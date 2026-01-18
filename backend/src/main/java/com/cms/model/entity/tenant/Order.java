@@ -16,7 +16,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.ToString;
 import org.hibernate.annotations.Type;
 
 @Entity
@@ -26,9 +25,6 @@ import org.hibernate.annotations.Type;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(
-    callSuper = true,
-    exclude = {"receptionist", "customer", "girl"})
 public class Order extends BaseEntity {
 
   @Column(name = "store_name")
@@ -91,4 +87,17 @@ public class Order extends BaseEntity {
 
   @Column(name = "status")
   private String status;
+
+  @Override
+  public String toString() {
+    return "Order(id="
+        + getId()
+        + ", storeName="
+        + storeName
+        + ", businessDate="
+        + businessDate
+        + ", status="
+        + status
+        + ")";
+  }
 }

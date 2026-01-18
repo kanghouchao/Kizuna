@@ -41,7 +41,8 @@ public class GirlController {
 
   @PostMapping
   public ResponseEntity<GirlResponse> create(@Valid @RequestBody GirlCreateRequest request) {
-    return ResponseEntity.ok(girlService.create(request));
+    return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+        .body(girlService.create(request));
   }
 
   @PutMapping("/{id}")

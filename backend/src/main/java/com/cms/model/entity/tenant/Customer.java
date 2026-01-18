@@ -8,7 +8,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.ToString;
 
 @Entity
 @Table(name = "t_customers")
@@ -17,7 +16,6 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(callSuper = true)
 public class Customer extends BaseEntity {
 
   @Column(name = "name")
@@ -52,4 +50,19 @@ public class Customer extends BaseEntity {
 
   @Column(name = "ng_content")
   private String ngContent;
+
+  @Override
+  public String toString() {
+    return "Customer(id="
+        + getId()
+        + ", name="
+        + name
+        + ", phoneNumber="
+        + phoneNumber
+        + ", classification="
+        + classification
+        + ", points="
+        + points
+        + ")";
+  }
 }

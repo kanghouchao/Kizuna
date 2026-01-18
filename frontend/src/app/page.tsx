@@ -8,11 +8,11 @@ export default async function Home() {
   // ログイン情報と現在のミドルウェアのロジックに基づいてリダイレクト
   // サービス管理者（Central）の場合、管理画面へリダイレクト
   if (role === 'central') {
-    redirect('/central/dashboard/central/');
+    redirect('/central/dashboard/');
   }
 
   /**
-   * TODO: テナントユーザーの場合、管理画面かフロントエンドページかを確認
+   * テナントユーザーの場合、管理画面かフロントエンドページかを確認
    * ログイン情報がない場合はフロントエンドのホームページを表示
    * ログインしている場合は管理画面（ダッシュボード）へリダイレクト
    */
@@ -22,7 +22,7 @@ export default async function Home() {
       const templateKey = cookieStore.get('x-mw-tenant-template')?.value || 'default';
       try {
         const { default: TemplateComponent } = await import(
-          `@/app/tenant/templates/${templateKey}/page`
+          `@/components/templates/tenant/${templateKey}/page`
         );
         return <TemplateComponent />;
       } catch (e) {

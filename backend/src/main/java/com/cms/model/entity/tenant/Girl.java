@@ -8,7 +8,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.ToString;
 
 @Entity
 @Table(name = "t_girls")
@@ -17,7 +16,6 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(callSuper = true)
 public class Girl extends BaseEntity {
 
   @Column(name = "name", nullable = false)
@@ -25,4 +23,19 @@ public class Girl extends BaseEntity {
 
   @Column(name = "status")
   private String status;
+
+  @Override
+  public String toString() {
+    return "Girl(id="
+        + getId()
+        + ", name="
+        + name
+        + ", status="
+        + status
+        + ", createdAt="
+        + getCreatedAt()
+        + ", updatedAt="
+        + getUpdatedAt()
+        + ")";
+  }
 }

@@ -9,6 +9,7 @@ import com.cms.model.entity.tenant.Order;
 import com.cms.repository.tenant.CustomerRepository;
 import com.cms.repository.tenant.GirlRepository;
 import com.cms.repository.tenant.OrderRepository;
+import com.cms.repository.tenant.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ public class OrderServiceImpl implements OrderService {
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final GirlRepository girlRepository;
+  private final TenantUserRepository tenantUserRepository;
 
   @Override
   @TenantScoped
@@ -61,14 +63,23 @@ public class OrderServiceImpl implements OrderService {
     // Update fields
     if (request.getStoreName() != null) order.setStoreName(request.getStoreName());
     if (request.getReceptionistId() != null) {
-      // TODO: Validate receptionist
+      order.setReceptionist(
+          tenantUserRepository
+              .findById(request.getReceptionistId())
+              .orElseThrow(
+                  () ->
+                      new ServiceException(
+                          "Receptionist not found: " + request.getReceptionistId())));
     }
     if (request.getArrivalScheduledStartTime() != null)
       order.setArrivalScheduledStartTime(request.getArrivalScheduledStartTime());
     if (request.getArrivalScheduledEndTime() != null)
       order.setArrivalScheduledEndTime(request.getArrivalScheduledEndTime());
     if (request.getGirlId() != null) {
-      // TODO: Validate girl
+      order.setGirl(
+          girlRepository
+              .findById(request.getGirlId())
+              .orElseThrow(() -> new ServiceException("Girl not found: " + request.getGirlId())));
     }
     if (request.getCourseMinutes() != null) order.setCourseMinutes(request.getCourseMinutes());
     if (request.getExtensionMinutes() != null)
@@ -128,7 +139,14 @@ public class OrderServiceImpl implements OrderService {
               .findById(req.getGirlId())
               .orElseThrow(() -> new ServiceException("Girl not found: " + req.getGirlId())));
     }
-    // TODO: Handle receptionist
+    if (req.getReceptionistId() != null) {
+      order.setReceptionist(
+          tenantUserRepository
+              .findById(req.getReceptionistId())
+              .orElseThrow(
+                  () ->
+                      new ServiceException("Receptionist not found: " + req.getReceptionistId())));
+    }
   }
 
   private OrderResponse toResponse(Order order) {

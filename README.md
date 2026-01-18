@@ -47,21 +47,28 @@ Note: references to other frameworks (e.g. Micronaut, Quarkus) were removed from
 
 Traefik routes all requests to the right service. The frontend and backend are fully decoupled and communicate over HTTP. All frontend API calls go through the reverse proxy under the `/api` prefix.
 
+### Module Structure & Domain Separation
+
+The application is strictly divided into two functional domains based on the user actor:
+
+1.  **Central Domain (`/central`)** - *The Platform Headquarters*
+    *   **User:** Platform Admin / System Owner.
+    *   **Purpose:** Manage tenants (stores), system-wide settings, billing, and global analytics.
+    *   **Access:** Only accessible via the Admin Domain (e.g., `admin.kizuna.com`).
+
+2.  **Tenant Domain (`/tenant`)** - *The Store Operations*
+    *   **User:** Tenant Admin, Store Managers, Casts.
+    *   **Purpose:** Day-to-day store operations (Orders, Cast management, Customer CRM).
+    *   **Access:** Accessible via Tenant Domains (e.g., `store1.kizuna.com`).
+    *   **Sub-modules:**
+        *   `/tenant/dashboard`: The secured back-office area (requires login).
+        *   `/tenant/site` (Future): Public landing pages for customers.
+
 ```text
                    ┌─────────────────┐
                    │   Frontend      │
    ┌──────────────►│   Next.js (3000)│
    │               └─────────────────┘
-┌───────────┐
-│ Traefik   │           ┌─────────────────┐
-│ :80       │◄──────────►│  Backend        │
-└───────────┘            │  Spring Boot    │
-                         │  :8080          │
-                         └─────────────────┘
-                                   │
-                          ┌─────────────────┐
-                          │ PostgreSQL/Redis│
-                          └─────────────────┘
 ```
 
 - Routing: `/api/*` → backend (prefix stripped before reaching Spring); everything else → frontend

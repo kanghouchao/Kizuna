@@ -29,7 +29,7 @@ databaseChangeLog:
                         - column:
                               name: receptionist_id
                               type: VARCHAR(64)
-                              remarks: 受付担当者ID (关联 t_users)
+                              remarks: 受付担当者ID (t_usersに関連)
                         - column:
                               name: business_date
                               type: DATE

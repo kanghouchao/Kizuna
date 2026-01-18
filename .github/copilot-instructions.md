@@ -17,7 +17,6 @@
 - Next.js の App Router を採用し、`src/app/central` と `src/app/tenant` で画面を分割。SSR コンポーネントは `middleware.ts` が与える cookie (`x-mw-role`, `x-mw-tenant-*`) を `cookies()` で参照する。
 - `src/middleware.ts` は管理ドメイン集合とバックエンドの `GET /central/tenant?domain=` を同期させている。レスポンス shape (template_key / tenant_id / tenant_name or id/name/domain) を壊さないこと。
 - API 呼び出しは `src/lib/client.ts` の axios インスタンス経由で `/api` ベースに集約され、ここで JWT・CSRF・テナントヘッダーが付与される。新しいサービス層は `src/services/central|tenant/` にメソッドを追加し、型は `src/types/api.ts` に定義する。
-- 認証/ログアウトの UI 状態は `contexts/AuthContext.tsx` が管理し、`isTenantDomain()` 判定で中央/テナント API を切り替える。ルーティング変更時はここを忘れずに更新する。
 
 ## ローカル開発とビルド
 - Docker 前提。`make build` (または `make build service=backend|frontend`) でそれぞれの BuildKit ステージを実行し、`make up env=development` で Traefik + DB + Redis + アプリを起動。

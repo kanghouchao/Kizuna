@@ -21,7 +21,7 @@ const centralNavigation = [
   {
     name: 'メイン',
     items: [
-      { name: 'ダッシュボード', href: '/central/dashboard/central', icon: HomeIcon },
+      { name: 'ダッシュボード', href: '/central/dashboard', icon: HomeIcon },
       { name: 'テナント一覧', href: '/central/tenants', icon: BuildingOfficeIcon },
     ],
   },
@@ -62,7 +62,7 @@ export function Sidebar() {
   const navigation = role === 'tenant' ? tenantNavigation : centralNavigation;
 
   return (
-    <aside className="w-64 bg-slate-800 text-white flex-shrink-0 hidden md:block border-r border-slate-700">
+    <aside className="w-64 bg-slate-800 text-white shrink-0 hidden md:block border-r border-slate-700">
       <div className="h-16 flex items-center px-6 border-b border-slate-700">
         <span className="text-xl font-bold tracking-wider text-indigo-400">
           {role === 'tenant' ? 'TENANT' : 'OLI-CMS'}
@@ -89,7 +89,7 @@ export function Sidebar() {
                         }`}
                       >
                         <item.icon
-                          className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                          className={`mr-3 h-5 w-5 shrink-0 ${
                             isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'
                           }`}
                         />

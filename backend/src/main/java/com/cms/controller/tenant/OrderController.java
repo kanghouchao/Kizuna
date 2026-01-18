@@ -39,7 +39,8 @@ public class OrderController {
 
   @PostMapping
   public ResponseEntity<OrderResponse> create(@Valid @RequestBody OrderCreateRequest request) {
-    return ResponseEntity.ok(orderService.create(request));
+    return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+        .body(orderService.create(request));
   }
 
   @PutMapping("/{id}")

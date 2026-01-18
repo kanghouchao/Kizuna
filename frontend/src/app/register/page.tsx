@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi } from '@/services/tenant/api';
+import { isTenantDomain } from '@/lib/config';
 
 export default function RegisterPage() {
   return (
@@ -25,8 +26,13 @@ function RegisterForm() {
   const [email, setEmail] = useState<string>('');
 
   useEffect(() => {
+    // If accessed from Central domain, registration is not allowed.
+    if (!isTenantDomain()) {
+      router.replace('/login');
+      return;
+    }
     setToken(searchParams?.get('token') || '');
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   const resolveLoginUrl = (loginUrl?: string | null, domain?: string | null) => {
     if (loginUrl) {

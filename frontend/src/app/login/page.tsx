@@ -19,6 +19,17 @@ export default function AdminLogin() {
   const [rememberMe, setRememberMe] = useState(false);
   const router = useRouter();
 
+  const isTenant = isTenantDomain();
+  const tenantName = Cookies.get('x-mw-tenant-name');
+  const pageTitle = isTenant
+    ? tenantName
+      ? `${tenantName} ログイン`
+      : '店舗ログイン'
+    : 'OLI-CMS 管理者ログイン';
+  const pageSubtitle = isTenant
+    ? '店舗アカウントでログインしてください'
+    : 'プラットフォーム管理者アカウントでログインしてください';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -26,8 +37,7 @@ export default function AdminLogin() {
       const response = await getAuthApi().login({ username, password });
       if (response.token && response.expires_at) {
         Cookies.set('token', response.token, { expires: response.expires_at });
-        const isTenant = isTenantDomain();
-        router.push(isTenant ? '/tenant/dashboard/' : '/central/dashboard/central/');
+        router.push(isTenant ? '/tenant/dashboard/' : '/central/dashboard/');
       }
     } catch (error) {
       console.error('Login failed:', error);
@@ -56,10 +66,8 @@ export default function AdminLogin() {
               />
             </svg>
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">管理者ログイン</h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            管理者アカウントでログインしてください
-          </p>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">{pageTitle}</h2>
+          <p className="mt-2 text-center text-sm text-gray-600">{pageSubtitle}</p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

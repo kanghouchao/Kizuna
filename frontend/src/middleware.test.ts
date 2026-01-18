@@ -1,125 +1,86 @@
+// Mock dependencies BEFORE importing middleware
+jest.mock('./lib/middleware/tenantResolver', () => ({
+  resolveTenant: jest.fn(),
+}));
+
+jest.mock('./lib/middleware/routeGuard', () => ({
+  handleRouteProtection: jest.fn(),
+}));
+
 jest.mock('next/server', () => {
   class MockCookies {
-    private store = new Map<string, { name: string; value: string }>();
-
+    private store = new Map<string, string>();
     set(name: string, value: string) {
-      this.store.set(name, { name, value });
+      this.store.set(name, value);
     }
-
     get(name: string) {
-      return this.store.get(name) ?? undefined;
+      return { value: this.store.get(name) };
     }
   }
 
   class MockNextResponse {
-    public readonly cookies = new MockCookies();
-    public readonly status: number;
-    public readonly body?: string;
-
-    constructor(body?: string, init?: { status?: number }) {
-      this.body = body;
-      this.status = init?.status ?? 200;
-    }
-
+    public cookies = new MockCookies();
+    public status = 200;
     static next() {
-      return new MockNextResponse(undefined, { status: 200 });
+      return new MockNextResponse();
     }
   }
 
-  class MockNextRequest {}
-
   return {
     NextResponse: MockNextResponse,
-    NextRequest: MockNextRequest,
+    NextRequest: class {},
   };
 });
 
-import type { NextRequest } from 'next/server';
 import { middleware } from './middleware';
+import { resolveTenant } from './lib/middleware/tenantResolver';
+import { handleRouteProtection } from './lib/middleware/routeGuard';
+import { NextRequest } from 'next/server';
 
-describe('middleware routing contract', () => {
-  const originalFetch = global.fetch;
+describe('middleware integration', () => {
+  const mockResolveTenant = resolveTenant as jest.Mock;
+  const mockHandleRouteProtection = handleRouteProtection as jest.Mock;
 
-  const createRequest = (url: string, headers: Record<string, string> = {}) => {
-    const normalizedEntries: Array<[string, string]> = Object.entries(headers).map(
-      ([key, value]) => [key.toLowerCase(), value]
-    );
-    const headerStore = new Map<string, string>(normalizedEntries);
+  const createRequest = () =>
+    ({
+      nextUrl: { protocol: 'http:' },
+    } as unknown as NextRequest);
 
-    return {
-      headers: {
-        get: (name: string) => headerStore.get(name.toLowerCase()) ?? null,
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('delegates to routeGuard and returns redirect if needed', async () => {
+    mockResolveTenant.mockResolvedValue({ role: 'central' });
+    const redirectResponse = { status: 307 };
+    mockHandleRouteProtection.mockReturnValue(redirectResponse);
+
+    const req = createRequest();
+    const res = await middleware(req);
+
+    expect(mockResolveTenant).toHaveBeenCalledWith(req);
+    expect(mockHandleRouteProtection).toHaveBeenCalledWith(req, 'central');
+    expect(res).toBe(redirectResponse);
+  });
+
+  it('sets cookies and proceeds if routeGuard allows', async () => {
+    mockResolveTenant.mockResolvedValue({
+      role: 'tenant',
+      tenantData: {
+        isValid: true,
+        templateKey: 'dark',
+        tenantId: 't1',
+        tenantName: 'Shop',
       },
-      cookies: {
-        get: () => undefined,
-        getAll: () => [],
-        set: () => undefined,
-        delete: () => undefined,
-        has: () => false,
-      } as unknown,
-      nextUrl: new URL(url),
-      url,
-      page: undefined as never,
-      ua: undefined as never,
-    } as unknown as NextRequest;
-  };
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-    jest.restoreAllMocks();
-    delete process.env.TENANT_VALIDATION_API_URL;
-  });
-
-  it('marks admin domains as central without calling validation API', async () => {
-    const fetchSpy = jest.fn();
-    global.fetch = fetchSpy as unknown as typeof fetch;
-    const request = createRequest('http://oli-cms.test/dashboard', {
-      host: 'oli-cms.test',
     });
+    mockHandleRouteProtection.mockReturnValue(null);
 
-    const response = await middleware(request);
+    const req = createRequest();
+    const res = (await middleware(req)) as any;
 
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(response.cookies.get('x-mw-role')?.value).toBe('central');
-    expect(response.status).toBe(200);
-  });
-
-  it('sets tenant cookies when validation succeeds', async () => {
-    const payload = {
-      id: 'tenant-123',
-      name: 'Tenant One',
-      template_key: 'dark-mode',
-    };
-    global.fetch = jest.fn().mockResolvedValue({
-      json: () => Promise.resolve(payload),
-    });
-    process.env.TENANT_VALIDATION_API_URL = 'http://backend:8080/central/tenant';
-
-    const request = createRequest('http://shop.example.test/home', {
-      host: 'shop.example.test',
-    });
-
-    const response = await middleware(request);
-
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(response.cookies.get('x-mw-role')?.value).toBe('tenant');
-    expect(response.cookies.get('x-mw-tenant-id')?.value).toBe('tenant-123');
-    expect(response.cookies.get('x-mw-tenant-name')?.value).toBe('Tenant One');
-    expect(response.cookies.get('x-mw-tenant-template')?.value).toBe('dark-mode');
-    expect(response.status).toBe(200);
-  });
-
-  it('returns 403 when validation fails', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
-
-    const request = createRequest('http://unknown.test', {
-      host: 'unknown.test',
-    });
-
-    const response = await middleware(request);
-
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(response.status).toBe(403);
-    expect(response.cookies.get('x-mw-role')).toBeUndefined();
+    expect(res.status).toBe(200);
+    expect(res.cookies.get('x-mw-role').value).toBe('tenant');
+    expect(res.cookies.get('x-mw-tenant-id').value).toBe('t1');
+    expect(res.cookies.get('x-mw-tenant-template').value).toBe('dark');
   });
 });

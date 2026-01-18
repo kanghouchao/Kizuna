@@ -7,7 +7,7 @@ import { ToastProvider } from '@/components/ToastProvider';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Oli CMS - マルチ店舗CMS',
+  title: 'CMS - マルチ店舗CMS',
   description: 'Laravel と Next.js を基盤としたマルチ店舗型コンテンツ管理システム',
 };
 
