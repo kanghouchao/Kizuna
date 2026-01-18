@@ -5,7 +5,7 @@ import { handleRouteProtection } from '../routeGuard';
 jest.mock('next/server', () => {
   return {
     NextResponse: {
-      redirect: jest.fn((url) => ({
+      redirect: jest.fn(url => ({
         status: 307,
         headers: { get: () => url.toString() },
       })),
@@ -34,7 +34,9 @@ describe('routeGuard', () => {
     const req = createRequest('/central/dashboard', false);
     const res = handleRouteProtection(req, 'central');
 
-    expect(NextResponse.redirect).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/login' }));
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/login' })
+    );
     expect(res).not.toBeNull();
   });
 

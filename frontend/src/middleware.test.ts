@@ -44,7 +44,7 @@ describe('middleware integration', () => {
   const createRequest = () =>
     ({
       nextUrl: { protocol: 'http:' },
-    } as unknown as NextRequest);
+    }) as unknown as NextRequest;
 
   beforeEach(() => {
     jest.clearAllMocks();
