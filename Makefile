@@ -1,11 +1,11 @@
 
-# CMS Project Makefile
+# Makefile
 # ======================
 env ?= development
 service ?=
 
 help: ## ヘルプ情報を表示
-	@echo "Oli CMS プロジェクト管理コマンド:"
+	@echo "プロジェクト管理コマンド:"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
