@@ -1,5 +1,6 @@
 package com.cms.service.mail;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
+@SuppressWarnings("null")
 public class MailServiceImplTests {
 
   @Test
@@ -24,15 +26,13 @@ public class MailServiceImplTests {
 
     svc.send("to@example.com", "subj", "body");
 
-    verify(mailSender).send(org.mockito.ArgumentMatchers.any(SimpleMailMessage.class));
+    verify(mailSender).send(any(SimpleMailMessage.class));
   }
 
   @Test
   void send_withMailSender_ignoredOnException() {
     JavaMailSender mailSender = mock(JavaMailSender.class);
-    doThrow(new RuntimeException("boom"))
-        .when(mailSender)
-        .send(org.mockito.ArgumentMatchers.any(SimpleMailMessage.class));
+    doThrow(new RuntimeException("boom")).when(mailSender).send(any(SimpleMailMessage.class));
     MailServiceImpl svc = new MailServiceImpl();
     try {
       java.lang.reflect.Field f = MailServiceImpl.class.getDeclaredField("mailSender");
@@ -42,7 +42,6 @@ public class MailServiceImplTests {
       throw new RuntimeException(e);
     }
 
-    // should not throw
     svc.send("to@example.com", "subj", "body");
   }
 

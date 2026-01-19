@@ -36,7 +36,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       const token = Cookies.get('token');
-      const publicRoutes = ['/login', '/register'];
+      const publicRoutes = ['/login', '/register', '/tenant'];
       const currentPath = window.location.pathname;
 
       if (!token && !publicRoutes.includes(currentPath)) {

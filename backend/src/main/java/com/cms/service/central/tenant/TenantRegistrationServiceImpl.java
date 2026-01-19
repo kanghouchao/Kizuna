@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class TenantRegistrationServiceImpl implements TenantRegistrationService {
 
   private final StringRedisTemplate redisTemplate;

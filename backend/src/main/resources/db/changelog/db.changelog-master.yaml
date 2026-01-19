@@ -8,3 +8,12 @@ databaseChangeLog:
   - include:
       file: changes/003-initial-data.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/004-create-customers.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/005-create-girls.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/006-create-orders.yaml
+      relativeToChangelogFile: true

@@ -14,6 +14,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.Filter;
 
 @Entity
@@ -22,6 +23,7 @@ import org.hibernate.annotations.Filter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(callSuper = true, exclude = "roles")
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class TenantUser extends BaseEntity {
 

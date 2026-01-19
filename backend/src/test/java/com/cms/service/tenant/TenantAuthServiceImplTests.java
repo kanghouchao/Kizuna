@@ -21,6 +21,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+@SuppressWarnings("null")
 class TenantAuthServiceImplTests {
 
   @Mock private PasswordEncoder passwordEncoder;

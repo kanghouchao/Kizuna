@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-6 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-linear-to-br from-blue-50 to-indigo-100 px-6 text-center">
       <div className="max-w-md">
         <h1 className="text-3xl font-bold text-indigo-700">ページが見つかりませんでした</h1>
         <p className="mt-4 text-gray-600">

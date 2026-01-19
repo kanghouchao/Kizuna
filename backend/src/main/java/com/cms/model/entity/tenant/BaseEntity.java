@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 
@@ -20,6 +21,7 @@ import org.hibernate.annotations.ParamDef;
 @Getter
 @Setter
 @NoArgsConstructor
+@ToString(exclude = "tenant")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 public abstract class BaseEntity {
 

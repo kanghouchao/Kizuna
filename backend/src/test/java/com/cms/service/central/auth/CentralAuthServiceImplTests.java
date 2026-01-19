@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.cms.model.dto.auth.Token;
 import com.cms.utils.JwtUtil;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -38,8 +39,7 @@ class CentralAuthServiceImplTests {
         .thenReturn(auth);
 
     Token expected = new Token("tkn", System.currentTimeMillis() + 10000);
-    when(jwtUtil.generateToken(
-            "alice", "CentralAuth", java.util.Map.of("authorities", List.of("ROLE_USER"))))
+    when(jwtUtil.generateToken("alice", "CentralAuth", Map.of("authorities", List.of("ROLE_USER"))))
         .thenReturn(expected);
 
     Token actual = service.login("alice", "pw");

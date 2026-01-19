@@ -1,5 +1,5 @@
 export function getCentralDomain(): string {
-  return process.env.NEXT_PUBLIC_CENTRAL_DOMAIN || 'oli-cms.test';
+  return process.env.NEXT_PUBLIC_CENTRAL_DOMAIN || 'cms.test';
 }
 
 export function isTenantDomain(): boolean {

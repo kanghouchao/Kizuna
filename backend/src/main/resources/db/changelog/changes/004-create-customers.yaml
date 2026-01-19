@@ -1,0 +1,112 @@
+databaseChangeLog:
+    - changeSet:
+          id: tenant-002-create-customers
+          author: kanghouchao
+          preConditions:
+              - dbms:
+                    type: postgresql
+          changes:
+              - createTable:
+                    tableName: t_customers
+                    remarks: 顧客情報テーブル
+                    columns:
+                        - column:
+                              name: id
+                              type: VARCHAR(64)
+                              constraints:
+                                  nullable: false
+                                  primaryKey: true
+                                  primaryKeyName: pk_t_customers
+                        - column:
+                              name: tenant_id
+                              type: BIGINT
+                              constraints:
+                                  nullable: false
+                        - column:
+                              name: name
+                              type: VARCHAR(255)
+                              remarks: 顧客名
+                        - column:
+                              name: phone_number
+                              type: VARCHAR(50)
+                              remarks: 電話番号
+                        - column:
+                              name: phone_number2
+                              type: VARCHAR(50)
+                              remarks: 電話番号2
+                        - column:
+                              name: address
+                              type: VARCHAR(500)
+                              remarks: 住所
+                        - column:
+                              name: building_name
+                              type: VARCHAR(255)
+                              remarks: 建物名
+                        - column:
+                              name: landmark
+                              type: VARCHAR(255)
+                              remarks: 目印
+                        - column:
+                              name: classification
+                              type: VARCHAR(50)
+                              remarks: 区分（自宅、ホテルなど）
+                        - column:
+                              name: has_pet
+                              type: BOOLEAN
+                              defaultValueBoolean: false
+                              remarks: ペットの有無
+                        - column:
+                              name: points
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: 保有ポイント
+                        - column:
+                              name: rank
+                              type: VARCHAR(50)
+                              defaultValue: "SILVER"
+                              remarks: 会員ランク
+                        - column:
+                              name: line_id
+                              type: VARCHAR(100)
+                              remarks: LINE ID
+                        - column:
+                              name: usage_areas
+                              type: VARCHAR(255)
+                              remarks: 利用エリア
+                        - column:
+                              name: ng_type
+                              type: VARCHAR(50)
+                              remarks: NGタイプ（注意・禁止など）
+                        - column:
+                              name: ng_content
+                              type: TEXT
+                              remarks: NG内容
+                        - column:
+                              name: created_at
+                              type: TIMESTAMP WITH TIME ZONE
+                              defaultValueComputed: CURRENT_TIMESTAMP
+                              constraints:
+                                  nullable: false
+                        - column:
+                              name: updated_at
+                              type: TIMESTAMP WITH TIME ZONE
+                              defaultValueComputed: CURRENT_TIMESTAMP
+                              constraints:
+                                  nullable: false
+
+              - addForeignKeyConstraint:
+                    constraintName: fk_t_customers_tenant
+                    baseTableName: t_customers
+                    baseColumnNames: tenant_id
+                    referencedTableName: central_tenants
+                    referencedColumnNames: id
+                    onDelete: CASCADE
+
+              - createIndex:
+                    indexName: idx_t_customers_phone
+                    tableName: t_customers
+                    columns:
+                        - column:
+                              name: phone_number
+                        - column:
+                              name: tenant_id

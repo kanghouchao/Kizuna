@@ -3,6 +3,7 @@ package com.cms.service.central.auth;
 import com.cms.model.dto.auth.Token;
 import com.cms.utils.JwtUtil;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,7 +24,7 @@ public class CentralAuthServiceImpl implements CentralAuthService {
             new UsernamePasswordAuthenticationToken(username, password));
 
     return jwtUtil.generateToken(
-        auth.getName(),
+        Objects.requireNonNull(auth.getName()),
         "CentralAuth",
         Map.of("authorities", auth.getAuthorities().stream().map(a -> a.getAuthority()).toList()));
   }

@@ -28,6 +28,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class CentralTenantServiceImplTest {
 
   @Mock TenantRepository tenantRepository;

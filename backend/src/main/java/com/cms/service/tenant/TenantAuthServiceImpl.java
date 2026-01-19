@@ -4,12 +4,15 @@ import com.cms.config.TenantScoped;
 import com.cms.config.interceptor.TenantContext;
 import com.cms.model.dto.auth.Token;
 import com.cms.model.dto.tenant.TenantRegisterRequest;
+import com.cms.model.entity.central.tenant.Tenant;
 import com.cms.model.entity.tenant.security.TenantUser;
 import com.cms.repository.central.TenantRepository;
 import com.cms.repository.tenant.TenantUserRepository;
 import com.cms.utils.JwtUtil;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -48,15 +51,13 @@ public class TenantAuthServiceImpl implements TenantAuthService {
     if (tenantId != null) {
       claims.put("tenantId", tenantId);
     }
-    return jwtUtil.generateToken(auth.getName(), "TenantAuth", claims);
+    return jwtUtil.generateToken(Objects.requireNonNull(auth.getName()), "TenantAuth", claims);
   }
 
   @Override
   @Transactional
-  public com.cms.model.entity.central.tenant.Tenant register(
-      Long tenantId, TenantRegisterRequest tenantRegisterRequest) {
-    com.cms.model.entity.central.tenant.Tenant tenant =
-        tenantRepository.findById(tenantId).orElseThrow();
+  public Tenant register(@NonNull Long tenantId, TenantRegisterRequest tenantRegisterRequest) {
+    Tenant tenant = tenantRepository.findById(tenantId).orElseThrow();
     TenantUser entity = new TenantUser();
     String email = tenantRegisterRequest.getEmail();
     String nickname =

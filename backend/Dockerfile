@@ -1,5 +1,5 @@
 # 1. Download and cache dependencies
-FROM gradle:9.0.0-jdk21-ubi-minimal AS dependencies
+FROM gradle:9.2.1-jdk21-ubi-minimal AS dependencies
 WORKDIR /app
 COPY build.gradle settings.gradle ./
 COPY gradlew gradlew

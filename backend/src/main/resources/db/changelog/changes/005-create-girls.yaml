@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: tenant-003-create-girls
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_girls
+            remarks: 女の子（キャスト）情報テーブル
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_girls
+              - column:
+                  name: tenant_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                  remarks: 女の子名
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+                  defaultValue: 'ACTIVE'
+                  remarks: ステータス
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            constraintName: fk_t_girls_tenant
+            baseTableName: t_girls
+            baseColumnNames: tenant_id
+            referencedTableName: central_tenants
+            referencedColumnNames: id
+            onDelete: CASCADE

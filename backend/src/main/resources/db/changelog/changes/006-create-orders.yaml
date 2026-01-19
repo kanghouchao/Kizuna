@@ -1,0 +1,211 @@
+databaseChangeLog:
+    - changeSet:
+          id: tenant-004-create-orders
+          author: kanghouchao
+          preConditions:
+              - dbms:
+                    type: postgresql
+          changes:
+              - createTable:
+                    tableName: t_orders
+                    remarks: 注文テーブル
+                    columns:
+                        - column:
+                              name: id
+                              type: VARCHAR(64)
+                              constraints:
+                                  nullable: false
+                                  primaryKey: true
+                                  primaryKeyName: pk_t_orders
+                        - column:
+                              name: tenant_id
+                              type: BIGINT
+                              constraints:
+                                  nullable: false
+                        - column:
+                              name: store_name
+                              type: VARCHAR(255)
+                              remarks: 店舗名
+                        - column:
+                              name: receptionist_id
+                              type: VARCHAR(64)
+                              remarks: 受付担当者ID (t_usersに関連)
+                        - column:
+                              name: business_date
+                              type: DATE
+                              constraints:
+                                  nullable: false
+                              remarks: 営業日
+                        - column:
+                              name: arrival_scheduled_start_time
+                              type: TIME
+                              remarks: 到着予定開始時間
+                        - column:
+                              name: arrival_scheduled_end_time
+                              type: TIME
+                              remarks: 到着予定終了時間
+                        - column:
+                              name: customer_id
+                              type: VARCHAR(64)
+                              remarks: 顧客ID
+                        - column:
+                              name: girl_id
+                              type: VARCHAR(64)
+                              remarks: 女の子ID
+                        - column:
+                              name: course_minutes
+                              type: INTEGER
+                              remarks: コース分数
+                        - column:
+                              name: extension_minutes
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: 延長分数
+                        - column:
+                              name: option_codes
+                              type: JSONB
+                              defaultValueComputed: "'[]'::jsonb"
+                              remarks: オプションコード一覧 (JSON Array)
+                        - column:
+                              name: discount_name
+                              type: VARCHAR(255)
+                              remarks: 割引名
+                        - column:
+                              name: manual_discount
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: 手動割引金額
+                        - column:
+                              name: carrier
+                              type: VARCHAR(100)
+                              remarks: キャリア/Carrier
+                        - column:
+                              name: media_name
+                              type: VARCHAR(100)
+                              remarks: 媒体名
+                        - column:
+                              name: used_points
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: 利用ポイント
+                        - column:
+                              name: manual_grant_points
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: 手動付与ポイント
+                        - column:
+                              name: auto_grant_points
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: 自動付与ポイント
+                        - column:
+                              name: survey_points
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: アンケートポイント
+                        - column:
+                              name: total_fee
+                              type: INTEGER
+                              defaultValueNumeric: 0
+                              remarks: 総額
+                        - column:
+                              name: survey_status
+                              type: VARCHAR(50)
+                              defaultValue: "UNANSWERED"
+                              remarks: アンケートステータス
+                        - column:
+                              name: location_address
+                              type: VARCHAR(500)
+                              remarks: 派遣先住所
+                        - column:
+                              name: location_building
+                              type: VARCHAR(255)
+                              remarks: 派遣先建物
+                        - column:
+                              name: actual_arrival_time
+                              type: TIME
+                              remarks: 実際の到着時間 (IN)
+                        - column:
+                              name: actual_end_time
+                              type: TIME
+                              remarks: 実際の終了時間 (OUT)
+                        - column:
+                              name: remarks
+                              type: TEXT
+                              remarks: 備考
+                        - column:
+                              name: girl_driver_message
+                              type: TEXT
+                              remarks: 女の子・ドライバーへのメッセージ
+                        - column:
+                              name: status
+                              type: VARCHAR(50)
+                              defaultValue: "CREATED"
+                              remarks: 注文ステータス
+                        - column:
+                              name: created_at
+                              type: TIMESTAMP WITH TIME ZONE
+                              defaultValueComputed: CURRENT_TIMESTAMP
+                              constraints:
+                                  nullable: false
+                        - column:
+                              name: updated_at
+                              type: TIMESTAMP WITH TIME ZONE
+                              defaultValueComputed: CURRENT_TIMESTAMP
+                              constraints:
+                                  nullable: false
+
+              - addForeignKeyConstraint:
+                    constraintName: fk_t_orders_tenant
+                    baseTableName: t_orders
+                    baseColumnNames: tenant_id
+                    referencedTableName: central_tenants
+                    referencedColumnNames: id
+                    onDelete: CASCADE
+
+              - addForeignKeyConstraint:
+                    constraintName: fk_t_orders_receptionist
+                    baseTableName: t_orders
+                    baseColumnNames: receptionist_id
+                    referencedTableName: t_users
+                    referencedColumnNames: id
+                    onDelete: SET NULL
+
+              - addForeignKeyConstraint:
+                    constraintName: fk_t_orders_customer
+                    baseTableName: t_orders
+                    baseColumnNames: customer_id
+                    referencedTableName: t_customers
+                    referencedColumnNames: id
+                    onDelete: RESTRICT
+
+              - addForeignKeyConstraint:
+                    constraintName: fk_t_orders_girl
+                    baseTableName: t_orders
+                    baseColumnNames: girl_id
+                    referencedTableName: t_girls
+                    referencedColumnNames: id
+                    onDelete: RESTRICT
+
+              - createIndex:
+                    indexName: idx_t_orders_date
+                    tableName: t_orders
+                    columns:
+                        - column:
+                              name: business_date
+                        - column:
+                              name: tenant_id
+
+              - createIndex:
+                    indexName: idx_t_orders_customer
+                    tableName: t_orders
+                    columns:
+                        - column:
+                              name: customer_id
+
+              - createIndex:
+                    indexName: idx_t_orders_girl
+                    tableName: t_orders
+                    columns:
+                        - column:
+                              name: girl_id

@@ -1,95 +1,45 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-const ADMIN_DOMAINS = new Set([process.env.APP_DOMAIN || 'oli-cms.test']);
+import { resolveTenant } from './lib/middleware/tenantResolver';
+import { handleRouteProtection } from './lib/middleware/routeGuard';
 
 export const config = {
-  // Match all paths except static assets and API routes
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next (Next.js internal assets and data)
-     * - favicon.ico (favicon file)
-     * - health (health check)
-     */
-    '/((?!api|_next|favicon.ico|health).*)',
-  ],
+  matcher: ['/((?!api|_next|favicon.ico|health).*)'],
 };
 
 export async function middleware(request: NextRequest) {
-  // Log every invocation for visibility during debugging
-  console.error('🔄 MIDDLEWARE CALLED! Path:', request.nextUrl.pathname);
+  // 1. Identify Role & Tenant
+  const { role, tenantData } = await resolveTenant(request);
 
-  const rawHost =
-    request.headers.get('x-forwarded-host') ||
-    request.headers.get('host') ||
-    request.nextUrl.hostname;
-  const hostname = rawHost.split(',')[0].trim().split(':')[0].toLowerCase();
+  // 2. Route Protection (Security Guard)
+  const redirectResponse = handleRouteProtection(request, role);
+  if (redirectResponse) {
+    return redirectResponse;
+  }
 
-  console.error('🌐 Raw host:', rawHost);
-  console.error('🏠 Processed hostname:', hostname);
-
+  // 3. Prepare Response & Cookies
+  const response = NextResponse.next();
   const isHttps = request.nextUrl.protocol === 'https:';
-
-  const baseCookieOptions = {
+  const cookieOptions = {
     httpOnly: false,
     sameSite: 'lax' as const,
     secure: isHttps,
     path: '/',
   };
 
-  if (ADMIN_DOMAINS.has(hostname)) {
-    console.error('👑 Admin domain detected');
-    const res = NextResponse.next();
-    res.cookies.set('x-mw-role', 'central', baseCookieOptions);
-    return res;
-  }
+  // Set Role Cookie
+  response.cookies.set('x-mw-role', role, cookieOptions);
 
-  const validationApiUrl =
-    process.env.TENANT_VALIDATION_API_URL || 'http://backend:8080/central/tenant';
-
-  const url = validationApiUrl + `?domain=${encodeURIComponent(hostname)}`;
-  console.error('🔍 Validating tenant with URL:', url);
-
-  try {
-    const res = await fetch(url);
-    const data = await res.json().catch(() => null);
-    console.error('📡 Tenant validation response:', data);
-
-    const nextRes = NextResponse.next();
-    nextRes.cookies.set('x-mw-role', 'tenant', baseCookieOptions);
-    // Accept both legacy shape { valid, template_key, tenant_id, tenant_name }
-    // and current shape { id, name, domain, email }
-    if (data && typeof data === 'object') {
-      const templateKey = String((data.template_key ?? 'default') || 'default');
-      const tenantId = String(data.tenant_id ?? data.id ?? '');
-      const tenantName = String(data.tenant_name ?? data.name ?? '');
-
-      // If tenantId and tenantName exist or domain exists, treat as valid
-      const isValid = Boolean(tenantId || tenantName || data.domain);
-
-      if (isValid) {
-        nextRes.cookies.set('x-mw-tenant-template', templateKey, baseCookieOptions);
-        if (tenantId) {
-          nextRes.cookies.set('x-mw-tenant-id', tenantId, baseCookieOptions);
-        }
-        if (tenantName) {
-          nextRes.cookies.set('x-mw-tenant-name', tenantName, baseCookieOptions);
-        }
-        console.error('✅ Tenant recognized, cookies set');
-      } else {
-        console.error('❌ Tenant payload lacked required identifiers');
-      }
-    } else {
-      console.error('❌ Invalid tenant or no data');
+  // Set Tenant Cookies (if applicable)
+  if (role === 'tenant' && tenantData?.isValid) {
+    response.cookies.set('x-mw-tenant-template', tenantData.templateKey, cookieOptions);
+    if (tenantData.tenantId) {
+      response.cookies.set('x-mw-tenant-id', tenantData.tenantId, cookieOptions);
     }
-    return nextRes;
-  } catch (error) {
-    console.error('🚨 Middleware error:', error);
-    // Return a 403 Forbidden response to prevent unauthorized access on validation failure
-    return new NextResponse('Forbidden: Tenant validation failed', {
-      status: 403,
-    });
+    if (tenantData.tenantName) {
+      response.cookies.set('x-mw-tenant-name', tenantData.tenantName, cookieOptions);
+    }
   }
+
+  return response;
 }

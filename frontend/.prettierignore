@@ -14,3 +14,4 @@ logs
 *.png
 *.jpg
 *.jpeg
+next-env.d.ts

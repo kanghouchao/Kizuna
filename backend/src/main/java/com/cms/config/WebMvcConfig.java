@@ -8,9 +8,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
-  private final TenantIdInterceptor tenantIdInterceptor;
 
-  public WebMvcConfig(TenantIdInterceptor tenantIdInterceptor) {
+  @NonNull private final TenantIdInterceptor tenantIdInterceptor;
+
+  public WebMvcConfig(@NonNull TenantIdInterceptor tenantIdInterceptor) {
     this.tenantIdInterceptor = tenantIdInterceptor;
   }
 

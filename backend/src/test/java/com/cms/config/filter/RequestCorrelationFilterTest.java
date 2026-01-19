@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@SuppressWarnings("null")
 class RequestCorrelationFilterTest {
 
   @Test

@@ -54,7 +54,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   @Override
   @Transactional(readOnly = true)
   public Optional<TenantVO> getById(String id) {
-    return tenantRepository.findById(Long.valueOf(id)).map(this::toDto);
+    return tenantRepository.findById(parseId(id)).map(this::toDto);
   }
 
   @Override
@@ -79,7 +79,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   public void update(String id, TenantUpdateDTO req) {
     var tenant =
         tenantRepository
-            .findById(Long.valueOf(id))
+            .findById(parseId(id))
             .orElseThrow(() -> new ServiceException("tenant not found"));
     tenant.setName(req.getName());
     tenantRepository.save(tenant);
@@ -88,7 +88,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   @Override
   @Transactional
   public void delete(String id) {
-    tenantRepository.deleteById(Long.valueOf(id));
+    tenantRepository.deleteById(parseId(id));
   }
 
   @Override
@@ -97,6 +97,14 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     long total = tenantRepository.count();
     // placeholder: active/inactive/pending not modelled yet
     return new TenantStatusVO(total, total, 0, 0);
+  }
+
+  private Long parseId(String id) {
+    try {
+      return Long.parseLong(id);
+    } catch (NumberFormatException e) {
+      throw new ServiceException("Invalid tenant ID format: " + id);
+    }
   }
 
   private TenantVO toDto(Tenant t) {
