@@ -1,4 +1,4 @@
-# Oli CMS — Multi-tenant CMS (Spring Boot + Next.js)
+# Kizuna Platform — Multi-tenant CMS, CRM, & HRM (Spring Boot + Next.js)
 
 ![Spring Boot](https://img.shields.io/badge/SpringBoot-3.5+-green.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-14+-blue.svg)
@@ -8,12 +8,13 @@
 [![CodeQL](https://github.com/kanghouchao/MYCMS/actions/workflows/codeql.yml/badge.svg)](https://github.com/kanghouchao/MYCMS/actions/workflows/codeql.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/kanghouchao/MYCMS/security/dependabot)
 
-Oli CMS is a modern, multi-tenant Content Management System built with a split architecture: Spring Boot backend and Next.js frontend, orchestrated with Docker compose.
+Kizuna Platform is a modern, multi-tenant system combining CMS, CRM, and HRM capabilities, built with a split architecture: Spring Boot backend and Next.js frontend, orchestrated with Docker compose.
 
 ## Highlights
 
 - Multi-tenant by host name: one frontend, isolated tenant contexts
 - Split architecture: Spring Boot API + Next.js app
+- Comprehensive suite: CMS (Content), CRM (Customer Relationships), HRM (Human Resources)
 - Stateless JWT auth; admin (central) and tenant APIs split
 - Responsive UI with Tailwind CSS
 - Container-first: easy local dev and ops via Make + Docker compose
