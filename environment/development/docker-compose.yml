@@ -1,11 +1,11 @@
 # docker-compose.yml
-name: oli-cms
+name: kizuna
 
 services:
   # Traefik: The reverse proxy
   traefik:
     image: "traefik:v3.5.0"
-    container_name: "oli-cms-traefik"
+    container_name: traefik
     ports:
       - "80:80"
       - "8080:8080"
@@ -13,7 +13,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./traefik/:/etc/traefik/:ro"
     networks:
-      - oli-cms-network
+      - network
     depends_on:
       backend:
         condition: service_healthy
@@ -29,17 +29,17 @@ services:
   # Database: PostgreSQL
   database:
     image: postgres:16-alpine
-    container_name: oli-cms-database
+    container_name: database
     environment:
-      POSTGRES_DB: ${DB_NAME:-cms}
-      POSTGRES_USER: ${DB_USERNAME:-cms}
+      POSTGRES_DB: ${DB_NAME:-kizuna}
+      POSTGRES_USER: ${DB_USERNAME:-kizuna}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
     volumes:
-      - oli-cms-db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql/data
     networks:
-      - oli-cms-network
+      - network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-cms} -d ${DB_NAME:-cms}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-kizuna} -d ${DB_NAME:-kizuna}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,12 +47,12 @@ services:
   # Cache: Redis
   redis:
     image: redis:8.2.0-alpine3.22
-    container_name: oli-cms-redis
+    container_name: redis
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}
     volumes:
-      - oli-cms-redis-data:/data
+      - redis-data:/data
     networks:
-      - oli-cms-network
+      - network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -61,10 +61,10 @@ services:
 
   # Backend: Java Spring Boot
   backend:
-    image: cms-backend:latest
-    container_name: oli-cms-backend
+    image: kizuna-backend:latest
+    container_name: backend
     networks:
-      - oli-cms-network
+      - network
     env_file:
       - .env
     depends_on:
@@ -89,10 +89,10 @@ services:
 
   # Frontend: next.js
   frontend:
-    image: cms-frontend:latest
-    container_name: oli-cms-frontend
+    image: kizuna-frontend:latest
+    container_name: frontend
     networks:
-      - oli-cms-network
+      - network
     env_file:
       - .env
     depends_on:
@@ -112,11 +112,11 @@ services:
     restart: on-failure:3
 
 networks:
-  oli-cms-network:
+  network:
     driver: bridge
 
 volumes:
-  oli-cms-db-data:
+  db-data:
     driver: local
-  oli-cms-redis-data:
+  redis-data:
     driver: local

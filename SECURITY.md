@@ -94,7 +94,7 @@ and we will adjust priorities accordingly.
 
 Title: Short descriptive title
 
-Product: MYCMS (repository: github.com/<owner>/MYCMS)
+Product: Kizuna (repository: github.com/kanghouchao/Kizuna)
 
 Versions: e.g. 5.1.0, commit abcdef123
 
@@ -158,7 +158,7 @@ upgrade accordingly.
 If you'd like, I can also:
 
 1) Replace placeholder contact details with a suggested address derived
-	 from the repository owner (example: security+mycms@kanghouchao.dev).
+	 from the repository owner (example: security+my@kanghouchao.dev).
 2) Open a PR with this change (or create a draft PR for review).
 
 Please tell me which email and PGP key (if any) you'd like to publish,

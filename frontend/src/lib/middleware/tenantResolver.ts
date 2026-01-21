@@ -7,7 +7,7 @@ export interface TenantData {
   tenantName: string;
 }
 
-const ADMIN_DOMAINS = new Set([process.env.APP_DOMAIN || 'oli-cms.test']);
+const ADMIN_DOMAINS = new Set([process.env.APP_DOMAIN || 'kizuna.test']);
 
 export async function resolveTenant(request: NextRequest): Promise<{
   role: 'central' | 'tenant';

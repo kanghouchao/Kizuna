@@ -95,7 +95,7 @@ Notes on coverage enforcement:
 - Frontend middleware: `frontend/src/middleware.ts` — host/tenant resolution and cookies
 - Shared HTTP client (frontend): `frontend/src/lib/client.ts`
 - Frontend server components (tenant templates): `frontend/src/app/tenant/templates/`
-- Backend Java: `backend/src/main/java/com/cms/`
+- Backend Java: `backend/src/main/java/com/kizuna/`
 - Backend changelogs/migrations: `backend/src/main/resources/db/changelog/`
 - Makefile and Docker compose at repo root control local orchestration.
 

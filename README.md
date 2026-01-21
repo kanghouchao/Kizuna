@@ -5,8 +5,8 @@
 ![Java](https://img.shields.io/badge/Java-21+-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)
 ![Docker](https://img.shields.io/badge/Docker-latest-blue.svg)
-[![CodeQL](https://github.com/kanghouchao/MYCMS/actions/workflows/codeql.yml/badge.svg)](https://github.com/kanghouchao/MYCMS/actions/workflows/codeql.yml)
-[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/kanghouchao/MYCMS/security/dependabot)
+[![CodeQL](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml/badge.svg)](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/kanghouchao/Kizuna/security/dependabot)
 
 Kizuna Platform is a modern, multi-tenant system combining CMS, CRM, and HRM capabilities, built with a split architecture: Spring Boot backend and Next.js frontend, orchestrated with Docker compose.
 
@@ -97,8 +97,8 @@ The application is strictly divided into two functional domains based on the use
 1. Clone the repo
 
 ```bash
-git clone https://github.com/kanghouchao/MYCMS.git
-cd MYCMS
+git clone https://github.com/kanghouchao/Kizuna.git
+cd Kizuna
 ```
 2. copy .env.example to .env and adjust if needed
 
@@ -106,7 +106,7 @@ cd MYCMS
 cp .env.example .env
 ```
 
-2. edit .env to set your preferred admin domain (e.g. `cms.com`)
+2. edit .env to set your preferred admin domain (e.g. `kizuna.com`)
 
 3. Start services
 
@@ -119,12 +119,12 @@ make build up
 Add the following lines to `/etc/hosts` (example using the repo default):
 
 ```text
-127.0.0.1 my-cms.test
+127.0.0.1 kizuna.test
 ```
 
 5. Access
 
-- Central (admin UI): [my-cms.test](http://my-cms.test) (or your configured admin domain)
+- Central (admin UI): [kizuna.test](http://kizuna.test) (or your configured admin domain)
 
 6. You can find password in [5.central-001-admin.yaml](./backend/src/main/resources/db/changelog/changes/5.central-001-admin.yaml)
 
@@ -151,7 +151,7 @@ Add the following lines to `/etc/hosts` (example using the repo default):
 ## Project Structure
 
 ```text
-MYCMS/
+Kizuna/
 ├── backend/                     # Backend Spring Boot API
 ├── frontend/                    # Frontend Next.js app
 ├── environment/                 # Traefik / environment config
@@ -168,7 +168,7 @@ MYCMS/
 
 ## Support
 
-- Open an issue: [github.com/kanghouchao/MYCMS/issues](https://github.com/kanghouchao/MYCMS/issues)
+- Open an issue: [github.com/kanghouchao/Kizuna/issues](https://github.com/kanghouchao/Kizuna/issues)
 
 ## Contributing & AI Guidelines
 
@@ -189,7 +189,7 @@ page about which branch and pull request produced the report.
 To view the latest reports, open the `reports/` folder in the GitHub Pages
 deployment for this repository or visit the repository on GitHub:
 
-- https://github.com/kanghouchao/MYCMS
+- https://github.com/kanghouchao/Kizuna
 
 If you need to update the links in `reports/index.html`, edit the local file
 and open a PR so the CI can regenerate and republish the artifact.
@@ -197,4 +197,4 @@ and open a PR so the CI can regenerate and republish the artifact.
 ---
 
 Author: [kanghouchao](https://github.com/kanghouchao)
-Repository: [github.com/kanghouchao/MYCMS](https://github.com/kanghouchao/MYCMS)
+Repository: [github.com/kanghouchao/Kizuna](https://github.com/kanghouchao/Kizuna)

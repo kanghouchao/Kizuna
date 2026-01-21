@@ -6,7 +6,7 @@ plugins {
     id 'com.diffplug.spotless' version '8.1.0'
 }
 
-group = 'com.cms'
+group = 'com.kizuna'
 version = '0.0.1-SNAPSHOT'
 
 java {

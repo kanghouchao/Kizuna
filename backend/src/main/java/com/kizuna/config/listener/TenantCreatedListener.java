@@ -36,11 +36,11 @@ public class TenantCreatedListener {
     }
 
     var token = registrationService.createToken(tenant.getId());
-    String subject = "[CMS] テナント登録のご案内";
+    String subject = "[きずな] テナント登録のご案内";
     String link = buildTenantRegisterLink(tenant.getDomain(), token);
     String body =
         String.format(
-            "CMSへようこそ, %s，\n\n登録を完了するには次のリンクをクリックしてください： %s \n\nこのリンクは7日間有効です。",
+            "きずなへようこそ, %s，\n\n登録を完了するには次のリンクをクリックしてください： %s \n\nこのリンクは7日間有効です。",
             tenant.getName(), link);
 
     try {
