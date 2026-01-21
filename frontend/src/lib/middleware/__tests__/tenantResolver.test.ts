@@ -20,7 +20,7 @@ describe('tenantResolver', () => {
   beforeEach(() => {
     jest.resetModules();
     process.env = { ...originalEnv };
-    process.env.APP_DOMAIN = 'oli-cms.test';
+    process.env.APP_DOMAIN = 'kizuna.test';
   });
 
   afterEach(() => {
@@ -29,7 +29,7 @@ describe('tenantResolver', () => {
   });
 
   it('identifies central role for admin domains', async () => {
-    const req = createRequest('oli-cms.test');
+    const req = createRequest('kizuna.test');
     const result = await resolveTenant(req);
     expect(result.role).toBe('central');
     expect(result.tenantData).toBeUndefined();

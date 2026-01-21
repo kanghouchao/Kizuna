@@ -1,4 +1,4 @@
-PROJECT_NAME := cms_development
+PROJECT_NAME := kizuna
 service ?=
 
 up:

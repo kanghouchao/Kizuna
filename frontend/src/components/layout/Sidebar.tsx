@@ -65,7 +65,7 @@ export function Sidebar() {
     <aside className="w-64 bg-slate-800 text-white shrink-0 hidden md:block border-r border-slate-700">
       <div className="h-16 flex items-center px-6 border-b border-slate-700">
         <span className="text-xl font-bold tracking-wider text-indigo-400">
-          {role === 'tenant' ? 'TENANT' : 'OLI-CMS'}
+          {role === 'tenant' ? 'TENANT' : 'CENTRAL'}
         </span>
       </div>
       <div className="p-4 overflow-y-auto h-[calc(100vh-4rem)] custom-scrollbar">

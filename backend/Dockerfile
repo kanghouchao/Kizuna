@@ -39,7 +39,7 @@ ENV JAVA_OPTS=${APP_JAVA_OPTS}
 # Install curl used by the healthcheck
 RUN apk add --no-cache curl
 
-COPY --from=build /app/build/libs/cms-*.jar app.jar
+COPY --from=build /app/build/libs/kizuna-*.jar app.jar
 EXPOSE 8080
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

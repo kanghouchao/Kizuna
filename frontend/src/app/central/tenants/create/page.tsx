@@ -157,7 +157,7 @@ export default function CreateTenantPage() {
                       className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                         errors.domain ? 'border-red-300' : ''
                       }`}
-                      placeholder="example.com または tenant1.oli-cms.test"
+                      placeholder="example.com"
                     />
                   </div>
                   {errors.domain && <p className="mt-2 text-sm text-red-600">{errors.domain}</p>}

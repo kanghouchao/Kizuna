@@ -20,7 +20,7 @@ export default function TenantDashboard() {
             </p>
           </div>
         </div>
-        <div className="mt-8 text-center text-gray-400 text-xs">Powered by oli-CMS</div>
+        <div className="mt-8 text-center text-gray-400 text-xs">Powered by Kizuna</div>
       </div>
     </div>
   );

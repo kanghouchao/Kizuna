@@ -25,7 +25,7 @@ export default function AdminLogin() {
     ? tenantName
       ? `${tenantName} ログイン`
       : '店舗ログイン'
-    : 'OLI-CMS 管理者ログイン';
+    : '管理者ログイン';
   const pageSubtitle = isTenant
     ? '店舗アカウントでログインしてください'
     : 'プラットフォーム管理者アカウントでログインしてください';

@@ -3,7 +3,7 @@
 # ======================
 
 # 変数定義
-DOCKER_IMAGE ?= cms-backend
+DOCKER_IMAGE ?= kizuna-backend
 DOCKER_TAG ?= latest
 REPORT_DIR ?= ../reports/
 

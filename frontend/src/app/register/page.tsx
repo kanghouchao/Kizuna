@@ -109,12 +109,12 @@ function RegisterForm() {
           {/* Next.js Image 优化图片加载 */}
           <Image
             src="/images/logos/32.svg"
-            alt="Oli-CMS"
+            alt="KIZUNA Logo"
             width={40}
             height={40}
             className="h-10 mr-3"
           />
-          <h2 className="text-2xl font-bold text-blue-700">Oli-CMS 管理者登録</h2>
+          <h2 className="text-2xl font-bold text-blue-700">KIZUNA 管理者登録</h2>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -190,7 +190,7 @@ function RegisterForm() {
           </div>
         )}
         <div className="mt-8 text-xs text-gray-400 text-center">
-          ご不明点はOli-CMSサポートまでご連絡ください
+          ご不明点はKIZUNAサポートまでご連絡ください
         </div>
       </div>
     </div>

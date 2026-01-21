@@ -6,7 +6,6 @@ out/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 *.war
-*.iml
 *.class
 .idea/
 *.swp
@@ -16,6 +15,3 @@ out/
 *.pid
 .env
 .DS_Store
-
-# Temporary files
-reports/
