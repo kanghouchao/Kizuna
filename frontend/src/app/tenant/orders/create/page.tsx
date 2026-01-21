@@ -4,6 +4,8 @@ import { OrderForm, OrderFormData } from '../_components/OrderForm';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { orderApi } from '@/services/tenant/api';
+import { OrderCreateRequest } from '@/types/order';
 
 export default function CreateOrderPage() {
   const router = useRouter();
@@ -12,15 +14,44 @@ export default function CreateOrderPage() {
   const handleSubmit = async (data: OrderFormData) => {
     setIsSubmitting(true);
     try {
-      // Data docking will happen here later
-      console.log('Order submitted:', data);
+      const request: OrderCreateRequest = {
+        storeName: data.storeName,
+        receptionistId: data.receptionistId || undefined,
+        businessDate: data.businessDate,
+        arrivalScheduledStartTime: data.arrivalStartTime
+          ? `${data.arrivalStartTime}:00`
+          : undefined,
+        arrivalScheduledEndTime: data.arrivalEndTime ? `${data.arrivalEndTime}:00` : undefined,
+        customerName: data.customerName,
+        phoneNumber: data.phoneNumber,
+        phoneNumber2: data.phoneNumber2,
+        address: data.address,
+        buildingName: data.buildingName,
+        classification: data.classification,
+        landmark: data.landmark,
+        hasPet: data.hasPet,
+        ngType: data.ngType,
+        ngContent: data.ngContent,
+        girlId: data.girlId, // Note: ID might need to be resolved if user inputs name, but form says 'girlId'
+        courseMinutes: Number(data.courseMinutes),
+        extensionMinutes: Number(data.extensionMinutes),
+        optionCodes: data.options || [],
+        discountName: data.discountName,
+        manualDiscount: Number(data.manualDiscount),
+        carrier: data.carrier,
+        mediaName: data.mediaName,
+        usedPoints: Number(data.usedPoints),
+        manualGrantPoints: Number(data.manualGrantPoints),
+        remarks: data.remarks,
+        girlDriverMessage: data.girlDriverMessage,
+      };
 
-      // Mock delay
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await orderApi.create(request);
 
       toast.success('オーダーを登録しました');
       router.push('/tenant/orders');
     } catch (error) {
+      console.error(error);
       toast.error('オーダーの登録に失敗しました');
     } finally {
       setIsSubmitting(false);
