@@ -18,7 +18,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings("null")
 class TenantRegistrationServiceImplTest {
 
   @Mock StringRedisTemplate redisTemplate;

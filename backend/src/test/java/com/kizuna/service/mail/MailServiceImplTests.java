@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
-@SuppressWarnings("null")
 public class MailServiceImplTests {
 
   @Test
