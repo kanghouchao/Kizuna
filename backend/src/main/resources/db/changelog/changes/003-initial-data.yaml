@@ -54,3 +54,85 @@ databaseChangeLog:
               - column:
                   name: role_id
                   valueNumeric: 1
+  - changeSet:
+      id: central-003-seed-sample-tenant
+      author: gemini
+      changes:
+        - insert:
+            tableName: central_tenants
+            columns:
+              - column:
+                  name: id
+                  valueNumeric: 1
+              - column:
+                  name: name
+                  value: Sample Tenant
+              - column:
+                  name: domain
+                  value: store1.kizuna.test
+              - column:
+                  name: email
+                  value: admin@store1.kizuna.com
+        - insert:
+            tableName: t_roles
+            columns:
+              - column:
+                  name: id
+                  value: role-1
+              - column:
+                  name: tenant_id
+                  valueNumeric: 1
+              - column:
+                  name: name
+                  value: ADMIN
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column:
+                  name: id
+                  value: perm-1
+              - column:
+                  name: tenant_id
+                  valueNumeric: 1
+              - column:
+                  name: name
+                  value: ALL_FUNCTIONS
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column:
+                  name: role_id
+                  value: role-1
+              - column:
+                  name: permission_id
+                  value: perm-1
+        - insert:
+            tableName: t_users
+            columns:
+              - column:
+                  name: id
+                  value: user-1
+              - column:
+                  name: tenant_id
+                  valueNumeric: 1
+              - column:
+                  name: nickname
+                  value: Tenant Admin
+              - column:
+                  name: email
+                  value: admin@store1.kizuna.com
+              - column:
+                  name: password
+                  value: "$2a$10$TAnVD5vZNlATP5wayRg1SOo8UKP7m9TpzbaLJejOplq55OJxRhPnS"
+              - column:
+                  name: enabled
+                  valueBoolean: true
+        - insert:
+            tableName: t_user_roles
+            columns:
+              - column:
+                  name: user_id
+                  value: user-1
+              - column:
+                  name: role_id
+                  value: role-1

@@ -65,17 +65,6 @@ The application is strictly divided into two functional domains based on the use
         *   `/tenant/dashboard`: The secured back-office area (requires login).
         *   `/tenant/site` (Future): Public landing pages for customers.
 
-```text
-                   ┌─────────────────┐
-                   │   Frontend      │
-   ┌──────────────►│   Next.js (3000)│
-   │               └─────────────────┘
-```
-
-- Routing: `/api/*` → backend (prefix stripped before reaching Spring); everything else → frontend
-- Backend API namespaces: `/central/*` (admin) and `/tenant/*` (tenant)
-- Domain switch (frontend middleware): admin domains render the central app, others render the tenant app
-
 ### Multi-tenant flow and cookies
 
 - Frontend middleware decides the role based on the host name and validates the tenant via backend
@@ -119,14 +108,20 @@ make build up
 Add the following lines to `/etc/hosts` (example using the repo default):
 
 ```text
-127.0.0.1 kizuna.test
+127.0.0.1 kizuna.test store1.kizuna.test
 ```
 
 5. Access
 
 - Central (admin UI): [kizuna.test](http://kizuna.test) (or your configured admin domain)
+- Sample Tenant (store UI): [store1.kizuna.test](http://store1.kizuna.test)
 
-6. You can find password in [5.central-001-admin.yaml](./backend/src/main/resources/db/changelog/changes/5.central-001-admin.yaml)
+6. Default Credentials
+
+You can find the initial data setup in [003-initial-data.yaml](./backend/src/main/resources/db/changelog/changes/003-initial-data.yaml).
+
+- **Central Admin:** `admin` / (check password hash in file)
+- **Sample Tenant Admin:** `admin@store1.kizuna.com` / (check password hash in file)
 
 7. Login and have fun!
 
@@ -164,7 +159,7 @@ Kizuna/
 
 - If ports are busy, ensure nothing else is using 80, 443
 - Confirm `/etc/hosts` entries resolve to your machine
-- if you cannot login, please create a new password hash via [bcrypt-generator.com](https://bcrypt-generator.com/) and update the password in [5.central-001-admin.yaml](./backend/src/main/resources/db/changelog/changes/5.central-001-admin.yaml), then run `make clean` and `make up` again.
+- if you cannot login, please create a new password hash via [bcrypt-generator.com](https://bcrypt-generator.com/) and update the password in [003-initial-data.yaml](./backend/src/main/resources/db/changelog/changes/003-initial-data.yaml), then run `make clean` and `make up` again.
 
 ## Support
 
