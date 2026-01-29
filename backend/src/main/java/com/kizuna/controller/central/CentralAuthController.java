@@ -11,7 +11,6 @@ import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import java.security.Principal;
-import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
@@ -61,15 +60,7 @@ public class CentralAuthController {
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
     if (authHeader != null && authHeader.startsWith("Bearer ")) {
       String token = authHeader.substring(7);
-      var claims = jwtUtil.getClaims(token);
-      long exp = claims.getExpiration().getTime();
-      long now = System.currentTimeMillis();
-      long ttl = Math.max(0, exp - now);
-      if (ttl > 0) {
-        redisTemplate
-            .opsForValue()
-            .set("blacklist:tokens:" + token, "1", ttl, TimeUnit.MILLISECONDS);
-      }
+      redisTemplate.delete("blacklist:tokens:" + token);
     }
     SecurityContextHolder.clearContext();
     return ResponseEntity.noContent().build();

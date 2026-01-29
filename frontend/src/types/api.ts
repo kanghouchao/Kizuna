@@ -16,12 +16,15 @@ export interface PaginatedResponse<T> {
 // 管理者
 export interface Admin {
   id: number;
-  name: string;
-  email: string;
+  username: string;
   role: 'super_admin' | 'admin';
-  is_active: boolean;
-  created_at: string;
-  updated_at?: string;
+}
+
+export interface MenuVO {
+  name: string;
+  path?: string;
+  icon?: string;
+  items?: MenuVO[];
 }
 
 // 認証レスポンス

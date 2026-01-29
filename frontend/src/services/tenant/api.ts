@@ -1,5 +1,11 @@
 import apiClient from '@/lib/client';
-import { RegisterRequest, RegisterResponse, LoginRequest, LoginResponse } from '@/types/api';
+import {
+  RegisterRequest,
+  RegisterResponse,
+  LoginRequest,
+  LoginResponse,
+  MenuVO,
+} from '@/types/api';
 import { Order, OrderCreateRequest, Page } from '@/types/order';
 
 export const authApi = {
@@ -16,6 +22,13 @@ export const authApi = {
   },
   me: async (): Promise<any> => {
     const response = await apiClient.get('/tenant/me');
+    return response.data;
+  },
+};
+
+export const tenantApi = {
+  getMenus: async (): Promise<MenuVO[]> => {
+    const response = await apiClient.get('/tenant/menus/me');
     return response.data;
   },
 };

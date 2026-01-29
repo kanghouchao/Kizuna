@@ -54,4 +54,9 @@ export const centralApi = {
     const response = await apiClient.get('/central/tenants/stats');
     return response.data;
   },
+  getMenus: async (): Promise<MenuVO[]> => {
+    const response = await apiClient.get('/central/menus/me');
+    return response.data;
+  },
 };
+import { MenuVO } from '@/types/api';

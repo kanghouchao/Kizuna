@@ -49,9 +49,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       await getAuthApi().logout();
-      router.push('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
     } finally {
       Cookies.remove('token');
+      router.push('/login');
     }
   };
 
