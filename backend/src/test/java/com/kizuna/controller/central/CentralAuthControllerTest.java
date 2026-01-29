@@ -15,11 +15,8 @@ import com.kizuna.model.entity.central.security.CentralUser;
 import com.kizuna.repository.central.CentralUserRepository;
 import com.kizuna.service.central.auth.CentralAuthService;
 import com.kizuna.utils.JwtUtil;
-import io.jsonwebtoken.Claims;
 import java.security.Principal;
-import java.util.Date;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +24,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -88,23 +84,14 @@ class CentralAuthControllerTest {
   }
 
   @Test
-  void logout_blacklistsToken() {
+  void logout_deletesToken() {
     String token = "jwt-token";
     String header = "Bearer " + token;
-    Claims claims = mock(Claims.class);
-    // Expiration in future
-    when(claims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 10000));
-    when(jwtUtil.getClaims(token)).thenReturn(claims);
-
-    @SuppressWarnings("unchecked")
-    ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
-    when(redisTemplate.opsForValue()).thenReturn(valueOps);
 
     ResponseEntity<?> response = controller.logout(header);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-    verify(valueOps)
-        .set(eq("blacklist:tokens:" + token), eq("1"), any(Long.class), eq(TimeUnit.MILLISECONDS));
+    verify(redisTemplate).delete("blacklist:tokens:" + token);
   }
 
   @Test
