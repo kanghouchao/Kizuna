@@ -44,9 +44,7 @@ class TenantMenuServiceImplTest {
     when(tenantContext.getTenantId()).thenReturn(1L);
 
     Authentication auth = mock(Authentication.class);
-    doReturn(List.of(new SimpleGrantedAuthority("PERM_ORDER_READ")))
-        .when(auth)
-        .getAuthorities();
+    doReturn(List.of(new SimpleGrantedAuthority("PERM_ORDER_READ"))).when(auth).getAuthorities();
     SecurityContext context = mock(SecurityContext.class);
     when(context.getAuthentication()).thenReturn(auth);
     SecurityContextHolder.setContext(context);

@@ -35,9 +35,7 @@ class CentralMenuServiceImplTest {
   void getMyMenus_returnsFilteredMenus() {
     // Mock Authentication with PERM_TENANT_MANAGE
     Authentication auth = mock(Authentication.class);
-    doReturn(List.of(new SimpleGrantedAuthority("PERM_TENANT_MANAGE")))
-        .when(auth)
-        .getAuthorities();
+    doReturn(List.of(new SimpleGrantedAuthority("PERM_TENANT_MANAGE"))).when(auth).getAuthorities();
     SecurityContext context = mock(SecurityContext.class);
     when(context.getAuthentication()).thenReturn(auth);
     SecurityContextHolder.setContext(context);
