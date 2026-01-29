@@ -29,12 +29,24 @@ public class TenantAuthController {
   }
 
   @PostMapping("/logout")
-  @PermitAll // Token is validated by Filter, if valid we delete it.
+  @PermitAll // Token is validated by Filter, if valid we blacklist it.
   public ResponseEntity<?> logout(
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
     if (authHeader != null && authHeader.startsWith("Bearer ")) {
       String token = authHeader.substring(7);
-      redisTemplate.delete("blacklist:tokens:" + token);
+      try {
+        var claims = jwtUtil.getClaims(token);
+        long exp = claims.getExpiration().getTime();
+        long now = System.currentTimeMillis();
+        long ttl = Math.max(0, exp - now);
+        if (ttl > 0) {
+          redisTemplate
+              .opsForValue()
+              .set("blacklist:tokens:" + token, "1", ttl, TimeUnit.MILLISECONDS);
+        }
+      } catch (Exception e) {
+        // Token might be expired or malformed, skip blacklisting
+      }
     }
     SecurityContextHolder.clearContext();
     return ResponseEntity.noContent().build();

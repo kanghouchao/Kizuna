@@ -1,11 +1,13 @@
 package com.kizuna.service.tenant;
 
 import com.kizuna.config.TenantScoped;
+import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;
 import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
 import com.kizuna.model.entity.tenant.Order;
+import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
 import com.kizuna.repository.tenant.GirlRepository;
 import com.kizuna.repository.tenant.OrderRepository;
@@ -24,6 +26,8 @@ public class OrderServiceImpl implements OrderService {
   private final CustomerRepository customerRepository;
   private final GirlRepository girlRepository;
   private final TenantUserRepository tenantUserRepository;
+  private final TenantRepository tenantRepository;
+  private final TenantContext tenantContext;
 
   @Override
   @TenantScoped
@@ -156,6 +160,11 @@ public class OrderServiceImpl implements OrderService {
                     newCustomer.setHasPet(req.getHasPet() != null ? req.getHasPet() : false);
                     newCustomer.setNgType(req.getNgType());
                     newCustomer.setNgContent(req.getNgContent());
+                    // Set Tenant Explicitly
+                    newCustomer.setTenant(
+                        tenantRepository
+                            .findById(tenantContext.getTenantId())
+                            .orElseThrow(() -> new ServiceException("Tenant context not found")));
                     return customerRepository.save(newCustomer);
                   });
       order.setCustomer(customer);
@@ -203,6 +212,9 @@ public class OrderServiceImpl implements OrderService {
         .remarks(order.getRemarks())
         .girlDriverMessage(order.getGirlDriverMessage())
         .status(order.getStatus())
+        // Added location fields
+        .locationAddress(order.getLocationAddress())
+        .locationBuilding(order.getLocationBuilding())
         .build();
   }
 }

@@ -120,8 +120,10 @@ Add the following lines to `/etc/hosts` (example using the repo default):
 
 You can find the initial data setup in [003-initial-data.yaml](./backend/src/main/resources/db/changelog/changes/003-initial-data.yaml).
 
-- **Central Admin:** `admin` / (check password hash in file)
-- **Sample Tenant Admin:** `admin@store1.kizuna.com` / (check password hash in file)
+- **Central Admin:** `admin` / default password (see note below)
+- **Sample Tenant Admin:** `admin@store1.kizuna.com` / default password (see note below)
+
+Both accounts share the same default password (`pass`), derived from the same bcrypt hash (`$2a$10$TAnVD5vZNlATP5wayRg1SOo8UKP7m9TpzbaLJejOplq55OJxRhPnS`) defined in `003-initial-data.yaml`.
 
 7. Login and have fun!
 
@@ -159,7 +161,7 @@ Kizuna/
 
 - If ports are busy, ensure nothing else is using 80, 443
 - Confirm `/etc/hosts` entries resolve to your machine
-- if you cannot login, please create a new password hash via [bcrypt-generator.com](https://bcrypt-generator.com/) and update the password in [003-initial-data.yaml](./backend/src/main/resources/db/changelog/changes/003-initial-data.yaml), then run `make clean` and `make up` again.
+- If you cannot log in, generate a new bcrypt password hash locally using trusted tooling (e.g. `htpasswd` or Python's `bcrypt`), update the password in [003-initial-data.yaml](./backend/src/main/resources/db/changelog/changes/003-initial-data.yaml), then run `make clean` and `make up` again.
 
 ## Support
 

@@ -1,15 +1,9 @@
-package com.kizuna.controller.central;
-
-import com.kizuna.model.dto.auth.LoginRequest;
-import com.kizuna.model.dto.auth.Token;
-import com.kizuna.model.dto.central.AdminDto;
-import com.kizuna.model.entity.central.security.CentralUser;
-import com.kizuna.repository.central.CentralUserRepository;
-import com.kizuna.service.central.auth.CentralAuthService;
+import com.kizuna.utils.JwtUtil;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import java.security.Principal;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +28,7 @@ public class CentralAuthController {
   private final CentralAuthService authService;
   private final CentralUserRepository userRepository;
   private final RedisTemplate<String, Object> redisTemplate;
+  private final JwtUtil jwtUtil;
 
   @PostMapping("/login")
   @PermitAll
@@ -58,7 +53,19 @@ public class CentralAuthController {
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
     if (authHeader != null && authHeader.startsWith("Bearer ")) {
       String token = authHeader.substring(7);
-      redisTemplate.delete("blacklist:tokens:" + token);
+      try {
+        var claims = jwtUtil.getClaims(token);
+        long exp = claims.getExpiration().getTime();
+        long now = System.currentTimeMillis();
+        long ttl = Math.max(0, exp - now);
+        if (ttl > 0) {
+          redisTemplate
+              .opsForValue()
+              .set("blacklist:tokens:" + token, "1", ttl, TimeUnit.MILLISECONDS);
+        }
+      } catch (Exception e) {
+        // Token invalid or expired, ignore
+      }
     }
     SecurityContextHolder.clearContext();
     return ResponseEntity.noContent().build();

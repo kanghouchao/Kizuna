@@ -1,19 +1,16 @@
 package com.kizuna.service.tenant;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
+import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;
 import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
+import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.Customer;
 import com.kizuna.model.entity.tenant.Girl;
 import com.kizuna.model.entity.tenant.Order;
 import com.kizuna.model.entity.tenant.security.TenantUser;
+import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
 import com.kizuna.repository.tenant.GirlRepository;
 import com.kizuna.repository.tenant.OrderRepository;
@@ -40,10 +37,13 @@ class OrderServiceImplTest {
   @Mock CustomerRepository customerRepository;
   @Mock GirlRepository girlRepository;
   @Mock TenantUserRepository tenantUserRepository;
+  @Mock TenantRepository tenantRepository;
+  @Mock TenantContext tenantContext;
 
   @InjectMocks OrderServiceImpl service;
 
   @Captor ArgumentCaptor<Order> orderCaptor;
+  @Captor ArgumentCaptor<Customer> customerCaptor;
 
   @Test
   void listReturnsPageOfOrderResponses() {
@@ -95,7 +95,38 @@ class OrderServiceImplTest {
   }
 
   @Test
+  void createCreatesCustomerWhenPhoneProvided() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setStoreName("S1");
+    req.setPhoneNumber("09012345678");
+    req.setCustomerName("New Guy");
+
+    // Mock tenant context for customer creation
+    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
+
+    // Mock customer lookup (not found) and save
+    when(customerRepository.findByPhoneNumber("09012345678")).thenReturn(Optional.empty());
+    when(customerRepository.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+
+    service.create(req);
+
+    // Verify customer was created
+    verify(customerRepository).save(customerCaptor.capture());
+    Customer newCustomer = customerCaptor.getValue();
+    assertThat(newCustomer.getName()).isEqualTo("New Guy");
+    assertThat(newCustomer.getPhoneNumber()).isEqualTo("09012345678");
+    assertThat(newCustomer.getTenant()).isNotNull(); // Verify tenant was set
+
+    // Verify order was linked
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomer()).isEqualTo(newCustomer);
+  }
+
+  @Test
   void createThrowsWhenCustomerNotFound() {
+
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCustomerId("c1");
     when(customerRepository.findById("c1")).thenReturn(Optional.empty());

@@ -8,6 +8,7 @@ import {
   UpdateTenantRequest,
   TenantStats,
   PaginatedResponse,
+  MenuVO,
 } from '@/types/api';
 
 export const authApi = {
@@ -59,4 +60,3 @@ export const centralApi = {
     return response.data;
   },
 };
-import { MenuVO } from '@/types/api';
