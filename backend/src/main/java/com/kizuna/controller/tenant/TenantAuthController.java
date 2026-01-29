@@ -2,8 +2,10 @@ package com.kizuna.controller.tenant;
 
 import com.kizuna.model.dto.auth.LoginRequest;
 import com.kizuna.service.tenant.TenantAuthService;
+import com.kizuna.utils.JwtUtil;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ public class TenantAuthController {
 
   private final TenantAuthService authService;
   private final RedisTemplate<String, Object> redisTemplate;
+  private final JwtUtil jwtUtil;
 
   @PostMapping("/login")
   @PermitAll

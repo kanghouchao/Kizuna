@@ -1,5 +1,11 @@
 package com.kizuna.service.tenant;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
@@ -126,7 +132,6 @@ class OrderServiceImplTest {
 
   @Test
   void createThrowsWhenCustomerNotFound() {
-
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCustomerId("c1");
     when(customerRepository.findById("c1")).thenReturn(Optional.empty());

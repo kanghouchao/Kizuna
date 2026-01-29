@@ -32,4 +32,6 @@ public class OrderResponse {
   private String remarks;
   private String girlDriverMessage;
   private String status;
+  private String locationAddress;
+  private String locationBuilding;
 }
