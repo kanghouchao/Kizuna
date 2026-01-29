@@ -16,8 +16,8 @@ Current versions in this workspace (source of truth):
 
 | Component | File | Version |
 | --------- | ---- | ------- |
-| Backend   | `backend/build.gradle` | `0.0.1-SNAPSHOT` |
-| Frontend  | `frontend/package.json` | `0.1.0` |
+| Backend   | `backend/build.gradle` | `0.1.0` |
+| Frontend  | `frontend/package.json` | `0.1.1` |
 
 Supported versions policy (recommended):
 
