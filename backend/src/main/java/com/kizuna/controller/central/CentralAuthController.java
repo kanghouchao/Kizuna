@@ -6,7 +6,6 @@ import com.kizuna.model.dto.central.AdminDto;
 import com.kizuna.model.entity.central.security.CentralUser;
 import com.kizuna.repository.central.CentralUserRepository;
 import com.kizuna.service.central.auth.CentralAuthService;
-import com.kizuna.utils.JwtUtil;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
@@ -35,7 +34,6 @@ public class CentralAuthController {
   private final CentralAuthService authService;
   private final CentralUserRepository userRepository;
   private final RedisTemplate<String, Object> redisTemplate;
-  private final JwtUtil jwtUtil;
 
   @PostMapping("/login")
   @PermitAll
