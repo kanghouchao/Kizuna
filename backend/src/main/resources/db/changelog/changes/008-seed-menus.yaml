@@ -1,0 +1,196 @@
+databaseChangeLog:
+  - changeSet:
+      id: central-008-seed-menus
+      author: gemini
+      changes:
+        # Central Menus
+        - insert:
+            tableName: central_menus
+            columns:
+              - column: { name: id, valueNumeric: 1 }
+              - column: { name: label, value: "メイン" }
+              - column: { name: sort_order, valueNumeric: 10 }
+        - insert:
+            tableName: central_menus
+            columns:
+              - column: { name: id, valueNumeric: 2 }
+              - column: { name: parent_id, valueNumeric: 1 }
+              - column: { name: label, value: "ダッシュボード" }
+              - column: { name: path, value: "/central/dashboard" }
+              - column: { name: icon, value: "HomeIcon" }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: central_menus
+            columns:
+              - column: { name: id, valueNumeric: 3 }
+              - column: { name: parent_id, valueNumeric: 1 }
+              - column: { name: label, value: "テナント一覧" }
+              - column: { name: path, value: "/central/tenants" }
+              - column: { name: icon, value: "BuildingOfficeIcon" }
+              - column: { name: permission, value: "TENANT_MANAGE" }
+              - column: { name: sort_order, valueNumeric: 2 }
+
+        # Tenant Menus (For Sample Tenant ID 1) - Updated Structure
+        # 1. Main
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-main" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: label, value: "メイン" }
+              - column: { name: sort_order, valueNumeric: 10 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-dashboard" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-main" }
+              - column: { name: label, value: "ダッシュボード" }
+              - column: { name: path, value: "/tenant/dashboard" }
+              - column: { name: icon, value: "HomeIcon" }
+              - column: { name: sort_order, valueNumeric: 1 }
+
+        # 2. Operations
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-ops" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: label, value: "業務管理" }
+              - column: { name: sort_order, valueNumeric: 20 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-orders" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-ops" }
+              - column: { name: label, value: "予約・案件管理" }
+              - column: { name: path, value: "/tenant/orders" }
+              - column: { name: icon, value: "ClipboardDocumentListIcon" }
+              - column: { name: sort_order, valueNumeric: 1 }
+
+        # 3. HRM
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-hrm" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: label, value: "HRM" }
+              - column: { name: sort_order, valueNumeric: 30 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-cast" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-hrm" }
+              - column: { name: label, value: "キャスト管理" }
+              - column: { name: path, value: "/tenant/casts" }
+              - column: { name: icon, value: "FaceSmileIcon" }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-shift" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-hrm" }
+              - column: { name: label, value: "シフト管理" }
+              - column: { name: path, value: "/tenant/shifts" }
+              - column: { name: icon, value: "ClockIcon" }
+              - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-staff" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-hrm" }
+              - column: { name: label, value: "スタッフ管理" }
+              - column: { name: path, value: "/tenant/staff" }
+              - column: { name: icon, value: "UsersIcon" }
+              - column: { name: sort_order, valueNumeric: 3 }
+
+        # 4. CRM
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-crm" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: label, value: "CRM" }
+              - column: { name: sort_order, valueNumeric: 40 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-customers" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-crm" }
+              - column: { name: label, value: "顧客一覧" }
+              - column: { name: path, value: "/tenant/customers" }
+              - column: { name: icon, value: "UserGroupIcon" }
+              - column: { name: sort_order, valueNumeric: 1 }
+
+        # 5. CMS
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-cms" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: label, value: "CMS" }
+              - column: { name: sort_order, valueNumeric: 50 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-news" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-cms" }
+              - column: { name: label, value: "お知らせ管理" }
+              - column: { name: path, value: "/tenant/news" }
+              - column: { name: icon, value: "MegaphoneIcon" }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-pages" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-cms" }
+              - column: { name: label, value: "ページ管理" }
+              - column: { name: path, value: "/tenant/pages" }
+              - column: { name: icon, value: "DocumentTextIcon" }
+              - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-media" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-cms" }
+              - column: { name: label, value: "バナー・画像" }
+              - column: { name: path, value: "/tenant/media" }
+              - column: { name: icon, value: "PhotoIcon" }
+              - column: { name: sort_order, valueNumeric: 3 }
+
+        # 6. Settings
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-settings-group" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: label, value: "設定" }
+              - column: { name: sort_order, valueNumeric: 60 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-profile" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-settings-group" }
+              - column: { name: label, value: "店舗情報" }
+              - column: { name: path, value: "/tenant/settings/profile" }
+              - column: { name: icon, value: "BuildingStorefrontIcon" }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-roles" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-settings-group" }
+              - column: { name: label, value: "ロール・権限" }
+              - column: { name: path, value: "/tenant/settings/roles" }
+              - column: { name: icon, value: "KeyIcon" }
+              - column: { name: sort_order, valueNumeric: 2 }

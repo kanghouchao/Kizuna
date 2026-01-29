@@ -18,6 +18,15 @@ public class OrderCreateRequest {
 
   private String customerId; // Usually look up or create customer first
   private String customerName; // Simple handling if no ID yet
+  private String phoneNumber;
+  private String phoneNumber2;
+  private String address;
+  private String buildingName;
+  private String classification;
+  private String landmark;
+  private Boolean hasPet;
+  private String ngType;
+  private String ngContent;
 
   private String girlId;
 

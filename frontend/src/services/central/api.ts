@@ -8,6 +8,7 @@ import {
   UpdateTenantRequest,
   TenantStats,
   PaginatedResponse,
+  MenuVO,
 } from '@/types/api';
 
 export const authApi = {
@@ -52,6 +53,10 @@ export const centralApi = {
   },
   getStats: async (): Promise<TenantStats> => {
     const response = await apiClient.get('/central/tenants/stats');
+    return response.data;
+  },
+  getMenus: async (): Promise<MenuVO[]> => {
+    const response = await apiClient.get('/central/menus/me');
     return response.data;
   },
 };

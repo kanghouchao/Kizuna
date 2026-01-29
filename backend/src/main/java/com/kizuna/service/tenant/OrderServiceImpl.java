@@ -1,11 +1,13 @@
 package com.kizuna.service.tenant;
 
 import com.kizuna.config.TenantScoped;
+import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;
 import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
 import com.kizuna.model.entity.tenant.Order;
+import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
 import com.kizuna.repository.tenant.GirlRepository;
 import com.kizuna.repository.tenant.OrderRepository;
@@ -24,6 +26,8 @@ public class OrderServiceImpl implements OrderService {
   private final CustomerRepository customerRepository;
   private final GirlRepository girlRepository;
   private final TenantUserRepository tenantUserRepository;
+  private final TenantRepository tenantRepository;
+  private final TenantContext tenantContext;
 
   @Override
   @TenantScoped
@@ -126,20 +130,53 @@ public class OrderServiceImpl implements OrderService {
     order.setGirlDriverMessage(req.getGirlDriverMessage());
     order.setStatus("CREATED");
 
-    if (req.getCustomerId() != null) {
+    // Set location info from request
+    order.setLocationAddress(req.getAddress());
+    order.setLocationBuilding(req.getBuildingName());
+
+    // Smart Customer Linking
+    if (req.getCustomerId() != null && !req.getCustomerId().isEmpty()) {
       order.setCustomer(
           customerRepository
               .findById(req.getCustomerId())
               .orElseThrow(
                   () -> new ServiceException("Customer not found: " + req.getCustomerId())));
+    } else if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
+      // Find or Create Customer
+      com.kizuna.model.entity.tenant.Customer customer =
+          customerRepository
+              .findByPhoneNumber(req.getPhoneNumber())
+              .orElseGet(
+                  () -> {
+                    com.kizuna.model.entity.tenant.Customer newCustomer =
+                        new com.kizuna.model.entity.tenant.Customer();
+                    newCustomer.setName(req.getCustomerName());
+                    newCustomer.setPhoneNumber(req.getPhoneNumber());
+                    newCustomer.setPhoneNumber2(req.getPhoneNumber2());
+                    newCustomer.setAddress(req.getAddress());
+                    newCustomer.setBuildingName(req.getBuildingName());
+                    newCustomer.setClassification(req.getClassification());
+                    newCustomer.setLandmark(req.getLandmark());
+                    newCustomer.setHasPet(req.getHasPet() != null ? req.getHasPet() : false);
+                    newCustomer.setNgType(req.getNgType());
+                    newCustomer.setNgContent(req.getNgContent());
+                    // Set Tenant Explicitly
+                    newCustomer.setTenant(
+                        tenantRepository
+                            .findById(tenantContext.getTenantId())
+                            .orElseThrow(() -> new ServiceException("Tenant context not found")));
+                    return customerRepository.save(newCustomer);
+                  });
+      order.setCustomer(customer);
     }
-    if (req.getGirlId() != null) {
+
+    if (req.getGirlId() != null && !req.getGirlId().isEmpty()) {
       order.setGirl(
           girlRepository
               .findById(req.getGirlId())
               .orElseThrow(() -> new ServiceException("Girl not found: " + req.getGirlId())));
     }
-    if (req.getReceptionistId() != null) {
+    if (req.getReceptionistId() != null && !req.getReceptionistId().isEmpty()) {
       order.setReceptionist(
           tenantUserRepository
               .findById(req.getReceptionistId())
@@ -175,6 +212,9 @@ public class OrderServiceImpl implements OrderService {
         .remarks(order.getRemarks())
         .girlDriverMessage(order.getGirlDriverMessage())
         .status(order.getStatus())
+        // Added location fields
+        .locationAddress(order.getLocationAddress())
+        .locationBuilding(order.getLocationBuilding())
         .build();
   }
 }

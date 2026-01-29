@@ -8,7 +8,6 @@ import com.kizuna.config.interceptor.TenantIdInterceptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 
-@SuppressWarnings("null")
 class WebMvcConfigTest {
 
   @Test

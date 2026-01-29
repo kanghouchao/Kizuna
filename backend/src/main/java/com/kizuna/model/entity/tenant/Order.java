@@ -79,6 +79,21 @@ public class Order extends BaseEntity {
   @Column(name = "manual_grant_points")
   private Integer manualGrantPoints;
 
+  @Column(name = "survey_status")
+  private String surveyStatus;
+
+  @Column(name = "location_address")
+  private String locationAddress;
+
+  @Column(name = "location_building")
+  private String locationBuilding;
+
+  @Column(name = "actual_arrival_time")
+  private LocalTime actualArrivalTime;
+
+  @Column(name = "actual_end_time")
+  private LocalTime actualEndTime;
+
   @Column(name = "remarks")
   private String remarks;
 

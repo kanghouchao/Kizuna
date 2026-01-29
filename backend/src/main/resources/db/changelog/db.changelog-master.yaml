@@ -17,3 +17,9 @@ databaseChangeLog:
   - include:
       file: changes/006-create-orders.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/007-create-menus.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/008-seed-menus.yaml
+      relativeToChangelogFile: true

@@ -15,41 +15,44 @@ import {
   UserGroupIcon,
   CogIcon,
   AdjustmentsHorizontalIcon,
+  FaceSmileIcon,
+  ClockIcon,
+  UsersIcon,
+  MegaphoneIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  BuildingStorefrontIcon,
+  KeyIcon,
 } from '@heroicons/react/24/outline';
+import { centralApi } from '@/services/central/api';
+import { tenantApi } from '@/services/tenant/api';
+import { MenuVO } from '@/types/api';
 
-const centralNavigation = [
-  {
-    name: 'メイン',
-    items: [
-      { name: 'ダッシュボード', href: '/central/dashboard', icon: HomeIcon },
-      { name: 'テナント一覧', href: '/central/tenants', icon: BuildingOfficeIcon },
-    ],
-  },
-];
-
-const tenantNavigation = [
-  {
-    name: 'メイン',
-    items: [{ name: 'ダッシュボード', href: '/tenant/dashboard', icon: HomeIcon }],
-  },
-  {
-    name: '配車システム',
-    items: [
-      { name: 'オーダー一覧', href: '/tenant/orders', icon: ClipboardDocumentListIcon },
-      { name: 'オーダー登録', href: '/tenant/orders/create', icon: PlusCircleIcon },
-      { name: '精算', href: '#', icon: CurrencyYenIcon },
-      { name: '業務', href: '#', icon: BriefcaseIcon },
-      { name: '集計', href: '#', icon: ChartBarIcon },
-      { name: '顧客管理', href: '#', icon: UserGroupIcon },
-      { name: 'マスタ管理', href: '#', icon: CogIcon },
-      { name: '設定', href: '#', icon: AdjustmentsHorizontalIcon },
-    ],
-  },
-];
+const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
+  HomeIcon,
+  BuildingOfficeIcon,
+  ClipboardDocumentListIcon,
+  PlusCircleIcon,
+  CurrencyYenIcon,
+  BriefcaseIcon,
+  ChartBarIcon,
+  UserGroupIcon,
+  CogIcon,
+  AdjustmentsHorizontalIcon,
+  FaceSmileIcon,
+  ClockIcon,
+  UsersIcon,
+  MegaphoneIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  BuildingStorefrontIcon,
+  KeyIcon,
+};
 
 export function Sidebar() {
   const pathname = usePathname();
   const [role, setRole] = useState<string>('central');
+  const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
     // Read the role from the cookie set by middleware
@@ -59,7 +62,33 @@ export function Sidebar() {
     }
   }, []);
 
-  const navigation = role === 'tenant' ? tenantNavigation : centralNavigation;
+  useEffect(() => {
+    const fetchMenus = async () => {
+      try {
+        let menus: MenuVO[] = [];
+        if (role === 'central') {
+          menus = await centralApi.getMenus();
+        } else if (role === 'tenant') {
+          menus = await tenantApi.getMenus();
+        }
+
+        const mappedNavigation = menus.map(section => ({
+          name: section.name,
+          items: (section.items || []).map(item => ({
+            name: item.name,
+            href: item.path || '#',
+            icon: item.icon && ICON_MAP[item.icon] ? ICON_MAP[item.icon] : HomeIcon,
+          })),
+        }));
+
+        setNavigation(mappedNavigation);
+      } catch (error) {
+        console.error('Failed to fetch menus', error);
+      }
+    };
+
+    fetchMenus();
+  }, [role]);
 
   return (
     <aside className="w-64 bg-slate-800 text-white shrink-0 hidden md:block border-r border-slate-700">
@@ -76,7 +105,7 @@ export function Sidebar() {
                 {section.name}
               </h3>
               <ul className="space-y-1">
-                {section.items.map(item => {
+                {section.items.map((item: any) => {
                   const isActive = pathname === item.href;
                   return (
                     <li key={item.name}>

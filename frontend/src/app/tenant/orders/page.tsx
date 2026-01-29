@@ -8,32 +8,32 @@ import {
   TrashIcon,
   EyeIcon,
 } from '@heroicons/react/24/outline';
-
-// Mock data
-const mockOrders = [
-  {
-    id: '1',
-    businessDate: '2025-12-31',
-    customerName: '山田太郎',
-    storeName: '沼津H',
-    girlName: 'サクラ',
-    courseMinutes: 60,
-    status: 'CREATED',
-    createdAt: '2025-12-31 14:00',
-  },
-  {
-    id: '2',
-    businessDate: '2025-12-31',
-    customerName: '佐藤次郎',
-    storeName: '横浜F',
-    girlName: 'フリー',
-    courseMinutes: 90,
-    status: 'CREATED',
-    createdAt: '2025-12-31 14:15',
-  },
-];
+import { useEffect, useState } from 'react';
+import { orderApi } from '@/services/tenant/api';
+import { Order } from '@/types/order';
+import { toast } from 'react-hot-toast';
 
 export default function OrderListPage() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      setIsLoading(true);
+      const response = await orderApi.list({ size: 100, sort: 'createdAt,desc' });
+      setOrders(response.content);
+    } catch (error) {
+      console.error(error);
+      toast.error('オーダーの取得に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -69,72 +69,82 @@ export default function OrderListPage() {
 
       {/* Orders Table */}
       <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                店舗 / 営業日
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                お客様名
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                女の子名
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                コース
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                ステータス
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                アクション
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {mockOrders.map(order => (
-              <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{order.storeName}</div>
-                  <div className="text-sm text-gray-500">{order.businessDate}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{order.customerName}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${order.girlName === 'フリー' ? 'bg-gray-100 text-gray-800' : 'bg-pink-100 text-pink-800'}`}
-                  >
-                    {order.girlName}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {order.courseMinutes} 分
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                    {order.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                  <button className="text-gray-400 hover:text-indigo-600">
-                    <EyeIcon className="h-5 w-5" />
-                  </button>
-                  <Link
-                    href={`/tenant/orders/${order.id}/edit`}
-                    className="text-gray-400 hover:text-amber-600 inline-block"
-                  >
-                    <PencilSquareIcon className="h-5 w-5" />
-                  </Link>
-                  <button className="text-gray-400 hover:text-red-600">
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
-                </td>
+        {isLoading ? (
+          <div className="p-8 text-center text-gray-500">読み込み中...</div>
+        ) : orders.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">オーダーがありません</div>
+        ) : (
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  店舗 / 営業日
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  お客様名
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  女の子名
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  コース
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ステータス
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  アクション
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {orders.map(order => (
+                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{order.storeName}</div>
+                    <div className="text-sm text-gray-500">{order.businessDate}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{order.customerName || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        !order.girlName || order.girlName === 'フリー'
+                          ? 'bg-gray-100 text-gray-800'
+                          : 'bg-pink-100 text-pink-800'
+                      }`}
+                    >
+                      {order.girlName || 'フリー'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.courseMinutes} 分
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                    <button className="text-gray-400 hover:text-indigo-600">
+                      <EyeIcon className="h-5 w-5" />
+                    </button>
+                    <Link
+                      href={`/tenant/orders/${order.id}/edit`}
+                      className="text-gray-400 hover:text-amber-600 inline-block"
+                    >
+                      <PencilSquareIcon className="h-5 w-5" />
+                    </Link>
+                    <button className="text-gray-400 hover:text-red-600">
+                      <TrashIcon className="h-5 w-5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
