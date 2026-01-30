@@ -1,13 +1,13 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.9'
+    id 'org.springframework.boot' version '3.5.10'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'java'
     id 'jacoco'
-    id 'com.diffplug.spotless' version '8.2.0'
+    id 'com.diffplug.spotless' version '8.2.1'
 }
 
 group = 'com.kizuna'
-version = '0.0.1-SNAPSHOT'
+version = '0.1.0'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -16,7 +16,7 @@ java {
 
 dependencyManagement {
     imports {
-        mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.9"
+        mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.10"
     }
 }
 
@@ -50,13 +50,17 @@ dependencies {
     runtimeOnly 'io.lettuce:lettuce-core'
     implementation 'org.liquibase:liquibase-core'
     implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.14.1'
+    implementation 'org.mapstruct:mapstruct:1.6.3'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     testAnnotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'

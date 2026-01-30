@@ -6,19 +6,22 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
+import com.kizuna.mapper.tenant.OrderMapper;
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;
 import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
+import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.Customer;
 import com.kizuna.model.entity.tenant.Girl;
 import com.kizuna.model.entity.tenant.Order;
 import com.kizuna.model.entity.tenant.security.TenantUser;
+import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
 import com.kizuna.repository.tenant.GirlRepository;
 import com.kizuna.repository.tenant.OrderRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -40,18 +43,24 @@ class OrderServiceImplTest {
   @Mock CustomerRepository customerRepository;
   @Mock GirlRepository girlRepository;
   @Mock TenantUserRepository tenantUserRepository;
+  @Mock TenantRepository tenantRepository;
+  @Mock TenantContext tenantContext;
+  @Mock OrderMapper orderMapper;
 
   @InjectMocks OrderServiceImpl service;
 
   @Captor ArgumentCaptor<Order> orderCaptor;
+  @Captor ArgumentCaptor<Customer> customerCaptor;
 
   @Test
   void listReturnsPageOfOrderResponses() {
     Order o = new Order();
     o.setId("o1");
-    o.setStoreName("Store A");
+    OrderResponse res = OrderResponse.builder().id("o1").build();
     Page<Order> page = new PageImpl<>(List.of(o), PageRequest.of(0, 10), 1);
+
     when(orderRepository.findAll(any(Pageable.class))).thenReturn(page);
+    when(orderMapper.toResponse(any(Order.class))).thenReturn(res);
 
     Page<OrderResponse> result = service.list(PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
@@ -62,7 +71,10 @@ class OrderServiceImplTest {
   void getReturnsOrderResponseOrThrows() {
     Order o = new Order();
     o.setId("o1");
+    OrderResponse res = OrderResponse.builder().id("o1").build();
+
     when(orderRepository.findById("o1")).thenReturn(Optional.of(o));
+    when(orderMapper.toResponse(o)).thenReturn(res);
     when(orderRepository.findById("o2")).thenReturn(Optional.empty());
 
     assertThat(service.get("o1").getId()).isEqualTo("o1");
@@ -72,55 +84,81 @@ class OrderServiceImplTest {
   @Test
   void createSavesOrderWithAssociations() {
     OrderCreateRequest req = new OrderCreateRequest();
-    req.setStoreName("S1");
-    req.setBusinessDate(LocalDate.now());
     req.setCustomerId("c1");
     req.setGirlId("g1");
     req.setReceptionistId("r1");
 
+    Order entity = new Order();
+    OrderResponse res = OrderResponse.builder().status("CREATED").build();
+
+    when(orderMapper.toEntity(req)).thenReturn(entity);
     when(customerRepository.findById("c1")).thenReturn(Optional.of(new Customer()));
     when(girlRepository.findById("g1")).thenReturn(Optional.of(new Girl()));
     when(tenantUserRepository.findById("r1")).thenReturn(Optional.of(new TenantUser()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderMapper.toResponse(any(Order.class))).thenReturn(res);
 
-    OrderResponse res = service.create(req);
+    service.create(req);
 
     verify(orderRepository).save(orderCaptor.capture());
-    Order saved = orderCaptor.getValue();
-    assertThat(saved.getStoreName()).isEqualTo("S1");
-    assertThat(saved.getCustomer()).isNotNull();
-    assertThat(saved.getGirl()).isNotNull();
-    assertThat(saved.getReceptionist()).isNotNull();
-    assertThat(res.getStatus()).isEqualTo("CREATED");
+    assertThat(orderCaptor.getValue().getCustomer()).isNotNull();
+    assertThat(orderCaptor.getValue().getGirl()).isNotNull();
+    assertThat(orderCaptor.getValue().getReceptionist()).isNotNull();
   }
 
   @Test
-  void createThrowsWhenCustomerNotFound() {
+  void createCreatesCustomerWhenPhoneProvided() {
     OrderCreateRequest req = new OrderCreateRequest();
-    req.setCustomerId("c1");
-    when(customerRepository.findById("c1")).thenReturn(Optional.empty());
+    req.setPhoneNumber("09012345678");
+    req.setCustomerName("New Guy");
 
-    assertThatThrownBy(() -> service.create(req)).isInstanceOf(ServiceException.class);
+    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
+    when(orderMapper.toEntity(req)).thenReturn(new Order());
+    when(customerRepository.findByPhoneNumberAndTenantId("09012345678", 1L))
+        .thenReturn(Optional.empty());
+    when(customerRepository.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
+
+    service.create(req);
+
+    verify(customerRepository).save(customerCaptor.capture());
+    assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09012345678");
   }
 
   @Test
-  void updateModifiesFieldsAndValidatesRelations() {
+  void updateModifiesAssociations() {
     Order existing = new Order();
     existing.setId("o1");
-    existing.setStoreName("Old");
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(girlRepository.findById("g2")).thenReturn(Optional.of(new Girl()));
+    when(tenantUserRepository.findById("r2")).thenReturn(Optional.of(new TenantUser()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
 
     OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setStoreName("New");
     req.setGirlId("g2");
+    req.setReceptionistId("r2");
 
-    OrderResponse res = service.update("o1", req);
+    service.update("o1", req);
 
-    assertThat(res.getStoreName()).isEqualTo("New");
     assertThat(existing.getGirl()).isNotNull();
+    assertThat(existing.getReceptionist()).isNotNull();
+    verify(orderMapper).updateEntityFromRequest(req, existing);
+  }
+
+  @Test
+  void updateThrowsWhenGirlNotFound() {
+    Order existing = new Order();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(girlRepository.findById("none")).thenReturn(Optional.empty());
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setGirlId("none");
+
+    assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
   }
 
   @Test
@@ -128,8 +166,35 @@ class OrderServiceImplTest {
     when(orderRepository.existsById("o1")).thenReturn(true);
     service.delete("o1");
     verify(orderRepository).deleteById("o1");
+  }
 
-    when(orderRepository.existsById("o2")).thenReturn(false);
-    assertThatThrownBy(() -> service.delete("o2")).isInstanceOf(ServiceException.class);
+  @Test
+  void createThrowsWhenGirlNotFound() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setGirlId("g_none");
+    when(orderMapper.toEntity(req)).thenReturn(new Order());
+    when(girlRepository.findById("g_none")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("Girl not found");
+  }
+
+  @Test
+  void createThrowsWhenReceptionistNotFound() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setReceptionistId("r_none");
+    when(orderMapper.toEntity(req)).thenReturn(new Order());
+    when(tenantUserRepository.findById("r_none")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("Receptionist not found");
+  }
+
+  @Test
+  void deleteThrowsIfNotFound() {
+    when(orderRepository.existsById("bad")).thenReturn(false);
+    assertThatThrownBy(() -> service.delete("bad")).isInstanceOf(ServiceException.class);
   }
 }

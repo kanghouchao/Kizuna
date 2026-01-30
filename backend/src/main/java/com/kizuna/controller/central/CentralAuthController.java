@@ -56,19 +56,23 @@ public class CentralAuthController {
   }
 
   @PostMapping("/logout")
-  @RolesAllowed("ADMIN")
+  @PermitAll
   public ResponseEntity<?> logout(
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
     if (authHeader != null && authHeader.startsWith("Bearer ")) {
       String token = authHeader.substring(7);
-      var claims = jwtUtil.getClaims(token);
-      long exp = claims.getExpiration().getTime();
-      long now = System.currentTimeMillis();
-      long ttl = Math.max(0, exp - now);
-      if (ttl > 0) {
-        redisTemplate
-            .opsForValue()
-            .set("blacklist:tokens:" + token, "1", ttl, TimeUnit.MILLISECONDS);
+      try {
+        var claims = jwtUtil.getClaims(token);
+        long exp = claims.getExpiration().getTime();
+        long now = System.currentTimeMillis();
+        long ttl = Math.max(0, exp - now);
+        if (ttl > 0) {
+          redisTemplate
+              .opsForValue()
+              .set("blacklist:tokens:" + token, "1", ttl, TimeUnit.MILLISECONDS);
+        }
+      } catch (Exception e) {
+        // Token invalid or expired, ignore
       }
     }
     SecurityContextHolder.clearContext();
