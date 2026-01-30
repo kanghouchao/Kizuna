@@ -84,6 +84,19 @@ export function Sidebar() {
         setNavigation(mappedNavigation);
       } catch (error) {
         console.error('Failed to fetch menus', error);
+        // Fallback to basic Dashboard if API fails
+        setNavigation([
+          {
+            name: 'メイン',
+            items: [
+              {
+                name: 'ダッシュボード',
+                href: role === 'tenant' ? '/tenant/dashboard' : '/central/dashboard',
+                icon: HomeIcon,
+              },
+            ],
+          },
+        ]);
       }
     };
 

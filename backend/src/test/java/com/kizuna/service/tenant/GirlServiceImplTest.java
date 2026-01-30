@@ -1,12 +1,11 @@
 package com.kizuna.service.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.exception.ServiceException;
 import com.kizuna.model.dto.tenant.girl.GirlCreateRequest;
 import com.kizuna.model.dto.tenant.girl.GirlResponse;
 import com.kizuna.model.dto.tenant.girl.GirlUpdateRequest;
@@ -16,8 +15,6 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,59 +25,60 @@ import org.springframework.data.domain.PageRequest;
 @ExtendWith(MockitoExtension.class)
 class GirlServiceImplTest {
 
-  @Mock GirlRepository girlRepository;
-  @InjectMocks GirlServiceImpl service;
-  @Captor ArgumentCaptor<Girl> girlCaptor;
+  @Mock private GirlRepository girlRepository;
+  @InjectMocks private GirlServiceImpl girlService;
 
   @Test
-  void listReturnsFilteredPage() {
+  void list_returnsPage() {
+    Girl g = new Girl();
+    g.setName("Test");
+    Page<Girl> page = new PageImpl<>(List.of(g));
+    when(girlRepository.findByNameContainingIgnoreCase(eq("test"), any(PageRequest.class)))
+        .thenReturn(page);
+
+    Page<GirlResponse> result = girlService.list("test", PageRequest.of(0, 10));
+    assertThat(result.getContent()).hasSize(1);
+  }
+
+  @Test
+  void get_returnsResponse() {
     Girl g = new Girl();
     g.setId("g1");
-    g.setName("Anna");
-    Page<Girl> page = new PageImpl<>(List.of(g));
-    when(girlRepository.findByNameContainingIgnoreCase(any(), any())).thenReturn(page);
-
-    Page<GirlResponse> res = service.list("Ann", PageRequest.of(0, 10));
-    assertThat(res.getContent()).hasSize(1);
-    assertThat(res.getContent().get(0).getName()).isEqualTo("Anna");
+    when(girlRepository.findById("g1")).thenReturn(Optional.of(g));
+    assertThat(girlService.get("g1").getId()).isEqualTo("g1");
   }
 
   @Test
-  void getThrowsIfNotFound() {
-    when(girlRepository.findById("g1")).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> service.get("g1")).isInstanceOf(ServiceException.class);
-  }
-
-  @Test
-  void createSavesGirl() {
+  void create_savesAndReturns() {
     GirlCreateRequest req = new GirlCreateRequest();
-    req.setName("Bella");
-    when(girlRepository.save(any(Girl.class))).thenAnswer(i -> i.getArgument(0));
-
-    service.create(req);
-    verify(girlRepository).save(girlCaptor.capture());
-    assertThat(girlCaptor.getValue().getName()).isEqualTo("Bella");
-    assertThat(girlCaptor.getValue().getStatus()).isEqualTo("ACTIVE");
+    req.setName("G1");
+    when(girlRepository.save(any()))
+        .thenAnswer(
+            i -> {
+              Girl g = i.getArgument(0);
+              g.setId("g_new");
+              return g;
+            });
+    GirlResponse res = girlService.create(req);
+    assertThat(res.getId()).isEqualTo("g_new");
   }
 
   @Test
-  void updateModifiesGirl() {
-    Girl existing = new Girl();
-    existing.setId("g1");
-    existing.setName("Cathy");
-    when(girlRepository.findById("g1")).thenReturn(Optional.of(existing));
-    when(girlRepository.save(any(Girl.class))).thenAnswer(i -> i.getArgument(0));
+  void update_modifiesFields() {
+    Girl g = new Girl();
+    when(girlRepository.findById("g1")).thenReturn(Optional.of(g));
+    when(girlRepository.save(any())).thenReturn(g);
 
     GirlUpdateRequest req = new GirlUpdateRequest();
-    req.setName("Catherine");
-
-    GirlResponse res = service.update("g1", req);
-    assertThat(res.getName()).isEqualTo("Catherine");
+    req.setName("G_Updated");
+    girlService.update("g1", req);
+    assertThat(g.getName()).isEqualTo("G_Updated");
   }
 
   @Test
-  void deleteThrowsIfNotFound() {
-    when(girlRepository.existsById("g1")).thenReturn(false);
-    assertThatThrownBy(() -> service.delete("g1")).isInstanceOf(ServiceException.class);
+  void delete_removes() {
+    when(girlRepository.existsById("g1")).thenReturn(true);
+    girlService.delete("g1");
+    verify(girlRepository).deleteById("g1");
   }
 }

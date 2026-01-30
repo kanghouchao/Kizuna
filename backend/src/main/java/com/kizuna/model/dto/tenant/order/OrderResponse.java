@@ -3,11 +3,15 @@ package com.kizuna.model.dto.tenant.order;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class OrderResponse {
   private String id;
   private String storeName;

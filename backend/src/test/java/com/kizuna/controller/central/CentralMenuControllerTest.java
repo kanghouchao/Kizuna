@@ -5,30 +5,34 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.menu.MenuVO;
 import com.kizuna.service.central.menu.CentralMenuService;
-import com.kizuna.utils.JwtUtil;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-@WebMvcTest(CentralMenuController.class)
+@ExtendWith(MockitoExtension.class)
 class CentralMenuControllerTest {
 
-  @Autowired private MockMvc mockMvc;
-  @MockBean private CentralMenuService menuService;
-  @MockBean private TenantContext tenantContext;
-  @MockBean private JwtUtil jwtUtil;
-  @MockBean private RedisTemplate<String, Object> redisTemplate;
+  private MockMvc mockMvc;
+
+  @Mock private CentralMenuService menuService;
+
+  @InjectMocks private CentralMenuController controller;
+
+  @BeforeEach
+  void setUp() {
+    // Standalone setup: NO Spring Context is started
+    mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+  }
 
   @Test
-  @WithMockUser(roles = "ADMIN")
   void getMyMenus_returnsMenus() throws Exception {
     MenuVO menu = new MenuVO("Dashboard", "/dashboard", "icon", List.of());
     when(menuService.getMyMenus()).thenReturn(List.of(menu));

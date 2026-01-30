@@ -14,4 +14,6 @@ public interface CustomerRepository
   Page<Customer> findByNameContainingIgnoreCase(String name, Pageable pageable);
 
   Optional<Customer> findByPhoneNumber(String phoneNumber);
+
+  Optional<Customer> findByPhoneNumberAndTenantId(String phoneNumber, Long tenantId);
 }

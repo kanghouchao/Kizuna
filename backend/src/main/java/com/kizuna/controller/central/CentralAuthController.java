@@ -56,7 +56,7 @@ public class CentralAuthController {
   }
 
   @PostMapping("/logout")
-  @RolesAllowed("ADMIN")
+  @PermitAll
   public ResponseEntity<?> logout(
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
     if (authHeader != null && authHeader.startsWith("Bearer ")) {

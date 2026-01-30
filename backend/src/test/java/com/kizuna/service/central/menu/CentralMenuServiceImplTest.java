@@ -1,21 +1,19 @@
 package com.kizuna.service.central.menu;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.model.dto.menu.MenuVO;
 import com.kizuna.model.entity.central.menu.CentralMenu;
 import com.kizuna.repository.central.menu.CentralMenuRepository;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,42 +22,55 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class CentralMenuServiceImplTest {
 
   @Mock private CentralMenuRepository menuRepository;
+  @Mock private SecurityContext securityContext;
+  @Mock private Authentication authentication;
+
   @InjectMocks private CentralMenuServiceImpl menuService;
 
-  @BeforeEach
-  void setUp() {
-    SecurityContextHolder.clearContext();
+  @Test
+  @SuppressWarnings("unchecked")
+  void getMyMenus_filtersByPermission() {
+    SecurityContextHolder.setContext(securityContext);
+    when(securityContext.getAuthentication()).thenReturn(authentication);
+
+    List<? extends GrantedAuthority> authorities =
+        List.of(
+            new SimpleGrantedAuthority("ROLE_ADMIN"), new SimpleGrantedAuthority("PERM_USER_READ"));
+    when(authentication.getAuthorities()).thenReturn((List) authorities);
+
+    CentralMenu m1 = new CentralMenu();
+    m1.setLabel("Users");
+    m1.setPermission("USER_READ"); // Will be checked as PERM_USER_READ
+    m1.setChildren(List.of());
+
+    CentralMenu m2 = new CentralMenu();
+    m2.setLabel("Secret");
+    m2.setPermission("SECRET_READ"); // Missing in authorities
+    m2.setChildren(List.of());
+
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(m1, m2));
+
+    List<MenuVO> result = menuService.getMyMenus();
+
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getName()).isEqualTo("Users");
   }
 
   @Test
-  void getMyMenus_returnsFilteredMenus() {
-    // Mock Authentication with PERM_TENANT_MANAGE
-    Authentication auth = mock(Authentication.class);
-    doReturn(List.of(new SimpleGrantedAuthority("PERM_TENANT_MANAGE"))).when(auth).getAuthorities();
-    SecurityContext context = mock(SecurityContext.class);
-    when(context.getAuthentication()).thenReturn(auth);
-    SecurityContextHolder.setContext(context);
+  @SuppressWarnings("unchecked")
+  void getMyMenus_returnsAllIfNoPermissionRequired() {
+    SecurityContextHolder.setContext(securityContext);
+    when(securityContext.getAuthentication()).thenReturn(authentication);
+    when(authentication.getAuthorities()).thenReturn((List) List.of());
 
-    // Prepare data
     CentralMenu m1 = new CentralMenu();
-    m1.setLabel("Main");
+    m1.setLabel("Public");
     m1.setPermission(null);
+    m1.setChildren(List.of());
 
-    CentralMenu m2 = new CentralMenu();
-    m2.setLabel("Tenants");
-    m2.setPermission("TENANT_MANAGE");
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(m1));
 
-    CentralMenu m3 = new CentralMenu();
-    m3.setLabel("Admin Only");
-    m3.setPermission("SUPER_ADMIN");
-
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(m1, m2, m3));
-
-    // Execute
-    List<MenuVO> results = menuService.getMyMenus();
-
-    // Verify
-    assertThat(results).hasSize(2);
-    assertThat(results).extracting(MenuVO::getName).containsExactly("Main", "Tenants");
+    List<MenuVO> result = menuService.getMyMenus();
+    assertThat(result).hasSize(1);
   }
 }
