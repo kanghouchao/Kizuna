@@ -1,19 +1,64 @@
-# Copilot Instructions for Kizuna Platform
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## プロジェクト概要
 
-Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 16+ (TypeScript) フロントエンドで構成されるマルチテナント CMS/CRM/HRM システムです。
+Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 16+ (React 19, TypeScript 5.9) フロントエンドで構成されるマルチテナント CMS/CRM/HRM システムです。Traefik リバースプロキシを介して完全に分離されたアーキテクチャを採用しています。
+
+## 開発コマンド
+
+### Docker ベースのビルド・テスト（推奨）
+
+```bash
+# ビルド
+make build                          # 全サービス
+make build service=frontend         # フロントエンドのみ
+make build service=backend          # バックエンドのみ
+
+# テスト（70% カバレッジ必須）
+make test                           # 全テスト
+make test service=frontend          # Jest のみ
+make test service=backend           # JUnit + Jacoco のみ
+
+# Lint・フォーマット
+make lint                           # チェック
+make format                         # 自動修正
+
+# ローカル起動
+make up                             # フルスタック起動
+make down                           # 停止
+make logs service=backend           # ログ確認
+```
+
+### ローカル直接実行
+
+```bash
+# Backend (Java 21 必須)
+cd backend
+./gradlew test                      # テスト実行
+./gradlew spotlessApply             # フォーマット自動修正
+./gradlew spotlessCheck             # スタイルチェック
+
+# Frontend (Node.js 24.7+ 必須)
+cd frontend
+npm test                            # Jest テスト
+npm run lint:fix                    # ESLint 自動修正
+npm run format                      # Prettier 自動修正
+```
 
 ## アーキテクチャ
 
 ### ドメイン分離（厳守）
 
-すべてのコードは **Central** または **Tenant** ドメインに属します：
+すべてのコードは **Central** または **Tenant** ドメインに属する：
 
-- **Central (`/central/*`)**: プラットフォーム管理（テナント管理、グローバル設定）。管理ドメイン（`kizuna.test`）からアクセス。
-- **Tenant (`/tenant/*`)**: 店舗運営（注文、CRM、HRM）。テナントサブドメイン（`store1.kizuna.test`）からアクセス。
+| ドメイン | パス | 用途 | アクセス元 |
+|---------|------|------|-----------|
+| **Central** | `/central/*` | プラットフォーム管理、テナント管理 | `kizuna.test` |
+| **Tenant** | `/tenant/*` | 店舗運営、注文、CRM、HRM | `store1.kizuna.test` |
 
-新しいコントローラーやサービスを追加する際は、適切なディレクトリに配置してください：
+ディレクトリ構造：
 - Backend: `controller/central/` or `controller/tenant/`, `service/central/` or `service/tenant/`
 - Frontend: `app/central/` or `app/tenant/`, `services/central/` or `services/tenant/`
 
@@ -22,7 +67,7 @@ Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 1
 1. **Frontend Middleware** (`src/middleware.ts`) がホスト名からテナントを判定
 2. Cookie を設定: `x-mw-role`, `x-mw-tenant-id`, `x-mw-tenant-name`, `x-mw-tenant-template`
 3. **Backend Interceptor** (`TenantIdInterceptor`) が `X-Tenant-ID` ヘッダーを読み取り `TenantContext` に設定
-4. **`@TenantScoped`** アノテーションでテナントフィルタを自動適用
+4. Hibernate フィルタで自動的にテナント分離を適用
 
 ```java
 // テナントスコープのサービスメソッドには必ず @TenantScoped を付与
@@ -37,27 +82,6 @@ public List<Order> findOrdersByTenant() {
 Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - Frontend: `/api/central/login` → Backend: `/central/login`
 - Frontend: `/api/tenant/orders` → Backend: `/tenant/orders`
-
-## 開発コマンド
-
-```bash
-# ビルド・起動（Docker 使用）
-make build                      # 全サービスビルド
-make up                         # フルスタック起動
-make down                       # 停止
-
-# テスト（70% カバレッジ必須）
-make test                       # 全テスト実行
-make test service=backend       # Backend のみ
-
-# Lint・フォーマット
-make lint                       # チェック
-make format                     # 自動修正
-
-# ローカル直接実行
-cd backend && ./gradlew test spotlessApply
-cd frontend && npm test && npm run lint:fix
-```
 
 ## コード規約
 
@@ -117,9 +141,25 @@ cd frontend && npm test && npm run lint:fix
 | Frontend Middleware | `frontend/src/middleware.ts` |
 | HTTP クライアント | `frontend/src/lib/client.ts` |
 
-## 注意事項
+## 認証・セッション
 
-- JWT はステートレス。ログアウト時は Redis の blacklist に追加
+- JWT はステートレス（`SessionCreationPolicy.STATELESS`）
+- ログアウト時は Redis の blacklist に追加
 - Cookie 名 (`x-mw-*`) と Backend ヘッダー (`X-Role`, `X-Tenant-ID`) は 1:1 対応
-- CI は 70% カバレッジを強制。新機能には必ずテストを追加
-- PR は small & focused に。frontend/backend/environment をまたぐ変更は分割を検討
+
+## ローカル開発環境
+
+```bash
+# hosts ファイルに追加
+echo "127.0.0.1 kizuna.test store1.kizuna.test" | sudo tee -a /etc/hosts
+
+# 環境変数コピー
+cp environment/.env.example .env
+
+# 起動
+make build up
+
+# デフォルト認証情報
+# Central: admin / pass
+# Tenant: admin@store1.kizuna.com / pass
+```

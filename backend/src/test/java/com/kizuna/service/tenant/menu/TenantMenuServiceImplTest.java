@@ -1,6 +1,7 @@
 package com.kizuna.service.tenant.menu;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.config.interceptor.TenantContext;
@@ -30,7 +31,6 @@ class TenantMenuServiceImplTest {
   @InjectMocks private TenantMenuServiceImpl menuService;
 
   @Test
-  @SuppressWarnings("unchecked")
   void getMyMenus_filtersByPermission() {
     SecurityContextHolder.setContext(securityContext);
     when(securityContext.getAuthentication()).thenReturn(authentication);
@@ -39,7 +39,7 @@ class TenantMenuServiceImplTest {
     List<? extends GrantedAuthority> authorities =
         List.of(
             new SimpleGrantedAuthority("ROLE_USER"), new SimpleGrantedAuthority("PERM_ORDER_READ"));
-    when(authentication.getAuthorities()).thenReturn((List) authorities);
+    doReturn(authorities).when(authentication).getAuthorities();
 
     TenantMenu m1 = new TenantMenu();
     m1.setLabel("Orders");
