@@ -93,9 +93,9 @@ cd frontend && npm test && npm run lint:fix
 
 | 用途 | パス |
 |------|------|
-| セキュリティ設定 | `backend/.../config/SecurityConfig.java` |
-| JWT フィルタ | `backend/.../config/filter/JwtAuthenticationFilter.java` |
-| テナントコンテキスト | `backend/.../config/interceptor/TenantIdInterceptor.java` |
+| セキュリティ設定 | `backend/src/main/java/com/kizuna/config/SecurityConfig.java` |
+| JWT フィルタ | `backend/src/main/java/com/kizuna/config/filter/JwtAuthenticationFilter.java` |
+| テナントコンテキスト | `backend/src/main/java/com/kizuna/config/interceptor/TenantIdInterceptor.java` |
 | DB マイグレーション | `backend/src/main/resources/db/changelog/changes/` |
 | Frontend Middleware | `frontend/src/middleware.ts` |
 | HTTP クライアント | `frontend/src/lib/client.ts` |

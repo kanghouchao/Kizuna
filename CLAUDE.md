@@ -97,10 +97,16 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - **import 必須**: 完全修飾クラス名（FQCN）を直接使用しない。必ず `import` 文を使用
 - **ワイルドカード禁止**: `import java.util.*` のようなワイルドカード import は禁止。個別にクラスを import する
   ```java
-  // ❌ Bad
+  // ❌ Bad: ワイルドカード import
   import java.util.*;
-  org.springframework.stereotype.Service
-
+  ```
+  ```java
+  // ❌ Bad: import を書かずに FQCN を使用
+  public class MyService {
+      private org.springframework.stereotype.Service service;
+  }
+  ```
+  ```java
   // ✅ Good
   import java.util.List;
   import java.util.Optional;
