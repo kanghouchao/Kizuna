@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 14+ (TypeScript) フロントエンドで構成されるマルチテナント CMS/CRM/HRM システムです。
+Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 16+ (TypeScript) フロントエンドで構成されるマルチテナント CMS/CRM/HRM システムです。
 
 ## アーキテクチャ
 
