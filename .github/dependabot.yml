@@ -1,38 +1,25 @@
 version: 2
 updates:
-  # Keep GitHub Actions up to date
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    groups:
+      all:
+        patterns: ["*"]
 
-  # Frontend npm dependencies
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
-    versioning-strategy: increase
+      interval: "monthly"
+    groups:
+      all:
+        patterns: ["*"]
 
-  # Backend Gradle dependencies
   - package-ecosystem: "gradle"
     directory: "/backend"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
+      interval: "monthly"
     groups:
-      minor-and-patch:
-        applies-to: version-updates
-        update-types:
-          - minor
-          - patch
+      all:
+        patterns: ["*"]
