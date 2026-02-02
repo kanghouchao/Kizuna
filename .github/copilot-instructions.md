@@ -1,31 +1,108 @@
-# Kizuna Platform Copilot Instructions (CMS, CRM, HRM)
+# Copilot Instructions for Kizuna Platform
 
-## アーキテクチャと責務
-- Kizuna Platform は `backend/` の Spring Boot 3.5.9 API、`frontend/` の Next.js 16 アプリ、`environment/` の Traefik＋Compose 定義に分離される二層構成。
-- プロジェクトのビジョン：CMS (コンテンツ管理)、CRM (顧客管理)、HRM (人事管理) を統合したマルチテナントプラットフォーム。
-- すべての外部リクエストは Traefik で `/api` -> backend、その他 -> frontend に振り分けられ、`environment/development/docker-compose.yml` でルーティングとヘルスチェックが定義される。
-- Multi-tenant モデル：中央管理 (`/central/*`) とテナント (`/tenant/*`) を API/画面ともに分離し、ホスト名判定で役割を切り替える。
+## プロジェクト概要
 
-## バックエンド指針
-- `backend/src/main/java` は `config/`, `controller/central|tenant`, `service`, `repository`, `model` の典型的な層構造。新機能 (CMS/CRM/HRM 等) はこの分離に合わせて配置する。
-- `SecurityConfig` は stateless JWT + CSRF cookie を前提としているため、エンドポイント追加時も `CookieCsrfTokenRepository` を尊重し、`JwtAuthenticationFilter` 前後のチェーン順序を崩さない。
-- テナントスコープは `TenantIdInterceptor` (X-Role + X-Tenant-ID ヘッダー) と `@TenantScoped` + `TenantFilterEnable` で実現する。テナント固有クエリを実行するサービスメソッドは必ず `@TenantScoped` を付与し、`TenantContext` の設定/クリアを二重に行わない。
-- すべてのリクエストには `RequestCorrelationFilter` が `X-Request-ID` を強制付与する。新しいフィルターやロガーは ThreadContext を破壊しないようにする。
-- Redis は JWT ブラックリスト (`CentralAuthController.logout`) と Spring Cache 双方で利用。Redis キーの接頭辞は `application.yml` の `spring.cache.redis.key-prefix` を再利用する。
-- データモデルの変更は `backend/src/main/resources/db/changelog/` の Liquibase で管理し、`db.changelog-master.yaml` にチェインを追加する。
+Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 14+ (TypeScript) フロントエンドで構成されるマルチテナント CMS/CRM/HRM システムです。
 
-## フロントエンド指針
-- Next.js 16 の App Router を採用し、`src/app/central` と `src/app/tenant` で画面を分割。SSR コンポーネントは `middleware.ts` が与える cookie (`x-mw-role`, `x-mw-tenant-*`) を `cookies()` で参照する。
-- `src/middleware.ts` は管理ドメイン集合とバックエンドの `GET /central/tenant?domain=` を同期させている。レスポンス shape (template_key / tenant_id / tenant_name or id/name/domain) を壊さないこと。
-- API 呼び出しは `src/lib/client.ts` の axios インスタンス経由で `/api` ベースに集約され、ここで JWT・CSRF・テナントヘッダーが付与される。新しいサービス層は `src/services/central|tenant/` にメソッドを追加し、型は `src/types/api.ts` に定義する。
+## アーキテクチャ
 
-## ローカル開発とビルド
-- Docker 前提。`make build` (または `make build service=backend|frontend`) でそれぞれの BuildKit ステージを実行し、`make up env=development` で Traefik + DB + Redis + アプリを起動。
-- Lint/Format/Test はすべて Make 経由で Docker ステージを呼ぶ：`make lint service=frontend`, `make format service=backend`, `make test`。ローカルで単体実行したい場合のみ `./backend/gradlew test` や `npm test` を使う。
-- テスト成果物は `make reports` で `reports/backend` (JUnit/Jacoco) と `reports/frontend` (Jest coverage) に集約され、`reports/index.html` から参照するのが前提。
+### ドメイン分離（厳守）
 
-## 実装上の注意
-- Traefik が `/api` プレフィックスを剥がした後に Spring が `/central/*` を受けるため、フロントが呼び出すパスは `/api/central/...` で統一する。
-- Middleware が設定する cookie 名はバックエンドヘッダーと 1:1 対応しているため、名称変更時は `TenantIdInterceptor` と `client.ts` を同時に更新する。
-- 監査やログに依存する値 (`req=<id> tenant=<id>`) は Log4j2 の ThreadContext を利用する。追加カスタムロガーもこの形式を踏襲する。
-- 重大な設定値は `AppProperties` から取得し、ハードコードしない。特にドメイン/スキームや JWT の有効期限はここから参照する。
+すべてのコードは **Central** または **Tenant** ドメインに属します：
+
+- **Central (`/central/*`)**: プラットフォーム管理（テナント管理、グローバル設定）。管理ドメイン（`kizuna.test`）からアクセス。
+- **Tenant (`/tenant/*`)**: 店舗運営（注文、CRM、HRM）。テナントサブドメイン（`store1.kizuna.test`）からアクセス。
+
+新しいコントローラーやサービスを追加する際は、適切なディレクトリに配置してください：
+- Backend: `controller/central/` or `controller/tenant/`, `service/central/` or `service/tenant/`
+- Frontend: `app/central/` or `app/tenant/`, `services/central/` or `services/tenant/`
+
+### マルチテナントフロー
+
+1. **Frontend Middleware** (`src/middleware.ts`) がホスト名からテナントを判定
+2. Cookie を設定: `x-mw-role`, `x-mw-tenant-id`, `x-mw-tenant-name`, `x-mw-tenant-template`
+3. **Backend Interceptor** (`TenantIdInterceptor`) が `X-Tenant-ID` ヘッダーを読み取り `TenantContext` に設定
+4. **`@TenantScoped`** アノテーションでテナントフィルタを自動適用
+
+```java
+// テナントスコープのサービスメソッドには必ず @TenantScoped を付与
+@TenantScoped
+public List<Order> findOrdersByTenant() {
+    return orderRepository.findAll(); // Hibernate フィルタが自動適用
+}
+```
+
+### API ルーティング
+
+Traefik が `/api/*` を backend へルーティングし prefix を除去：
+- Frontend: `/api/central/login` → Backend: `/central/login`
+- Frontend: `/api/tenant/orders` → Backend: `/tenant/orders`
+
+## 開発コマンド
+
+```bash
+# ビルド・起動（Docker 使用）
+make build                      # 全サービスビルド
+make up                         # フルスタック起動
+make down                       # 停止
+
+# テスト（70% カバレッジ必須）
+make test                       # 全テスト実行
+make test service=backend       # Backend のみ
+
+# Lint・フォーマット
+make lint                       # チェック
+make format                     # 自動修正
+
+# ローカル直接実行
+cd backend && ./gradlew test spotlessApply
+cd frontend && npm test && npm run lint:fix
+```
+
+## コード規約
+
+### 共通ルール
+
+- **コード簡潔性**: 冗長なコードを避け、適切なコメントを付与する
+- **TDD**: テストを先に書いてから実装する（Test-Driven Development）
+- **コミット前チェック**: 必ず `make lint` と `make test` を実行してから提出
+
+### Backend (Java)
+
+- **import 必須**: 完全修飾クラス名（FQCN）を直接使用しない。必ず `import` 文を使用する
+  ```java
+  // ❌ Bad
+  org.springframework.stereotype.Service
+
+  // ✅ Good
+  import org.springframework.stereotype.Service;
+  ```
+- **フォーマット**: Spotless + Google Java Format（`make format service=backend`）
+- **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML で追加）
+- **設定値**: `AppProperties` から取得（ハードコード禁止）
+- **ログ**: `req=<id> tenant=<id>` 形式を維持（Log4j2 ThreadContext）
+
+### Frontend (TypeScript)
+
+- **API クライアント**: `src/lib/client.ts` の axios インスタンスを使用
+- **Server Components**: Cookie は `cookies()` で読み取り（`headers()` は使わない）
+- **型定義**: `src/types/api.ts` に集約
+- **テスト**: `__tests__/` ディレクトリに配置
+
+## 重要ファイル
+
+| 用途 | パス |
+|------|------|
+| セキュリティ設定 | `backend/.../config/SecurityConfig.java` |
+| JWT フィルタ | `backend/.../config/filter/JwtAuthenticationFilter.java` |
+| テナントコンテキスト | `backend/.../config/interceptor/TenantIdInterceptor.java` |
+| DB マイグレーション | `backend/src/main/resources/db/changelog/changes/` |
+| Frontend Middleware | `frontend/src/middleware.ts` |
+| HTTP クライアント | `frontend/src/lib/client.ts` |
+
+## 注意事項
+
+- JWT はステートレス。ログアウト時は Redis の blacklist に追加
+- Cookie 名 (`x-mw-*`) と Backend ヘッダー (`X-Role`, `X-Tenant-ID`) は 1:1 対応
+- CI は 70% カバレッジを強制。新機能には必ずテストを追加
+- PR は small & focused に。frontend/backend/environment をまたぐ変更は分割を検討
