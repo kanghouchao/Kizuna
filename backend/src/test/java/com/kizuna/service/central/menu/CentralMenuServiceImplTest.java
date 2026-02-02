@@ -1,6 +1,7 @@
 package com.kizuna.service.central.menu;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.model.dto.menu.MenuVO;
@@ -28,7 +29,6 @@ class CentralMenuServiceImplTest {
   @InjectMocks private CentralMenuServiceImpl menuService;
 
   @Test
-  @SuppressWarnings("unchecked")
   void getMyMenus_filtersByPermission() {
     SecurityContextHolder.setContext(securityContext);
     when(securityContext.getAuthentication()).thenReturn(authentication);
@@ -36,7 +36,7 @@ class CentralMenuServiceImplTest {
     List<? extends GrantedAuthority> authorities =
         List.of(
             new SimpleGrantedAuthority("ROLE_ADMIN"), new SimpleGrantedAuthority("PERM_USER_READ"));
-    when(authentication.getAuthorities()).thenReturn((List) authorities);
+    doReturn(authorities).when(authentication).getAuthorities();
 
     CentralMenu m1 = new CentralMenu();
     m1.setLabel("Users");
@@ -57,11 +57,10 @@ class CentralMenuServiceImplTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   void getMyMenus_returnsAllIfNoPermissionRequired() {
     SecurityContextHolder.setContext(securityContext);
     when(securityContext.getAuthentication()).thenReturn(authentication);
-    when(authentication.getAuthorities()).thenReturn((List) List.of());
+    doReturn(List.of()).when(authentication).getAuthorities();
 
     CentralMenu m1 = new CentralMenu();
     m1.setLabel("Public");
