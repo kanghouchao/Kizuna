@@ -85,15 +85,27 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 
 ## コード規約
 
-### 共通
+### 共通（厳守）
 
-- **TDD**: テストを先に書いてから実装
+- **TDD**: テストを先に書いてから実装する（Test-Driven Development）
+- **簡潔なコード**: 冗長なコードを避け、シンプルで読みやすいコードを書く
 - **カバレッジ**: 70% 必須（CI で強制）
-- **コミット前**: `make lint && make test` を実行
+- **コミット前チェック**: 必ず `make lint && make test` を実行してからコミット
 
 ### Backend (Java)
 
-- **import 必須**: FQCN を直接使用せず、必ず `import` 文を使用
+- **import 必須**: 完全修飾クラス名（FQCN）を直接使用しない。必ず `import` 文を使用
+- **ワイルドカード禁止**: `import java.util.*` のようなワイルドカード import は禁止。個別にクラスを import する
+  ```java
+  // ❌ Bad
+  import java.util.*;
+  org.springframework.stereotype.Service
+
+  // ✅ Good
+  import java.util.List;
+  import java.util.Optional;
+  import org.springframework.stereotype.Service;
+  ```
 - **フォーマット**: Spotless + Google Java Format
 - **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML）
 - **設定値**: `AppProperties` から取得（ハードコード禁止）
