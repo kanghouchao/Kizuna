@@ -21,7 +21,7 @@ jest.mock('@/lib/config', () => ({
 
 function Consumer() {
   const { logout } = useAuth();
-  return (<button onClick={() => logout()}>out</button>) as any;
+  return (<button onClick={() => logout()}>out</button>) as React.ReactElement;
 }
 
 describe('AuthProvider', () => {
@@ -29,23 +29,9 @@ describe('AuthProvider', () => {
     jest.clearAllMocks();
     (Cookies.get as jest.Mock).mockReset?.();
     (isTenantDomain as jest.Mock).mockReset?.();
-    window.history.replaceState({}, '', '/');
-  });
-
-  it('redirects to login if no token on mount', async () => {
-    // Ensure provider treats this as central domain so we don't hit tenant APIs
-    (isTenantDomain as jest.Mock).mockReturnValue(false);
-    (Cookies.get as jest.Mock).mockReturnValue(undefined);
-    render(
-      <AuthProvider>
-        <div />
-      </AuthProvider>
-    );
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'));
   });
 
   it('logout calls api and removes token and navigates', async () => {
-    // Ensure provider treats this as central domain so logout calls mocked central api
     (isTenantDomain as jest.Mock).mockReturnValue(false);
     (Cookies.get as jest.Mock).mockReturnValue('tkn');
     (authApi.logout as jest.Mock).mockResolvedValueOnce({});
@@ -61,17 +47,21 @@ describe('AuthProvider', () => {
     expect(mockPush).toHaveBeenCalledWith('/login');
   });
 
-  it('does not redirect on public register route', () => {
+  it('provides logout function via context', () => {
     (isTenantDomain as jest.Mock).mockReturnValue(false);
-    (Cookies.get as jest.Mock).mockReturnValue(undefined);
-    window.history.replaceState({}, '', '/register');
-
-    render(
+    const { getByText } = render(
       <AuthProvider>
-        <div />
+        <Consumer />
       </AuthProvider>
     );
+    expect(getByText('out')).toBeInTheDocument();
+  });
 
-    expect(mockPush).not.toHaveBeenCalled();
+  it('throws error when useAuth is used outside AuthProvider', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => render(<Consumer />)).toThrow(
+      'useAuth must be used within an AuthProvider'
+    );
+    consoleError.mockRestore();
   });
 });

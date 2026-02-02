@@ -6,9 +6,10 @@ export default async function Home() {
   const role = cookieStore.get('x-mw-role')?.value;
 
   // ログイン情報と現在のミドルウェアのロジックに基づいてリダイレクト
-  // サービス管理者（Central）の場合、管理画面へリダイレクト
+  // サービス管理者（Central）の場合、ログイン状態に応じてリダイレクト
   if (role === 'central') {
-    redirect('/central/dashboard/');
+    const token = cookieStore.get('token')?.value;
+    redirect(token ? '/central/dashboard/' : '/login');
   }
 
   /**
