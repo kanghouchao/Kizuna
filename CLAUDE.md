@@ -85,6 +85,8 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 
 ## コード規約
 
+> **重要**: コード生成時は常にベストプラクティスを推奨し、以下の規約に従うこと。
+
 ### 共通（厳守）
 
 - **TDD**: テストを先に書いてから実装する（Test-Driven Development）
@@ -94,23 +96,27 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 
 ### Backend (Java)
 
-- **import 必須**: 完全修飾クラス名（FQCN）を直接使用しない。必ず `import` 文を使用
-- **ワイルドカード禁止**: `import java.util.*` のようなワイルドカード import は禁止。個別にクラスを import する
+- **import ルール**: 完全修飾クラス名（FQCN）を直接使用せず、必ず個別に import する。ワイルドカード import (`*`) は禁止
+  ```java
+  // ✅ Best Practice: 個別に import
+  import java.util.List;
+  import java.util.Optional;
+  import org.springframework.stereotype.Service;
+
+  @Service
+  public class MyService {
+      public Optional<List<String>> getData() { ... }
+  }
+  ```
   ```java
   // ❌ Bad: ワイルドカード import
   import java.util.*;
   ```
   ```java
-  // ❌ Bad: import を書かずに FQCN を使用
+  // ❌ Bad: import を書かずに FQCN を直接使用
   public class MyService {
       private org.springframework.stereotype.Service service;
   }
-  ```
-  ```java
-  // ✅ Good
-  import java.util.List;
-  import java.util.Optional;
-  import org.springframework.stereotype.Service;
   ```
 - **フォーマット**: Spotless + Google Java Format
 - **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML）

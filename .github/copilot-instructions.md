@@ -61,33 +61,50 @@ cd frontend && npm test && npm run lint:fix
 
 ## コード規約
 
-### 共通ルール
+> **重要**: コード生成時は常にベストプラクティスを推奨し、以下の規約に従うこと。
 
-- **コード簡潔性**: 冗長なコードを避け、適切なコメントを付与する
+### 共通（厳守）
+
 - **TDD**: テストを先に書いてから実装する（Test-Driven Development）
-- **コミット前チェック**: 必ず `make lint` と `make test` を実行してから提出
+- **簡潔なコード**: 冗長なコードを避け、シンプルで読みやすいコードを書く
+- **カバレッジ**: 70% 必須（CI で強制）
+- **コミット前チェック**: 必ず `make lint && make test` を実行してからコミット
 
 ### Backend (Java)
 
-- **import 必須**: 完全修飾クラス名（FQCN）を直接使用しない。必ず `import` 文を使用する
+- **import ルール**: 完全修飾クラス名（FQCN）を直接使用せず、必ず個別に import する。ワイルドカード import (`*`) は禁止
   ```java
-  // ❌ Bad
-  org.springframework.stereotype.Service
-
-  // ✅ Good
+  // ✅ Best Practice: 個別に import
+  import java.util.List;
+  import java.util.Optional;
   import org.springframework.stereotype.Service;
+
+  @Service
+  public class MyService {
+      public Optional<List<String>> getData() { ... }
+  }
   ```
-- **フォーマット**: Spotless + Google Java Format（`make format service=backend`）
-- **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML で追加）
+  ```java
+  // ❌ Bad: ワイルドカード import
+  import java.util.*;
+  ```
+  ```java
+  // ❌ Bad: import を書かずに FQCN を直接使用
+  public class MyService {
+      private org.springframework.stereotype.Service service;
+  }
+  ```
+- **フォーマット**: Spotless + Google Java Format
+- **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML）
 - **設定値**: `AppProperties` から取得（ハードコード禁止）
-- **ログ**: `req=<id> tenant=<id>` 形式を維持（Log4j2 ThreadContext）
+- **ログ**: `req=<id> tenant=<id>` 形式を維持
 
 ### Frontend (TypeScript)
 
 - **API クライアント**: `src/lib/client.ts` の axios インスタンスを使用
 - **Server Components**: Cookie は `cookies()` で読み取り（`headers()` は使わない）
 - **型定義**: `src/types/api.ts` に集約
-- **テスト**: `__tests__/` ディレクトリに配置
+- **テスト配置**: `__tests__/` ディレクトリに配置
 
 ## 重要ファイル
 
