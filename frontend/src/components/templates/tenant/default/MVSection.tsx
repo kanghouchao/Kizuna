@@ -3,10 +3,7 @@ interface MVSectionProps {
   mvType?: 'image' | 'video';
 }
 
-export default function MVSection({
-  mvUrl,
-  mvType = 'image',
-}: MVSectionProps) {
+export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
   // Placeholder content when no MV is configured
   const placeholderContent = (
     <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
@@ -32,9 +29,7 @@ export default function MVSection({
   return (
     <section className="py-16 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">
-          Main Visual
-        </h2>
+        <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">Main Visual</h2>
 
         {mvUrl ? (
           mvType === 'video' ? (
@@ -50,11 +45,7 @@ export default function MVSection({
             </div>
           ) : (
             <div className="aspect-video rounded-lg overflow-hidden shadow-xl">
-              <img
-                src={mvUrl}
-                alt="Main Visual"
-                className="w-full h-full object-cover"
-              />
+              <img src={mvUrl} alt="Main Visual" className="w-full h-full object-cover" />
             </div>
           )
         ) : (

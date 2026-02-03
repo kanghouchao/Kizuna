@@ -35,15 +35,11 @@ export default function Advertisement({ ads }: AdvertisementProps) {
   return (
     <section className="py-16 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold text-center mb-4 text-gray-800">
-          キャンペーン情報
-        </h2>
-        <p className="text-center text-gray-600 mb-12">
-          お得なキャンペーン・イベント情報
-        </p>
+        <h2 className="text-3xl font-bold text-center mb-4 text-gray-800">キャンペーン情報</h2>
+        <p className="text-center text-gray-600 mb-12">お得なキャンペーン・イベント情報</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {displayAds.map((ad) => (
+          {displayAds.map(ad => (
             <div
               key={ad.id}
               className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow"
@@ -51,11 +47,7 @@ export default function Advertisement({ ads }: AdvertisementProps) {
               {/* Ad Image or Placeholder */}
               {ad.imageUrl ? (
                 <div className="aspect-video rounded-lg overflow-hidden mb-4">
-                  <img
-                    src={ad.imageUrl}
-                    alt={ad.title}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={ad.imageUrl} alt={ad.title} className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div className="aspect-video bg-gradient-to-r from-indigo-400 to-purple-400 rounded-lg mb-4 flex items-center justify-center">
@@ -75,12 +67,8 @@ export default function Advertisement({ ads }: AdvertisementProps) {
                 </div>
               )}
 
-              <h3 className="text-xl font-bold text-gray-800 mb-2">
-                {ad.title}
-              </h3>
-              {ad.description && (
-                <p className="text-gray-600">{ad.description}</p>
-              )}
+              <h3 className="text-xl font-bold text-gray-800 mb-2">{ad.title}</h3>
+              {ad.description && <p className="text-gray-600">{ad.description}</p>}
 
               {ad.linkUrl && (
                 <a

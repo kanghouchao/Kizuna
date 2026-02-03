@@ -13,30 +13,19 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
             {logoUrl ? (
               <img src={logoUrl} alt={tenantName} className="h-10 w-auto" />
             ) : (
-              <span className="text-2xl font-bold text-indigo-600">
-                {tenantName}
-              </span>
+              <span className="text-2xl font-bold text-indigo-600">{tenantName}</span>
             )}
           </div>
 
           {/* Navigation */}
           <nav className="hidden md:flex space-x-8">
-            <a
-              href="#cast"
-              className="text-gray-700 hover:text-indigo-600 transition-colors"
-            >
+            <a href="#cast" className="text-gray-700 hover:text-indigo-600 transition-colors">
               キャスト
             </a>
-            <a
-              href="#about"
-              className="text-gray-700 hover:text-indigo-600 transition-colors"
-            >
+            <a href="#about" className="text-gray-700 hover:text-indigo-600 transition-colors">
               店舗情報
             </a>
-            <a
-              href="#contact"
-              className="text-gray-700 hover:text-indigo-600 transition-colors"
-            >
+            <a href="#contact" className="text-gray-700 hover:text-indigo-600 transition-colors">
               お問い合わせ
             </a>
           </nav>

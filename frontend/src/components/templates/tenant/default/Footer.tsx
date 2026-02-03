@@ -30,13 +30,8 @@ const placeholderSns: SnsLinks = {
   line: '#',
 };
 
-export default function Footer({
-  tenantName,
-  partnerLinks,
-  snsLinks,
-}: FooterProps) {
-  const partners =
-    partnerLinks && partnerLinks.length > 0 ? partnerLinks : placeholderPartners;
+export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterProps) {
+  const partners = partnerLinks && partnerLinks.length > 0 ? partnerLinks : placeholderPartners;
   const sns = snsLinks || placeholderSns;
 
   return (
@@ -150,8 +145,7 @@ export default function Footer({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 text-sm">
-              &copy; {new Date().getFullYear()} {tenantName}. All rights
-              reserved.
+              &copy; {new Date().getFullYear()} {tenantName}. All rights reserved.
             </p>
             <p className="text-gray-500 text-xs mt-2 md:mt-0">
               Powered by{' '}

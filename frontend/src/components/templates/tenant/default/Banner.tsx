@@ -4,11 +4,7 @@ interface BannerProps {
   description?: string;
 }
 
-export default function Banner({
-  tenantName,
-  bannerUrl,
-  description,
-}: BannerProps) {
+export default function Banner({ tenantName, bannerUrl, description }: BannerProps) {
   return (
     <section className="relative h-[500px] bg-gradient-to-r from-indigo-600 to-purple-600">
       {/* Background Image */}
