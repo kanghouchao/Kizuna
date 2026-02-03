@@ -4,16 +4,42 @@ interface BannerProps {
   description?: string;
 }
 
+function sanitizeBannerUrl(url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined;
+  }
+  const trimmed = url.trim();
+
+  // Allow relative paths (served from the same origin / CDN path)
+  if (trimmed.startsWith('/')) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const allowedProtocols = ['http:', 'https:'];
+    if (allowedProtocols.includes(parsed.protocol)) {
+      return parsed.toString();
+    }
+  } catch {
+    // Invalid URL, fall through to return undefined
+  }
+
+  return undefined;
+}
+
 export default function Banner({ tenantName, bannerUrl, description }: BannerProps) {
+  const safeBannerUrl = sanitizeBannerUrl(bannerUrl);
+
   return (
     <section className="relative h-[500px] bg-gradient-to-r from-indigo-600 to-purple-600">
       {/* Background Image */}
-      {bannerUrl && (
+      {safeBannerUrl && (
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${bannerUrl})` }}
+          style={{ backgroundImage: `url("${safeBannerUrl}")` }}
         >
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
         </div>
       )}
 

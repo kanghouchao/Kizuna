@@ -1,3 +1,6 @@
+import Image from 'next/image';
+import Link from 'next/link';
+
 interface Cast {
   id: string;
   name: string;
@@ -37,7 +40,13 @@ export default function CastSection({ casts }: CastSectionProps) {
               {/* Cast Image */}
               <div className="aspect-[3/4] bg-gradient-to-br from-pink-100 to-purple-100 relative">
                 {cast.imageUrl ? (
-                  <img src={cast.imageUrl} alt={cast.name} className="w-full h-full object-cover" />
+                  <Image
+                    src={cast.imageUrl}
+                    alt={cast.name}
+                    fill
+                    className="object-cover"
+                    sizes="200px"
+                  />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <svg
@@ -68,12 +77,12 @@ export default function CastSection({ casts }: CastSectionProps) {
 
         {/* View More Button */}
         <div className="text-center mt-10">
-          <a
+          <Link
             href="/login"
             className="inline-block bg-indigo-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-indigo-700 transition-colors"
           >
             全てのキャストを見る
-          </a>
+          </Link>
         </div>
       </div>
     </section>

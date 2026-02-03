@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 interface MVSectionProps {
   mvUrl?: string;
   mvType?: 'image' | 'video';
@@ -38,14 +40,15 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
                 src={mvUrl}
                 controls
                 className="w-full h-full object-cover"
-                poster="/placeholder-video-poster.jpg"
+                title="メインビジュアル動画"
+                aria-label="メインビジュアル動画"
               >
                 お使いのブラウザは動画再生に対応していません。
               </video>
             </div>
           ) : (
-            <div className="aspect-video rounded-lg overflow-hidden shadow-xl">
-              <img src={mvUrl} alt="Main Visual" className="w-full h-full object-cover" />
+            <div className="aspect-video rounded-lg overflow-hidden shadow-xl relative">
+              <Image src={mvUrl} alt="Main Visual" fill className="object-cover" sizes="100vw" />
             </div>
           )
         ) : (

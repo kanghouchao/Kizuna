@@ -1,5 +1,28 @@
+import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const cookieStore = await cookies();
+  const role = cookieStore.get('x-mw-role')?.value;
+
+  if (role === 'tenant') {
+    const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+    return {
+      title: tenantName,
+      description: `${tenantName}の公式サイトです。キャスト情報やキャンペーン情報をご覧いただけます。`,
+      openGraph: {
+        title: tenantName,
+        description: `${tenantName}の公式サイトです。`,
+        type: 'website',
+      },
+    };
+  }
+
+  return {
+    title: 'Kizuna Platform',
+  };
+}
 
 export default async function Home() {
   const cookieStore = await cookies();

@@ -1,3 +1,6 @@
+import Image from 'next/image';
+import Link from 'next/link';
+
 interface HeaderProps {
   tenantName: string;
   logoUrl?: string;
@@ -11,7 +14,13 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
           {/* Logo */}
           <div className="flex items-center">
             {logoUrl ? (
-              <img src={logoUrl} alt={tenantName} className="h-10 w-auto" />
+              <Image
+                src={logoUrl}
+                alt={tenantName}
+                width={160}
+                height={40}
+                className="h-10 w-auto"
+              />
             ) : (
               <span className="text-2xl font-bold text-indigo-600">{tenantName}</span>
             )}
@@ -19,25 +28,19 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
 
           {/* Navigation */}
           <nav className="hidden md:flex space-x-8">
-            <a href="#cast" className="text-gray-700 hover:text-indigo-600 transition-colors">
+            <Link href="#cast" className="text-gray-700 hover:text-indigo-600 transition-colors">
               キャスト
-            </a>
-            <a href="#about" className="text-gray-700 hover:text-indigo-600 transition-colors">
-              店舗情報
-            </a>
-            <a href="#contact" className="text-gray-700 hover:text-indigo-600 transition-colors">
-              お問い合わせ
-            </a>
+            </Link>
           </nav>
 
           {/* Login Button */}
           <div className="flex items-center">
-            <a
+            <Link
               href="/login"
               className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
             >
               ログイン
-            </a>
+            </Link>
           </div>
         </div>
       </div>
