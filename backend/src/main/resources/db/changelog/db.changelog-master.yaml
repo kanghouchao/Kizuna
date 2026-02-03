@@ -23,3 +23,6 @@ databaseChangeLog:
   - include:
       file: changes/008-seed-menus.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/009-create-tenant-site-config.yaml
+      relativeToChangelogFile: true

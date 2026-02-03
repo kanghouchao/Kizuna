@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext } from 'react';
 import { authApi as centralAuthApi } from '@/services/central/api';
 import { authApi as tenantAuthApi } from '@/services/tenant/api';
 import Cookies from 'js-cookie';
@@ -28,23 +28,6 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const router = useRouter();
   const getAuthApi = () => (isTenantDomain() ? tenantAuthApi : centralAuthApi);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      if (typeof window === 'undefined') {
-        return;
-      }
-
-      const token = Cookies.get('token');
-      const publicRoutes = ['/login', '/register', '/tenant'];
-      const currentPath = window.location.pathname;
-
-      if (!token && !publicRoutes.includes(currentPath)) {
-        router.push('/login');
-      }
-    };
-    checkAuth();
-  }, [router]);
 
   const logout = async () => {
     try {

@@ -1,18 +1,51 @@
 import { cookies } from 'next/headers';
 
+import Advertisement from './Advertisement';
+import Banner from './Banner';
+import CastSection from './CastSection';
+import Footer from './Footer';
+import Header from './Header';
+import MVSection from './MVSection';
+
 export default async function Page() {
   const cookieStore = await cookies();
-  const tenantId = cookieStore.get('x-mw-tenant-id')?.value;
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || '';
+  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+
+  // TODO: Fetch site config from API when backend is ready
+  // For now, using static placeholder content
+  const siteConfig = {
+    logoUrl: undefined,
+    bannerUrl: undefined,
+    description: undefined,
+    mvUrl: undefined,
+    mvType: 'image' as const,
+    snsLinks: undefined,
+    partnerLinks: undefined,
+  };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-3xl font-bold mb-4 text-indigo-700">Default テンプレート</h1>
-      <p className="text-gray-600">これはデフォルトのテンプレートページです。</p>
-      <div className="mt-8 text-gray-800">
-        <div>租户ID: {tenantId}</div>
-        <div>租户名称: {tenantName}</div>
-      </div>
-    </main>
+    <div className="min-h-screen flex flex-col">
+      <Header tenantName={tenantName} logoUrl={siteConfig.logoUrl} />
+
+      <main className="flex-grow">
+        <Banner
+          tenantName={tenantName}
+          bannerUrl={siteConfig.bannerUrl}
+          description={siteConfig.description}
+        />
+
+        <MVSection mvUrl={siteConfig.mvUrl} mvType={siteConfig.mvType} />
+
+        <CastSection />
+
+        <Advertisement />
+      </main>
+
+      <Footer
+        tenantName={tenantName}
+        snsLinks={siteConfig.snsLinks}
+        partnerLinks={siteConfig.partnerLinks}
+      />
+    </div>
   );
 }
