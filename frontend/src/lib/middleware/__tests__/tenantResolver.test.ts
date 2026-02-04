@@ -91,7 +91,7 @@ describe('tenantResolver', () => {
     };
     const req = createRequest('store.test', cookies);
 
-    // fetch should NOT be called because cookies are present
+    // Cookie が存在するため fetch は呼び出されないはず
     global.fetch = jest.fn();
 
     const result = await resolveTenant(req);
