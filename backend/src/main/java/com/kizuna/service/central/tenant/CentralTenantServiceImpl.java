@@ -8,7 +8,10 @@ import com.kizuna.model.dto.central.tenant.TenantStatusVO;
 import com.kizuna.model.dto.central.tenant.TenantUpdateDTO;
 import com.kizuna.model.dto.central.tenant.TenantVO;
 import com.kizuna.model.entity.central.tenant.Tenant;
+import com.kizuna.model.entity.tenant.TenantSiteConfig;
 import com.kizuna.repository.central.TenantRepository;
+import com.kizuna.repository.tenant.TenantSiteConfigRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CentralTenantServiceImpl implements CentralTenantService {
 
   private final TenantRepository tenantRepository;
+  private final TenantSiteConfigRepository siteConfigRepository;
   private final ApplicationEventPublisher eventPublisher;
 
   // ドメイン → テナント情報のキャッシュ
@@ -93,6 +97,18 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     t.setDomain(req.getDomain());
     t.setEmail(req.getEmail());
     Tenant saved = tenantRepository.save(t);
+
+    // テナント作成時にデフォルトのサイト設定を保存
+    TenantSiteConfig config =
+        TenantSiteConfig.builder()
+            .tenant(saved)
+            .templateKey("default")
+            .mvType("image")
+            .snsLinks(new ArrayList<>())
+            .partnerLinks(new ArrayList<>())
+            .build();
+    siteConfigRepository.save(config);
+
     eventPublisher.publishEvent(new TenantCreatedEvent(saved));
   }
 

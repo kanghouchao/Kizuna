@@ -2,6 +2,7 @@ package com.kizuna.service.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,25 +54,16 @@ class SiteConfigServiceImplTest {
   }
 
   @Test
-  void get_createsDefaultConfigIfNotExists() {
+  void get_returnsDefaultConfigWithoutSavingIfNotExists() {
     Tenant tenant = new Tenant();
     tenant.setId(TENANT_ID);
     when(siteConfigRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.empty());
     when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(tenant));
-    when(siteConfigRepository.save(any()))
-        .thenAnswer(
-            i -> {
-              TenantSiteConfig c = i.getArgument(0);
-              c.setId(1L);
-              c.setCreatedAt(OffsetDateTime.now());
-              c.setUpdatedAt(OffsetDateTime.now());
-              return c;
-            });
 
     SiteConfigResponse response = siteConfigService.get();
 
     assertThat(response.getTemplateKey()).isEqualTo("default");
-    verify(siteConfigRepository).save(any());
+    verify(siteConfigRepository, never()).save(any());
   }
 
   @Test

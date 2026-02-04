@@ -28,9 +28,7 @@ public class SiteConfigServiceImpl implements SiteConfigService {
   public SiteConfigResponse get() {
     Long tenantId = tenantContext.getTenantId();
     TenantSiteConfig config =
-        siteConfigRepository
-            .findByTenantId(tenantId)
-            .orElseGet(() -> createDefaultConfig(tenantId));
+        siteConfigRepository.findByTenantId(tenantId).orElseGet(() -> buildDefaultConfig(tenantId));
     return toResponse(config);
   }
 
@@ -42,7 +40,12 @@ public class SiteConfigServiceImpl implements SiteConfigService {
     TenantSiteConfig config =
         siteConfigRepository
             .findByTenantId(tenantId)
-            .orElseGet(() -> createDefaultConfig(tenantId));
+            .orElseGet(
+                () -> {
+                  // Update の時は保存が必要なので save する
+                  TenantSiteConfig newConfig = buildDefaultConfig(tenantId);
+                  return siteConfigRepository.save(newConfig);
+                });
 
     if (request.getTemplateKey() != null) {
       config.setTemplateKey(request.getTemplateKey());
@@ -72,22 +75,19 @@ public class SiteConfigServiceImpl implements SiteConfigService {
     return toResponse(siteConfigRepository.save(config));
   }
 
-  private TenantSiteConfig createDefaultConfig(Long tenantId) {
+  private TenantSiteConfig buildDefaultConfig(Long tenantId) {
     Tenant tenant =
         tenantRepository
             .findById(tenantId)
             .orElseThrow(() -> new ServiceException("テナントが見つかりません: " + tenantId));
 
-    TenantSiteConfig config =
-        TenantSiteConfig.builder()
-            .tenant(tenant)
-            .templateKey("default")
-            .mvType("image")
-            .snsLinks(new ArrayList<>())
-            .partnerLinks(new ArrayList<>())
-            .build();
-
-    return siteConfigRepository.save(config);
+    return TenantSiteConfig.builder()
+        .tenant(tenant)
+        .templateKey("default")
+        .mvType("image")
+        .snsLinks(new ArrayList<>())
+        .partnerLinks(new ArrayList<>())
+        .build();
   }
 
   private SiteConfigResponse toResponse(TenantSiteConfig config) {

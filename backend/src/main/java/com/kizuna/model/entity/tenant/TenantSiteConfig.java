@@ -23,6 +23,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
+
 import org.hibernate.annotations.Type;
 
 @Entity
@@ -32,6 +34,7 @@ import org.hibernate.annotations.Type;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class TenantSiteConfig {
 
   @Id
@@ -90,14 +93,4 @@ public class TenantSiteConfig {
     this.updatedAt = OffsetDateTime.now();
   }
 
-  @Override
-  public String toString() {
-    return "TenantSiteConfig(id="
-        + id
-        + ", tenantId="
-        + (tenant != null ? tenant.getId() : null)
-        + ", templateKey="
-        + templateKey
-        + ")";
-  }
 }
