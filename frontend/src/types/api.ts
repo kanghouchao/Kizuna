@@ -92,3 +92,44 @@ export interface RegisterResponse {
   loginUrl: string;
   tenantName?: string;
 }
+
+// SNSリンク
+export interface SnsLink {
+  platform: string;
+  url: string;
+  label?: string;
+}
+
+// パートナーリンク
+export interface PartnerLink {
+  name: string;
+  url: string;
+  logoUrl?: string;
+}
+
+// サイト設定レスポンス
+export interface SiteConfigResponse {
+  id: number;
+  templateKey: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  mvUrl?: string;
+  mvType: string;
+  description?: string;
+  snsLinks: SnsLink[];
+  partnerLinks: PartnerLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// サイト設定更新リクエスト
+export interface SiteConfigUpdateRequest {
+  templateKey?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  mvUrl?: string;
+  mvType?: string;
+  description?: string;
+  snsLinks?: SnsLink[];
+  partnerLinks?: PartnerLink[];
+}

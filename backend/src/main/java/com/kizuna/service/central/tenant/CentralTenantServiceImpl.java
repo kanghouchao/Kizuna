@@ -11,20 +11,26 @@ import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.repository.central.TenantRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Log4j2
 @Service
 @RequiredArgsConstructor
 public class CentralTenantServiceImpl implements CentralTenantService {
 
   private final TenantRepository tenantRepository;
   private final ApplicationEventPublisher eventPublisher;
+
+  // ドメイン → テナント情報のキャッシュ
+  private final ConcurrentHashMap<String, TenantVO> domainCache = new ConcurrentHashMap<>();
 
   @Override
   @Transactional(readOnly = true)
@@ -60,7 +66,23 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   @Override
   @Transactional(readOnly = true)
   public Optional<TenantVO> getByDomain(String domain) {
-    return tenantRepository.findByDomain(domain).map(this::toDto);
+    // キャッシュを先にチェック
+    TenantVO cached = domainCache.get(domain);
+    if (cached != null) {
+      log.debug("テナントキャッシュヒット domain: {}", domain);
+      return Optional.of(cached);
+    }
+
+    // キャッシュミス、データベースを検索
+    log.debug("テナントキャッシュミス domain: {}, データベースを検索", domain);
+    return tenantRepository
+        .findByDomain(domain)
+        .map(
+            t -> {
+              TenantVO dto = toDto(t);
+              domainCache.put(domain, dto);
+              return dto;
+            });
   }
 
   @Override
@@ -81,6 +103,8 @@ public class CentralTenantServiceImpl implements CentralTenantService {
         tenantRepository
             .findById(parseId(id))
             .orElseThrow(() -> new ServiceException("tenant not found"));
+    // キャッシュをクリア
+    domainCache.remove(tenant.getDomain());
     tenant.setName(req.getName());
     tenantRepository.save(tenant);
   }
@@ -88,6 +112,10 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   @Override
   @Transactional
   public void delete(String id) {
+    // 削除前にドメインを取得してキャッシュをクリア
+    tenantRepository
+        .findById(parseId(id))
+        .ifPresent(tenant -> domainCache.remove(tenant.getDomain()));
     tenantRepository.deleteById(parseId(id));
   }
 
@@ -95,7 +123,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   @Transactional(readOnly = true)
   public TenantStatusVO stats() {
     long total = tenantRepository.count();
-    // placeholder: active/inactive/pending not modelled yet
+    // TODO: active/inactive/pending はまだモデル化されていない
     return new TenantStatusVO(total, total, 0, 0);
   }
 
