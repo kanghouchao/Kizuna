@@ -2,13 +2,16 @@ import { NextRequest } from 'next/server';
 import { resolveTenant } from '../tenantResolver';
 
 // Mock NextRequest since we depend on it
-const createRequest = (hostname: string) => {
+const createRequest = (hostname: string, cookies: Record<string, string> = {}) => {
   return {
     headers: {
       get: (name: string) => (name === 'host' ? hostname : null),
     },
     nextUrl: {
       hostname,
+    },
+    cookies: {
+      get: (name: string) => (cookies[name] ? { value: cookies[name] } : undefined),
     },
   } as unknown as NextRequest;
 };
@@ -78,5 +81,25 @@ describe('tenantResolver', () => {
 
     expect(result.role).toBe('tenant');
     expect(result.tenantData?.isValid).toBe(false);
+  });
+
+  it('resolves tenant from cookies when present', async () => {
+    const cookies = {
+      'x-mw-tenant-id': 'cookie-tenant-id',
+      'x-mw-tenant-name': 'Cookie Tenant',
+      'x-mw-tenant-template': 'cookie-template',
+    };
+    const req = createRequest('store.test', cookies);
+    
+    // fetch should NOT be called because cookies are present
+    global.fetch = jest.fn();
+
+    const result = await resolveTenant(req);
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result.role).toBe('tenant');
+    expect(result.tenantData?.tenantId).toBe('cookie-tenant-id');
+    expect(result.tenantData?.tenantName).toBe('Cookie Tenant');
+    expect(result.tenantData?.templateKey).toBe('cookie-template');
   });
 });
