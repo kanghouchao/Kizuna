@@ -103,7 +103,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     var tenant =
         tenantRepository
             .findById(parseId(id))
-            .orElseThrow(() -> new ServiceException("tenant not found"));
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"));
     tenant.setName(req.getName());
     tenantRepository.save(tenant);
   }

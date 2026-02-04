@@ -33,7 +33,7 @@ import org.hibernate.annotations.Type;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString
+@ToString(exclude = "tenant")
 public class TenantSiteConfig {
 
   @Id
