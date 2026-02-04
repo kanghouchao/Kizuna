@@ -14,10 +14,11 @@ import com.kizuna.repository.tenant.TenantSiteConfigRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,9 +33,6 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   private final TenantRepository tenantRepository;
   private final TenantSiteConfigRepository siteConfigRepository;
   private final ApplicationEventPublisher eventPublisher;
-
-  // ドメイン → テナント情報のキャッシュ
-  private final ConcurrentHashMap<String, TenantVO> domainCache = new ConcurrentHashMap<>();
 
   @Override
   @Transactional(readOnly = true)
@@ -69,24 +67,10 @@ public class CentralTenantServiceImpl implements CentralTenantService {
 
   @Override
   @Transactional(readOnly = true)
+  @Cacheable(value = "tenantByDomain", key = "#domain")
   public Optional<TenantVO> getByDomain(String domain) {
-    // キャッシュを先にチェック
-    TenantVO cached = domainCache.get(domain);
-    if (cached != null) {
-      log.debug("テナントキャッシュヒット domain: {}", domain);
-      return Optional.of(cached);
-    }
-
-    // キャッシュミス、データベースを検索
-    log.debug("テナントキャッシュミス domain: {}, データベースを検索", domain);
-    return tenantRepository
-        .findByDomain(domain)
-        .map(
-            t -> {
-              TenantVO dto = toDto(t);
-              domainCache.put(domain, dto);
-              return dto;
-            });
+    log.debug("テナントをデータベースから検索 domain: {}", domain);
+    return tenantRepository.findByDomain(domain).map(this::toDto);
   }
 
   @Override
@@ -114,24 +98,20 @@ public class CentralTenantServiceImpl implements CentralTenantService {
 
   @Override
   @Transactional
+  @CacheEvict(value = "tenantByDomain", allEntries = true)
   public void update(String id, TenantUpdateDTO req) {
     var tenant =
         tenantRepository
             .findById(parseId(id))
             .orElseThrow(() -> new ServiceException("tenant not found"));
-    // キャッシュをクリア
-    domainCache.remove(tenant.getDomain());
     tenant.setName(req.getName());
     tenantRepository.save(tenant);
   }
 
   @Override
   @Transactional
+  @CacheEvict(value = "tenantByDomain", allEntries = true)
   public void delete(String id) {
-    // 削除前にドメインを取得してキャッシュをクリア
-    tenantRepository
-        .findById(parseId(id))
-        .ifPresent(tenant -> domainCache.remove(tenant.getDomain()));
     tenantRepository.deleteById(parseId(id));
   }
 
