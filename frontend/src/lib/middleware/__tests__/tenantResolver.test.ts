@@ -90,7 +90,7 @@ describe('tenantResolver', () => {
       'x-mw-tenant-template': 'cookie-template',
     };
     const req = createRequest('store.test', cookies);
-    
+
     // fetch should NOT be called because cookies are present
     global.fetch = jest.fn();
 
