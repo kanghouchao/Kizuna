@@ -24,8 +24,11 @@ export async function resolveTenant(request: NextRequest): Promise<{
   }
 
   // Cookie のテナント情報を優先使用（重複クエリを回避）
+  // ただし、Cookie に保存されたドメインと現在のホスト名が一致する場合のみ信頼する
   const existingTenantId = request.cookies.get('x-mw-tenant-id')?.value;
-  if (existingTenantId) {
+  const existingDomain = request.cookies.get('x-mw-tenant-domain')?.value;
+
+  if (existingTenantId && existingDomain === hostname) {
     const existingTenantName = request.cookies.get('x-mw-tenant-name')?.value || '';
     const existingTemplate = request.cookies.get('x-mw-tenant-template')?.value || 'default';
     return {

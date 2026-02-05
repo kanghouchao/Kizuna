@@ -219,6 +219,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                   type="button"
                   onClick={() => removeSns(index)}
                   className="mt-6 p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                  aria-label={`SNS リンク ${index + 1} を削除`}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -292,6 +293,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                   type="button"
                   onClick={() => removePartner(index)}
                   className="mt-6 p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                  aria-label={`パートナーリンク ${index + 1} を削除`}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
