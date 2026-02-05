@@ -72,3 +72,30 @@ databaseChangeLog:
             columns:
               - column:
                   name: tenant_id
+
+  - changeSet:
+      id: 009-seed-tenant-site-config
+      author: claude
+      comment: デフォルトテナントのサイト設定を追加
+      changes:
+        - insert:
+            tableName: tenant_site_configs
+            columns:
+              - column:
+                  name: tenant_id
+                  valueNumeric: 1
+              - column:
+                  name: template_key
+                  value: default
+              - column:
+                  name: mv_type
+                  value: image
+              - column:
+                  name: description
+                  value: Sample Tenant のサイトへようこそ
+              - column:
+                  name: sns_links
+                  valueComputed: "'[]'::jsonb"
+              - column:
+                  name: partner_links
+                  valueComputed: "'[]'::jsonb"
