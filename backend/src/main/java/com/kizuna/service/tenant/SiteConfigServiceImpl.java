@@ -9,7 +9,6 @@ import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.TenantSiteConfig;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantSiteConfigRepository;
-import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,13 +80,7 @@ public class SiteConfigServiceImpl implements SiteConfigService {
             .findById(tenantId)
             .orElseThrow(() -> new ServiceException("テナントが見つかりません: " + tenantId));
 
-    return TenantSiteConfig.builder()
-        .tenant(tenant)
-        .templateKey("default")
-        .mvType("image")
-        .snsLinks(new ArrayList<>())
-        .partnerLinks(new ArrayList<>())
-        .build();
+    return TenantSiteConfig.createDefault(tenant);
   }
 
   private SiteConfigResponse toResponse(TenantSiteConfig config) {

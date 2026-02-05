@@ -11,7 +11,6 @@ import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.TenantSiteConfig;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantSiteConfigRepository;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -83,15 +82,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     Tenant saved = tenantRepository.save(t);
 
     // テナント作成時にデフォルトのサイト設定を保存
-    TenantSiteConfig config =
-        TenantSiteConfig.builder()
-            .tenant(saved)
-            .templateKey("default")
-            .mvType("image")
-            .snsLinks(new ArrayList<>())
-            .partnerLinks(new ArrayList<>())
-            .build();
-    siteConfigRepository.save(config);
+    siteConfigRepository.save(TenantSiteConfig.createDefault(saved));
 
     eventPublisher.publishEvent(new TenantCreatedEvent(saved));
   }

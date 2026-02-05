@@ -91,4 +91,20 @@ public class TenantSiteConfig {
   protected void onUpdate() {
     this.updatedAt = OffsetDateTime.now();
   }
+
+  /**
+   * テナント用のデフォルトサイト設定を生成する。
+   *
+   * @param tenant 対象テナント
+   * @return デフォルト値が設定された TenantSiteConfig インスタンス
+   */
+  public static TenantSiteConfig createDefault(Tenant tenant) {
+    return TenantSiteConfig.builder()
+        .tenant(tenant)
+        .templateKey("default")
+        .mvType("image")
+        .snsLinks(new ArrayList<>())
+        .partnerLinks(new ArrayList<>())
+        .build();
+  }
 }
