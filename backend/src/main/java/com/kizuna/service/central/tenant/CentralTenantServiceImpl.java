@@ -89,7 +89,6 @@ public class CentralTenantServiceImpl implements CentralTenantService {
 
   @Override
   @Transactional
-  @CacheEvict(value = "tenantByDomain", allEntries = true)
   public void update(String id, TenantUpdateDTO req) {
     var tenant =
         tenantRepository
@@ -118,7 +117,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     try {
       return Long.parseLong(id);
     } catch (NumberFormatException e) {
-      throw new ServiceException("Invalid tenant ID format: " + id);
+      throw new ServiceException("テナント ID の形式が不正です: " + id);
     }
   }
 

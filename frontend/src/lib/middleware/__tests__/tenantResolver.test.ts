@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { resolveTenant } from '../tenantResolver';
 
-// Mock NextRequest since we depend on it
+// テスト用の NextRequest モックを作成
 const createRequest = (hostname: string, cookies: Record<string, string> = {}) => {
   return {
     headers: {
