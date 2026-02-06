@@ -14,27 +14,27 @@ export default async function Page() {
   // TODO: Fetch site config from API when backend is ready
   // For now, using static placeholder content
   const siteConfig = {
-    logoUrl: undefined,
-    bannerUrl: undefined,
+    logo_url: undefined,
+    banner_url: undefined,
     description: undefined,
-    mvUrl: undefined,
-    mvType: 'image' as const,
-    snsLinks: undefined,
-    partnerLinks: undefined,
+    mv_url: undefined,
+    mv_type: 'image' as const,
+    sns_links: undefined,
+    partner_links: undefined,
   };
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header tenantName={tenantName} logoUrl={siteConfig.logoUrl} />
+      <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
 
       <main className="flex-grow">
         <Banner
           tenantName={tenantName}
-          bannerUrl={siteConfig.bannerUrl}
+          bannerUrl={siteConfig.banner_url}
           description={siteConfig.description}
         />
 
-        <MVSection mvUrl={siteConfig.mvUrl} mvType={siteConfig.mvType} />
+        <MVSection mvUrl={siteConfig.mv_url} mvType={siteConfig.mv_type} />
 
         <CastSection />
 
@@ -43,8 +43,8 @@ export default async function Page() {
 
       <Footer
         tenantName={tenantName}
-        snsLinks={siteConfig.snsLinks}
-        partnerLinks={siteConfig.partnerLinks}
+        snsLinks={siteConfig.sns_links}
+        partnerLinks={siteConfig.partner_links}
       />
     </div>
   );

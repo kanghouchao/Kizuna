@@ -33,6 +33,8 @@ export default function AdminLogin() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    // 古いトークンを削除（期限切れトークンがログインを妨げないように）
+    Cookies.remove('token');
     try {
       const response = await getAuthApi().login({ username, password });
       if (response.token && response.expires_at) {

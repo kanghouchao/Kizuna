@@ -1,6 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは Claude Code (claude.ai/code) がこのリポジトリで作業する際のガイダンスを提供します。
+
+## 絶対命令（必ず従うこと）
+
+- **日本語必須**: コード内のコメント、ドキュメント、変数名以外のテキスト（エラーメッセージ、ログメッセージ等）はすべて日本語で記述すること
+- **既存ファイルの修正時**: 日本語以外（英語、中国語等）のコメントや説明文を発見した場合、必ず日本語に翻訳して修正すること
+- **新規ファイル作成時**: 最初から日本語でコメントやドキュメントを記述すること
 
 ## プロジェクト概要
 
@@ -129,6 +135,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - **Server Components**: Cookie は `cookies()` で読み取り（`headers()` は使わない）
 - **型定義**: `src/types/api.ts` に集約
 - **テスト配置**: `__tests__/` ディレクトリに配置
+- **API の命名規約（snake_case）**: バックエンドの Jackson 設定（`PropertyNamingStrategies.SNAKE_CASE`）により、API のリクエスト/レスポンスの JSON キーはすべて snake_case に自動変換される。そのため、フロントエンドの TypeScript 型定義や API 通信で使用するプロパティ名も **snake_case** で統一すること（例: `template_key`, `logo_url`, `created_at`）。フロントエンド側で camelCase ↔ snake_case の変換処理は不要
 
 ## 重要ファイル
 

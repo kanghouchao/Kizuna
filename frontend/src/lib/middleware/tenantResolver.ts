@@ -19,13 +19,30 @@ export async function resolveTenant(request: NextRequest): Promise<{
     request.nextUrl.hostname;
   const hostname = rawHost.split(',')[0].trim().split(':')[0].toLowerCase();
 
-  console.error('🌐 Middleware Host Resolution:', { rawHost, hostname });
-
   if (ADMIN_DOMAINS.has(hostname)) {
     return { role: 'central' };
   }
 
-  // Tenant validation logic
+  // Cookie のテナント情報を優先使用（重複クエリを回避）
+  // ただし、Cookie に保存されたドメインと現在のホスト名が一致する場合のみ信頼する
+  const existingTenantId = request.cookies.get('x-mw-tenant-id')?.value;
+  const existingDomain = request.cookies.get('x-mw-tenant-domain')?.value;
+
+  if (existingTenantId && existingDomain === hostname) {
+    const existingTenantName = request.cookies.get('x-mw-tenant-name')?.value || '';
+    const existingTemplate = request.cookies.get('x-mw-tenant-template')?.value || 'default';
+    return {
+      role: 'tenant',
+      tenantData: {
+        isValid: true,
+        templateKey: existingTemplate,
+        tenantId: existingTenantId,
+        tenantName: existingTenantName,
+      },
+    };
+  }
+
+  // Cookie にテナント情報がない場合、バックエンド API を呼び出す（バックエンドにキャッシュあり）
   const validationApiUrl =
     process.env.TENANT_VALIDATION_API_URL || 'http://backend:8080/central/tenant';
   const url = validationApiUrl + `?domain=${encodeURIComponent(hostname)}`;
@@ -51,7 +68,7 @@ export async function resolveTenant(request: NextRequest): Promise<{
       };
     }
   } catch (error) {
-    console.error('🚨 Tenant resolution failed:', error);
+    console.error('🚨 テナント解決に失敗:', error);
   }
 
   return {

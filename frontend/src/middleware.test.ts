@@ -41,9 +41,12 @@ describe('middleware integration', () => {
   const mockResolveTenant = resolveTenant as jest.Mock;
   const mockHandleRouteProtection = handleRouteProtection as jest.Mock;
 
-  const createRequest = () =>
+  const createRequest = (hostname = 'store.test') =>
     ({
-      nextUrl: { protocol: 'http:' },
+      nextUrl: { protocol: 'http:', hostname },
+      headers: {
+        get: (name: string) => (name === 'host' ? hostname : null),
+      },
     }) as unknown as NextRequest;
 
   beforeEach(() => {
@@ -82,5 +85,6 @@ describe('middleware integration', () => {
     expect(res.cookies.get('x-mw-role').value).toBe('tenant');
     expect(res.cookies.get('x-mw-tenant-id').value).toBe('t1');
     expect(res.cookies.get('x-mw-tenant-template').value).toBe('dark');
+    expect(res.cookies.get('x-mw-tenant-domain').value).toBe('store.test');
   });
 });

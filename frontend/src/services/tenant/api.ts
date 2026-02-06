@@ -5,6 +5,8 @@ import {
   LoginRequest,
   LoginResponse,
   MenuVO,
+  TenantConfigResponse,
+  TenantConfigUpdateRequest,
 } from '@/types/api';
 import { Order, OrderCreateRequest, Page } from '@/types/order';
 
@@ -40,6 +42,17 @@ export const orderApi = {
   },
   create: async (data: OrderCreateRequest): Promise<Order> => {
     const response = await apiClient.post('/tenant/orders', data);
+    return response.data;
+  },
+};
+
+export const tenantConfigApi = {
+  get: async (): Promise<TenantConfigResponse> => {
+    const response = await apiClient.get('/tenant/config');
+    return response.data;
+  },
+  update: async (data: TenantConfigUpdateRequest): Promise<TenantConfigResponse> => {
+    const response = await apiClient.put('/tenant/config', data);
     return response.data;
   },
 };

@@ -32,6 +32,17 @@ export async function middleware(request: NextRequest) {
 
   // Set Tenant Cookies (if applicable)
   if (role === 'tenant' && tenantData?.isValid) {
+    // ドメインを保存して、後続リクエストで検証に使用
+    const hostname = (
+      request.headers.get('x-forwarded-host') ||
+      request.headers.get('host') ||
+      request.nextUrl.hostname
+    )
+      .split(',')[0]
+      .trim()
+      .split(':')[0]
+      .toLowerCase();
+    response.cookies.set('x-mw-tenant-domain', hostname, cookieOptions);
     response.cookies.set('x-mw-tenant-template', tenantData.templateKey, cookieOptions);
     if (tenantData.tenantId) {
       response.cookies.set('x-mw-tenant-id', tenantData.tenantId, cookieOptions);

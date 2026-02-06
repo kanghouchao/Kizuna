@@ -8,9 +8,9 @@ jest.mock('@/lib/client', () => ({
       data:
         url === '/tenant/register'
           ? {
-              tenantDomain: 'tenant.example.com',
-              loginUrl: 'https://tenant.example.com/login',
-              tenantName: 'Tenant Example',
+              tenant_domain: 'tenant.example.com',
+              login_url: 'https://tenant.example.com/login',
+              tenant_name: 'Tenant Example',
             }
           : url === '/tenant/login'
             ? { token: 'jwt-token', expires_at: 123 }
@@ -23,9 +23,9 @@ describe('tenant api', () => {
   it('register returns data from /tenant/register', async () => {
     const res = await authApi.register({} as any);
     expect(res).toEqual({
-      tenantDomain: 'tenant.example.com',
-      loginUrl: 'https://tenant.example.com/login',
-      tenantName: 'Tenant Example',
+      tenant_domain: 'tenant.example.com',
+      login_url: 'https://tenant.example.com/login',
+      tenant_name: 'Tenant Example',
     });
   });
   it('login returns data from /tenant/login', async () => {

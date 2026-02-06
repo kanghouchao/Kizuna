@@ -8,22 +8,29 @@ import com.kizuna.model.dto.central.tenant.TenantStatusVO;
 import com.kizuna.model.dto.central.tenant.TenantUpdateDTO;
 import com.kizuna.model.dto.central.tenant.TenantVO;
 import com.kizuna.model.entity.central.tenant.Tenant;
+import com.kizuna.model.entity.tenant.TenantConfig;
 import com.kizuna.repository.central.TenantRepository;
+import com.kizuna.repository.tenant.TenantConfigRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Log4j2
 @Service
 @RequiredArgsConstructor
 public class CentralTenantServiceImpl implements CentralTenantService {
 
   private final TenantRepository tenantRepository;
+  private final TenantConfigRepository tenantConfigRepository;
   private final ApplicationEventPublisher eventPublisher;
 
   @Override
@@ -59,7 +66,9 @@ public class CentralTenantServiceImpl implements CentralTenantService {
 
   @Override
   @Transactional(readOnly = true)
+  @Cacheable(value = "tenantByDomain", key = "#domain")
   public Optional<TenantVO> getByDomain(String domain) {
+    log.debug("テナントをデータベースから検索 domain: {}", domain);
     return tenantRepository.findByDomain(domain).map(this::toDto);
   }
 
@@ -71,6 +80,10 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     t.setDomain(req.getDomain());
     t.setEmail(req.getEmail());
     Tenant saved = tenantRepository.save(t);
+
+    // テナント作成時にデフォルトのテナント設定を保存
+    tenantConfigRepository.save(TenantConfig.createDefault(saved));
+
     eventPublisher.publishEvent(new TenantCreatedEvent(saved));
   }
 
@@ -80,13 +93,14 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     var tenant =
         tenantRepository
             .findById(parseId(id))
-            .orElseThrow(() -> new ServiceException("tenant not found"));
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"));
     tenant.setName(req.getName());
     tenantRepository.save(tenant);
   }
 
   @Override
   @Transactional
+  @CacheEvict(value = "tenantByDomain", allEntries = true)
   public void delete(String id) {
     tenantRepository.deleteById(parseId(id));
   }
@@ -95,7 +109,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   @Transactional(readOnly = true)
   public TenantStatusVO stats() {
     long total = tenantRepository.count();
-    // placeholder: active/inactive/pending not modelled yet
+    // TODO: active/inactive/pending はまだモデル化されていない
     return new TenantStatusVO(total, total, 0, 0);
   }
 
@@ -103,7 +117,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     try {
       return Long.parseLong(id);
     } catch (NumberFormatException e) {
-      throw new ServiceException("Invalid tenant ID format: " + id);
+      throw new ServiceException("テナント ID の形式が不正です: " + id);
     }
   }
 

@@ -88,7 +88,48 @@ export interface RegisterRequest {
 }
 
 export interface RegisterResponse {
-  tenantDomain: string;
-  loginUrl: string;
-  tenantName?: string;
+  tenant_domain: string;
+  login_url: string;
+  tenant_name?: string;
+}
+
+// SNSリンク
+export interface SnsLink {
+  platform: string;
+  url: string;
+  label?: string;
+}
+
+// パートナーリンク
+export interface PartnerLink {
+  name: string;
+  url: string;
+  logo_url?: string;
+}
+
+// テナント設定レスポンス
+export interface TenantConfigResponse {
+  id: number;
+  template_key: string;
+  logo_url?: string;
+  banner_url?: string;
+  mv_url?: string;
+  mv_type: string;
+  description?: string;
+  sns_links: SnsLink[];
+  partner_links: PartnerLink[];
+  created_at: string;
+  updated_at: string;
+}
+
+// テナント設定更新リクエスト
+export interface TenantConfigUpdateRequest {
+  template_key?: string;
+  logo_url?: string;
+  banner_url?: string;
+  mv_url?: string;
+  mv_type?: string;
+  description?: string;
+  sns_links?: SnsLink[];
+  partner_links?: PartnerLink[];
 }

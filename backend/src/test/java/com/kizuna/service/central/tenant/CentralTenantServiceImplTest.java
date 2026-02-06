@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.model.dto.central.tenant.TenantCreateDTO;
 import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.repository.central.TenantRepository;
+import com.kizuna.repository.tenant.TenantConfigRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,7 @@ import org.springframework.data.domain.PageImpl;
 class CentralTenantServiceImplTest {
 
   @Mock private TenantRepository tenantRepository;
+  @Mock private TenantConfigRepository tenantConfigRepository;
   @Mock private ApplicationEventPublisher eventPublisher;
   @InjectMocks private CentralTenantServiceImpl tenantService;
 
@@ -46,6 +48,7 @@ class CentralTenantServiceImplTest {
     when(tenantRepository.save(any())).thenReturn(t);
 
     tenantService.create(req);
+    verify(tenantConfigRepository).save(any());
     verify(eventPublisher).publishEvent(any());
   }
 }
