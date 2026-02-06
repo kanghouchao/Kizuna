@@ -135,6 +135,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - **Server Components**: Cookie は `cookies()` で読み取り（`headers()` は使わない）
 - **型定義**: `src/types/api.ts` に集約
 - **テスト配置**: `__tests__/` ディレクトリに配置
+- **API の命名規約（snake_case）**: バックエンドの Jackson 設定（`PropertyNamingStrategies.SNAKE_CASE`）により、API のリクエスト/レスポンスの JSON キーはすべて snake_case に自動変換される。そのため、フロントエンドの TypeScript 型定義や API 通信で使用するプロパティ名も **snake_case** で統一すること（例: `template_key`, `logo_url`, `created_at`）。フロントエンド側で camelCase ↔ snake_case の変換処理は不要
 
 ## 重要ファイル
 

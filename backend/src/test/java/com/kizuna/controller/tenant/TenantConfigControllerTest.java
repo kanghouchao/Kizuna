@@ -8,9 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kizuna.model.dto.tenant.siteconfig.SiteConfigResponse;
-import com.kizuna.model.dto.tenant.siteconfig.SiteConfigUpdateRequest;
-import com.kizuna.service.tenant.SiteConfigService;
+import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigResponse;
+import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigUpdateRequest;
+import com.kizuna.service.tenant.TenantConfigService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,14 +24,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
-class SiteConfigControllerTest {
+class TenantConfigControllerTest {
 
   private MockMvc mockMvc;
   private ObjectMapper objectMapper;
 
-  @Mock private SiteConfigService siteConfigService;
+  @Mock private TenantConfigService tenantConfigService;
 
-  @InjectMocks private SiteConfigController controller;
+  @InjectMocks private TenantConfigController controller;
 
   @BeforeEach
   void setUp() {
@@ -42,11 +42,11 @@ class SiteConfigControllerTest {
 
   @Test
   void get_returnsConfig() throws Exception {
-    SiteConfigResponse response = createTestResponse();
-    when(siteConfigService.get()).thenReturn(response);
+    TenantConfigResponse response = createTestResponse();
+    when(tenantConfigService.get()).thenReturn(response);
 
     mockMvc
-        .perform(get("/tenant/site-config"))
+        .perform(get("/tenant/config"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(1))
         .andExpect(jsonPath("$.templateKey").value("default"))
@@ -55,24 +55,24 @@ class SiteConfigControllerTest {
 
   @Test
   void update_returnsUpdatedConfig() throws Exception {
-    SiteConfigResponse response = createTestResponse();
+    TenantConfigResponse response = createTestResponse();
     response.setLogoUrl("https://example.com/new-logo.png");
-    when(siteConfigService.update(any())).thenReturn(response);
+    when(tenantConfigService.update(any())).thenReturn(response);
 
-    SiteConfigUpdateRequest request = new SiteConfigUpdateRequest();
+    TenantConfigUpdateRequest request = new TenantConfigUpdateRequest();
     request.setLogoUrl("https://example.com/new-logo.png");
 
     mockMvc
         .perform(
-            put("/tenant/site-config")
+            put("/tenant/config")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.logoUrl").value("https://example.com/new-logo.png"));
   }
 
-  private SiteConfigResponse createTestResponse() {
-    return SiteConfigResponse.builder()
+  private TenantConfigResponse createTestResponse() {
+    return TenantConfigResponse.builder()
         .id(1L)
         .templateKey("default")
         .logoUrl("https://example.com/logo.png")

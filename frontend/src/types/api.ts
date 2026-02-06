@@ -88,9 +88,9 @@ export interface RegisterRequest {
 }
 
 export interface RegisterResponse {
-  tenantDomain: string;
-  loginUrl: string;
-  tenantName?: string;
+  tenant_domain: string;
+  login_url: string;
+  tenant_name?: string;
 }
 
 // SNSリンク
@@ -104,32 +104,32 @@ export interface SnsLink {
 export interface PartnerLink {
   name: string;
   url: string;
-  logoUrl?: string;
+  logo_url?: string;
 }
 
-// サイト設定レスポンス
-export interface SiteConfigResponse {
+// テナント設定レスポンス
+export interface TenantConfigResponse {
   id: number;
-  templateKey: string;
-  logoUrl?: string;
-  bannerUrl?: string;
-  mvUrl?: string;
-  mvType: string;
+  template_key: string;
+  logo_url?: string;
+  banner_url?: string;
+  mv_url?: string;
+  mv_type: string;
   description?: string;
-  snsLinks: SnsLink[];
-  partnerLinks: PartnerLink[];
-  createdAt: string;
-  updatedAt: string;
+  sns_links: SnsLink[];
+  partner_links: PartnerLink[];
+  created_at: string;
+  updated_at: string;
 }
 
-// サイト設定更新リクエスト
-export interface SiteConfigUpdateRequest {
-  templateKey?: string;
-  logoUrl?: string;
-  bannerUrl?: string;
-  mvUrl?: string;
-  mvType?: string;
+// テナント設定更新リクエスト
+export interface TenantConfigUpdateRequest {
+  template_key?: string;
+  logo_url?: string;
+  banner_url?: string;
+  mv_url?: string;
+  mv_type?: string;
   description?: string;
-  snsLinks?: SnsLink[];
-  partnerLinks?: PartnerLink[];
+  sns_links?: SnsLink[];
+  partner_links?: PartnerLink[];
 }

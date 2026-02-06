@@ -76,8 +76,8 @@ function RegisterForm() {
     }
     try {
       const response = await authApi.register({ token, email, password });
-      const tenantLabel = response.tenantName || response.tenantDomain || '店舗';
-      const nextUrl = resolveLoginUrl(response.loginUrl, response.tenantDomain);
+      const tenantLabel = response.tenant_name || response.tenant_domain || '店舗';
+      const nextUrl = resolveLoginUrl(response.login_url, response.tenant_domain);
       setRedirectUrl(nextUrl || null);
       setSuccess(`${tenantLabel} のログインページへリダイレクトします。数秒お待ちください。`);
       const fallback = () => router.push('/login');

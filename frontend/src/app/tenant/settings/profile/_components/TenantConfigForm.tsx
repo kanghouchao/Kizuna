@@ -1,22 +1,22 @@
 'use client';
 
 import { useForm, useFieldArray } from 'react-hook-form';
-import { SiteConfigResponse, SiteConfigUpdateRequest, SnsLink, PartnerLink } from '@/types/api';
+import { TenantConfigResponse, TenantConfigUpdateRequest, SnsLink, PartnerLink } from '@/types/api';
 
-interface SiteConfigFormData {
-  templateKey: string;
-  logoUrl: string;
-  bannerUrl: string;
-  mvUrl: string;
-  mvType: string;
+interface TenantConfigFormData {
+  template_key: string;
+  logo_url: string;
+  banner_url: string;
+  mv_url: string;
+  mv_type: string;
   description: string;
-  snsLinks: SnsLink[];
-  partnerLinks: PartnerLink[];
+  sns_links: SnsLink[];
+  partner_links: PartnerLink[];
 }
 
-interface SiteConfigFormProps {
-  initialData: SiteConfigResponse;
-  onSubmit: (data: SiteConfigUpdateRequest) => Promise<void>;
+interface TenantConfigFormProps {
+  initialData: TenantConfigResponse;
+  onSubmit: (data: TenantConfigUpdateRequest) => Promise<void>;
   isSubmitting: boolean;
 }
 
@@ -29,17 +29,17 @@ const SNS_PLATFORMS = [
   { value: 'facebook', label: 'Facebook' },
 ];
 
-export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConfigFormProps) {
-  const { register, control, handleSubmit } = useForm<SiteConfigFormData>({
+export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: TenantConfigFormProps) {
+  const { register, control, handleSubmit } = useForm<TenantConfigFormData>({
     defaultValues: {
-      templateKey: initialData.templateKey || 'default',
-      logoUrl: initialData.logoUrl || '',
-      bannerUrl: initialData.bannerUrl || '',
-      mvUrl: initialData.mvUrl || '',
-      mvType: initialData.mvType || 'image',
+      template_key: initialData.template_key || 'default',
+      logo_url: initialData.logo_url || '',
+      banner_url: initialData.banner_url || '',
+      mv_url: initialData.mv_url || '',
+      mv_type: initialData.mv_type || 'image',
       description: initialData.description || '',
-      snsLinks: initialData.snsLinks || [],
-      partnerLinks: initialData.partnerLinks || [],
+      sns_links: initialData.sns_links || [],
+      partner_links: initialData.partner_links || [],
     },
   });
 
@@ -49,7 +49,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
     remove: removeSns,
   } = useFieldArray({
     control,
-    name: 'snsLinks',
+    name: 'sns_links',
   });
 
   const {
@@ -58,10 +58,10 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
     remove: removePartner,
   } = useFieldArray({
     control,
-    name: 'partnerLinks',
+    name: 'partner_links',
   });
 
-  const handleFormSubmit = (data: SiteConfigFormData) => {
+  const handleFormSubmit = (data: TenantConfigFormData) => {
     onSubmit(data);
   };
 
@@ -79,7 +79,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">テンプレート</label>
             <select
-              {...register('templateKey')}
+              {...register('template_key')}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             >
               <option value="default">デフォルト</option>
@@ -100,7 +100,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
             <label className="block text-sm font-medium text-gray-700 mb-1">ロゴ URL</label>
             <input
               type="url"
-              {...register('logoUrl')}
+              {...register('logo_url')}
               placeholder="https://example.com/logo.png"
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
@@ -109,7 +109,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
             <label className="block text-sm font-medium text-gray-700 mb-1">バナー URL</label>
             <input
               type="url"
-              {...register('bannerUrl')}
+              {...register('banner_url')}
               placeholder="https://example.com/banner.png"
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
@@ -121,7 +121,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
               </label>
               <input
                 type="url"
-                {...register('mvUrl')}
+                {...register('mv_url')}
                 placeholder="https://example.com/main-visual.png"
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               />
@@ -129,7 +129,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">MV タイプ</label>
               <select
-                {...register('mvType')}
+                {...register('mv_type')}
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               >
                 <option value="image">画像</option>
@@ -184,7 +184,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                       プラットフォーム
                     </label>
                     <select
-                      {...register(`snsLinks.${index}.platform`)}
+                      {...register(`sns_links.${index}.platform`)}
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     >
                       {SNS_PLATFORMS.map(p => (
@@ -198,7 +198,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                     <label className="block text-sm font-medium text-gray-700 mb-1">URL</label>
                     <input
                       type="url"
-                      {...register(`snsLinks.${index}.url`)}
+                      {...register(`sns_links.${index}.url`)}
                       placeholder="https://..."
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
@@ -209,7 +209,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                     </label>
                     <input
                       type="text"
-                      {...register(`snsLinks.${index}.label`)}
+                      {...register(`sns_links.${index}.label`)}
                       placeholder="@username"
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
@@ -244,7 +244,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
           </h3>
           <button
             type="button"
-            onClick={() => appendPartner({ name: '', url: '', logoUrl: '' })}
+            onClick={() => appendPartner({ name: '', url: '', logo_url: '' })}
             className="px-4 py-2 text-sm bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors"
           >
             + 追加
@@ -263,7 +263,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                     <label className="block text-sm font-medium text-gray-700 mb-1">名前</label>
                     <input
                       type="text"
-                      {...register(`partnerLinks.${index}.name`)}
+                      {...register(`partner_links.${index}.name`)}
                       placeholder="パートナー名"
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
@@ -272,7 +272,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                     <label className="block text-sm font-medium text-gray-700 mb-1">URL</label>
                     <input
                       type="url"
-                      {...register(`partnerLinks.${index}.url`)}
+                      {...register(`partner_links.${index}.url`)}
                       placeholder="https://..."
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
@@ -283,7 +283,7 @@ export function SiteConfigForm({ initialData, onSubmit, isSubmitting }: SiteConf
                     </label>
                     <input
                       type="url"
-                      {...register(`partnerLinks.${index}.logoUrl`)}
+                      {...register(`partner_links.${index}.logo_url`)}
                       placeholder="https://..."
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />

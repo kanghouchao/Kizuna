@@ -1,7 +1,7 @@
 package com.kizuna.model.entity.tenant;
 
-import com.kizuna.model.dto.tenant.siteconfig.PartnerLink;
-import com.kizuna.model.dto.tenant.siteconfig.SnsLink;
+import com.kizuna.model.dto.tenant.tenantconfig.PartnerLink;
+import com.kizuna.model.dto.tenant.tenantconfig.SnsLink;
 import com.kizuna.model.entity.central.tenant.Tenant;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
@@ -27,14 +27,14 @@ import lombok.ToString;
 import org.hibernate.annotations.Type;
 
 @Entity
-@Table(name = "tenant_site_configs")
+@Table(name = "t_tenant_configs")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "tenant")
-public class TenantSiteConfig {
+public class TenantConfig {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -93,13 +93,13 @@ public class TenantSiteConfig {
   }
 
   /**
-   * テナント用のデフォルトサイト設定を生成する。
+   * テナント用のデフォルト設定を生成する。
    *
    * @param tenant 対象テナント
-   * @return デフォルト値が設定された TenantSiteConfig インスタンス
+   * @return デフォルト値が設定された TenantConfig インスタンス
    */
-  public static TenantSiteConfig createDefault(Tenant tenant) {
-    return TenantSiteConfig.builder()
+  public static TenantConfig createDefault(Tenant tenant) {
+    return TenantConfig.builder()
         .tenant(tenant)
         .templateKey("default")
         .mvType("image")

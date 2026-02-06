@@ -1,4 +1,4 @@
-package com.kizuna.model.dto.tenant.siteconfig;
+package com.kizuna.model.dto.tenant.tenantconfig;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SiteConfigResponse {
+public class TenantConfigResponse {
   private Long id;
   private String templateKey;
   private String logoUrl;

@@ -1,4 +1,4 @@
-package com.kizuna.model.dto.tenant.siteconfig;
+package com.kizuna.model.dto.tenant.tenantconfig;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
@@ -6,7 +6,7 @@ import java.util.List;
 import lombok.Data;
 
 @Data
-public class SiteConfigUpdateRequest {
+public class TenantConfigUpdateRequest {
 
   @Size(max = 50)
   private String templateKey;

@@ -1,101 +1,101 @@
 databaseChangeLog:
-  - changeSet:
-      id: 009-create-tenant-site-config
-      author: claude
-      changes:
-        - createTable:
-            tableName: tenant_site_configs
-            columns:
-              - column:
-                  name: id
-                  type: BIGINT
-                  autoIncrement: true
-                  constraints:
-                    primaryKey: true
-                    nullable: false
-              - column:
-                  name: tenant_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-                    unique: true
-              - column:
-                  name: template_key
-                  type: VARCHAR(50)
-                  defaultValue: 'default'
-              - column:
-                  name: logo_url
-                  type: VARCHAR(500)
-              - column:
-                  name: banner_url
-                  type: VARCHAR(500)
-              - column:
-                  name: mv_url
-                  type: VARCHAR(500)
-              - column:
-                  name: mv_type
-                  type: VARCHAR(20)
-                  defaultValue: 'image'
-              - column:
-                  name: description
-                  type: TEXT
-              - column:
-                  name: sns_links
-                  type: JSONB
-              - column:
-                  name: partner_links
-                  type: JSONB
-              - column:
-                  name: created_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: CURRENT_TIMESTAMP
-                  constraints:
-                    nullable: false
-              - column:
-                  name: updated_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: CURRENT_TIMESTAMP
-                  constraints:
-                    nullable: false
+    - changeSet:
+          id: 009-create-tenant-site-config
+          author: claude
+          changes:
+              - createTable:
+                    tableName: t_tenant_configs
+                    columns:
+                        - column:
+                              name: id
+                              type: BIGINT
+                              autoIncrement: true
+                              constraints:
+                                  primaryKey: true
+                                  nullable: false
+                        - column:
+                              name: tenant_id
+                              type: BIGINT
+                              constraints:
+                                  nullable: false
+                                  unique: true
+                        - column:
+                              name: template_key
+                              type: VARCHAR(50)
+                              defaultValue: "default"
+                        - column:
+                              name: logo_url
+                              type: VARCHAR(500)
+                        - column:
+                              name: banner_url
+                              type: VARCHAR(500)
+                        - column:
+                              name: mv_url
+                              type: VARCHAR(500)
+                        - column:
+                              name: mv_type
+                              type: VARCHAR(20)
+                              defaultValue: "image"
+                        - column:
+                              name: description
+                              type: TEXT
+                        - column:
+                              name: sns_links
+                              type: JSONB
+                        - column:
+                              name: partner_links
+                              type: JSONB
+                        - column:
+                              name: created_at
+                              type: TIMESTAMP WITH TIME ZONE
+                              defaultValueComputed: CURRENT_TIMESTAMP
+                              constraints:
+                                  nullable: false
+                        - column:
+                              name: updated_at
+                              type: TIMESTAMP WITH TIME ZONE
+                              defaultValueComputed: CURRENT_TIMESTAMP
+                              constraints:
+                                  nullable: false
 
-        - addForeignKeyConstraint:
-            constraintName: fk_site_config_tenant
-            baseTableName: tenant_site_configs
-            baseColumnNames: tenant_id
-            referencedTableName: central_tenants
-            referencedColumnNames: id
-            onDelete: CASCADE
+              - addForeignKeyConstraint:
+                    constraintName: fk_tenant_config_tenant
+                    baseTableName: t_tenant_configs
+                    baseColumnNames: tenant_id
+                    referencedTableName: central_tenants
+                    referencedColumnNames: id
+                    onDelete: CASCADE
 
-        - createIndex:
-            tableName: tenant_site_configs
-            indexName: idx_site_config_tenant_id
-            columns:
-              - column:
-                  name: tenant_id
+              - createIndex:
+                    tableName: t_tenant_configs
+                    indexName: idx_tenant_config_tenant_id
+                    columns:
+                        - column:
+                              name: tenant_id
 
-  - changeSet:
-      id: 009-seed-tenant-site-config
-      author: claude
-      comment: デフォルトテナントのサイト設定を追加
-      changes:
-        - insert:
-            tableName: tenant_site_configs
-            columns:
-              - column:
-                  name: tenant_id
-                  valueNumeric: 1
-              - column:
-                  name: template_key
-                  value: default
-              - column:
-                  name: mv_type
-                  value: image
-              - column:
-                  name: description
-                  value: Sample Tenant のサイトへようこそ
-              - column:
-                  name: sns_links
-                  valueComputed: "'[]'::jsonb"
-              - column:
-                  name: partner_links
-                  valueComputed: "'[]'::jsonb"
+    - changeSet:
+          id: 009-seed-tenant-site-config
+          author: claude
+          comment: デフォルトテナントのサイト設定を追加
+          changes:
+              - insert:
+                    tableName: t_tenant_configs
+                    columns:
+                        - column:
+                              name: tenant_id
+                              valueNumeric: 1
+                        - column:
+                              name: template_key
+                              value: default
+                        - column:
+                              name: mv_type
+                              value: image
+                        - column:
+                              name: description
+                              value: Sample Tenant のサイトへようこそ
+                        - column:
+                              name: sns_links
+                              valueComputed: "'[]'::jsonb"
+                        - column:
+                              name: partner_links
+                              valueComputed: "'[]'::jsonb"
