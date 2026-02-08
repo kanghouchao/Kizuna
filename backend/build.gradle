@@ -89,7 +89,8 @@ jacocoTestReport {
                 'build/**',
                 'generated/**',
                 '**/generated/**',
-                '**/external/**'
+                '**/external/**',
+                '**/*MapperImpl.class'
         ]) }))
     }
 }
@@ -104,6 +105,15 @@ jacocoTestCoverageVerification {
                 minimum = 0.70
             }
         }
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect { fileTree(dir: it, exclude: [
+                'build/**',
+                'generated/**',
+                '**/generated/**',
+                '**/external/**',
+                '**/*MapperImpl.class'
+        ]) }))
     }
 }
 

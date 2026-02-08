@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
+import com.kizuna.mapper.tenant.CustomerMapper;
 import com.kizuna.mapper.tenant.OrderMapper;
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;
@@ -46,6 +47,7 @@ class OrderServiceImplTest {
   @Mock TenantRepository tenantRepository;
   @Mock TenantContext tenantContext;
   @Mock OrderMapper orderMapper;
+  @Mock CustomerMapper customerMapper;
 
   @InjectMocks OrderServiceImpl service;
 
@@ -91,6 +93,8 @@ class OrderServiceImplTest {
     Order entity = new Order();
     OrderResponse res = OrderResponse.builder().status("CREATED").build();
 
+    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(entity);
     when(customerRepository.findById("c1")).thenReturn(Optional.of(new Customer()));
     when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
@@ -112,11 +116,17 @@ class OrderServiceImplTest {
     req.setPhoneNumber("09012345678");
     req.setCustomerName("New Guy");
 
+    Customer newCustomer = new Customer();
+    newCustomer.setPhoneNumber("09012345678");
+
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(new Order());
     when(customerRepository.findByPhoneNumberAndTenantId("09012345678", 1L))
         .thenReturn(Optional.empty());
+
+    when(customerMapper.toCustomer(req)).thenReturn(newCustomer);
+
     when(customerRepository.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
@@ -172,24 +182,30 @@ class OrderServiceImplTest {
   void createThrowsWhenCastNotFound() {
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCastId("g_none");
+
+    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(new Order());
     when(castRepository.findById("g_none")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("Cast not found");
+        .hasMessageContaining("キャストが見つかりません");
   }
 
   @Test
   void createThrowsWhenReceptionistNotFound() {
     OrderCreateRequest req = new OrderCreateRequest();
     req.setReceptionistId("r_none");
+
+    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(new Order());
     when(tenantUserRepository.findById("r_none")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("Receptionist not found");
+        .hasMessageContaining("受付担当者が見つかりません");
   }
 
   @Test

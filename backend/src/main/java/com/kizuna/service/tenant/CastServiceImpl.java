@@ -1,11 +1,14 @@
 package com.kizuna.service.tenant;
 
 import com.kizuna.config.TenantScoped;
+import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
+import com.kizuna.mapper.tenant.CastMapper;
 import com.kizuna.model.dto.tenant.cast.CastCreateRequest;
 import com.kizuna.model.dto.tenant.cast.CastResponse;
 import com.kizuna.model.dto.tenant.cast.CastUpdateRequest;
 import com.kizuna.model.entity.tenant.Cast;
+import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CastRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,15 +22,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class CastServiceImpl implements CastService {
 
   private final CastRepository castRepository;
+  private final CastMapper castMapper;
+  private final TenantContext tenantContext;
+  private final TenantRepository tenantRepository;
 
   @Override
   @TenantScoped
   @Transactional(readOnly = true)
   public Page<CastResponse> list(String search, Pageable pageable) {
     if (search != null && !search.isEmpty()) {
-      return castRepository.findByNameContainingIgnoreCase(search, pageable).map(this::toResponse);
+      return castRepository
+          .findByNameContainingIgnoreCase(search, pageable)
+          .map(castMapper::toResponse);
     }
-    return castRepository.findAll(pageable).map(this::toResponse);
+    return castRepository.findAll(pageable).map(castMapper::toResponse);
   }
 
   @Override
@@ -36,26 +44,22 @@ public class CastServiceImpl implements CastService {
   public CastResponse get(String id) {
     return castRepository
         .findById(id)
-        .map(this::toResponse)
-        .orElseThrow(() -> new ServiceException("Cast not found: " + id));
+        .map(castMapper::toResponse)
+        .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
   }
 
   @Override
   @TenantScoped
   @Transactional
   public CastResponse create(CastCreateRequest request) {
-    Cast cast = new Cast();
-    cast.setName(request.getName());
-    cast.setStatus(request.getStatus() != null ? request.getStatus() : "ACTIVE");
-    cast.setPhotoUrl(request.getPhotoUrl());
-    cast.setIntroduction(request.getIntroduction());
-    cast.setAge(request.getAge());
-    cast.setHeight(request.getHeight());
-    cast.setBust(request.getBust());
-    cast.setWaist(request.getWaist());
-    cast.setHip(request.getHip());
-    cast.setDisplayOrder(request.getDisplayOrder());
-    return toResponse(castRepository.save(cast));
+    Cast cast = castMapper.toEntity(request);
+
+    cast.setTenant(
+        tenantRepository
+            .findById(tenantContext.getTenantId())
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
+
+    return castMapper.toResponse(castRepository.save(cast));
   }
 
   @Override
@@ -63,22 +67,11 @@ public class CastServiceImpl implements CastService {
   @Transactional
   public CastResponse update(String id, CastUpdateRequest request) {
     Cast cast =
-        castRepository
-            .findById(id)
-            .orElseThrow(() -> new ServiceException("Cast not found: " + id));
+        castRepository.findById(id).orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
 
-    if (request.getName() != null) cast.setName(request.getName());
-    if (request.getStatus() != null) cast.setStatus(request.getStatus());
-    if (request.getPhotoUrl() != null) cast.setPhotoUrl(request.getPhotoUrl());
-    if (request.getIntroduction() != null) cast.setIntroduction(request.getIntroduction());
-    if (request.getAge() != null) cast.setAge(request.getAge());
-    if (request.getHeight() != null) cast.setHeight(request.getHeight());
-    if (request.getBust() != null) cast.setBust(request.getBust());
-    if (request.getWaist() != null) cast.setWaist(request.getWaist());
-    if (request.getHip() != null) cast.setHip(request.getHip());
-    if (request.getDisplayOrder() != null) cast.setDisplayOrder(request.getDisplayOrder());
+    castMapper.updateEntityFromRequest(request, cast);
 
-    return toResponse(castRepository.save(cast));
+    return castMapper.toResponse(castRepository.save(cast));
   }
 
   @Override
@@ -86,7 +79,7 @@ public class CastServiceImpl implements CastService {
   @Transactional
   public void delete(String id) {
     if (!castRepository.existsById(id)) {
-      throw new ServiceException("Cast not found: " + id);
+      throw new ServiceException("キャストが見つかりません: " + id);
     }
     castRepository.deleteById(id);
   }
@@ -96,25 +89,7 @@ public class CastServiceImpl implements CastService {
   @Transactional(readOnly = true)
   public List<CastResponse> listActive() {
     return castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE").stream()
-        .map(this::toResponse)
+        .map(castMapper::toResponse)
         .toList();
-  }
-
-  private CastResponse toResponse(Cast cast) {
-    return CastResponse.builder()
-        .id(cast.getId())
-        .name(cast.getName())
-        .status(cast.getStatus())
-        .photoUrl(cast.getPhotoUrl())
-        .introduction(cast.getIntroduction())
-        .age(cast.getAge())
-        .height(cast.getHeight())
-        .bust(cast.getBust())
-        .waist(cast.getWaist())
-        .hip(cast.getHip())
-        .displayOrder(cast.getDisplayOrder())
-        .createdAt(cast.getCreatedAt())
-        .updatedAt(cast.getUpdatedAt())
-        .build();
   }
 }
