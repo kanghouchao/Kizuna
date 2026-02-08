@@ -150,7 +150,7 @@ export default function CastListPage() {
                       <div className="h-12 w-10 rounded overflow-hidden bg-gray-100 relative">
                         {cast.photo_url ? (
                           <Image
-                            src={`/api${cast.photo_url}`}
+                            src={cast.photo_url}
                             alt={cast.name}
                             fill
                             className="object-cover"

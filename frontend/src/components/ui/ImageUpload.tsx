@@ -13,10 +13,17 @@ interface ImageUploadProps {
   onChange: (url: string) => void;
   /** アップロード先ディレクトリ */
   directory?: string;
+  /** コンテナのクラス名 (サイズ調整用) */
+  className?: string;
 }
 
 /** 画像アップロードコンポーネント */
-export default function ImageUpload({ value, onChange, directory = 'casts' }: ImageUploadProps) {
+export default function ImageUpload({
+  value,
+  onChange,
+  directory = 'casts',
+  className = 'w-40 h-52',
+}: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | undefined>(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +64,7 @@ export default function ImageUpload({ value, onChange, directory = 'casts' }: Im
   return (
     <div className="space-y-2">
       <div
-        className="relative w-40 h-52 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden cursor-pointer hover:border-indigo-400 transition-colors"
+        className={`relative border-2 border-dashed border-gray-300 rounded-lg overflow-hidden cursor-pointer hover:border-indigo-400 transition-colors ${className}`}
         onClick={() => inputRef.current?.click()}
       >
         {displayUrl ? (
