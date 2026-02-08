@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
-
+import { notFound } from 'next/navigation';
+import { storefrontService } from '@/services/storefront';
 import Advertisement from './Advertisement';
 import Banner from './Banner';
 import CastSection from './CastSection';
@@ -7,73 +8,49 @@ import Footer from './Footer';
 import Header from './Header';
 import MVSection from './MVSection';
 
-interface Cast {
-  id: string;
-  name: string;
-  photo_url?: string;
-  age?: number;
-  height?: number;
-  bust?: number;
-  waist?: number;
-  hip?: number;
-}
-
-async function fetchCasts(tenantId: string): Promise<Cast[]> {
-  try {
-    const backendUrl =
-      process.env.TENANT_VALIDATION_API_URL?.replace('/central/tenant', '') ||
-      'http://backend:8080';
-    const response = await fetch(`${backendUrl}/tenant/casts/public`, {
-      headers: {
-        'X-Role': 'tenant',
-        'X-Tenant-ID': tenantId,
-      },
-      next: { revalidate: 60 },
-    });
-    if (!response.ok) return [];
-    return await response.json();
-  } catch {
-    return [];
-  }
-}
-
-export default async function Page() {
+/**
+ * デフォルトのテナントページ模版 (Server Component)
+ *
+ * 役割:
+ * - クッキーからテナント情報を取得し、必要なデータをサービス層から取得する。
+ * - 取得したデータを各セクションコンポーネントに配布する。
+ */
+export default async function DefaultTemplate() {
   const cookieStore = await cookies();
+  const tenantId = cookieStore.get('x-mw-tenant-id')?.value;
   const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
-  const tenantId = cookieStore.get('x-mw-tenant-id')?.value || '';
 
-  // キャストデータを取得
-  const casts = tenantId ? await fetchCasts(tenantId) : [];
+  if (!tenantId) {
+    notFound();
+  }
 
-  // TODO: サイト設定をAPIから取得（バックエンド準備完了後）
-  const siteConfig = {
-    logo_url: undefined,
-    banner_url: undefined,
-    description: undefined,
-    mv_url: undefined,
-    mv_type: 'image' as const,
-    sns_links: undefined,
-    partner_links: undefined,
-  };
+  // この模版に必要なデータを取得
+  const { casts, siteConfig } = await storefrontService.getPageData(tenantId);
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* ヘッダー部分 */}
       <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
 
       <main className="grow">
+        {/* バナー部分 */}
         <Banner
           tenantName={tenantName}
           bannerUrl={siteConfig.banner_url}
           description={siteConfig.description}
         />
 
+        {/* メインビジュアル部分 */}
         <MVSection mvUrl={siteConfig.mv_url} mvType={siteConfig.mv_type} />
 
+        {/* キャスト一覧部分 */}
         <CastSection casts={casts} />
 
+        {/* 広告部分 */}
         <Advertisement />
       </main>
 
+      {/* フッター部分 */}
       <Footer
         tenantName={tenantName}
         snsLinks={siteConfig.sns_links}
