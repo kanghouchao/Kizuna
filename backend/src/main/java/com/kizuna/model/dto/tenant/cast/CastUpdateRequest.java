@@ -1,9 +1,9 @@
-package com.kizuna.model.dto.tenant.girl;
+package com.kizuna.model.dto.tenant.cast;
 
 import lombok.Data;
 
 @Data
-public class GirlUpdateRequest {
+public class CastUpdateRequest {
   private String name;
   private String status;
   private String photoUrl;

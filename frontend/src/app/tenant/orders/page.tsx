@@ -110,12 +110,12 @@ export default function OrderListPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        !order.girlName || order.girlName === 'フリー'
+                        !order.castName || order.castName === 'フリー'
                           ? 'bg-gray-100 text-gray-800'
                           : 'bg-pink-100 text-pink-800'
                       }`}
                     >
-                      {order.girlName || 'フリー'}
+                      {order.castName || 'フリー'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

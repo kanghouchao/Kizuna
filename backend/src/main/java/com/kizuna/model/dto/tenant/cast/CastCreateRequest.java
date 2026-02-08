@@ -1,10 +1,10 @@
-package com.kizuna.model.dto.tenant.girl;
+package com.kizuna.model.dto.tenant.cast;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class GirlCreateRequest {
+public class CastCreateRequest {
   @NotBlank private String name;
   private String status;
   private String photoUrl;

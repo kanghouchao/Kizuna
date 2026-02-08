@@ -16,7 +16,7 @@ interface ImageUploadProps {
 }
 
 /** 画像アップロードコンポーネント */
-export default function ImageUpload({ value, onChange, directory = 'girls' }: ImageUploadProps) {
+export default function ImageUpload({ value, onChange, directory = 'casts' }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | undefined>(value);
   const inputRef = useRef<HTMLInputElement>(null);

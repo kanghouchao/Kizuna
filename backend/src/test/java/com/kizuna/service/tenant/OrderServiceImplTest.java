@@ -13,13 +13,13 @@ import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;
 import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
 import com.kizuna.model.entity.central.tenant.Tenant;
+import com.kizuna.model.entity.tenant.Cast;
 import com.kizuna.model.entity.tenant.Customer;
-import com.kizuna.model.entity.tenant.Girl;
 import com.kizuna.model.entity.tenant.Order;
 import com.kizuna.model.entity.tenant.security.TenantUser;
 import com.kizuna.repository.central.TenantRepository;
+import com.kizuna.repository.tenant.CastRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
-import com.kizuna.repository.tenant.GirlRepository;
 import com.kizuna.repository.tenant.OrderRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
 import java.util.List;
@@ -41,7 +41,7 @@ class OrderServiceImplTest {
 
   @Mock OrderRepository orderRepository;
   @Mock CustomerRepository customerRepository;
-  @Mock GirlRepository girlRepository;
+  @Mock CastRepository castRepository;
   @Mock TenantUserRepository tenantUserRepository;
   @Mock TenantRepository tenantRepository;
   @Mock TenantContext tenantContext;
@@ -85,7 +85,7 @@ class OrderServiceImplTest {
   void createSavesOrderWithAssociations() {
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCustomerId("c1");
-    req.setGirlId("g1");
+    req.setCastId("g1");
     req.setReceptionistId("r1");
 
     Order entity = new Order();
@@ -93,7 +93,7 @@ class OrderServiceImplTest {
 
     when(orderMapper.toEntity(req)).thenReturn(entity);
     when(customerRepository.findById("c1")).thenReturn(Optional.of(new Customer()));
-    when(girlRepository.findById("g1")).thenReturn(Optional.of(new Girl()));
+    when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
     when(tenantUserRepository.findById("r1")).thenReturn(Optional.of(new TenantUser()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderMapper.toResponse(any(Order.class))).thenReturn(res);
@@ -102,7 +102,7 @@ class OrderServiceImplTest {
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomer()).isNotNull();
-    assertThat(orderCaptor.getValue().getGirl()).isNotNull();
+    assertThat(orderCaptor.getValue().getCast()).isNotNull();
     assertThat(orderCaptor.getValue().getReceptionist()).isNotNull();
   }
 
@@ -133,30 +133,30 @@ class OrderServiceImplTest {
     existing.setId("o1");
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(girlRepository.findById("g2")).thenReturn(Optional.of(new Girl()));
+    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
     when(tenantUserRepository.findById("r2")).thenReturn(Optional.of(new TenantUser()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
 
     OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setGirlId("g2");
+    req.setCastId("g2");
     req.setReceptionistId("r2");
 
     service.update("o1", req);
 
-    assertThat(existing.getGirl()).isNotNull();
+    assertThat(existing.getCast()).isNotNull();
     assertThat(existing.getReceptionist()).isNotNull();
     verify(orderMapper).updateEntityFromRequest(req, existing);
   }
 
   @Test
-  void updateThrowsWhenGirlNotFound() {
+  void updateThrowsWhenCastNotFound() {
     Order existing = new Order();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(girlRepository.findById("none")).thenReturn(Optional.empty());
+    when(castRepository.findById("none")).thenReturn(Optional.empty());
 
     OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setGirlId("none");
+    req.setCastId("none");
 
     assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
   }
@@ -169,15 +169,15 @@ class OrderServiceImplTest {
   }
 
   @Test
-  void createThrowsWhenGirlNotFound() {
+  void createThrowsWhenCastNotFound() {
     OrderCreateRequest req = new OrderCreateRequest();
-    req.setGirlId("g_none");
+    req.setCastId("g_none");
     when(orderMapper.toEntity(req)).thenReturn(new Order());
-    when(girlRepository.findById("g_none")).thenReturn(Optional.empty());
+    when(castRepository.findById("g_none")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("Girl not found");
+        .hasMessageContaining("Cast not found");
   }
 
   @Test

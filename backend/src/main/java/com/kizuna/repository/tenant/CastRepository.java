@@ -1,6 +1,6 @@
 package com.kizuna.repository.tenant;
 
-import com.kizuna.model.entity.tenant.Girl;
+import com.kizuna.model.entity.tenant.Cast;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,9 +9,9 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface GirlRepository
-    extends JpaRepository<Girl, String>, JpaSpecificationExecutor<Girl> {
-  Page<Girl> findByNameContainingIgnoreCase(String name, Pageable pageable);
+public interface CastRepository
+    extends JpaRepository<Cast, String>, JpaSpecificationExecutor<Cast> {
+  Page<Cast> findByNameContainingIgnoreCase(String name, Pageable pageable);
 
-  List<Girl> findByStatusOrderByDisplayOrderAsc(String status);
+  List<Cast> findByStatusOrderByDisplayOrderAsc(String status);
 }

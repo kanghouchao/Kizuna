@@ -32,7 +32,7 @@ export default function CreateOrderPage() {
         hasPet: data.hasPet,
         ngType: data.ngType,
         ngContent: data.ngContent,
-        girlId: data.girlId, // Note: ID might need to be resolved if user inputs name, but form says 'girlId'
+        castId: data.castId, // Note: ID might need to be resolved if user inputs name, but form says 'castId'
         courseMinutes: Number(data.courseMinutes),
         extensionMinutes: Number(data.extensionMinutes),
         optionCodes: data.options || [],
@@ -43,7 +43,7 @@ export default function CreateOrderPage() {
         usedPoints: Number(data.usedPoints),
         manualGrantPoints: Number(data.manualGrantPoints),
         remarks: data.remarks,
-        girlDriverMessage: data.girlDriverMessage,
+        castDriverMessage: data.castDriverMessage,
       };
 
       await orderApi.create(request);

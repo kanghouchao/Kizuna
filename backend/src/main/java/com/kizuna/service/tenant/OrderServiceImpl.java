@@ -10,8 +10,8 @@ import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
 import com.kizuna.model.entity.tenant.Customer;
 import com.kizuna.model.entity.tenant.Order;
 import com.kizuna.repository.central.TenantRepository;
+import com.kizuna.repository.tenant.CastRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
-import com.kizuna.repository.tenant.GirlRepository;
 import com.kizuna.repository.tenant.OrderRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ public class OrderServiceImpl implements OrderService {
 
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
-  private final GirlRepository girlRepository;
+  private final CastRepository castRepository;
   private final TenantUserRepository tenantUserRepository;
   private final TenantRepository tenantRepository;
   private final TenantContext tenantContext;
@@ -60,11 +60,11 @@ public class OrderServiceImpl implements OrderService {
     handleCustomerLinking(request, order);
 
     // Handle other ID associations
-    if (request.getGirlId() != null && !request.getGirlId().isEmpty()) {
-      order.setGirl(
-          girlRepository
-              .findById(request.getGirlId())
-              .orElseThrow(() -> new ServiceException("Girl not found: " + request.getGirlId())));
+    if (request.getCastId() != null && !request.getCastId().isEmpty()) {
+      order.setCast(
+          castRepository
+              .findById(request.getCastId())
+              .orElseThrow(() -> new ServiceException("Cast not found: " + request.getCastId())));
     }
     if (request.getReceptionistId() != null && !request.getReceptionistId().isEmpty()) {
       order.setReceptionist(
@@ -101,11 +101,11 @@ public class OrderServiceImpl implements OrderService {
                       new ServiceException(
                           "Receptionist not found: " + request.getReceptionistId())));
     }
-    if (request.getGirlId() != null) {
-      order.setGirl(
-          girlRepository
-              .findById(request.getGirlId())
-              .orElseThrow(() -> new ServiceException("Girl not found: " + request.getGirlId())));
+    if (request.getCastId() != null) {
+      order.setCast(
+          castRepository
+              .findById(request.getCastId())
+              .orElseThrow(() -> new ServiceException("Cast not found: " + request.getCastId())));
     }
 
     return orderMapper.toResponse(orderRepository.save(order));

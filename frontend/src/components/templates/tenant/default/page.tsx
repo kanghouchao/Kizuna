@@ -23,7 +23,7 @@ async function fetchCasts(tenantId: string): Promise<Cast[]> {
     const backendUrl =
       process.env.TENANT_VALIDATION_API_URL?.replace('/central/tenant', '') ||
       'http://backend:8080';
-    const response = await fetch(`${backendUrl}/tenant/girls/public`, {
+    const response = await fetch(`${backendUrl}/tenant/casts/public`, {
       headers: {
         'X-Role': 'tenant',
         'X-Tenant-ID': tenantId,

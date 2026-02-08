@@ -141,8 +141,8 @@ export interface FileUploadResponse {
   size: number;
 }
 
-// キャスト（Girl）レスポンス
-export interface GirlResponse {
+// キャスト（Cast）レスポンス
+export interface CastResponse {
   id: string;
   name: string;
   status: string;
@@ -159,7 +159,7 @@ export interface GirlResponse {
 }
 
 // キャスト作成リクエスト
-export interface GirlCreateRequest {
+export interface CastCreateRequest {
   name: string;
   status?: string;
   photo_url?: string;
@@ -173,7 +173,7 @@ export interface GirlCreateRequest {
 }
 
 // キャスト更新リクエスト
-export interface GirlUpdateRequest {
+export interface CastUpdateRequest {
   name?: string;
   status?: string;
   photo_url?: string;

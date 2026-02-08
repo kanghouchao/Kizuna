@@ -30,14 +30,14 @@ public interface OrderMapper {
   @Mapping(target = "receptionistName", source = "receptionist.nickname")
   @Mapping(target = "customerId", source = "customer.id")
   @Mapping(target = "customerName", source = "customer.name")
-  @Mapping(target = "girlId", source = "girl.id")
-  @Mapping(target = "girlName", source = "girl.name")
+  @Mapping(target = "castId", source = "cast.id")
+  @Mapping(target = "castName", source = "cast.name")
   OrderResponse toResponse(Order order);
 
   // ==================== CreateRequest -> Entity ====================
 
   /**
-   * Convert OrderCreateRequest DTO to Order entity. Note: Associated entities (Customer, Girl,
+   * Convert OrderCreateRequest DTO to Order entity. Note: Associated entities (Customer, Cast,
    * Receptionist) should be set manually in the service layer after ID lookup.
    *
    * @param request the order create request
@@ -55,7 +55,7 @@ public interface OrderMapper {
   @Mapping(target = "actualEndTime", ignore = true)
   // Associated entities - handled manually in service
   @Mapping(target = "customer", ignore = true)
-  @Mapping(target = "girl", ignore = true)
+  @Mapping(target = "cast", ignore = true)
   @Mapping(target = "receptionist", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
@@ -83,7 +83,7 @@ public interface OrderMapper {
   @Mapping(target = "locationBuilding", ignore = true) // Not in UpdateRequest
   // Associated entities - handled manually in service
   @Mapping(target = "customer", ignore = true)
-  @Mapping(target = "girl", ignore = true)
+  @Mapping(target = "cast", ignore = true)
   @Mapping(target = "receptionist", ignore = true)
   void updateEntityFromRequest(OrderUpdateRequest request, @MappingTarget Order order);
 }

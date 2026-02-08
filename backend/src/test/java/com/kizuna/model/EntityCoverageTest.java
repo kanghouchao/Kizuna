@@ -3,8 +3,8 @@ package com.kizuna.model;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.model.entity.central.menu.CentralMenu;
+import com.kizuna.model.entity.tenant.Cast;
 import com.kizuna.model.entity.tenant.Customer;
-import com.kizuna.model.entity.tenant.Girl;
 import com.kizuna.model.entity.tenant.Order;
 import com.kizuna.model.entity.tenant.menu.TenantMenu;
 import com.kizuna.model.entity.tenant.security.TenantUser;
@@ -58,8 +58,8 @@ class EntityCoverageTest {
     assertThat(o.getRemarks()).isEqualTo("R");
     assertThat(o.getStatus()).isEqualTo("S");
 
-    // Girl
-    Girl g = new Girl();
+    // Cast
+    Cast g = new Cast();
     g.setName("G");
     g.setStatus("A");
     assertThat(g.getName()).isEqualTo("G");

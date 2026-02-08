@@ -11,14 +11,14 @@ import lombok.Setter;
 import org.hibernate.annotations.Filter;
 
 @Entity
-@Table(name = "t_girls")
+@Table(name = "t_casts")
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Girl extends BaseEntity {
+public class Cast extends BaseEntity {
 
   @Column(name = "name", nullable = false)
   private String name;
@@ -52,7 +52,7 @@ public class Girl extends BaseEntity {
 
   @Override
   public String toString() {
-    return "Girl(id="
+    return "Cast(id="
         + getId()
         + ", name="
         + name

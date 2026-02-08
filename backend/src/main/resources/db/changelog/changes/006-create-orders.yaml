@@ -1,6 +1,6 @@
 databaseChangeLog:
     - changeSet:
-          id: tenant-004-create-orders
+          id: tenant-006-create-orders
           author: kanghouchao
           preConditions:
               - dbms:
@@ -49,9 +49,9 @@ databaseChangeLog:
                               type: VARCHAR(64)
                               remarks: 顧客ID
                         - column:
-                              name: girl_id
+                              name: cast_id
                               type: VARCHAR(64)
-                              remarks: 女の子ID
+                              remarks: キャストID
                         - column:
                               name: course_minutes
                               type: INTEGER
@@ -134,9 +134,9 @@ databaseChangeLog:
                               type: TEXT
                               remarks: 備考
                         - column:
-                              name: girl_driver_message
+                              name: cast_driver_message
                               type: TEXT
-                              remarks: 女の子・ドライバーへのメッセージ
+                              remarks: キャスト・ドライバーへのメッセージ
                         - column:
                               name: status
                               type: VARCHAR(50)
@@ -180,10 +180,10 @@ databaseChangeLog:
                     onDelete: RESTRICT
 
               - addForeignKeyConstraint:
-                    constraintName: fk_t_orders_girl
+                    constraintName: fk_t_orders_cast
                     baseTableName: t_orders
-                    baseColumnNames: girl_id
-                    referencedTableName: t_girls
+                    baseColumnNames: cast_id
+                    referencedTableName: t_casts
                     referencedColumnNames: id
                     onDelete: RESTRICT
 
@@ -204,8 +204,8 @@ databaseChangeLog:
                               name: customer_id
 
               - createIndex:
-                    indexName: idx_t_orders_girl
+                    indexName: idx_t_orders_cast
                     tableName: t_orders
                     columns:
                         - column:
-                              name: girl_id
+                              name: cast_id

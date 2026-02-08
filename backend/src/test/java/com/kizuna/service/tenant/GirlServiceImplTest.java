@@ -6,11 +6,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.model.dto.tenant.girl.GirlCreateRequest;
-import com.kizuna.model.dto.tenant.girl.GirlResponse;
-import com.kizuna.model.dto.tenant.girl.GirlUpdateRequest;
-import com.kizuna.model.entity.tenant.Girl;
-import com.kizuna.repository.tenant.GirlRepository;
+import com.kizuna.model.dto.tenant.cast.CastCreateRequest;
+import com.kizuna.model.dto.tenant.cast.CastResponse;
+import com.kizuna.model.dto.tenant.cast.CastUpdateRequest;
+import com.kizuna.model.entity.tenant.Cast;
+import com.kizuna.repository.tenant.CastRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -23,50 +23,50 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
-class GirlServiceImplTest {
+class CastServiceImplTest {
 
-  @Mock private GirlRepository girlRepository;
-  @InjectMocks private GirlServiceImpl girlService;
+  @Mock private CastRepository castRepository;
+  @InjectMocks private CastServiceImpl castService;
 
   @Test
   void list_returnsPage() {
-    Girl g = new Girl();
+    Cast g = new Cast();
     g.setName("Test");
-    Page<Girl> page = new PageImpl<>(List.of(g));
-    when(girlRepository.findByNameContainingIgnoreCase(eq("test"), any(PageRequest.class)))
+    Page<Cast> page = new PageImpl<>(List.of(g));
+    when(castRepository.findByNameContainingIgnoreCase(eq("test"), any(PageRequest.class)))
         .thenReturn(page);
 
-    Page<GirlResponse> result = girlService.list("test", PageRequest.of(0, 10));
+    Page<CastResponse> result = castService.list("test", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
   }
 
   @Test
   void get_returnsResponse() {
-    Girl g = new Girl();
+    Cast g = new Cast();
     g.setId("g1");
-    when(girlRepository.findById("g1")).thenReturn(Optional.of(g));
-    assertThat(girlService.get("g1").getId()).isEqualTo("g1");
+    when(castRepository.findById("g1")).thenReturn(Optional.of(g));
+    assertThat(castService.get("g1").getId()).isEqualTo("g1");
   }
 
   @Test
   void create_savesAndReturns() {
-    GirlCreateRequest req = new GirlCreateRequest();
+    CastCreateRequest req = new CastCreateRequest();
     req.setName("G1");
-    when(girlRepository.save(any()))
+    when(castRepository.save(any()))
         .thenAnswer(
             i -> {
-              Girl g = i.getArgument(0);
+              Cast g = i.getArgument(0);
               g.setId("g_new");
               return g;
             });
-    GirlResponse res = girlService.create(req);
+    CastResponse res = castService.create(req);
     assertThat(res.getId()).isEqualTo("g_new");
   }
 
   @Test
   void create_新フィールドが保存される() {
-    GirlCreateRequest req = new GirlCreateRequest();
-    req.setName("TestGirl");
+    CastCreateRequest req = new CastCreateRequest();
+    req.setName("TestCast");
     req.setPhotoUrl("https://example.com/photo.jpg");
     req.setIntroduction("自己紹介テスト");
     req.setAge(25);
@@ -76,15 +76,15 @@ class GirlServiceImplTest {
     req.setHip(85);
     req.setDisplayOrder(1);
 
-    when(girlRepository.save(any()))
+    when(castRepository.save(any()))
         .thenAnswer(
             i -> {
-              Girl g = i.getArgument(0);
+              Cast g = i.getArgument(0);
               g.setId("g_new2");
               return g;
             });
 
-    GirlResponse res = girlService.create(req);
+    CastResponse res = castService.create(req);
     assertThat(res.getId()).isEqualTo("g_new2");
     assertThat(res.getPhotoUrl()).isEqualTo("https://example.com/photo.jpg");
     assertThat(res.getIntroduction()).isEqualTo("自己紹介テスト");
@@ -98,25 +98,25 @@ class GirlServiceImplTest {
 
   @Test
   void update_modifiesFields() {
-    Girl g = new Girl();
-    when(girlRepository.findById("g1")).thenReturn(Optional.of(g));
-    when(girlRepository.save(any())).thenReturn(g);
+    Cast g = new Cast();
+    when(castRepository.findById("g1")).thenReturn(Optional.of(g));
+    when(castRepository.save(any())).thenReturn(g);
 
-    GirlUpdateRequest req = new GirlUpdateRequest();
+    CastUpdateRequest req = new CastUpdateRequest();
     req.setName("G_Updated");
-    girlService.update("g1", req);
+    castService.update("g1", req);
     assertThat(g.getName()).isEqualTo("G_Updated");
   }
 
   @Test
   void update_新フィールドが更新される() {
-    Girl g = new Girl();
+    Cast g = new Cast();
     g.setName("Original");
     g.setStatus("ACTIVE");
-    when(girlRepository.findById("g1")).thenReturn(Optional.of(g));
-    when(girlRepository.save(any())).thenReturn(g);
+    when(castRepository.findById("g1")).thenReturn(Optional.of(g));
+    when(castRepository.save(any())).thenReturn(g);
 
-    GirlUpdateRequest req = new GirlUpdateRequest();
+    CastUpdateRequest req = new CastUpdateRequest();
     req.setPhotoUrl("https://example.com/new-photo.jpg");
     req.setIntroduction("更新された自己紹介");
     req.setAge(26);
@@ -126,7 +126,7 @@ class GirlServiceImplTest {
     req.setHip(88);
     req.setDisplayOrder(2);
 
-    girlService.update("g1", req);
+    castService.update("g1", req);
 
     assertThat(g.getPhotoUrl()).isEqualTo("https://example.com/new-photo.jpg");
     assertThat(g.getIntroduction()).isEqualTo("更新された自己紹介");
@@ -140,29 +140,29 @@ class GirlServiceImplTest {
 
   @Test
   void delete_removes() {
-    when(girlRepository.existsById("g1")).thenReturn(true);
-    girlService.delete("g1");
-    verify(girlRepository).deleteById("g1");
+    when(castRepository.existsById("g1")).thenReturn(true);
+    castService.delete("g1");
+    verify(castRepository).deleteById("g1");
   }
 
   @Test
   void listActive_ACTIVEステータスのみ返す() {
-    Girl active1 = new Girl();
+    Cast active1 = new Cast();
     active1.setId("g1");
     active1.setName("Active1");
     active1.setStatus("ACTIVE");
     active1.setDisplayOrder(1);
 
-    Girl active2 = new Girl();
+    Cast active2 = new Cast();
     active2.setId("g2");
     active2.setName("Active2");
     active2.setStatus("ACTIVE");
     active2.setDisplayOrder(2);
 
-    when(girlRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
+    when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
         .thenReturn(List.of(active1, active2));
 
-    List<GirlResponse> result = girlService.listActive();
+    List<CastResponse> result = castService.listActive();
 
     assertThat(result).hasSize(2);
     assertThat(result.get(0).getId()).isEqualTo("g1");

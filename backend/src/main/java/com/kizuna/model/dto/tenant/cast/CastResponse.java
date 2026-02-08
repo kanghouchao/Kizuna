@@ -1,4 +1,4 @@
-package com.kizuna.model.dto.tenant.girl;
+package com.kizuna.model.dto.tenant.cast;
 
 import java.time.OffsetDateTime;
 import lombok.Builder;
@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class GirlResponse {
+public class CastResponse {
   private String id;
   private String name;
   private String status;

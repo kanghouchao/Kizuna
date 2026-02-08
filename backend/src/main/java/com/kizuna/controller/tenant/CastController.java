@@ -1,9 +1,9 @@
 package com.kizuna.controller.tenant;
 
-import com.kizuna.model.dto.tenant.girl.GirlCreateRequest;
-import com.kizuna.model.dto.tenant.girl.GirlResponse;
-import com.kizuna.model.dto.tenant.girl.GirlUpdateRequest;
-import com.kizuna.service.tenant.GirlService;
+import com.kizuna.model.dto.tenant.cast.CastCreateRequest;
+import com.kizuna.model.dto.tenant.cast.CastResponse;
+import com.kizuna.model.dto.tenant.cast.CastUpdateRequest;
+import com.kizuna.service.tenant.CastService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -24,44 +24,44 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/tenant/girls")
+@RequestMapping("/tenant/casts")
 @RequiredArgsConstructor
-public class GirlController {
+public class CastController {
 
-  private final GirlService girlService;
+  private final CastService castService;
 
   @GetMapping
-  public ResponseEntity<Page<GirlResponse>> list(
+  public ResponseEntity<Page<CastResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(girlService.list(search, pageable));
+    return ResponseEntity.ok(castService.list(search, pageable));
   }
 
   @GetMapping("/{id}")
-  public ResponseEntity<GirlResponse> get(@PathVariable String id) {
-    return ResponseEntity.ok(girlService.get(id));
+  public ResponseEntity<CastResponse> get(@PathVariable String id) {
+    return ResponseEntity.ok(castService.get(id));
   }
 
   @PostMapping
-  public ResponseEntity<GirlResponse> create(@Valid @RequestBody GirlCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(girlService.create(request));
+  public ResponseEntity<CastResponse> create(@Valid @RequestBody CastCreateRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(castService.create(request));
   }
 
   @PutMapping("/{id}")
-  public ResponseEntity<GirlResponse> update(
-      @PathVariable String id, @Valid @RequestBody GirlUpdateRequest request) {
-    return ResponseEntity.ok(girlService.update(id, request));
+  public ResponseEntity<CastResponse> update(
+      @PathVariable String id, @Valid @RequestBody CastUpdateRequest request) {
+    return ResponseEntity.ok(castService.update(id, request));
   }
 
   @DeleteMapping("/{id}")
   public ResponseEntity<Void> delete(@PathVariable String id) {
-    girlService.delete(id);
+    castService.delete(id);
     return ResponseEntity.ok().build();
   }
 
   @GetMapping("/public")
   @PermitAll
-  public ResponseEntity<List<GirlResponse>> listPublic() {
-    return ResponseEntity.ok(girlService.listActive());
+  public ResponseEntity<List<CastResponse>> listPublic() {
+    return ResponseEntity.ok(castService.listActive());
   }
 }

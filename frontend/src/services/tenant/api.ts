@@ -8,9 +8,9 @@ import {
   TenantConfigResponse,
   TenantConfigUpdateRequest,
   FileUploadResponse,
-  GirlResponse,
-  GirlCreateRequest,
-  GirlUpdateRequest,
+  CastResponse,
+  CastCreateRequest,
+  CastUpdateRequest,
 } from '@/types/api';
 import { Order, OrderCreateRequest, Page } from '@/types/order';
 
@@ -74,34 +74,34 @@ export const fileApi = {
   },
 };
 
-export const girlApi = {
+export const castApi = {
   /** キャスト一覧を取得する */
   list: async (params?: any): Promise<any> => {
-    const response = await apiClient.get('/tenant/girls', { params });
+    const response = await apiClient.get('/tenant/casts', { params });
     return response.data;
   },
   /** キャスト詳細を取得する */
-  get: async (id: string): Promise<GirlResponse> => {
-    const response = await apiClient.get(`/tenant/girls/${id}`);
+  get: async (id: string): Promise<CastResponse> => {
+    const response = await apiClient.get(`/tenant/casts/${id}`);
     return response.data;
   },
   /** キャストを新規作成する */
-  create: async (data: GirlCreateRequest): Promise<GirlResponse> => {
-    const response = await apiClient.post('/tenant/girls', data);
+  create: async (data: CastCreateRequest): Promise<CastResponse> => {
+    const response = await apiClient.post('/tenant/casts', data);
     return response.data;
   },
   /** キャスト情報を更新する */
-  update: async (id: string, data: GirlUpdateRequest): Promise<GirlResponse> => {
-    const response = await apiClient.put(`/tenant/girls/${id}`, data);
+  update: async (id: string, data: CastUpdateRequest): Promise<CastResponse> => {
+    const response = await apiClient.put(`/tenant/casts/${id}`, data);
     return response.data;
   },
   /** キャストを削除する */
   delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/tenant/girls/${id}`);
+    await apiClient.delete(`/tenant/casts/${id}`);
   },
   /** 公開キャスト一覧を取得する */
-  listPublic: async (): Promise<GirlResponse[]> => {
-    const response = await apiClient.get('/tenant/girls/public');
+  listPublic: async (): Promise<CastResponse[]> => {
+    const response = await apiClient.get('/tenant/casts/public');
     return response.data;
   },
 };

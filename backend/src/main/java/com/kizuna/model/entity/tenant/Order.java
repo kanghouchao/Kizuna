@@ -48,8 +48,8 @@ public class Order extends BaseEntity {
   private Customer customer;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "girl_id")
-  private Girl girl;
+  @JoinColumn(name = "cast_id")
+  private Cast cast;
 
   @Column(name = "course_minutes")
   private Integer courseMinutes;
@@ -97,8 +97,8 @@ public class Order extends BaseEntity {
   @Column(name = "remarks")
   private String remarks;
 
-  @Column(name = "girl_driver_message")
-  private String girlDriverMessage;
+  @Column(name = "cast_driver_message")
+  private String castDriverMessage;
 
   @Column(name = "status")
   private String status;

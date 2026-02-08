@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import ImageUpload from '@/components/ui/ImageUpload';
 
 /** キャストフォームのデータ型 */
-export interface GirlFormData {
+export interface CastFormData {
   name: string;
   status: string;
   photo_url: string;
@@ -18,19 +18,19 @@ export interface GirlFormData {
   display_order: number;
 }
 
-interface GirlFormProps {
+interface CastFormProps {
   /** 編集時の初期データ */
-  initialData?: Partial<GirlFormData>;
+  initialData?: Partial<CastFormData>;
   /** フォーム送信時のコールバック */
-  onSubmit: (data: GirlFormData) => void;
+  onSubmit: (data: CastFormData) => void;
   /** 送信中フラグ */
   isSubmitting?: boolean;
 }
 
 /** キャスト登録・編集フォームコンポーネント */
-export function GirlForm({ initialData, onSubmit, isSubmitting }: GirlFormProps) {
+export function CastForm({ initialData, onSubmit, isSubmitting }: CastFormProps) {
   const router = useRouter();
-  const { register, handleSubmit, setValue, watch } = useForm<GirlFormData>({
+  const { register, handleSubmit, setValue, watch } = useForm<CastFormData>({
     defaultValues: {
       name: '',
       status: 'ACTIVE',
@@ -64,7 +64,7 @@ export function GirlForm({ initialData, onSubmit, isSubmitting }: GirlFormProps)
             <ImageUpload
               value={photoUrl}
               onChange={url => setValue('photo_url', url)}
-              directory="girls"
+              directory="casts"
             />
           </div>
           <div className="flex-1 space-y-4">

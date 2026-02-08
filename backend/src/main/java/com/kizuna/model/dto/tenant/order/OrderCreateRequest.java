@@ -28,7 +28,7 @@ public class OrderCreateRequest {
   private String ngType;
   private String ngContent;
 
-  private String girlId;
+  private String castId;
 
   private Integer courseMinutes;
   private Integer extensionMinutes;
@@ -40,5 +40,5 @@ public class OrderCreateRequest {
   private Integer usedPoints;
   private Integer manualGrantPoints;
   private String remarks;
-  private String girlDriverMessage;
+  private String castDriverMessage;
 }

@@ -9,30 +9,30 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
-import { girlApi } from '@/services/tenant/api';
-import { GirlResponse } from '@/types/api';
+import { castApi } from '@/services/tenant/api';
+import { CastResponse } from '@/types/api';
 import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */
-export default function GirlListPage() {
-  const [girls, setGirls] = useState<GirlResponse[]>([]);
+export default function CastListPage() {
+  const [casts, setCasts] = useState<CastResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetchGirls();
+    fetchCasts();
   }, []);
 
   /** キャスト一覧を取得する */
-  const fetchGirls = async (searchQuery?: string) => {
+  const fetchCasts = async (searchQuery?: string) => {
     try {
       setIsLoading(true);
-      const response = await girlApi.list({
+      const response = await castApi.list({
         size: 100,
         sort: 'displayOrder,asc',
         search: searchQuery || undefined,
       });
-      setGirls(response.content);
+      setCasts(response.content);
     } catch {
       toast.error('キャスト一覧の取得に失敗しました');
     } finally {
@@ -42,16 +42,16 @@ export default function GirlListPage() {
 
   /** 検索を実行する */
   const handleSearch = () => {
-    fetchGirls(search);
+    fetchCasts(search);
   };
 
   /** キャストを削除する */
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`「${name}」を削除しますか？`)) return;
     try {
-      await girlApi.delete(id);
+      await castApi.delete(id);
       toast.success('キャストを削除しました');
-      fetchGirls(search);
+      fetchCasts(search);
     } catch {
       toast.error('キャストの削除に失敗しました');
     }
@@ -77,7 +77,7 @@ export default function GirlListPage() {
           <p className="text-sm text-gray-500 mt-1">キャスト情報の登録・編集ができます。</p>
         </div>
         <Link
-          href="/tenant/girls/create"
+          href="/tenant/casts/create"
           className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
         >
           <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
@@ -112,7 +112,7 @@ export default function GirlListPage() {
       <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-gray-500">読み込み中...</div>
-        ) : girls.length === 0 ? (
+        ) : casts.length === 0 ? (
           <div className="p-8 text-center text-gray-500">キャストが登録されていません</div>
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
@@ -142,16 +142,16 @@ export default function GirlListPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {girls.map(girl => {
-                const status = statusLabel(girl.status);
+              {casts.map(cast => {
+                const status = statusLabel(cast.status);
                 return (
-                  <tr key={girl.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={cast.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="h-12 w-10 rounded overflow-hidden bg-gray-100 relative">
-                        {girl.photo_url ? (
+                        {cast.photo_url ? (
                           <Image
-                            src={`/api${girl.photo_url}`}
-                            alt={girl.name}
+                            src={`/api${cast.photo_url}`}
+                            alt={cast.name}
                             fill
                             className="object-cover"
                             sizes="40px"
@@ -164,18 +164,18 @@ export default function GirlListPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{girl.name}</div>
+                      <div className="text-sm font-medium text-gray-900">{cast.name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {girl.age ? `${girl.age}歳` : '-'}
+                      {cast.age ? `${cast.age}歳` : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {girl.bust && girl.waist && girl.hip
-                        ? `B${girl.bust} W${girl.waist} H${girl.hip}`
+                      {cast.bust && cast.waist && cast.hip
+                        ? `B${cast.bust} W${cast.waist} H${cast.hip}`
                         : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {girl.display_order ?? 0}
+                      {cast.display_order ?? 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
@@ -186,13 +186,13 @@ export default function GirlListPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                       <Link
-                        href={`/tenant/girls/${girl.id}/edit`}
+                        href={`/tenant/casts/${cast.id}/edit`}
                         className="text-gray-400 hover:text-amber-600 inline-block"
                       >
                         <PencilSquareIcon className="h-5 w-5" />
                       </Link>
                       <button
-                        onClick={() => handleDelete(girl.id, girl.name)}
+                        onClick={() => handleDelete(cast.id, cast.name)}
                         className="text-gray-400 hover:text-red-600"
                       >
                         <TrashIcon className="h-5 w-5" />
