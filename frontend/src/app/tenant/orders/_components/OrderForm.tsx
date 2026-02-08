@@ -193,7 +193,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">女の子名</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">キャスト名</label>
             <input
               type="text"
               {...register('castId')}
@@ -249,7 +249,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              女の子、ドライバー伝言
+              キャスト・ドライバーへのメッセージ
             </label>
             <textarea
               {...register('castDriverMessage')}
