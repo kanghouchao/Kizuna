@@ -141,6 +141,22 @@ export interface FileUploadResponse {
   size: number;
 }
 
+// ページネーションと検索用の共通パラメータ
+export interface PaginationParams {
+  page?: number;
+  size?: number;
+  sort?: string;
+  search?: string;
+}
+
+// テナントユーザー情報
+export interface TenantUserResponse {
+  id: string;
+  email: string;
+  nickname: string;
+  role: string;
+}
+
 // キャスト（Cast）レスポンス
 export interface CastResponse {
   id: string;

@@ -11,6 +11,8 @@ import {
   CastResponse,
   CastCreateRequest,
   CastUpdateRequest,
+  PaginationParams,
+  TenantUserResponse,
 } from '@/types/api';
 import { Order, OrderCreateRequest, Page } from '@/types/order';
 
@@ -26,7 +28,7 @@ export const authApi = {
   logout: async (): Promise<void> => {
     await apiClient.post('/tenant/logout');
   },
-  me: async (): Promise<any> => {
+  me: async (): Promise<TenantUserResponse> => {
     const response = await apiClient.get('/tenant/me');
     return response.data;
   },
@@ -40,7 +42,7 @@ export const tenantApi = {
 };
 
 export const orderApi = {
-  list: async (params?: any): Promise<Page<Order>> => {
+  list: async (params?: PaginationParams): Promise<Page<Order>> => {
     const response = await apiClient.get('/tenant/orders', { params });
     return response.data;
   },
@@ -73,16 +75,9 @@ export const fileApi = {
   },
 };
 
-export interface CastListParams {
-  page?: number;
-  size?: number;
-  sort?: string;
-  search?: string;
-}
-
 export const castApi = {
   /** キャスト一覧を取得する */
-  list: async (params?: CastListParams): Promise<Page<CastResponse>> => {
+  list: async (params?: PaginationParams): Promise<Page<CastResponse>> => {
     const response = await apiClient.get('/tenant/casts', { params });
     return response.data;
   },
