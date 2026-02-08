@@ -14,7 +14,7 @@ describe('storefrontService', () => {
   });
 
   describe('fetchCasts', () => {
-    it('should call serverClient.get', async () => {
+    it('serverClient.get を呼び出すこと', async () => {
       const mockCasts = [{ id: '1', name: 'Cast 1' }];
       (serverClient.get as jest.Mock).mockResolvedValue(mockCasts);
 
@@ -24,7 +24,7 @@ describe('storefrontService', () => {
       expect(result).toEqual(mockCasts);
     });
 
-    it('should return empty array on error', async () => {
+    it('エラー時に空配列を返すこと', async () => {
       (serverClient.get as jest.Mock).mockRejectedValue(new Error('Failed'));
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -37,7 +37,7 @@ describe('storefrontService', () => {
   });
 
   describe('fetchSiteConfig', () => {
-    it('should call serverClient.get', async () => {
+    it('serverClient.get を呼び出すこと', async () => {
       const mockConfig = { mv_type: 'video', logo_url: 'logo.png' };
       (serverClient.get as jest.Mock).mockResolvedValue(mockConfig);
 
@@ -47,7 +47,7 @@ describe('storefrontService', () => {
       expect(result).toEqual(mockConfig);
     });
 
-    it('should return default config on error', async () => {
+    it('エラー時にデフォルト設定を返すこと', async () => {
       (serverClient.get as jest.Mock).mockRejectedValue(new Error('Failed'));
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -60,7 +60,7 @@ describe('storefrontService', () => {
   });
 
   describe('getPageData', () => {
-    it('should aggregate data', async () => {
+    it('データを集約して返すこと', async () => {
       const mockCasts = [{ id: '1', name: 'Cast 1' }];
       const mockConfig = { mv_type: 'image' };
 

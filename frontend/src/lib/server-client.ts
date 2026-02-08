@@ -25,7 +25,7 @@ export const serverClient = {
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText} (${path})`);
+      throw new Error(`APIエラー: ${response.status} ${response.statusText} (${path})`);
     }
 
     return response.json();

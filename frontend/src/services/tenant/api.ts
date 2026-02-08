@@ -67,16 +67,22 @@ export const fileApi = {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('directory', directory);
-    const response = await apiClient.post('/tenant/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    // axiosが自動的に境界を設定するため、Content-Typeヘッダーは手動で設定しない
+    const response = await apiClient.post('/tenant/files/upload', formData);
     return response.data;
   },
 };
 
+export interface CastListParams {
+  page?: number;
+  size?: number;
+  sort?: string;
+  search?: string;
+}
+
 export const castApi = {
   /** キャスト一覧を取得する */
-  list: async (params?: any): Promise<any> => {
+  list: async (params?: CastListParams): Promise<Page<CastResponse>> => {
     const response = await apiClient.get('/tenant/casts', { params });
     return response.data;
   },

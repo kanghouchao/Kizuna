@@ -1,3 +1,5 @@
+import { SnsLink, PartnerLink } from '@/types/api';
+
 /**
  * キャスト情報
  */
@@ -21,8 +23,8 @@ export interface SiteConfig {
   description?: string;
   mv_url?: string;
   mv_type: 'image' | 'video';
-  sns_links?: any;
-  partner_links?: any;
+  sns_links?: SnsLink[];
+  partner_links?: PartnerLink[];
 }
 
 /**

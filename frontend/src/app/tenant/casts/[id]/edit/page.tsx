@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from '../../_components/CastForm';
 import { castApi } from '@/services/tenant/api';
 import { CastResponse, CastUpdateRequest } from '@/types/api';
 import { toast } from 'react-hot-toast';
 
 /** キャスト編集ページ */
-export default function CastEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function CastEditPage() {
+  const params = useParams();
+  const id = params.id as string;
   const router = useRouter();
   const [cast, setCast] = useState<CastResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
