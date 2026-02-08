@@ -1,29 +1,40 @@
+'use client';
+
+import { useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 
 interface Cast {
   id: string;
   name: string;
-  imageUrl?: string;
-  status?: string;
+  photo_url?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
 }
 
 interface CastSectionProps {
   casts?: Cast[];
 }
 
-// Placeholder cast data for demo
-const placeholderCasts: Cast[] = [
-  { id: '1', name: 'あいり', status: '出勤中' },
-  { id: '2', name: 'みく', status: '出勤中' },
-  { id: '3', name: 'さくら', status: '本日出勤' },
-  { id: '4', name: 'ゆい', status: '本日出勤' },
-  { id: '5', name: 'りな', status: '本日出勤' },
-  { id: '6', name: 'まい', status: '本日出勤' },
-];
-
 export default function CastSection({ casts }: CastSectionProps) {
-  const displayCasts = casts && casts.length > 0 ? casts : placeholderCasts;
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  if (!casts || casts.length === 0) {
+    return null;
+  }
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const scrollAmount = 280;
+    scrollRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  };
 
   return (
     <section id="cast" className="py-16 bg-gray-50">
@@ -31,51 +42,77 @@ export default function CastSection({ casts }: CastSectionProps) {
         <h2 className="text-3xl font-bold text-center mb-4 text-gray-800">キャスト紹介</h2>
         <p className="text-center text-gray-600 mb-12">当店自慢のキャストをご紹介します</p>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-          {displayCasts.map(cast => (
-            <div
-              key={cast.id}
-              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-            >
-              {/* Cast Image */}
-              <div className="aspect-[3/4] bg-gradient-to-br from-pink-100 to-purple-100 relative">
-                {cast.imageUrl ? (
-                  <Image
-                    src={cast.imageUrl}
-                    alt={cast.name}
-                    fill
-                    className="object-cover"
-                    sizes="200px"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <svg
-                      className="w-16 h-16 text-gray-300"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                    </svg>
-                  </div>
-                )}
+        {/* カルーセルコンテナ */}
+        <div className="relative group">
+          {/* 左矢印ボタン */}
+          <button
+            onClick={() => scroll('left')}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 hover:bg-white shadow-lg rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity -ml-4"
+            aria-label="前へ"
+          >
+            <ChevronLeftIcon className="h-6 w-6 text-gray-700" />
+          </button>
 
-                {/* Status Badge */}
-                {cast.status && (
-                  <div className="absolute top-2 right-2 bg-pink-500 text-white text-xs px-2 py-1 rounded-full">
-                    {cast.status}
-                  </div>
-                )}
-              </div>
+          {/* スクロールエリア */}
+          <div
+            ref={scrollRef}
+            className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide pb-4"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {casts.map(cast => (
+              <div
+                key={cast.id}
+                className="shrink-0 w-48 snap-start bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+              >
+                {/* キャスト画像 */}
+                <div className="aspect-3/4 bg-linear-to-br from-pink-100 to-purple-100 relative">
+                  {cast.photo_url ? (
+                    <Image
+                      src={cast.photo_url}
+                      alt={cast.name}
+                      fill
+                      className="object-cover"
+                      sizes="192px"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <svg
+                        className="w-16 h-16 text-gray-300"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
 
-              {/* Cast Name */}
-              <div className="p-3 text-center">
-                <h3 className="font-semibold text-gray-800">{cast.name}</h3>
+                {/* キャスト情報 */}
+                <div className="p-3 text-center">
+                  <h3 className="font-semibold text-gray-800">{cast.name}</h3>
+                  {cast.age && <p className="text-sm text-gray-500 mt-1">{cast.age}歳</p>}
+                  {cast.height && <p className="text-xs text-gray-400">T{cast.height}</p>}
+                  {cast.bust && cast.waist && cast.hip && (
+                    <p className="text-xs text-gray-400">
+                      B{cast.bust} W{cast.waist} H{cast.hip}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          {/* 右矢印ボタン */}
+          <button
+            onClick={() => scroll('right')}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 hover:bg-white shadow-lg rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity -mr-4"
+            aria-label="次へ"
+          >
+            <ChevronRightIcon className="h-6 w-6 text-gray-700" />
+          </button>
         </div>
 
-        {/* View More Button */}
+        {/* もっと見るボタン */}
         <div className="text-center mt-10">
           <Link
             href="/login"

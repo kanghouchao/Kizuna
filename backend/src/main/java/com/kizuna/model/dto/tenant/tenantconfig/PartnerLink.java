@@ -19,6 +19,5 @@ public class PartnerLink {
   @URL(message = "有効な URL を入力してください")
   private String url;
 
-  @URL(message = "有効なロゴ URL を入力してください")
   private String logoUrl;
 }

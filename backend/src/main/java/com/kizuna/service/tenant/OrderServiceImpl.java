@@ -3,6 +3,7 @@ package com.kizuna.service.tenant;
 import com.kizuna.config.TenantScoped;
 import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.exception.ServiceException;
+import com.kizuna.mapper.tenant.CustomerMapper;
 import com.kizuna.mapper.tenant.OrderMapper;
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;
@@ -10,8 +11,8 @@ import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
 import com.kizuna.model.entity.tenant.Customer;
 import com.kizuna.model.entity.tenant.Order;
 import com.kizuna.repository.central.TenantRepository;
+import com.kizuna.repository.tenant.CastRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
-import com.kizuna.repository.tenant.GirlRepository;
 import com.kizuna.repository.tenant.OrderRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,11 +27,12 @@ public class OrderServiceImpl implements OrderService {
 
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
-  private final GirlRepository girlRepository;
+  private final CastRepository castRepository;
   private final TenantUserRepository tenantUserRepository;
   private final TenantRepository tenantRepository;
   private final TenantContext tenantContext;
   private final OrderMapper orderMapper;
+  private final CustomerMapper customerMapper;
 
   @Override
   @TenantScoped
@@ -46,7 +48,7 @@ public class OrderServiceImpl implements OrderService {
     return orderRepository
         .findById(id)
         .map(orderMapper::toResponse)
-        .orElseThrow(() -> new ServiceException("Order not found: " + id));
+        .orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
   }
 
   @Override
@@ -56,24 +58,28 @@ public class OrderServiceImpl implements OrderService {
     // Use MapStruct for basic field mapping
     Order order = orderMapper.toEntity(request);
 
+    // Set Tenant
+    order.setTenant(
+        tenantRepository
+            .findById(tenantContext.getTenantId())
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
+
     // Handle complex association logic (Customer smart linking)
     handleCustomerLinking(request, order);
 
     // Handle other ID associations
-    if (request.getGirlId() != null && !request.getGirlId().isEmpty()) {
-      order.setGirl(
-          girlRepository
-              .findById(request.getGirlId())
-              .orElseThrow(() -> new ServiceException("Girl not found: " + request.getGirlId())));
+    if (request.getCastId() != null && !request.getCastId().isEmpty()) {
+      order.setCast(
+          castRepository
+              .findById(request.getCastId())
+              .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
     }
     if (request.getReceptionistId() != null && !request.getReceptionistId().isEmpty()) {
       order.setReceptionist(
           tenantUserRepository
               .findById(request.getReceptionistId())
               .orElseThrow(
-                  () ->
-                      new ServiceException(
-                          "Receptionist not found: " + request.getReceptionistId())));
+                  () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
     }
 
     return orderMapper.toResponse(orderRepository.save(order));
@@ -84,9 +90,7 @@ public class OrderServiceImpl implements OrderService {
   @Transactional
   public OrderResponse update(String id, OrderUpdateRequest request) {
     Order order =
-        orderRepository
-            .findById(id)
-            .orElseThrow(() -> new ServiceException("Order not found: " + id));
+        orderRepository.findById(id).orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
 
     // Use MapStruct for automatic non-null field updates
     orderMapper.updateEntityFromRequest(request, order);
@@ -97,15 +101,13 @@ public class OrderServiceImpl implements OrderService {
           tenantUserRepository
               .findById(request.getReceptionistId())
               .orElseThrow(
-                  () ->
-                      new ServiceException(
-                          "Receptionist not found: " + request.getReceptionistId())));
+                  () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
     }
-    if (request.getGirlId() != null) {
-      order.setGirl(
-          girlRepository
-              .findById(request.getGirlId())
-              .orElseThrow(() -> new ServiceException("Girl not found: " + request.getGirlId())));
+    if (request.getCastId() != null) {
+      order.setCast(
+          castRepository
+              .findById(request.getCastId())
+              .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
     }
 
     return orderMapper.toResponse(orderRepository.save(order));
@@ -116,7 +118,7 @@ public class OrderServiceImpl implements OrderService {
   @Transactional
   public void delete(String id) {
     if (!orderRepository.existsById(id)) {
-      throw new ServiceException("Order not found: " + id);
+      throw new ServiceException("注文が見つかりません: " + id);
     }
     orderRepository.deleteById(id);
   }
@@ -126,8 +128,7 @@ public class OrderServiceImpl implements OrderService {
       order.setCustomer(
           customerRepository
               .findById(req.getCustomerId())
-              .orElseThrow(
-                  () -> new ServiceException("Customer not found: " + req.getCustomerId())));
+              .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + req.getCustomerId())));
     } else if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
       // Find or Create Customer
       Customer customer =
@@ -135,22 +136,12 @@ public class OrderServiceImpl implements OrderService {
               .findByPhoneNumberAndTenantId(req.getPhoneNumber(), tenantContext.getTenantId())
               .orElseGet(
                   () -> {
-                    Customer newCustomer = new Customer();
-                    newCustomer.setName(req.getCustomerName());
-                    newCustomer.setPhoneNumber(req.getPhoneNumber());
-                    newCustomer.setPhoneNumber2(req.getPhoneNumber2());
-                    newCustomer.setAddress(req.getAddress());
-                    newCustomer.setBuildingName(req.getBuildingName());
-                    newCustomer.setClassification(req.getClassification());
-                    newCustomer.setLandmark(req.getLandmark());
-                    newCustomer.setHasPet(req.getHasPet() != null ? req.getHasPet() : false);
-                    newCustomer.setNgType(req.getNgType());
-                    newCustomer.setNgContent(req.getNgContent());
+                    Customer newCustomer = customerMapper.toCustomer(req);
                     // Set Tenant Explicitly
                     newCustomer.setTenant(
                         tenantRepository
                             .findById(tenantContext.getTenantId())
-                            .orElseThrow(() -> new ServiceException("Tenant context not found")));
+                            .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
                     return customerRepository.save(newCustomer);
                   });
       order.setCustomer(customer);

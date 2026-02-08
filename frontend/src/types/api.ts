@@ -133,3 +133,71 @@ export interface TenantConfigUpdateRequest {
   sns_links?: SnsLink[];
   partner_links?: PartnerLink[];
 }
+
+// ファイルアップロードレスポンス
+export interface FileUploadResponse {
+  url: string;
+  original_name: string;
+  size: number;
+}
+
+// ページネーションと検索用の共通パラメータ
+export interface PaginationParams {
+  page?: number;
+  size?: number;
+  sort?: string;
+  search?: string;
+}
+
+// テナントユーザー情報
+export interface TenantUserResponse {
+  id: string;
+  email: string;
+  nickname: string;
+  role: string;
+}
+
+// キャスト（Cast）レスポンス
+export interface CastResponse {
+  id: string;
+  name: string;
+  status: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// キャスト作成リクエスト
+export interface CastCreateRequest {
+  name: string;
+  status?: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+}
+
+// キャスト更新リクエスト
+export interface CastUpdateRequest {
+  name?: string;
+  status?: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+}

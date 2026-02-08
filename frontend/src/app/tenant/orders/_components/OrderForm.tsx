@@ -17,7 +17,7 @@ export interface OrderFormData {
   classification: string;
   landmark: string;
   hasPet: boolean;
-  girlId: string;
+  castId: string;
   courseMinutes: number;
   extensionMinutes: number;
   options: string[];
@@ -28,7 +28,7 @@ export interface OrderFormData {
   usedPoints: number;
   manualGrantPoints: number;
   remarks: string;
-  girlDriverMessage: string;
+  castDriverMessage: string;
   ngType: string;
   ngContent: string;
 }
@@ -193,10 +193,10 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">女の子名</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">キャスト名</label>
             <input
               type="text"
-              {...register('girlId')}
+              {...register('castId')}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               placeholder="フリー"
             />
@@ -249,10 +249,10 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              女の子、ドライバー伝言
+              キャスト・ドライバーへのメッセージ
             </label>
             <textarea
-              {...register('girlDriverMessage')}
+              {...register('castDriverMessage')}
               rows={3}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />

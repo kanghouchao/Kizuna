@@ -12,7 +12,7 @@ databaseChangeLog:
       file: changes/004-create-customers.yaml
       relativeToChangelogFile: true
   - include:
-      file: changes/005-create-girls.yaml
+      file: changes/005-create-casts.yaml
       relativeToChangelogFile: true
   - include:
       file: changes/006-create-orders.yaml
@@ -24,5 +24,5 @@ databaseChangeLog:
       file: changes/008-seed-menus.yaml
       relativeToChangelogFile: true
   - include:
-      file: changes/009-create-tenant-site-config.yaml
+      file: changes/009-create-tenant-config.yaml
       relativeToChangelogFile: true

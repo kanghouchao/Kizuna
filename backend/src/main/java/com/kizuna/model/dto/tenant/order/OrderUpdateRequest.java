@@ -10,7 +10,7 @@ public class OrderUpdateRequest {
   private String receptionistId;
   private LocalTime arrivalScheduledStartTime;
   private LocalTime arrivalScheduledEndTime;
-  private String girlId;
+  private String castId;
   private Integer courseMinutes;
   private Integer extensionMinutes;
   private List<String> optionCodes;
@@ -19,6 +19,6 @@ public class OrderUpdateRequest {
   private Integer usedPoints;
   private Integer manualGrantPoints;
   private String remarks;
-  private String girlDriverMessage;
+  private String castDriverMessage;
   private String status;
 }

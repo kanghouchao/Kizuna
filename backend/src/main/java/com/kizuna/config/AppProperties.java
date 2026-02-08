@@ -1,5 +1,6 @@
 package com.kizuna.config;
 
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -18,11 +19,23 @@ public class AppProperties {
   /** app.jwt.* */
   private Jwt jwt = new Jwt();
 
+  /** app.upload.* */
+  private Upload upload = new Upload();
+
   @Getter
   @Setter
   public static class Jwt {
     private String secret;
     private long expiration;
+  }
+
+  @Getter
+  @Setter
+  public static class Upload {
+    private String basePath = "/data/uploads";
+    private long maxFileSize = 10485760;
+    private List<String> allowedTypes =
+        List.of("image/jpeg", "image/png", "image/gif", "image/webp");
   }
 
   public enum Scheme {

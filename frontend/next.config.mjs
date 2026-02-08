@@ -9,9 +9,6 @@ const nextConfig = {
     unoptimized: true,
   },
   output: 'standalone',
-  experimental: {
-    instrumentationHook: true,
-  },
   async rewrites() {
     return [];
   },

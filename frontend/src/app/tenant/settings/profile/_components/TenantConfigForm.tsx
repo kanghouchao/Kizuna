@@ -1,7 +1,8 @@
 'use client';
 
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { TenantConfigResponse, TenantConfigUpdateRequest, SnsLink, PartnerLink } from '@/types/api';
+import ImageUpload from '@/components/ui/ImageUpload';
 
 interface TenantConfigFormData {
   template_key: string;
@@ -68,16 +69,16 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
   return (
     <form
       onSubmit={handleSubmit(handleFormSubmit)}
-      className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-100"
+      className="space-y-10 bg-white p-8 rounded-xl shadow-sm border border-gray-100"
     >
       {/* 1. 基本設定 */}
       <section>
         <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
           基本設定
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">テンプレート</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">テンプレート</label>
             <select
               {...register('template_key')}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -87,6 +88,15 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
               <option value="classic">クラシック</option>
             </select>
           </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">店舗説明文</label>
+            <textarea
+              {...register('description')}
+              rows={4}
+              placeholder="店舗の紹介文を入力してください..."
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
         </div>
       </section>
 
@@ -95,68 +105,79 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
         <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
           ビジュアル設定
         </h3>
-        <div className="grid grid-cols-1 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ロゴ URL</label>
-            <input
-              type="url"
-              {...register('logo_url')}
-              placeholder="https://example.com/logo.png"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+
+        {/* ロゴ */}
+        <div className="mb-8">
+          <label className="block text-sm font-medium text-gray-700 mb-2">ロゴ画像</label>
+          <p className="text-xs text-gray-500 mb-3">正方形の画像を推奨します（例: 200x200px）</p>
+          <div className="flex items-start">
+            <Controller
+              control={control}
+              name="logo_url"
+              render={({ field: { value, onChange } }) => (
+                <ImageUpload
+                  value={value}
+                  onChange={onChange}
+                  directory="config"
+                  className="w-32 h-32" // Square
+                />
+              )}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">バナー URL</label>
-            <input
-              type="url"
-              {...register('banner_url')}
-              placeholder="https://example.com/banner.png"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                メインビジュアル URL
-              </label>
-              <input
-                type="url"
-                {...register('mv_url')}
-                placeholder="https://example.com/main-visual.png"
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        </div>
+
+        {/* バナー */}
+        <div className="mb-8">
+          <label className="block text-sm font-medium text-gray-700 mb-2">バナー画像</label>
+          <p className="text-xs text-gray-500 mb-3">横長の画像を推奨します（例: 1200x400px）</p>
+          <Controller
+            control={control}
+            name="banner_url"
+            render={({ field: { value, onChange } }) => (
+              <ImageUpload
+                value={value}
+                onChange={onChange}
+                directory="config"
+                className="w-full h-40 max-w-2xl" // Wide rectangle
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">MV タイプ</label>
+            )}
+          />
+        </div>
+
+        {/* メインビジュアル (MV) */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-2">
+            <label className="block text-sm font-medium text-gray-700">メインビジュアル (MV)</label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">タイプ:</span>
               <select
                 {...register('mv_type')}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 pl-2 pr-8"
               >
                 <option value="image">画像</option>
                 <option value="video">動画</option>
               </select>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* 3. 店舗説明 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          店舗説明
-        </h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">説明文</label>
-          <textarea
-            {...register('description')}
-            rows={5}
-            placeholder="店舗の紹介文を入力してください..."
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          <p className="text-xs text-gray-500 mb-3">
+            サイトの顔となる大きな画像です（例: 1920x800px）
+          </p>
+          <Controller
+            control={control}
+            name="mv_url"
+            render={({ field: { value, onChange } }) => (
+              <ImageUpload
+                value={value}
+                onChange={onChange}
+                directory="config"
+                className="w-full h-64" // Taller wide rectangle
+              />
+            )}
           />
         </div>
       </section>
 
-      {/* 4. SNSリンク */}
+      {/* 3. SNSリンク */}
       <section>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-indigo-500 pl-3">
@@ -172,20 +193,23 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
         </div>
         <div className="space-y-4">
           {snsFields.length === 0 ? (
-            <p className="text-gray-500 text-sm">
-              SNS リンクがありません。「+ 追加」で追加できます。
-            </p>
+            <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-gray-500 text-sm">
+              SNS リンクが登録されていません
+            </div>
           ) : (
             snsFields.map((field, index) => (
-              <div key={field.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+              <div
+                key={field.id}
+                className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
+              >
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
                       プラットフォーム
                     </label>
                     <select
                       {...register(`sns_links.${index}.platform`)}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     >
                       {SNS_PLATFORMS.map(p => (
                         <option key={p.value} value={p.value}>
@@ -194,39 +218,28 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">URL</label>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">URL</label>
                     <input
                       type="url"
                       {...register(`sns_links.${index}.url`)}
                       placeholder="https://..."
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      表示名（任意）
-                    </label>
-                    <input
-                      type="text"
-                      {...register(`sns_links.${index}.label`)}
-                      placeholder="@username"
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     />
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => removeSns(index)}
-                  className="mt-6 p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                  aria-label={`SNS リンク ${index + 1} を削除`}
+                  className="mt-6 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                  aria-label="削除"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      d="M6 18L18 6M6 6l12 12"
                     />
                   </svg>
                 </button>
@@ -236,7 +249,7 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
         </div>
       </section>
 
-      {/* 5. パートナーリンク */}
+      {/* 4. パートナーリンク */}
       <section>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-indigo-500 pl-3">
@@ -252,55 +265,64 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
         </div>
         <div className="space-y-4">
           {partnerFields.length === 0 ? (
-            <p className="text-gray-500 text-sm">
-              パートナーリンクがありません。「+ 追加」で追加できます。
-            </p>
+            <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-gray-500 text-sm">
+              パートナーリンクが登録されていません
+            </div>
           ) : (
             partnerFields.map((field, index) => (
-              <div key={field.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">名前</label>
+              <div
+                key={field.id}
+                className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
+              >
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="md:col-span-4">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">名前</label>
                     <input
                       type="text"
                       {...register(`partner_links.${index}.name`)}
                       placeholder="パートナー名"
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">URL</label>
+                  <div className="md:col-span-5">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">URL</label>
                     <input
                       type="url"
                       {...register(`partner_links.${index}.url`)}
                       placeholder="https://..."
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ロゴ URL（任意）
-                    </label>
-                    <input
-                      type="url"
-                      {...register(`partner_links.${index}.logo_url`)}
-                      placeholder="https://..."
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    />
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">ロゴ</label>
+                    <div className="h-10">
+                      <Controller
+                        control={control}
+                        name={`partner_links.${index}.logo_url`}
+                        render={({ field: { value, onChange } }) => (
+                          <ImageUpload
+                            value={value}
+                            onChange={onChange}
+                            directory="partners"
+                            className="w-full h-10 border-gray-200"
+                          />
+                        )}
+                      />
+                    </div>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => removePartner(index)}
-                  className="mt-6 p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                  aria-label={`パートナーリンク ${index + 1} を削除`}
+                  className="mt-6 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                  aria-label="削除"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      d="M6 18L18 6M6 6l12 12"
                     />
                   </svg>
                 </button>
@@ -311,13 +333,13 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
       </section>
 
       {/* Buttons */}
-      <div className="flex justify-end space-x-4 pt-6 border-t border-gray-100">
+      <div className="flex justify-end space-x-4 pt-6 border-t border-gray-100 sticky bottom-0 bg-white/90 backdrop-blur-sm p-4 -mx-8 -mb-8 rounded-b-xl">
         <button
           type="submit"
           disabled={isSubmitting}
-          className="px-10 py-2.5 rounded-md bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all"
+          className="px-10 py-2.5 rounded-md bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all transform active:scale-95"
         >
-          {isSubmitting ? '保存中...' : '保存する'}
+          {isSubmitting ? '保存中...' : '設定を保存する'}
         </button>
       </div>
     </form>

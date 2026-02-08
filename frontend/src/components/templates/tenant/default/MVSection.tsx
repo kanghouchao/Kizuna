@@ -8,7 +8,7 @@ interface MVSectionProps {
 export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
   // Placeholder content when no MV is configured
   const placeholderContent = (
-    <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+    <div className="aspect-video bg-linear-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
       <div className="text-center text-gray-400">
         <svg
           className="w-16 h-16 mx-auto mb-4"

@@ -7,6 +7,12 @@ import {
   MenuVO,
   TenantConfigResponse,
   TenantConfigUpdateRequest,
+  FileUploadResponse,
+  CastResponse,
+  CastCreateRequest,
+  CastUpdateRequest,
+  PaginationParams,
+  TenantUserResponse,
 } from '@/types/api';
 import { Order, OrderCreateRequest, Page } from '@/types/order';
 
@@ -22,7 +28,7 @@ export const authApi = {
   logout: async (): Promise<void> => {
     await apiClient.post('/tenant/logout');
   },
-  me: async (): Promise<any> => {
+  me: async (): Promise<TenantUserResponse> => {
     const response = await apiClient.get('/tenant/me');
     return response.data;
   },
@@ -36,7 +42,7 @@ export const tenantApi = {
 };
 
 export const orderApi = {
-  list: async (params?: any): Promise<Page<Order>> => {
+  list: async (params?: PaginationParams): Promise<Page<Order>> => {
     const response = await apiClient.get('/tenant/orders', { params });
     return response.data;
   },
@@ -53,6 +59,50 @@ export const tenantConfigApi = {
   },
   update: async (data: TenantConfigUpdateRequest): Promise<TenantConfigResponse> => {
     const response = await apiClient.put('/tenant/config', data);
+    return response.data;
+  },
+};
+
+export const fileApi = {
+  /** ファイルをアップロードする */
+  upload: async (file: File, directory: string = 'general'): Promise<FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('directory', directory);
+    // axiosが自動的に境界を設定するため、Content-Typeヘッダーは手動で設定しない
+    const response = await apiClient.post('/tenant/files/upload', formData);
+    return response.data;
+  },
+};
+
+export const castApi = {
+  /** キャスト一覧を取得する */
+  list: async (params?: PaginationParams): Promise<Page<CastResponse>> => {
+    const response = await apiClient.get('/tenant/casts', { params });
+    return response.data;
+  },
+  /** キャスト詳細を取得する */
+  get: async (id: string): Promise<CastResponse> => {
+    const response = await apiClient.get(`/tenant/casts/${id}`);
+    return response.data;
+  },
+  /** キャストを新規作成する */
+  create: async (data: CastCreateRequest): Promise<CastResponse> => {
+    const response = await apiClient.post('/tenant/casts', data);
+    return response.data;
+  },
+  /** キャスト情報を更新する */
+  update: async (id: string, data: CastUpdateRequest): Promise<CastResponse> => {
+    const response = await apiClient.put(`/tenant/casts/${id}`, data);
+    return response.data;
+  },
+  /** キャストを削除する */
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/tenant/casts/${id}`);
+  },
+  /** 公開キャスト一覧を取得する */
+  listPublic: async (): Promise<CastResponse[]> => {
+    const response = await apiClient.get('/tenant/casts/public');
     return response.data;
   },
 };

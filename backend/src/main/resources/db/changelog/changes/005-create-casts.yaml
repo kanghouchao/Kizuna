@@ -1,14 +1,14 @@
 databaseChangeLog:
   - changeSet:
-      id: tenant-003-create-girls
+      id: tenant-005-create-casts
       author: kanghouchao
       preConditions:
         - dbms:
             type: postgresql
       changes:
         - createTable:
-            tableName: t_girls
-            remarks: 女の子（キャスト）情報テーブル
+            tableName: t_casts
+            remarks: キャスト情報テーブル
             columns:
               - column:
                   name: id
@@ -16,7 +16,7 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                     primaryKey: true
-                    primaryKeyName: pk_t_girls
+                    primaryKeyName: pk_t_casts
               - column:
                   name: tenant_id
                   type: BIGINT
@@ -27,12 +27,45 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   constraints:
                     nullable: false
-                  remarks: 女の子名
+                  remarks: キャスト名
               - column:
                   name: status
                   type: VARCHAR(50)
                   defaultValue: 'ACTIVE'
                   remarks: ステータス
+              - column:
+                  name: photo_url
+                  type: VARCHAR(500)
+                  remarks: 写真URL
+              - column:
+                  name: introduction
+                  type: TEXT
+                  remarks: 自己紹介
+              - column:
+                  name: age
+                  type: INTEGER
+                  remarks: 年齢
+              - column:
+                  name: height
+                  type: INTEGER
+                  remarks: 身長(cm)
+              - column:
+                  name: bust
+                  type: INTEGER
+                  remarks: バスト(cm)
+              - column:
+                  name: waist
+                  type: INTEGER
+                  remarks: ウエスト(cm)
+              - column:
+                  name: hip
+                  type: INTEGER
+                  remarks: ヒップ(cm)
+              - column:
+                  name: display_order
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: 表示順
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -47,8 +80,8 @@ databaseChangeLog:
                     nullable: false
 
         - addForeignKeyConstraint:
-            constraintName: fk_t_girls_tenant
-            baseTableName: t_girls
+            constraintName: fk_t_casts_tenant
+            baseTableName: t_casts
             baseColumnNames: tenant_id
             referencedTableName: central_tenants
             referencedColumnNames: id

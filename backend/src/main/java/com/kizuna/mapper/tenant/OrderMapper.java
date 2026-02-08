@@ -11,37 +11,33 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
-/**
- * MapStruct mapper for Order entity and DTOs. Handles conversion between Order entity and
- * OrderResponse/OrderCreateRequest/OrderUpdateRequest.
- */
+/** 注文エンティティとDTOのマッピングを行うMapStructマッパー。 */
 @Mapper(componentModel = "spring", builder = @Builder(disableBuilder = true))
 public interface OrderMapper {
 
   // ==================== Entity -> Response ====================
 
   /**
-   * Convert Order entity to OrderResponse DTO.
+   * 注文エンティティをレスポンスDTOに変換します。
    *
-   * @param order the order entity
-   * @return the order response DTO
+   * @param order 注文エンティティ
+   * @return 注文レスポンスDTO
    */
   @Mapping(target = "receptionistId", source = "receptionist.id")
   @Mapping(target = "receptionistName", source = "receptionist.nickname")
   @Mapping(target = "customerId", source = "customer.id")
   @Mapping(target = "customerName", source = "customer.name")
-  @Mapping(target = "girlId", source = "girl.id")
-  @Mapping(target = "girlName", source = "girl.name")
+  @Mapping(target = "castId", source = "cast.id")
+  @Mapping(target = "castName", source = "cast.name")
   OrderResponse toResponse(Order order);
 
   // ==================== CreateRequest -> Entity ====================
 
   /**
-   * Convert OrderCreateRequest DTO to Order entity. Note: Associated entities (Customer, Girl,
-   * Receptionist) should be set manually in the service layer after ID lookup.
+   * 注文作成リクエストDTOを注文エンティティに変換します。 注: 関連エンティティ（顧客、キャスト、受付担当）はサービス層でID検索後に手動設定する必要があります。
    *
-   * @param request the order create request
-   * @return the order entity
+   * @param request 注文作成リクエスト
+   * @return 注文エンティティ
    */
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "tenant", ignore = true)
@@ -53,37 +49,37 @@ public interface OrderMapper {
   @Mapping(target = "surveyStatus", ignore = true)
   @Mapping(target = "actualArrivalTime", ignore = true)
   @Mapping(target = "actualEndTime", ignore = true)
-  // Associated entities - handled manually in service
+  // 関連エンティティ - サービス層で手動設定
   @Mapping(target = "customer", ignore = true)
-  @Mapping(target = "girl", ignore = true)
+  @Mapping(target = "cast", ignore = true)
   @Mapping(target = "receptionist", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   // ==================== UpdateRequest -> Entity (Partial Update) ====================
 
   /**
-   * Update Order entity from OrderUpdateRequest DTO. Only non-null fields from request will be
-   * applied (nullValuePropertyMappingStrategy = IGNORE).
+   * 注文更新リクエストDTOから注文エンティティを更新します。 リクエスト内の非nullフィールドのみが適用されます (nullValuePropertyMappingStrategy =
+   * IGNORE)。
    *
-   * @param request the order update request
-   * @param order the existing order entity to update
+   * @param request 注文更新リクエスト
+   * @param order 更新対象の注文エンティティ
    */
   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "tenant", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
-  @Mapping(target = "businessDate", ignore = true) // Business date should not be updated
-  @Mapping(target = "carrier", ignore = true) // Carrier should not be updated
-  @Mapping(target = "mediaName", ignore = true) // MediaName should not be updated
+  @Mapping(target = "businessDate", ignore = true) // 営業日は更新不可
+  @Mapping(target = "carrier", ignore = true) // キャリアは更新不可
+  @Mapping(target = "mediaName", ignore = true) // 媒体名は更新不可
   @Mapping(target = "surveyStatus", ignore = true)
   @Mapping(target = "actualArrivalTime", ignore = true)
   @Mapping(target = "actualEndTime", ignore = true)
-  @Mapping(target = "locationAddress", ignore = true) // Not in UpdateRequest
-  @Mapping(target = "locationBuilding", ignore = true) // Not in UpdateRequest
-  // Associated entities - handled manually in service
+  @Mapping(target = "locationAddress", ignore = true) // 更新リクエストに含まれない
+  @Mapping(target = "locationBuilding", ignore = true) // 更新リクエストに含まれない
+  // 関連エンティティ - サービス層で手動設定
   @Mapping(target = "customer", ignore = true)
-  @Mapping(target = "girl", ignore = true)
+  @Mapping(target = "cast", ignore = true)
   @Mapping(target = "receptionist", ignore = true)
   void updateEntityFromRequest(OrderUpdateRequest request, @MappingTarget Order order);
 }
