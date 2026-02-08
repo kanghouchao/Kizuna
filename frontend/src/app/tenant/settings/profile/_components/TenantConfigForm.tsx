@@ -1,7 +1,8 @@
 'use client';
 
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { TenantConfigResponse, TenantConfigUpdateRequest, SnsLink, PartnerLink } from '@/types/api';
+import ImageUpload from '@/components/ui/ImageUpload';
 
 interface TenantConfigFormData {
   template_key: string;
@@ -98,20 +99,22 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
         <div className="grid grid-cols-1 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ロゴ URL</label>
-            <input
-              type="url"
-              {...register('logo_url')}
-              placeholder="https://example.com/logo.png"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            <Controller
+              control={control}
+              name="logo_url"
+              render={({ field: { value, onChange } }) => (
+                <ImageUpload value={value} onChange={onChange} directory="config" />
+              )}
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">バナー URL</label>
-            <input
-              type="url"
-              {...register('banner_url')}
-              placeholder="https://example.com/banner.png"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            <Controller
+              control={control}
+              name="banner_url"
+              render={({ field: { value, onChange } }) => (
+                <ImageUpload value={value} onChange={onChange} directory="config" />
+              )}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -119,11 +122,12 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 メインビジュアル URL
               </label>
-              <input
-                type="url"
-                {...register('mv_url')}
-                placeholder="https://example.com/main-visual.png"
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              <Controller
+                control={control}
+                name="mv_url"
+                render={({ field: { value, onChange } }) => (
+                  <ImageUpload value={value} onChange={onChange} directory="config" />
+                )}
               />
             </div>
             <div>
@@ -281,11 +285,12 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       ロゴ URL（任意）
                     </label>
-                    <input
-                      type="url"
-                      {...register(`partner_links.${index}.logo_url`)}
-                      placeholder="https://..."
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    <Controller
+                      control={control}
+                      name={`partner_links.${index}.logo_url`}
+                      render={({ field: { value, onChange } }) => (
+                        <ImageUpload value={value} onChange={onChange} directory="partners" />
+                      )}
                     />
                   </div>
                 </div>

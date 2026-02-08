@@ -3,6 +3,7 @@ package com.kizuna.controller.tenant;
 import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigResponse;
 import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigUpdateRequest;
 import com.kizuna.service.tenant.TenantConfigService;
+import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -28,5 +29,11 @@ public class TenantConfigController {
   public ResponseEntity<TenantConfigResponse> update(
       @Valid @RequestBody TenantConfigUpdateRequest request) {
     return ResponseEntity.ok(tenantConfigService.update(request));
+  }
+
+  @GetMapping("/public")
+  @PermitAll
+  public ResponseEntity<TenantConfigResponse> getPublic() {
+    return ResponseEntity.ok(tenantConfigService.get());
   }
 }
