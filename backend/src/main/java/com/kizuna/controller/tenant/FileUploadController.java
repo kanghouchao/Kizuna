@@ -34,7 +34,7 @@ public class FileUploadController {
 
     FileUploadResponse response =
         FileUploadResponse.builder()
-            .url("/tenant/files/" + relativePath)
+            .url("/static/tenant/files/" + relativePath)
             .originalName(file.getOriginalFilename())
             .size(file.getSize())
             .build();

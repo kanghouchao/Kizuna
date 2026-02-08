@@ -90,6 +90,24 @@ services:
       - kizuna-upload-data:/data/uploads
     restart: on-failure:3
 
+  # Static File Server: Nginx
+  static:
+    image: nginx:alpine
+    container_name: static
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - kizuna-upload-data:/usr/share/nginx/html/uploads:ro
+    networks:
+      - kizuna-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.static.rule=PathPrefix(`/static`)"
+      - "traefik.http.routers.static.entrypoints=web"
+      - "traefik.http.routers.static.middlewares=static-strip@docker"
+      - "traefik.http.services.static.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.static-strip.stripPrefix.prefixes=/static"
+    restart: on-failure:3
+
   # Frontend: next.js
   frontend:
     image: kizuna-frontend:latest
@@ -103,7 +121,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     healthcheck:

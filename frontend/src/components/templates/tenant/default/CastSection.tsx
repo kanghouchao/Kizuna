@@ -68,7 +68,7 @@ export default function CastSection({ casts }: CastSectionProps) {
                 <div className="aspect-3/4 bg-linear-to-br from-pink-100 to-purple-100 relative">
                   {cast.photo_url ? (
                     <Image
-                      src={`/api${cast.photo_url}`}
+                      src={cast.photo_url}
                       alt={cast.name}
                       fill
                       className="object-cover"

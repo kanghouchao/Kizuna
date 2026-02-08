@@ -52,11 +52,7 @@ export default function ImageUpload({ value, onChange, directory = 'casts' }: Im
   };
 
   // data: URI（ローカルプレビュー）はそのまま使用し、APIパスの場合は /api プレフィックスを付与
-  const displayUrl = preview?.startsWith('data:')
-    ? preview
-    : preview
-      ? `/api${preview}`
-      : undefined;
+  const displayUrl = preview;
 
   return (
     <div className="space-y-2">
