@@ -17,7 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,8 +42,8 @@ class LocalFileStorageServiceImplTest {
   }
 
   @Test
-  void store_正常にファイルを保存する() throws IOException {
-    byte[] content = "テストファイルの内容".getBytes();
+  void store_savesFileSuccessfully() throws IOException {
+    byte[] content = "test content".getBytes();
     when(multipartFile.getSize()).thenReturn((long) content.length);
     when(multipartFile.getContentType()).thenReturn("image/jpeg");
     when(multipartFile.getOriginalFilename()).thenReturn("test.jpg");
@@ -60,7 +59,14 @@ class LocalFileStorageServiceImplTest {
   }
 
   @Test
-  void store_許可されていないMIMEタイプでエラー() {
+  void store_throwsErrorOnInvalidDirectoryName() {
+    assertThatThrownBy(() -> storageService.store(1L, "../../../etc", multipartFile))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("不正なディレクトリ名です");
+  }
+
+  @Test
+  void store_throwsErrorOnDisallowedMimeType() {
     when(multipartFile.getSize()).thenReturn(100L);
     when(multipartFile.getContentType()).thenReturn("application/pdf");
 
@@ -70,7 +76,7 @@ class LocalFileStorageServiceImplTest {
   }
 
   @Test
-  void store_ファイルサイズ超過でエラー() {
+  void store_throwsErrorOnFileSizeExceeded() {
     when(multipartFile.getSize()).thenReturn(20_000_000L);
 
     assertThatThrownBy(() -> storageService.store(1L, "photos", multipartFile))
@@ -79,8 +85,8 @@ class LocalFileStorageServiceImplTest {
   }
 
   @Test
-  void delete_正常にファイルを削除する() throws IOException {
-    // テスト用ファイルを作成
+  void delete_removesFileSuccessfully() throws IOException {
+    // Create test file
     Path dir = tempDir.resolve("1/photos");
     Files.createDirectories(dir);
     Path file = dir.resolve("test.jpg");
@@ -93,23 +99,9 @@ class LocalFileStorageServiceImplTest {
   }
 
   @Test
-  void load_正常にファイルを読み込む() throws IOException {
-    // テスト用ファイルを作成
-    Path dir = tempDir.resolve("1/photos");
-    Files.createDirectories(dir);
-    Path file = dir.resolve("test.jpg");
-    Files.write(file, "content".getBytes());
-
-    Resource resource = storageService.load("1/photos/test.jpg");
-
-    assertThat(resource.exists()).isTrue();
-    assertThat(resource.isReadable()).isTrue();
-  }
-
-  @Test
-  void load_存在しないファイルでエラー() {
-    assertThatThrownBy(() -> storageService.load("1/photos/nonexistent.jpg"))
+  void delete_throwsErrorOnInvalidPath() {
+    assertThatThrownBy(() -> storageService.delete("../../../etc/passwd"))
         .isInstanceOf(ServiceException.class)
-        .hasMessage("ファイルが見つかりません");
+        .hasMessage("不正なファイルパスです");
   }
 }

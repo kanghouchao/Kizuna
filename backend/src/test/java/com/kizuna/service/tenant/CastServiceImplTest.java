@@ -131,7 +131,7 @@ class CastServiceImplTest {
   }
 
   @Test
-  void listActive_ACTIVEステータスのみ返す() {
+  void listActive_returnsOnlyActiveCasts() {
     Cast active1 = new Cast();
     active1.setId("g1");
 

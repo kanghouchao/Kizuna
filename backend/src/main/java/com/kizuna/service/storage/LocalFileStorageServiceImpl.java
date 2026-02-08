@@ -9,8 +9,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +22,12 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
   @Override
   public String store(Long tenantId, String directory, MultipartFile file) {
     AppProperties.Upload upload = appProperties.getUpload();
+
+    // 1. ディレクトリ名のバリデーション (パストラバーサル防止)
+    // 英数字、ハイフン、アンダースコアのみを許可
+    if (directory == null || !directory.matches("^[a-zA-Z0-9_-]+$")) {
+      throw new ServiceException("不正なディレクトリ名です");
+    }
 
     // ファイルサイズのバリデーション
     if (file.getSize() > upload.getMaxFileSize()) {
@@ -46,7 +50,14 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
     // UUIDでファイル名を生成
     String filename = UUID.randomUUID() + extension;
     String relativePath = tenantId + "/" + directory + "/" + filename;
-    Path targetPath = Paths.get(upload.getBasePath()).resolve(relativePath);
+
+    // 2. パスの正規化とベースディレクトリ内であることの確認
+    Path basePath = Paths.get(upload.getBasePath()).toAbsolutePath().normalize();
+    Path targetPath = basePath.resolve(relativePath).toAbsolutePath().normalize();
+
+    if (!targetPath.startsWith(basePath)) {
+      throw new ServiceException("不正なファイルパスです");
+    }
 
     try {
       // ディレクトリを自動作成
@@ -61,25 +72,18 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
 
   @Override
   public void delete(String filePath) {
-    Path path = Paths.get(appProperties.getUpload().getBasePath()).resolve(filePath);
+    Path basePath = Paths.get(appProperties.getUpload().getBasePath()).toAbsolutePath().normalize();
+    Path path = basePath.resolve(filePath).toAbsolutePath().normalize();
+
+    // パストラバーサルチェック
+    if (!path.startsWith(basePath)) {
+      throw new ServiceException("不正なファイルパスです");
+    }
+
     try {
       Files.deleteIfExists(path);
     } catch (IOException e) {
       throw new ServiceException("ファイルの削除に失敗しました");
-    }
-  }
-
-  @Override
-  public Resource load(String filePath) {
-    try {
-      Path path = Paths.get(appProperties.getUpload().getBasePath()).resolve(filePath);
-      Resource resource = new UrlResource(path.toUri());
-      if (!resource.exists() || !resource.isReadable()) {
-        throw new ServiceException("ファイルが見つかりません");
-      }
-      return resource;
-    } catch (IOException e) {
-      throw new ServiceException("ファイルの読み込みに失敗しました");
     }
   }
 }

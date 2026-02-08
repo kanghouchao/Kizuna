@@ -1,6 +1,5 @@
 package com.kizuna.service.storage;
 
-import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
 /** ファイルストレージサービスのインターフェース */
@@ -11,7 +10,4 @@ public interface FileStorageService {
 
   /** ファイルを削除する */
   void delete(String filePath);
-
-  /** ファイルをリソースとして読み込む */
-  Resource load(String filePath);
 }
