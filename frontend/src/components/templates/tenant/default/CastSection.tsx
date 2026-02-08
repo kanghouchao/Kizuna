@@ -62,10 +62,10 @@ export default function CastSection({ casts }: CastSectionProps) {
             {casts.map(cast => (
               <div
                 key={cast.id}
-                className="flex-shrink-0 w-48 snap-start bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                className="shrink-0 w-48 snap-start bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
               >
                 {/* キャスト画像 */}
-                <div className="aspect-[3/4] bg-gradient-to-br from-pink-100 to-purple-100 relative">
+                <div className="aspect-3/4 bg-linear-to-br from-pink-100 to-purple-100 relative">
                   {cast.photo_url ? (
                     <Image
                       src={`/api${cast.photo_url}`}
