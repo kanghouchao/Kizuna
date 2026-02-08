@@ -7,6 +7,10 @@ import {
   MenuVO,
   TenantConfigResponse,
   TenantConfigUpdateRequest,
+  FileUploadResponse,
+  GirlResponse,
+  GirlCreateRequest,
+  GirlUpdateRequest,
 } from '@/types/api';
 import { Order, OrderCreateRequest, Page } from '@/types/order';
 
@@ -53,6 +57,51 @@ export const tenantConfigApi = {
   },
   update: async (data: TenantConfigUpdateRequest): Promise<TenantConfigResponse> => {
     const response = await apiClient.put('/tenant/config', data);
+    return response.data;
+  },
+};
+
+export const fileApi = {
+  /** ファイルをアップロードする */
+  upload: async (file: File, directory: string = 'general'): Promise<FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('directory', directory);
+    const response = await apiClient.post('/tenant/files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+};
+
+export const girlApi = {
+  /** キャスト一覧を取得する */
+  list: async (params?: any): Promise<any> => {
+    const response = await apiClient.get('/tenant/girls', { params });
+    return response.data;
+  },
+  /** キャスト詳細を取得する */
+  get: async (id: string): Promise<GirlResponse> => {
+    const response = await apiClient.get(`/tenant/girls/${id}`);
+    return response.data;
+  },
+  /** キャストを新規作成する */
+  create: async (data: GirlCreateRequest): Promise<GirlResponse> => {
+    const response = await apiClient.post('/tenant/girls', data);
+    return response.data;
+  },
+  /** キャスト情報を更新する */
+  update: async (id: string, data: GirlUpdateRequest): Promise<GirlResponse> => {
+    const response = await apiClient.put(`/tenant/girls/${id}`, data);
+    return response.data;
+  },
+  /** キャストを削除する */
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/tenant/girls/${id}`);
+  },
+  /** 公開キャスト一覧を取得する */
+  listPublic: async (): Promise<GirlResponse[]> => {
+    const response = await apiClient.get('/tenant/girls/public');
     return response.data;
   },
 };

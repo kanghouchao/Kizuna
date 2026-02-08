@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { resolveTenant } from './lib/middleware/tenantResolver';
-import { handleRouteProtection } from './lib/middleware/routeGuard';
+import { resolveTenant } from './lib/proxy/tenantResolver';
+import { handleRouteProtection } from './lib/proxy/routeGuard';
 
 export const config = {
   matcher: ['/((?!api|_next|favicon.ico|health).*)'],
 };
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // 1. Identify Role & Tenant
   const { role, tenantData } = await resolveTenant(request);
 

@@ -86,6 +86,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
+    volumes:
+      - kizuna-upload-data:/data/uploads
     restart: on-failure:3
 
   # Frontend: next.js
@@ -120,4 +122,6 @@ volumes:
   kizuna-db-data:
     driver: local
   kizuna-redis-data:
+    driver: local
+  kizuna-upload-data:
     driver: local

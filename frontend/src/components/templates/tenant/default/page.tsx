@@ -7,12 +7,45 @@ import Footer from './Footer';
 import Header from './Header';
 import MVSection from './MVSection';
 
+interface Cast {
+  id: string;
+  name: string;
+  photo_url?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+}
+
+async function fetchCasts(tenantId: string): Promise<Cast[]> {
+  try {
+    const backendUrl =
+      process.env.TENANT_VALIDATION_API_URL?.replace('/central/tenant', '') ||
+      'http://backend:8080';
+    const response = await fetch(`${backendUrl}/tenant/girls/public`, {
+      headers: {
+        'X-Role': 'tenant',
+        'X-Tenant-ID': tenantId,
+      },
+      next: { revalidate: 60 },
+    });
+    if (!response.ok) return [];
+    return await response.json();
+  } catch {
+    return [];
+  }
+}
+
 export default async function Page() {
   const cookieStore = await cookies();
   const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantId = cookieStore.get('x-mw-tenant-id')?.value || '';
 
-  // TODO: Fetch site config from API when backend is ready
-  // For now, using static placeholder content
+  // キャストデータを取得
+  const casts = tenantId ? await fetchCasts(tenantId) : [];
+
+  // TODO: サイト設定をAPIから取得（バックエンド準備完了後）
   const siteConfig = {
     logo_url: undefined,
     banner_url: undefined,
@@ -36,7 +69,7 @@ export default async function Page() {
 
         <MVSection mvUrl={siteConfig.mv_url} mvType={siteConfig.mv_type} />
 
-        <CastSection />
+        <CastSection casts={casts} />
 
         <Advertisement />
       </main>

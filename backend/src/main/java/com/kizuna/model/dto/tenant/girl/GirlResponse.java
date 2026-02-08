@@ -1,5 +1,6 @@
 package com.kizuna.model.dto.tenant.girl;
 
+import java.time.OffsetDateTime;
 import lombok.Builder;
 import lombok.Data;
 
@@ -9,4 +10,14 @@ public class GirlResponse {
   private String id;
   private String name;
   private String status;
+  private String photoUrl;
+  private String introduction;
+  private Integer age;
+  private Integer height;
+  private Integer bust;
+  private Integer waist;
+  private Integer hip;
+  private Integer displayOrder;
+  private OffsetDateTime createdAt;
+  private OffsetDateTime updatedAt;
 }

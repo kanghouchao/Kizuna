@@ -3,6 +3,7 @@ package com.kizuna.service.tenant;
 import com.kizuna.model.dto.tenant.girl.GirlCreateRequest;
 import com.kizuna.model.dto.tenant.girl.GirlResponse;
 import com.kizuna.model.dto.tenant.girl.GirlUpdateRequest;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -16,4 +17,6 @@ public interface GirlService {
   GirlResponse update(String id, GirlUpdateRequest request);
 
   void delete(String id);
+
+  List<GirlResponse> listActive();
 }

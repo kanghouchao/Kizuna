@@ -26,3 +26,6 @@ databaseChangeLog:
   - include:
       file: changes/009-create-tenant-site-config.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/010-alter-girls-add-fields.yaml
+      relativeToChangelogFile: true

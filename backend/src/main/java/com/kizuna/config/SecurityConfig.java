@@ -31,6 +31,7 @@ public class SecurityConfig {
     PathPatternRequestMatcher.withDefaults().matcher("/central/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/tenant/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/tenant/register"),
+    PathPatternRequestMatcher.withDefaults().matcher("/tenant/files/upload"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
       return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");

@@ -133,3 +133,55 @@ export interface TenantConfigUpdateRequest {
   sns_links?: SnsLink[];
   partner_links?: PartnerLink[];
 }
+
+// ファイルアップロードレスポンス
+export interface FileUploadResponse {
+  url: string;
+  original_name: string;
+  size: number;
+}
+
+// キャスト（Girl）レスポンス
+export interface GirlResponse {
+  id: string;
+  name: string;
+  status: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// キャスト作成リクエスト
+export interface GirlCreateRequest {
+  name: string;
+  status?: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+}
+
+// キャスト更新リクエスト
+export interface GirlUpdateRequest {
+  name?: string;
+  status?: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+}

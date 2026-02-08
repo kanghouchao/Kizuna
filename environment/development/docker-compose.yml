@@ -85,6 +85,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
+    volumes:
+      - upload-data:/data/uploads
     restart: on-failure:3
 
   # Frontend: next.js
@@ -119,4 +121,6 @@ volumes:
   db-data:
     driver: local
   redis-data:
+    driver: local
+  upload-data:
     driver: local

@@ -1,9 +1,14 @@
-// Mock dependencies BEFORE importing middleware
-jest.mock('./lib/middleware/tenantResolver', () => ({
+import { proxy } from './proxy';
+import { resolveTenant } from './lib/proxy/tenantResolver';
+import { handleRouteProtection } from './lib/proxy/routeGuard';
+import { NextRequest } from 'next/server';
+
+// Mock dependencies BEFORE importing proxy
+jest.mock('./lib/proxy/tenantResolver', () => ({
   resolveTenant: jest.fn(),
 }));
 
-jest.mock('./lib/middleware/routeGuard', () => ({
+jest.mock('./lib/proxy/routeGuard', () => ({
   handleRouteProtection: jest.fn(),
 }));
 
@@ -32,12 +37,7 @@ jest.mock('next/server', () => {
   };
 });
 
-import { middleware } from './middleware';
-import { resolveTenant } from './lib/middleware/tenantResolver';
-import { handleRouteProtection } from './lib/middleware/routeGuard';
-import { NextRequest } from 'next/server';
-
-describe('middleware integration', () => {
+describe('proxy integration', () => {
   const mockResolveTenant = resolveTenant as jest.Mock;
   const mockHandleRouteProtection = handleRouteProtection as jest.Mock;
 
@@ -59,7 +59,7 @@ describe('middleware integration', () => {
     mockHandleRouteProtection.mockReturnValue(redirectResponse);
 
     const req = createRequest();
-    const res = await middleware(req);
+    const res = await proxy(req);
 
     expect(mockResolveTenant).toHaveBeenCalledWith(req);
     expect(mockHandleRouteProtection).toHaveBeenCalledWith(req, 'central');
@@ -79,7 +79,7 @@ describe('middleware integration', () => {
     mockHandleRouteProtection.mockReturnValue(null);
 
     const req = createRequest();
-    const res = (await middleware(req)) as any;
+    const res = (await proxy(req)) as any;
 
     expect(res.status).toBe(200);
     expect(res.cookies.get('x-mw-role').value).toBe('tenant');

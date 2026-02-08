@@ -1,0 +1,44 @@
+databaseChangeLog:
+  - changeSet:
+      id: tenant-010-alter-girls-add-fields
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_girls
+            columns:
+              - column:
+                  name: photo_url
+                  type: VARCHAR(500)
+                  remarks: 写真URL
+              - column:
+                  name: introduction
+                  type: TEXT
+                  remarks: 自己紹介
+              - column:
+                  name: age
+                  type: INTEGER
+                  remarks: 年齢
+              - column:
+                  name: height
+                  type: INTEGER
+                  remarks: 身長(cm)
+              - column:
+                  name: bust
+                  type: INTEGER
+                  remarks: バスト(cm)
+              - column:
+                  name: waist
+                  type: INTEGER
+                  remarks: ウエスト(cm)
+              - column:
+                  name: hip
+                  type: INTEGER
+                  remarks: ヒップ(cm)
+              - column:
+                  name: display_order
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: 表示順
