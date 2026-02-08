@@ -9,8 +9,6 @@ import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigUpdateRequest;
 import com.kizuna.model.entity.tenant.TenantConfig;
 import com.kizuna.repository.tenant.TenantConfigRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +23,6 @@ public class TenantConfigServiceImpl implements TenantConfigService {
   @Override
   @TenantScoped
   @Transactional(readOnly = true)
-  @Cacheable(value = "tenantConfig", key = "#root.target.tenantContext.tenantId")
   public TenantConfigResponse get() {
     Long tenantId = tenantContext.getTenantId();
     TenantConfig config =
@@ -38,7 +35,6 @@ public class TenantConfigServiceImpl implements TenantConfigService {
   @Override
   @TenantScoped
   @Transactional
-  @CacheEvict(value = "tenantConfig", key = "#root.target.tenantContext.tenantId")
   public TenantConfigResponse update(TenantConfigUpdateRequest request) {
     Long tenantId = tenantContext.getTenantId();
     TenantConfig config =
