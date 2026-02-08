@@ -60,7 +60,7 @@ export default async function Page() {
     <div className="min-h-screen flex flex-col">
       <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
 
-      <main className="flex-grow">
+      <main className="grow">
         <Banner
           tenantName={tenantName}
           bannerUrl={siteConfig.banner_url}
