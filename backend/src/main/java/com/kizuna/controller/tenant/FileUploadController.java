@@ -3,9 +3,9 @@ package com.kizuna.controller.tenant;
 import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.tenant.file.FileUploadResponse;
 import com.kizuna.service.storage.FileStorageService;
+import jakarta.annotation.security.RolesAllowed;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,7 +21,7 @@ public class FileUploadController {
   private final TenantContext tenantContext;
 
   @PostMapping("/upload")
-  @PreAuthorize("isAuthenticated()")
+  @RolesAllowed("ADMIN")
   public ResponseEntity<FileUploadResponse> upload(
       @RequestParam("file") MultipartFile file,
       @RequestParam(value = "directory", defaultValue = "general") String directory) {

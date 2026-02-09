@@ -115,6 +115,8 @@ class OrderServiceImplTest {
     OrderCreateRequest req = new OrderCreateRequest();
     req.setPhoneNumber("09012345678");
     req.setCustomerName("New Guy");
+    req.setCastId("g1");
+    req.setReceptionistId("r1");
 
     Customer newCustomer = new Customer();
     newCustomer.setPhoneNumber("09012345678");
@@ -124,6 +126,8 @@ class OrderServiceImplTest {
     when(orderMapper.toEntity(req)).thenReturn(new Order());
     when(customerRepository.findByPhoneNumberAndTenantId("09012345678", 1L))
         .thenReturn(Optional.empty());
+    when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
+    when(tenantUserRepository.findById("r1")).thenReturn(Optional.of(new TenantUser()));
 
     when(customerMapper.toCustomer(req)).thenReturn(newCustomer);
 
@@ -164,9 +168,11 @@ class OrderServiceImplTest {
     Order existing = new Order();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(castRepository.findById("none")).thenReturn(Optional.empty());
+    when(tenantUserRepository.findById("r2")).thenReturn(Optional.of(new TenantUser()));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("none");
+    req.setReceptionistId("r2");
 
     assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
   }
@@ -182,6 +188,7 @@ class OrderServiceImplTest {
   void createThrowsWhenCastNotFound() {
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCastId("g_none");
+    req.setReceptionistId("r1");
 
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
@@ -197,10 +204,12 @@ class OrderServiceImplTest {
   void createThrowsWhenReceptionistNotFound() {
     OrderCreateRequest req = new OrderCreateRequest();
     req.setReceptionistId("r_none");
+    req.setCastId("g1");
 
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(new Order());
+    when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
     when(tenantUserRepository.findById("r_none")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.create(req))

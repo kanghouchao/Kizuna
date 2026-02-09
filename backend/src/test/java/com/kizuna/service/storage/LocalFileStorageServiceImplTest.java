@@ -86,7 +86,7 @@ class LocalFileStorageServiceImplTest {
 
   @Test
   void delete_removesFileSuccessfully() throws IOException {
-    // Create test file
+    // テスト用ファイルの作成
     Path dir = tempDir.resolve("1/photos");
     Files.createDirectories(dir);
     Path file = dir.resolve("test.jpg");

@@ -1,6 +1,6 @@
 databaseChangeLog:
     - changeSet:
-          id: tenant-006-create-orders
+          id: tenant-004-create-orders
           author: kanghouchao
           preConditions:
               - dbms:

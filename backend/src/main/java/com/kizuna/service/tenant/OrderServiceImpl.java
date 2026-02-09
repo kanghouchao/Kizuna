@@ -55,32 +55,28 @@ public class OrderServiceImpl implements OrderService {
   @TenantScoped
   @Transactional
   public OrderResponse create(OrderCreateRequest request) {
-    // Use MapStruct for basic field mapping
+    // MapStructを使用して基本的なフィールドをマッピング
     Order order = orderMapper.toEntity(request);
 
-    // Set Tenant
+    // テナントの設定
     order.setTenant(
         tenantRepository
             .findById(tenantContext.getTenantId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
 
-    // Handle complex association logic (Customer smart linking)
+    // 複雑な関連ロジックの処理（顧客のスマートリンク）
     handleCustomerLinking(request, order);
 
-    // Handle other ID associations
-    if (request.getCastId() != null && !request.getCastId().isEmpty()) {
-      order.setCast(
-          castRepository
-              .findById(request.getCastId())
-              .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
-    }
-    if (request.getReceptionistId() != null && !request.getReceptionistId().isEmpty()) {
-      order.setReceptionist(
-          tenantUserRepository
-              .findById(request.getReceptionistId())
-              .orElseThrow(
-                  () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
-    }
+    // その他のID関連の処理
+    order.setCast(
+        castRepository
+            .findById(request.getCastId())
+            .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
+    order.setReceptionist(
+        tenantUserRepository
+            .findById(request.getReceptionistId())
+            .orElseThrow(
+                () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
 
     return orderMapper.toResponse(orderRepository.save(order));
   }
@@ -92,23 +88,19 @@ public class OrderServiceImpl implements OrderService {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
 
-    // Use MapStruct for automatic non-null field updates
+    // MapStructを使用して非nullフィールドを自動更新
     orderMapper.updateEntityFromRequest(request, order);
 
-    // Handle association ID updates (MapStruct cannot do DB lookups)
-    if (request.getReceptionistId() != null) {
-      order.setReceptionist(
-          tenantUserRepository
-              .findById(request.getReceptionistId())
-              .orElseThrow(
-                  () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
-    }
-    if (request.getCastId() != null) {
-      order.setCast(
-          castRepository
-              .findById(request.getCastId())
-              .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
-    }
+    // 関連IDの更新処理（MapStructではDB検索ができないため手動で実施）
+    order.setReceptionist(
+        tenantUserRepository
+            .findById(request.getReceptionistId())
+            .orElseThrow(
+                () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
+    order.setCast(
+        castRepository
+            .findById(request.getCastId())
+            .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
 
     return orderMapper.toResponse(orderRepository.save(order));
   }
@@ -130,14 +122,14 @@ public class OrderServiceImpl implements OrderService {
               .findById(req.getCustomerId())
               .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + req.getCustomerId())));
     } else if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
-      // Find or Create Customer
+      // 顧客の検索または作成
       Customer customer =
           customerRepository
               .findByPhoneNumberAndTenantId(req.getPhoneNumber(), tenantContext.getTenantId())
               .orElseGet(
                   () -> {
                     Customer newCustomer = customerMapper.toCustomer(req);
-                    // Set Tenant Explicitly
+                    // テナントを明示的に設定
                     newCustomer.setTenant(
                         tenantRepository
                             .findById(tenantContext.getTenantId())

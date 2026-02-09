@@ -110,9 +110,9 @@ class CastServiceImplTest {
     CastUpdateRequest req = new CastUpdateRequest();
     req.setName("G_Updated");
 
-    // Mock mapper doing nothing or simulating update
-    // castMapper.updateEntityFromRequest is void, so we don't need to mock return
-    // But we should verify it was called or assume it works as it is mocked
+    // マッパーのモック：何もしないか更新をシミュレート
+    // castMapper.updateEntityFromRequest は void なので、戻り値をモックする必要はない
+    // 呼び出されたことを検証することで動作を確認する
 
     CastResponse resp = new CastResponse();
     resp.setName("G_Updated");

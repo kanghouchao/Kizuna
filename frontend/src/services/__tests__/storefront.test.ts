@@ -1,7 +1,7 @@
 import { storefrontService } from '../storefront';
 import { serverClient } from '@/lib/server-client';
 
-// Mock serverClient
+// serverClientのモック
 jest.mock('@/lib/server-client', () => ({
   serverClient: {
     get: jest.fn(),
@@ -65,8 +65,8 @@ describe('storefrontService', () => {
       const mockConfig = { mv_type: 'image' };
 
       (serverClient.get as jest.Mock)
-        .mockResolvedValueOnce(mockCasts) // First call: casts
-        .mockResolvedValueOnce(mockConfig); // Second call: config
+        .mockResolvedValueOnce(mockCasts) // 1回目の呼び出し: キャスト
+        .mockResolvedValueOnce(mockConfig); // 2回目の呼び出し: 設定
 
       const result = await storefrontService.getPageData();
 

@@ -1,6 +1,6 @@
 import { serverClient } from '../server-client';
 
-// Mock cookies
+// クッキーのモック
 const mockCookieStore = {
   get: jest.fn(),
 };
@@ -8,7 +8,7 @@ jest.mock('next/headers', () => ({
   cookies: jest.fn(() => Promise.resolve(mockCookieStore)),
 }));
 
-// Mock fetch
+// fetchのモック
 global.fetch = jest.fn();
 
 describe('serverClient', () => {
