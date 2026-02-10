@@ -1,4 +1,4 @@
-package com.kizuna.model.dto.tenant.file;
+package com.kizuna.model.dto.file;
 
 import lombok.Builder;
 import lombok.Data;

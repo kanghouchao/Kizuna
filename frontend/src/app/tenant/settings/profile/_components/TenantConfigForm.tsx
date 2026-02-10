@@ -118,7 +118,7 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
                 <ImageUpload
                   value={value}
                   onChange={onChange}
-                  directory="config"
+                  bucket="public"
                   className="w-32 h-32" // Square
                 />
               )}
@@ -137,7 +137,7 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
               <ImageUpload
                 value={value}
                 onChange={onChange}
-                directory="config"
+                bucket="public"
                 className="w-full h-40 max-w-2xl" // Wide rectangle
               />
             )}
@@ -169,7 +169,7 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
               <ImageUpload
                 value={value}
                 onChange={onChange}
-                directory="config"
+                bucket="public"
                 className="w-full h-64" // Taller wide rectangle
               />
             )}
@@ -303,7 +303,7 @@ export function TenantConfigForm({ initialData, onSubmit, isSubmitting }: Tenant
                           <ImageUpload
                             value={value}
                             onChange={onChange}
-                            directory="partners"
+                            bucket="public"
                             className="w-full h-10 border-gray-200"
                           />
                         )}

@@ -42,16 +42,16 @@ class LocalFileStorageServiceImplTest {
   }
 
   @Test
-  void store_savesFileSuccessfully() throws IOException {
+  void store_savesFileWithTenantPrefix() throws IOException {
     byte[] content = "test content".getBytes();
     when(multipartFile.getSize()).thenReturn((long) content.length);
     when(multipartFile.getContentType()).thenReturn("image/jpeg");
     when(multipartFile.getOriginalFilename()).thenReturn("test.jpg");
     when(multipartFile.getInputStream()).thenReturn(new ByteArrayInputStream(content));
 
-    String result = storageService.store(1L, "photos", multipartFile);
+    String result = storageService.store("1", "photos", multipartFile);
 
-    assertThat(result).startsWith("1/photos/");
+    assertThat(result).startsWith("photos/1/");
     assertThat(result).endsWith(".jpg");
     Path savedFile = tempDir.resolve(result);
     assertThat(Files.exists(savedFile)).isTrue();
@@ -59,10 +59,41 @@ class LocalFileStorageServiceImplTest {
   }
 
   @Test
-  void store_throwsErrorOnInvalidDirectoryName() {
-    assertThatThrownBy(() -> storageService.store(1L, "../../../etc", multipartFile))
+  void store_savesFileWithCentralPrefix() throws IOException {
+    byte[] content = "central content".getBytes();
+    when(multipartFile.getSize()).thenReturn((long) content.length);
+    when(multipartFile.getContentType()).thenReturn("image/png");
+    when(multipartFile.getOriginalFilename()).thenReturn("logo.png");
+    when(multipartFile.getInputStream()).thenReturn(new ByteArrayInputStream(content));
+
+    String result = storageService.store("central", "logos", multipartFile);
+
+    assertThat(result).startsWith("logos/central/");
+    assertThat(result).endsWith(".png");
+    Path savedFile = tempDir.resolve(result);
+    assertThat(Files.exists(savedFile)).isTrue();
+    assertThat(Files.readAllBytes(savedFile)).isEqualTo(content);
+  }
+
+  @Test
+  void store_throwsErrorOnInvalidPrefix() {
+    assertThatThrownBy(() -> storageService.store("../../../etc", "photos", multipartFile))
         .isInstanceOf(ServiceException.class)
-        .hasMessage("不正なディレクトリ名です");
+        .hasMessage("不正なプレフィックスです");
+  }
+
+  @Test
+  void store_throwsErrorOnNullPrefix() {
+    assertThatThrownBy(() -> storageService.store(null, "photos", multipartFile))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("不正なプレフィックスです");
+  }
+
+  @Test
+  void store_throwsErrorOnInvalidBucketName() {
+    assertThatThrownBy(() -> storageService.store("1", "../../../etc", multipartFile))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("不正なバケット名です");
   }
 
   @Test
@@ -70,7 +101,7 @@ class LocalFileStorageServiceImplTest {
     when(multipartFile.getSize()).thenReturn(100L);
     when(multipartFile.getContentType()).thenReturn("application/pdf");
 
-    assertThatThrownBy(() -> storageService.store(1L, "docs", multipartFile))
+    assertThatThrownBy(() -> storageService.store("1", "docs", multipartFile))
         .isInstanceOf(ServiceException.class)
         .hasMessage("許可されていないファイル形式です");
   }
@@ -79,29 +110,8 @@ class LocalFileStorageServiceImplTest {
   void store_throwsErrorOnFileSizeExceeded() {
     when(multipartFile.getSize()).thenReturn(20_000_000L);
 
-    assertThatThrownBy(() -> storageService.store(1L, "photos", multipartFile))
+    assertThatThrownBy(() -> storageService.store("1", "photos", multipartFile))
         .isInstanceOf(ServiceException.class)
         .hasMessage("ファイルサイズが上限を超えています");
-  }
-
-  @Test
-  void delete_removesFileSuccessfully() throws IOException {
-    // テスト用ファイルの作成
-    Path dir = tempDir.resolve("1/photos");
-    Files.createDirectories(dir);
-    Path file = dir.resolve("test.jpg");
-    Files.write(file, "content".getBytes());
-    assertThat(Files.exists(file)).isTrue();
-
-    storageService.delete("1/photos/test.jpg");
-
-    assertThat(Files.exists(file)).isFalse();
-  }
-
-  @Test
-  void delete_throwsErrorOnInvalidPath() {
-    assertThatThrownBy(() -> storageService.delete("../../../etc/passwd"))
-        .isInstanceOf(ServiceException.class)
-        .hasMessage("不正なファイルパスです");
   }
 }

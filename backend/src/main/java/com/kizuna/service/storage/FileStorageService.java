@@ -6,8 +6,5 @@ import org.springframework.web.multipart.MultipartFile;
 public interface FileStorageService {
 
   /** ファイルを保存し、相対パスを返す */
-  String store(Long tenantId, String directory, MultipartFile file);
-
-  /** ファイルを削除する */
-  void delete(String filePath);
+  String store(String prefix, String bucket, MultipartFile file);
 }

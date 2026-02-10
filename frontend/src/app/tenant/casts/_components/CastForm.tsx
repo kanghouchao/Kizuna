@@ -64,7 +64,7 @@ export function CastForm({ initialData, onSubmit, isSubmitting }: CastFormProps)
             <ImageUpload
               value={photoUrl}
               onChange={url => setValue('photo_url', url)}
-              directory="casts"
+              bucket="public"
             />
           </div>
           <div className="flex-1 space-y-4">

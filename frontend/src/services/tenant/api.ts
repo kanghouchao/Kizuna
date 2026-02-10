@@ -7,7 +7,6 @@ import {
   MenuVO,
   TenantConfigResponse,
   TenantConfigUpdateRequest,
-  FileUploadResponse,
   CastResponse,
   CastCreateRequest,
   CastUpdateRequest,
@@ -59,18 +58,6 @@ export const tenantConfigApi = {
   },
   update: async (data: TenantConfigUpdateRequest): Promise<TenantConfigResponse> => {
     const response = await apiClient.put('/tenant/config', data);
-    return response.data;
-  },
-};
-
-export const fileApi = {
-  /** ファイルをアップロードする */
-  upload: async (file: File, directory: string = 'general'): Promise<FileUploadResponse> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('directory', directory);
-    // axiosが自動的に境界を設定するため、Content-Typeヘッダーは手動で設定しない
-    const response = await apiClient.post('/tenant/files/upload', formData);
     return response.data;
   },
 };

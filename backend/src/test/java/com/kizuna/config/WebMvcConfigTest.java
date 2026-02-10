@@ -24,6 +24,6 @@ class WebMvcConfigTest {
     config.addInterceptors(registry);
 
     verify(registry).addInterceptor(interceptor);
-    verify(registration).addPathPatterns("/tenant/**");
+    verify(registration).addPathPatterns("/tenant/**", "/files/**");
   }
 }

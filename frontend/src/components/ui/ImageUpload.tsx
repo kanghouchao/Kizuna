@@ -3,26 +3,26 @@
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { fileApi } from '@/services/tenant/api';
+import { fileApi } from '@/services/file';
 import { toast } from 'react-hot-toast';
 
 interface ImageUploadProps {
-  /** 現在の画像URL */
   value?: string;
-  /** 画像URL変更時のコールバック */
   onChange: (url: string) => void;
-  /** アップロード先ディレクトリ */
-  directory?: string;
-  /** コンテナのクラス名 (サイズ調整用) */
+  bucket?: string;
   className?: string;
+  required?: boolean;
+  accept?: string;
 }
 
 /** 画像アップロードコンポーネント */
 export default function ImageUpload({
   value,
   onChange,
-  directory = 'casts',
+  bucket = 'public',
+  required = false,
   className = 'w-40 h-52',
+  accept = 'image/jpeg,image/png,image/webp',
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | undefined>(value);
@@ -40,7 +40,7 @@ export default function ImageUpload({
 
     try {
       setIsUploading(true);
-      const response = await fileApi.upload(file, directory);
+      const response = await fileApi.upload(file, bucket);
       onChange(response.url);
       toast.success('画像をアップロードしました');
     } catch {
@@ -58,7 +58,6 @@ export default function ImageUpload({
     if (inputRef.current) inputRef.current.value = '';
   };
 
-  // data: URI（ローカルプレビュー）はそのまま使用し、APIパスの場合は /api プレフィックスを付与
   const displayUrl = preview;
 
   return (
@@ -96,9 +95,10 @@ export default function ImageUpload({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp"
+        accept={accept}
         onChange={handleFileChange}
         className="hidden"
+        required={required}
       />
     </div>
   );

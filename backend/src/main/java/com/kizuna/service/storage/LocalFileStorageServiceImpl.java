@@ -20,13 +20,18 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
   private final AppProperties appProperties;
 
   @Override
-  public String store(Long tenantId, String directory, MultipartFile file) {
+  public String store(String prefix, String bucket, MultipartFile file) {
     AppProperties.Upload upload = appProperties.getUpload();
 
-    // 1. ディレクトリ名のバリデーション (パストラバーサル防止)
+    // 1. プレフィックスのバリデーション (パストラバーサル防止)
+    if (prefix == null || !prefix.matches("^[a-zA-Z0-9_-]+$")) {
+      throw new ServiceException("不正なプレフィックスです");
+    }
+
+    // バケット名のバリデーション (パストラバーサル防止)
     // 英数字、ハイフン、アンダースコアのみを許可
-    if (directory == null || !directory.matches("^[a-zA-Z0-9_-]+$")) {
-      throw new ServiceException("不正なディレクトリ名です");
+    if (bucket == null || !bucket.matches("^[a-zA-Z0-9_-]+$")) {
+      throw new ServiceException("不正なバケット名です");
     }
 
     // ファイルサイズのバリデーション
@@ -49,7 +54,7 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
 
     // UUIDでファイル名を生成
     String filename = UUID.randomUUID() + extension;
-    String relativePath = tenantId + "/" + directory + "/" + filename;
+    String relativePath = bucket + "/" + prefix + "/" + filename;
 
     // 2. パスの正規化とベースディレクトリ内であることの確認
     Path basePath = Paths.get(upload.getBasePath()).toAbsolutePath().normalize();
@@ -68,22 +73,5 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
     }
 
     return relativePath;
-  }
-
-  @Override
-  public void delete(String filePath) {
-    Path basePath = Paths.get(appProperties.getUpload().getBasePath()).toAbsolutePath().normalize();
-    Path path = basePath.resolve(filePath).toAbsolutePath().normalize();
-
-    // パストラバーサルチェック
-    if (!path.startsWith(basePath)) {
-      throw new ServiceException("不正なファイルパスです");
-    }
-
-    try {
-      Files.deleteIfExists(path);
-    } catch (IOException e) {
-      throw new ServiceException("ファイルの削除に失敗しました");
-    }
   }
 }

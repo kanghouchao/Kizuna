@@ -33,6 +33,7 @@ public class AppProperties {
   @Setter
   public static class Upload {
     private String basePath = "/data/uploads";
+    private String urlPrefix = "/static/";
     private long maxFileSize = 10485760;
     private List<String> allowedTypes =
         List.of("image/jpeg", "image/png", "image/gif", "image/webp");
