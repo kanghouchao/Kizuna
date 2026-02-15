@@ -1,0 +1,459 @@
+/* ===============================================
+   認証ページ — Midnight Atelier テーマ
+   KIZUNA プラットフォーム
+   =============================================== */
+
+/* ========== キーフレーム定義 ========== */
+
+@keyframes auth-pulse {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes auth-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes auth-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes auth-rotate-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes auth-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* ========== ブランドパネル ========== */
+
+.auth-panel {
+  background: linear-gradient(160deg, #080810 0%, #10102a 35%, #1a1045 65%, #12102a 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* グレインテクスチャオーバーレイ */
+.auth-panel::after {
+  content: '';
+  position: absolute;
+  inset: -100%;
+  width: 300%;
+  height: 300%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 光彩エフェクト */
+.auth-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.auth-glow--1 {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.2) 0%, transparent 70%);
+  top: 5%;
+  left: -10%;
+  animation: auth-pulse 7s ease-in-out infinite;
+}
+
+.auth-glow--2 {
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, transparent 70%);
+  bottom: 15%;
+  right: -8%;
+  animation: auth-pulse 9s ease-in-out infinite 3s;
+}
+
+.auth-glow--3 {
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.12) 0%, transparent 70%);
+  top: 50%;
+  left: 40%;
+  animation: auth-pulse 11s ease-in-out infinite 1.5s;
+}
+
+/* 装飾リング */
+.auth-ring {
+  position: absolute;
+  border: 1px solid rgba(167, 139, 250, 0.06);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.auth-ring--1 {
+  width: 420px;
+  height: 420px;
+  top: -120px;
+  right: -120px;
+  animation: auth-rotate-slow 80s linear infinite;
+}
+
+.auth-ring--2 {
+  width: 280px;
+  height: 280px;
+  bottom: -60px;
+  left: -60px;
+  animation: auth-rotate-slow 55s linear infinite reverse;
+}
+
+/* ブランドコンテンツエリア */
+.auth-brand {
+  position: relative;
+  z-index: 2;
+}
+
+.auth-brand > * {
+  opacity: 0;
+  animation: auth-reveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.auth-brand > *:nth-child(1) {
+  animation-delay: 0.3s;
+}
+.auth-brand > *:nth-child(2) {
+  animation-delay: 0.5s;
+}
+.auth-brand > *:nth-child(3) {
+  animation-delay: 0.7s;
+}
+.auth-brand > *:nth-child(4) {
+  animation-delay: 0.9s;
+}
+.auth-brand > *:nth-child(5) {
+  animation-delay: 1.1s;
+}
+
+/* ブランド名のタイポグラフィ */
+.auth-brand__name {
+  font-family: var(--font-cormorant), 'Georgia', serif;
+  letter-spacing: 0.35em;
+  font-weight: 300;
+}
+
+/* 装飾区切り線（◇付き） */
+.auth-brand__divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  opacity: 0.4;
+}
+
+.auth-brand__divider::before,
+.auth-brand__divider::after {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.6), transparent);
+}
+
+/* 背景ウォーターマーク漢字 */
+.auth-watermark {
+  position: absolute;
+  font-size: 280px;
+  font-weight: 100;
+  color: rgba(167, 139, 250, 0.03);
+  pointer-events: none;
+  z-index: 0;
+  user-select: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+}
+
+/* ========== フォームエリア ========== */
+
+.auth-form-bg {
+  background-color: #faf9f7;
+  position: relative;
+}
+
+/* 紙の質感テクスチャ */
+.auth-form-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.012'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+/* ========== 入力フィールド ========== */
+
+.auth-field {
+  position: relative;
+}
+
+.auth-field__input {
+  width: 100%;
+  padding: 14px 0 10px;
+  font-size: 15px;
+  color: #1a1040;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid #d4d0cc;
+  border-radius: 0;
+  outline: none;
+  transition: border-color 0.35s ease;
+  letter-spacing: 0.01em;
+}
+
+.auth-field__input:focus {
+  border-bottom-color: transparent;
+}
+
+.auth-field__input::placeholder {
+  color: #b8b4af;
+  font-weight: 300;
+}
+
+/* フォーカス時のグラデーションアンダーライン */
+.auth-field__accent {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-field__input:focus ~ .auth-field__accent {
+  width: 100%;
+}
+
+/* ========== ボタン ========== */
+
+.auth-btn {
+  width: 100%;
+  padding: 15px 32px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: #ffffff;
+  background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 50%, #7c3aed 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: auth-shimmer 4s ease-in-out infinite;
+}
+
+.auth-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 30px rgba(76, 29, 149, 0.3),
+    0 2px 8px rgba(124, 58, 237, 0.2);
+}
+
+.auth-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.auth-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========== スタガードアニメーション ========== */
+
+.auth-stagger > * {
+  opacity: 0;
+  animation: auth-reveal 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.auth-stagger > *:nth-child(1) {
+  animation-delay: 0.06s;
+}
+.auth-stagger > *:nth-child(2) {
+  animation-delay: 0.13s;
+}
+.auth-stagger > *:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.auth-stagger > *:nth-child(4) {
+  animation-delay: 0.27s;
+}
+.auth-stagger > *:nth-child(5) {
+  animation-delay: 0.34s;
+}
+.auth-stagger > *:nth-child(6) {
+  animation-delay: 0.41s;
+}
+.auth-stagger > *:nth-child(7) {
+  animation-delay: 0.48s;
+}
+.auth-stagger > *:nth-child(8) {
+  animation-delay: 0.55s;
+}
+
+/* ========== チェックボックス ========== */
+
+.auth-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #d4d0cc;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.auth-check:checked {
+  background: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.auth-check:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.auth-check:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+/* ========== リンク ========== */
+
+.auth-link {
+  color: #7c3aed;
+  text-decoration: none;
+  position: relative;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.auth-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: #7c3aed;
+  transition: width 0.3s ease;
+}
+
+.auth-link:hover {
+  color: #6d28d9;
+}
+
+.auth-link:hover::after {
+  width: 100%;
+}
+
+/* ========== アラート ========== */
+
+.auth-alert {
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.auth-alert--error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+.auth-alert--success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+}
+
+/* ========== ローディングスピナー ========== */
+
+.auth-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: auth-rotate-slow 0.6s linear infinite;
+}
+
+/* ========== モバイルブランドバー ========== */
+
+.auth-mobile-brand {
+  animation: auth-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+/* ========== フッター ========== */
+
+.auth-footer {
+  color: #b8b4af;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
