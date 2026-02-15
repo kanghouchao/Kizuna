@@ -98,6 +98,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - **TDD**: テストを先に書いてから実装する（Test-Driven Development）
 - **簡潔なコード**: 冗長なコードを避け、シンプルで読みやすいコードを書く
 - **カバレッジ**: 70% 必須（CI で強制）
+- **Backend単体テスト方針**: 単体テストは業務ロジック（Service / UseCase / Controller の振る舞い）を優先し、設定・定型変換・インフラ薄層の網羅を目的にしない
 - **コミット前チェック**: 必ず `make lint && make test` を実行してからコミット
 
 ### Backend (Java)
@@ -125,6 +126,8 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
   }
   ```
 - **フォーマット**: Spotless + Google Java Format
+- **カバレッジ算出除外**: JaCoCo では `config` / `model` / `repository` / `mapper` / `exception` を除外し、業務実装の検証に集中する
+- **例外ルール**: 上記パッケージに明確な業務分岐・検証ロジックが存在する場合は、除外前提にせず個別にテスト追加可否を判断する
 - **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML）
 - **設定値**: `AppProperties` から取得（ハードコード禁止）
 - **ログ**: `req=<id> tenant=<id>` 形式を維持
