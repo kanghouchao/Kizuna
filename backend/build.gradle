@@ -9,6 +9,14 @@ plugins {
 group = 'com.kizuna'
 version = '0.1.0'
 
+def jacocoCoverageExcludes = [
+    "**/config/**",
+    "**/model/**",
+    "**/repository/**",
+    "**/mapper/**",
+    "**/exception/**"
+]
+
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
@@ -74,7 +82,6 @@ spotless {
     java {
         target 'src/**/*.java'
         googleJavaFormat('1.22.0')
-        targetExclude 'build/generated/**', 'bin/generated-sources/**'
     }
 }
 
@@ -85,17 +92,9 @@ jacocoTestReport {
         html.required = true
     }
     afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect { fileTree(dir: it, exclude: [
-                'build/**',
-                'generated/**',
-                '**/generated/**',
-                '**/external/**',
-                "**/config/**",
-                "**/model/**",
-                "**/repository/**",
-                "**/mapper/**",
-                "**/exception/**"
-        ]) }))
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: jacocoCoverageExcludes)
+        }))
     }
 }
 
@@ -111,17 +110,9 @@ jacocoTestCoverageVerification {
         }
     }
     afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect { fileTree(dir: it, exclude: [
-                'build/**',
-                'generated/**',
-                '**/generated/**',
-                '**/external/**',
-                "**/config/**",
-                "**/model/**",
-                "**/repository/**",
-                "**/mapper/**",
-                "**/exception/**"
-        ]) }))
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: jacocoCoverageExcludes)
+        }))
     }
 }
 
