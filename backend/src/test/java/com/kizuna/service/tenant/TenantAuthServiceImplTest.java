@@ -11,13 +11,19 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.auth.Token;
+import com.kizuna.model.dto.tenant.TenantRegisterRequest;
+import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
 import com.kizuna.utils.JwtUtil;
 import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,6 +43,8 @@ class TenantAuthServiceImplTest {
 
   @InjectMocks private TenantAuthServiceImpl authService;
 
+  @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
+
   @Test
   void login_success_returnsToken() {
     Authentication auth = mock(Authentication.class);
@@ -52,6 +60,10 @@ class TenantAuthServiceImplTest {
 
     Token res = authService.login("user@example.com", "pass");
     assertThat(res.token()).isEqualTo("token123");
+
+    verify(jwtUtil).generateToken(eq("user@example.com"), eq("TenantAuth"), claimsCaptor.capture());
+    assertThat(claimsCaptor.getValue()).containsKey("authorities");
+    assertThat(claimsCaptor.getValue()).containsEntry("tenantId", 1L);
   }
 
   @Test
@@ -63,18 +75,28 @@ class TenantAuthServiceImplTest {
 
   @Test
   void register_createsUser() {
-    com.kizuna.model.dto.tenant.TenantRegisterRequest req =
-        new com.kizuna.model.dto.tenant.TenantRegisterRequest();
+    TenantRegisterRequest req = new TenantRegisterRequest();
     req.setEmail("admin@test.com");
     req.setPassword("pass");
 
-    com.kizuna.model.entity.central.tenant.Tenant tenant =
-        new com.kizuna.model.entity.central.tenant.Tenant();
+    Tenant tenant = new Tenant();
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     when(passwordEncoder.encode("pass")).thenReturn("encoded");
 
     authService.register(1L, req);
 
     verify(userRepository).save(any());
+  }
+
+  @Test
+  void register_throwsWhenTenantNotFound() {
+    TenantRegisterRequest req = new TenantRegisterRequest();
+    req.setEmail("admin@test.com");
+    req.setPassword("pass");
+
+    when(tenantRepository.findById(999L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> authService.register(999L, req))
+        .isInstanceOf(NoSuchElementException.class);
   }
 }

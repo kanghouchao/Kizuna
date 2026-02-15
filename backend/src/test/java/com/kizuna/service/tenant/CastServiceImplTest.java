@@ -1,12 +1,14 @@
 package com.kizuna.service.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.config.interceptor.TenantContext;
+import com.kizuna.exception.ServiceException;
 import com.kizuna.mapper.tenant.CastMapper;
 import com.kizuna.model.dto.tenant.cast.CastCreateRequest;
 import com.kizuna.model.dto.tenant.cast.CastResponse;
@@ -55,6 +57,23 @@ class CastServiceImplTest {
   }
 
   @Test
+  void list_withoutSearch_returnsAll() {
+    Cast g = new Cast();
+    g.setName("All");
+    Page<Cast> page = new PageImpl<>(List.of(g));
+
+    CastResponse resp = new CastResponse();
+    resp.setName("All");
+
+    when(castRepository.findAll(any(PageRequest.class))).thenReturn(page);
+    when(castMapper.toResponse(g)).thenReturn(resp);
+
+    Page<CastResponse> result = castService.list(null, PageRequest.of(0, 10));
+    assertThat(result.getContent()).hasSize(1);
+    assertThat(result.getContent().get(0).getName()).isEqualTo("All");
+  }
+
+  @Test
   void get_returnsResponse() {
     Cast g = new Cast();
     g.setId("g1");
@@ -66,6 +85,15 @@ class CastServiceImplTest {
     when(castMapper.toResponse(g)).thenReturn(resp);
 
     assertThat(castService.get("g1").getId()).isEqualTo("g1");
+  }
+
+  @Test
+  void get_throwsWhenNotFound() {
+    when(castRepository.findById("missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> castService.get("missing"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("キャストが見つかりません");
   }
 
   @Test
@@ -100,6 +128,20 @@ class CastServiceImplTest {
   }
 
   @Test
+  void create_throwsWhenTenantNotFound() {
+    CastCreateRequest req = new CastCreateRequest();
+    req.setName("G1");
+
+    when(castMapper.toEntity(req)).thenReturn(new Cast());
+    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> castService.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("テナントが見つかりません");
+  }
+
+  @Test
   void update_modifiesFields() {
     Cast g = new Cast();
     g.setId("g1");
@@ -109,10 +151,6 @@ class CastServiceImplTest {
 
     CastUpdateRequest req = new CastUpdateRequest();
     req.setName("G_Updated");
-
-    // マッパーのモック：何もしないか更新をシミュレート
-    // castMapper.updateEntityFromRequest は void なので、戻り値をモックする必要はない
-    // 呼び出されたことを検証することで動作を確認する
 
     CastResponse resp = new CastResponse();
     resp.setName("G_Updated");
@@ -124,10 +162,28 @@ class CastServiceImplTest {
   }
 
   @Test
+  void update_throwsWhenNotFound() {
+    when(castRepository.findById("missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> castService.update("missing", new CastUpdateRequest()))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("キャストが見つかりません");
+  }
+
+  @Test
   void delete_removes() {
     when(castRepository.existsById("g1")).thenReturn(true);
     castService.delete("g1");
     verify(castRepository).deleteById("g1");
+  }
+
+  @Test
+  void delete_throwsWhenNotFound() {
+    when(castRepository.existsById("missing")).thenReturn(false);
+
+    assertThatThrownBy(() -> castService.delete("missing"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("キャストが見つかりません");
   }
 
   @Test

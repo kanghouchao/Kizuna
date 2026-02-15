@@ -9,6 +9,7 @@ import com.kizuna.model.dto.menu.MenuVO;
 import com.kizuna.model.entity.tenant.menu.TenantMenu;
 import com.kizuna.repository.tenant.menu.TenantMenuRepository;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,6 +31,11 @@ class TenantMenuServiceImplTest {
 
   @InjectMocks private TenantMenuServiceImpl menuService;
 
+  @AfterEach
+  void tearDown() {
+    SecurityContextHolder.clearContext();
+  }
+
   @Test
   void getMyMenus_filtersByPermission() {
     SecurityContextHolder.setContext(securityContext);
@@ -43,12 +49,12 @@ class TenantMenuServiceImplTest {
 
     TenantMenu m1 = new TenantMenu();
     m1.setLabel("Orders");
-    m1.setPermission("ORDER_READ"); // Checked as PERM_ORDER_READ
+    m1.setPermission("ORDER_READ"); // PERM_ORDER_READ として評価される
     m1.setChildren(List.of());
 
     TenantMenu m2 = new TenantMenu();
     m2.setLabel("Config");
-    m2.setPermission("ADMIN_ONLY"); // Missing
+    m2.setPermission("ADMIN_ONLY"); // 権限に存在しない
     m2.setChildren(List.of());
 
     when(menuRepository.findByTenantIdAndParentIsNullOrderBySortOrderAsc(1L))
@@ -58,5 +64,14 @@ class TenantMenuServiceImplTest {
 
     assertThat(result).hasSize(1);
     assertThat(result.get(0).getName()).isEqualTo("Orders");
+  }
+
+  @Test
+  void getMyMenus_returnsEmptyWhenTenantIdMissing() {
+    when(tenantContext.getTenantId()).thenReturn(null);
+
+    List<MenuVO> result = menuService.getMyMenus();
+
+    assertThat(result).isEmpty();
   }
 }

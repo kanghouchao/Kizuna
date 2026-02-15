@@ -8,6 +8,7 @@ import com.kizuna.model.dto.menu.MenuVO;
 import com.kizuna.model.entity.central.menu.CentralMenu;
 import com.kizuna.repository.central.menu.CentralMenuRepository;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +29,11 @@ class CentralMenuServiceImplTest {
 
   @InjectMocks private CentralMenuServiceImpl menuService;
 
+  @AfterEach
+  void tearDown() {
+    SecurityContextHolder.clearContext();
+  }
+
   @Test
   void getMyMenus_filtersByPermission() {
     SecurityContextHolder.setContext(securityContext);
@@ -40,12 +46,12 @@ class CentralMenuServiceImplTest {
 
     CentralMenu m1 = new CentralMenu();
     m1.setLabel("Users");
-    m1.setPermission("USER_READ"); // Will be checked as PERM_USER_READ
+    m1.setPermission("USER_READ"); // PERM_USER_READ として評価される
     m1.setChildren(List.of());
 
     CentralMenu m2 = new CentralMenu();
     m2.setLabel("Secret");
-    m2.setPermission("SECRET_READ"); // Missing in authorities
+    m2.setPermission("SECRET_READ"); // 権限に存在しない
     m2.setChildren(List.of());
 
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(m1, m2));
@@ -71,5 +77,15 @@ class CentralMenuServiceImplTest {
 
     List<MenuVO> result = menuService.getMyMenus();
     assertThat(result).hasSize(1);
+  }
+
+  @Test
+  void getMyMenus_returnsEmptyWhenAuthenticationMissing() {
+    SecurityContextHolder.clearContext();
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of());
+
+    List<MenuVO> result = menuService.getMyMenus();
+
+    assertThat(result).isEmpty();
   }
 }

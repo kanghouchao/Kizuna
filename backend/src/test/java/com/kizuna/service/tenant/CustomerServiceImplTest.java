@@ -1,12 +1,14 @@
 package com.kizuna.service.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.config.interceptor.TenantContext;
+import com.kizuna.exception.ServiceException;
 import com.kizuna.mapper.tenant.CustomerMapper;
 import com.kizuna.model.dto.tenant.customer.CustomerCreateRequest;
 import com.kizuna.model.dto.tenant.customer.CustomerResponse;
@@ -55,6 +57,23 @@ class CustomerServiceImplTest {
   }
 
   @Test
+  void list_withoutSearch_returnsAll() {
+    Customer c = new Customer();
+    c.setName("All");
+    Page<Customer> page = new PageImpl<>(List.of(c));
+
+    CustomerResponse resp = new CustomerResponse();
+    resp.setName("All");
+
+    when(customerRepository.findAll(any(PageRequest.class))).thenReturn(page);
+    when(customerMapper.toResponse(c)).thenReturn(resp);
+
+    Page<CustomerResponse> result = customerService.list(null, PageRequest.of(0, 10));
+    assertThat(result.getContent()).hasSize(1);
+    assertThat(result.getContent().get(0).getName()).isEqualTo("All");
+  }
+
+  @Test
   void get_returnsResponse() {
     Customer c = new Customer();
     c.setId("c1");
@@ -66,6 +85,15 @@ class CustomerServiceImplTest {
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
     assertThat(customerService.get("c1").getId()).isEqualTo("c1");
+  }
+
+  @Test
+  void get_throwsWhenNotFound() {
+    when(customerRepository.findById("missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> customerService.get("missing"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("顧客が見つかりません");
   }
 
   @Test
@@ -102,6 +130,20 @@ class CustomerServiceImplTest {
   }
 
   @Test
+  void create_throwsWhenTenantNotFound() {
+    CustomerCreateRequest req = new CustomerCreateRequest();
+    req.setName("New");
+
+    when(customerMapper.toEntity(req)).thenReturn(new Customer());
+    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> customerService.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("テナントが見つかりません");
+  }
+
+  @Test
   void update_modifiesFields() {
     Customer c = new Customer();
     c.setId("c1");
@@ -122,9 +164,27 @@ class CustomerServiceImplTest {
   }
 
   @Test
+  void update_throwsWhenNotFound() {
+    when(customerRepository.findById("missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> customerService.update("missing", new CustomerUpdateRequest()))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("顧客が見つかりません");
+  }
+
+  @Test
   void delete_removesIfExists() {
     when(customerRepository.existsById("c1")).thenReturn(true);
     customerService.delete("c1");
     verify(customerRepository).deleteById("c1");
+  }
+
+  @Test
+  void delete_throwsWhenNotFound() {
+    when(customerRepository.existsById("missing")).thenReturn(false);
+
+    assertThatThrownBy(() -> customerService.delete("missing"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("顧客が見つかりません");
   }
 }
