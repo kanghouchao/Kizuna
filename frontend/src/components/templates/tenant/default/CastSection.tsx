@@ -56,7 +56,7 @@ export default function CastSection({ casts }: CastSectionProps) {
           {/* スクロールエリア */}
           <div
             ref={scrollRef}
-            className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide pb-4"
+            className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {casts.map(cast => (
