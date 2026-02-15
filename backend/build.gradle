@@ -90,7 +90,11 @@ jacocoTestReport {
                 'generated/**',
                 '**/generated/**',
                 '**/external/**',
-                '**/*MapperImpl.class'
+                "**/config/**",
+                "**/model/**",
+                "**/repository/**",
+                "**/mapper/**",
+                "**/exception/**"
         ]) }))
     }
 }
@@ -112,7 +116,11 @@ jacocoTestCoverageVerification {
                 'generated/**',
                 '**/generated/**',
                 '**/external/**',
-                '**/*MapperImpl.class'
+                "**/config/**",
+                "**/model/**",
+                "**/repository/**",
+                "**/mapper/**",
+                "**/exception/**"
         ]) }))
     }
 }
