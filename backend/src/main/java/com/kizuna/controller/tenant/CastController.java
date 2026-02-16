@@ -4,7 +4,6 @@ import com.kizuna.model.dto.tenant.cast.CastCreateRequest;
 import com.kizuna.model.dto.tenant.cast.CastResponse;
 import com.kizuna.model.dto.tenant.cast.CastUpdateRequest;
 import com.kizuna.service.tenant.hrm.CastService;
-
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.util.List;

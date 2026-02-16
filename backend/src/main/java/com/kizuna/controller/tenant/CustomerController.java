@@ -4,7 +4,6 @@ import com.kizuna.model.dto.tenant.customer.CustomerCreateRequest;
 import com.kizuna.model.dto.tenant.customer.CustomerResponse;
 import com.kizuna.model.dto.tenant.customer.CustomerUpdateRequest;
 import com.kizuna.service.tenant.crm.CustomerService;
-
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

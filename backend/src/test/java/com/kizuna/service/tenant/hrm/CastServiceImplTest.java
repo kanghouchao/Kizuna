@@ -17,7 +17,6 @@ import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.Cast;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CastRepository;
-
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
