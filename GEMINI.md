@@ -42,14 +42,24 @@ Kizuna Platformは、Spring Boot 3.5+ (Java 21) と Next.js 16+ (React 19, TypeS
 - **Backend**: `TenantIdInterceptor` がリクエストヘッダーからテナントIDを抽出し、`TenantContext` に設定します。
 - **JPA隔離**: テナントスコープのサービスには `@TenantScoped` を付与してください。Hibernateフィルタが適用され、データが自動的に分離されます。
 
-### 3. API 命名規約 (snake_case)
-- バックエンドの変換設定により、JSONキーはすべて **snake_case** になります。
-- フロントエンドの TypeScript 型定義や API プロパティ名も **snake_case** で統一してください（例: `logo_url`, `template_key`）。
+### 3. 命名規則とデータ形式
+- **Backend (Java)**: クラス名、メソッド名、変数名、フィールド名はすべて **CamelCase** (例: `userProfile`, `getTenantConfig`) を使用してください。
+- **Database**: テーブル名、カラム名は **snake_case** (例: `user_profiles`, `tenant_config`) を使用してください。
+- **API / JSON**: 通信時のJSONキーはすべて **snake_case** に統一されます。Jacksonの設定により自動変換されるため、Java側で変換ロジックを書く必要はありません。
+- **Frontend (TypeScript)**:
+    - コンポーネント名: **PascalCase** (例: `TenantConfigForm`)。
+    - API関連の型定義（Interface/Type）およびオブジェクトのプロパティ名: **snake_case** (例: `logo_url`, `template_key`)。バックエンドのJSONと完全に一致させてください。
+    - 変数名・関数名: 一般的なTypeScript慣習に従いますが、APIデータに由来する変数は **snake_case** を維持してください。
+
+### 4. 開発プロセス
+- **TDD (テスト駆動開発)**: **必ず実装前にテストを作成してください**。テストファーストの原則を厳守し、テストが失敗することを確認してから実装を行ってください。
+- **機能追加時のデータ登録**: 新しい機能（APIエンドポイント、画面）を追加する際は、必ず対応する権限（Permission）やメニュー（Menu）のデータを登録するSQLスクリプト（Liquibase changeset）を作成してください。機能実装とデータ登録は常にセットで行う必要があります。
+
 
 ## コーディング規約
 
 ### 共通
-- **TDD**: テストを先に作成し、実装を検証するプロセスを徹底してください。
+- **TDD (テスト駆動開発)**: **必ず実装前にテストを作成してください**。テストファーストの原則を厳守し、テストが失敗することを確認してから実装を行ってください。
 - **カバレッジ**: 70% 以上のラインカバレッジを維持してください。
 - **Backend単体テスト方針**: 単体テストは業務ロジック（Service / UseCase / Controller の振る舞い）を優先し、設定・定型変換・インフラ薄層の網羅を目的にしないでください。
 

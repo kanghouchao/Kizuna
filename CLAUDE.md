@@ -95,7 +95,8 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 
 ### 共通（厳守）
 
-- **TDD**: テストを先に書いてから実装する（Test-Driven Development）
+- **TDD (テスト駆動開発)**: **必ず実装前にテストを作成してください**。テストファーストの原則を厳守し、テストが失敗することを確認してから実装を行ってください。
+- **機能追加時のデータ登録**: 新しい機能を追加する際は、必ず対応する権限（Permission）やメニュー（Menu）のデータを登録するSQLスクリプト（Liquibase changeset）を作成してください。
 - **簡潔なコード**: 冗長なコードを避け、シンプルで読みやすいコードを書く
 - **カバレッジ**: 70% 必須（CI で強制）
 - **Backend単体テスト方針**: 単体テストは業務ロジック（Service / UseCase / Controller の振る舞い）を優先し、設定・定型変換・インフラ薄層の網羅を目的にしない
@@ -103,6 +104,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 
 ### Backend (Java)
 
+- **命名規則**: クラス名、メソッド名、変数名、フィールド名はすべて **CamelCase** を使用すること。DBのカラム名（snake_case）とのマッピングは JPA/Hibernate が、APIのJSONキー（snake_case）との変換は Jackson が自動的に行う。
 - **import ルール**: 完全修飾クラス名（FQCN）を直接使用せず、必ず個別に import する。ワイルドカード import (`*`) は禁止
   ```java
   // ✅ Best Practice: 個別に import
@@ -134,11 +136,11 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 
 ### Frontend (TypeScript)
 
+- **命名規則**: 
+    - コンポーネント名: **PascalCase**。
+    - API関連の型定義（Interface/Type）およびプロパティ名: **snake_case**。
+    - 内部変数・関数名: 一般的なTypeScript慣習に従うが、APIデータに由来する変数は **snake_case** を維持すること。
 - **API クライアント**: `src/lib/client.ts` の axios インスタンスを使用
-- **Server Components**: Cookie は `cookies()` で読み取り（`headers()` は使わない）
-- **型定義**: `src/types/api.ts` に集約
-- **テスト配置**: `__tests__/` ディレクトリに配置
-- **API の命名規約（snake_case）**: バックエンドの Jackson 設定（`PropertyNamingStrategies.SNAKE_CASE`）により、API のリクエスト/レスポンスの JSON キーはすべて snake_case に自動変換される。そのため、フロントエンドの TypeScript 型定義や API 通信で使用するプロパティ名も **snake_case** で統一すること（例: `template_key`, `logo_url`, `created_at`）。フロントエンド側で camelCase ↔ snake_case の変換処理は不要
 
 ## 重要ファイル
 
