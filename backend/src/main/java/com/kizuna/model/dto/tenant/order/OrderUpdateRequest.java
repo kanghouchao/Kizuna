@@ -1,5 +1,6 @@
 package com.kizuna.model.dto.tenant.order;
 
+import jakarta.validation.constraints.NotBlank;
 import java.time.LocalTime;
 import java.util.List;
 import lombok.Data;
@@ -7,10 +8,16 @@ import lombok.Data;
 @Data
 public class OrderUpdateRequest {
   private String storeName;
+
+  @NotBlank(message = "受付は必須です")
   private String receptionistId;
+
   private LocalTime arrivalScheduledStartTime;
   private LocalTime arrivalScheduledEndTime;
-  private String girlId;
+
+  @NotBlank(message = "キャストIDは必須です")
+  private String castId;
+
   private Integer courseMinutes;
   private Integer extensionMinutes;
   private List<String> optionCodes;
@@ -19,6 +26,6 @@ public class OrderUpdateRequest {
   private Integer usedPoints;
   private Integer manualGrantPoints;
   private String remarks;
-  private String girlDriverMessage;
+  private String castDriverMessage;
   private String status;
 }

@@ -8,8 +8,8 @@ export interface Order {
   arrivalScheduledEndTime?: string;
   customerId?: string;
   customerName?: string;
-  girlId?: string;
-  girlName?: string;
+  castId?: string;
+  castName?: string;
   courseMinutes: number;
   extensionMinutes: number;
   optionCodes: string[];
@@ -20,7 +20,7 @@ export interface Order {
   usedPoints: number;
   manualGrantPoints: number;
   remarks?: string;
-  girlDriverMessage?: string;
+  castDriverMessage?: string;
   status: string;
 }
 
@@ -32,7 +32,7 @@ export interface OrderCreateRequest {
   arrivalScheduledEndTime?: string;
   customerId?: string;
   customerName?: string;
-  girlId?: string;
+  castId?: string;
   courseMinutes: number;
   extensionMinutes: number;
   optionCodes: string[];
@@ -43,7 +43,7 @@ export interface OrderCreateRequest {
   usedPoints: number;
   manualGrantPoints: number;
   remarks?: string;
-  girlDriverMessage?: string;
+  castDriverMessage?: string;
   // Customer Creation Fields
   phoneNumber?: string;
   phoneNumber2?: string;

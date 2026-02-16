@@ -30,7 +30,8 @@ public class SecurityConfig {
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/central/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/tenant/login"),
-    PathPatternRequestMatcher.withDefaults().matcher("/tenant/register"),
+    PathPatternRequestMatcher.withDefaults().matcher("/tenant/init-admin-use"),
+    PathPatternRequestMatcher.withDefaults().matcher("/files/upload"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
       return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");

@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 
+/**
+ * ページメタデータの生成
+ */
 export async function generateMetadata(): Promise<Metadata> {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
@@ -24,27 +27,34 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+/**
+ * ルートページコンポーネント
+ *
+ * 役割:
+ * - ドメイン（ロール）に応じたルーティングの振り分け。
+ * - 適切な模版（Template）の動的読み込み。
+ */
 export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  // Central ドメインの場合、ログイン状態に応じてリダイレクト
+  // Central ドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
   if (role === 'central') {
     const token = cookieStore.get('token')?.value;
     redirect(token ? '/central/dashboard/' : '/login');
   }
 
-  // Tenant ドメインの場合、常にランディングページを表示
-  // ログイン状態に関係なくアクセス可能（将来的に表示内容を変える可能性あり）
+  // Tenant ドメイン（店舗フロント側）の場合、模版を表示
   if (role === 'tenant') {
     const templateKey = cookieStore.get('x-mw-tenant-template')?.value || 'default';
+
     try {
       const { default: TemplateComponent } = await import(
         `@/components/templates/tenant/${templateKey}/page`
       );
       return <TemplateComponent />;
     } catch (e) {
-      console.error('Template not found:', e);
+      console.error('模版の読み込みに失敗しました:', e);
       notFound();
     }
   }

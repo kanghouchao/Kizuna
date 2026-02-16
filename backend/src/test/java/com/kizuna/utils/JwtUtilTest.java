@@ -1,35 +1,24 @@
 package com.kizuna.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.config.AppProperties;
 import com.kizuna.model.dto.auth.Token;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith(MockitoExtension.class)
 class JwtUtilTest {
-
-  @Mock private AppProperties appProperties;
-  private JwtUtil jwtUtil;
 
   private final String secret = "mysecretmysecretmysecretmysecretmysecretmysecretmysecretmysecret";
 
-  @BeforeEach
-  void setUp() {
-    when(appProperties.getJwtSecret()).thenReturn(secret);
-    when(appProperties.getJwtExpiration()).thenReturn(3600000L);
-    jwtUtil = new JwtUtil(appProperties);
-  }
-
   @Test
   void generateAndValidateToken() {
+    JwtUtil jwtUtil = createJwtUtil(secret, 3600000L);
+
     Token token = jwtUtil.generateToken("user", "issuer", Map.of("role", "ADMIN"));
     assertThat(token.token()).isNotNull();
 
@@ -37,5 +26,44 @@ class JwtUtilTest {
     assertThat(claims.getSubject()).isEqualTo("user");
     assertThat(claims.getIssuer()).isEqualTo("issuer");
     assertThat(claims.get("role")).isEqualTo("ADMIN");
+  }
+
+  @Test
+  void getClaims_throwsWhenTokenExpired() {
+    JwtUtil expiredJwtUtil = createJwtUtil(secret, -1000L);
+
+    Token token = expiredJwtUtil.generateToken("user", "issuer", Map.of());
+
+    assertThatThrownBy(() -> expiredJwtUtil.getClaims(token.token()))
+        .isInstanceOf(ExpiredJwtException.class);
+  }
+
+  @Test
+  void getClaims_throwsWhenSignatureInvalid() {
+    JwtUtil jwtUtil = createJwtUtil(secret, 3600000L);
+    Token token = jwtUtil.generateToken("user", "issuer", Map.of("role", "ADMIN"));
+
+    JwtUtil otherJwtUtil =
+        createJwtUtil(
+            "anothersecretanothersecretanothersecretanothersecretanothersecret1234", 3600000L);
+
+    assertThatThrownBy(() -> otherJwtUtil.getClaims(token.token()))
+        .isInstanceOf(JwtException.class);
+  }
+
+  @Test
+  void getClaims_throwsWhenTokenMalformed() {
+    JwtUtil jwtUtil = createJwtUtil(secret, 3600000L);
+
+    assertThatThrownBy(() -> jwtUtil.getClaims("malformed.token")).isInstanceOf(JwtException.class);
+  }
+
+  private JwtUtil createJwtUtil(String jwtSecret, long expiration) {
+    AppProperties properties = new AppProperties();
+    AppProperties.Jwt jwt = new AppProperties.Jwt();
+    jwt.setSecret(jwtSecret);
+    jwt.setExpiration(expiration);
+    properties.setJwt(jwt);
+    return new JwtUtil(properties);
   }
 }

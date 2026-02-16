@@ -1,6 +1,7 @@
 package com.kizuna.service.central.tenant;
 
-import com.kizuna.config.listener.event.TenantCreatedEvent;
+import com.kizuna.config.AppProperties;
+import com.kizuna.controller.tenant.listener.event.TenantCreatedEvent;
 import com.kizuna.exception.ServiceException;
 import com.kizuna.model.dto.central.tenant.PaginatedTenantVO;
 import com.kizuna.model.dto.central.tenant.TenantCreateDTO;
@@ -11,6 +12,7 @@ import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.TenantConfig;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantConfigRepository;
+import com.kizuna.utils.RandomTokenUtils;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -32,6 +34,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
   private final TenantRepository tenantRepository;
   private final TenantConfigRepository tenantConfigRepository;
   private final ApplicationEventPublisher eventPublisher;
+  private final AppProperties appProperties;
 
   @Override
   @Transactional(readOnly = true)
@@ -80,11 +83,9 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     t.setDomain(req.getDomain());
     t.setEmail(req.getEmail());
     Tenant saved = tenantRepository.save(t);
-
-    // テナント作成時にデフォルトのテナント設定を保存
     tenantConfigRepository.save(TenantConfig.createDefault(saved));
-
-    eventPublisher.publishEvent(new TenantCreatedEvent(saved));
+    String token = appProperties.getTenantCreatorCachePerfix() + RandomTokenUtils.generate();
+    eventPublisher.publishEvent(new TenantCreatedEvent(saved, token));
   }
 
   @Override

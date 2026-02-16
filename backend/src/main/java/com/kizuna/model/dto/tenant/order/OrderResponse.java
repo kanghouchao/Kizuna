@@ -22,8 +22,8 @@ public class OrderResponse {
   private LocalTime arrivalScheduledEndTime;
   private String customerId;
   private String customerName; // Helper
-  private String girlId;
-  private String girlName; // Helper
+  private String castId;
+  private String castName; // Helper
   private Integer courseMinutes;
   private Integer extensionMinutes;
   private List<String> optionCodes;
@@ -34,7 +34,7 @@ public class OrderResponse {
   private Integer usedPoints;
   private Integer manualGrantPoints;
   private String remarks;
-  private String girlDriverMessage;
+  private String castDriverMessage;
   private String status;
   private String locationAddress;
   private String locationBuilding;

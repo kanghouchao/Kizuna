@@ -1,5 +1,6 @@
 package com.kizuna.model.dto.tenant.order;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -9,6 +10,8 @@ import lombok.Data;
 @Data
 public class OrderCreateRequest {
   private String storeName;
+
+  @NotBlank(message = "受付は必須です")
   private String receptionistId;
 
   @NotNull private LocalDate businessDate;
@@ -16,8 +19,8 @@ public class OrderCreateRequest {
   private LocalTime arrivalScheduledStartTime;
   private LocalTime arrivalScheduledEndTime;
 
-  private String customerId; // Usually look up or create customer first
-  private String customerName; // Simple handling if no ID yet
+  private String customerId;
+  private String customerName;
   private String phoneNumber;
   private String phoneNumber2;
   private String address;
@@ -28,7 +31,8 @@ public class OrderCreateRequest {
   private String ngType;
   private String ngContent;
 
-  private String girlId;
+  @NotBlank(message = "キャストIDは必須です")
+  private String castId;
 
   private Integer courseMinutes;
   private Integer extensionMinutes;
@@ -40,5 +44,5 @@ public class OrderCreateRequest {
   private Integer usedPoints;
   private Integer manualGrantPoints;
   private String remarks;
-  private String girlDriverMessage;
+  private String castDriverMessage;
 }

@@ -84,7 +84,7 @@ export default function AdminDashboard() {
                 <div className="bg-white overflow-hidden shadow rounded-lg">
                   <div className="p-5">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <svg
                           className="h-6 w-6 text-gray-400"
                           fill="none"
@@ -112,7 +112,7 @@ export default function AdminDashboard() {
                 <div className="bg-white overflow-hidden shadow rounded-lg">
                   <div className="p-5">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <svg
                           className="h-6 w-6 text-green-400"
                           fill="none"
@@ -142,7 +142,7 @@ export default function AdminDashboard() {
                 <div className="bg-white overflow-hidden shadow rounded-lg">
                   <div className="p-5">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <svg
                           className="h-6 w-6 text-yellow-400"
                           fill="none"
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
                 <div className="bg-white overflow-hidden shadow rounded-lg">
                   <div className="p-5">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <svg
                           className="h-6 w-6 text-red-400"
                           fill="none"
@@ -224,7 +224,7 @@ export default function AdminDashboard() {
                   <li key={tenant.id} className="px-4 py-4 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
+                        <div className="shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
                             <span className="text-sm font-medium text-indigo-600">
                               {tenant.name.charAt(0).toUpperCase()}
@@ -262,7 +262,7 @@ export default function AdminDashboard() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <svg
                       className="h-8 w-8 text-indigo-600"
                       fill="none"
@@ -296,7 +296,7 @@ export default function AdminDashboard() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <svg
                       className="h-8 w-8 text-green-600"
                       fill="none"
@@ -330,7 +330,7 @@ export default function AdminDashboard() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <svg
                       className="h-8 w-8 text-purple-600"
                       fill="none"

@@ -25,8 +25,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.Filter;
-import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.Type;
 
 @Entity
@@ -37,7 +35,6 @@ import org.hibernate.annotations.Type;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "tenant")
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class TenantConfig {
 
