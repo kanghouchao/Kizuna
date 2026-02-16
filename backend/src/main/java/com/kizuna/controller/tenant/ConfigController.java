@@ -2,7 +2,7 @@ package com.kizuna.controller.tenant;
 
 import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigResponse;
 import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigUpdateRequest;
-import com.kizuna.service.tenant.TenantConfigService;
+import com.kizuna.service.tenant.ConfigService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/tenant/config")
 @RequiredArgsConstructor
-public class TenantConfigController {
+public class ConfigController {
 
-  private final TenantConfigService tenantConfigService;
+  private final ConfigService tenantConfigService;
 
   @GetMapping
   public ResponseEntity<TenantConfigResponse> get() {

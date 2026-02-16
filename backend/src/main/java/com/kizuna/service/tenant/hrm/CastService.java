@@ -1,4 +1,4 @@
-package com.kizuna.service.tenant;
+package com.kizuna.service.tenant.hrm;
 
 import com.kizuna.model.dto.tenant.cast.CastCreateRequest;
 import com.kizuna.model.dto.tenant.cast.CastResponse;

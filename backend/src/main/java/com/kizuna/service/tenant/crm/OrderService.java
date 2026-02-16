@@ -1,4 +1,4 @@
-package com.kizuna.service.tenant;
+package com.kizuna.service.tenant.crm;
 
 import com.kizuna.model.dto.tenant.order.OrderCreateRequest;
 import com.kizuna.model.dto.tenant.order.OrderResponse;

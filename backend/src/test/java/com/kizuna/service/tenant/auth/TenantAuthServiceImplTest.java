@@ -1,4 +1,4 @@
-package com.kizuna.service.tenant;
+package com.kizuna.service.tenant.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.config.AppProperties;
 import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.auth.Token;
 import com.kizuna.model.dto.tenant.TenantRegisterRequest;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +29,8 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,10 +44,16 @@ class TenantAuthServiceImplTest {
   @Mock private AuthenticationManager authenticationManager;
   @Mock private JwtUtil jwtUtil;
   @Mock private TenantContext tenantContext;
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private AppProperties appProperties;
+  @Mock private ValueOperations<String, String> valueOperations;
 
   @InjectMocks private TenantAuthServiceImpl authService;
 
   @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
+
+  @BeforeEach
+  void setUp() {}
 
   @Test
   void login_success_returnsToken() {
@@ -74,29 +84,55 @@ class TenantAuthServiceImplTest {
   }
 
   @Test
-  void register_createsUser() {
+  void initializeAdminUser_success_createsUserAndDeletesToken() {
     TenantRegisterRequest req = new TenantRegisterRequest();
+    req.setToken("12345678901234567890123456789012");
     req.setEmail("admin@test.com");
-    req.setPassword("pass");
+    req.setPassword("password123");
 
     Tenant tenant = new Tenant();
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(appProperties.getTenantCreatorCachePerfix()).thenReturn("tenant-creator:");
+    when(valueOperations.get("tenant-creator:" + req.getToken())).thenReturn("1");
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
-    when(passwordEncoder.encode("pass")).thenReturn("encoded");
+    when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
 
-    authService.register(1L, req);
+    Tenant result = authService.initializeAdminUser(req);
 
+    assertThat(result).isSameAs(tenant);
     verify(userRepository).save(any());
+    verify(redisTemplate).delete("tenant-creator:" + req.getToken());
   }
 
   @Test
-  void register_throwsWhenTenantNotFound() {
+  void initializeAdminUser_invalidToken_throwsIllegalArgumentException() {
     TenantRegisterRequest req = new TenantRegisterRequest();
+    req.setToken("12345678901234567890123456789012");
     req.setEmail("admin@test.com");
-    req.setPassword("pass");
+    req.setPassword("password123");
 
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(appProperties.getTenantCreatorCachePerfix()).thenReturn("tenant-creator:");
+    when(valueOperations.get("tenant-creator:" + req.getToken())).thenReturn(null);
+
+    assertThatThrownBy(() -> authService.initializeAdminUser(req))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Invalid or expired registration token");
+  }
+
+  @Test
+  void initializeAdminUser_tenantNotFound_throwsNoSuchElementException() {
+    TenantRegisterRequest req = new TenantRegisterRequest();
+    req.setToken("12345678901234567890123456789012");
+    req.setEmail("admin@test.com");
+    req.setPassword("password123");
+
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(appProperties.getTenantCreatorCachePerfix()).thenReturn("tenant-creator:");
+    when(valueOperations.get("tenant-creator:" + req.getToken())).thenReturn("999");
     when(tenantRepository.findById(999L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> authService.register(999L, req))
+    assertThatThrownBy(() -> authService.initializeAdminUser(req))
         .isInstanceOf(NoSuchElementException.class);
   }
 }

@@ -1,4 +1,4 @@
-package com.kizuna.service.tenant;
+package com.kizuna.service.tenant.crm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,6 +23,7 @@ import com.kizuna.repository.tenant.CastRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
 import com.kizuna.repository.tenant.OrderRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
+
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

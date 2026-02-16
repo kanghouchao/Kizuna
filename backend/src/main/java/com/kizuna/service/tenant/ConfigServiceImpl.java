@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class TenantConfigServiceImpl implements TenantConfigService {
+public class ConfigServiceImpl implements ConfigService {
 
   private final TenantConfigRepository tenantConfigRepository;
   private final TenantContext tenantContext;

@@ -1,4 +1,4 @@
-package com.kizuna.service.tenant;
+package com.kizuna.service.tenant.hrm;
 
 import com.kizuna.config.TenantScoped;
 import com.kizuna.config.interceptor.TenantContext;

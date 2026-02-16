@@ -16,6 +16,8 @@ public class AppProperties {
 
   private String domain;
 
+  private String tenantCreatorCachePerfix = "tenant:creator:";
+
   /** app.jwt.* */
   private Jwt jwt = new Jwt();
 

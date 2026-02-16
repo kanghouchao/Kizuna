@@ -17,7 +17,7 @@ import { Order, OrderCreateRequest, Page } from '@/types/order';
 
 export const authApi = {
   register: async (data: RegisterRequest): Promise<RegisterResponse> => {
-    const response = await apiClient.post('/tenant/register', data);
+    const response = await apiClient.post('/tenant/init-admin-use', data);
     return response.data;
   },
   login: async (data: LoginRequest): Promise<LoginResponse> => {

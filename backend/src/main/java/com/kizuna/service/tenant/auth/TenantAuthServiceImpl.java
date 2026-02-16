@@ -1,5 +1,6 @@
-package com.kizuna.service.tenant;
+package com.kizuna.service.tenant.auth;
 
+import com.kizuna.config.AppProperties;
 import com.kizuna.config.TenantScoped;
 import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.auth.Token;
@@ -12,9 +13,9 @@ import com.kizuna.utils.JwtUtil;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,6 +23,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @Log4j2
@@ -34,6 +36,8 @@ public class TenantAuthServiceImpl implements TenantAuthService {
   private final TenantUserRepository userRepository;
   private final TenantRepository tenantRepository;
   private final TenantContext tenantContext;
+  private final StringRedisTemplate redisTemplate;
+  private final AppProperties appProperties;
 
   @Override
   @Transactional(readOnly = true)
@@ -56,8 +60,15 @@ public class TenantAuthServiceImpl implements TenantAuthService {
 
   @Override
   @Transactional
-  public Tenant register(@NonNull Long tenantId, TenantRegisterRequest tenantRegisterRequest) {
-    Tenant tenant = tenantRepository.findById(tenantId).orElseThrow();
+  public Tenant initializeAdminUser(TenantRegisterRequest tenantRegisterRequest) {
+    String tenantId =
+        redisTemplate
+            .opsForValue()
+            .get(appProperties.getTenantCreatorCachePerfix() + tenantRegisterRequest.getToken());
+    if (!StringUtils.hasText(tenantId)) {
+      throw new IllegalArgumentException("Invalid or expired registration token");
+    }
+    Tenant tenant = tenantRepository.findById(Long.parseLong(tenantId)).orElseThrow();
     TenantUser entity = new TenantUser();
     String email = tenantRegisterRequest.getEmail();
     String nickname =
@@ -67,6 +78,8 @@ public class TenantAuthServiceImpl implements TenantAuthService {
     entity.setEmail(email);
     entity.setPassword(passwordEncoder.encode(tenantRegisterRequest.getPassword()));
     userRepository.save(entity);
+    redisTemplate.delete(
+        appProperties.getTenantCreatorCachePerfix() + tenantRegisterRequest.getToken());
     return tenant;
   }
 }

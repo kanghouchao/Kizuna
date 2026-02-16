@@ -29,12 +29,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class TenantConfigServiceImplTest {
+class ConfigServiceImplTest {
 
   @Mock private TenantConfigRepository tenantConfigRepository;
   @Mock private TenantContext tenantContext;
   @Mock private TenantConfigMapper tenantConfigMapper;
-  @InjectMocks private TenantConfigServiceImpl tenantConfigService;
+  @InjectMocks private ConfigServiceImpl tenantConfigService;
 
   private static final Long TENANT_ID = 1L;
 

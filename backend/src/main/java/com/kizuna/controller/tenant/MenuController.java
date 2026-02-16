@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/tenant/menus")
 @RequiredArgsConstructor
-public class TenantMenuController {
+public class MenuController {
 
   private final TenantMenuService menuService;
 
