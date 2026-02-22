@@ -8,13 +8,13 @@ import com.kizuna.repository.central.CentralUserRepository;
 import com.kizuna.service.central.auth.CentralAuthService;
 import com.kizuna.utils.JwtUtil;
 import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,7 +45,7 @@ public class CentralAuthController {
   }
 
   @GetMapping("/me")
-  @RolesAllowed("ADMIN")
+  @PreAuthorize("isAuthenticated()")
   public ResponseEntity<AdminDto> me(Principal principal) {
     if (principal == null || principal.getName() == null) {
       return ResponseEntity.status(401).build();

@@ -7,6 +7,7 @@ import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,11 +22,13 @@ public class ConfigController {
   private final ConfigService tenantConfigService;
 
   @GetMapping
+  @PreAuthorize("hasAuthority('TENANT_CONFIG')")
   public ResponseEntity<TenantConfigResponse> get() {
     return ResponseEntity.ok(tenantConfigService.get());
   }
 
   @PutMapping
+  @PreAuthorize("hasAuthority('TENANT_CONFIG')")
   public ResponseEntity<TenantConfigResponse> update(
       @Valid @RequestBody TenantConfigUpdateRequest request) {
     return ResponseEntity.ok(tenantConfigService.update(request));
