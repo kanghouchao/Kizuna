@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { storefrontService } from '@/services/storefront';
+import AgeGate from './AgeVerification';
 import Advertisement from './Advertisement';
 import Banner from './Banner';
 import CastSection from './CastSection';
@@ -9,6 +10,15 @@ import MVSection from './MVSection';
 
 /**
  * デフォルトのテナントページ模版 (Server Component)
+ *
+ * 構成:
+ * 1. AgeGate    - 年齢確認オーバーレイ（Client Component / localStorage）
+ * 2. Header     - スティッキーヘッダー
+ * 3. Banner     - フルスクリーンヒーローセクション
+ * 4. MVSection  - メインビジュアル
+ * 5. CastSection - キャスト紹介カルーセル
+ * 6. Advertisement - キャンペーン情報
+ * 7. Footer     - フッター
  */
 export default async function DefaultTemplate() {
   const cookieStore = await cookies();
@@ -18,7 +28,10 @@ export default async function DefaultTemplate() {
   const { casts, siteConfig } = await storefrontService.getPageData();
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: '#080808' }}>
+      {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
+      <AgeGate storeName={tenantName} />
+
       <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
 
       <main className="grow">
