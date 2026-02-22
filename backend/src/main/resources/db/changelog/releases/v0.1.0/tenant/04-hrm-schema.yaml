@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: tenant-005-create-casts
+      id: tenant-004-hrm-schema
       author: kanghouchao
       preConditions:
         - dbms:
@@ -78,7 +78,6 @@ databaseChangeLog:
                   defaultValueComputed: CURRENT_TIMESTAMP
                   constraints:
                     nullable: false
-
         - addForeignKeyConstraint:
             constraintName: fk_t_casts_tenant
             baseTableName: t_casts

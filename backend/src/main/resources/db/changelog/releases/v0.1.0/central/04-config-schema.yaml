@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: central-004-config-schema
+      author: kanghouchao
+      changes:
+        - createTable:
+            tableName: central_configs
+            remarks: システム全体の設定（SMTP, メンテナンスモード等）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_central_configs
+              - column:
+                  name: config_key
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_central_configs_key
+              - column:
+                  name: config_value
+                  type: TEXT
+              - column:
+                  name: category
+                  type: VARCHAR(50)
+                  remarks: 設定のカテゴリ（SMTP, SYSTEM, SECURITY等）
+              - column:
+                  name: description
+                  type: VARCHAR(500)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false

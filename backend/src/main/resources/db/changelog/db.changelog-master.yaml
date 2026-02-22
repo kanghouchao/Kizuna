@@ -1,31 +1,4 @@
 databaseChangeLog:
   - include:
-      file: changes/001-central-core.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/002-tenant-core.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/003-initial-data.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/004-create-customers.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/005-create-casts.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/006-create-orders.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/007-create-menus.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/008-seed-menus.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/009-create-tenant-config.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: changes/010-create-system-config.yaml
+      file: releases/v0.1.0/master.yaml
       relativeToChangelogFile: true
