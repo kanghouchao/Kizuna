@@ -28,7 +28,7 @@ databaseChangeLog:
               - column: { name: tenant_id, valueNumeric: 1 }
               - column: { name: nickname, value: "Tenant Admin" }
               - column: { name: email, value: "admin@store1.kizuna.com" }
-              - column: { name: password, value: "$2a$10$TAnVD5vZNlATP5wayRg1SOo8UKP7m9TpzbaLJejOplq55OJxRhPnS" }
+              - column: { name: password, value: "$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue" }
               - column: { name: enabled, valueBoolean: true }
         - insert:
             tableName: t_user_roles
