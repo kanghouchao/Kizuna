@@ -9,23 +9,23 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
   const hasMedia = !!mvUrl;
 
   return (
-    <section className="py-20 px-6" style={{ background: '#0A0A0A' }}>
+    <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: '#0A0A0A' }}>
       <div className="max-w-5xl mx-auto">
         {/* セクションヘッダー */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8 md:mb-12">
           <p className="text-[#C9A84C]/40 text-[9px] tracking-[0.6em] uppercase mb-3">
             Main Visual
           </p>
           <h2
-            className="text-2xl font-light tracking-[0.2em] text-[#F8F4F0]/80"
+            className="text-xl md:text-2xl font-light tracking-[0.2em] text-[#F8F4F0]/80"
             style={{ fontFamily: "'Noto Serif JP', 'Hiragino Mincho Pro', serif" }}
           >
             メインビジュアル
           </h2>
-          <div className="flex items-center justify-center gap-3 mt-5">
-            <div className="h-px w-12 bg-gradient-to-r from-transparent to-[#C9A84C]/35" />
+          <div className="flex items-center justify-center gap-3 mt-4 md:mt-5">
+            <div className="h-px w-10 md:w-12 bg-linear-to-r from-transparent to-[#C9A84C]/35" />
             <span className="text-[#C9A84C]/40 text-[10px]">◆</span>
-            <div className="h-px w-12 bg-gradient-to-l from-transparent to-[#C9A84C]/35" />
+            <div className="h-px w-10 md:w-12 bg-linear-to-l from-transparent to-[#C9A84C]/35" />
           </div>
         </div>
 
@@ -64,19 +64,18 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
                 </div>
               )
             ) : (
-              /* プレースホルダー */
               <div
                 className="aspect-video flex items-center justify-center"
                 style={{ background: '#0D0D0D' }}
               >
                 <div className="text-center">
-                  <div className="flex items-center justify-center gap-3 mb-6">
-                    <div className="h-px w-10 bg-gradient-to-r from-transparent to-[#C9A84C]/25" />
+                  <div className="flex items-center justify-center gap-3 mb-4 md:mb-6">
+                    <div className="h-px w-8 md:w-10 bg-linear-to-r from-transparent to-[#C9A84C]/25" />
                     <span className="text-[#C9A84C]/30 text-xs">◆</span>
-                    <div className="h-px w-10 bg-gradient-to-l from-transparent to-[#C9A84C]/25" />
+                    <div className="h-px w-8 md:w-10 bg-linear-to-l from-transparent to-[#C9A84C]/25" />
                   </div>
                   <svg
-                    className="w-12 h-12 mx-auto mb-4"
+                    className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 md:mb-4"
                     fill="none"
                     stroke="rgba(201,168,76,0.2)"
                     viewBox="0 0 24 24"
@@ -89,7 +88,7 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
                     />
                   </svg>
                   <p
-                    className="text-[#C9A84C]/25 text-xs tracking-widest"
+                    className="text-[#C9A84C]/25 text-[10px] md:text-xs tracking-widest"
                     style={{ fontFamily: "'Noto Serif JP', serif" }}
                   >
                     メインビジュアル
@@ -100,10 +99,10 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
           </div>
 
           {/* コーナーオーナメント */}
-          <div className="absolute top-3 left-3 w-6 h-6 border-t border-l border-[#C9A84C]/50" />
-          <div className="absolute top-3 right-3 w-6 h-6 border-t border-r border-[#C9A84C]/50" />
-          <div className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-[#C9A84C]/50" />
-          <div className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-[#C9A84C]/50" />
+          <div className="absolute top-2 left-2 md:top-3 md:left-3 w-5 h-5 md:w-6 md:h-6 border-t border-l border-[#C9A84C]/50" />
+          <div className="absolute top-2 right-2 md:top-3 md:right-3 w-5 h-5 md:w-6 md:h-6 border-t border-r border-[#C9A84C]/50" />
+          <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 w-5 h-5 md:w-6 md:h-6 border-b border-l border-[#C9A84C]/50" />
+          <div className="absolute bottom-2 right-2 md:bottom-3 md:right-3 w-5 h-5 md:w-6 md:h-6 border-b border-r border-[#C9A84C]/50" />
         </div>
       </div>
     </section>

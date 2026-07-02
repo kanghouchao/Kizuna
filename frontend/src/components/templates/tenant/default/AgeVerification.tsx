@@ -90,9 +90,9 @@ export default function AgeGate({ storeName }: AgeGateProps) {
 
             {/* ゴールド区切り線 */}
             <div className="flex items-center justify-center gap-3 mb-8">
-              <div className="h-px w-16 bg-gradient-to-r from-transparent to-[#C9A84C]/45" />
+              <div className="h-px w-16 bg-linear-to-r from-transparent to-[#C9A84C]/45" />
               <span className="text-[#C9A84C]/55 text-[11px]">◆</span>
-              <div className="h-px w-16 bg-gradient-to-l from-transparent to-[#C9A84C]/45" />
+              <div className="h-px w-16 bg-linear-to-l from-transparent to-[#C9A84C]/45" />
             </div>
 
             {/* 年齢確認ボックス */}
@@ -143,9 +143,9 @@ export default function AgeGate({ storeName }: AgeGateProps) {
           /* アクセス拒否状態 */
           <>
             <div className="flex items-center justify-center gap-3 mb-8">
-              <div className="h-px w-16 bg-gradient-to-r from-transparent to-[#8B1A2E]/45" />
+              <div className="h-px w-16 bg-linear-to-r from-transparent to-[#8B1A2E]/45" />
               <span className="text-[#8B1A2E]/55 text-[11px]">◆</span>
-              <div className="h-px w-16 bg-gradient-to-l from-transparent to-[#8B1A2E]/45" />
+              <div className="h-px w-16 bg-linear-to-l from-transparent to-[#8B1A2E]/45" />
             </div>
             <p
               className="text-[#F8F4F0] text-lg font-light tracking-[0.25em] mb-2"

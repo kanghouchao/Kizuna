@@ -18,23 +18,23 @@ Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 1
 
 ```bash
 # ビルド
-make build                          # 全サービス
-make build service=frontend         # フロントエンドのみ
-make build service=backend          # バックエンドのみ
+task build                          # 全サービス
+task build service=frontend         # フロントエンドのみ
+task build service=backend          # バックエンドのみ
 
 # テスト（70% カバレッジ必須）
-make test                           # 全テスト
-make test service=frontend          # Jest のみ
-make test service=backend           # JUnit + Jacoco のみ
+task test                           # 全テスト
+task test service=frontend          # Jest のみ
+task test service=backend           # JUnit + Jacoco のみ
 
 # Lint・フォーマット
-make lint                           # チェック
-make format                         # 自動修正
+task lint                           # チェック
+task format                         # 自動修正
 
 # ローカル起動
-make up                             # フルスタック起動
-make down                           # 停止
-make logs service=backend           # ログ確認
+task up                             # フルスタック起動
+task down                           # 停止
+task logs service=backend           # ログ確認
 ```
 
 ### ローカル直接実行
@@ -100,7 +100,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - **簡潔なコード**: 冗長なコードを避け、シンプルで読みやすいコードを書く
 - **カバレッジ**: 70% 必須（CI で強制）
 - **Backend単体テスト方針**: 単体テストは業務ロジック（Service / UseCase / Controller の振る舞い）を優先し、設定・定型変換・インフラ薄層の網羅を目的にしない
-- **コミット前チェック**: 必ず `make lint && make test` を実行してからコミット
+- **コミット前チェック**: 必ず `task lint && task test` を実行してからコミット
 
 ### Backend (Java)
 
@@ -130,7 +130,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - **フォーマット**: Spotless + Google Java Format
 - **カバレッジ算出除外**: JaCoCo では `config` / `model` / `repository` / `mapper` / `exception` を除外し、業務実装の検証に集中する
 - **例外ルール**: 上記パッケージに明確な業務分岐・検証ロジックが存在する場合は、除外前提にせず個別にテスト追加可否を判断する
-- **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML）
+- **DB マイグレーション**: Liquibase（`db/changelog/releases/<バージョン>/central/` または `db/changelog/releases/<バージョン>/tenant/` に YAML）
 - **設定値**: `AppProperties` から取得（ハードコード禁止）
 - **ログ**: `req=<id> tenant=<id>` 形式を維持
 
@@ -149,7 +149,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 | セキュリティ設定 | `backend/src/main/java/com/kizuna/config/SecurityConfig.java` |
 | JWT フィルタ | `backend/src/main/java/com/kizuna/config/filter/JwtAuthenticationFilter.java` |
 | テナントコンテキスト | `backend/src/main/java/com/kizuna/config/interceptor/TenantIdInterceptor.java` |
-| DB マイグレーション | `backend/src/main/resources/db/changelog/changes/` |
+| DB マイグレーション | `backend/src/main/resources/db/changelog/releases/` |
 | Frontend Middleware | `frontend/src/middleware.ts` |
 | HTTP クライアント | `frontend/src/lib/client.ts` |
 
@@ -169,7 +169,7 @@ echo "127.0.0.1 kizuna.test store1.kizuna.test" | sudo tee -a /etc/hosts
 cp environment/.env.example .env
 
 # 起動
-make build up
+task build up
 
 # デフォルト認証情報
 # Central: admin / pass
