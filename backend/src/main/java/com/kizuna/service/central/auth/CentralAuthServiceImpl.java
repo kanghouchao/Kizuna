@@ -25,7 +25,7 @@ public class CentralAuthServiceImpl implements CentralAuthService {
 
     return jwtUtil.generateToken(
         Objects.requireNonNull(auth.getName()),
-        "CentralAuth",
+        JwtUtil.ISSUER_CENTRAL,
         Map.of("authorities", auth.getAuthorities().stream().map(a -> a.getAuthority()).toList()));
   }
 }

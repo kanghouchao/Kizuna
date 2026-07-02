@@ -39,7 +39,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
       String token = authHeader.substring(7);
       Claims claims = jwtUtil.getClaims(token);
-      if (!redisTemplate.hasKey("blacklist:tokens:" + token)) {
+      if (issuerMatchesDomain(claims.getIssuer(), request.getRequestURI())
+          && !redisTemplate.hasKey("blacklist:tokens:" + token)) {
         if (new Date().before(claims.getExpiration())) {
           String username = claims.getSubject();
           List<?> authorities = claims.get("authorities", List.class);
@@ -59,5 +60,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       }
     }
     filterChain.doFilter(request, response);
+  }
+
+  /**
+   * リクエストパスの属するドメインとトークンの issuer が一致するか検証する。 Central / Tenant は署名キーを共有しているため、issuer
+   * の照合でドメイン間のトークン流用を防ぐ。ドメイン外のパス（/files 等）は制限しない。
+   */
+  private boolean issuerMatchesDomain(String issuer, String path) {
+    if (path.equals("/central") || path.startsWith("/central/")) {
+      return JwtUtil.ISSUER_CENTRAL.equals(issuer);
+    }
+    if (path.equals("/tenant") || path.startsWith("/tenant/")) {
+      return JwtUtil.ISSUER_TENANT.equals(issuer);
+    }
+    return true;
   }
 }
