@@ -6,6 +6,7 @@ import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -38,6 +39,22 @@ public class CommonExceptionHandler {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
   }
 
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<Map<String, Object>> handle(AccessDeniedException ex) {
+    log.warn(ex.getMessage());
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", "アクセス権限がありません");
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+  }
+
+  @ExceptionHandler(ServiceException.class)
+  public ResponseEntity<Map<String, Object>> handle(ServiceException ex) {
+    log.warn(ex.getMessage());
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+  }
+
   @ExceptionHandler(NoResourceFoundException.class)
   public ResponseEntity<Map<String, Object>> handle(NoResourceFoundException ex) {
     log.warn(ex.getMessage());
@@ -50,7 +67,7 @@ public class CommonExceptionHandler {
   public ResponseEntity<Map<String, Object>> handle(Exception ex) {
     log.error(ex.getMessage(), ex);
     Map<String, Object> body = new HashMap<>();
-    body.put("error", "Internal server error");
+    body.put("error", "サーバー内部エラーが発生しました");
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
   }
 }
