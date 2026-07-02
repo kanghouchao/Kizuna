@@ -48,7 +48,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                         TenantPermission::getName);
                 return buildUser(u.getEmail(), u.getPassword(), u.getEnabled(), authorities);
               })
-          .orElseThrow(() -> new UsernameNotFoundException("User not found (tenant): " + username));
+          .orElseThrow(() -> new UsernameNotFoundException("ユーザーが見つかりません（テナント）: " + username));
     } else {
       return centralUserRepository
           .findByUsername(username)
@@ -62,8 +62,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                         CentralPermission::getName);
                 return buildUser(u.getUsername(), u.getPassword(), u.getEnabled(), authorities);
               })
-          .orElseThrow(
-              () -> new UsernameNotFoundException("User not found (central): " + username));
+          .orElseThrow(() -> new UsernameNotFoundException("ユーザーが見つかりません（セントラル）: " + username));
     }
   }
 

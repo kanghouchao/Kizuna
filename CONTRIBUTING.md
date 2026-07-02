@@ -21,31 +21,31 @@ Before opening a PR it's helpful to run a minimal local validation to save revie
 - Build & tests:
 
 ```bash
-make test build
+task test build
 ```
 
 - Start full stack for manual smoke checks (requires Docker/Buildx):
 
 ```bash
-make up
+task up
 ```
 
 ## Local development & useful commands
 
 This repository uses Make targets and Docker for local development. Common commands (run from the repository root):
 
-- Build all images: make build service=frontend|backend
-- Start local stack: make up
-- Show running containers: make ps
-- Follow logs for a service: make logs service=backend|frontend|traefik|database
-- Run tests for a service: make test service=frontend|backend
-- Lint or format: make lint service=frontend|backend
-- Format: make format service=frontend|backend
-- Stop and remove containers: make down
-- (be careful!) Clean all containers, volumes, images: make clean service=frontend|backend
+- Build all images: task build service=frontend|backend
+- Start local stack: task up
+- Show running containers: task ps
+- Follow logs for a service: task logs service=backend|frontend|traefik|database
+- Run tests for a service: task test service=frontend|backend
+- Lint or format: task lint service=frontend|backend
+- Format: task format service=frontend|backend
+- Stop and remove containers: task down
+- (be careful!) Clean all containers, volumes, images: task clean service=frontend|backend
 
 Notes:
-- When you are not specifying service=..., the command applies to both frontend and backend, or all services(e.g. `make logs`).
+- When you are not specifying service=..., the command applies to both frontend and backend, or all services(e.g. `task logs`).
 - Frontend dev server: `frontend/` uses Next.js (run `npm run dev` inside `frontend` for a typical dev workflow).
 - Backend build/test: use the Gradle wrapper in `backend/` (e.g. `./gradlew build` or `./gradlew test`).
 	- On Windows PowerShell use `gradlew.bat build` or `gradlew.bat test`.

@@ -22,21 +22,27 @@ jobs:
             image=moby/buildkit:latest
             network=host
 
+      - name: Set up Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Lint
-        run: make lint
+        run: task lint
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
 
       - name: Test
-        run: make test
+        run: task test
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
-      
+
       - name: Create reports directory
         if: always()
-        run: make reports
+        run: task reports
 
       - name: Inject report metadata (branch & PR)
         if: always()

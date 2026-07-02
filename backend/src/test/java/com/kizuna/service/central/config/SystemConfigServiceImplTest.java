@@ -33,7 +33,7 @@ class SystemConfigServiceImplTest {
   @Test
   @DisplayName("全設定を取得できること")
   void getAllConfigs() {
-    // Arrange
+    // 準備
     SystemConfig config = SystemConfig.builder().configKey("key1").configValue("value1").build();
     SystemConfigResponse response =
         SystemConfigResponse.builder().configKey("key1").configValue("value1").build();
@@ -41,10 +41,10 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.findAll()).thenReturn(List.of(config));
     when(systemConfigMapper.toResponse(config)).thenReturn(response);
 
-    // Act
+    // 実行
     List<SystemConfigResponse> result = systemConfigService.getAllConfigs();
 
-    // Assert
+    // 検証
     assertEquals(1, result.size());
     assertEquals("key1", result.get(0).getConfigKey());
     verify(systemConfigRepository, times(1)).findAll();
@@ -53,7 +53,7 @@ class SystemConfigServiceImplTest {
   @Test
   @DisplayName("カテゴリ指定で設定を取得できること")
   void getConfigsByCategory() {
-    // Arrange
+    // 準備
     String category = "SMTP";
     SystemConfig config = SystemConfig.builder().configKey("smtp_host").category(category).build();
     SystemConfigResponse response =
@@ -62,10 +62,10 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.findByCategory(category)).thenReturn(List.of(config));
     when(systemConfigMapper.toResponse(config)).thenReturn(response);
 
-    // Act
+    // 実行
     List<SystemConfigResponse> result = systemConfigService.getConfigsByCategory(category);
 
-    // Assert
+    // 検証
     assertEquals(1, result.size());
     assertEquals(category, result.get(0).getCategory());
     verify(systemConfigRepository, times(1)).findByCategory(category);
@@ -74,7 +74,7 @@ class SystemConfigServiceImplTest {
   @Test
   @DisplayName("設定を更新できること")
   void updateConfig() {
-    // Arrange
+    // 準備
     String key = "maintenance_mode";
     String newValue = "true";
     SystemConfigUpdateRequest request =
@@ -93,10 +93,10 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.save(existingConfig)).thenReturn(updatedConfig);
     when(systemConfigMapper.toResponse(updatedConfig)).thenReturn(response);
 
-    // Act
+    // 実行
     SystemConfigResponse result = systemConfigService.updateConfig(request);
 
-    // Assert
+    // 検証
     assertNotNull(result);
     assertEquals(newValue, result.getConfigValue());
     verify(systemConfigMapper, times(1)).updateEntityFromRequest(request, existingConfig);
@@ -106,13 +106,13 @@ class SystemConfigServiceImplTest {
   @Test
   @DisplayName("存在しない設定キーの更新で例外が発生すること")
   void updateConfig_NotFound() {
-    // Arrange
+    // 準備
     String key = "unknown_key";
     SystemConfigUpdateRequest request = SystemConfigUpdateRequest.builder().configKey(key).build();
 
     when(systemConfigRepository.findByConfigKey(key)).thenReturn(Optional.empty());
 
-    // Act & Assert
+    // 実行・検証
     assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
   }
 }

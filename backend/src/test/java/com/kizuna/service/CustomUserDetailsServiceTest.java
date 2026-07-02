@@ -40,7 +40,7 @@ class CustomUserDetailsServiceTest {
 
   @BeforeEach
   void setUp() {
-    // Setup CentralUser
+    // セントラルユーザーの準備
     CentralPermission centralPerm1 = new CentralPermission();
     centralPerm1.setName("READ");
     CentralPermission centralPerm2 = new CentralPermission();
@@ -56,7 +56,7 @@ class CustomUserDetailsServiceTest {
     centralUser.setEnabled(true);
     centralUser.setRoles(Set.of(centralRole));
 
-    // Setup TenantUser
+    // テナントユーザーの準備
     TenantPermission tenantPerm1 = new TenantPermission();
     tenantPerm1.setName("VIEW");
     TenantPermission tenantPerm2 = new TenantPermission();
@@ -111,7 +111,7 @@ class CustomUserDetailsServiceTest {
 
     assertThatThrownBy(() -> customUserDetailsService.loadUserByUsername("nonexistent"))
         .isInstanceOf(UsernameNotFoundException.class)
-        .hasMessageContaining("User not found (central): nonexistent");
+        .hasMessageContaining("ユーザーが見つかりません（セントラル）: nonexistent");
   }
 
   @Test
@@ -121,7 +121,7 @@ class CustomUserDetailsServiceTest {
 
     assertThatThrownBy(() -> customUserDetailsService.loadUserByUsername("nonexistent@test.com"))
         .isInstanceOf(UsernameNotFoundException.class)
-        .hasMessageContaining("User not found (tenant): nonexistent@test.com");
+        .hasMessageContaining("ユーザーが見つかりません（テナント）: nonexistent@test.com");
   }
 
   @Test

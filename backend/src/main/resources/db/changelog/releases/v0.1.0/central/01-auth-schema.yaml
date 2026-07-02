@@ -5,7 +5,7 @@ databaseChangeLog:
       changes:
         - createTable:
             tableName: central_users
-            remarks: 核心控制台用户
+            remarks: セントラル管理ユーザー
             columns:
               - column:
                   name: id
@@ -47,7 +47,7 @@ databaseChangeLog:
                     nullable: false
         - createTable:
             tableName: central_roles
-            remarks: 控制台角色
+            remarks: セントラルロール
             columns:
               - column:
                   name: id
@@ -78,7 +78,7 @@ databaseChangeLog:
                     nullable: false
         - createTable:
             tableName: central_permissions
-            remarks: 控制台权限
+            remarks: セントラル権限
             columns:
               - column:
                   name: id
@@ -109,7 +109,7 @@ databaseChangeLog:
                     nullable: false
         - createTable:
             tableName: central_user_roles
-            remarks: 控制台用户角色关联
+            remarks: セントラルユーザーとロールの関連
             columns:
               - column:
                   name: user_id
@@ -123,7 +123,7 @@ databaseChangeLog:
                     nullable: false
         - createTable:
             tableName: central_role_permissions
-            remarks: 控制台角色权限关联
+            remarks: セントラルロール权限关联
             columns:
               - column:
                   name: role_id
