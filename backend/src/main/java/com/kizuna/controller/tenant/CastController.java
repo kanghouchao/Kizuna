@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +32,7 @@ public class CastController {
   private final CastService castService;
 
   @GetMapping
+  @PreAuthorize("hasAuthority('CAST_MANAGE')")
   public ResponseEntity<Page<CastResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
@@ -38,22 +40,26 @@ public class CastController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('CAST_MANAGE')")
   public ResponseEntity<CastResponse> get(@PathVariable String id) {
     return ResponseEntity.ok(castService.get(id));
   }
 
   @PostMapping
+  @PreAuthorize("hasAuthority('CAST_MANAGE')")
   public ResponseEntity<CastResponse> create(@Valid @RequestBody CastCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED).body(castService.create(request));
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAuthority('CAST_MANAGE')")
   public ResponseEntity<CastResponse> update(
       @PathVariable String id, @Valid @RequestBody CastUpdateRequest request) {
     return ResponseEntity.ok(castService.update(id, request));
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("hasAuthority('CAST_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     castService.delete(id);
     return ResponseEntity.ok().build();

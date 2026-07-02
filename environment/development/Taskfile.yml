@@ -1,0 +1,56 @@
+version: "3"
+
+# 開発環境用タスク
+vars:
+  PROJECT_NAME: '{{default "kizuna" .PROJECT_NAME}}'
+  service: '{{default "" .service}}'
+
+tasks:
+  up:
+    desc: サービスを起動
+    cmds:
+      - docker compose -p {{.PROJECT_NAME}} up -d --timestamps --wait
+
+  down:
+    desc: サービスを停止
+    cmds:
+      - docker compose -p {{.PROJECT_NAME}} down
+
+  ps:
+    desc: サービス状態を表示
+    cmds:
+      - docker compose -p {{.PROJECT_NAME}} ps
+
+  logs:
+    desc: ログを表示
+    cmds:
+      - |
+        if [ -n "{{.service}}" ]; then
+          echo "📜 {{.service}}サービスのログを表示中..."
+          docker compose -p {{.PROJECT_NAME}} logs -f {{.service}}
+        else
+          docker compose -p {{.PROJECT_NAME}} logs -f
+        fi
+
+  exec:
+    desc: サービスコンテナに入る
+    cmds:
+      - |
+        if [ -n "{{.service}}" ]; then
+          docker compose -p {{.PROJECT_NAME}} exec {{.service}} sh
+        else
+          echo "❗ serviceを指定してください。例: task exec service=backend"
+          exit 1
+        fi
+
+  restart:
+    desc: サービスを再起動
+    cmds:
+      - |
+        if [ -n "{{.service}}" ]; then
+          echo "🔄 {{.service}}サービスを再起動中..."
+          docker compose -p {{.PROJECT_NAME}} restart {{.service}}
+        else
+          echo "🔄 すべてのサービスを再起動中..."
+          docker compose -p {{.PROJECT_NAME}} restart
+        fi

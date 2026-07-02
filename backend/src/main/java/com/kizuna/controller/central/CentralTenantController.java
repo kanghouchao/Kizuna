@@ -7,11 +7,11 @@ import com.kizuna.model.dto.central.tenant.TenantUpdateDTO;
 import com.kizuna.model.dto.central.tenant.TenantVO;
 import com.kizuna.service.central.tenant.CentralTenantService;
 import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,7 +31,7 @@ public class CentralTenantController {
   private final CentralTenantService tenantService;
 
   @GetMapping("tenants")
-  @RolesAllowed("ADMIN")
+  @PreAuthorize("hasAuthority('TENANT_MANAGE')")
   public ResponseEntity<PaginatedTenantVO<TenantVO>> list(
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(name = "per_page", defaultValue = "10") int perPage,
@@ -40,7 +40,7 @@ public class CentralTenantController {
   }
 
   @GetMapping("tenant/{id}")
-  @RolesAllowed("ADMIN")
+  @PreAuthorize("hasAuthority('TENANT_MANAGE')")
   public ResponseEntity<TenantVO> getById(@PathVariable String id) {
     return tenantService
         .getById(id)
@@ -65,28 +65,28 @@ public class CentralTenantController {
   }
 
   @PostMapping("tenant")
-  @RolesAllowed("ADMIN")
+  @PreAuthorize("hasAuthority('TENANT_MANAGE')")
   public ResponseEntity<Void> create(@Valid @RequestBody TenantCreateDTO tenant) {
     tenantService.create(tenant);
     return ResponseEntity.noContent().build();
   }
 
   @PutMapping("tenant/{id}")
-  @RolesAllowed("ADMIN")
+  @PreAuthorize("hasAuthority('TENANT_MANAGE')")
   public ResponseEntity<Void> update(@PathVariable String id, @RequestBody TenantUpdateDTO tenant) {
     tenantService.update(id, tenant);
     return ResponseEntity.noContent().build();
   }
 
   @DeleteMapping("tenant/{id}")
-  @RolesAllowed("ADMIN")
+  @PreAuthorize("hasAuthority('TENANT_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     tenantService.delete(id);
     return ResponseEntity.noContent().build();
   }
 
   @GetMapping("tenants/stats")
-  @RolesAllowed("ADMIN")
+  @PreAuthorize("hasAuthority('TENANT_MANAGE')")
   public ResponseEntity<TenantStatusVO> stats() {
     return ResponseEntity.ok(tenantService.stats());
   }

@@ -18,23 +18,23 @@ Kizuna Platform は、Spring Boot 3.5+ (Java 21) バックエンドと Next.js 1
 
 ```bash
 # ビルド
-make build                          # 全サービス
-make build service=frontend         # フロントエンドのみ
-make build service=backend          # バックエンドのみ
+task build                          # 全サービス
+task build service=frontend         # フロントエンドのみ
+task build service=backend          # バックエンドのみ
 
 # テスト（70% カバレッジ必須）
-make test                           # 全テスト
-make test service=frontend          # Jest のみ
-make test service=backend           # JUnit + Jacoco のみ
+task test                           # 全テスト
+task test service=frontend          # Jest のみ
+task test service=backend           # JUnit + Jacoco のみ
 
 # Lint・フォーマット
-make lint                           # チェック
-make format                         # 自動修正
+task lint                           # チェック
+task format                         # 自動修正
 
 # ローカル起動
-make up                             # フルスタック起動
-make down                           # 停止
-make logs service=backend           # ログ確認
+task up                             # フルスタック起動
+task down                           # 停止
+task logs service=backend           # ログ確認
 ```
 
 ### ローカル直接実行
@@ -95,14 +95,16 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 
 ### 共通（厳守）
 
-- **TDD**: テストを先に書いてから実装する（Test-Driven Development）
+- **TDD (テスト駆動開発)**: **必ず実装前にテストを作成してください**。テストファーストの原則を厳守し、テストが失敗することを確認してから実装を行ってください。
+- **機能追加時のデータ登録**: 新しい機能を追加する際は、必ず対応する権限（Permission）やメニュー（Menu）のデータを登録するSQLスクリプト（Liquibase changeset）を作成してください。
 - **簡潔なコード**: 冗長なコードを避け、シンプルで読みやすいコードを書く
 - **カバレッジ**: 70% 必須（CI で強制）
 - **Backend単体テスト方針**: 単体テストは業務ロジック（Service / UseCase / Controller の振る舞い）を優先し、設定・定型変換・インフラ薄層の網羅を目的にしない
-- **コミット前チェック**: 必ず `make lint && make test` を実行してからコミット
+- **コミット前チェック**: 必ず `task lint && task test` を実行してからコミット
 
 ### Backend (Java)
 
+- **命名規則**: クラス名、メソッド名、変数名、フィールド名はすべて **CamelCase** を使用すること。DBのカラム名（snake_case）とのマッピングは JPA/Hibernate が、APIのJSONキー（snake_case）との変換は Jackson が自動的に行う。
 - **import ルール**: 完全修飾クラス名（FQCN）を直接使用せず、必ず個別に import する。ワイルドカード import (`*`) は禁止
   ```java
   // ✅ Best Practice: 個別に import
@@ -128,17 +130,17 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 - **フォーマット**: Spotless + Google Java Format
 - **カバレッジ算出除外**: JaCoCo では `config` / `model` / `repository` / `mapper` / `exception` を除外し、業務実装の検証に集中する
 - **例外ルール**: 上記パッケージに明確な業務分岐・検証ロジックが存在する場合は、除外前提にせず個別にテスト追加可否を判断する
-- **DB マイグレーション**: Liquibase（`db/changelog/changes/` に YAML）
+- **DB マイグレーション**: Liquibase（`db/changelog/releases/<バージョン>/central/` または `db/changelog/releases/<バージョン>/tenant/` に YAML）
 - **設定値**: `AppProperties` から取得（ハードコード禁止）
 - **ログ**: `req=<id> tenant=<id>` 形式を維持
 
 ### Frontend (TypeScript)
 
+- **命名規則**: 
+    - コンポーネント名: **PascalCase**。
+    - API関連の型定義（Interface/Type）およびプロパティ名: **snake_case**。
+    - 内部変数・関数名: 一般的なTypeScript慣習に従うが、APIデータに由来する変数は **snake_case** を維持すること。
 - **API クライアント**: `src/lib/client.ts` の axios インスタンスを使用
-- **Server Components**: Cookie は `cookies()` で読み取り（`headers()` は使わない）
-- **型定義**: `src/types/api.ts` に集約
-- **テスト配置**: `__tests__/` ディレクトリに配置
-- **API の命名規約（snake_case）**: バックエンドの Jackson 設定（`PropertyNamingStrategies.SNAKE_CASE`）により、API のリクエスト/レスポンスの JSON キーはすべて snake_case に自動変換される。そのため、フロントエンドの TypeScript 型定義や API 通信で使用するプロパティ名も **snake_case** で統一すること（例: `template_key`, `logo_url`, `created_at`）。フロントエンド側で camelCase ↔ snake_case の変換処理は不要
 
 ## 重要ファイル
 
@@ -147,7 +149,7 @@ Traefik が `/api/*` を backend へルーティングし prefix を除去：
 | セキュリティ設定 | `backend/src/main/java/com/kizuna/config/SecurityConfig.java` |
 | JWT フィルタ | `backend/src/main/java/com/kizuna/config/filter/JwtAuthenticationFilter.java` |
 | テナントコンテキスト | `backend/src/main/java/com/kizuna/config/interceptor/TenantIdInterceptor.java` |
-| DB マイグレーション | `backend/src/main/resources/db/changelog/changes/` |
+| DB マイグレーション | `backend/src/main/resources/db/changelog/releases/` |
 | Frontend Middleware | `frontend/src/middleware.ts` |
 | HTTP クライアント | `frontend/src/lib/client.ts` |
 
@@ -167,7 +169,7 @@ echo "127.0.0.1 kizuna.test store1.kizuna.test" | sudo tee -a /etc/hosts
 cp environment/.env.example .env
 
 # 起動
-make build up
+task build up
 
 # デフォルト認証情報
 # Central: admin / pass

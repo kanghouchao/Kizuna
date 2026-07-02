@@ -100,7 +100,7 @@ cp .env.example .env
 3. Start services
 
 ```bash
-make build up
+task build up
 ```
 
 4. Map local domains (for admin/tenant switching)
@@ -118,7 +118,7 @@ Add the following lines to `/etc/hosts` (example using the repo default):
 
 6. Default Credentials
 
-You can find the initial data setup in [003-initial-data.yaml](./backend/src/main/resources/db/changelog/changes/003-initial-data.yaml).
+You can find the initial data setup in [05-initial-data.yaml](./backend/src/main/resources/db/changelog/releases/v0.1.0/central/05-initial-data.yaml).
 
 - **Central Admin:** `admin` / default password (see note below)
 - **Sample Tenant Admin:** `admin@store1.kizuna.com` / default password (see note below)
@@ -129,16 +129,16 @@ Both accounts share the same default password (`pass`), derived from the same bc
 
 ### Useful Make targets
 
-- `make help` — list all commands
-- `make build` or `make build service=frontend|backend` — build docker images for all or specified service
-- `make up` — start the full stack (Traefik, DB, Redis, backend, frontend)
-- `make down` — stop and remove containers
-- `make clean` or `make clean service=frontend|backend` — remove containers, volumes, and images for all or specified service
-- `make ps` — show running services
-- `make logs` or `make logs service=frontend|backend|traefik|database` — follow service logs
-- `make test` or `make test service=backend|frontend` — run tests
- - `make lint` or `make lint service=frontend|backend` — run linters for all or specified service
- - `make format` or `make format service=frontend|backend` — run code formatters (Spotless for backend, eslint fixes for frontend)
+- `task help` — list all commands
+- `task build` or `task build service=frontend|backend` — build docker images for all or specified service
+- `task up` — start the full stack (Traefik, DB, Redis, backend, frontend)
+- `task down` — stop and remove containers
+- `task clean` or `task clean service=frontend|backend` — remove containers, volumes, and images for all or specified service
+- `task ps` — show running services
+- `task logs` or `task logs service=frontend|backend|traefik|database` — follow service logs
+- `task test` or `task test service=backend|frontend` — run tests
+ - `task lint` or `task lint service=frontend|backend` — run linters for all or specified service
+ - `task format` or `task format service=frontend|backend` — run code formatters (Spotless for backend, eslint fixes for frontend)
 
 ### Observability quick reference
 
@@ -161,7 +161,7 @@ Kizuna/
 
 - If ports are busy, ensure nothing else is using 80, 443
 - Confirm `/etc/hosts` entries resolve to your machine
-- If you cannot log in, generate a new bcrypt password hash locally using trusted tooling (e.g. `htpasswd` or Python's `bcrypt`), update the password in [003-initial-data.yaml](./backend/src/main/resources/db/changelog/changes/003-initial-data.yaml), then run `make clean` and `make up` again.
+- If you cannot log in, generate a new bcrypt password hash locally using trusted tooling (e.g. `htpasswd` or Python's `bcrypt`), update the password in [05-initial-data.yaml](./backend/src/main/resources/db/changelog/releases/v0.1.0/central/05-initial-data.yaml), then run `task clean` and `task up` again.
 
 ## Support
 

@@ -17,6 +17,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JwtUtil {
 
+  /** セントラルドメインのトークン発行者 */
+  public static final String ISSUER_CENTRAL = "CentralAuth";
+
+  /** テナントドメインのトークン発行者 */
+  public static final String ISSUER_TENANT = "TenantAuth";
+
   private final AppProperties appProperties;
 
   public Token generateToken(

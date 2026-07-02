@@ -188,6 +188,23 @@ export interface CastCreateRequest {
   display_order?: number;
 }
 
+// システム設定レスポンス
+export interface SystemConfigResponse {
+  id: number;
+  config_key: string;
+  config_value: string;
+  category: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// システム設定更新リクエスト
+export interface SystemConfigUpdateRequest {
+  config_key: string;
+  config_value: string;
+}
+
 // キャスト更新リクエスト
 export interface CastUpdateRequest {
   name?: string;

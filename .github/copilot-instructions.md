@@ -72,7 +72,8 @@ cd frontend && npm test && npm run lint:fix
 
 ### 共通（厳守）
 
-- **TDD**: テストを先に書いてから実装する（Test-Driven Development）
+- **TDD (テスト駆動開発)**: **必ず実装前にテストを作成してください**。テストファーストの原則を厳守し、テストが失敗することを確認してから実装を行ってください。
+- **機能追加時のデータ登録**: 新しい機能（APIエンドポイント、画面）を追加する際は、必ず対応する権限（Permission）やメニュー（Menu）のデータを登録するSQLスクリプト（Liquibase changeset）を作成してください。機能実装とデータ登録は常にセットで行う必要があります。
 - **簡潔なコード**: 冗長なコードを避け、シンプルで読みやすいコードを書く
 - **カバレッジ**: 70% 必須（CI で強制）
 - **Backend単体テスト方針**: 単体テストは業務ロジック（Service / UseCase / Controller の振る舞い）を優先し、設定・定型変換・インフラ薄層の網羅を目的にしない
@@ -80,6 +81,9 @@ cd frontend && npm test && npm run lint:fix
 
 ### Backend (Java)
 
+- **命名規則**: クラス名、メソッド名、変数名、フィールド名はすべて **CamelCase** を使用すること。
+    - **Database**: テーブル名、カラム名は **snake_case**。JPA/Hibernate が自動的にマッピングします。
+    - **API / JSON**: 通信時のJSONキーはすべて **snake_case**。Jacksonの設定により自動変換されるため、Java側で変換ロジックを書く必要はありません。
 - **import ルール**: 完全修飾クラス名（FQCN）を直接使用せず、必ず個別に import する。ワイルドカード import (`*`) は禁止
   ```java
   // ✅ Best Practice: 個別に import
@@ -111,6 +115,10 @@ cd frontend && npm test && npm run lint:fix
 
 ### Frontend (TypeScript)
 
+- **命名規則**: 
+    - コンポーネント名: **PascalCase**。
+    - API関連の型定義（Interface/Type）およびプロパティ名: **snake_case**（バックエンドのJSONと一致させる）。
+    - 内部変数・関数名: 一般的なTypeScript慣習に従うが、APIデータに由来する変数は **snake_case** を維持すること。
 - **API クライアント**: `src/lib/client.ts` の axios インスタンスを使用
 - **Server Components**: Cookie は `cookies()` で読み取り（`headers()` は使わない）
 - **型定義**: `src/types/api.ts` に集約
