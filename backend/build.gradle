@@ -1,9 +1,9 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.11'
+    id 'org.springframework.boot' version '3.5.16'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'java'
     id 'jacoco'
-    id 'com.diffplug.spotless' version '8.2.1'
+    id 'com.diffplug.spotless' version '8.8.0'
 }
 
 group = 'com.kizuna'
@@ -24,7 +24,7 @@ java {
 
 dependencyManagement {
     imports {
-        mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.11"
+        mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.16"
     }
 }
 
@@ -57,7 +57,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     runtimeOnly 'io.lettuce:lettuce-core'
     implementation 'org.liquibase:liquibase-core'
-    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.15.1'
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.15.4'
     implementation 'org.mapstruct:mapstruct:1.6.3'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
