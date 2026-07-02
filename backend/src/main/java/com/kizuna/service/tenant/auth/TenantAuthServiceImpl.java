@@ -55,7 +55,8 @@ public class TenantAuthServiceImpl implements TenantAuthService {
     if (tenantId != null) {
       claims.put("tenantId", tenantId);
     }
-    return jwtUtil.generateToken(Objects.requireNonNull(auth.getName()), "TenantAuth", claims);
+    return jwtUtil.generateToken(
+        Objects.requireNonNull(auth.getName()), JwtUtil.ISSUER_TENANT, claims);
   }
 
   @Override
