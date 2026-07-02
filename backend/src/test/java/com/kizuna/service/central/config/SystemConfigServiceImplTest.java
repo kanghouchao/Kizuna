@@ -2,6 +2,7 @@ package com.kizuna.service.central.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -101,6 +102,75 @@ class SystemConfigServiceImplTest {
     assertEquals(newValue, result.getConfigValue());
     verify(systemConfigMapper, times(1)).updateEntityFromRequest(request, existingConfig);
     verify(systemConfigRepository, times(1)).save(existingConfig);
+  }
+
+  @Test
+  @DisplayName("真偽値型の設定に不正な値を指定すると例外が発生すること")
+  void updateConfig_invalidBoolean() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder()
+            .configKey("maintenance_mode")
+            .configValue("yes")
+            .build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("maintenance_mode").valueType("BOOLEAN").build();
+    when(systemConfigRepository.findByConfigKey("maintenance_mode"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+  }
+
+  @Test
+  @DisplayName("数値型の設定に不正な値を指定すると例外が発生すること")
+  void updateConfig_invalidNumber() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder().configKey("smtp_port").configValue("abc").build();
+    SystemConfig config = SystemConfig.builder().configKey("smtp_port").valueType("NUMBER").build();
+    when(systemConfigRepository.findByConfigKey("smtp_port")).thenReturn(Optional.of(config));
+
+    assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+  }
+
+  @Test
+  @DisplayName("秘匿設定の値はレスポンスでマスクされること")
+  void getAllConfigs_masksSecret() {
+    SystemConfig config =
+        SystemConfig.builder()
+            .configKey("smtp_password")
+            .configValue("secret-value")
+            .secret(true)
+            .build();
+    SystemConfigResponse response =
+        SystemConfigResponse.builder()
+            .configKey("smtp_password")
+            .configValue("secret-value")
+            .build();
+    when(systemConfigRepository.findAll()).thenReturn(List.of(config));
+    when(systemConfigMapper.toResponse(config)).thenReturn(response);
+
+    List<SystemConfigResponse> result = systemConfigService.getAllConfigs();
+
+    assertEquals(1, result.size());
+    assertNull(result.get(0).getConfigValue());
+  }
+
+  @Test
+  @DisplayName("getConfigValue で設定値を取得できること")
+  void getConfigValue() {
+    SystemConfig config =
+        SystemConfig.builder().configKey("maintenance_mode").configValue("true").build();
+    when(systemConfigRepository.findByConfigKey("maintenance_mode"))
+        .thenReturn(Optional.of(config));
+
+    assertEquals(Optional.of("true"), systemConfigService.getConfigValue("maintenance_mode"));
+  }
+
+  @Test
+  @DisplayName("存在しないキーの getConfigValue は空を返すこと")
+  void getConfigValue_missing() {
+    when(systemConfigRepository.findByConfigKey("unknown")).thenReturn(Optional.empty());
+
+    assertEquals(Optional.empty(), systemConfigService.getConfigValue("unknown"));
   }
 
   @Test
