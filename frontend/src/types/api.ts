@@ -192,7 +192,10 @@ export interface CastCreateRequest {
 export interface SystemConfigResponse {
   id: number;
   config_key: string;
-  config_value: string;
+  // 秘匿設定はバックエンドでマスクされ JSON に含まれないため optional
+  config_value?: string;
+  value_type: 'STRING' | 'NUMBER' | 'BOOLEAN';
+  secret: boolean;
   category: string;
   description?: string;
   created_at: string;
