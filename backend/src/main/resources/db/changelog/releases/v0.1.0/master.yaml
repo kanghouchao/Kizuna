@@ -15,6 +15,9 @@ databaseChangeLog:
       file: central/05-initial-data.yaml
       relativeToChangelogFile: true
   - include:
+      file: central/06-config-extend.yaml
+      relativeToChangelogFile: true
+  - include:
       file: tenant/01-core-schema.yaml
       relativeToChangelogFile: true
   - include:

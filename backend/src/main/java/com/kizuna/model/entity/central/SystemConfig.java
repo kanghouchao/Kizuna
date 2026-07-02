@@ -31,4 +31,12 @@ public class SystemConfig extends BaseEntity {
 
   @Column(name = "description", length = 500)
   private String description;
+
+  @Builder.Default
+  @Column(name = "value_type", nullable = false, length = 20)
+  private String valueType = "STRING";
+
+  @Builder.Default
+  @Column(name = "secret", nullable = false)
+  private Boolean secret = false;
 }
