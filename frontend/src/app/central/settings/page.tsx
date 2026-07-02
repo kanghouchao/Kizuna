@@ -9,6 +9,15 @@ type ConfigGroup = {
   [category: string]: SystemConfigResponse[];
 };
 
+// axios エラーからサーバーのバリデーションメッセージを取り出す
+function errorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const data = (error as { response?: { data?: { error?: string } } }).response?.data;
+    if (data?.error) return data.error;
+  }
+  return '設定の更新に失敗しました';
+}
+
 export default function SystemSettingsPage() {
   const [configs, setConfigs] = useState<SystemConfigResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,9 +41,34 @@ export default function SystemSettingsPage() {
     }
   };
 
+  const saveConfig = async (configKey: string, configValue: string) => {
+    const request: SystemConfigUpdateRequest = {
+      config_key: configKey,
+      config_value: configValue,
+    };
+    await systemConfigService.updateConfig(request);
+    setConfigs(prev =>
+      prev.map(c => (c.config_key === configKey ? { ...c, config_value: configValue } : c))
+    );
+    toast.success('設定を更新しました');
+  };
+
+  const handleToggle = async (config: SystemConfigResponse) => {
+    setSaving(true);
+    try {
+      await saveConfig(config.config_key, config.config_value === 'true' ? 'false' : 'true');
+    } catch (error) {
+      console.error('設定の更新に失敗しました', error);
+      toast.error(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleEdit = (config: SystemConfigResponse) => {
     setEditingKey(config.config_key);
-    setEditValue(config.config_value || '');
+    // 秘匿設定は現在値を取得できないため空欄から入力する
+    setEditValue(config.secret ? '' : config.config_value || '');
   };
 
   const handleCancel = () => {
@@ -46,22 +80,11 @@ export default function SystemSettingsPage() {
     if (!editingKey) return;
     setSaving(true);
     try {
-      const request: SystemConfigUpdateRequest = {
-        config_key: editingKey,
-        config_value: editValue,
-      };
-      await systemConfigService.updateConfig(request);
-
-      // ローカルの状態を更新
-      setConfigs(
-        configs.map(c => (c.config_key === editingKey ? { ...c, config_value: editValue } : c))
-      );
-
-      toast.success('設定を更新しました');
+      await saveConfig(editingKey, editValue);
       setEditingKey(null);
     } catch (error) {
       console.error('設定の更新に失敗しました', error);
-      toast.error('設定の更新に失敗しました');
+      toast.error(errorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -120,14 +143,51 @@ export default function SystemSettingsPage() {
                         )}
                       </div>
 
-                      {editingKey === config.config_key ? (
+                      {config.value_type === 'BOOLEAN' ? (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={config.config_value === 'true'}
+                            aria-label={config.config_key}
+                            onClick={() => handleToggle(config)}
+                            disabled={saving}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              config.config_value === 'true' ? 'bg-indigo-600' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                config.config_value === 'true' ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      ) : editingKey === config.config_key ? (
                         <div className="mt-3">
-                          <textarea
-                            value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                            rows={3}
-                          />
+                          {config.secret ? (
+                            <input
+                              type="password"
+                              value={editValue}
+                              onChange={e => setEditValue(e.target.value)}
+                              placeholder="新しい値を入力"
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+                            />
+                          ) : config.value_type === 'NUMBER' ? (
+                            <input
+                              type="number"
+                              value={editValue}
+                              onChange={e => setEditValue(e.target.value)}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+                            />
+                          ) : (
+                            <textarea
+                              value={editValue}
+                              onChange={e => setEditValue(e.target.value)}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+                              rows={3}
+                            />
+                          )}
                           <div className="mt-2 flex justify-end gap-2">
                             <button
                               onClick={handleCancel}
@@ -151,14 +211,18 @@ export default function SystemSettingsPage() {
                           onClick={() => handleEdit(config)}
                           title="クリックして編集"
                         >
-                          {config.config_value || (
-                            <span className="text-gray-400 italic">(未設定)</span>
+                          {config.secret ? (
+                            <span className="text-gray-400 italic">(秘匿設定)</span>
+                          ) : (
+                            config.config_value || (
+                              <span className="text-gray-400 italic">(未設定)</span>
+                            )
                           )}
                         </div>
                       )}
                     </div>
 
-                    {editingKey !== config.config_key && (
+                    {config.value_type !== 'BOOLEAN' && editingKey !== config.config_key && (
                       <div className="shrink-0">
                         <button
                           onClick={() => handleEdit(config)}

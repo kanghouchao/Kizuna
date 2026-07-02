@@ -1,0 +1,67 @@
+databaseChangeLog:
+  - changeSet:
+      id: central-006-config-extend-schema
+      author: kanghouchao
+      changes:
+        - addColumn:
+            tableName: central_configs
+            columns:
+              - column:
+                  name: value_type
+                  type: VARCHAR(20)
+                  defaultValue: STRING
+                  remarks: 設定値の型（STRING, NUMBER, BOOLEAN）
+                  constraints:
+                    nullable: false
+              - column:
+                  name: secret
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  remarks: 秘匿設定（レスポンスで値をマスクする）
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: central-006-config-extend-data
+      author: kanghouchao
+      changes:
+        # 既存キーへの型付け
+        - update:
+            tableName: central_configs
+            columns:
+              - column: { name: value_type, value: BOOLEAN }
+            where: config_key = 'maintenance_mode'
+        - update:
+            tableName: central_configs
+            columns:
+              - column: { name: value_type, value: NUMBER }
+            where: config_key = 'smtp_port'
+        # 旧シードの smtp_host=localhost は実際には未使用だったため、
+        # 「未設定＝環境変数フォールバック」となるよう空に戻す（手動変更済みの値は温存）
+        - update:
+            tableName: central_configs
+            columns:
+              - column: { name: config_value, value: "" }
+            where: config_key = 'smtp_host' AND config_value = 'localhost'
+        # SMTP 認証・送信元のシード追加
+        - insert:
+            tableName: central_configs
+            columns:
+              - column: { name: config_key, value: "smtp_username" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "SMTP認証ユーザー名" }
+        - insert:
+            tableName: central_configs
+            columns:
+              - column: { name: config_key, value: "smtp_password" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "SMTP認証パスワード" }
+              - column: { name: secret, valueBoolean: true }
+        - insert:
+            tableName: central_configs
+            columns:
+              - column: { name: config_key, value: "smtp_from" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "メール送信元アドレス" }

@@ -16,6 +16,8 @@ public class SystemConfigResponse {
   private String configValue;
   private String category;
   private String description;
+  private String valueType;
+  private Boolean secret;
   private OffsetDateTime createdAt;
   private OffsetDateTime updatedAt;
 }

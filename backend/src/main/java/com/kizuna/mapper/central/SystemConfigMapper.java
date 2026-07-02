@@ -22,6 +22,8 @@ public interface SystemConfigMapper {
   @Mapping(target = "description", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
+  @Mapping(target = "valueType", ignore = true)
+  @Mapping(target = "secret", ignore = true)
   void updateEntityFromRequest(
       SystemConfigUpdateRequest request, @MappingTarget SystemConfig config);
 }
