@@ -4,7 +4,7 @@ name: kizuna
 services:
   # Traefik: The reverse proxy
   traefik:
-    image: "traefik:v3.5.0"
+    image: "traefik:v3.7.6"
     container_name: "kizuna-traefik"
     ports:
       - "80:80"

@@ -123,7 +123,7 @@ You can find the initial data setup in [05-initial-data.yaml](./backend/src/main
 - **Central Admin:** `admin` / default password (see note below)
 - **Sample Tenant Admin:** `admin@store1.kizuna.com` / default password (see note below)
 
-Both accounts share the same default password (`pass`), derived from the same bcrypt hash (`$2a$10$TAnVD5vZNlATP5wayRg1SOo8UKP7m9TpzbaLJejOplq55OJxRhPnS`) defined in `003-initial-data.yaml`.
+Both accounts share the same default password (`pass`), derived from the same bcrypt hash (`$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue`) defined in `central/05-initial-data.yaml` and `tenant/08-initial-data.yaml`.
 
 7. Login and have fun!
 

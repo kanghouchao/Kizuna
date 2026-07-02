@@ -24,7 +24,7 @@ databaseChangeLog:
             columns:
               - column: { name: id, valueNumeric: 1 }
               - column: { name: username, value: admin }
-              - column: { name: password, value: "$2a$10$TAnVD5vZNlATP5wayRg1SOo8UKP7m9TpzbaLJejOplq55OJxRhPnS" }
+              - column: { name: password, value: "$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue" }
               - column: { name: enabled, valueBoolean: true }
         - insert:
             tableName: central_user_roles
