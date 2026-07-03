@@ -1,13 +1,13 @@
 package com.kizuna.service.tenant;
 
-import com.kizuna.config.TenantScoped;
-import com.kizuna.config.interceptor.TenantContext;
-import com.kizuna.exception.ServiceException;
 import com.kizuna.mapper.tenant.TenantConfigMapper;
 import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigResponse;
 import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigUpdateRequest;
 import com.kizuna.model.entity.tenant.TenantConfig;
 import com.kizuna.repository.tenant.TenantConfigRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -9,13 +9,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.config.AppProperties;
-import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.auth.Token;
 import com.kizuna.model.dto.tenant.TenantRegisterRequest;
 import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
+import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.utils.JwtUtil;
 import java.util.List;
 import java.util.Map;

@@ -1,4 +1,4 @@
-package com.kizuna.exception;
+package com.kizuna.shared.exception;
 
 import lombok.NoArgsConstructor;
 import org.springframework.http.HttpStatus;

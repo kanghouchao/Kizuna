@@ -1,4 +1,4 @@
-package com.kizuna.config;
+package com.kizuna.shared.tenancy;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

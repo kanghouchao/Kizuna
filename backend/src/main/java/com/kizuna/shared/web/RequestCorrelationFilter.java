@@ -1,6 +1,6 @@
-package com.kizuna.config.filter;
+package com.kizuna.shared.web;
 
-import com.kizuna.config.interceptor.TenantContext;
+import com.kizuna.shared.tenancy.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

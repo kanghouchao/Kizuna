@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.config.AppProperties;
-import com.kizuna.exception.ServiceException;
+import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ServiceException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;

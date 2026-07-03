@@ -13,7 +13,6 @@ class ModularityTests {
       JavaClass.Predicates.resideInAnyPackage(
           "com.kizuna.config..",
           "com.kizuna.controller..",
-          "com.kizuna.exception..",
           "com.kizuna.mapper..",
           "com.kizuna.model..",
           "com.kizuna.repository..",

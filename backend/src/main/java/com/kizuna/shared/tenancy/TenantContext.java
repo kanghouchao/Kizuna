@@ -1,4 +1,4 @@
-package com.kizuna.config.interceptor;
+package com.kizuna.shared.tenancy;
 
 import org.springframework.stereotype.Component;
 

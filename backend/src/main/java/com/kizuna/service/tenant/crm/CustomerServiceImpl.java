@@ -1,8 +1,5 @@
 package com.kizuna.service.tenant.crm;
 
-import com.kizuna.config.TenantScoped;
-import com.kizuna.config.interceptor.TenantContext;
-import com.kizuna.exception.ServiceException;
 import com.kizuna.mapper.tenant.CustomerMapper;
 import com.kizuna.model.dto.tenant.customer.CustomerCreateRequest;
 import com.kizuna.model.dto.tenant.customer.CustomerResponse;
@@ -10,6 +7,9 @@ import com.kizuna.model.dto.tenant.customer.CustomerUpdateRequest;
 import com.kizuna.model.entity.tenant.Customer;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

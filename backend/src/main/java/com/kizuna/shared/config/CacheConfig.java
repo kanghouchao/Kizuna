@@ -1,4 +1,4 @@
-package com.kizuna.config;
+package com.kizuna.shared.config;
 
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Configuration;

@@ -7,8 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.config.interceptor.TenantContext;
-import com.kizuna.exception.ServiceException;
 import com.kizuna.mapper.tenant.CustomerMapper;
 import com.kizuna.model.dto.tenant.customer.CustomerCreateRequest;
 import com.kizuna.model.dto.tenant.customer.CustomerResponse;
@@ -17,6 +15,8 @@ import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.Customer;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

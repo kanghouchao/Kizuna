@@ -1,4 +1,4 @@
-package com.kizuna.model.entity.tenant;
+package com.kizuna.shared.persistence;
 
 import java.io.Serializable;
 import java.time.Instant;

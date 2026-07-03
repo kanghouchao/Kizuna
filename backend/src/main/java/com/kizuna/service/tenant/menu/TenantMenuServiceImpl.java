@@ -1,9 +1,9 @@
 package com.kizuna.service.tenant.menu;
 
-import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.menu.MenuVO;
 import com.kizuna.model.entity.tenant.menu.TenantMenu;
 import com.kizuna.repository.tenant.menu.TenantMenuRepository;
+import com.kizuna.shared.tenancy.TenantContext;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;

@@ -1,6 +1,7 @@
 package com.kizuna.model.entity.tenant;
 
 import com.kizuna.model.entity.central.tenant.Tenant;
+import com.kizuna.shared.persistence.SnowflakeId;
 import jakarta.persistence.Column;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;

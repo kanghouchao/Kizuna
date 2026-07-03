@@ -1,4 +1,4 @@
-package com.kizuna.model.entity.central;
+package com.kizuna.shared.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;

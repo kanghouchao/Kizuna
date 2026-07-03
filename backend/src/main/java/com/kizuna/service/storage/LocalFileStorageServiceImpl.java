@@ -1,7 +1,7 @@
 package com.kizuna.service.storage;
 
-import com.kizuna.config.AppProperties;
-import com.kizuna.exception.ServiceException;
+import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ServiceException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

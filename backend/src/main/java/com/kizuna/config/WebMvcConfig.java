@@ -1,7 +1,7 @@
 package com.kizuna.config;
 
 import com.kizuna.config.interceptor.MaintenanceModeInterceptor;
-import com.kizuna.config.interceptor.TenantIdInterceptor;
+import com.kizuna.shared.tenancy.TenantIdInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
