@@ -72,10 +72,19 @@ jobs:
     environment:
       # ponytail: 固定名。PR ごとに環境を作ると Pages のアクティブデプロイ上限(100)に達して即失敗する
       name: reports
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v5.0.0
+        with:
+          artifact_name: backend-test-reports
+
+      # Pages バックエンドは一時的に "Deployment failed, try again later" を返すことがあるため 1 回だけ再試行
+      - name: Retry deploy after transient failure
+        id: deployment-retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v5.0.0
         with:
           artifact_name: backend-test-reports
