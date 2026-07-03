@@ -7,9 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.settings.application.SmtpSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import java.lang.reflect.Field;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +23,8 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 @ExtendWith(MockitoExtension.class)
 class MailServiceImplTests {
+
+  private static final SmtpSettings NOT_CONFIGURED = new SmtpSettings("", 25, "", "", "");
 
   @Mock private SystemConfigService systemConfigService;
 
@@ -47,7 +49,7 @@ class MailServiceImplTests {
   @Test
   @DisplayName("SMTP 設定もフォールバックもない場合はログのみで例外を投げないこと")
   void send_noConfigNoFallback() {
-    when(systemConfigService.getConfigValue("smtp_host")).thenReturn(Optional.empty());
+    when(systemConfigService.smtpSettings()).thenReturn(NOT_CONFIGURED);
 
     service.send("to@example.com", "件名", "本文");
     // 例外が出なければ成功
@@ -56,8 +58,7 @@ class MailServiceImplTests {
   @Test
   @DisplayName("DB の SMTP 設定がない場合はフォールバック送信クライアントを使用すること")
   void send_usesFallbackSender() {
-    when(systemConfigService.getConfigValue("smtp_host")).thenReturn(Optional.empty());
-    when(systemConfigService.getConfigValue("smtp_from")).thenReturn(Optional.empty());
+    when(systemConfigService.smtpSettings()).thenReturn(NOT_CONFIGURED);
     JavaMailSender fallback = mock(JavaMailSender.class);
     injectMailSender(fallback);
 
@@ -69,9 +70,8 @@ class MailServiceImplTests {
   @Test
   @DisplayName("smtp_from が設定されていれば送信元が設定されること")
   void send_setsFromAddress() {
-    when(systemConfigService.getConfigValue("smtp_host")).thenReturn(Optional.empty());
-    when(systemConfigService.getConfigValue("smtp_from"))
-        .thenReturn(Optional.of("noreply@kizuna.test"));
+    when(systemConfigService.smtpSettings())
+        .thenReturn(new SmtpSettings("", 25, "", "", "noreply@kizuna.test"));
     JavaMailSender fallback = mock(JavaMailSender.class);
     injectMailSender(fallback);
 
@@ -85,32 +85,27 @@ class MailServiceImplTests {
   @Test
   @DisplayName("DB の SMTP 設定から送信クライアントが構築されること")
   void resolveSender_buildsFromDbConfig() {
-    when(systemConfigService.getConfigValue("smtp_host"))
-        .thenReturn(Optional.of("smtp.example.com"));
-    when(systemConfigService.getConfigValue("smtp_port")).thenReturn(Optional.of("587"));
-    when(systemConfigService.getConfigValue("smtp_username")).thenReturn(Optional.of("user"));
-    when(systemConfigService.getConfigValue("smtp_password")).thenReturn(Optional.of("pass"));
+    SmtpSettings smtp =
+        new SmtpSettings(
+            "smtp.example.com", 587, "user", "test-placeholder-secret", "noreply@kizuna.test");
 
-    JavaMailSender sender = service.resolveSender();
+    JavaMailSender sender = service.resolveSender(smtp);
 
     assertThat(sender).isInstanceOf(JavaMailSenderImpl.class);
     JavaMailSenderImpl impl = (JavaMailSenderImpl) sender;
     assertThat(impl.getHost()).isEqualTo("smtp.example.com");
     assertThat(impl.getPort()).isEqualTo(587);
     assertThat(impl.getUsername()).isEqualTo("user");
-    assertThat(impl.getPassword()).isEqualTo("pass");
+    assertThat(impl.getPassword()).isEqualTo("test-placeholder-secret");
     assertThat(impl.getJavaMailProperties().getProperty("mail.smtp.auth")).isEqualTo("true");
   }
 
   @Test
   @DisplayName("smtp_username が空なら認証なしで構築されること")
   void resolveSender_withoutAuth() {
-    when(systemConfigService.getConfigValue("smtp_host"))
-        .thenReturn(Optional.of("smtp.example.com"));
-    when(systemConfigService.getConfigValue("smtp_port")).thenReturn(Optional.of(""));
-    when(systemConfigService.getConfigValue("smtp_username")).thenReturn(Optional.of(""));
+    SmtpSettings smtp = new SmtpSettings("smtp.example.com", 25, "", "", "");
 
-    JavaMailSenderImpl impl = (JavaMailSenderImpl) service.resolveSender();
+    JavaMailSenderImpl impl = (JavaMailSenderImpl) service.resolveSender(smtp);
 
     assertThat(impl.getPort()).isEqualTo(25);
     assertThat(impl.getUsername()).isNull();
@@ -120,8 +115,7 @@ class MailServiceImplTests {
   @Test
   @DisplayName("送信時の例外は握りつぶしてログに記録すること")
   void send_swallowsException() {
-    when(systemConfigService.getConfigValue("smtp_host")).thenReturn(Optional.empty());
-    when(systemConfigService.getConfigValue("smtp_from")).thenReturn(Optional.empty());
+    when(systemConfigService.smtpSettings()).thenReturn(NOT_CONFIGURED);
     JavaMailSender fallback = mock(JavaMailSender.class);
     doThrow(new RuntimeException("接続失敗")).when(fallback).send(any(SimpleMailMessage.class));
     injectMailSender(fallback);
