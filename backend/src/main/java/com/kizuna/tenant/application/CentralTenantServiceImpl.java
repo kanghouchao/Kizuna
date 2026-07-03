@@ -69,7 +69,9 @@ public class CentralTenantServiceImpl implements CentralTenantService {
 
   @Override
   @Transactional(readOnly = true)
-  @Cacheable(value = "tenantByDomain", key = "#domain")
+  // Optional は unwrap されるため未登録ドメインは null。cache-null-values=false の Redis に
+  // null を書くと IllegalArgumentException → 500 になるのでキャッシュ対象外にする（#207）
+  @Cacheable(value = "tenantByDomain", key = "#domain", unless = "#result == null")
   public Optional<TenantVO> getByDomain(String domain) {
     log.debug("テナントをデータベースから検索 domain: {}", domain);
     return tenantRepository.findByDomain(domain).map(this::toDto);
