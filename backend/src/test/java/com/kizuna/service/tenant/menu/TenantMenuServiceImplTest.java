@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.menu.MenuVO;
 import com.kizuna.model.entity.tenant.menu.TenantMenu;
 import com.kizuna.repository.tenant.menu.TenantMenuRepository;
+import com.kizuna.shared.tenancy.TenantContext;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

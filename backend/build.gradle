@@ -14,7 +14,9 @@ def jacocoCoverageExcludes = [
     "**/model/**",
     "**/repository/**",
     "**/mapper/**",
-    "**/exception/**"
+    "**/exception/**",
+    // 旧 config/model/exception から shared へ移動した横断的設施（除外基準は従来どおり、PR9 で全体を見直す）
+    "**/shared/**"
 ]
 
 java {

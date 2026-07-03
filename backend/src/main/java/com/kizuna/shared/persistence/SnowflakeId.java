@@ -1,4 +1,4 @@
-package com.kizuna.model.entity.tenant;
+package com.kizuna.shared.persistence;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;

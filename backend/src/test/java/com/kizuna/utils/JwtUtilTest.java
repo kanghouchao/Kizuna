@@ -3,8 +3,8 @@ package com.kizuna.utils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.config.AppProperties;
 import com.kizuna.model.dto.auth.Token;
+import com.kizuna.shared.config.AppProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;

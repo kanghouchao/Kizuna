@@ -1,4 +1,4 @@
-package com.kizuna.config.interceptor;
+package com.kizuna.shared.tenancy;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

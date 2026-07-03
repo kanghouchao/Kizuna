@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.entity.central.security.CentralPermission;
 import com.kizuna.model.entity.central.security.CentralRole;
 import com.kizuna.model.entity.central.security.CentralUser;
@@ -13,6 +12,7 @@ import com.kizuna.model.entity.tenant.security.TenantRole;
 import com.kizuna.model.entity.tenant.security.TenantUser;
 import com.kizuna.repository.central.CentralUserRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
+import com.kizuna.shared.tenancy.TenantContext;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;

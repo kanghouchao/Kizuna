@@ -1,6 +1,5 @@
-package com.kizuna.config;
+package com.kizuna.shared.tenancy;
 
-import com.kizuna.config.interceptor.TenantContext;
 import jakarta.persistence.EntityManager;
 import lombok.AllArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -27,7 +26,7 @@ public class TenantFilterEnable {
   private final EntityManager entityManager;
   private final TenantContext tenantContext;
 
-  @Around(value = "@annotation(com.kizuna.config.TenantScoped)")
+  @Around(value = "@annotation(com.kizuna.shared.tenancy.TenantScoped)")
   public Object enableTenantFilterForTenantServiceMethods(ProceedingJoinPoint pjp)
       throws Throwable {
     if (tenantContext.isTenant()) {

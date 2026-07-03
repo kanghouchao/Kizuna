@@ -1,9 +1,9 @@
 package com.kizuna.controller;
 
-import com.kizuna.config.AppProperties;
-import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.file.FileUploadResponse;
 import com.kizuna.service.storage.FileStorageService;
+import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.tenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;

@@ -1,14 +1,14 @@
 package com.kizuna.service.tenant.auth;
 
-import com.kizuna.config.AppProperties;
-import com.kizuna.config.TenantScoped;
-import com.kizuna.config.interceptor.TenantContext;
 import com.kizuna.model.dto.auth.Token;
 import com.kizuna.model.dto.tenant.TenantRegisterRequest;
 import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.security.TenantUser;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantUserRepository;
+import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.utils.JwtUtil;
 import java.util.HashMap;
 import java.util.Map;

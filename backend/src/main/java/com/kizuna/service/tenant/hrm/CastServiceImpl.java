@@ -1,8 +1,5 @@
 package com.kizuna.service.tenant.hrm;
 
-import com.kizuna.config.TenantScoped;
-import com.kizuna.config.interceptor.TenantContext;
-import com.kizuna.exception.ServiceException;
 import com.kizuna.mapper.tenant.CastMapper;
 import com.kizuna.model.dto.tenant.cast.CastCreateRequest;
 import com.kizuna.model.dto.tenant.cast.CastResponse;
@@ -10,6 +7,9 @@ import com.kizuna.model.dto.tenant.cast.CastUpdateRequest;
 import com.kizuna.model.entity.tenant.Cast;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.CastRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantScoped;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

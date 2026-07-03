@@ -8,8 +8,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.config.interceptor.TenantContext;
-import com.kizuna.exception.ServiceException;
 import com.kizuna.mapper.tenant.TenantConfigMapper;
 import com.kizuna.model.dto.tenant.tenantconfig.PartnerLink;
 import com.kizuna.model.dto.tenant.tenantconfig.SnsLink;
@@ -17,6 +15,8 @@ import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigResponse;
 import com.kizuna.model.dto.tenant.tenantconfig.TenantConfigUpdateRequest;
 import com.kizuna.model.entity.tenant.TenantConfig;
 import com.kizuna.repository.tenant.TenantConfigRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;

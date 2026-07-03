@@ -1,7 +1,7 @@
 package com.kizuna.utils;
 
-import com.kizuna.config.AppProperties;
 import com.kizuna.model.dto.auth.Token;
+import com.kizuna.shared.config.AppProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;

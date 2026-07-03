@@ -1,4 +1,4 @@
-package com.kizuna.exception;
+package com.kizuna.shared.exception;
 
 import java.util.HashMap;
 import java.util.Map;

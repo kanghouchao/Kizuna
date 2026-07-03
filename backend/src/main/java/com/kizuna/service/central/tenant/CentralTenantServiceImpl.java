@@ -1,8 +1,6 @@
 package com.kizuna.service.central.tenant;
 
-import com.kizuna.config.AppProperties;
 import com.kizuna.controller.tenant.listener.event.TenantCreatedEvent;
-import com.kizuna.exception.ServiceException;
 import com.kizuna.model.dto.central.tenant.PaginatedTenantVO;
 import com.kizuna.model.dto.central.tenant.TenantCreateDTO;
 import com.kizuna.model.dto.central.tenant.TenantStatusVO;
@@ -12,6 +10,8 @@ import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.model.entity.tenant.TenantConfig;
 import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantConfigRepository;
+import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.utils.RandomTokenUtils;
 import java.util.List;
 import java.util.Optional;

@@ -1,9 +1,9 @@
 package com.kizuna.controller.tenant.listener;
 
-import com.kizuna.config.AppProperties;
 import com.kizuna.controller.tenant.listener.event.TenantCreatedEvent;
 import com.kizuna.model.entity.central.tenant.Tenant;
 import com.kizuna.service.mail.MailService;
+import com.kizuna.shared.config.AppProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.scheduling.annotation.Async;

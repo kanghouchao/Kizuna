@@ -1,4 +1,4 @@
-package com.kizuna.config;
+package com.kizuna.shared.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
