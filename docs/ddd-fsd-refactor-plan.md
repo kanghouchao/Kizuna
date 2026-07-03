@@ -90,6 +90,8 @@ frontend/
 
 ## 四、PR 分批计划（D8）
 
+> 状态（2026-07-03）：PR1-PR9 全部完成并开出 stacked PR（#202→#203→#204→#205→#206→#209→#210→#211→#212，按序合并）。
+
 每个 PR 的验收线：`task lint` + `task test` 全绿（≥70% 覆盖率）、Modulith verify/Steiger 无违规、行为零变化（纯重构）。
 
 | PR | 内容 |
@@ -109,7 +111,7 @@ frontend/
 ### 配套更新（PR9 明细）
 
 - **Jacoco 排除**：现排除 `config/model/repository/mapper/exception`。新结构下 `domain` 含业务行为**必须纳入覆盖**；排除面收窄为 `api/dto`、MapStruct 生成物、纯配置类。
-- **规则文档**：`.claude/rules/*.md` 按新结构重写（模块模板、层依赖规则、FSD 层级说明、CONTEXT.md 指引）。
+- **规则文档**：`.claude/rules/*.md` 是 Claude 专属配置（`.claude/` 在 gitignore 中，不入库），已在本地按新结构重写。仓库内的规范正本是本计划文档 + ADR + CONTEXT.md。
 - **CONTEXT.md / ADR**：作为活文档随实施更新。
 
 ## 五、未决问题

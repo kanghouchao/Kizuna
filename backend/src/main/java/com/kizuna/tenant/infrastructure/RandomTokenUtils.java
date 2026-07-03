@@ -1,4 +1,4 @@
-package com.kizuna.utils;
+package com.kizuna.tenant.infrastructure;
 
 import java.security.SecureRandom;
 import lombok.experimental.UtilityClass;

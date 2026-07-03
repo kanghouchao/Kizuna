@@ -1,0 +1,14 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.cast`
+|Spring components
+|_Repositories_
+
+* `c.k.c.domain.CastRepository`
+|Bean references
+|* `c.k.s.tenancy.TenantContext` (in Shared)
+* `c.k.t.domain.TenantRepository` (in Tenant)
+|Aggregate roots
+|* `c.k.c.domain.Cast`
+|===

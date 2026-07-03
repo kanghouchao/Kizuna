@@ -12,10 +12,6 @@ const customJestConfig = {
   // Coverage settings — focus on core client logic instead of pages/templates
   collectCoverage: true,
   collectCoverageFrom: [
-    'src/lib/**/*.{ts,tsx}',
-    'src/contexts/**/*.{ts,tsx}',
-    'src/services/**/*.{ts,tsx}',
-    'src/hooks/**/*.{ts,tsx}',
     'src/shared/api/**/*.{ts,tsx}',
     'src/shared/lib/**/*.{ts,tsx}',
     'src/entities/**/*.{ts,tsx}',
