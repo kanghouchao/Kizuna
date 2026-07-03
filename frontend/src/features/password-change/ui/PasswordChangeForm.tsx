@@ -3,16 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { centralAuthApi, storeAuthApi, useAuth } from '@/entities/user';
-import { isTenantDomain } from '@/shared/lib';
-
-// axios エラーからサーバーのバリデーションメッセージを取り出す
-function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'response' in error) {
-    const data = (error as { response?: { data?: { error?: string } } }).response?.data;
-    if (data?.error) return data.error;
-  }
-  return 'パスワードの変更に失敗しました';
-}
+import { getApiErrorMessage, isTenantDomain } from '@/shared/lib';
 
 /** パスワード変更フォーム。成功するとトークンが失効するため、ログアウトして再ログインを促す。 */
 export function PasswordChangeForm() {
@@ -42,7 +33,7 @@ export function PasswordChangeForm() {
       toast.success('パスワードを変更しました。再度ログインしてください');
       logout();
     } catch (error) {
-      toast.error(errorMessage(error));
+      toast.error(getApiErrorMessage(error, 'パスワードの変更に失敗しました'));
       setIsSubmitting(false);
     }
   };

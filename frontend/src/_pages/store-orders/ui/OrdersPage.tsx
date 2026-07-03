@@ -1,37 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  PlusIcon,
-  MagnifyingGlassIcon,
-  PencilSquareIcon,
-  TrashIcon,
-  EyeIcon,
-} from '@heroicons/react/24/outline';
-import { useEffect, useState } from 'react';
+import { PlusIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { Order, orderApi } from '@/entities/order';
-import { toast } from 'react-hot-toast';
+import { useManagedList } from '@/shared/lib';
 
 export default function OrderListPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  const fetchOrders = async () => {
-    try {
-      setIsLoading(true);
-      const response = await orderApi.list({ size: 100, sort: 'createdAt,desc' });
-      setOrders(response.content);
-    } catch (error) {
-      console.error(error);
-      toast.error('オーダーの取得に失敗しました');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { items: orders, isLoading } = useManagedList<Order>(
+    () => orderApi.list({ size: 100, sort: 'createdAt,desc' }).then(page => page.content),
+    'オーダーの取得に失敗しました'
+  );
 
   return (
     <div className="space-y-6">
@@ -47,23 +25,6 @@ export default function OrderListPage() {
           <PlusIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
           新規オーダー登録
         </Link>
-      </div>
-
-      {/* Search Bar */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex items-center space-x-4">
-        <div className="flex-1 relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            placeholder="電話番号、お客様名で検索..."
-          />
-        </div>
-        <button className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-          検索
-        </button>
       </div>
 
       {/* Orders Table */}
@@ -126,18 +87,12 @@ export default function OrderListPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                    <button className="text-gray-400 hover:text-indigo-600">
-                      <EyeIcon className="h-5 w-5" />
-                    </button>
                     <Link
                       href={`/tenant/orders/${order.id}/edit`}
                       className="text-gray-400 hover:text-amber-600 inline-block"
                     >
                       <PencilSquareIcon className="h-5 w-5" />
                     </Link>
-                    <button className="text-gray-400 hover:text-red-600">
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
                   </td>
                 </tr>
               ))}
