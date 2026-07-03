@@ -38,4 +38,9 @@ public class CentralUser extends BaseEntity {
       joinColumns = @JoinColumn(name = "user_id"),
       inverseJoinColumns = @JoinColumn(name = "role_id"))
   private Set<CentralRole> roles = new HashSet<>();
+
+  /** パスワードを更新する。エンコード済みの値を渡すこと（検証は application 層の責務）。 */
+  public void changePassword(String encodedPassword) {
+    this.password = encodedPassword;
+  }
 }

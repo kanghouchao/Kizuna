@@ -2,22 +2,22 @@ package com.kizuna.auth.api.central;
 
 import com.kizuna.auth.api.dto.AdminDto;
 import com.kizuna.auth.api.dto.LoginRequest;
+import com.kizuna.auth.api.dto.PasswordChangeRequest;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.application.CentralAuthService;
-import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.user.domain.CentralUser;
 import com.kizuna.user.domain.CentralUserRepository;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.security.Principal;
-import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,8 +35,7 @@ public class CentralAuthController {
 
   private final CentralAuthService authService;
   private final CentralUserRepository userRepository;
-  private final RedisTemplate<String, Object> redisTemplate;
-  private final JwtUtil jwtUtil;
+  private final TokenBlacklistService tokenBlacklistService;
 
   @PostMapping("/login")
   @PermitAll
@@ -55,26 +54,25 @@ public class CentralAuthController {
     return ResponseEntity.ok(new AdminDto(user.getId(), user.getUsername(), user.getUsername()));
   }
 
+  /** パスワード変更。成功時は現在のトークンを失効させるため、クライアントは再ログインが必要。 */
+  @PutMapping("/password")
+  @PreAuthorize("isAuthenticated()")
+  public ResponseEntity<Void> changePassword(
+      Principal principal,
+      @RequestHeader(name = "Authorization", required = false) String authHeader,
+      @Valid @RequestBody PasswordChangeRequest request) {
+    authService.changePassword(
+        principal.getName(), request.getCurrentPassword(), request.getNewPassword());
+    tokenBlacklistService.blacklist(authHeader);
+    SecurityContextHolder.clearContext();
+    return ResponseEntity.noContent().build();
+  }
+
   @PostMapping("/logout")
   @PermitAll
   public ResponseEntity<?> logout(
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
-    if (authHeader != null && authHeader.startsWith("Bearer ")) {
-      String token = authHeader.substring(7);
-      try {
-        var claims = jwtUtil.getClaims(token);
-        long exp = claims.getExpiration().getTime();
-        long now = System.currentTimeMillis();
-        long ttl = Math.max(0, exp - now);
-        if (ttl > 0) {
-          redisTemplate
-              .opsForValue()
-              .set("blacklist:tokens:" + token, "1", ttl, TimeUnit.MILLISECONDS);
-        }
-      } catch (Exception e) {
-        // Token invalid or expired, ignore
-      }
-    }
+    tokenBlacklistService.blacklist(authHeader);
     SecurityContextHolder.clearContext();
     return ResponseEntity.noContent().build();
   }

@@ -45,4 +45,14 @@ public class StoreUser extends TenantScopedEntity {
       joinColumns = @JoinColumn(name = "user_id"),
       inverseJoinColumns = @JoinColumn(name = "role_id"))
   private Set<TenantRole> roles = new HashSet<>();
+
+  /** パスワードを更新する。エンコード済みの値を渡すこと（検証は application 層の責務）。 */
+  public void changePassword(String encodedPassword) {
+    this.password = encodedPassword;
+  }
+
+  /** ニックネームを変更する。 */
+  public void rename(String nickname) {
+    this.nickname = nickname;
+  }
 }

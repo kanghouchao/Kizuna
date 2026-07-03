@@ -13,4 +13,13 @@ public interface CentralAuthService {
    * @return the JWT token
    */
   Token login(String username, String password);
+
+  /**
+   * パスワードを変更する。現在のパスワードが一致しない場合は {@link com.kizuna.shared.exception.ServiceException}。
+   *
+   * @param username 対象ユーザー名
+   * @param currentPassword 現在のパスワード（平文）
+   * @param newPassword 新しいパスワード（平文）
+   */
+  void changePassword(String username, String currentPassword, String newPassword);
 }

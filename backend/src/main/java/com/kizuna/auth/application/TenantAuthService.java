@@ -27,4 +27,13 @@ public interface TenantAuthService {
    * @return 初期化されたテナントエンティティ
    */
   Tenant initializeAdminUser(TenantRegisterRequest tenant);
+
+  /**
+   * パスワードを変更する。現在のパスワードが一致しない場合は {@link com.kizuna.shared.exception.ServiceException}。
+   *
+   * @param email 対象ユーザーのメールアドレス
+   * @param currentPassword 現在のパスワード（平文）
+   * @param newPassword 新しいパスワード（平文）
+   */
+  void changePassword(String email, String currentPassword, String newPassword);
 }

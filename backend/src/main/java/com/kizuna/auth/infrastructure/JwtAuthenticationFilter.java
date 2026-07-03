@@ -37,9 +37,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     String authHeader = request.getHeader("Authorization");
     if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
       String token = authHeader.substring(7);
-      Claims claims = jwtUtil.getClaims(token);
-      if (issuerMatchesDomain(claims.getIssuer(), request.getRequestURI())
-          && !redisTemplate.hasKey("blacklist:tokens:" + token)) {
+      Claims claims = parseClaims(token);
+      if (claims != null
+          && issuerMatchesDomain(claims.getIssuer(), request.getRequestURI())
+          && !redisTemplate.hasKey(TokenBlacklistService.KEY_PREFIX + token)) {
         if (new Date().before(claims.getExpiration())) {
           String username = claims.getSubject();
           List<?> authorities = claims.get("authorities", List.class);
@@ -59,6 +60,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       }
     }
     filterChain.doFilter(request, response);
+  }
+
+  /** 期限切れ・改ざん等で解析できないトークンは「未認証」として扱う（500 にしない）。 */
+  private Claims parseClaims(String token) {
+    try {
+      return jwtUtil.getClaims(token);
+    } catch (Exception e) {
+      log.debug("JWT の解析に失敗（未認証として続行）: {}", e.getMessage());
+      return null;
+    }
   }
 
   /**
