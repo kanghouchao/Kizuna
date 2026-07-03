@@ -10,7 +10,7 @@ group = 'com.kizuna'
 version = '0.1.0'
 
 // 除外は「api/dto（DTO + MapStruct 生成物）」と「純粋な設定クラス」のみ。
-// domain 層は業務行動を含むため必ずカバレッジ対象（docs/rules/backend.md）
+// domain 層は業務行動を含むため必ずカバレッジ対象（docs/ddd-fsd-refactor-plan.md PR9）
 def jacocoCoverageExcludes = [
     "**/api/dto/**",
     "**/shared/config/**",

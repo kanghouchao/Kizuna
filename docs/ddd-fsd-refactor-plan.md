@@ -111,7 +111,7 @@ frontend/
 ### 配套更新（PR9 明细）
 
 - **Jacoco 排除**：现排除 `config/model/repository/mapper/exception`。新结构下 `domain` 含业务行为**必须纳入覆盖**；排除面收窄为 `api/dto`、MapStruct 生成物、纯配置类。
-- **规则文档**：按新结构重写，正本放在 `docs/rules/*.md`（`.claude/` 在 gitignore 中无法入库，`.claude/rules/*.md` 仅留指针存根）。
+- **规则文档**：`.claude/rules/*.md` 是 Claude 专属配置（`.claude/` 在 gitignore 中，不入库），已在本地按新结构重写。仓库内的规范正本是本计划文档 + ADR + CONTEXT.md。
 - **CONTEXT.md / ADR**：作为活文档随实施更新。
 
 ## 五、未决问题
