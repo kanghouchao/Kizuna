@@ -8,9 +8,11 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_customers")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
