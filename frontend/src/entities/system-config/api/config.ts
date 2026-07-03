@@ -1,4 +1,4 @@
-import { SystemConfigResponse, SystemConfigUpdateRequest } from '@/entities/system-config';
+import { SystemConfigResponse, SystemConfigUpdateRequest } from '../model/types';
 import { apiClient } from '@/shared/api';
 
 const BASE_URL = '/central/configs';
