@@ -67,10 +67,11 @@ jobs:
       pages: write
       id-token: write
     concurrency:
-      group: reports-${{ github.ref_name }}
+      group: reports
       cancel-in-progress: true
     environment:
-      name: reports-${{ github.ref_name }}
+      # ponytail: 固定名。PR ごとに環境を作ると Pages のアクティブデプロイ上限(100)に達して即失敗する
+      name: reports
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
