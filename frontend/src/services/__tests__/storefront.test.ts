@@ -1,8 +1,8 @@
 import { storefrontService } from '../storefront';
-import { serverClient } from '@/lib/server-client';
+import { serverClient } from '@/shared/api/index.server';
 
 // serverClientのモック
-jest.mock('@/lib/server-client', () => ({
+jest.mock('@/shared/api/server-client', () => ({
   serverClient: {
     get: jest.fn(),
   },

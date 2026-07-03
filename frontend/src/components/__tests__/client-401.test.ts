@@ -2,11 +2,11 @@ import Cookies from 'js-cookie';
 
 // mock navigation helper before importing client so that interceptor uses the mock
 const redirectMock = jest.fn();
-jest.mock('@/lib/navigation', () => ({
+jest.mock('@/shared/lib', () => ({
   redirectToLogin: () => redirectMock(),
 }));
 
-import apiClient from '@/lib/client';
+import { apiClient } from '@/shared/api';
 
 jest.mock('js-cookie');
 

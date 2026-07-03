@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { castApi } from '@/services/tenant/api';
-import { CastResponse } from '@/types/api';
+import { CastResponse, castApi } from '@/entities/cast';
 import { toast } from 'react-hot-toast';
 
 export interface OrderFormData {

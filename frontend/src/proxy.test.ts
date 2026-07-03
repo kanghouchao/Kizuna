@@ -1,14 +1,14 @@
 import { proxy } from './proxy';
-import { resolveTenant } from './lib/proxy/tenantResolver';
-import { handleRouteProtection } from './lib/proxy/routeGuard';
+import { resolveTenant } from './shared/lib/proxy/tenantResolver';
+import { handleRouteProtection } from './shared/lib/proxy/routeGuard';
 import { NextRequest } from 'next/server';
 
 // Mock dependencies BEFORE importing proxy
-jest.mock('./lib/proxy/tenantResolver', () => ({
+jest.mock('./shared/lib/proxy/tenantResolver', () => ({
   resolveTenant: jest.fn(),
 }));
 
-jest.mock('./lib/proxy/routeGuard', () => ({
+jest.mock('./shared/lib/proxy/routeGuard', () => ({
   handleRouteProtection: jest.fn(),
 }));
 

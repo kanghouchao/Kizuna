@@ -2,7 +2,7 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import ImageUpload from '@/components/ui/ImageUpload';
+import { ImageUpload } from '@/shared/ui';
 
 /** キャストフォームのデータ型 */
 export interface CastFormData {

@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { centralApi } from '@/services/central/api';
-import { Tenant, PaginatedResponse } from '@/types/api';
+import { Tenant, centralTenantApi } from '@/entities/tenant';
+import { PaginatedResponse } from '@/shared/api';
 import toast from 'react-hot-toast';
 
 export default function TenantsPage() {
@@ -18,7 +18,7 @@ export default function TenantsPage() {
   const loadTenants = useCallback(async () => {
     setLoadingTenants(true);
     try {
-      const tenants = await centralApi.getList({
+      const tenants = await centralTenantApi.getList({
         page: currentPage,
         per_page: 10,
         search: searchTerm || undefined,
@@ -48,7 +48,7 @@ export default function TenantsPage() {
     }
 
     try {
-      await centralApi.delete(id);
+      await centralTenantApi.delete(id);
       toast.success('店舗を削除しました');
       loadTenants();
     } catch (error) {

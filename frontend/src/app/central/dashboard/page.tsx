@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { centralApi } from '@/services/central/api';
-import { TenantStats, Tenant } from '@/types/api';
+import { Tenant, TenantStats, centralTenantApi } from '@/entities/tenant';
 import toast from 'react-hot-toast';
 
 export default function AdminDashboard() {
@@ -17,8 +16,8 @@ export default function AdminDashboard() {
   const loadDashboardData = useCallback(async () => {
     try {
       const [statsResponse, tenantsResponse] = await Promise.all([
-        centralApi.getStats(),
-        centralApi.getList({ per_page: 5, page: 1 }),
+        centralTenantApi.getStats(),
+        centralTenantApi.getList({ per_page: 5, page: 1 }),
       ]);
 
       setStats(statsResponse);

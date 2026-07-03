@@ -4,8 +4,7 @@ import { OrderForm, OrderFormData } from '../_components/OrderForm';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { orderApi } from '@/services/tenant/api';
-import { OrderCreateRequest } from '@/types/order';
+import { OrderCreateRequest, orderApi } from '@/entities/order';
 
 export default function CreateOrderPage() {
   const router = useRouter();

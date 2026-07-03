@@ -3,8 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { centralApi } from '@/services/central/api';
-import { CreateTenantRequest } from '@/types/api';
+import { CreateTenantRequest, centralTenantApi } from '@/entities/tenant';
 import toast from 'react-hot-toast';
 
 export default function CreateTenantPage() {
@@ -60,7 +59,7 @@ export default function CreateTenantPage() {
     setIsSubmitting(true);
 
     try {
-      await centralApi.create(formData);
+      await centralTenantApi.create(formData);
       toast.success('店舗を作成しました。店舗一覧に戻ります');
       router.push('/central/tenants');
     } catch (error: any) {

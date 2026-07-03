@@ -24,9 +24,7 @@ import {
   BuildingStorefrontIcon,
   KeyIcon,
 } from '@heroicons/react/24/outline';
-import { centralApi } from '@/services/central/api';
-import { tenantApi } from '@/services/tenant/api';
-import { MenuVO } from '@/types/api';
+import { centralMenuApi, MenuVO, storeMenuApi } from '@/entities/menu';
 
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   HomeIcon,
@@ -67,9 +65,9 @@ export function Sidebar() {
       try {
         let menus: MenuVO[] = [];
         if (role === 'central') {
-          menus = await centralApi.getMenus();
+          menus = await centralMenuApi.getMenus();
         } else if (role === 'tenant') {
-          menus = await tenantApi.getMenus();
+          menus = await storeMenuApi.getMenus();
         }
 
         const mappedNavigation = menus.map(section => ({

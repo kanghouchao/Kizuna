@@ -9,8 +9,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
-import { castApi } from '@/services/tenant/api';
-import { CastResponse } from '@/types/api';
+import { CastResponse, castApi } from '@/entities/cast';
 import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */

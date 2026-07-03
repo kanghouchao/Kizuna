@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { tenantConfigApi } from '@/services/tenant/api';
+import {
+  StoreProfileResponse,
+  StoreProfileUpdateRequest,
+  storeProfileApi,
+} from '@/entities/store-profile';
 import { TenantConfigForm } from './_components/TenantConfigForm';
-import { TenantConfigResponse, TenantConfigUpdateRequest } from '@/types/api';
 
 export default function TenantConfigPage() {
-  const [config, setConfig] = useState<TenantConfigResponse | null>(null);
+  const [config, setConfig] = useState<StoreProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -17,7 +20,7 @@ export default function TenantConfigPage() {
 
   const loadConfig = async () => {
     try {
-      const data = await tenantConfigApi.get();
+      const data = await storeProfileApi.get();
       setConfig(data);
     } catch (error) {
       toast.error('設定の読み込みに失敗しました');
@@ -26,10 +29,10 @@ export default function TenantConfigPage() {
     }
   };
 
-  const handleSubmit = async (data: TenantConfigUpdateRequest) => {
+  const handleSubmit = async (data: StoreProfileUpdateRequest) => {
     setIsSubmitting(true);
     try {
-      const updated = await tenantConfigApi.update(data);
+      const updated = await storeProfileApi.update(data);
       setConfig(updated);
       toast.success('設定を保存しました');
     } catch (error) {

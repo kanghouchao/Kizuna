@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { systemConfigService } from '@/services/central/config';
-import { SystemConfigResponse, SystemConfigUpdateRequest } from '@/types/api';
+import {
+  SystemConfigResponse,
+  SystemConfigUpdateRequest,
+  systemConfigService,
+} from '@/entities/system-config';
 
 type ConfigGroup = {
   [category: string]: SystemConfigResponse[];
