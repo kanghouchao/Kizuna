@@ -21,11 +21,11 @@ export interface PaginationParams {
   search?: string;
 }
 
-// Spring Data の Page レスポンス
+// Spring Data の Page レスポンス（JSON キーは Jackson グローバル SNAKE_CASE）
 export interface Page<T> {
   content: T[];
-  totalPages: number;
-  totalElements: number;
+  total_pages: number;
+  total_elements: number;
   size: number;
   number: number;
 }

@@ -100,25 +100,25 @@ export default function OrderListPage() {
               {orders.map(order => (
                 <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{order.storeName}</div>
-                    <div className="text-sm text-gray-500">{order.businessDate}</div>
+                    <div className="text-sm font-medium text-gray-900">{order.store_name}</div>
+                    <div className="text-sm text-gray-500">{order.business_date}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{order.customerName || '-'}</div>
+                    <div className="text-sm text-gray-900">{order.customer_name || '-'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        !order.castName || order.castName === 'フリー'
+                        !order.cast_name || order.cast_name === 'フリー'
                           ? 'bg-gray-100 text-gray-800'
                           : 'bg-pink-100 text-pink-800'
                       }`}
                     >
-                      {order.castName || 'フリー'}
+                      {order.cast_name || 'フリー'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.courseMinutes} 分
+                    {order.course_minutes} 分
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">

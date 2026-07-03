@@ -14,35 +14,35 @@ export default function CreateOrderPage() {
     setIsSubmitting(true);
     try {
       const request: OrderCreateRequest = {
-        storeName: data.storeName,
-        receptionistId: data.receptionistId || undefined,
-        businessDate: data.businessDate,
-        arrivalScheduledStartTime: data.arrivalStartTime
+        store_name: data.storeName,
+        receptionist_id: data.receptionistId || undefined,
+        business_date: data.businessDate,
+        arrival_scheduled_start_time: data.arrivalStartTime
           ? `${data.arrivalStartTime}:00`
           : undefined,
-        arrivalScheduledEndTime: data.arrivalEndTime ? `${data.arrivalEndTime}:00` : undefined,
-        customerName: data.customerName,
-        phoneNumber: data.phoneNumber,
-        phoneNumber2: data.phoneNumber2,
+        arrival_scheduled_end_time: data.arrivalEndTime ? `${data.arrivalEndTime}:00` : undefined,
+        customer_name: data.customerName,
+        phone_number: data.phoneNumber,
+        phone_number2: data.phoneNumber2,
         address: data.address,
-        buildingName: data.buildingName,
+        building_name: data.buildingName,
         classification: data.classification,
         landmark: data.landmark,
-        hasPet: data.hasPet,
-        ngType: data.ngType,
-        ngContent: data.ngContent,
-        castId: data.castId, // 注: ユーザーが名前を入力する場合、ID解決が必要かもしれないが、フォーム上は 'castId' となっている
-        courseMinutes: Number(data.courseMinutes),
-        extensionMinutes: Number(data.extensionMinutes),
-        optionCodes: data.options || [],
-        discountName: data.discountName,
-        manualDiscount: Number(data.manualDiscount),
+        has_pet: data.hasPet,
+        ng_type: data.ngType,
+        ng_content: data.ngContent,
+        cast_id: data.castId, // 注: ユーザーが名前を入力する場合、ID解決が必要かもしれないが、フォーム上は 'castId' となっている
+        course_minutes: Number(data.courseMinutes),
+        extension_minutes: Number(data.extensionMinutes),
+        option_codes: data.options || [],
+        discount_name: data.discountName,
+        manual_discount: Number(data.manualDiscount),
         carrier: data.carrier,
-        mediaName: data.mediaName,
-        usedPoints: Number(data.usedPoints),
-        manualGrantPoints: Number(data.manualGrantPoints),
+        media_name: data.mediaName,
+        used_points: Number(data.usedPoints),
+        manual_grant_points: Number(data.manualGrantPoints),
         remarks: data.remarks,
-        castDriverMessage: data.castDriverMessage,
+        cast_driver_message: data.castDriverMessage,
       };
 
       await orderApi.create(request);
