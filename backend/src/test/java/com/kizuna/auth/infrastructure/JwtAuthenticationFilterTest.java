@@ -14,7 +14,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -25,7 +24,7 @@ class JwtAuthenticationFilterTest {
 
   @Mock private JwtUtil jwtUtil;
 
-  @Mock private RedisTemplate<String, Object> redisTemplate;
+  @Mock private TokenBlacklistService tokenBlacklistService;
 
   @InjectMocks private JwtAuthenticationFilter filter;
 
@@ -56,7 +55,7 @@ class JwtAuthenticationFilterTest {
   @Test
   @DisplayName("CentralAuth 発行のトークンは /central 配下で認証されること")
   void centralTokenOnCentralPath() throws Exception {
-    when(redisTemplate.hasKey("blacklist:tokens:token")).thenReturn(false);
+    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
     assertThat(authenticated("/central/configs", "CentralAuth")).isTrue();
   }
 
@@ -75,14 +74,14 @@ class JwtAuthenticationFilterTest {
   @Test
   @DisplayName("ドメイン外のパスでは issuer を制限しないこと")
   void anyIssuerOnDomainFreePath() throws Exception {
-    when(redisTemplate.hasKey("blacklist:tokens:token")).thenReturn(false);
+    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
     assertThat(authenticated("/files/upload", "TenantAuth")).isTrue();
   }
 
   @Test
   @DisplayName("ブラックリスト登録済みのトークンは認証されないこと")
   void blacklistedToken() throws Exception {
-    when(redisTemplate.hasKey("blacklist:tokens:token")).thenReturn(true);
+    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(true);
     assertThat(authenticated("/central/configs", "CentralAuth")).isFalse();
   }
 }

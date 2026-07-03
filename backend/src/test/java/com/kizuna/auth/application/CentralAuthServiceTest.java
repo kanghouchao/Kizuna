@@ -34,6 +34,8 @@ class CentralAuthServiceTest {
   @Mock private CentralUserRepository userRepository;
   @Mock private PasswordEncoder passwordEncoder;
 
+  @Mock private AuthSessionService authSessionService;
+
   @InjectMocks private CentralAuthService authService;
 
   @Test
@@ -67,10 +69,11 @@ class CentralAuthServiceTest {
     when(passwordEncoder.matches("current", "test-placeholder-stored-hash")).thenReturn(true);
     when(passwordEncoder.encode("newpass123")).thenReturn("test-placeholder-encoded-hash");
 
-    authService.changePassword("admin", "current", "newpass123");
+    authService.changePassword("admin", "current", "newpass123", "Bearer current-token");
 
     assertThat(user.getPassword()).isEqualTo("test-placeholder-encoded-hash");
     verify(userRepository).save(user);
+    verify(authSessionService).invalidate("Bearer current-token");
   }
 
   @Test
@@ -81,7 +84,9 @@ class CentralAuthServiceTest {
     when(userRepository.findByUsername("admin")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("wrong", "test-placeholder-stored-hash")).thenReturn(false);
 
-    assertThatThrownBy(() -> authService.changePassword("admin", "wrong", "newpass123"))
+    assertThatThrownBy(
+            () ->
+                authService.changePassword("admin", "wrong", "newpass123", "Bearer current-token"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("現在のパスワードが正しくありません");
     verify(userRepository, never()).save(any());
@@ -91,7 +96,10 @@ class CentralAuthServiceTest {
   void changePassword_userNotFound_throws() {
     when(userRepository.findByUsername("missing")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> authService.changePassword("missing", "current", "newpass123"))
+    assertThatThrownBy(
+            () ->
+                authService.changePassword(
+                    "missing", "current", "newpass123", "Bearer current-token"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("ユーザーが見つかりません");
   }

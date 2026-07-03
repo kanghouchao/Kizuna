@@ -51,6 +51,8 @@ class TenantAuthServiceTest {
   @Mock private AppProperties appProperties;
   @Mock private ValueOperations<String, String> valueOperations;
 
+  @Mock private AuthSessionService authSessionService;
+
   @InjectMocks private TenantAuthService authService;
 
   @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
@@ -149,10 +151,12 @@ class TenantAuthServiceTest {
     when(passwordEncoder.matches("current", "test-placeholder-stored-hash")).thenReturn(true);
     when(passwordEncoder.encode("newpass123")).thenReturn("test-placeholder-encoded-hash");
 
-    authService.changePassword("staff@store1.kizuna.com", "current", "newpass123");
+    authService.changePassword(
+        "staff@store1.kizuna.com", "current", "newpass123", "Bearer current-token");
 
     assertThat(user.getPassword()).isEqualTo("test-placeholder-encoded-hash");
     verify(userRepository).save(user);
+    verify(authSessionService).invalidate("Bearer current-token");
   }
 
   @Test
@@ -164,7 +168,9 @@ class TenantAuthServiceTest {
     when(passwordEncoder.matches("wrong", "test-placeholder-stored-hash")).thenReturn(false);
 
     assertThatThrownBy(
-            () -> authService.changePassword("staff@store1.kizuna.com", "wrong", "newpass123"))
+            () ->
+                authService.changePassword(
+                    "staff@store1.kizuna.com", "wrong", "newpass123", "Bearer current-token"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("現在のパスワードが正しくありません");
     verify(userRepository, never()).save(any());
@@ -174,7 +180,10 @@ class TenantAuthServiceTest {
   void changePassword_userNotFound_throws() {
     when(userRepository.findByEmail("missing@x.com")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> authService.changePassword("missing@x.com", "current", "newpass123"))
+    assertThatThrownBy(
+            () ->
+                authService.changePassword(
+                    "missing@x.com", "current", "newpass123", "Bearer current-token"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("ユーザーが見つかりません");
   }

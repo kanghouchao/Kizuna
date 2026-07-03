@@ -34,6 +34,7 @@ public class TenantAuthService {
   private final PasswordEncoder passwordEncoder;
   private final AuthenticationManager authenticationManager;
   private final JwtUtil jwtUtil;
+  private final AuthSessionService authSessionService;
   private final StoreUserRepository userRepository;
   private final TenantRepository tenantRepository;
   private final TenantContext tenantContext;
@@ -83,9 +84,11 @@ public class TenantAuthService {
     return tenant;
   }
 
+  /** パスワード変更。成功時は現在のセッションを失効させる（要再ログイン）。 */
   @Transactional
   @TenantScoped
-  public void changePassword(String email, String currentPassword, String newPassword) {
+  public void changePassword(
+      String email, String currentPassword, String newPassword, String currentToken) {
     StoreUser user =
         userRepository.findByEmail(email).orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
     if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
@@ -93,5 +96,6 @@ public class TenantAuthService {
     }
     user.changePassword(passwordEncoder.encode(newPassword));
     userRepository.save(user);
+    authSessionService.invalidate(currentToken);
   }
 }

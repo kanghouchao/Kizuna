@@ -4,8 +4,8 @@ import com.kizuna.auth.api.dto.AdminDto;
 import com.kizuna.auth.api.dto.LoginRequest;
 import com.kizuna.auth.api.dto.PasswordChangeRequest;
 import com.kizuna.auth.api.dto.Token;
+import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.auth.application.CentralAuthService;
-import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.user.domain.CentralUser;
 import com.kizuna.user.domain.CentralUserRepository;
 import jakarta.annotation.security.PermitAll;
@@ -14,7 +14,6 @@ import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -35,7 +34,7 @@ public class CentralAuthController {
 
   private final CentralAuthService authService;
   private final CentralUserRepository userRepository;
-  private final TokenBlacklistService tokenBlacklistService;
+  private final AuthSessionService authSessionService;
 
   @PostMapping("/login")
   @PermitAll
@@ -62,9 +61,7 @@ public class CentralAuthController {
       @RequestHeader(name = "Authorization", required = false) String authHeader,
       @Valid @RequestBody PasswordChangeRequest request) {
     authService.changePassword(
-        principal.getName(), request.getCurrentPassword(), request.getNewPassword());
-    tokenBlacklistService.blacklist(authHeader);
-    SecurityContextHolder.clearContext();
+        principal.getName(), request.getCurrentPassword(), request.getNewPassword(), authHeader);
     return ResponseEntity.noContent().build();
   }
 
@@ -72,8 +69,7 @@ public class CentralAuthController {
   @PermitAll
   public ResponseEntity<?> logout(
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
-    tokenBlacklistService.blacklist(authHeader);
-    SecurityContextHolder.clearContext();
+    authSessionService.invalidate(authHeader);
     return ResponseEntity.noContent().build();
   }
 }

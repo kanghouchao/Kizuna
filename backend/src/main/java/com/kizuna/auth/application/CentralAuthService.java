@@ -23,6 +23,7 @@ public class CentralAuthService {
   private final JwtUtil jwtUtil;
   private final CentralUserRepository userRepository;
   private final PasswordEncoder passwordEncoder;
+  private final AuthSessionService authSessionService;
 
   public Token login(String username, String password) {
     Authentication auth =
@@ -35,8 +36,10 @@ public class CentralAuthService {
         Map.of("authorities", auth.getAuthorities().stream().map(a -> a.getAuthority()).toList()));
   }
 
+  /** パスワード変更。成功時は現在のセッションを失効させる（要再ログイン）。 */
   @Transactional
-  public void changePassword(String username, String currentPassword, String newPassword) {
+  public void changePassword(
+      String username, String currentPassword, String newPassword, String currentToken) {
     CentralUser user =
         userRepository
             .findByUsername(username)
@@ -46,5 +49,6 @@ public class CentralAuthService {
     }
     user.changePassword(passwordEncoder.encode(newPassword));
     userRepository.save(user);
+    authSessionService.invalidate(currentToken);
   }
 }

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
@@ -22,7 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -49,7 +49,7 @@ class CentralConfigControllerTest {
   // JwtAuthenticationFilter の依存（Authorization ヘッダーなしでは素通しのため動作に影響しない）
   @MockitoBean private JwtUtil jwtUtil;
 
-  @MockitoBean private RedisTemplate<String, Object> redisTemplate;
+  @MockitoBean private TokenBlacklistService tokenBlacklistService;
 
   @Test
   @DisplayName("SYSTEM_CONFIG 権限があれば設定一覧を取得できること")
