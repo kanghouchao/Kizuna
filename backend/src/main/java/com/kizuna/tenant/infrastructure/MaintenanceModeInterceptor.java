@@ -1,6 +1,6 @@
 package com.kizuna.tenant.infrastructure;
 
-import com.kizuna.service.central.config.SystemConfigService;
+import com.kizuna.settings.application.SystemConfigService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;

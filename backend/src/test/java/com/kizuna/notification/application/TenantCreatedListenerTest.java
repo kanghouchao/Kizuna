@@ -8,7 +8,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.service.mail.MailService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.tenant.domain.event.TenantCreatedEvent;
 import org.junit.jupiter.api.DisplayName;

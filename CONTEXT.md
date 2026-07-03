@@ -49,7 +49,8 @@ _Avoid_: TenantConfig（旧名，与 SystemConfig 假同名）
 _Avoid_: Config（裸用，易与 StoreProfile 混淆）
 
 **Menu（菜单）**:
-后台界面的导航菜单树。Central 与 Store 两个作用域共用同一概念。
+后台界面的导航菜单树。Central 与 Store 两个作用域共用同一概念；代码中为 menu 模块内的双实体（CentralMenu / StoreMenu，2026-07 决定不合并表）。
+_Avoid_: TenantMenu（旧名）
 
 ## Open questions
 
