@@ -8,40 +8,29 @@ import {
   PencilSquareIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CastResponse, castApi } from '@/entities/cast';
+import { useManagedList } from '@/shared/lib';
 import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */
 export default function CastListPage() {
-  const [casts, setCasts] = useState<CastResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    fetchCasts();
-  }, []);
-
-  /** キャスト一覧を取得する */
-  const fetchCasts = async (searchQuery?: string) => {
-    try {
-      setIsLoading(true);
-      const response = await castApi.list({
-        size: 100,
-        sort: 'displayOrder,asc',
-        search: searchQuery || undefined,
-      });
-      setCasts(response.content);
-    } catch {
-      toast.error('キャスト一覧の取得に失敗しました');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    items: casts,
+    isLoading,
+    refetch,
+  } = useManagedList<CastResponse>(
+    () =>
+      castApi
+        .list({ size: 100, sort: 'displayOrder,asc', search: search || undefined })
+        .then(page => page.content),
+    'キャスト一覧の取得に失敗しました'
+  );
 
   /** 検索を実行する */
   const handleSearch = () => {
-    fetchCasts(search);
+    void refetch();
   };
 
   /** キャストを削除する */
@@ -50,7 +39,7 @@ export default function CastListPage() {
     try {
       await castApi.delete(id);
       toast.success('キャストを削除しました');
-      fetchCasts(search);
+      void refetch();
     } catch {
       toast.error('キャストの削除に失敗しました');
     }

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { storeAuthApi } from '@/entities/user';
-import { isTenantDomain } from '@/shared/lib';
+import { getApiErrorMessage, isTenantDomain } from '@/shared/lib';
 import { AuthLayout } from '@/shared/ui';
 
 /** テナント初期管理者の登録動作。 */
@@ -82,10 +82,12 @@ export default function RegisterForm() {
       setTimeout(navigate, 1500);
     } catch (err) {
       console.error('テナント登録に失敗', err);
-      const message =
-        (err as any)?.response?.data?.message ||
-        '登録に失敗しました。リンクの有効期限や入力内容をご確認のうえ、必要に応じてサポートへご連絡ください。';
-      setError(message);
+      setError(
+        getApiErrorMessage(
+          err,
+          '登録に失敗しました。リンクの有効期限や入力内容をご確認のうえ、必要に応じてサポートへご連絡ください。'
+        )
+      );
     }
   };
 

@@ -7,19 +7,11 @@ import {
   SystemConfigUpdateRequest,
   systemConfigService,
 } from '@/entities/system-config';
+import { getApiErrorMessage } from '@/shared/lib';
 
 type ConfigGroup = {
   [category: string]: SystemConfigResponse[];
 };
-
-// axios エラーからサーバーのバリデーションメッセージを取り出す
-function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'response' in error) {
-    const data = (error as { response?: { data?: { error?: string } } }).response?.data;
-    if (data?.error) return data.error;
-  }
-  return '設定の更新に失敗しました';
-}
 
 export default function SystemSettingsPage() {
   const [configs, setConfigs] = useState<SystemConfigResponse[]>([]);
@@ -62,7 +54,7 @@ export default function SystemSettingsPage() {
       await saveConfig(config.config_key, config.config_value === 'true' ? 'false' : 'true');
     } catch (error) {
       console.error('設定の更新に失敗しました', error);
-      toast.error(errorMessage(error));
+      toast.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
     } finally {
       setSaving(false);
     }
@@ -87,7 +79,7 @@ export default function SystemSettingsPage() {
       setEditingKey(null);
     } catch (error) {
       console.error('設定の更新に失敗しました', error);
-      toast.error(errorMessage(error));
+      toast.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
     } finally {
       setSaving(false);
     }
