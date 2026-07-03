@@ -1,0 +1,88 @@
+package com.kizuna.customer.application;
+
+import com.kizuna.customer.api.dto.CustomerMapper;
+import com.kizuna.customer.api.dto.CustomerCreateRequest;
+import com.kizuna.customer.api.dto.CustomerResponse;
+import com.kizuna.customer.api.dto.CustomerUpdateRequest;
+import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.tenant.domain.TenantRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class CustomerServiceImpl implements CustomerService {
+
+  private final CustomerRepository customerRepository;
+  private final CustomerMapper customerMapper;
+  private final TenantContext tenantContext;
+  private final TenantRepository tenantRepository;
+
+  @Override
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public Page<CustomerResponse> list(String search, Pageable pageable) {
+    if (search != null && !search.isEmpty()) {
+      return customerRepository
+          .findByNameContainingIgnoreCase(search, pageable)
+          .map(customerMapper::toResponse);
+    }
+    return customerRepository.findAll(pageable).map(customerMapper::toResponse);
+  }
+
+  @Override
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public CustomerResponse get(String id) {
+    return customerRepository
+        .findById(id)
+        .map(customerMapper::toResponse)
+        .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
+  }
+
+  @Override
+  @TenantScoped
+  @Transactional
+  public CustomerResponse create(CustomerCreateRequest request) {
+    Customer customer = customerMapper.toEntity(request);
+
+    customer.setTenantId(
+        tenantRepository
+            .findById(tenantContext.getTenantId())
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+            .getId());
+
+    return customerMapper.toResponse(customerRepository.save(customer));
+  }
+
+  @Override
+  @TenantScoped
+  @Transactional
+  public CustomerResponse update(String id, CustomerUpdateRequest request) {
+    Customer customer =
+        customerRepository
+            .findById(id)
+            .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
+
+    customerMapper.updateEntityFromRequest(request, customer);
+
+    return customerMapper.toResponse(customerRepository.save(customer));
+  }
+
+  @Override
+  @TenantScoped
+  @Transactional
+  public void delete(String id) {
+    if (!customerRepository.existsById(id)) {
+      throw new ServiceException("顧客が見つかりません: " + id);
+    }
+    customerRepository.deleteById(id);
+  }
+}
