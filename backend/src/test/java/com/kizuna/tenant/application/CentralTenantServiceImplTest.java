@@ -7,9 +7,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.repository.tenant.TenantConfigRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.tenant.api.dto.TenantCreateDTO;
 import com.kizuna.tenant.api.dto.TenantStatusVO;
 import com.kizuna.tenant.api.dto.TenantUpdateDTO;
@@ -32,7 +32,7 @@ import org.springframework.data.domain.PageImpl;
 class CentralTenantServiceImplTest {
 
   @Mock private TenantRepository tenantRepository;
-  @Mock private TenantConfigRepository tenantConfigRepository;
+  @Mock private StoreProfileRepository storeProfileRepository;
   @Mock private ApplicationEventPublisher eventPublisher;
   @Mock private AppProperties appProperties;
   @InjectMocks private CentralTenantServiceImpl tenantService;
@@ -58,7 +58,7 @@ class CentralTenantServiceImplTest {
     when(appProperties.getTenantCreatorCachePerfix()).thenReturn("prefix-");
 
     tenantService.create(req);
-    verify(tenantConfigRepository).save(any());
+    verify(storeProfileRepository).save(any());
     verify(eventPublisher).publishEvent(any(TenantCreatedEvent.class));
   }
 

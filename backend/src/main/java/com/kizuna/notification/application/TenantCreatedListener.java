@@ -1,6 +1,5 @@
 package com.kizuna.notification.application;
 
-import com.kizuna.service.mail.MailService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.tenant.domain.event.TenantCreatedEvent;
 import lombok.RequiredArgsConstructor;

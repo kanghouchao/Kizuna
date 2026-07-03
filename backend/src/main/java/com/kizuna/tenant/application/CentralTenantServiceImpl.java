@@ -1,9 +1,9 @@
 package com.kizuna.tenant.application;
 
-import com.kizuna.model.entity.tenant.TenantConfig;
-import com.kizuna.repository.tenant.TenantConfigRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.storeprofile.domain.StoreProfile;
+import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.tenant.api.dto.PaginatedTenantVO;
 import com.kizuna.tenant.api.dto.TenantCreateDTO;
 import com.kizuna.tenant.api.dto.TenantStatusVO;
@@ -32,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CentralTenantServiceImpl implements CentralTenantService {
 
   private final TenantRepository tenantRepository;
-  private final TenantConfigRepository tenantConfigRepository;
+  private final StoreProfileRepository storeProfileRepository;
   private final ApplicationEventPublisher eventPublisher;
   private final AppProperties appProperties;
 
@@ -83,7 +83,7 @@ public class CentralTenantServiceImpl implements CentralTenantService {
     t.setDomain(req.getDomain());
     t.setEmail(req.getEmail());
     Tenant saved = tenantRepository.save(t);
-    tenantConfigRepository.save(TenantConfig.createDefault(saved));
+    storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
     String token = appProperties.getTenantCreatorCachePerfix() + RandomTokenUtils.generate();
     eventPublisher.publishEvent(
         new TenantCreatedEvent(
