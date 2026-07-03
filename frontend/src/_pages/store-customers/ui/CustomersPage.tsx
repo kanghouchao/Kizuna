@@ -28,6 +28,7 @@ export default function CustomersPage() {
         const response = await customerApi.list({
           page: pageNumber,
           size: 20,
+          sort: 'createdAt,desc',
           search: search || undefined,
           rank: rank || undefined,
           classification: classification || undefined,

@@ -2,6 +2,7 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
+import { CustomerCreateRequest } from '@/entities/customer';
 
 /** 顧客フォームのデータ型 */
 export interface CustomerFormData {
@@ -17,6 +18,24 @@ export interface CustomerFormData {
   usage_areas: string;
   ng_type: string;
   ng_content: string;
+}
+
+/** フォーム値を API リクエスト形式へ変換する（空文字のフィールドは undefined に落とす） */
+export function toCustomerRequest(data: CustomerFormData): CustomerCreateRequest {
+  return {
+    name: data.name,
+    phone_number: data.phone_number || undefined,
+    phone_number2: data.phone_number2 || undefined,
+    address: data.address || undefined,
+    building_name: data.building_name || undefined,
+    classification: data.classification || undefined,
+    has_pet: data.has_pet,
+    rank: data.rank || undefined,
+    line_id: data.line_id || undefined,
+    usage_areas: data.usage_areas || undefined,
+    ng_type: data.ng_type || undefined,
+    ng_content: data.ng_content || undefined,
+  };
 }
 
 interface CustomerFormProps {

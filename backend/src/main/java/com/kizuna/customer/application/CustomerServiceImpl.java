@@ -53,7 +53,7 @@ public class CustomerServiceImpl implements CustomerService {
             cb.or(
                 cb.like(cb.lower(root.get("name")), pattern),
                 cb.like(root.get("phoneNumber"), "%" + search + "%"),
-                cb.like(root.get("lineId"), "%" + search + "%")));
+                cb.like(cb.lower(root.get("lineId")), pattern)));
       }
       if (rank != null) {
         predicates.add(cb.equal(root.get("rank"), rank));

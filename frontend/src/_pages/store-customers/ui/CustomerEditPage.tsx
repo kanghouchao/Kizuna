@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { CustomerForm, CustomerFormData } from './CustomerForm';
-import { CustomerResponse, CustomerUpdateRequest, customerApi } from '@/entities/customer';
+import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
+import { CustomerResponse, customerApi } from '@/entities/customer';
 import { Order, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 
@@ -43,21 +43,7 @@ export default function CustomerEditPage() {
   const handleSubmit = async (data: CustomerFormData) => {
     try {
       setIsSubmitting(true);
-      const requestData: CustomerUpdateRequest = {
-        name: data.name,
-        phone_number: data.phone_number || undefined,
-        phone_number2: data.phone_number2 || undefined,
-        address: data.address || undefined,
-        building_name: data.building_name || undefined,
-        classification: data.classification || undefined,
-        has_pet: data.has_pet,
-        rank: data.rank || undefined,
-        line_id: data.line_id || undefined,
-        usage_areas: data.usage_areas || undefined,
-        ng_type: data.ng_type || undefined,
-        ng_content: data.ng_content || undefined,
-      };
-      await customerApi.update(id, requestData);
+      await customerApi.update(id, toCustomerRequest(data));
       toast.success('顧客情報を更新しました');
       router.push('/tenant/customers');
     } catch {
