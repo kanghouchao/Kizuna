@@ -54,10 +54,11 @@ public class CastServiceImpl implements CastService {
   public CastResponse create(CastCreateRequest request) {
     Cast cast = castMapper.toEntity(request);
 
-    cast.setTenant(
+    cast.setTenantId(
         tenantRepository
             .findById(tenantContext.getTenantId())
-            .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+            .getId());
 
     return castMapper.toResponse(castRepository.save(cast));
   }

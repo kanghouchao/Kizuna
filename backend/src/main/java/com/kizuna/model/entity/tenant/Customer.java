@@ -1,5 +1,6 @@
 package com.kizuna.model.entity.tenant;
 
+import com.kizuna.shared.persistence.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -16,7 +17,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Customer extends BaseEntity {
+public class Customer extends TenantScopedEntity {
 
   @Column(name = "name")
   private String name;

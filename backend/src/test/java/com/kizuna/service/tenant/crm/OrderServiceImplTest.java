@@ -14,15 +14,15 @@ import com.kizuna.model.dto.tenant.order.OrderUpdateRequest;
 import com.kizuna.model.entity.tenant.Cast;
 import com.kizuna.model.entity.tenant.Customer;
 import com.kizuna.model.entity.tenant.Order;
-import com.kizuna.model.entity.tenant.security.TenantUser;
 import com.kizuna.repository.tenant.CastRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
 import com.kizuna.repository.tenant.OrderRepository;
-import com.kizuna.repository.tenant.TenantUserRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.user.domain.StoreUser;
+import com.kizuna.user.domain.StoreUserRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ class OrderServiceImplTest {
   @Mock OrderRepository orderRepository;
   @Mock CustomerRepository customerRepository;
   @Mock CastRepository castRepository;
-  @Mock TenantUserRepository tenantUserRepository;
+  @Mock StoreUserRepository storeUserRepository;
   @Mock TenantRepository tenantRepository;
   @Mock TenantContext tenantContext;
   @Mock OrderMapper orderMapper;
@@ -98,7 +98,7 @@ class OrderServiceImplTest {
     when(orderMapper.toEntity(req)).thenReturn(entity);
     when(customerRepository.findById("c1")).thenReturn(Optional.of(new Customer()));
     when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
-    when(tenantUserRepository.findById("r1")).thenReturn(Optional.of(new TenantUser()));
+    when(storeUserRepository.findById("r1")).thenReturn(Optional.of(new StoreUser()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderMapper.toResponse(any(Order.class))).thenReturn(res);
 
@@ -127,7 +127,7 @@ class OrderServiceImplTest {
     when(customerRepository.findByPhoneNumberAndTenantId("09012345678", 1L))
         .thenReturn(Optional.empty());
     when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
-    when(tenantUserRepository.findById("r1")).thenReturn(Optional.of(new TenantUser()));
+    when(storeUserRepository.findById("r1")).thenReturn(Optional.of(new StoreUser()));
 
     when(customerMapper.toCustomer(req)).thenReturn(newCustomer);
 
@@ -148,7 +148,7 @@ class OrderServiceImplTest {
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
-    when(tenantUserRepository.findById("r2")).thenReturn(Optional.of(new TenantUser()));
+    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
 
@@ -168,7 +168,7 @@ class OrderServiceImplTest {
     Order existing = new Order();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(castRepository.findById("none")).thenReturn(Optional.empty());
-    when(tenantUserRepository.findById("r2")).thenReturn(Optional.of(new TenantUser()));
+    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("none");
@@ -210,7 +210,7 @@ class OrderServiceImplTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(new Order());
     when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
-    when(tenantUserRepository.findById("r_none")).thenReturn(Optional.empty());
+    when(storeUserRepository.findById("r_none")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)

@@ -17,7 +17,7 @@ public interface CastMapper {
   CastResponse toResponse(Cast cast);
 
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenant", ignore = true)
+  @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "status", defaultValue = "ACTIVE")
@@ -25,7 +25,7 @@ public interface CastMapper {
 
   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenant", ignore = true)
+  @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   void updateEntityFromRequest(CastUpdateRequest request, @MappingTarget Cast cast);

@@ -1,6 +1,7 @@
 package com.kizuna.model.entity.tenant;
 
-import com.kizuna.model.entity.tenant.security.TenantUser;
+import com.kizuna.shared.persistence.TenantScopedEntity;
+import com.kizuna.user.domain.StoreUser;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -25,14 +26,14 @@ import org.hibernate.annotations.Type;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Order extends BaseEntity {
+public class Order extends TenantScopedEntity {
 
   @Column(name = "store_name")
   private String storeName;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "receptionist_id")
-  private TenantUser receptionist;
+  private StoreUser receptionist;
 
   @Column(name = "business_date", nullable = false)
   private LocalDate businessDate;

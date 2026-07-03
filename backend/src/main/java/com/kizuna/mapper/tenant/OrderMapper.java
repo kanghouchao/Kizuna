@@ -40,7 +40,7 @@ public interface OrderMapper {
    * @return 注文エンティティ
    */
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenant", ignore = true)
+  @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "locationAddress", source = "address")
@@ -66,7 +66,7 @@ public interface OrderMapper {
    */
   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenant", ignore = true)
+  @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "businessDate", ignore = true) // 営業日は更新不可

@@ -1,5 +1,6 @@
 package com.kizuna.model.entity.tenant;
 
+import com.kizuna.shared.persistence.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -18,7 +19,7 @@ import org.hibernate.annotations.Filter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Cast extends BaseEntity {
+public class Cast extends TenantScopedEntity {
 
   @Column(name = "name", nullable = false)
   private String name;

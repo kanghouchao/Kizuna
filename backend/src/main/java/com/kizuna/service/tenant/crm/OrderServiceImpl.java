@@ -10,11 +10,11 @@ import com.kizuna.model.entity.tenant.Order;
 import com.kizuna.repository.tenant.CastRepository;
 import com.kizuna.repository.tenant.CustomerRepository;
 import com.kizuna.repository.tenant.OrderRepository;
-import com.kizuna.repository.tenant.TenantUserRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.user.domain.StoreUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +28,7 @@ public class OrderServiceImpl implements OrderService {
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final CastRepository castRepository;
-  private final TenantUserRepository tenantUserRepository;
+  private final StoreUserRepository storeUserRepository;
   private final TenantRepository tenantRepository;
   private final TenantContext tenantContext;
   private final OrderMapper orderMapper;
@@ -59,10 +59,11 @@ public class OrderServiceImpl implements OrderService {
     Order order = orderMapper.toEntity(request);
 
     // テナントの設定
-    order.setTenant(
+    order.setTenantId(
         tenantRepository
             .findById(tenantContext.getTenantId())
-            .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+            .getId());
 
     // 複雑な関連ロジックの処理（顧客のスマートリンク）
     handleCustomerLinking(request, order);
@@ -73,7 +74,7 @@ public class OrderServiceImpl implements OrderService {
             .findById(request.getCastId())
             .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
     order.setReceptionist(
-        tenantUserRepository
+        storeUserRepository
             .findById(request.getReceptionistId())
             .orElseThrow(
                 () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
@@ -93,7 +94,7 @@ public class OrderServiceImpl implements OrderService {
 
     // 関連IDの更新処理（MapStructではDB検索ができないため手動で実施）
     order.setReceptionist(
-        tenantUserRepository
+        storeUserRepository
             .findById(request.getReceptionistId())
             .orElseThrow(
                 () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
@@ -130,10 +131,11 @@ public class OrderServiceImpl implements OrderService {
                   () -> {
                     Customer newCustomer = customerMapper.toCustomer(req);
                     // テナントを明示的に設定
-                    newCustomer.setTenant(
+                    newCustomer.setTenantId(
                         tenantRepository
                             .findById(tenantContext.getTenantId())
-                            .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
+                            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+                            .getId());
                     return customerRepository.save(newCustomer);
                   });
       order.setCustomer(customer);
