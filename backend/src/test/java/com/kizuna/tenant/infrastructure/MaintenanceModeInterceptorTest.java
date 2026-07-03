@@ -1,4 +1,4 @@
-package com.kizuna.config.interceptor;
+package com.kizuna.tenant.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;

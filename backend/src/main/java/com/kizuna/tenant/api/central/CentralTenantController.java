@@ -1,11 +1,11 @@
-package com.kizuna.controller.central;
+package com.kizuna.tenant.api.central;
 
-import com.kizuna.model.dto.central.tenant.PaginatedTenantVO;
-import com.kizuna.model.dto.central.tenant.TenantCreateDTO;
-import com.kizuna.model.dto.central.tenant.TenantStatusVO;
-import com.kizuna.model.dto.central.tenant.TenantUpdateDTO;
-import com.kizuna.model.dto.central.tenant.TenantVO;
-import com.kizuna.service.central.tenant.CentralTenantService;
+import com.kizuna.tenant.api.dto.PaginatedTenantVO;
+import com.kizuna.tenant.api.dto.TenantCreateDTO;
+import com.kizuna.tenant.api.dto.TenantStatusVO;
+import com.kizuna.tenant.api.dto.TenantUpdateDTO;
+import com.kizuna.tenant.api.dto.TenantVO;
+import com.kizuna.tenant.application.CentralTenantService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

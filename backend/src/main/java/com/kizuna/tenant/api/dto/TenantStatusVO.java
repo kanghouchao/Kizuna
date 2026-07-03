@@ -1,3 +1,3 @@
-package com.kizuna.model.dto.central.tenant;
+package com.kizuna.tenant.api.dto;
 
 public record TenantStatusVO(long total, long active, long inactive, long pending) {}

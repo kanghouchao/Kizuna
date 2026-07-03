@@ -1,4 +1,4 @@
-package com.kizuna.config.interceptor;
+package com.kizuna.tenant.infrastructure;
 
 import com.kizuna.service.central.config.SystemConfigService;
 import jakarta.servlet.http.HttpServletRequest;

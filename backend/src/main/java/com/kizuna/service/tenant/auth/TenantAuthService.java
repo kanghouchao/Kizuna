@@ -2,7 +2,7 @@ package com.kizuna.service.tenant.auth;
 
 import com.kizuna.model.dto.auth.Token;
 import com.kizuna.model.dto.tenant.TenantRegisterRequest;
-import com.kizuna.model.entity.central.tenant.Tenant;
+import com.kizuna.tenant.domain.Tenant;
 
 /**
  * テナント認証サービスのインターフェース。
