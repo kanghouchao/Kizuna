@@ -37,8 +37,14 @@ public interface OrderRepository
         left join com.kizuna.user.domain.StoreUser u on u.id = o.receptionistId
       """;
 
-  @Query(value = VIEW_SELECT, countQuery = "select count(o) from com.kizuna.order.domain.Order o")
-  Page<OrderView> findAllViews(Pageable pageable);
+  @Query(
+      value = VIEW_SELECT + " where (:customerId is null or o.customerId = :customerId)",
+      countQuery =
+          """
+          select count(o) from com.kizuna.order.domain.Order o
+          where (:customerId is null or o.customerId = :customerId)
+          """)
+  Page<OrderView> findAllViews(@Param("customerId") String customerId, Pageable pageable);
 
   @Query(VIEW_SELECT + " where o.id = :id")
   Optional<OrderView> findViewById(@Param("id") String id);

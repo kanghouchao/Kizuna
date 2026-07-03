@@ -46,6 +46,15 @@ public class Customer extends TenantScopedEntity {
   @Column(name = "points")
   private Integer points;
 
+  @Column(name = "rank")
+  private String rank;
+
+  @Column(name = "line_id")
+  private String lineId;
+
+  @Column(name = "usage_areas")
+  private String usageAreas;
+
   @Column(name = "ng_type")
   private String ngType;
 
@@ -71,6 +80,15 @@ public class Customer extends TenantScopedEntity {
     }
     if (patch.classification() != null) {
       this.classification = patch.classification();
+    }
+    if (patch.rank() != null) {
+      this.rank = patch.rank();
+    }
+    if (patch.lineId() != null) {
+      this.lineId = patch.lineId();
+    }
+    if (patch.usageAreas() != null) {
+      this.usageAreas = patch.usageAreas();
     }
     if (patch.hasPet() != null) {
       this.hasPet = patch.hasPet();
