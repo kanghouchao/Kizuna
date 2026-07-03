@@ -22,14 +22,14 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
-class StoreMenuServiceImplTest {
+class StoreMenuServiceTest {
 
   @Mock private StoreMenuRepository menuRepository;
   @Mock private TenantContext tenantContext;
   @Mock private SecurityContext securityContext;
   @Mock private Authentication authentication;
 
-  @InjectMocks private StoreMenuServiceImpl menuService;
+  @InjectMocks private StoreMenuService menuService;
 
   @AfterEach
   void tearDown() {

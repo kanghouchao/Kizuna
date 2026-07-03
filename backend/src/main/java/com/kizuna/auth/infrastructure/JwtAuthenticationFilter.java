@@ -11,7 +11,6 @@ import java.util.Date;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,7 +25,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtUtil jwtUtil;
-  private final RedisTemplate<String, Object> redisTemplate;
+  private final TokenBlacklistService tokenBlacklistService;
 
   @Override
   protected void doFilterInternal(
@@ -40,7 +39,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       Claims claims = parseClaims(token);
       if (claims != null
           && issuerMatchesDomain(claims.getIssuer(), request.getRequestURI())
-          && !redisTemplate.hasKey(TokenBlacklistService.KEY_PREFIX + token)) {
+          && !tokenBlacklistService.isBlacklisted(token)) {
         if (new Date().before(claims.getExpiration())) {
           String username = claims.getSubject();
           List<?> authorities = claims.get("authorities", List.class);

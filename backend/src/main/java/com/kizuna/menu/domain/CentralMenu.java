@@ -23,7 +23,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Setter
 @Entity
 @Table(name = "central_menus")
-public class CentralMenu {
+public class CentralMenu implements MenuNode {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)

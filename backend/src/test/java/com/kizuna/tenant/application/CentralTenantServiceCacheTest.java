@@ -49,7 +49,7 @@ class CentralTenantServiceCacheTest {
 
     @Bean
     CentralTenantService centralTenantService(TenantRepository tenantRepository) {
-      return new CentralTenantServiceImpl(
+      return new CentralTenantService(
           tenantRepository,
           mock(StoreProfileRepository.class),
           mock(ApplicationEventPublisher.class),

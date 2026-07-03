@@ -5,10 +5,6 @@ plantuml::components.puml[,,format=svg]
 plantuml::module-shared.puml[,,format=svg]
 include::module-shared.adoc[]
 
-== Menu
-plantuml::module-menu.puml[,,format=svg]
-include::module-menu.adoc[]
-
 == Settings
 plantuml::module-settings.puml[,,format=svg]
 include::module-settings.adoc[]
@@ -24,6 +20,10 @@ include::module-storeprofile.adoc[]
 == User
 plantuml::module-user.puml[,,format=svg]
 include::module-user.adoc[]
+
+== Menu
+plantuml::module-menu.puml[,,format=svg]
+include::module-menu.adoc[]
 
 == Tenant
 plantuml::module-tenant.puml[,,format=svg]

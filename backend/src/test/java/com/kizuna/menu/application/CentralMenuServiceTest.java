@@ -21,13 +21,13 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
-class CentralMenuServiceImplTest {
+class CentralMenuServiceTest {
 
   @Mock private CentralMenuRepository menuRepository;
   @Mock private SecurityContext securityContext;
   @Mock private Authentication authentication;
 
-  @InjectMocks private CentralMenuServiceImpl menuService;
+  @InjectMocks private CentralMenuService menuService;
 
   @AfterEach
   void tearDown() {

@@ -5,16 +5,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
-/**
- * JWT を Redis のブラックリストに登録する（残存有効期間ぶんだけ保持）。 ログアウトとパスワード変更の両方から使う。判定は {@link JwtAuthenticationFilter}
- * が行う。
- */
+/** JWT ブラックリストの読み書き（Redis、残存有効期間ぶんだけ保持）。書き込みはセッション失効、判定は認証フィルタから使う。 */
 @Component
 @RequiredArgsConstructor
 public class TokenBlacklistService {
 
-  /** Redis キーの接頭辞。判定側の {@link JwtAuthenticationFilter} と共有する。 */
-  static final String KEY_PREFIX = "blacklist:tokens:";
+  private static final String KEY_PREFIX = "blacklist:tokens:";
 
   private final RedisTemplate<String, Object> redisTemplate;
   private final JwtUtil jwtUtil;
@@ -41,5 +37,10 @@ public class TokenBlacklistService {
     } catch (Exception e) {
       // トークンが無効または期限切れ — ブラックリスト不要
     }
+  }
+
+  /** 生トークンがブラックリスト登録済みかを返す。 */
+  public boolean isBlacklisted(String token) {
+    return Boolean.TRUE.equals(redisTemplate.hasKey(KEY_PREFIX + token));
   }
 }

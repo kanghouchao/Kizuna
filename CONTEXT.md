@@ -26,6 +26,10 @@ _Avoid_: Branch
 门店的员工账号，以 email 登录，数据按租户隔离。
 _Avoid_: TenantUser（旧名）
 
+**AuthSession（认证会话）**:
+一枚已签发 JWT 所代表的认证状态。登出与修改密码都走唯一的失效通道（token 黑名单）作废当前会话。
+_Avoid_: Token 裸用（token 是载体，session 是概念）
+
 ### 门店运营
 
 **Cast**:

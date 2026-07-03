@@ -1,5 +1,6 @@
 package com.kizuna.notification.application;
 
+import com.kizuna.settings.application.SmtpSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -23,17 +24,17 @@ public class MailServiceImpl implements MailService {
   @Override
   public void send(String to, String subject, String body) {
     try {
-      JavaMailSender sender = resolveSender();
+      SmtpSettings smtp = systemConfigService.smtpSettings();
+      JavaMailSender sender = resolveSender(smtp);
       if (sender == null) {
         // フォールバック: メール設定がなくてもシステムが動作するようログ出力のみ行う
         log.info("[MAIL-FALLBACK] to={} subject={} body={} ", to, subject, body);
         return;
       }
       SimpleMailMessage msg = new SimpleMailMessage();
-      systemConfigService
-          .getConfigValue("smtp_from")
-          .filter(v -> !v.isBlank())
-          .ifPresent(msg::setFrom);
+      if (smtp.hasFrom()) {
+        msg.setFrom(smtp.from());
+      }
       msg.setTo(to);
       msg.setSubject(subject);
       msg.setText(body);
@@ -44,29 +45,19 @@ public class MailServiceImpl implements MailService {
   }
 
   /** DB の SMTP 設定があればそこから送信クライアントを構築し、なければ環境変数ベースの設定にフォールバックする。 */
-  JavaMailSender resolveSender() {
-    String host = systemConfigService.getConfigValue("smtp_host").orElse("");
-    if (host.isBlank()) {
+  JavaMailSender resolveSender(SmtpSettings smtp) {
+    if (!smtp.configured()) {
       return mailSender;
     }
-    // ponytail: 送信の度にクライアントを生成する。送信量が増えたら設定更新時に再生成するキャッシュ方式へ
+    // ponytail: 設定は smtpSettings() 側でキャッシュ済み。送信クライアントの器の生成は軽量なので送信毎で足りる
     JavaMailSenderImpl impl = new JavaMailSenderImpl();
-    impl.setHost(host);
-    impl.setPort(
-        systemConfigService
-            .getConfigValue("smtp_port")
-            .filter(v -> !v.isBlank())
-            .map(v -> Integer.parseInt(v.trim()))
-            .orElse(25));
-    systemConfigService
-        .getConfigValue("smtp_username")
-        .filter(v -> !v.isBlank())
-        .ifPresent(
-            username -> {
-              impl.setUsername(username);
-              systemConfigService.getConfigValue("smtp_password").ifPresent(impl::setPassword);
-              impl.getJavaMailProperties().put("mail.smtp.auth", "true");
-            });
+    impl.setHost(smtp.host());
+    impl.setPort(smtp.port());
+    if (smtp.hasAuth()) {
+      impl.setUsername(smtp.username());
+      impl.setPassword(smtp.password());
+      impl.getJavaMailProperties().put("mail.smtp.auth", "true");
+    }
     return impl;
   }
 }

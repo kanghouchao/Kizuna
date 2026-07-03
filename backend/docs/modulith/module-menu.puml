@@ -10,10 +10,13 @@ top to bottom direction
 
 Container_Boundary("Application.Application_boundary", "Application", $tags="") {
   Component(Application.Application.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
+  Component(Application.Application.User, "User", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Menu, "Menu", $techn="Module", $descr="", $tags="", $link="")
 }
 
+Rel(Application.Application.Menu, Application.Application.User, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Menu, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.User, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 @enduml

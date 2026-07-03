@@ -1,5 +1,6 @@
 package com.kizuna.settings.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -184,5 +185,43 @@ class SystemConfigServiceImplTest {
 
     // 実行・検証
     assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+  }
+
+  @Test
+  void smtpSettings_buildsTypedSnapshotFromKeys() {
+    when(systemConfigRepository.findByConfigKey("smtp_host"))
+        .thenReturn(Optional.of(config("smtp_host", "smtp.example.com")));
+    when(systemConfigRepository.findByConfigKey("smtp_port"))
+        .thenReturn(Optional.of(config("smtp_port", "587")));
+    when(systemConfigRepository.findByConfigKey("smtp_username"))
+        .thenReturn(Optional.of(config("smtp_username", "user")));
+    when(systemConfigRepository.findByConfigKey("smtp_password"))
+        .thenReturn(Optional.of(config("smtp_password", "test-placeholder-secret")));
+    when(systemConfigRepository.findByConfigKey("smtp_from"))
+        .thenReturn(Optional.of(config("smtp_from", "noreply@kizuna.test")));
+
+    SmtpSettings smtp = systemConfigService.smtpSettings();
+
+    assertThat(smtp.configured()).isTrue();
+    assertThat(smtp.port()).isEqualTo(587);
+    assertThat(smtp.hasAuth()).isTrue();
+    assertThat(smtp.from()).isEqualTo("noreply@kizuna.test");
+  }
+
+  @Test
+  void smtpSettings_defaultsWhenUnset() {
+    when(systemConfigRepository.findByConfigKey(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(Optional.empty());
+
+    SmtpSettings smtp = systemConfigService.smtpSettings();
+
+    assertThat(smtp.configured()).isFalse();
+    assertThat(smtp.port()).isEqualTo(25);
+    assertThat(smtp.hasAuth()).isFalse();
+    assertThat(smtp.hasFrom()).isFalse();
+  }
+
+  private SystemConfig config(String key, String value) {
+    return SystemConfig.builder().configKey(key).configValue(value).build();
   }
 }

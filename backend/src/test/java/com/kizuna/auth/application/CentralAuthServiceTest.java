@@ -27,14 +27,16 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
-class CentralAuthServiceImplTest {
+class CentralAuthServiceTest {
 
   @Mock private AuthenticationManager authenticationManager;
   @Mock private JwtUtil jwtUtil;
   @Mock private CentralUserRepository userRepository;
   @Mock private PasswordEncoder passwordEncoder;
 
-  @InjectMocks private CentralAuthServiceImpl authService;
+  @Mock private AuthSessionService authSessionService;
+
+  @InjectMocks private CentralAuthService authService;
 
   @Test
   void login_success_returnsToken() {
@@ -67,10 +69,11 @@ class CentralAuthServiceImplTest {
     when(passwordEncoder.matches("current", "test-placeholder-stored-hash")).thenReturn(true);
     when(passwordEncoder.encode("newpass123")).thenReturn("test-placeholder-encoded-hash");
 
-    authService.changePassword("admin", "current", "newpass123");
+    authService.changePassword("admin", "current", "newpass123", "Bearer current-token");
 
     assertThat(user.getPassword()).isEqualTo("test-placeholder-encoded-hash");
     verify(userRepository).save(user);
+    verify(authSessionService).invalidate("Bearer current-token");
   }
 
   @Test
@@ -81,7 +84,9 @@ class CentralAuthServiceImplTest {
     when(userRepository.findByUsername("admin")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("wrong", "test-placeholder-stored-hash")).thenReturn(false);
 
-    assertThatThrownBy(() -> authService.changePassword("admin", "wrong", "newpass123"))
+    assertThatThrownBy(
+            () ->
+                authService.changePassword("admin", "wrong", "newpass123", "Bearer current-token"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("現在のパスワードが正しくありません");
     verify(userRepository, never()).save(any());
@@ -91,7 +96,10 @@ class CentralAuthServiceImplTest {
   void changePassword_userNotFound_throws() {
     when(userRepository.findByUsername("missing")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> authService.changePassword("missing", "current", "newpass123"))
+    assertThatThrownBy(
+            () ->
+                authService.changePassword(
+                    "missing", "current", "newpass123", "Bearer current-token"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("ユーザーが見つかりません");
   }

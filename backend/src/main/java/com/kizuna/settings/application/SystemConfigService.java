@@ -14,4 +14,7 @@ public interface SystemConfigService {
 
   /** 設定値を取得する（キャッシュされる。バックエンド内部からの設定参照はこのメソッドを使うこと） */
   Optional<String> getConfigValue(String configKey);
+
+  /** SMTP 設定の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
+  SmtpSettings smtpSettings();
 }

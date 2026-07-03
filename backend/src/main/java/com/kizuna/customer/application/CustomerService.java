@@ -1,19 +1,115 @@
 package com.kizuna.customer.application;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
+import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
+import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.tenant.domain.TenantRepository;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-public interface CustomerService {
-  Page<CustomerResponse> list(String search, String rank, String classification, Pageable pageable);
+@Service
+@RequiredArgsConstructor
+public class CustomerService {
 
-  CustomerResponse get(String id);
+  private final CustomerRepository customerRepository;
+  private final CustomerMapper customerMapper;
+  private final TenantContext tenantContext;
+  private final TenantRepository tenantRepository;
 
-  CustomerResponse create(CustomerCreateRequest request);
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public Page<CustomerResponse> list(
+      String search, String rank, String classification, Pageable pageable) {
+    Specification<Customer> spec =
+        searchSpec(blankToNull(search), blankToNull(rank), blankToNull(classification));
+    return customerRepository.findAll(spec, pageable).map(customerMapper::toResponse);
+  }
 
-  CustomerResponse update(String id, CustomerUpdateRequest request);
+  /**
+   * 検索語は 名前・電話番号・LINE ID を横断し、rank / classification は完全一致の絞り込み。 null の条件は述語を生成しない（JPQL の ":param is
+   * null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため Specification で組み立てる）。
+   */
+  private static Specification<Customer> searchSpec(
+      String search, String rank, String classification) {
+    return (root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+      if (search != null) {
+        String pattern = "%" + search.toLowerCase() + "%";
+        predicates.add(
+            cb.or(
+                cb.like(cb.lower(root.get("name")), pattern),
+                cb.like(root.get("phoneNumber"), "%" + search + "%"),
+                cb.like(cb.lower(root.get("lineId")), pattern)));
+      }
+      if (rank != null) {
+        predicates.add(cb.equal(root.get("rank"), rank));
+      }
+      if (classification != null) {
+        predicates.add(cb.equal(root.get("classification"), classification));
+      }
+      return cb.and(predicates.toArray(new Predicate[0]));
+    };
+  }
 
-  void delete(String id);
+  private static String blankToNull(String value) {
+    return (value == null || value.isBlank()) ? null : value;
+  }
+
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public CustomerResponse get(String id) {
+    return customerRepository
+        .findById(id)
+        .map(customerMapper::toResponse)
+        .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
+  }
+
+  @TenantScoped
+  @Transactional
+  public CustomerResponse create(CustomerCreateRequest request) {
+    Customer customer = customerMapper.toEntity(request);
+
+    customer.setTenantId(
+        tenantRepository
+            .findById(tenantContext.getTenantId())
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+            .getId());
+
+    return customerMapper.toResponse(customerRepository.save(customer));
+  }
+
+  @TenantScoped
+  @Transactional
+  public CustomerResponse update(String id, CustomerUpdateRequest request) {
+    Customer customer =
+        customerRepository
+            .findById(id)
+            .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
+
+    customer.apply(customerMapper.toPatch(request));
+
+    return customerMapper.toResponse(customerRepository.save(customer));
+  }
+
+  @TenantScoped
+  @Transactional
+  public void delete(String id) {
+    if (!customerRepository.existsById(id)) {
+      throw new ServiceException("顧客が見つかりません: " + id);
+    }
+    customerRepository.deleteById(id);
+  }
 }

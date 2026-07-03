@@ -1,25 +1,54 @@
 package com.kizuna.auth.application;
 
 import com.kizuna.auth.api.dto.Token;
+import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.domain.CentralUser;
+import com.kizuna.user.domain.CentralUserRepository;
+import java.util.Map;
+import java.util.Objects;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-/** Authentication service interface. */
-public interface CentralAuthService {
+@Service
+@RequiredArgsConstructor
+public class CentralAuthService {
 
-  /**
-   * Logs in a user for Central Authentication.
-   *
-   * @param username the username
-   * @param password the password
-   * @return the JWT token
-   */
-  Token login(String username, String password);
+  private final AuthenticationManager authenticationManager;
+  private final JwtUtil jwtUtil;
+  private final CentralUserRepository userRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final AuthSessionService authSessionService;
 
-  /**
-   * パスワードを変更する。現在のパスワードが一致しない場合は {@link com.kizuna.shared.exception.ServiceException}。
-   *
-   * @param username 対象ユーザー名
-   * @param currentPassword 現在のパスワード（平文）
-   * @param newPassword 新しいパスワード（平文）
-   */
-  void changePassword(String username, String currentPassword, String newPassword);
+  public Token login(String username, String password) {
+    Authentication auth =
+        authenticationManager.authenticate(
+            new UsernamePasswordAuthenticationToken(username, password));
+
+    return jwtUtil.generateToken(
+        Objects.requireNonNull(auth.getName()),
+        JwtUtil.ISSUER_CENTRAL,
+        Map.of("authorities", auth.getAuthorities().stream().map(a -> a.getAuthority()).toList()));
+  }
+
+  /** パスワード変更。成功時は現在のセッションを失効させる（要再ログイン）。 */
+  @Transactional
+  public void changePassword(
+      String username, String currentPassword, String newPassword, String currentToken) {
+    CentralUser user =
+        userRepository
+            .findByUsername(username)
+            .orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
+    if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+      throw new ServiceException("現在のパスワードが正しくありません");
+    }
+    user.changePassword(passwordEncoder.encode(newPassword));
+    userRepository.save(user);
+    authSessionService.invalidate(currentToken);
+  }
 }

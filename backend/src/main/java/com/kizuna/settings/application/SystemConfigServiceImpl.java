@@ -40,7 +40,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
   @Override
   @Transactional
-  @CacheEvict(value = "systemConfigValues", key = "#request.configKey")
+  // smtpSettings のような集約キャッシュも確実に無効化するため全消去（設定更新は低頻度の管理操作）
+  @CacheEvict(value = "systemConfigValues", allEntries = true)
   public SystemConfigResponse updateConfig(SystemConfigUpdateRequest request) {
     SystemConfig config =
         systemConfigRepository
@@ -58,6 +59,35 @@ public class SystemConfigServiceImpl implements SystemConfigService {
   @Cacheable(value = "systemConfigValues", key = "#configKey")
   public Optional<String> getConfigValue(String configKey) {
     return systemConfigRepository.findByConfigKey(configKey).map(SystemConfig::getConfigValue);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  @Cacheable(value = "systemConfigValues", key = "'smtp:settings'")
+  public SmtpSettings smtpSettings() {
+    int port = 25;
+    String rawPort = rawValue("smtp_port");
+    if (!rawPort.isBlank()) {
+      try {
+        port = Integer.parseInt(rawPort.trim());
+      } catch (NumberFormatException e) {
+        // 不正値は既定ポートで送信を試みる（更新時に NUMBER 検証済みのため通常は到達しない）
+      }
+    }
+    return new SmtpSettings(
+        rawValue("smtp_host"),
+        port,
+        rawValue("smtp_username"),
+        rawValue("smtp_password"),
+        rawValue("smtp_from"));
+  }
+
+  /** キャッシュプロキシを経由しない内部読み取り（smtpSettings 自体がキャッシュされる）。 */
+  private String rawValue(String configKey) {
+    return systemConfigRepository
+        .findByConfigKey(configKey)
+        .map(SystemConfig::getConfigValue)
+        .orElse("");
   }
 
   /** value_type に応じて設定値を検証する */

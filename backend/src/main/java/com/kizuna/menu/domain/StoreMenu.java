@@ -22,7 +22,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Setter
 @Entity
 @Table(name = "t_menus")
-public class StoreMenu {
+public class StoreMenu implements MenuNode {
 
   @Id private String id;
 
