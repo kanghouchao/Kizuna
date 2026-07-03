@@ -2,7 +2,7 @@ package com.kizuna.model.entity.tenant;
 
 import com.kizuna.model.dto.tenant.tenantconfig.PartnerLink;
 import com.kizuna.model.dto.tenant.tenantconfig.SnsLink;
-import com.kizuna.model.entity.central.tenant.Tenant;
+import com.kizuna.tenant.domain.Tenant;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

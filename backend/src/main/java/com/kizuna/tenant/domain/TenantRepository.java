@@ -1,6 +1,5 @@
-package com.kizuna.repository.central;
+package com.kizuna.tenant.domain;
 
-import com.kizuna.model.entity.central.tenant.Tenant;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

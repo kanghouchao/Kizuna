@@ -1,10 +1,10 @@
-package com.kizuna.service.central.tenant;
+package com.kizuna.tenant.application;
 
-import com.kizuna.model.dto.central.tenant.PaginatedTenantVO;
-import com.kizuna.model.dto.central.tenant.TenantCreateDTO;
-import com.kizuna.model.dto.central.tenant.TenantStatusVO;
-import com.kizuna.model.dto.central.tenant.TenantUpdateDTO;
-import com.kizuna.model.dto.central.tenant.TenantVO;
+import com.kizuna.tenant.api.dto.PaginatedTenantVO;
+import com.kizuna.tenant.api.dto.TenantCreateDTO;
+import com.kizuna.tenant.api.dto.TenantStatusVO;
+import com.kizuna.tenant.api.dto.TenantUpdateDTO;
+import com.kizuna.tenant.api.dto.TenantVO;
 import java.util.Optional;
 
 public interface CentralTenantService {

@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: central/01-event-publication.yaml
+      relativeToChangelogFile: true

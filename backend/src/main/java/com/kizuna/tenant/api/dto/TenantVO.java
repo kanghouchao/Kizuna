@@ -1,4 +1,4 @@
-package com.kizuna.model.dto.central.tenant;
+package com.kizuna.tenant.api.dto;
 
 import java.io.Serial;
 import java.io.Serializable;

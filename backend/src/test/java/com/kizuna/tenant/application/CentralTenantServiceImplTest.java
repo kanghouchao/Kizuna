@@ -1,4 +1,4 @@
-package com.kizuna.service.central.tenant;
+package com.kizuna.tenant.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -7,15 +7,16 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.model.dto.central.tenant.TenantCreateDTO;
-import com.kizuna.model.dto.central.tenant.TenantStatusVO;
-import com.kizuna.model.dto.central.tenant.TenantUpdateDTO;
-import com.kizuna.model.dto.central.tenant.TenantVO;
-import com.kizuna.model.entity.central.tenant.Tenant;
-import com.kizuna.repository.central.TenantRepository;
 import com.kizuna.repository.tenant.TenantConfigRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.tenant.api.dto.TenantCreateDTO;
+import com.kizuna.tenant.api.dto.TenantStatusVO;
+import com.kizuna.tenant.api.dto.TenantUpdateDTO;
+import com.kizuna.tenant.api.dto.TenantVO;
+import com.kizuna.tenant.domain.Tenant;
+import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.tenant.domain.event.TenantCreatedEvent;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -58,7 +59,7 @@ class CentralTenantServiceImplTest {
 
     tenantService.create(req);
     verify(tenantConfigRepository).save(any());
-    verify(eventPublisher).publishEvent(any());
+    verify(eventPublisher).publishEvent(any(TenantCreatedEvent.class));
   }
 
   @Test

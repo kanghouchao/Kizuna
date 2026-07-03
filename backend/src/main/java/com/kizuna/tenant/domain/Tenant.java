@@ -1,4 +1,4 @@
-package com.kizuna.model.entity.central.tenant;
+package com.kizuna.tenant.domain;
 
 import com.kizuna.shared.persistence.BaseEntity;
 import jakarta.persistence.Column;

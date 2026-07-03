@@ -62,7 +62,7 @@ dependencies {
     implementation 'org.liquibase:liquibase-core'
     implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.15.4'
     implementation 'org.mapstruct:mapstruct:1.6.3'
-    implementation 'org.springframework.modulith:spring-modulith-starter-core'
+    implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
