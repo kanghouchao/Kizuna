@@ -16,12 +16,14 @@ import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "t_menus")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class StoreMenu implements MenuNode {
 
   @Id private String id;
