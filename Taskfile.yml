@@ -97,18 +97,18 @@ tasks:
     desc: サービスを起動
     cmds:
       - echo "🚀 サービスを起動中..."
-      - task -d "environment/{{.env}}" up
+      - task -d "infrastructure/{{.env}}" up
 
   down:
     desc: サービスを停止
     cmds:
       - echo "🛑 サービスを停止中..."
-      - task -d "environment/{{.env}}" down
+      - task -d "infrastructure/{{.env}}" down
 
   ps:
     desc: サービスの状態を表示
     cmds:
-      - task -d "environment/{{.env}}" ps
+      - task -d "infrastructure/{{.env}}" ps
 
   logs:
     desc: すべてのサービスのログを表示
@@ -116,9 +116,9 @@ tasks:
       - |
         if [ -n "{{.service}}" ]; then
           echo "📜 {{.service}}サービスのログを表示中..."
-          task -d "environment/{{.env}}" logs service="{{.service}}"
+          task -d "infrastructure/{{.env}}" logs service="{{.service}}"
         else
-          task -d "environment/{{.env}}" logs
+          task -d "infrastructure/{{.env}}" logs
         fi
 
   exec:
@@ -126,7 +126,7 @@ tasks:
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
-          task -d "environment/{{.env}}" exec service="{{.service}}"
+          task -d "infrastructure/{{.env}}" exec service="{{.service}}"
         else
           echo "❗ service を指定してください。例: task exec service=backend"
           exit 1
@@ -150,8 +150,8 @@ tasks:
       - |
         if [ -n "{{.service}}" ]; then
           echo "🔄 {{.service}}サービスを再起動中..."
-          task -d "environment/{{.env}}" restart service="{{.service}}"
+          task -d "infrastructure/{{.env}}" restart service="{{.service}}"
         else
           echo "🔄 すべてのサービスを再起動中..."
-          task -d "environment/{{.env}}" restart
+          task -d "infrastructure/{{.env}}" restart
         fi

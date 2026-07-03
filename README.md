@@ -23,26 +23,25 @@ Kizuna Platform is a modern, multi-tenant system combining CMS, CRM, and HRM cap
 
 Below are the actual frameworks and key dependency versions used in this repository (extracted from `backend/build.gradle` and `frontend/package.json`). If you upgrade any of these in the project, please update this table accordingly.
 
-| Area | Technology | Version / Notes |
-|------|------------|-----------------|
-| Backend framework | Spring Boot | 3.5.6 (see `backend/build.gradle`)
-| Backend language | Java | 21 (sourceCompatibility in `backend/build.gradle`)
-| Web / Security | Spring Web, Spring Security | `spring-boot-starter-web`, `spring-boot-starter-security`
-| JWT library | JJWT | 0.13.0 (`io.jsonwebtoken`)
-| Data / DB | Spring Data JPA, PostgreSQL driver | `org.postgresql:postgresql` (runtime)
-| Cache | Spring Data Redis, Lettuce | `io.lettuce:lettuce-core` (runtime)
-| Migrations | Liquibase | `org.liquibase:liquibase-core`
-| Frontend framework | Next.js | ^14 (`frontend/package.json`)
-| Frontend UI | React | ^18
-| Frontend language | TypeScript | 5.4.5 (devDependency)
-| Styling | Tailwind CSS | ^3.4.1
-| HTTP client | axios | ^1.6.0
-| Containers / Local orchestration | Docker, Docker Compose | see `docker-compose.yml`
-| Reverse proxy | Traefik | configured under `environment/` (Traefik configs)
-| Testing | JUnit/Jacoco (backend), Jest (frontend) | see `backend/build.gradle` and `frontend/package.json`
+| Area                             | Technology                              | Version / Notes                                           |
+| -------------------------------- | --------------------------------------- | --------------------------------------------------------- |
+| Backend framework                | Spring Boot                             | 3.5.6 (see `backend/build.gradle`)                        |
+| Backend language                 | Java                                    | 21 (sourceCompatibility in `backend/build.gradle`)        |
+| Web / Security                   | Spring Web, Spring Security             | `spring-boot-starter-web`, `spring-boot-starter-security` |
+| JWT library                      | JJWT                                    | 0.13.0 (`io.jsonwebtoken`)                                |
+| Data / DB                        | Spring Data JPA, PostgreSQL driver      | `org.postgresql:postgresql` (runtime)                     |
+| Cache                            | Spring Data Redis, Lettuce              | `io.lettuce:lettuce-core` (runtime)                       |
+| Migrations                       | Liquibase                               | `org.liquibase:liquibase-core`                            |
+| Frontend framework               | Next.js                                 | ^14 (`frontend/package.json`)                             |
+| Frontend UI                      | React                                   | ^18                                                       |
+| Frontend language                | TypeScript                              | 5.4.5 (devDependency)                                     |
+| Styling                          | Tailwind CSS                            | ^3.4.1                                                    |
+| HTTP client                      | axios                                   | ^1.6.0                                                    |
+| Containers / Local orchestration | Docker, Docker Compose                  | see `docker-compose.yml`                                  |
+| Reverse proxy                    | Traefik                                 | configured under `infrastructure/` (Traefik configs)      |
+| Testing                          | JUnit/Jacoco (backend), Jest (frontend) | see `backend/build.gradle` and `frontend/package.json`    |
 
 Note: references to other frameworks (e.g. Micronaut, Quarkus) were removed from the table — they are not used in this repository.
-
 
 ## Architecture
 
@@ -52,18 +51,18 @@ Traefik routes all requests to the right service. The frontend and backend are f
 
 The application is strictly divided into two functional domains based on the user actor:
 
-1.  **Central Domain (`/central`)** - *The Platform Headquarters*
-    *   **User:** Platform Admin / System Owner.
-    *   **Purpose:** Manage tenants (stores), system-wide settings, billing, and global analytics.
-    *   **Access:** Only accessible via the Admin Domain (e.g., `admin.kizuna.com`).
+1.  **Central Domain (`/central`)** - _The Platform Headquarters_
+    - **User:** Platform Admin / System Owner.
+    - **Purpose:** Manage tenants (stores), system-wide settings, billing, and global analytics.
+    - **Access:** Only accessible via the Admin Domain (e.g., `admin.kizuna.com`).
 
-2.  **Tenant Domain (`/tenant`)** - *The Store Operations*
-    *   **User:** Tenant Admin, Store Managers, Casts.
-    *   **Purpose:** Day-to-day store operations (Orders, Cast management, Customer CRM).
-    *   **Access:** Accessible via Tenant Domains (e.g., `store1.kizuna.com`).
-    *   **Sub-modules:**
-        *   `/tenant/dashboard`: The secured back-office area (requires login).
-        *   `/tenant/site` (Future): Public landing pages for customers.
+2.  **Tenant Domain (`/tenant`)** - _The Store Operations_
+    - **User:** Tenant Admin, Store Managers, Casts.
+    - **Purpose:** Day-to-day store operations (Orders, Cast management, Customer CRM).
+    - **Access:** Accessible via Tenant Domains (e.g., `store1.kizuna.com`).
+    - **Sub-modules:**
+      - `/tenant/dashboard`: The secured back-office area (requires login).
+      - `/tenant/site` (Future): Public landing pages for customers.
 
 ### Multi-tenant flow and cookies
 
@@ -89,10 +88,11 @@ The application is strictly divided into two functional domains based on the use
 git clone https://github.com/kanghouchao/Kizuna.git
 cd Kizuna
 ```
+
 2. copy .env.example to .env and adjust if needed
 
 ```bash
-cp .env.example .env
+cp infrastructure/.env.example infrastructure/development/.env
 ```
 
 2. edit .env to set your preferred admin domain (e.g. `kizuna.com`)
@@ -123,7 +123,7 @@ You can find the initial data setup in [05-initial-data.yaml](./backend/src/main
 - **Central Admin:** `admin` / default password (see note below)
 - **Sample Tenant Admin:** `admin@store1.kizuna.com` / default password (see note below)
 
-Both accounts share the same default password (`pass`), derived from the same bcrypt hash (`$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue`) defined in `central/05-initial-data.yaml` and `tenant/08-initial-data.yaml`.
+Both accounts share the same default password `pass`
 
 7. Login and have fun!
 
@@ -137,8 +137,8 @@ Both accounts share the same default password (`pass`), derived from the same bc
 - `task ps` — show running services
 - `task logs` or `task logs service=frontend|backend|traefik|database` — follow service logs
 - `task test` or `task test service=backend|frontend` — run tests
- - `task lint` or `task lint service=frontend|backend` — run linters for all or specified service
- - `task format` or `task format service=frontend|backend` — run code formatters (Spotless for backend, eslint fixes for frontend)
+- `task lint` or `task lint service=frontend|backend` — run linters for all or specified service
+- `task format` or `task format service=frontend|backend` — run code formatters (Spotless for backend, eslint fixes for frontend)
 
 ### Observability quick reference
 
@@ -151,10 +151,11 @@ Both accounts share the same default password (`pass`), derived from the same bc
 Kizuna/
 ├── backend/                     # Backend Spring Boot API
 ├── frontend/                    # Frontend Next.js app
-├── environment/                 # Traefik / environment config
-├── .env.example                 # Example env file
-├── docker-compose.yml
-└── Makefile
+├── infrastructure/              # Docker Compose / Traefik config per environment
+│   ├── .env.example             # Example env file
+│   ├── development/             # docker-compose.yml + Traefik config (development)
+│   └── release/                 # docker-compose.yml + Traefik config (release)
+└── Taskfile.yml
 ```
 
 ## Troubleshooting
