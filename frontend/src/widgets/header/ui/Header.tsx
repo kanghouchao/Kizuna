@@ -1,10 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useAuth } from '@/entities/user';
+import { isTenantDomain } from '@/shared/lib';
 import { BellIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export function Header() {
   const { logout } = useAuth();
+  const accountHref = isTenantDomain() ? '/tenant/settings/account' : '/central/settings/account';
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-20">
@@ -30,6 +33,12 @@ export function Header() {
               <UserCircleIcon className="h-8 w-8 text-gray-400 group-hover:text-indigo-500 transition-colors" />
             </button>
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-gray-100 hidden group-hover:block transition-all duration-200 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 origin-top-right">
+              <Link
+                href={accountHref}
+                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                アカウント設定
+              </Link>
               <button
                 onClick={logout}
                 className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"

@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api';
-import { Admin, LoginRequest, LoginResponse } from '../model/types';
+import { Admin, LoginRequest, LoginResponse, PasswordChangeRequest } from '../model/types';
 
 export const centralAuthApi = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
@@ -14,5 +14,9 @@ export const centralAuthApi = {
 
   logout: async (): Promise<void> => {
     await apiClient.post('/central/logout');
+  },
+
+  changePassword: async (data: PasswordChangeRequest): Promise<void> => {
+    await apiClient.put('/central/password', data);
   },
 };

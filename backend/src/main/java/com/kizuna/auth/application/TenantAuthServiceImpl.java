@@ -4,6 +4,7 @@ import com.kizuna.auth.api.dto.TenantRegisterRequest;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.tenant.domain.Tenant;
@@ -82,5 +83,18 @@ public class TenantAuthServiceImpl implements TenantAuthService {
     redisTemplate.delete(
         appProperties.getTenantCreatorCachePerfix() + tenantRegisterRequest.getToken());
     return tenant;
+  }
+
+  @Override
+  @Transactional
+  @TenantScoped
+  public void changePassword(String email, String currentPassword, String newPassword) {
+    StoreUser user =
+        userRepository.findByEmail(email).orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
+    if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+      throw new ServiceException("現在のパスワードが正しくありません");
+    }
+    user.changePassword(passwordEncoder.encode(newPassword));
+    userRepository.save(user);
   }
 }

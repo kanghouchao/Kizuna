@@ -13,6 +13,17 @@ export interface StoreUserResponse {
   role: string;
 }
 
+// パスワード変更リクエスト
+export interface PasswordChangeRequest {
+  current_password: string;
+  new_password: string;
+}
+
+// 店舗ユーザーのプロフィール更新リクエスト
+export interface StoreUserProfileUpdateRequest {
+  nickname: string;
+}
+
 // ログインリクエスト
 export interface LoginRequest {
   username: string;
