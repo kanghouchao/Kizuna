@@ -1,0 +1,41 @@
+package com.kizuna.order.api.dto;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderResponse {
+  private String id;
+  private String storeName;
+  private String receptionistId;
+  private String receptionistName; // Helper for display
+  private LocalDate businessDate;
+  private LocalTime arrivalScheduledStartTime;
+  private LocalTime arrivalScheduledEndTime;
+  private String customerId;
+  private String customerName; // Helper
+  private String castId;
+  private String castName; // Helper
+  private Integer courseMinutes;
+  private Integer extensionMinutes;
+  private List<String> optionCodes;
+  private String discountName;
+  private Integer manualDiscount;
+  private String carrier;
+  private String mediaName;
+  private Integer usedPoints;
+  private Integer manualGrantPoints;
+  private String remarks;
+  private String castDriverMessage;
+  private String status;
+  private String locationAddress;
+  private String locationBuilding;
+}
