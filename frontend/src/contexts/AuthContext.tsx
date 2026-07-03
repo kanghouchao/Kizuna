@@ -1,11 +1,10 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { authApi as centralAuthApi } from '@/services/central/api';
-import { authApi as tenantAuthApi } from '@/services/tenant/api';
+import { centralAuthApi, storeAuthApi } from '@/entities/user';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
-import { isTenantDomain } from '@/lib/config';
+import { isTenantDomain } from '@/shared/lib';
 
 interface AuthContextType {
   logout: () => void;
@@ -27,7 +26,7 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const router = useRouter();
-  const getAuthApi = () => (isTenantDomain() ? tenantAuthApi : centralAuthApi);
+  const getAuthApi = () => (isTenantDomain() ? storeAuthApi : centralAuthApi);
 
   const logout = async () => {
     try {

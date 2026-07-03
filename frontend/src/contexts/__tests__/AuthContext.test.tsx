@@ -3,20 +3,22 @@ import { render, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import Cookies from 'js-cookie';
 
-import { authApi } from '@/services/central/api';
-import { isTenantDomain } from '@/lib/config';
+import { centralAuthApi } from '@/entities/user';
+import { isTenantDomain } from '@/shared/lib';
 
 jest.mock('js-cookie');
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-jest.mock('@/services/central/api', () => ({
-  authApi: { logout: jest.fn() },
+jest.mock('@/entities/user', () => ({
+  centralAuthApi: { logout: jest.fn() },
+  storeAuthApi: { logout: jest.fn() },
 }));
 
-jest.mock('@/lib/config', () => ({
+jest.mock('@/shared/lib', () => ({
   isTenantDomain: jest.fn(),
+  redirectToLogin: jest.fn(),
 }));
 
 function Consumer() {
@@ -34,7 +36,7 @@ describe('AuthProvider', () => {
   it('logout calls api and removes token and navigates', async () => {
     (isTenantDomain as jest.Mock).mockReturnValue(false);
     (Cookies.get as jest.Mock).mockReturnValue('tkn');
-    (authApi.logout as jest.Mock).mockResolvedValueOnce({});
+    (centralAuthApi.logout as jest.Mock).mockResolvedValueOnce({});
     const removeSpy = jest.spyOn(Cookies, 'remove');
     const { getByText } = render(
       <AuthProvider>
@@ -42,7 +44,7 @@ describe('AuthProvider', () => {
       </AuthProvider>
     );
     getByText('out').click();
-    await waitFor(() => expect(authApi.logout).toHaveBeenCalled());
+    await waitFor(() => expect(centralAuthApi.logout).toHaveBeenCalled());
     expect(removeSpy).toHaveBeenCalledWith('token');
     expect(mockPush).toHaveBeenCalledWith('/login');
   });

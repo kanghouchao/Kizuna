@@ -1,5 +1,5 @@
 import Cookies from 'js-cookie';
-import apiClient from '@/lib/client';
+import { apiClient } from '@/shared/api';
 
 jest.mock('js-cookie');
 

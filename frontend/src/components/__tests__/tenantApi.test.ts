@@ -1,6 +1,6 @@
-import { authApi } from '@/services/tenant/api';
+import { storeAuthApi } from '@/entities/user';
 
-jest.mock('@/lib/client', () => ({
+jest.mock('@/shared/api/client', () => ({
   __esModule: true,
   default: {
     get: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
@@ -21,7 +21,7 @@ jest.mock('@/lib/client', () => ({
 
 describe('tenant api', () => {
   it('register returns data from /tenant/init-admin-use', async () => {
-    const res = await authApi.register({} as any);
+    const res = await storeAuthApi.register({} as any);
     expect(res).toEqual({
       tenant_domain: 'tenant.example.com',
       login_url: 'https://tenant.example.com/login',
@@ -29,11 +29,11 @@ describe('tenant api', () => {
     });
   });
   it('login returns data from /tenant/login', async () => {
-    const res = await authApi.login({} as any);
+    const res = await storeAuthApi.login({} as any);
     expect(res).toEqual({ token: 'jwt-token', expires_at: 123 });
   });
   it('me calls /tenant/me', async () => {
-    const res = await authApi.me();
+    const res = await storeAuthApi.me();
     expect(res).toEqual({ ok: true, url: '/tenant/me' });
   });
 });

@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CastForm, CastFormData } from '../_components/CastForm';
-import { castApi } from '@/services/tenant/api';
-import { CastCreateRequest } from '@/types/api';
+import { CastCreateRequest, castApi } from '@/entities/cast';
 import { toast } from 'react-hot-toast';
 
 /** 新規キャスト登録ページ */

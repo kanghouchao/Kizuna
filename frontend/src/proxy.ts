@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { resolveTenant } from './lib/proxy/tenantResolver';
-import { handleRouteProtection } from './lib/proxy/routeGuard';
+import { resolveTenant } from './shared/lib/proxy/tenantResolver';
+import { handleRouteProtection } from './shared/lib/proxy/routeGuard';
 
 export const config = {
   matcher: ['/((?!api|_next|favicon.ico|health).*)'],

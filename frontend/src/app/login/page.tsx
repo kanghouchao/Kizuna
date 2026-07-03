@@ -3,14 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import { authApi as centralAuthApi } from '@/services/central/api';
-import { authApi as tenantAuthApi } from '@/services/tenant/api';
+import { centralAuthApi, storeAuthApi } from '@/entities/user';
 import toast from 'react-hot-toast';
-import { isTenantDomain } from '@/lib/config';
+import { isTenantDomain } from '@/shared/lib';
 import AuthLayout from '@/components/auth/AuthLayout';
 
 function getAuthApi() {
-  return isTenantDomain() ? tenantAuthApi : centralAuthApi;
+  return isTenantDomain() ? storeAuthApi : centralAuthApi;
 }
 
 export default function LoginPage() {

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { authApi } from '@/services/tenant/api';
-import { isTenantDomain } from '@/lib/config';
+import { storeAuthApi } from '@/entities/user';
+import { isTenantDomain } from '@/shared/lib';
 import AuthLayout from '@/components/auth/AuthLayout';
 
 export default function RegisterPage() {
@@ -68,7 +68,7 @@ function RegisterForm() {
     }
 
     try {
-      const response = await authApi.register({ token, email, password });
+      const response = await storeAuthApi.register({ token, email, password });
       const tenantLabel = response.tenant_name || response.tenant_domain || '店舗';
       const nextUrl = resolveLoginUrl(response.login_url, response.tenant_domain);
       setRedirectUrl(nextUrl || null);

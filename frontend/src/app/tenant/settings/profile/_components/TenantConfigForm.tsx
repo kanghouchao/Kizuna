@@ -1,8 +1,13 @@
 'use client';
 
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
-import { TenantConfigResponse, TenantConfigUpdateRequest, SnsLink, PartnerLink } from '@/types/api';
-import ImageUpload from '@/components/ui/ImageUpload';
+import {
+  PartnerLink,
+  SnsLink,
+  StoreProfileResponse,
+  StoreProfileUpdateRequest,
+} from '@/entities/store-profile';
+import { ImageUpload } from '@/shared/ui';
 
 interface TenantConfigFormData {
   template_key: string;
@@ -16,8 +21,8 @@ interface TenantConfigFormData {
 }
 
 interface TenantConfigFormProps {
-  initialData: TenantConfigResponse;
-  onSubmit: (data: TenantConfigUpdateRequest) => Promise<void>;
+  initialData: StoreProfileResponse;
+  onSubmit: (data: StoreProfileUpdateRequest) => Promise<void>;
   isSubmitting: boolean;
 }
 

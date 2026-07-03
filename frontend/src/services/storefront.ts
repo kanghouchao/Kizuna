@@ -1,5 +1,5 @@
 import { Cast, SiteConfig, StorefrontData } from '@/types/storefront';
-import { serverClient } from '@/lib/server-client';
+import { serverClient } from '@/shared/api/index.server';
 
 /**
  * ストアフロント用データサービス

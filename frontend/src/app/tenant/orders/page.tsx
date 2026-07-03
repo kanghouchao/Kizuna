@@ -9,8 +9,7 @@ import {
   EyeIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
-import { orderApi } from '@/services/tenant/api';
-import { Order } from '@/types/order';
+import { Order, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 
 export default function OrderListPage() {

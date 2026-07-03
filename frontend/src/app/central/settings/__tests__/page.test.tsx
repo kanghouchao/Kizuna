@@ -5,7 +5,7 @@ import SystemSettingsPage from '../page';
 const mockGetAllConfigs = jest.fn();
 const mockUpdateConfig = jest.fn();
 
-jest.mock('@/services/central/config', () => ({
+jest.mock('@/entities/system-config', () => ({
   systemConfigService: {
     getAllConfigs: (...args: unknown[]) => mockGetAllConfigs(...args),
     updateConfig: (...args: unknown[]) => mockUpdateConfig(...args),

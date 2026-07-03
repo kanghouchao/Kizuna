@@ -1,4 +1,4 @@
-import { SnsLink, PartnerLink } from '@/types/api';
+import { PartnerLink, SnsLink } from '@/entities/store-profile';
 
 /**
  * キャスト情報

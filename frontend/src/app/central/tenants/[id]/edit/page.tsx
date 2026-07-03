@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { centralApi } from '@/services/central/api';
-import type { Tenant, UpdateTenantRequest } from '@/types/api';
+import { Tenant, UpdateTenantRequest, centralTenantApi } from '@/entities/tenant';
 import toast from 'react-hot-toast';
 
 export default function EditTenantPage() {
@@ -29,7 +28,7 @@ export default function EditTenantPage() {
       }
       try {
         setLoading(true);
-        const res = await centralApi.getById(tenantId);
+        const res = await centralTenantApi.getById(tenantId);
         const t = res as unknown as Tenant;
         setTenant(t);
         setFormData({
@@ -68,7 +67,7 @@ export default function EditTenantPage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await centralApi.update(tenant.id, formData);
+      await centralTenantApi.update(tenant.id, formData);
       toast.success('店舗情報を更新しました');
       router.push('/central/tenants');
     } catch (err: any) {
