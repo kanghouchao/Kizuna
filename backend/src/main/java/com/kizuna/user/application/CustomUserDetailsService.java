@@ -1,6 +1,7 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.user.domain.Authorities;
 import com.kizuna.user.domain.CentralPermission;
 import com.kizuna.user.domain.CentralRole;
 import com.kizuna.user.domain.CentralUserRepository;
@@ -92,8 +93,8 @@ public class CustomUserDetailsService implements UserDetailsService {
                       : perms.stream()
                           .map(
                               p ->
-                                  "PERM_"
-                                      + (permNameExtractor.apply(p) == null
+                                  Authorities.permission(
+                                      permNameExtractor.apply(p) == null
                                           ? ""
                                           : permNameExtractor.apply(p).toUpperCase()));
 
