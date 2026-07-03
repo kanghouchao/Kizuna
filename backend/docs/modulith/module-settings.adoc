@@ -1,0 +1,9 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.settings`
+|Spring components
+|_Services_
+
+* `c.k.s.application.SystemConfigService` (via `c.k.s.application.SystemConfigServiceImpl`)
+|===

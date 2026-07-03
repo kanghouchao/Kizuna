@@ -1,0 +1,11 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.order`
+|Bean references
+|* `c.k.c.domain.CustomerRepository` (in Customer)
+* `c.k.c.domain.CastRepository` (in Cast)
+* `c.k.u.domain.StoreUserRepository` (in User)
+* `c.k.t.domain.TenantRepository` (in Tenant)
+* `c.k.s.tenancy.TenantContext` (in Shared)
+|===

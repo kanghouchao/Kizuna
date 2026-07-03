@@ -1,0 +1,51 @@
+== Application
+plantuml::components.puml[,,format=svg]
+
+== Shared
+plantuml::module-shared.puml[,,format=svg]
+include::module-shared.adoc[]
+
+== Menu
+plantuml::module-menu.puml[,,format=svg]
+include::module-menu.adoc[]
+
+== Settings
+plantuml::module-settings.puml[,,format=svg]
+include::module-settings.adoc[]
+
+== Storage
+plantuml::module-storage.puml[,,format=svg]
+include::module-storage.adoc[]
+
+== Storeprofile
+plantuml::module-storeprofile.puml[,,format=svg]
+include::module-storeprofile.adoc[]
+
+== User
+plantuml::module-user.puml[,,format=svg]
+include::module-user.adoc[]
+
+== Tenant
+plantuml::module-tenant.puml[,,format=svg]
+include::module-tenant.adoc[]
+
+== Auth
+plantuml::module-auth.puml[,,format=svg]
+include::module-auth.adoc[]
+
+== Cast
+plantuml::module-cast.puml[,,format=svg]
+include::module-cast.adoc[]
+
+== Customer
+plantuml::module-customer.puml[,,format=svg]
+include::module-customer.adoc[]
+
+== Notification
+plantuml::module-notification.puml[,,format=svg]
+include::module-notification.adoc[]
+
+== Order
+plantuml::module-order.puml[,,format=svg]
+include::module-order.adoc[]
+

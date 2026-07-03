@@ -1,0 +1,15 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.user`
+|Spring components
+|_Repositories_
+
+* `c.k.u.domain.CentralUserRepository`
+* `c.k.u.domain.StoreUserRepository`
+|Bean references
+|* `c.k.s.tenancy.TenantContext` (in Shared)
+|Aggregate roots
+|* `c.k.u.domain.CentralUser`
+* `c.k.u.domain.StoreUser`
+|===

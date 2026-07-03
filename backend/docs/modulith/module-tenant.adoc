@@ -1,0 +1,16 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.tenant`
+|Spring components
+|_Repositories_
+
+* `c.k.t.domain.TenantRepository`
+|Bean references
+|* `c.k.s.domain.StoreProfileRepository` (in Storeprofile)
+* `c.k.s.config.AppProperties` (in Shared)
+* `c.k.s.application.SystemConfigService` (in Settings)
+* `c.k.s.tenancy.TenantIdInterceptor` (in Shared)
+|Aggregate roots
+|* `c.k.t.domain.Tenant`
+|===

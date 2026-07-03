@@ -1,0 +1,10 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.notification`
+|Bean references
+|* `c.k.s.application.SystemConfigService` (in Settings)
+* `c.k.s.config.AppProperties` (in Shared)
+|Events listened to
+|* `c.k.t.domain.event.TenantCreatedEvent` (async) 
+|===

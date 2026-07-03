@@ -12,7 +12,7 @@ import com.kizuna.tenant.api.dto.TenantVO;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
 import com.kizuna.tenant.domain.event.TenantCreatedEvent;
-import com.kizuna.utils.RandomTokenUtils;
+import com.kizuna.tenant.infrastructure.RandomTokenUtils;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;

@@ -1,0 +1,7 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.menu`
+|Bean references
+|* `c.k.s.tenancy.TenantContext` (in Shared)
+|===

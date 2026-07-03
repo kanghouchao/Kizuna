@@ -1,0 +1,8 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.storage`
+|Bean references
+|* `c.k.s.tenancy.TenantContext` (in Shared)
+* `c.k.s.config.AppProperties` (in Shared)
+|===
