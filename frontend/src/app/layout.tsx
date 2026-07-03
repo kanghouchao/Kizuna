@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter, Cormorant_Garamond } from 'next/font/google';
 import './globals.css';
-import { AuthProvider } from '@/contexts/AuthContext';
-import { ToastProvider } from '@/components/ToastProvider';
+import { AuthProvider } from '@/entities/user';
+import { ToastProvider } from '@/_app/providers';
 
 const inter = Inter({ subsets: ['latin'] });
 const cormorant = Cormorant_Garamond({
