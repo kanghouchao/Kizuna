@@ -31,6 +31,11 @@ export function useManagedList<T>(fetcher: () => Promise<T[]>, errorMessage: str
 
   useEffect(() => {
     void refetch();
+    return () => {
+      // requestIdRef is a request counter, not a DOM ref.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      requestIdRef.current++;
+    };
   }, [refetch]);
 
   return { items, isLoading, refetch };

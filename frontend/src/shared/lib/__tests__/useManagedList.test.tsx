@@ -53,6 +53,22 @@ describe('useManagedList', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('アンマウント後に失敗したリクエストはトーストを出さない', async () => {
+    let rejectRequest!: (reason?: unknown) => void;
+    const fetcher = () =>
+      new Promise<string[]>((_, reject) => {
+        rejectRequest = reject;
+      });
+    const { unmount } = renderHook(() => useManagedList(fetcher, '取得失敗'));
+
+    unmount();
+    await act(async () => {
+      rejectRequest(new Error('boom'));
+    });
+
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('失敗時はトーストを出し loading を解除する', async () => {
     const { result } = renderHook(() =>
       useManagedList(async () => {
