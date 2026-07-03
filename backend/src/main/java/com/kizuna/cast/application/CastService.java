@@ -1,22 +1,90 @@
 package com.kizuna.cast.application;
 
 import com.kizuna.cast.api.dto.CastCreateRequest;
+import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.tenant.domain.TenantRepository;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-public interface CastService {
-  Page<CastResponse> list(String search, Pageable pageable);
+@Service
+@RequiredArgsConstructor
+public class CastService {
 
-  CastResponse get(String id);
+  private final CastRepository castRepository;
+  private final CastMapper castMapper;
+  private final TenantContext tenantContext;
+  private final TenantRepository tenantRepository;
 
-  CastResponse create(CastCreateRequest request);
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public Page<CastResponse> list(String search, Pageable pageable) {
+    if (search != null && !search.isEmpty()) {
+      return castRepository
+          .findByNameContainingIgnoreCase(search, pageable)
+          .map(castMapper::toResponse);
+    }
+    return castRepository.findAll(pageable).map(castMapper::toResponse);
+  }
 
-  CastResponse update(String id, CastUpdateRequest request);
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public CastResponse get(String id) {
+    return castRepository
+        .findById(id)
+        .map(castMapper::toResponse)
+        .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
+  }
 
-  void delete(String id);
+  @TenantScoped
+  @Transactional
+  public CastResponse create(CastCreateRequest request) {
+    Cast cast = castMapper.toEntity(request);
 
-  List<CastResponse> listActive();
+    cast.setTenantId(
+        tenantRepository
+            .findById(tenantContext.getTenantId())
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+            .getId());
+
+    return castMapper.toResponse(castRepository.save(cast));
+  }
+
+  @TenantScoped
+  @Transactional
+  public CastResponse update(String id, CastUpdateRequest request) {
+    Cast cast =
+        castRepository.findById(id).orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
+
+    cast.apply(castMapper.toPatch(request));
+
+    return castMapper.toResponse(castRepository.save(cast));
+  }
+
+  @TenantScoped
+  @Transactional
+  public void delete(String id) {
+    if (!castRepository.existsById(id)) {
+      throw new ServiceException("キャストが見つかりません: " + id);
+    }
+    castRepository.deleteById(id);
+  }
+
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public List<CastResponse> listActive() {
+    return castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE").stream()
+        .map(castMapper::toResponse)
+        .toList();
+  }
 }

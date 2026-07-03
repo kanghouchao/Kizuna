@@ -27,14 +27,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
-class CentralAuthServiceImplTest {
+class CentralAuthServiceTest {
 
   @Mock private AuthenticationManager authenticationManager;
   @Mock private JwtUtil jwtUtil;
   @Mock private CentralUserRepository userRepository;
   @Mock private PasswordEncoder passwordEncoder;
 
-  @InjectMocks private CentralAuthServiceImpl authService;
+  @InjectMocks private CentralAuthService authService;
 
   @Test
   void login_success_returnsToken() {

@@ -29,13 +29,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 
 @ExtendWith(MockitoExtension.class)
-class CentralTenantServiceImplTest {
+class CentralTenantServiceTest {
 
   @Mock private TenantRepository tenantRepository;
   @Mock private StoreProfileRepository storeProfileRepository;
   @Mock private ApplicationEventPublisher eventPublisher;
   @Mock private AppProperties appProperties;
-  @InjectMocks private CentralTenantServiceImpl tenantService;
+  @InjectMocks private CentralTenantService tenantService;
 
   @Test
   void list_returnsPage() {

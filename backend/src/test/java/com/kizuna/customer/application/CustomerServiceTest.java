@@ -31,14 +31,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
-class CustomerServiceImplTest {
+class CustomerServiceTest {
 
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMapper customerMapper;
   @Mock private TenantContext tenantContext;
   @Mock private TenantRepository tenantRepository;
 
-  @InjectMocks private CustomerServiceImpl customerService;
+  @InjectMocks private CustomerService customerService;
 
   @Test
   void list_returnsPage() {

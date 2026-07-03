@@ -18,8 +18,8 @@ Container_Boundary("Application.Application_boundary", "Application", $tags="") 
 Rel(Application.Application.Auth, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Auth, Application.Application.Tenant, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Auth, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Tenant, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.User, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Tenant, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 @enduml

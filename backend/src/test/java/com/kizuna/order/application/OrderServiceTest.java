@@ -41,7 +41,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
-class OrderServiceImplTest {
+class OrderServiceTest {
 
   @Mock OrderRepository orderRepository;
   @Mock CustomerRepository customerRepository;
@@ -51,7 +51,7 @@ class OrderServiceImplTest {
   @Mock TenantContext tenantContext;
   @Mock OrderMapper orderMapper;
 
-  @InjectMocks OrderServiceImpl service;
+  @InjectMocks OrderService service;
 
   @Captor ArgumentCaptor<Order> orderCaptor;
   @Captor ArgumentCaptor<Customer> customerCaptor;

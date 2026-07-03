@@ -30,14 +30,14 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
-class CastServiceImplTest {
+class CastServiceTest {
 
   @Mock private CastRepository castRepository;
   @Mock private CastMapper castMapper;
   @Mock private TenantContext tenantContext;
   @Mock private TenantRepository tenantRepository;
 
-  @InjectMocks private CastServiceImpl castService;
+  @InjectMocks private CastService castService;
 
   @Test
   void list_returnsPage() {

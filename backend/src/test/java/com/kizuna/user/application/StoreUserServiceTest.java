@@ -18,11 +18,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class StoreUserServiceImplTest {
+class StoreUserServiceTest {
 
   @Mock private StoreUserRepository userRepository;
 
-  @InjectMocks private StoreUserServiceImpl service;
+  @InjectMocks private StoreUserService service;
 
   private StoreUser user(String nickname) {
     StoreUser user = new StoreUser();

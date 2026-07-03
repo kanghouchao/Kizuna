@@ -29,12 +29,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class StoreProfileServiceImplTest {
+class StoreProfileServiceTest {
 
   @Mock private StoreProfileRepository storeProfileRepository;
   @Mock private TenantContext tenantContext;
   @Mock private StoreProfileMapper storeProfileMapper;
-  @InjectMocks private StoreProfileServiceImpl tenantConfigService;
+  @InjectMocks private StoreProfileService tenantConfigService;
 
   private static final Long TENANT_ID = 1L;
 

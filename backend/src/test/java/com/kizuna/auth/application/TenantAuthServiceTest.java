@@ -39,7 +39,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
-class TenantAuthServiceImplTest {
+class TenantAuthServiceTest {
 
   @Mock private StoreUserRepository userRepository;
   @Mock private TenantRepository tenantRepository;
@@ -51,7 +51,7 @@ class TenantAuthServiceImplTest {
   @Mock private AppProperties appProperties;
   @Mock private ValueOperations<String, String> valueOperations;
 
-  @InjectMocks private TenantAuthServiceImpl authService;
+  @InjectMocks private TenantAuthService authService;
 
   @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
 
