@@ -55,3 +55,4 @@ _Avoid_: TenantMenu（旧名）
 ## Open questions
 
 - **Order.storeName**：订单上的自由文本"店名"字段。Tenant 与门店已确认 1:1，此字段的真实含义（屋号/品牌/渠道名？）待澄清后改名或移除。
+- **Customer.rank / classification**：均为自由文本，等级/区分的正式取值体系未定义（DB 默认 rank='SILVER'）。UI 以文本输入暂顶，待业务确定取值集后收敛为 enum + 下拉。

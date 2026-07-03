@@ -36,9 +36,10 @@ public class OrderServiceImpl implements OrderService {
   @Override
   @TenantScoped
   @Transactional(readOnly = true)
-  public Page<OrderResponse> list(Pageable pageable) {
-    // 一覧は集約を経由せず JPQL join projection で取得（D3）
-    return orderRepository.findAllViews(pageable).map(orderMapper::toResponse);
+  public Page<OrderResponse> list(String customerId, Pageable pageable) {
+    // 一覧は集約を経由せず JPQL join projection で取得（D3）。customerId は顧客詳細の注文履歴用
+    String filter = (customerId == null || customerId.isBlank()) ? null : customerId;
+    return orderRepository.findAllViews(filter, pageable).map(orderMapper::toResponse);
   }
 
   @Override

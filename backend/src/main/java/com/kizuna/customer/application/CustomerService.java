@@ -7,7 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface CustomerService {
-  Page<CustomerResponse> list(String search, Pageable pageable);
+  Page<CustomerResponse> list(String search, String rank, String classification, Pageable pageable);
 
   CustomerResponse get(String id);
 

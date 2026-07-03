@@ -12,6 +12,9 @@ public class CustomerCreateRequest {
   private String buildingName;
   private String classification;
   private Boolean hasPet;
+  private String rank;
+  private String lineId;
+  private String usageAreas;
   private String ngType;
   private String ngContent;
 }

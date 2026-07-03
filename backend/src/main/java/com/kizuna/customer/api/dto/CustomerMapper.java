@@ -12,6 +12,8 @@ public interface CustomerMapper {
 
   @Mapping(target = "points", constant = "0")
   @Mapping(target = "landmark", ignore = true)
+  // rank は DB デフォルト（'SILVER'）と同義。エンティティに列をマッピングしたため明示的に補完する
+  @Mapping(target = "rank", source = "rank", defaultValue = "SILVER")
   Customer toEntity(CustomerCreateRequest request);
 
   /** 更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */

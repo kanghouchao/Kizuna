@@ -32,8 +32,10 @@ public class CustomerController {
   @PreAuthorize("hasAuthority('CUSTOMER_MANAGE')")
   public ResponseEntity<Page<CustomerResponse>> list(
       @RequestParam(required = false) String search,
+      @RequestParam(required = false) String rank,
+      @RequestParam(required = false) String classification,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(customerService.list(search, pageable));
+    return ResponseEntity.ok(customerService.list(search, rank, classification, pageable));
   }
 
   @GetMapping("/{id}")

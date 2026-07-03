@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -30,8 +31,9 @@ public class OrderController {
   @GetMapping
   @PreAuthorize("hasAuthority('ORDER_MANAGE')")
   public ResponseEntity<Page<OrderResponse>> list(
+      @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(orderService.list(pageable));
+    return ResponseEntity.ok(orderService.list(customerId, pageable));
   }
 
   @GetMapping("/{id}")

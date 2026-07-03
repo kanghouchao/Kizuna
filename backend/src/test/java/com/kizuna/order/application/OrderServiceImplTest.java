@@ -3,6 +3,7 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -65,10 +66,24 @@ class OrderServiceImplTest {
     OrderResponse res = OrderResponse.builder().id("o1").build();
     Page<OrderView> page = new PageImpl<>(List.of(view), PageRequest.of(0, 10), 1);
 
-    when(orderRepository.findAllViews(any(Pageable.class))).thenReturn(page);
+    when(orderRepository.findAllViews(eq(null), any(Pageable.class))).thenReturn(page);
     when(orderMapper.toResponse(view)).thenReturn(res);
 
-    Page<OrderResponse> result = service.list(PageRequest.of(0, 10));
+    Page<OrderResponse> result = service.list(null, PageRequest.of(0, 10));
+    assertThat(result.getContent()).hasSize(1);
+    assertThat(result.getContent().get(0).getId()).isEqualTo("o1");
+  }
+
+  @Test
+  void listFiltersByCustomerId() {
+    OrderView view = mock(OrderView.class);
+    OrderResponse res = OrderResponse.builder().id("o1").build();
+    Page<OrderView> page = new PageImpl<>(List.of(view), PageRequest.of(0, 10), 1);
+
+    when(orderRepository.findAllViews(eq("c1"), any(Pageable.class))).thenReturn(page);
+    when(orderMapper.toResponse(view)).thenReturn(res);
+
+    Page<OrderResponse> result = service.list("c1", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getId()).isEqualTo("o1");
   }
