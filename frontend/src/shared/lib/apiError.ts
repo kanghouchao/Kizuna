@@ -4,8 +4,8 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object' && 'response' in error) {
     const data = (error as { response?: { data?: { error?: string; message?: string } } }).response
       ?.data;
-    if (data?.error) return data.error;
-    if (data?.message) return data.message;
+    if (typeof data?.error === 'string') return data.error;
+    if (typeof data?.message === 'string') return data.message;
   }
   return fallback;
 }

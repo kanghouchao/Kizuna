@@ -17,16 +17,40 @@ describe('useManagedList', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('refetch は最新のクロージャで再取得する', async () => {
-    let value = ['first'];
-    const { result } = renderHook(() => useManagedList(async () => value, '取得失敗'));
+  it('refetch は再レンダー後の最新の fetcher を使う', async () => {
+    const first = jest.fn(async () => ['first']);
+    const second = jest.fn(async () => ['second']);
+    const { result, rerender } = renderHook(({ fetcher }) => useManagedList(fetcher, '取得失敗'), {
+      initialProps: { fetcher: first as () => Promise<string[]> },
+    });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    value = ['second'];
+    rerender({ fetcher: second });
     await act(async () => {
       await result.current.refetch();
     });
+    expect(second).toHaveBeenCalledTimes(1);
     expect(result.current.items).toEqual(['second']);
+  });
+
+  it('古いリクエストの遅延応答は新しい結果を上書きしない', async () => {
+    const resolvers: Array<(value: string[]) => void> = [];
+    const fetcher = jest.fn(() => new Promise<string[]>(resolve => resolvers.push(resolve)));
+    const { result } = renderHook(() => useManagedList(fetcher, '取得失敗'));
+
+    // マウント時の取得（1件目）が在途のまま 2 件目を発火し、2件目 → 1件目の順に解決する
+    act(() => {
+      void result.current.refetch();
+    });
+    await act(async () => {
+      resolvers[1](['newer']);
+    });
+    await act(async () => {
+      resolvers[0](['stale']);
+    });
+
+    expect(result.current.items).toEqual(['newer']);
+    expect(result.current.isLoading).toBe(false);
   });
 
   it('失敗時はトーストを出し loading を解除する', async () => {

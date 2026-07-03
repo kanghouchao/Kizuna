@@ -16,4 +16,9 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage(null, '代替')).toBe('代替');
     expect(getApiErrorMessage({ response: { data: {} } }, '代替')).toBe('代替');
   });
+
+  it('error / message が文字列でなければ無視して fallback を返す', () => {
+    expect(getApiErrorMessage({ response: { data: { error: { code: 1 } } } }, '代替')).toBe('代替');
+    expect(getApiErrorMessage({ response: { data: { message: 42 } } }, '代替')).toBe('代替');
+  });
 });

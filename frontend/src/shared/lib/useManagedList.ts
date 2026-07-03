@@ -11,17 +11,21 @@ import { toast } from 'react-hot-toast';
 export function useManagedList<T>(fetcher: () => Promise<T[]>, errorMessage: string) {
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する
+  const requestIdRef = useRef(0);
   const [items, setItems] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refetch = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      setItems(await fetcherRef.current());
+      const result = await fetcherRef.current();
+      if (requestId === requestIdRef.current) setItems(result);
     } catch {
-      toast.error(errorMessage);
+      if (requestId === requestIdRef.current) toast.error(errorMessage);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) setIsLoading(false);
     }
   }, [errorMessage]);
 
