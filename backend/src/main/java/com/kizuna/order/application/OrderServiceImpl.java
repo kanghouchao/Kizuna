@@ -6,6 +6,7 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.domain.OrderRepository;
@@ -101,7 +102,20 @@ public class OrderServiceImpl implements OrderService {
             .findById(request.getCastId())
             .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
 
+    // ステータスはドメインの遷移メソッド経由で変更（不正な遷移はドメイン例外 → 400）
+    if (request.getStatus() != null) {
+      order.transitionTo(parseStatus(request.getStatus()));
+    }
+
     return orderMapper.toResponse(orderRepository.save(order));
+  }
+
+  private OrderStatus parseStatus(String raw) {
+    try {
+      return OrderStatus.valueOf(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ServiceException("不正な注文ステータスです: " + raw);
+    }
   }
 
   @Override

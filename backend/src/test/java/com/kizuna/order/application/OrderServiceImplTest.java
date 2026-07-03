@@ -16,6 +16,7 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.tenant.domain.Tenant;
@@ -159,6 +160,56 @@ class OrderServiceImplTest {
     assertThat(existing.getCast()).isNotNull();
     assertThat(existing.getReceptionist()).isNotNull();
     verify(orderMapper).updateEntityFromRequest(req, existing);
+  }
+
+  @Test
+  void updateAppliesLegalStatusTransition() {
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
+    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId("r2");
+    req.setStatus("CONFIRMED");
+
+    service.update("o1", req);
+
+    assertThat(existing.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+  }
+
+  @Test
+  void updateRejectsIllegalStatusTransition() {
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
+    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId("r2");
+    req.setStatus("COMPLETED");
+
+    assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
+    assertThat(existing.getStatus()).isEqualTo(OrderStatus.CREATED);
+  }
+
+  @Test
+  void updateRejectsUnknownStatusValue() {
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
+    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId("r2");
+    req.setStatus("GARBAGE");
+
+    assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
   }
 
   @Test

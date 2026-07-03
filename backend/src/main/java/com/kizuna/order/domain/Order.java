@@ -7,6 +7,8 @@ import com.kizuna.user.domain.StoreUser;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -103,8 +105,35 @@ public class Order extends TenantScopedEntity {
   @Column(name = "cast_driver_message")
   private String castDriverMessage;
 
+  @Enumerated(EnumType.STRING)
   @Column(name = "status")
-  private String status;
+  private OrderStatus status;
+
+  /** 注文を確認済みにする。 */
+  public void confirm() {
+    transitionTo(OrderStatus.CONFIRMED);
+  }
+
+  /** 注文を完了する。確認済みの注文のみ完了できる。 */
+  public void complete() {
+    transitionTo(OrderStatus.COMPLETED);
+  }
+
+  /** 注文をキャンセルする。完了前のみ可能。 */
+  public void cancel() {
+    transitionTo(OrderStatus.CANCELLED);
+  }
+
+  /** 指定ステータスへ遷移する。同一ステータスへは冪等（何もしない）、不正な遷移はドメイン例外を投げる。 */
+  public void transitionTo(OrderStatus target) {
+    if (status == target) {
+      return;
+    }
+    if (status == null || !status.canTransitionTo(target)) {
+      throw new IllegalOrderStateTransitionException(status, target);
+    }
+    this.status = target;
+  }
 
   @Override
   public String toString() {

@@ -63,6 +63,7 @@ public interface OrderMapper {
    * @param order 更新対象の注文エンティティ
    */
   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+  @Mapping(target = "status", ignore = true) // ステータスはドメインの遷移メソッド経由でのみ変更（サービス層で実施）
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
