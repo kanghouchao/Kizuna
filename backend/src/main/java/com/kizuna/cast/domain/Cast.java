@@ -8,14 +8,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_casts")
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -50,6 +48,40 @@ public class Cast extends TenantScopedEntity {
 
   @Column(name = "display_order")
   private Integer displayOrder;
+
+  /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
+  public void apply(CastPatch patch) {
+    if (patch.name() != null) {
+      this.name = patch.name();
+    }
+    if (patch.status() != null) {
+      this.status = patch.status();
+    }
+    if (patch.photoUrl() != null) {
+      this.photoUrl = patch.photoUrl();
+    }
+    if (patch.introduction() != null) {
+      this.introduction = patch.introduction();
+    }
+    if (patch.age() != null) {
+      this.age = patch.age();
+    }
+    if (patch.height() != null) {
+      this.height = patch.height();
+    }
+    if (patch.bust() != null) {
+      this.bust = patch.bust();
+    }
+    if (patch.waist() != null) {
+      this.waist = patch.waist();
+    }
+    if (patch.hip() != null) {
+      this.hip = patch.hip();
+    }
+    if (patch.displayOrder() != null) {
+      this.displayOrder = patch.displayOrder();
+    }
+  }
 
   @Override
   public String toString() {

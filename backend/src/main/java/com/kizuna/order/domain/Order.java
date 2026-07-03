@@ -1,17 +1,11 @@
 package com.kizuna.order.domain;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.customer.domain.Customer;
 import com.kizuna.shared.persistence.TenantScopedEntity;
-import com.kizuna.user.domain.StoreUser;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -20,13 +14,11 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "t_orders")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -35,9 +27,8 @@ public class Order extends TenantScopedEntity {
   @Column(name = "store_name")
   private String storeName;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "receptionist_id")
-  private StoreUser receptionist;
+  @Column(name = "receptionist_id")
+  private String receptionistId;
 
   @Column(name = "business_date", nullable = false)
   private LocalDate businessDate;
@@ -48,13 +39,11 @@ public class Order extends TenantScopedEntity {
   @Column(name = "arrival_scheduled_end_time")
   private LocalTime arrivalScheduledEndTime;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "customer_id")
-  private Customer customer;
+  @Column(name = "customer_id")
+  private String customerId;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "cast_id")
-  private Cast cast;
+  @Column(name = "cast_id")
+  private String castId;
 
   @Column(name = "course_minutes")
   private Integer courseMinutes;
@@ -108,6 +97,61 @@ public class Order extends TenantScopedEntity {
   @Enumerated(EnumType.STRING)
   @Column(name = "status")
   private OrderStatus status;
+
+  /** キャストを割り当てる（存在確認は application 層の責務）。 */
+  public void assignCast(String castId) {
+    this.castId = castId;
+  }
+
+  /** 受付担当者を割り当てる（存在確認は application 層の責務）。 */
+  public void assignReceptionist(String receptionistId) {
+    this.receptionistId = receptionistId;
+  }
+
+  /** 顧客を紐付ける（存在確認・検索/作成は application 層の責務）。 */
+  public void linkCustomer(String customerId) {
+    this.customerId = customerId;
+  }
+
+  /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
+  public void apply(OrderPatch patch) {
+    if (patch.storeName() != null) {
+      this.storeName = patch.storeName();
+    }
+    if (patch.arrivalScheduledStartTime() != null) {
+      this.arrivalScheduledStartTime = patch.arrivalScheduledStartTime();
+    }
+    if (patch.arrivalScheduledEndTime() != null) {
+      this.arrivalScheduledEndTime = patch.arrivalScheduledEndTime();
+    }
+    if (patch.courseMinutes() != null) {
+      this.courseMinutes = patch.courseMinutes();
+    }
+    if (patch.extensionMinutes() != null) {
+      this.extensionMinutes = patch.extensionMinutes();
+    }
+    if (patch.optionCodes() != null) {
+      this.optionCodes = patch.optionCodes();
+    }
+    if (patch.discountName() != null) {
+      this.discountName = patch.discountName();
+    }
+    if (patch.manualDiscount() != null) {
+      this.manualDiscount = patch.manualDiscount();
+    }
+    if (patch.usedPoints() != null) {
+      this.usedPoints = patch.usedPoints();
+    }
+    if (patch.manualGrantPoints() != null) {
+      this.manualGrantPoints = patch.manualGrantPoints();
+    }
+    if (patch.remarks() != null) {
+      this.remarks = patch.remarks();
+    }
+    if (patch.castDriverMessage() != null) {
+      this.castDriverMessage = patch.castDriverMessage();
+    }
+  }
 
   /** 注文を確認済みにする。 */
   public void confirm() {

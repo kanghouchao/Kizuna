@@ -8,12 +8,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "t_customers")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -51,6 +49,37 @@ public class Customer extends TenantScopedEntity {
 
   @Column(name = "ng_content")
   private String ngContent;
+
+  /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
+  public void apply(CustomerPatch patch) {
+    if (patch.name() != null) {
+      this.name = patch.name();
+    }
+    if (patch.phoneNumber() != null) {
+      this.phoneNumber = patch.phoneNumber();
+    }
+    if (patch.phoneNumber2() != null) {
+      this.phoneNumber2 = patch.phoneNumber2();
+    }
+    if (patch.address() != null) {
+      this.address = patch.address();
+    }
+    if (patch.buildingName() != null) {
+      this.buildingName = patch.buildingName();
+    }
+    if (patch.classification() != null) {
+      this.classification = patch.classification();
+    }
+    if (patch.hasPet() != null) {
+      this.hasPet = patch.hasPet();
+    }
+    if (patch.ngType() != null) {
+      this.ngType = patch.ngType();
+    }
+    if (patch.ngContent() != null) {
+      this.ngContent = patch.ngContent();
+    }
+  }
 
   @Override
   public String toString() {

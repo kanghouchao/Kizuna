@@ -3,25 +3,27 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.customer.domain.Customer;
 import com.kizuna.order.domain.Order;
-import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.OrderView;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.StoreUser;
 import com.kizuna.user.domain.StoreUserRepository;
 import java.util.List;
 import java.util.Optional;
@@ -53,15 +55,18 @@ class OrderServiceImplTest {
   @Captor ArgumentCaptor<Order> orderCaptor;
   @Captor ArgumentCaptor<Customer> customerCaptor;
 
+  private OrderPatch emptyPatch() {
+    return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null, null);
+  }
+
   @Test
   void listReturnsPageOfOrderResponses() {
-    Order o = new Order();
-    o.setId("o1");
+    OrderView view = mock(OrderView.class);
     OrderResponse res = OrderResponse.builder().id("o1").build();
-    Page<Order> page = new PageImpl<>(List.of(o), PageRequest.of(0, 10), 1);
+    Page<OrderView> page = new PageImpl<>(List.of(view), PageRequest.of(0, 10), 1);
 
-    when(orderRepository.findAll(any(Pageable.class))).thenReturn(page);
-    when(orderMapper.toResponse(any(Order.class))).thenReturn(res);
+    when(orderRepository.findAllViews(any(Pageable.class))).thenReturn(page);
+    when(orderMapper.toResponse(view)).thenReturn(res);
 
     Page<OrderResponse> result = service.list(PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
@@ -70,13 +75,12 @@ class OrderServiceImplTest {
 
   @Test
   void getReturnsOrderResponseOrThrows() {
-    Order o = new Order();
-    o.setId("o1");
+    OrderView view = mock(OrderView.class);
     OrderResponse res = OrderResponse.builder().id("o1").build();
 
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(o));
-    when(orderMapper.toResponse(o)).thenReturn(res);
-    when(orderRepository.findById("o2")).thenReturn(Optional.empty());
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(view));
+    when(orderMapper.toResponse(view)).thenReturn(res);
+    when(orderRepository.findViewById("o2")).thenReturn(Optional.empty());
 
     assertThat(service.get("o1").getId()).isEqualTo("o1");
     assertThatThrownBy(() -> service.get("o2")).isInstanceOf(ServiceException.class);
@@ -89,24 +93,26 @@ class OrderServiceImplTest {
     req.setCastId("g1");
     req.setReceptionistId("r1");
 
-    Order entity = new Order();
+    Order entity = Order.builder().build();
     OrderResponse res = OrderResponse.builder().status("CREATED").build();
 
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(entity);
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(new Customer()));
-    when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
-    when(storeUserRepository.findById("r1")).thenReturn(Optional.of(new StoreUser()));
+    when(customerRepository.existsById("c1")).thenReturn(true);
+    when(castRepository.existsById("g1")).thenReturn(true);
+    when(storeUserRepository.existsById("r1")).thenReturn(true);
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderMapper.toResponse(any(Order.class))).thenReturn(res);
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(res);
 
     service.create(req);
 
     verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCustomer()).isNotNull();
-    assertThat(orderCaptor.getValue().getCast()).isNotNull();
-    assertThat(orderCaptor.getValue().getReceptionist()).isNotNull();
+    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c1");
+    assertThat(orderCaptor.getValue().getCastId()).isEqualTo("g1");
+    assertThat(orderCaptor.getValue().getReceptionistId()).isEqualTo("r1");
   }
 
   @Test
@@ -117,22 +123,23 @@ class OrderServiceImplTest {
     req.setCastId("g1");
     req.setReceptionistId("r1");
 
-    Customer newCustomer = new Customer();
-    newCustomer.setPhoneNumber("09012345678");
+    Customer newCustomer = Customer.builder().phoneNumber("09012345678").build();
 
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
-    when(orderMapper.toEntity(req)).thenReturn(new Order());
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(customerRepository.findByPhoneNumberAndTenantId("09012345678", 1L))
         .thenReturn(Optional.empty());
-    when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
-    when(storeUserRepository.findById("r1")).thenReturn(Optional.of(new StoreUser()));
+    when(castRepository.existsById("g1")).thenReturn(true);
+    when(storeUserRepository.existsById("r1")).thenReturn(true);
 
     when(orderMapper.toCustomer(req)).thenReturn(newCustomer);
 
     when(customerRepository.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     service.create(req);
 
@@ -142,14 +149,16 @@ class OrderServiceImplTest {
 
   @Test
   void updateModifiesAssociations() {
-    Order existing = new Order();
-    existing.setId("o1");
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
-    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    when(castRepository.existsById("g2")).thenReturn(true);
+    when(storeUserRepository.existsById("r2")).thenReturn(true);
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -157,19 +166,46 @@ class OrderServiceImplTest {
 
     service.update("o1", req);
 
-    assertThat(existing.getCast()).isNotNull();
-    assertThat(existing.getReceptionist()).isNotNull();
-    verify(orderMapper).updateEntityFromRequest(req, existing);
+    assertThat(existing.getCastId()).isEqualTo("g2");
+    assertThat(existing.getReceptionistId()).isEqualTo("r2");
+  }
+
+  @Test
+  void updateAppliesPatchFields() {
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
+
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
+        .thenReturn(
+            new OrderPatch(
+                "新しい店名", null, null, null, null, null, null, null, null, null, null, null));
+    when(castRepository.existsById("g2")).thenReturn(true);
+    when(storeUserRepository.existsById("r2")).thenReturn(true);
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId("r2");
+
+    service.update("o1", req);
+
+    assertThat(existing.getStoreName()).isEqualTo("新しい店名");
   }
 
   @Test
   void updateAppliesLegalStatusTransition() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
-    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    when(castRepository.existsById("g2")).thenReturn(true);
+    when(storeUserRepository.existsById("r2")).thenReturn(true);
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderMapper.toResponse(any(Order.class))).thenReturn(OrderResponse.builder().build());
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -185,8 +221,9 @@ class OrderServiceImplTest {
   void updateRejectsIllegalStatusTransition() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
-    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    when(castRepository.existsById("g2")).thenReturn(true);
+    when(storeUserRepository.existsById("r2")).thenReturn(true);
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -201,8 +238,9 @@ class OrderServiceImplTest {
   void updateRejectsUnknownStatusValue() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(castRepository.findById("g2")).thenReturn(Optional.of(new Cast()));
-    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    when(castRepository.existsById("g2")).thenReturn(true);
+    when(storeUserRepository.existsById("r2")).thenReturn(true);
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -214,10 +252,11 @@ class OrderServiceImplTest {
 
   @Test
   void updateThrowsWhenCastNotFound() {
-    Order existing = new Order();
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(castRepository.findById("none")).thenReturn(Optional.empty());
-    when(storeUserRepository.findById("r2")).thenReturn(Optional.of(new StoreUser()));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    when(castRepository.existsById("none")).thenReturn(false);
+    when(storeUserRepository.existsById("r2")).thenReturn(true);
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("none");
@@ -234,41 +273,8 @@ class OrderServiceImplTest {
   }
 
   @Test
-  void createThrowsWhenCastNotFound() {
-    OrderCreateRequest req = new OrderCreateRequest();
-    req.setCastId("g_none");
-    req.setReceptionistId("r1");
-
-    when(tenantContext.getTenantId()).thenReturn(1L);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
-    when(orderMapper.toEntity(req)).thenReturn(new Order());
-    when(castRepository.findById("g_none")).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("キャストが見つかりません");
-  }
-
-  @Test
-  void createThrowsWhenReceptionistNotFound() {
-    OrderCreateRequest req = new OrderCreateRequest();
-    req.setReceptionistId("r_none");
-    req.setCastId("g1");
-
-    when(tenantContext.getTenantId()).thenReturn(1L);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
-    when(orderMapper.toEntity(req)).thenReturn(new Order());
-    when(castRepository.findById("g1")).thenReturn(Optional.of(new Cast()));
-    when(storeUserRepository.findById("r_none")).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("受付担当者が見つかりません");
-  }
-
-  @Test
-  void deleteThrowsIfNotFound() {
-    when(orderRepository.existsById("bad")).thenReturn(false);
-    assertThatThrownBy(() -> service.delete("bad")).isInstanceOf(ServiceException.class);
+  void deleteThrowsWhenMissing() {
+    when(orderRepository.existsById("nope")).thenReturn(false);
+    assertThatThrownBy(() -> service.delete("nope")).isInstanceOf(ServiceException.class);
   }
 }

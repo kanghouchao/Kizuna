@@ -1,6 +1,5 @@
 package com.kizuna.customer.domain;
 
-import com.kizuna.customer.domain.Customer;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

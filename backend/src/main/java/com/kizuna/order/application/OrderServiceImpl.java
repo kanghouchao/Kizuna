@@ -1,15 +1,15 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
-import com.kizuna.customer.domain.Customer;
 import com.kizuna.order.domain.Order;
-import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
@@ -37,17 +37,15 @@ public class OrderServiceImpl implements OrderService {
   @TenantScoped
   @Transactional(readOnly = true)
   public Page<OrderResponse> list(Pageable pageable) {
-    return orderRepository.findAll(pageable).map(orderMapper::toResponse);
+    // 一覧は集約を経由せず JPQL join projection で取得（D3）
+    return orderRepository.findAllViews(pageable).map(orderMapper::toResponse);
   }
 
   @Override
   @TenantScoped
   @Transactional(readOnly = true)
   public OrderResponse get(String id) {
-    return orderRepository
-        .findById(id)
-        .map(orderMapper::toResponse)
-        .orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
+    return toResponse(id);
   }
 
   @Override
@@ -67,18 +65,18 @@ public class OrderServiceImpl implements OrderService {
     // 複雑な関連ロジックの処理（顧客のスマートリンク）
     handleCustomerLinking(request, order);
 
-    // その他のID関連の処理
-    order.setCast(
-        castRepository
-            .findById(request.getCastId())
-            .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
-    order.setReceptionist(
-        storeUserRepository
-            .findById(request.getReceptionistId())
-            .orElseThrow(
-                () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
+    // 関連 ID の割り当て（存在確認のうえ）
+    if (!castRepository.existsById(request.getCastId())) {
+      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
+    }
+    order.assignCast(request.getCastId());
+    if (!storeUserRepository.existsById(request.getReceptionistId())) {
+      throw new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId());
+    }
+    order.assignReceptionist(request.getReceptionistId());
 
-    return orderMapper.toResponse(orderRepository.save(order));
+    Order saved = orderRepository.save(order);
+    return toResponse(saved.getId());
   }
 
   @Override
@@ -88,26 +86,33 @@ public class OrderServiceImpl implements OrderService {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
 
-    // MapStructを使用して非nullフィールドを自動更新
-    orderMapper.updateEntityFromRequest(request, order);
+    // 非nullフィールドのみをドメインの部分更新コマンドとして適用
+    order.apply(orderMapper.toPatch(request));
 
-    // 関連IDの更新処理（MapStructではDB検索ができないため手動で実施）
-    order.setReceptionist(
-        storeUserRepository
-            .findById(request.getReceptionistId())
-            .orElseThrow(
-                () -> new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId())));
-    order.setCast(
-        castRepository
-            .findById(request.getCastId())
-            .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + request.getCastId())));
+    // 関連 ID の更新（存在確認のうえ）
+    if (!storeUserRepository.existsById(request.getReceptionistId())) {
+      throw new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId());
+    }
+    order.assignReceptionist(request.getReceptionistId());
+    if (!castRepository.existsById(request.getCastId())) {
+      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
+    }
+    order.assignCast(request.getCastId());
 
     // ステータスはドメインの遷移メソッド経由で変更（不正な遷移はドメイン例外 → 400）
     if (request.getStatus() != null) {
       order.transitionTo(parseStatus(request.getStatus()));
     }
 
-    return orderMapper.toResponse(orderRepository.save(order));
+    Order saved = orderRepository.save(order);
+    return toResponse(saved.getId());
+  }
+
+  private OrderResponse toResponse(String id) {
+    return orderRepository
+        .findViewById(id)
+        .map(orderMapper::toResponse)
+        .orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
   }
 
   private OrderStatus parseStatus(String raw) {
@@ -130,10 +135,10 @@ public class OrderServiceImpl implements OrderService {
 
   private void handleCustomerLinking(OrderCreateRequest req, Order order) {
     if (req.getCustomerId() != null && !req.getCustomerId().isEmpty()) {
-      order.setCustomer(
-          customerRepository
-              .findById(req.getCustomerId())
-              .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + req.getCustomerId())));
+      if (!customerRepository.existsById(req.getCustomerId())) {
+        throw new ServiceException("顧客が見つかりません: " + req.getCustomerId());
+      }
+      order.linkCustomer(req.getCustomerId());
     } else if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
       // 顧客の検索または作成
       Customer customer =
@@ -150,7 +155,7 @@ public class OrderServiceImpl implements OrderService {
                             .getId());
                     return customerRepository.save(newCustomer);
                   });
-      order.setCustomer(customer);
+      order.linkCustomer(customer.getId());
     }
   }
 }

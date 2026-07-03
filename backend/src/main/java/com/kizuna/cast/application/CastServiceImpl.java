@@ -1,7 +1,7 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastCreateRequest;
+import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
@@ -70,7 +70,7 @@ public class CastServiceImpl implements CastService {
     Cast cast =
         castRepository.findById(id).orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
 
-    castMapper.updateEntityFromRequest(request, cast);
+    cast.apply(castMapper.toPatch(request));
 
     return castMapper.toResponse(castRepository.save(cast));
   }

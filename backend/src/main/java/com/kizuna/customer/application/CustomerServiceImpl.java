@@ -1,7 +1,7 @@
 package com.kizuna.customer.application;
 
-import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
+import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
@@ -71,7 +71,7 @@ public class CustomerServiceImpl implements CustomerService {
             .findById(id)
             .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
 
-    customerMapper.updateEntityFromRequest(request, customer);
+    customer.apply(customerMapper.toPatch(request));
 
     return customerMapper.toResponse(customerRepository.save(customer));
   }

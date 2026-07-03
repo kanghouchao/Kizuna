@@ -7,11 +7,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastCreateRequest;
+import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
@@ -40,8 +41,7 @@ class CastServiceImplTest {
 
   @Test
   void list_returnsPage() {
-    Cast g = new Cast();
-    g.setName("Test");
+    Cast g = Cast.builder().name("Test").build();
     Page<Cast> page = new PageImpl<>(List.of(g));
 
     CastResponse resp = new CastResponse();
@@ -58,8 +58,7 @@ class CastServiceImplTest {
 
   @Test
   void list_withoutSearch_returnsAll() {
-    Cast g = new Cast();
-    g.setName("All");
+    Cast g = Cast.builder().name("All").build();
     Page<Cast> page = new PageImpl<>(List.of(g));
 
     CastResponse resp = new CastResponse();
@@ -101,8 +100,7 @@ class CastServiceImplTest {
     CastCreateRequest req = new CastCreateRequest();
     req.setName("G1");
 
-    Cast castEntity = new Cast();
-    castEntity.setName("G1");
+    Cast castEntity = Cast.builder().name("G1").build();
 
     Tenant tenant = new Tenant();
     tenant.setId(1L);
@@ -152,13 +150,17 @@ class CastServiceImplTest {
     CastUpdateRequest req = new CastUpdateRequest();
     req.setName("G_Updated");
 
+    when(castMapper.toPatch(req))
+        .thenReturn(
+            new CastPatch("G_Updated", null, null, null, null, null, null, null, null, null));
+
     CastResponse resp = new CastResponse();
     resp.setName("G_Updated");
     when(castMapper.toResponse(g)).thenReturn(resp);
 
     CastResponse result = castService.update("g1", req);
     assertThat(result.getName()).isEqualTo("G_Updated");
-    verify(castMapper).updateEntityFromRequest(req, g);
+    assertThat(g.getName()).isEqualTo("G_Updated");
   }
 
   @Test

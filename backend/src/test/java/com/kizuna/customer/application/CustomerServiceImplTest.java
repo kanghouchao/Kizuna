@@ -7,11 +7,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
+import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
@@ -40,8 +41,7 @@ class CustomerServiceImplTest {
 
   @Test
   void list_returnsPage() {
-    Customer c = new Customer();
-    c.setName("Test");
+    Customer c = Customer.builder().name("Test").build();
     Page<Customer> page = new PageImpl<>(List.of(c));
 
     CustomerResponse resp = new CustomerResponse();
@@ -58,8 +58,7 @@ class CustomerServiceImplTest {
 
   @Test
   void list_withoutSearch_returnsAll() {
-    Customer c = new Customer();
-    c.setName("All");
+    Customer c = Customer.builder().name("All").build();
     Page<Customer> page = new PageImpl<>(List.of(c));
 
     CustomerResponse resp = new CustomerResponse();
@@ -101,8 +100,7 @@ class CustomerServiceImplTest {
     CustomerCreateRequest req = new CustomerCreateRequest();
     req.setName("New");
 
-    Customer customerEntity = new Customer();
-    customerEntity.setName("New");
+    Customer customerEntity = Customer.builder().name("New").build();
 
     Tenant tenant = new Tenant();
     tenant.setId(1L);
@@ -154,12 +152,15 @@ class CustomerServiceImplTest {
     CustomerUpdateRequest req = new CustomerUpdateRequest();
     req.setName("Updated");
 
+    when(customerMapper.toPatch(req))
+        .thenReturn(new CustomerPatch("Updated", null, null, null, null, null, null, null, null));
+
     CustomerResponse resp = new CustomerResponse();
     resp.setName("Updated");
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
     CustomerResponse res = customerService.update("c1", req);
-    verify(customerMapper).updateEntityFromRequest(req, c);
+    assertThat(c.getName()).isEqualTo("Updated");
     assertThat(res.getName()).isEqualTo("Updated");
   }
 
