@@ -50,7 +50,7 @@ export default async function Home() {
 
     try {
       const { default: TemplateComponent } = await import(
-        `@/components/templates/tenant/${templateKey}/page`
+        `@/_pages/store-site/templates/${templateKey}/page`
       );
       return <TemplateComponent />;
     } catch (e) {

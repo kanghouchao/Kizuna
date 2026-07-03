@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/entities/user';
 import { BellIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export function Header() {

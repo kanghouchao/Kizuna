@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/entities/user';
 import { useRouter } from 'next/navigation';
 import { Tenant, TenantStats, centralTenantApi } from '@/entities/tenant';
 import toast from 'react-hot-toast';

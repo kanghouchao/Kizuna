@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/entities/user';
 import { Tenant, UpdateTenantRequest, centralTenantApi } from '@/entities/tenant';
 import toast from 'react-hot-toast';
 
