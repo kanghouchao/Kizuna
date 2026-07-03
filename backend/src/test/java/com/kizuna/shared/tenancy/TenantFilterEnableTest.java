@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import jakarta.persistence.EntityManager;
 import org.aspectj.lang.ProceedingJoinPoint;
+import org.hibernate.Filter;
 import org.hibernate.Session;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,7 +21,7 @@ class TenantFilterEnableTest {
 
   @Mock private EntityManager entityManager;
   @Mock private Session session;
-  @Mock private org.hibernate.Filter filter;
+  @Mock private Filter filter;
   @Mock private ProceedingJoinPoint pjp;
 
   private TenantContext tenantContext;
