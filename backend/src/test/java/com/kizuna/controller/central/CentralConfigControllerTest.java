@@ -8,13 +8,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.auth.infrastructure.JwtUtil;
 import com.kizuna.model.dto.central.config.SystemConfigResponse;
 import com.kizuna.model.dto.central.config.SystemConfigUpdateRequest;
 import com.kizuna.service.central.config.SystemConfigService;
 import com.kizuna.shared.config.JacksonConfig;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.utils.JwtUtil;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

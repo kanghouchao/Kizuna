@@ -53,10 +53,11 @@ public class CustomerServiceImpl implements CustomerService {
   public CustomerResponse create(CustomerCreateRequest request) {
     Customer customer = customerMapper.toEntity(request);
 
-    customer.setTenant(
+    customer.setTenantId(
         tenantRepository
             .findById(tenantContext.getTenantId())
-            .orElseThrow(() -> new ServiceException("テナントが見つかりません")));
+            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+            .getId());
 
     return customerMapper.toResponse(customerRepository.save(customer));
   }

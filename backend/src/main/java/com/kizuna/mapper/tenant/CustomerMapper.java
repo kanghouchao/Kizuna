@@ -18,7 +18,7 @@ public interface CustomerMapper {
   CustomerResponse toResponse(Customer customer);
 
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenant", ignore = true)
+  @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "points", constant = "0")
@@ -27,7 +27,7 @@ public interface CustomerMapper {
 
   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenant", ignore = true)
+  @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "points", ignore = true)
@@ -35,7 +35,7 @@ public interface CustomerMapper {
   void updateEntityFromRequest(CustomerUpdateRequest request, @MappingTarget Customer customer);
 
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenant", ignore = true)
+  @Mapping(target = "tenantId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   @Mapping(target = "points", constant = "0")
