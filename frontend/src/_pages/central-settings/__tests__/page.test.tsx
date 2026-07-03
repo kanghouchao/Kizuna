@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import SystemSettingsPage from '../page';
+import SystemSettingsPage from '../ui/SettingsPage';
 
 const mockGetAllConfigs = jest.fn();
 const mockUpdateConfig = jest.fn();
