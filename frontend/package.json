@@ -7,6 +7,7 @@
     "dev": "next dev",
     "lint": "eslint .",
     "lint:fix": "eslint --fix --quiet .",
+    "lint:fsd": "steiger ./src",
     "test": "jest",
     "test:watch": "jest --watch",
     "format": "prettier --write --log-level warn .",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@feature-sliced/steiger-plugin": "0.6.0",
     "@tailwindcss/postcss": "4.3.2",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
@@ -44,6 +46,7 @@
     "jest-junit": "17.0.0",
     "postcss": "8.5.16",
     "prettier": "3.9.4",
+    "steiger": "0.5.13",
     "tailwindcss": "4.3.2",
     "ts-jest": "29.4.11",
     "typescript": "5.9.3"
