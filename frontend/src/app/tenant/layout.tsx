@@ -1,7 +1,7 @@
 'use client';
 
-import { Sidebar } from '@/components/layout/Sidebar';
-import { Header } from '@/components/layout/Header';
+import { Sidebar } from '@/widgets/sidebar';
+import { Header } from '@/widgets/header';
 
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
   return (
