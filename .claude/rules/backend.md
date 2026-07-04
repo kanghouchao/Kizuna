@@ -1,0 +1,57 @@
+---
+paths:
+  - "backend/**"
+---
+
+# Backend (Java) Conventions
+
+- **Java version**: 21
+- **Framework**: Spring Boot 3.5+, Spring Modulith, Spring Data JPA, Spring Security, Liquibase
+- **Testing**: JUnit 5, Jacoco (LINE ≥ 70%)
+- **Code generation**: Lombok, MapStruct
+- **Database**: PostgreSQL 18+, Redis 8+
+
+## Module structure (Spring Modulith)
+
+```
+com.kizuna
+├── shared/          # Shared kernel (OPEN module): tenancy, web, config, exception, persistence
+├── tenant/  auth/  user/  cast/  customer/  order/
+└── menu/  settings/  storeprofile/  notification/  storage/
+```
+
+Each module follows the DDD four layers:
+
+```
+<module>/
+├── domain/          # Aggregate (JPA entity, rich model), value objects, enums, domain events, repository interfaces
+├── application/     # Use-case services (transaction boundary), read-side queries
+├── infrastructure/  # Additional adapters (interceptors, utilities, etc.)
+└── api/
+    ├── central/     # Central-side controllers (when needed)
+    ├── store/       # Store-side controllers (when needed)
+    └── dto/         # request/response + MapStruct mappers
+```
+
+### Layer / module rules
+
+- **Aggregate = JPA entity** (rich model): no public setters. Already applied in the rich-model modules cast / customer / order. Modules not yet enriched (tenant / user / menu / settings / storeprofile) will adopt this incrementally; **do not add new public setters in new code** (the `TenantScopedEntity` base setters are also slated for gradual removal). Construction uses `@Builder` (consumed by MapStruct); partial updates use a domain-owned `XxxPatch` record + `apply()`; state transitions are behavior methods (e.g. `Order.confirm()/complete()/cancel()`, with invalid transitions raising a domain exception → 400).
+- **Cross-aggregate references are by ID only** (`Order.customerId`, etc.). DB foreign keys are kept. Object assembly happens in the application layer; lists and details use projections (e.g. `OrderView` + JPQL join — reference entity names by FQCN to avoid HQL reserved-word collisions).
+- **Synchronous references between modules** go only through packages exposed via `@NamedInterface` (document transitional exceptions in package-info.java). Events use `@ApplicationModuleListener` + the event publication registry (`event_publication` table, spring-modulith-starter-jdbc).
+- **Application services are concrete classes by default** (FooService = class). An interface + Impl split is introduced only when a second adapter actually exists, or when a consumer in another module mocks it (current cases: SystemConfigService, FileStorageService). Do not introduce single-implementation interfaces.
+- **Central / Store are authorization scopes, not module boundaries** (resolved by the api/central and api/store adapter layers + Spring Security).
+
+## Code Conventions
+
+- **Naming**: classes, methods, and variables are CamelCase. DB columns (snake_case) are mapped by JPA; API JSON keys (snake_case) are mapped by Jackson.
+- **Store-side vocabulary uses the Store prefix**: StoreUser, StoreProfile, StoreMenu (the old Tenant* names are not used — see `docs/CONTEXT.md`).
+- **Imports**: no inline FQCN usage, no wildcard imports (`*`); one explicit import per class.
+- **Formatting**: Spotless + Google Java Format (if the local JDK is not 21, run it in Docker: `docker run --rm -u root -v "$PWD":/app -w /app gradle:9.2.1-jdk21-ubi-minimal gradle spotlessApply --no-daemon`).
+- **Coverage**: the only Jacoco exclusions are `**/api/dto/**` (DTOs + MapStruct-generated code) and `**/shared/config/**` (pure configuration). **The domain layer must always be covered.**
+- **DB migrations**: Liquibase (YAML under `db/changelog/releases/<version>/central|tenant/`).
+- **Config values**: read from `AppProperties` (shared/config). No hardcoding.
+- **Logging**: keep the `req=<id> tenant=<id>` format.
+- **Modulith docs**: `ModularityTests` generates them under `backend/docs/modulith/` (committed). The Documenter's Rel-line ordering is unstable, so unless there is a structural change, revert the diff with checkout.
+- **Optional filter queries**: the JPQL `(:param is null or ...)` pattern can cause a runtime 500 due to PostgreSQL parameter type inference (see `CustomerService.searchSpec`). Build variable filter conditions with a `Specification` instead.
+- **Build verification**: Gradle failure messages may be non-English depending on the local JVM locale. Do not judge success/failure with `grep error`; check the exit code or the presence of `BUILD FAILED`.
+- **Manual API verification**: when hitting a tenant-scoped endpoint directly with curl, the `X-Role: tenant` and `X-Tenant-ID: <id>` headers are required (see `TenantIdInterceptor`). Without them the request is treated as central.
