@@ -15,6 +15,6 @@ class ModularityTests {
 
   @Test
   void writesModuleDocumentation() {
-    new Documenter(modules, "docs/modulith").writeDocumentation();
+    new Documenter(modules).writeDocumentation();
   }
 }
