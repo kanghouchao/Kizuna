@@ -19,7 +19,10 @@ import org.hibernate.annotations.ParamDef;
 @Setter
 @NoArgsConstructor
 @ToString
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
+@FilterDef(
+    name = "tenantFilter",
+    applyToLoadByKey = true,
+    parameters = @ParamDef(name = "tenantId", type = Long.class))
 public abstract class TenantScopedEntity {
 
   @Id @SnowflakeId private String id;

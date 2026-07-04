@@ -2,12 +2,14 @@ package com.kizuna;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.shared.persistence.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
@@ -53,6 +55,20 @@ class TenantIsolationTests {
             "@Filter(name=\"tenantFilter\", condition=\"%s\") が無い tenant_id 列保持エンティティ",
             EXPECTED_CONDITION)
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("tenantFilter は主キー直接ロード（EntityManager#find 経由の findById 等）にも適用されること")
+  void tenantFilterAppliesToLoadByKey() {
+    FilterDef filterDef = TenantScopedEntity.class.getAnnotation(FilterDef.class);
+
+    assertThat(filterDef).isNotNull();
+    assertThat(filterDef.name()).isEqualTo("tenantFilter");
+    assertThat(filterDef.applyToLoadByKey())
+        .as(
+            "applyToLoadByKey=false だと Session#find（Spring Data JPA の findById 実装経路）に"
+                + " filter が効かず、他テナントの ID を直接指定した読み取りが素通りする")
+        .isTrue();
   }
 
   /** tenant_id 列は TenantScopedEntity 経由（継承フィールド）でも、エンティティ自身の宣言でも良い。 */
