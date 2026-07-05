@@ -1,0 +1,60 @@
+# 統合テスト専用 compose（issue #225）
+# 開発用スタック（プロジェクト名 kizuna）とは独立したプロジェクト名で、
+# データは tmpfs のみ（ボリューム永続化なし）。実行ごとに down で使い捨てる
+# （gradle キャッシュボリュームだけは依存再取得の flaky 回避のため保持する）。
+name: kizuna-backend-test
+
+services:
+  database:
+    image: postgres:18-alpine
+    tmpfs:
+      - /var/lib/postgresql
+    environment:
+      POSTGRES_DB: kizuna
+      POSTGRES_USER: kizuna
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kizuna -d kizuna"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cache:
+    image: redis:8.8.0-alpine3.23
+    # 資格情報は開発用 compose と同じ変数参照形式（既定値はテスト専用のダミー値）
+    command: redis-server --requirepass ${REDIS_PASSWORD:-password}
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-password}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  integration-test:
+    image: gradle:9.2.1-jdk21-ubi-minimal
+    user: root # bind mount への build/ 書き込みのため（rules/backend.md の Spotless Docker 実行と同じ流儀）
+    working_dir: /app
+    volumes:
+      - .:/app
+      - gradle-it-cache:/root/.gradle
+    environment:
+      DB_HOST: database
+      DB_PORT: "5432"
+      DB_NAME: kizuna
+      DB_USERNAME: kizuna
+      DB_PASSWORD: password
+      REDIS_HOST: cache
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
+      # HMAC-SHA256 の要件（RFC 7518）で 256bit 以上必要（JwtUtil は raw bytes 解釈）
+      APP_JWT_SECRET: integration-test-secret-0123456789abcdef
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    command: ./gradlew integrationTest --no-daemon
+
+volumes:
+  gradle-it-cache:
