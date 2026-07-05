@@ -42,9 +42,7 @@ public abstract class CrossTenantTestSupport {
             new HttpEntity<>(
                 "{\"username\": \"admin@store1.kizuna.com\", \"password\": \"pass\"}", headers),
             JsonNode.class);
-    assertThat(res.getStatusCode())
-        .as("前提: シードユーザーでのログインが成功すること")
-        .isEqualTo(HttpStatus.OK);
+    assertThat(res.getStatusCode()).as("前提: シードユーザーでのログインが成功すること").isEqualTo(HttpStatus.OK);
     token = res.getBody().path("token").asText();
     assertThat(token).isNotBlank();
   }
