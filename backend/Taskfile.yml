@@ -36,13 +36,16 @@ tasks:
   test:
     desc: バックエンドの全テストを実行し、reports/backend に収集
     cmds:
-      - echo "🧪  バックエンドのテストを実行中..."
+      - echo "🧪  バックエンドの単体テストを実行中..."
       - |
         docker buildx build \
           --target test \
           -t {{.DOCKER_IMAGE}}-test:{{.DOCKER_TAG}} \
           --load \
           .
+      - echo "🧪  バックエンドの統合テストを実行中（compose ネットワーク接続）..."
+      - defer: docker compose -f docker-compose.test.yml down -v
+      - docker compose -f docker-compose.test.yml run --rm integration-test
 
   test-copy-artifacts:
     desc: テスト成果物を REPORT_DIR/backend にコピー
