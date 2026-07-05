@@ -47,6 +47,7 @@ task logs service=backend           # view logs
 
 - [Backend](./rules/backend.md)
 - [Frontend](./rules/frontend.md)
+- [Design](./rules/design.md)
 - [Infrastructure](./rules/infrastructure.md)
 
 Use the Taskfile so that commands run locally match the CI/CD environment, avoiding build or test failures caused by environment differences.
