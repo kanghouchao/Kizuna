@@ -126,3 +126,29 @@ jar {
     archiveBaseName.set(rootProject.name)
     archiveVersion.set(version.toString())
 }
+
+// 統合テスト（本物の PostgreSQL/Redis に接続。docker-compose.test.yml 経由で実行する）
+// check には紐づけない: 単体テストは従来どおり Dockerfile test ステージで完結させ、
+// 統合テストは compose ネットワーク内のランナーからのみ実行する（issue #225 の方式決定）
+sourceSets {
+    integrationTest {
+        java.srcDir 'src/integrationTest/java'
+        resources.srcDir 'src/integrationTest/resources'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+tasks.register('integrationTest', Test) {
+    description = '統合テスト（compose ネットワーク内で実行すること。task -d backend test 参照）'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter test
+}
