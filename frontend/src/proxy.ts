@@ -43,7 +43,13 @@ export async function proxy(request: NextRequest) {
       .split(':')[0]
       .toLowerCase();
     response.cookies.set('x-mw-tenant-domain', hostname, cookieOptions);
-    response.cookies.set('x-mw-tenant-template', tenantData.templateKey, cookieOptions);
+    // template cookie のみ maxAge 60 秒（ISR revalidate 60 秒と揃える）。
+    // session cookie のままだと一度立った模版が既存訪問者に永久固定され、
+    // 模版変更が伝播しない。短命化して最大 ~2 分で全訪問者へ反映させる。
+    response.cookies.set('x-mw-tenant-template', tenantData.templateKey, {
+      ...cookieOptions,
+      maxAge: 60,
+    });
     if (tenantData.tenantId) {
       response.cookies.set('x-mw-tenant-id', tenantData.tenantId, cookieOptions);
     }

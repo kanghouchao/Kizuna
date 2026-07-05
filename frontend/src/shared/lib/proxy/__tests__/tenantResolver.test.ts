@@ -153,4 +153,79 @@ describe('tenantResolver', () => {
     expect(global.fetch).toHaveBeenCalled();
     expect(result.tenantData?.tenantId).toBe('api-tenant-id');
   });
+
+  it('fetches template_key from tenant config when central response lacks it', async () => {
+    // 現実のバックエンド応答（TenantVO）は template_key を返さない
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      if (String(url).includes('config/public')) {
+        return Promise.resolve({
+          json: () => Promise.resolve({ template_key: 'modern' }),
+        });
+      }
+      return Promise.resolve({
+        json: () =>
+          Promise.resolve({
+            id: 't1',
+            name: 'Tenant 1',
+            domain: 'store.test',
+            email: 'owner@store.test',
+          }),
+      });
+    });
+
+    const req = createRequest('store.test');
+    const result = await resolveTenant(req);
+
+    expect(result.tenantData?.templateKey).toBe('modern');
+    // 追撃 fetch は X-Role: tenant + X-Tenant-ID ヘッダで行う
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('config/public'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Role': 'tenant', 'X-Tenant-ID': 't1' }),
+      })
+    );
+  });
+
+  it('falls back to default when tenant config fetch fails', async () => {
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      if (String(url).includes('config/public')) {
+        return Promise.reject(new Error('config down'));
+      }
+      return Promise.resolve({
+        json: () => Promise.resolve({ id: 't1', name: 'Tenant 1', domain: 'store.test' }),
+      });
+    });
+
+    const req = createRequest('store.test');
+    const result = await resolveTenant(req);
+
+    expect(result.tenantData?.isValid).toBe(true);
+    expect(result.tenantData?.templateKey).toBe('default');
+  });
+
+  it('does not short-circuit when template cookie is missing', async () => {
+    const cookies = {
+      'x-mw-tenant-id': 'cookie-tenant-id',
+      'x-mw-tenant-domain': 'store.test', // ドメインは一致するが template cookie が無い
+    };
+    const req = createRequest('store.test', cookies);
+
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      if (String(url).includes('config/public')) {
+        return Promise.resolve({
+          json: () => Promise.resolve({ template_key: 'classic' }),
+        });
+      }
+      return Promise.resolve({
+        json: () =>
+          Promise.resolve({ id: 'api-tenant-id', name: 'API Tenant', domain: 'store.test' }),
+      });
+    });
+
+    const result = await resolveTenant(req);
+
+    // 短絡せずバックエンド再解決に落ちる
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('domain=store.test'));
+    expect(result.tenantData?.tenantId).toBe('api-tenant-id');
+  });
 });
