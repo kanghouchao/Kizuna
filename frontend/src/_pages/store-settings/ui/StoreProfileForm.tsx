@@ -2,6 +2,7 @@
 
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import {
+  getAllTemplateMetas,
   getTemplateMeta,
   PartnerLink,
   SnsLink,
@@ -102,15 +103,46 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
           基本設定
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
+          <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">テンプレート</label>
-            <select
-              {...register('template_key')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              {/* modern / classic は #223 Phase 3 で実装され、Phase 4 でカード選択 UI とともに復活する */}
-              <option value="default">デフォルト</option>
-            </select>
+            {/* サムネイル付き予覧カードで模版を選択。選択中の key は既存 watch で
+                模版テキスト欄の描画に連動する（追加配線は不要） */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {getAllTemplateMetas().map(meta => {
+                const selected = templateKey === meta.key;
+                return (
+                  <label
+                    key={meta.key}
+                    className={`block rounded-[10px] border p-3 cursor-pointer transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${
+                      selected
+                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      value={meta.key}
+                      {...register('template_key')}
+                      className="sr-only"
+                    />
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 静的サムネイル、最適化不要 */}
+                    <img
+                      src={meta.thumbnail}
+                      alt={meta.name}
+                      className="w-full rounded border border-gray-200"
+                    />
+                    <p
+                      className={`mt-2 text-sm font-medium ${
+                        selected ? 'text-blue-600' : 'text-gray-900'
+                      }`}
+                    >
+                      {meta.name}
+                    </p>
+                    <p className="text-xs text-gray-500">{meta.description}</p>
+                  </label>
+                );
+              })}
+            </div>
           </div>
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">店舗説明文</label>
