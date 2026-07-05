@@ -1,0 +1,21 @@
+/* modern 模版のテーマトークン（issue #223 Phase 3、藍黒×薔薇紅×Noto Sans JP）。
+   値は承認済みパレット A から外推。模版差はこのトークンと排布のみ（.claude/rules/design.md）。
+   注: --storefront-subtle は計画のパレット比較表に modern 値の記載が無かったため、
+   default の bg→neutral 関係（極薄の近背景トーン）に合わせて外推した値。 */
+.storefront-modern {
+  --storefront-bg: #0b0b12;
+  --storefront-fg: #f2eff4;
+  --storefront-accent: #e64980;
+  --storefront-muted: #8a87a0;
+  --storefront-neutral: #3a3a48;
+  --storefront-subtle: #1e1e29;
+  --storefront-danger: #8b1a2e;
+  --storefront-bg-deep: #07070c;
+  --storefront-surface-1: #10101a;
+  --storefront-surface-2: #13131e;
+  --storefront-surface-3: #161622;
+  --storefront-line: #24242f;
+  --storefront-bg-glow: #170d14;
+  --storefront-hairline: rgba(255, 255, 255, 0.05);
+  --storefront-font-display: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+}

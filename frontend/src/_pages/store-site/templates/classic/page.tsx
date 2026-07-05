@@ -10,18 +10,19 @@ import MVSection from '../_sections/MVSection';
 import './theme.css';
 
 /**
- * デフォルトのテナントページ模版 (Server Component)
+ * classic 模版のテナントページ (Server Component)
  *
- * 構成:
+ * 構成（排布差: キャッチコピー帯を Banner の直上に置き明るい第一印象を作る）:
  * 1. AgeGate    - 年齢確認オーバーレイ（Client Component / localStorage）
  * 2. Header     - スティッキーヘッダー
- * 3. Banner     - フルスクリーンヒーローセクション
- * 4. MVSection  - メインビジュアル
- * 5. CastSection - キャスト紹介カルーセル
- * 6. Advertisement - キャンペーン情報
- * 7. Footer     - フッター
+ * 3. キャッチコピー帯（設定時のみ）
+ * 4. Banner     - フルスクリーンヒーローセクション
+ * 5. MVSection  - メインビジュアル
+ * 6. CastSection - キャスト紹介カルーセル
+ * 7. Advertisement - キャンペーン情報
+ * 8. Footer     - フッター
  */
-export default async function DefaultTemplate() {
+export default async function ClassicTemplate() {
   const cookieStore = await cookies();
   const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
 
@@ -30,7 +31,7 @@ export default async function DefaultTemplate() {
 
   return (
     <div
-      className="storefront-default min-h-screen flex flex-col"
+      className="storefront-classic min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
       {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
@@ -39,13 +40,7 @@ export default async function DefaultTemplate() {
       <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
 
       <main className="grow">
-        <Banner
-          tenantName={tenantName}
-          bannerUrl={siteConfig.banner_url}
-          description={siteConfig.description}
-        />
-
-        {/* キャッチコピー帯（設定されている場合のみ表示） */}
+        {/* キャッチコピー帯（設定されている場合のみ表示、Banner の直上） */}
         {siteConfig.catch_copy && (
           <section
             className="py-10 md:py-14 px-5 sm:px-6 text-center"
@@ -59,6 +54,12 @@ export default async function DefaultTemplate() {
             </p>
           </section>
         )}
+
+        <Banner
+          tenantName={tenantName}
+          bannerUrl={siteConfig.banner_url}
+          description={siteConfig.description}
+        />
 
         <MVSection mvUrl={siteConfig.mv_url} mvType={siteConfig.mv_type} />
 

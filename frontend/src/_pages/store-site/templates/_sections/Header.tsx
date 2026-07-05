@@ -27,9 +27,9 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
       <header
         className="sticky top-0 z-50 border-b"
         style={{
-          background: 'rgba(8, 8, 8, 0.97)',
+          background: 'color-mix(in srgb, var(--storefront-bg) 97%, transparent)',
           backdropFilter: 'blur(16px)',
-          borderBottomColor: 'rgba(201, 168, 76, 0.12)',
+          borderBottomColor: 'color-mix(in srgb, var(--storefront-accent) 12%, transparent)',
         }}
       >
         <div className="max-w-7xl mx-auto px-5 lg:px-10">
@@ -46,8 +46,8 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
                 />
               ) : (
                 <span
-                  className="text-base md:text-lg tracking-[0.25em] md:tracking-[0.3em] text-[#C9A84C]"
-                  style={{ fontFamily: "'Noto Serif JP', 'Hiragino Mincho Pro', serif" }}
+                  className="text-base md:text-lg tracking-[0.25em] md:tracking-[0.3em] text-[var(--storefront-accent)]"
+                  style={{ fontFamily: 'var(--storefront-font-display)' }}
                 >
                   {tenantName}
                 </span>
@@ -60,8 +60,8 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
                 <Link
                   key={href}
                   href={href}
-                  className="text-[10px] tracking-[0.25em] text-[#F8F4F0]/40 hover:text-[#C9A84C] transition-colors duration-300"
-                  style={{ fontFamily: "'Noto Serif JP', serif" }}
+                  className="text-[10px] tracking-[0.25em] text-[color-mix(in_srgb,var(--storefront-fg)_40%,transparent)] hover:text-[var(--storefront-accent)] transition-colors duration-300"
+                  style={{ fontFamily: 'var(--storefront-font-display)' }}
                 >
                   {label}
                 </Link>
@@ -73,8 +73,8 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
               {/* ログインボタン（sm以上で表示） */}
               <Link
                 href="/login"
-                className="hidden sm:block text-[9px] tracking-[0.3em] border border-[#C9A84C]/40 text-[#C9A84C] px-4 py-1.5 md:px-5 md:py-2 hover:bg-[#C9A84C] hover:text-[#080808] transition-all duration-300"
-                style={{ fontFamily: "'Noto Serif JP', serif" }}
+                className="hidden sm:block text-[9px] tracking-[0.3em] border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] px-4 py-1.5 md:px-5 md:py-2 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
+                style={{ fontFamily: 'var(--storefront-font-display)' }}
               >
                 ログイン
               </Link>
@@ -87,21 +87,21 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
                 aria-expanded={menuOpen}
               >
                 <span
-                  className="block w-[18px] h-px bg-[#C9A84C]"
+                  className="block w-[18px] h-px bg-[var(--storefront-accent)]"
                   style={{
                     transition: 'transform 0.25s ease, opacity 0.25s ease',
                     transform: menuOpen ? 'translateY(6px) rotate(45deg)' : 'none',
                   }}
                 />
                 <span
-                  className="block w-[18px] h-px bg-[#C9A84C]"
+                  className="block w-[18px] h-px bg-[var(--storefront-accent)]"
                   style={{
                     transition: 'opacity 0.25s ease',
                     opacity: menuOpen ? 0 : 1,
                   }}
                 />
                 <span
-                  className="block w-[18px] h-px bg-[#C9A84C]"
+                  className="block w-[18px] h-px bg-[var(--storefront-accent)]"
                   style={{
                     transition: 'transform 0.25s ease',
                     transform: menuOpen ? 'translateY(-6px) rotate(-45deg)' : 'none',
@@ -118,7 +118,7 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
         className="fixed inset-0 z-40 md:hidden flex flex-col pointer-events-none"
         style={{
           top: '56px',
-          background: 'rgba(8, 8, 8, 0.98)',
+          background: 'color-mix(in srgb, var(--storefront-bg) 98%, transparent)',
           opacity: menuOpen ? 1 : 0,
           transition: 'opacity 0.3s ease',
           pointerEvents: menuOpen ? 'auto' : 'none',
@@ -131,9 +131,9 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
               key={href}
               href={href}
               onClick={closeMenu}
-              className="text-[#F8F4F0]/60 text-base tracking-[0.35em] hover:text-[#C9A84C] transition-colors duration-200"
+              className="text-[color-mix(in_srgb,var(--storefront-fg)_60%,transparent)] text-base tracking-[0.35em] hover:text-[var(--storefront-accent)] transition-colors duration-200"
               style={{
-                fontFamily: "'Noto Serif JP', serif",
+                fontFamily: 'var(--storefront-font-display)',
                 transitionDelay: menuOpen ? `${i * 60}ms` : '0ms',
                 transform: menuOpen ? 'translateY(0)' : 'translateY(8px)',
                 opacity: menuOpen ? 1 : 0,
@@ -146,17 +146,19 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
 
           {/* 区切り */}
           <div className="flex items-center gap-3 my-2">
-            <div className="h-px w-10 bg-linear-to-r from-transparent to-[#C9A84C]/25" />
-            <span className="text-[#C9A84C]/30 text-[10px]">◆</span>
-            <div className="h-px w-10 bg-linear-to-l from-transparent to-[#C9A84C]/25" />
+            <div className="h-px w-10 bg-linear-to-r from-transparent to-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)]" />
+            <span className="text-[color-mix(in_srgb,var(--storefront-accent)_30%,transparent)] text-[10px]">
+              ◆
+            </span>
+            <div className="h-px w-10 bg-linear-to-l from-transparent to-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)]" />
           </div>
 
           {/* ログインボタン（xs） */}
           <Link
             href="/login"
             onClick={closeMenu}
-            className="text-[10px] tracking-[0.4em] border border-[#C9A84C]/40 text-[#C9A84C] px-8 py-3 hover:bg-[#C9A84C] hover:text-[#080808] transition-all duration-300"
-            style={{ fontFamily: "'Noto Serif JP', serif" }}
+            className="text-[10px] tracking-[0.4em] border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] px-8 py-3 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
+            style={{ fontFamily: 'var(--storefront-font-display)' }}
           >
             ログイン
           </Link>
@@ -164,8 +166,8 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
 
         {/* 下部コピーライト */}
         <p
-          className="text-center text-[#252525] text-[9px] tracking-wider pb-8"
-          style={{ fontFamily: "'Noto Serif JP', serif" }}
+          className="text-center text-[var(--storefront-subtle)] text-[9px] tracking-wider pb-8"
+          style={{ fontFamily: 'var(--storefront-font-display)' }}
         >
           18歳以上限定 / For Adults Only
         </p>

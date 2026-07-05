@@ -1,0 +1,22 @@
+/* classic 模版のテーマトークン（issue #223 Phase 3、暖白×松石藍×Noto Serif JP）。
+   値は承認済みパレット A から外推。模版差はこのトークンと排布のみ（.claude/rules/design.md）。
+   明色地のため surface は bg より沈む方向、hairline は暗色側の極薄罫線。
+   注: --storefront-subtle は計画のパレット比較表に classic 値の記載が無かったため、
+   default の bg→neutral 関係（極薄の近背景トーン）に合わせて外推した値。 */
+.storefront-classic {
+  --storefront-bg: #faf7f2;
+  --storefront-fg: #2a2a28;
+  --storefront-accent: #4e8da6;
+  --storefront-muted: #7a776e;
+  --storefront-neutral: #d8d4cc;
+  --storefront-subtle: #ebe7e1;
+  --storefront-danger: #b0453a;
+  --storefront-bg-deep: #efe8dc;
+  --storefront-surface-1: #f4f0e9;
+  --storefront-surface-2: #f0ebe2;
+  --storefront-surface-3: #ece6db;
+  --storefront-line: #e2ddd3;
+  --storefront-bg-glow: #fffdf8;
+  --storefront-hairline: rgba(0, 0, 0, 0.06);
+  --storefront-font-display: 'Noto Serif JP', 'Hiragino Mincho Pro', serif;
+}

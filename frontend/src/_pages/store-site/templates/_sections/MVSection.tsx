@@ -9,23 +9,28 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
   const hasMedia = !!mvUrl;
 
   return (
-    <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: '#0A0A0A' }}>
+    <section
+      className="py-12 md:py-20 px-5 sm:px-6"
+      style={{ background: 'var(--storefront-surface-1)' }}
+    >
       <div className="max-w-5xl mx-auto">
         {/* セクションヘッダー */}
         <div className="text-center mb-8 md:mb-12">
-          <p className="text-[#C9A84C]/40 text-[9px] tracking-[0.6em] uppercase mb-3">
+          <p className="text-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[9px] tracking-[0.6em] uppercase mb-3">
             Main Visual
           </p>
           <h2
-            className="text-xl md:text-2xl font-light tracking-[0.2em] text-[#F8F4F0]/80"
-            style={{ fontFamily: "'Noto Serif JP', 'Hiragino Mincho Pro', serif" }}
+            className="text-xl md:text-2xl font-light tracking-[0.2em] text-[color-mix(in_srgb,var(--storefront-fg)_80%,transparent)]"
+            style={{ fontFamily: 'var(--storefront-font-display)' }}
           >
             メインビジュアル
           </h2>
           <div className="flex items-center justify-center gap-3 mt-4 md:mt-5">
-            <div className="h-px w-10 md:w-12 bg-linear-to-r from-transparent to-[#C9A84C]/35" />
-            <span className="text-[#C9A84C]/40 text-[10px]">◆</span>
-            <div className="h-px w-10 md:w-12 bg-linear-to-l from-transparent to-[#C9A84C]/35" />
+            <div className="h-px w-10 md:w-12 bg-linear-to-r from-transparent to-[color-mix(in_srgb,var(--storefront-accent)_35%,transparent)]" />
+            <span className="text-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[10px]">
+              ◆
+            </span>
+            <div className="h-px w-10 md:w-12 bg-linear-to-l from-transparent to-[color-mix(in_srgb,var(--storefront-accent)_35%,transparent)]" />
           </div>
         </div>
 
@@ -35,10 +40,10 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
           style={{
             padding: '1px',
             background:
-              'linear-gradient(135deg, rgba(201,168,76,0.25) 0%, rgba(201,168,76,0.05) 50%, rgba(201,168,76,0.25) 100%)',
+              'linear-gradient(135deg, color-mix(in srgb, var(--storefront-accent) 25%, transparent) 0%, color-mix(in srgb, var(--storefront-accent) 5%, transparent) 50%, color-mix(in srgb, var(--storefront-accent) 25%, transparent) 100%)',
           }}
         >
-          <div className="relative" style={{ background: '#0F0F0F' }}>
+          <div className="relative" style={{ background: 'var(--storefront-surface-3)' }}>
             {hasMedia ? (
               mvType === 'video' ? (
                 <div className="aspect-video">
@@ -66,18 +71,20 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
             ) : (
               <div
                 className="aspect-video flex items-center justify-center"
-                style={{ background: '#0D0D0D' }}
+                style={{ background: 'var(--storefront-surface-2)' }}
               >
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-3 mb-4 md:mb-6">
-                    <div className="h-px w-8 md:w-10 bg-linear-to-r from-transparent to-[#C9A84C]/25" />
-                    <span className="text-[#C9A84C]/30 text-xs">◆</span>
-                    <div className="h-px w-8 md:w-10 bg-linear-to-l from-transparent to-[#C9A84C]/25" />
+                    <div className="h-px w-8 md:w-10 bg-linear-to-r from-transparent to-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)]" />
+                    <span className="text-[color-mix(in_srgb,var(--storefront-accent)_30%,transparent)] text-xs">
+                      ◆
+                    </span>
+                    <div className="h-px w-8 md:w-10 bg-linear-to-l from-transparent to-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)]" />
                   </div>
                   <svg
                     className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 md:mb-4"
                     fill="none"
-                    stroke="rgba(201,168,76,0.2)"
+                    stroke="color-mix(in srgb, var(--storefront-accent) 20%, transparent)"
                     viewBox="0 0 24 24"
                   >
                     <path
@@ -88,8 +95,8 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
                     />
                   </svg>
                   <p
-                    className="text-[#C9A84C]/25 text-[10px] md:text-xs tracking-widest"
-                    style={{ fontFamily: "'Noto Serif JP', serif" }}
+                    className="text-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)] text-[10px] md:text-xs tracking-widest"
+                    style={{ fontFamily: 'var(--storefront-font-display)' }}
                   >
                     メインビジュアル
                   </p>
@@ -99,10 +106,10 @@ export default function MVSection({ mvUrl, mvType = 'image' }: MVSectionProps) {
           </div>
 
           {/* コーナーオーナメント */}
-          <div className="absolute top-2 left-2 md:top-3 md:left-3 w-5 h-5 md:w-6 md:h-6 border-t border-l border-[#C9A84C]/50" />
-          <div className="absolute top-2 right-2 md:top-3 md:right-3 w-5 h-5 md:w-6 md:h-6 border-t border-r border-[#C9A84C]/50" />
-          <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 w-5 h-5 md:w-6 md:h-6 border-b border-l border-[#C9A84C]/50" />
-          <div className="absolute bottom-2 right-2 md:bottom-3 md:right-3 w-5 h-5 md:w-6 md:h-6 border-b border-r border-[#C9A84C]/50" />
+          <div className="absolute top-2 left-2 md:top-3 md:left-3 w-5 h-5 md:w-6 md:h-6 border-t border-l border-[color-mix(in_srgb,var(--storefront-accent)_50%,transparent)]" />
+          <div className="absolute top-2 right-2 md:top-3 md:right-3 w-5 h-5 md:w-6 md:h-6 border-t border-r border-[color-mix(in_srgb,var(--storefront-accent)_50%,transparent)]" />
+          <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 w-5 h-5 md:w-6 md:h-6 border-b border-l border-[color-mix(in_srgb,var(--storefront-accent)_50%,transparent)]" />
+          <div className="absolute bottom-2 right-2 md:bottom-3 md:right-3 w-5 h-5 md:w-6 md:h-6 border-b border-r border-[color-mix(in_srgb,var(--storefront-accent)_50%,transparent)]" />
         </div>
       </div>
     </section>
