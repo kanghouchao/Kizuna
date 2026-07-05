@@ -71,6 +71,7 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 - **Status pill**: fully rounded, 12px text, `bg-green-100 text-green-800` (確定) / `bg-yellow-100 text-yellow-800` (保留); add hues per new status semantics, always `*-100` bg + `*-800` text.
 - **Progress bar**: track `bg-gray-200 h-2 rounded-full`, fill `bg-blue-600`.
 - **Ranking row**: 32px circular rank chip (`bg-blue-50 text-blue-600`), name + area line (12px icon + gray-500), right-aligned amount (bold) over count (gray-500).
+- **Selectable preview card**: `<label>` wrapping an `sr-only` radio; `rounded-[10px] border p-3 cursor-pointer`. Unselected `border-gray-200 hover:bg-gray-50`; selected `border-blue-600 ring-2 ring-blue-600 bg-blue-50`. Body = thumbnail image (`w-full rounded border-gray-200`) → name (`text-sm font-medium`, selected `text-blue-600`) → description (`text-xs text-gray-500`); keyboard focus via `has-[:focus-visible]:ring-blue-500`.
 
 Component states (hover / focus / disabled) must always be styled: hover darkens one step (e.g. `hover:bg-blue-700`), focus uses ring (`focus:ring-blue-500`), disabled uses `disabled:opacity-50`.
 

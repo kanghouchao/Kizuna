@@ -13,6 +13,10 @@ export interface TemplateTextSlot {
 export interface StoreTemplateMeta {
   key: string;
   name: string;
+  /** カードに表示する風格説明。 */
+  description: string;
+  /** サムネイル画像の public パス。 */
+  thumbnail: string;
   textSlots: TemplateTextSlot[];
 }
 
@@ -20,16 +24,22 @@ const TEMPLATE_METAS: Record<string, StoreTemplateMeta> = {
   default: {
     key: 'default',
     name: 'デフォルト',
+    description: '黒×金のラグジュアリー系。セリフ体で高級感を演出',
+    thumbnail: '/templates/default.svg',
     textSlots: [{ key: 'access_note', label: 'アクセス補足（店舗情報ページに表示）' }],
   },
   modern: {
     key: 'modern',
     name: 'モダン',
+    description: '藍黒×薔薇紅のビビッド系。サンセリフ体でモダンな印象',
+    thumbnail: '/templates/modern.svg',
     textSlots: [{ key: 'access_note', label: 'アクセス補足（店舗情報ページに表示）' }],
   },
   classic: {
     key: 'classic',
     name: 'クラシック',
+    description: '暖白×松石藍の明るく清潔な印象。セリフ体で上品に',
+    thumbnail: '/templates/classic.svg',
     textSlots: [{ key: 'access_note', label: 'アクセス補足（店舗情報ページに表示）' }],
   },
 };
@@ -37,4 +47,9 @@ const TEMPLATE_METAS: Record<string, StoreTemplateMeta> = {
 /** 未知の key は default のメタにフォールバックする。 */
 export function getTemplateMeta(templateKey: string): StoreTemplateMeta {
   return TEMPLATE_METAS[templateKey] ?? TEMPLATE_METAS['default'];
+}
+
+/** カード選択 UI 用に全模版メタを配列で返す。 */
+export function getAllTemplateMetas(): StoreTemplateMeta[] {
+  return Object.values(TEMPLATE_METAS);
 }
