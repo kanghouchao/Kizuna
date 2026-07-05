@@ -36,6 +36,28 @@ describe('storefrontService', () => {
     });
   });
 
+  describe('fetchCast', () => {
+    it('公開キャスト一覧から id で 1 件返すこと', async () => {
+      const mockCasts = [
+        { id: '1', name: 'Cast 1' },
+        { id: '2', name: 'Cast 2' },
+      ];
+      (serverClient.get as jest.Mock).mockResolvedValue(mockCasts);
+
+      const result = await storefrontService.fetchCast('2');
+
+      expect(result?.name).toBe('Cast 2');
+    });
+
+    it('存在しない id は null を返すこと', async () => {
+      (serverClient.get as jest.Mock).mockResolvedValue([{ id: '1', name: 'Cast 1' }]);
+
+      const result = await storefrontService.fetchCast('missing');
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('fetchSiteConfig', () => {
     it('serverClient.get を呼び出すこと', async () => {
       const mockConfig = { mv_type: 'video', logo_url: 'logo.png' };

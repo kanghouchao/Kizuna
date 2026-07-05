@@ -11,7 +11,9 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -58,6 +60,26 @@ public class StoreProfile {
 
   @Column(name = "description", columnDefinition = "TEXT")
   private String description;
+
+  @Column(name = "catch_copy", columnDefinition = "TEXT")
+  private String catchCopy;
+
+  @Column(name = "address", length = 500)
+  private String address;
+
+  @Column(name = "phone", length = 50)
+  private String phone;
+
+  @Column(name = "business_hours", length = 500)
+  private String businessHours;
+
+  @Column(name = "pricing_description", columnDefinition = "TEXT")
+  private String pricingDescription;
+
+  @Type(JsonBinaryType.class)
+  @Column(name = "custom_texts", columnDefinition = "jsonb")
+  @Builder.Default
+  private Map<String, String> customTexts = new HashMap<>();
 
   @Type(JsonBinaryType.class)
   @Column(name = "sns_links", columnDefinition = "jsonb")

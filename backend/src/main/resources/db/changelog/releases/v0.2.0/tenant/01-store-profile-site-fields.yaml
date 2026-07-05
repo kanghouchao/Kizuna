@@ -1,0 +1,33 @@
+databaseChangeLog:
+  - changeSet:
+      id: tenant-v020-001-store-profile-site-fields
+      author: claude
+      comment: 店舗公開サイト用の固定フィールドと模版別テキストスロット（issue #223 Phase 2）
+      changes:
+        - addColumn:
+            tableName: t_tenant_configs
+            columns:
+              - column:
+                  name: catch_copy
+                  type: TEXT
+                  remarks: キャッチコピー
+              - column:
+                  name: address
+                  type: VARCHAR(500)
+                  remarks: 住所
+              - column:
+                  name: phone
+                  type: VARCHAR(50)
+                  remarks: 電話番号
+              - column:
+                  name: business_hours
+                  type: VARCHAR(500)
+                  remarks: 営業時間（自由テキスト）
+              - column:
+                  name: pricing_description
+                  type: TEXT
+                  remarks: 料金説明文（料金ページの本文）
+              - column:
+                  name: custom_texts
+                  type: JSONB
+                  remarks: 模版別テキストスロット（key→text。模版切替時も他模版の key を保持）

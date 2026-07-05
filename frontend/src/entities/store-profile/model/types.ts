@@ -21,6 +21,12 @@ export interface StoreProfileResponse {
   mv_url?: string;
   mv_type: string;
   description?: string;
+  catch_copy?: string;
+  address?: string;
+  phone?: string;
+  business_hours?: string;
+  pricing_description?: string;
+  custom_texts?: Record<string, string>;
   sns_links: SnsLink[];
   partner_links: PartnerLink[];
   created_at: string;
@@ -35,6 +41,12 @@ export interface StoreProfileUpdateRequest {
   mv_url?: string;
   mv_type?: string;
   description?: string;
+  catch_copy?: string;
+  address?: string;
+  phone?: string;
+  business_hours?: string;
+  pricing_description?: string;
+  custom_texts?: Record<string, string>;
   sns_links?: SnsLink[];
   partner_links?: PartnerLink[];
 }

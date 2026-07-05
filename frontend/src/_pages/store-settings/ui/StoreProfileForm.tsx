@@ -2,6 +2,7 @@
 
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import {
+  getTemplateMeta,
   PartnerLink,
   SnsLink,
   StoreProfileResponse,
@@ -16,6 +17,12 @@ interface StoreProfileFormData {
   mv_url: string;
   mv_type: string;
   description: string;
+  catch_copy: string;
+  address: string;
+  phone: string;
+  business_hours: string;
+  pricing_description: string;
+  custom_texts: Record<string, string>;
   sns_links: SnsLink[];
   partner_links: PartnerLink[];
 }
@@ -36,7 +43,7 @@ const SNS_PLATFORMS = [
 ];
 
 export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreProfileFormProps) {
-  const { register, control, handleSubmit } = useForm<StoreProfileFormData>({
+  const { register, control, handleSubmit, watch } = useForm<StoreProfileFormData>({
     defaultValues: {
       template_key: initialData.template_key || 'default',
       logo_url: initialData.logo_url || '',
@@ -44,10 +51,19 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
       mv_url: initialData.mv_url || '',
       mv_type: initialData.mv_type || 'image',
       description: initialData.description || '',
+      catch_copy: initialData.catch_copy || '',
+      address: initialData.address || '',
+      phone: initialData.phone || '',
+      business_hours: initialData.business_hours || '',
+      pricing_description: initialData.pricing_description || '',
+      custom_texts: initialData.custom_texts || {},
       sns_links: initialData.sns_links || [],
       partner_links: initialData.partner_links || [],
     },
   });
+
+  const templateKey = watch('template_key');
+  const textSlots = getTemplateMeta(templateKey).textSlots;
 
   const {
     fields: snsFields,
@@ -68,7 +84,11 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
   });
 
   const handleFormSubmit = (data: StoreProfileFormData) => {
-    onSubmit(data);
+    // 現模版に無い既存 key を潰さないよう、保存済み custom_texts にマージする
+    onSubmit({
+      ...data,
+      custom_texts: { ...(initialData.custom_texts || {}), ...(data.custom_texts || {}) },
+    });
   };
 
   return (
@@ -101,7 +121,80 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">キャッチコピー</label>
+            <textarea
+              {...register('catch_copy')}
+              rows={2}
+              placeholder="トップページに大きく表示される一言を入力してください..."
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">住所</label>
+            <input
+              type="text"
+              {...register('address')}
+              placeholder="例: 東京都新宿区..."
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">電話番号</label>
+            <input
+              type="tel"
+              {...register('phone')}
+              placeholder="例: 03-1234-5678"
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">営業時間</label>
+            <input
+              type="text"
+              {...register('business_hours')}
+              placeholder="例: 10:00〜翌1:00（不定休）"
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">料金説明文</label>
+            <p className="text-xs text-gray-500 mb-2">
+              料金ページの本文です。改行はそのまま公開サイトに表示されます。
+            </p>
+            <textarea
+              {...register('pricing_description')}
+              rows={6}
+              placeholder={'例:\nセット料金 60分 5,000円\n指名料 1,000円\n延長 30分 2,500円'}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
         </div>
+      </section>
+
+      {/* 模版テキスト */}
+      <section>
+        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
+          模版テキスト
+        </h3>
+        {textSlots.length === 0 ? (
+          <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-gray-500 text-sm">
+            この模版に追加のテキスト項目はありません
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {textSlots.map(slot => (
+              <div key={slot.key}>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{slot.label}</label>
+                <textarea
+                  {...register(`custom_texts.${slot.key}`)}
+                  rows={3}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 2. ビジュアル設定 */}
