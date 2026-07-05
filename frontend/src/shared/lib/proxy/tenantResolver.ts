@@ -24,13 +24,16 @@ export async function resolveTenant(request: NextRequest): Promise<{
   }
 
   // Cookie のテナント情報を優先使用（重複クエリを回避）
-  // ただし、Cookie に保存されたドメインと現在のホスト名が一致する場合のみ信頼する
+  // ただし、Cookie に保存されたドメインと現在のホスト名が一致し、
+  // かつ template cookie が存在する場合のみ信頼する。
+  // template cookie が無い場合は黙って 'default' 扱いにせず、
+  // バックエンド再解決に落として正しい template_key を取得し直す。
   const existingTenantId = request.cookies.get('x-mw-tenant-id')?.value;
   const existingDomain = request.cookies.get('x-mw-tenant-domain')?.value;
+  const existingTemplate = request.cookies.get('x-mw-tenant-template')?.value;
 
-  if (existingTenantId && existingDomain === hostname) {
+  if (existingTenantId && existingDomain === hostname && existingTemplate) {
     const existingTenantName = request.cookies.get('x-mw-tenant-name')?.value || '';
-    const existingTemplate = request.cookies.get('x-mw-tenant-template')?.value || 'default';
     return {
       role: 'tenant',
       tenantData: {
@@ -52,10 +55,18 @@ export async function resolveTenant(request: NextRequest): Promise<{
     const data = await res.json().catch(() => null);
 
     if (data && typeof data === 'object') {
-      const templateKey = String((data.template_key ?? 'default') || 'default');
       const tenantId = String(data.tenant_id ?? data.id ?? '');
       const tenantName = String(data.tenant_name ?? data.name ?? '');
       const isValid = Boolean(tenantId || tenantName || data.domain);
+
+      // 中央応答（TenantVO）は template_key を返さないため、含まれていれば従来どおり採用し、
+      // 無ければテナント側の /tenant/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
+      let templateKey = 'default';
+      if (data.template_key) {
+        templateKey = String(data.template_key);
+      } else if (isValid && tenantId) {
+        templateKey = await fetchTemplateKey(tenantId);
+      }
 
       return {
         role: 'tenant',
@@ -80,4 +91,29 @@ export async function resolveTenant(request: NextRequest): Promise<{
       tenantName: '',
     },
   };
+}
+
+// テナント側の StoreProfile から template_key を取得する。
+// 認証トークン不要・キャッシュ無しで、X-Role/X-Tenant-ID ヘッダのみで動作する公開エンドポイント。
+// 取得失敗・欠落時は 'default' に回落し、決して throw しない。
+async function fetchTemplateKey(tenantId: string): Promise<string> {
+  const configApiUrl =
+    process.env.TENANT_CONFIG_API_URL || 'http://backend:8080/tenant/config/public';
+
+  try {
+    const res = await fetch(configApiUrl, {
+      headers: {
+        'X-Role': 'tenant',
+        'X-Tenant-ID': tenantId,
+      },
+    });
+    const config = await res.json().catch(() => null);
+    if (config && typeof config === 'object' && config.template_key) {
+      return String(config.template_key);
+    }
+  } catch (error) {
+    console.error('🚨 テナント設定の取得に失敗:', error);
+  }
+
+  return 'default';
 }
