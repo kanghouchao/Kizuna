@@ -88,9 +88,8 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
               {...register('template_key')}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             >
+              {/* modern / classic は #223 Phase 3 で実装され、Phase 4 でカード選択 UI とともに復活する */}
               <option value="default">デフォルト</option>
-              <option value="modern">モダン</option>
-              <option value="classic">クラシック</option>
             </select>
           </div>
           <div className="col-span-2">
