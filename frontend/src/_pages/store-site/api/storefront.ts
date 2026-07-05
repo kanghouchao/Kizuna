@@ -36,6 +36,14 @@ export const storefrontService = {
   },
 
   /**
+   * 公開キャスト一覧から 1 件を取得します（専用エンドポイントは持たない）。
+   */
+  async fetchCast(id: string): Promise<Cast | null> {
+    const casts = await this.fetchCasts();
+    return casts.find(cast => cast.id === id) ?? null;
+  },
+
+  /**
    * サイト設定を取得します
    */
   async fetchSiteConfig(): Promise<SiteConfig> {

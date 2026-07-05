@@ -7,6 +7,7 @@ export interface Cast {
   id: string;
   name: string;
   photo_url?: string;
+  introduction?: string;
   age?: number;
   height?: number;
   bust?: number;
@@ -21,6 +22,12 @@ export interface SiteConfig {
   logo_url?: string;
   banner_url?: string;
   description?: string;
+  catch_copy?: string;
+  address?: string;
+  phone?: string;
+  business_hours?: string;
+  pricing_description?: string;
+  custom_texts?: Record<string, string>;
   mv_url?: string;
   mv_type: 'image' | 'video';
   sns_links?: SnsLink[];

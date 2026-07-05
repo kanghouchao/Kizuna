@@ -45,6 +45,21 @@ export default async function DefaultTemplate() {
           description={siteConfig.description}
         />
 
+        {/* キャッチコピー帯（設定されている場合のみ表示） */}
+        {siteConfig.catch_copy && (
+          <section
+            className="py-10 md:py-14 px-5 sm:px-6 text-center"
+            style={{ background: '#080808' }}
+          >
+            <p
+              className="max-w-3xl mx-auto text-[#C9A84C] text-lg md:text-2xl font-light tracking-[0.2em] leading-relaxed whitespace-pre-line"
+              style={{ fontFamily: "'Noto Serif JP', 'Hiragino Mincho Pro', serif" }}
+            >
+              {siteConfig.catch_copy}
+            </p>
+          </section>
+        )}
+
         <MVSection mvUrl={siteConfig.mv_url} mvType={siteConfig.mv_type} />
 
         <CastSection casts={casts} />

@@ -10,9 +10,11 @@ interface HeaderProps {
 }
 
 const navLinks = [
-  { href: '#cast', label: 'キャスト' },
-  { href: '#campaign', label: 'キャンペーン' },
-  { href: '#contact', label: 'お問い合わせ' },
+  { href: '/', label: 'TOP' },
+  { href: '/casts', label: 'キャスト' },
+  { href: '/schedule', label: '出勤表' },
+  { href: '/menu', label: '料金' },
+  { href: '/about', label: '店舗情報' },
 ];
 
 export default function Header({ tenantName, logoUrl }: HeaderProps) {
