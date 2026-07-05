@@ -1,12 +1,13 @@
 import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
-import AgeGate from './AgeVerification';
-import Advertisement from './Advertisement';
-import Banner from './Banner';
-import CastSection from './CastSection';
-import Footer from './Footer';
-import Header from './Header';
-import MVSection from './MVSection';
+import AgeGate from '../_sections/AgeVerification';
+import Advertisement from '../_sections/Advertisement';
+import Banner from '../_sections/Banner';
+import CastSection from '../_sections/CastSection';
+import Footer from '../_sections/Footer';
+import Header from '../_sections/Header';
+import MVSection from '../_sections/MVSection';
+import './theme.css';
 
 /**
  * デフォルトのテナントページ模版 (Server Component)
@@ -28,7 +29,10 @@ export default async function DefaultTemplate() {
   const { casts, siteConfig } = await storefrontService.getPageData();
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#080808' }}>
+    <div
+      className="storefront-default min-h-screen flex flex-col"
+      style={{ background: 'var(--storefront-bg)' }}
+    >
       {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
       <AgeGate storeName={tenantName} />
 

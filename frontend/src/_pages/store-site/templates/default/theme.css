@@ -1,0 +1,6 @@
+/* default 模版のテーマトークン（issue #223 Phase 1）。
+   Phase 3 で modern / classic が独自の theme.css を持つ。
+   トークンは実際に模版間で差分が必要になった時点で追加する（現時点は背景色のみ）。 */
+.storefront-default {
+  --storefront-bg: #080808;
+}

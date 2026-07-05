@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
+import { loadTemplatePage } from '@/_pages/store-site';
 
 /**
  * ページメタデータの生成
@@ -48,15 +49,9 @@ export default async function Home() {
   if (role === 'tenant') {
     const templateKey = cookieStore.get('x-mw-tenant-template')?.value || 'default';
 
-    try {
-      const { default: TemplateComponent } = await import(
-        `@/_pages/store-site/templates/${templateKey}/page`
-      );
-      return <TemplateComponent />;
-    } catch (e) {
-      console.error('模版の読み込みに失敗しました:', e);
-      notFound();
-    }
+    // 読み込み失敗時は helper 内で default にフォールバックするため、ここでは 404 にしない
+    const TemplateComponent = await loadTemplatePage(templateKey);
+    return <TemplateComponent />;
   }
 
   notFound();
