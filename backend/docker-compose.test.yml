@@ -45,7 +45,8 @@ services:
       REDIS_HOST: cache
       REDIS_PORT: "6379"
       REDIS_PASSWORD: password
-      APP_JWT_SECRET: integration-test-secret
+      # HMAC-SHA256 の要件（RFC 7518）で 256bit 以上必要（JwtUtil は raw bytes 解釈）
+      APP_JWT_SECRET: integration-test-secret-0123456789abcdef
     depends_on:
       database:
         condition: service_healthy
