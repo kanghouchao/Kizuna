@@ -12,12 +12,12 @@ interface CastGridProps {
  */
 export default function CastGrid({ casts }: CastGridProps) {
   return (
-    <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: '#080808' }}>
+    <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: 'var(--storefront-bg)' }}>
       <div className="max-w-7xl mx-auto">
         {casts.length === 0 ? (
           <p
-            className="text-center text-[#F8F4F0]/30 text-sm tracking-wider py-16"
-            style={{ fontFamily: "'Noto Serif JP', serif" }}
+            className="text-center text-[color-mix(in_srgb,var(--storefront-fg)_30%,transparent)] text-sm tracking-wider py-16"
+            style={{ fontFamily: 'var(--storefront-font-display)' }}
           >
             キャスト情報は準備中です
           </p>
@@ -27,7 +27,11 @@ export default function CastGrid({ casts }: CastGridProps) {
               <Link key={cast.id} href={`/casts/${cast.id}`} className="group/card block">
                 <div
                   className="aspect-3/4 relative overflow-hidden mb-2 md:mb-3"
-                  style={{ background: '#0F0F0F', boxShadow: '0 0 0 1px rgba(201,168,76,0.1)' }}
+                  style={{
+                    background: 'var(--storefront-surface-3)',
+                    boxShadow:
+                      '0 0 0 1px color-mix(in srgb, var(--storefront-accent) 10%, transparent)',
+                  }}
                 >
                   {cast.photo_url ? (
                     <Image
@@ -41,7 +45,7 @@ export default function CastGrid({ casts }: CastGridProps) {
                     <div className="absolute inset-0 flex items-center justify-center">
                       <svg
                         className="w-10 h-10 md:w-14 md:h-14"
-                        fill="rgba(201,168,76,0.15)"
+                        fill="color-mix(in srgb, var(--storefront-accent) 15%, transparent)"
                         viewBox="0 0 24 24"
                       >
                         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
@@ -50,18 +54,23 @@ export default function CastGrid({ casts }: CastGridProps) {
                   )}
                   <div
                     className="absolute inset-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300"
-                    style={{ boxShadow: 'inset 0 0 0 1px rgba(201,168,76,0.4)' }}
+                    style={{
+                      boxShadow:
+                        'inset 0 0 0 1px color-mix(in srgb, var(--storefront-accent) 40%, transparent)',
+                    }}
                   />
                 </div>
                 <div className="text-center px-1">
                   <h3
-                    className="text-[#F8F4F0]/85 text-xs md:text-sm font-light tracking-wider mb-1"
-                    style={{ fontFamily: "'Noto Serif JP', serif" }}
+                    className="text-[color-mix(in_srgb,var(--storefront-fg)_85%,transparent)] text-xs md:text-sm font-light tracking-wider mb-1"
+                    style={{ fontFamily: 'var(--storefront-font-display)' }}
                   >
                     {cast.name}
                   </h3>
                   {cast.age && (
-                    <p className="text-[9px] md:text-[10px] text-[#C9A84C]/50">{cast.age}歳</p>
+                    <p className="text-[9px] md:text-[10px] text-[color-mix(in_srgb,var(--storefront-accent)_50%,transparent)]">
+                      {cast.age}歳
+                    </p>
                   )}
                 </div>
               </Link>

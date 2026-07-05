@@ -14,26 +14,29 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
   return (
     <footer
       id="contact"
-      style={{ background: '#050505', borderTop: '1px solid rgba(201,168,76,0.1)' }}
+      style={{
+        background: 'var(--storefront-bg-deep)',
+        borderTop: '1px solid color-mix(in srgb, var(--storefront-accent) 10%, transparent)',
+      }}
     >
       {/* メインフッター */}
       <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-10 py-12 md:py-16">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 md:gap-12">
           {/* 店舗情報 */}
           <div className="sm:col-span-2 md:col-span-1">
-            <p className="text-[#C9A84C]/40 text-[8px] tracking-[0.5em] uppercase mb-3 md:mb-4">
+            <p className="text-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[8px] tracking-[0.5em] uppercase mb-3 md:mb-4">
               Premium Entertainment
             </p>
             <h3
-              className="text-lg md:text-xl font-light tracking-[0.25em] text-[#C9A84C] mb-4 md:mb-5"
-              style={{ fontFamily: "'Noto Serif JP', 'Hiragino Mincho Pro', serif" }}
+              className="text-lg md:text-xl font-light tracking-[0.25em] text-[var(--storefront-accent)] mb-4 md:mb-5"
+              style={{ fontFamily: 'var(--storefront-font-display)' }}
             >
               {tenantName}
             </h3>
-            <div className="w-8 h-px bg-[#C9A84C]/30 mb-4 md:mb-5" />
+            <div className="w-8 h-px bg-[color-mix(in_srgb,var(--storefront-accent)_30%,transparent)] mb-4 md:mb-5" />
             <p
-              className="text-[#F8F4F0]/30 text-xs leading-relaxed"
-              style={{ fontFamily: "'Noto Serif JP', serif" }}
+              className="text-[color-mix(in_srgb,var(--storefront-fg)_30%,transparent)] text-xs leading-relaxed"
+              style={{ fontFamily: 'var(--storefront-font-display)' }}
             >
               お客様に最高のサービスを提供することをお約束します。
             </p>
@@ -41,7 +44,7 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
 
           {/* パートナーリンク */}
           <div>
-            <p className="text-[#C9A84C]/50 text-[9px] tracking-[0.4em] uppercase mb-4 md:mb-5">
+            <p className="text-[color-mix(in_srgb,var(--storefront-accent)_50%,transparent)] text-[9px] tracking-[0.4em] uppercase mb-4 md:mb-5">
               Partner Links
             </p>
             {partners.length > 0 ? (
@@ -52,8 +55,8 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
                       href={partner.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#F8F4F0]/30 text-xs hover:text-[#C9A84C]/70 transition-colors duration-200 tracking-wider"
-                      style={{ fontFamily: "'Noto Serif JP', serif" }}
+                      className="text-[color-mix(in_srgb,var(--storefront-fg)_30%,transparent)] text-xs hover:text-[color-mix(in_srgb,var(--storefront-accent)_70%,transparent)] transition-colors duration-200 tracking-wider"
+                      style={{ fontFamily: 'var(--storefront-font-display)' }}
                     >
                       {partner.name}
                     </a>
@@ -61,13 +64,15 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
                 ))}
               </ul>
             ) : (
-              <p className="text-[#F8F4F0]/15 text-xs">—</p>
+              <p className="text-[color-mix(in_srgb,var(--storefront-fg)_15%,transparent)] text-xs">
+                —
+              </p>
             )}
           </div>
 
           {/* SNSリンク */}
           <div>
-            <p className="text-[#C9A84C]/50 text-[9px] tracking-[0.4em] uppercase mb-4 md:mb-5">
+            <p className="text-[color-mix(in_srgb,var(--storefront-accent)_50%,transparent)] text-[9px] tracking-[0.4em] uppercase mb-4 md:mb-5">
               Follow Us
             </p>
             {sns.length > 0 ? (
@@ -78,7 +83,7 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#F8F4F0]/25 hover:text-[#C9A84C]/70 transition-colors duration-200"
+                    className="text-[color-mix(in_srgb,var(--storefront-fg)_25%,transparent)] hover:text-[color-mix(in_srgb,var(--storefront-accent)_70%,transparent)] transition-colors duration-200"
                     aria-label={item.platform}
                   >
                     {getSnsIcon(item.platform)}
@@ -86,23 +91,27 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
                 ))}
               </div>
             ) : (
-              <p className="text-[#F8F4F0]/15 text-xs">—</p>
+              <p className="text-[color-mix(in_srgb,var(--storefront-fg)_15%,transparent)] text-xs">
+                —
+              </p>
             )}
           </div>
         </div>
       </div>
 
       {/* コピーライト */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+      <div style={{ borderTop: '1px solid var(--storefront-hairline)' }}>
         <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-10 py-5 md:py-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-3">
-              <span className="text-[#C9A84C]/25 text-[10px]">◆</span>
-              <p className="text-[#F8F4F0]/20 text-[10px] tracking-wider">
+              <span className="text-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)] text-[10px]">
+                ◆
+              </span>
+              <p className="text-[color-mix(in_srgb,var(--storefront-fg)_20%,transparent)] text-[10px] tracking-wider">
                 © {year} {tenantName}. All rights reserved.
               </p>
             </div>
-            <p className="text-[#F8F4F0]/10 text-[9px] tracking-widest">
+            <p className="text-[color-mix(in_srgb,var(--storefront-fg)_10%,transparent)] text-[9px] tracking-widest">
               Powered by Kizuna Platform
             </p>
           </div>

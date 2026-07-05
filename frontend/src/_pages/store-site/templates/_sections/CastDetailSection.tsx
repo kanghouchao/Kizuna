@@ -19,12 +19,15 @@ export default function CastDetailSection({ cast }: CastDetailSectionProps) {
   if (cast.hip) profile.push({ label: 'ヒップ', value: `${cast.hip}` });
 
   return (
-    <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: '#080808' }}>
+    <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: 'var(--storefront-bg)' }}>
       <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
         {/* 写真 */}
         <div
           className="aspect-3/4 relative overflow-hidden"
-          style={{ background: '#0F0F0F', boxShadow: '0 0 0 1px rgba(201,168,76,0.15)' }}
+          style={{
+            background: 'var(--storefront-surface-3)',
+            boxShadow: '0 0 0 1px color-mix(in srgb, var(--storefront-accent) 15%, transparent)',
+          }}
         >
           {cast.photo_url ? (
             <Image
@@ -36,7 +39,11 @@ export default function CastDetailSection({ cast }: CastDetailSectionProps) {
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              <svg className="w-16 h-16" fill="rgba(201,168,76,0.15)" viewBox="0 0 24 24">
+              <svg
+                className="w-16 h-16"
+                fill="color-mix(in srgb, var(--storefront-accent) 15%, transparent)"
+                viewBox="0 0 24 24"
+              >
                 <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
               </svg>
             </div>
@@ -50,14 +57,14 @@ export default function CastDetailSection({ cast }: CastDetailSectionProps) {
               {profile.map(({ label, value }) => (
                 <div
                   key={label}
-                  className="flex items-center justify-between border-b border-[#C9A84C]/10 pb-2"
+                  className="flex items-center justify-between border-b border-[color-mix(in_srgb,var(--storefront-accent)_10%,transparent)] pb-2"
                 >
-                  <dt className="text-[#C9A84C]/60 text-[10px] tracking-[0.3em] uppercase">
+                  <dt className="text-[color-mix(in_srgb,var(--storefront-accent)_60%,transparent)] text-[10px] tracking-[0.3em] uppercase">
                     {label}
                   </dt>
                   <dd
-                    className="text-[#F8F4F0]/80 text-sm tracking-wider"
-                    style={{ fontFamily: "'Noto Serif JP', serif" }}
+                    className="text-[color-mix(in_srgb,var(--storefront-fg)_80%,transparent)] text-sm tracking-wider"
+                    style={{ fontFamily: 'var(--storefront-font-display)' }}
                   >
                     {value}
                   </dd>
@@ -68,8 +75,8 @@ export default function CastDetailSection({ cast }: CastDetailSectionProps) {
 
           {cast.introduction && (
             <p
-              className="text-[#F8F4F0]/50 text-sm leading-loose whitespace-pre-line"
-              style={{ fontFamily: "'Noto Serif JP', serif" }}
+              className="text-[color-mix(in_srgb,var(--storefront-fg)_50%,transparent)] text-sm leading-loose whitespace-pre-line"
+              style={{ fontFamily: 'var(--storefront-font-display)' }}
             >
               {cast.introduction}
             </p>
@@ -80,8 +87,8 @@ export default function CastDetailSection({ cast }: CastDetailSectionProps) {
       <div className="text-center mt-12 md:mt-16">
         <Link
           href="/casts"
-          className="inline-block border border-[#C9A84C]/40 text-[#C9A84C] text-[9px] tracking-[0.4em] uppercase px-8 md:px-10 py-3 hover:bg-[#C9A84C] hover:text-[#080808] transition-all duration-300"
-          style={{ fontFamily: "'Noto Serif JP', serif" }}
+          className="inline-block border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] text-[9px] tracking-[0.4em] uppercase px-8 md:px-10 py-3 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
+          style={{ fontFamily: 'var(--storefront-font-display)' }}
         >
           ← キャスト一覧へ
         </Link>

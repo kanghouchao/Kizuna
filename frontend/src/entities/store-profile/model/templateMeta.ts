@@ -22,7 +22,16 @@ const TEMPLATE_METAS: Record<string, StoreTemplateMeta> = {
     name: 'デフォルト',
     textSlots: [{ key: 'access_note', label: 'アクセス補足（店舗情報ページに表示）' }],
   },
-  // modern / classic は #223 Phase 3 で追加する
+  modern: {
+    key: 'modern',
+    name: 'モダン',
+    textSlots: [{ key: 'access_note', label: 'アクセス補足（店舗情報ページに表示）' }],
+  },
+  classic: {
+    key: 'classic',
+    name: 'クラシック',
+    textSlots: [{ key: 'access_note', label: 'アクセス補足（店舗情報ページに表示）' }],
+  },
 };
 
 /** 未知の key は default のメタにフォールバックする。 */

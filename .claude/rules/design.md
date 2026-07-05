@@ -30,9 +30,29 @@ Never mix the two vocabularies: no gold-serif storefront styling in admin screen
 | Danger | `red-600` | Destructive actions, errors |
 | Icon chips | `bg-blue-500` / `bg-green-500` / `bg-orange-500` / `bg-purple-500` | Stat-card icons; one hue per metric, white icon |
 
-### Public storefront (default template)
+### Public storefront (three templates)
 
-Defined in `templates/default/theme.css` as CSS custom properties. Current vocabulary: background `#080808` (`--storefront-bg`), gold accent `#C9A84C`, light text `#F8F4F0` at reduced opacities. New color needs = new `--storefront-*` token in theme.css, never inline hex in sections. modern / classic templates (issue #223 Phase 3) get their own `theme.css` token tables; templates may only differ via tokens and page layout, never by forking `_sections/` components.
+Each template owns a `templates/<key>/theme.css` that defines the same `--storefront-*` token contract on a `.storefront-<key>` class; the shared `_sections/` read only these tokens — never raw hex/rgba (sections use `var()` for solid colors and `color-mix(in srgb, var(--token) N%, transparent)` for opacities). Templates differ only via token values and page layout, never by forking `_sections/`. New color needs = a new `--storefront-*` token added to **all** template theme.css files in the same PR, never inline hex in sections.
+
+| token | default (dark luxury) | modern (dark vivid) | classic (light) |
+|---|---|---|---|
+| `--storefront-bg` | `#080808` | `#0b0b12` | `#faf7f2` |
+| `--storefront-fg` | `#f8f4f0` | `#f2eff4` | `#2a2a28` |
+| `--storefront-accent` | `#c9a84c` gold | `#e64980` rose | `#4e8da6` teal |
+| `--storefront-muted` | `#a89880` | `#8a87a0` | `#7a776e` |
+| `--storefront-neutral` | `#484848` | `#3a3a48` | `#d8d4cc` |
+| `--storefront-subtle` | `#252525` | `#1e1e29` | `#ebe7e1` |
+| `--storefront-danger` | `#8b1a2e` | `#8b1a2e` | `#b0453a` |
+| `--storefront-bg-deep` | `#050505` | `#07070c` | `#efe8dc` |
+| `--storefront-surface-1` | `#0a0a0a` | `#10101a` | `#f4f0e9` |
+| `--storefront-surface-2` | `#0d0d0d` | `#13131e` | `#f0ebe2` |
+| `--storefront-surface-3` | `#0f0f0f` | `#161622` | `#ece6db` |
+| `--storefront-line` | `#2a2a2a` | `#24242f` | `#e2ddd3` |
+| `--storefront-bg-glow` | `#130d08` | `#170d14` | `#fffdf8` |
+| `--storefront-hairline` | `rgba(255,255,255,0.04)` | `rgba(255,255,255,0.05)` | `rgba(0,0,0,0.06)` |
+| `--storefront-font-display` | `'Noto Serif JP', …, serif` | `'Noto Sans JP', …, sans-serif` | `'Noto Serif JP', …, serif` |
+
+`surface-1/2/3` step away from `bg` toward higher contrast (dark templates lighten, classic sinks). `bg-deep` is the Footer band below `bg`; `line` is a weaker border than `neutral`; `bg-glow` is the AgeVerification radial-gradient center; `hairline` is an ultra-thin rule; `subtle` is the faintest near-background text/border tone (legal fine print, copyright line).
 
 ## Fonts
 

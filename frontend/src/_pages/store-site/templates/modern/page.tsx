@@ -10,18 +10,18 @@ import MVSection from '../_sections/MVSection';
 import './theme.css';
 
 /**
- * デフォルトのテナントページ模版 (Server Component)
+ * modern 模版のテナントページ (Server Component)
  *
- * 構成:
+ * 構成（排布差: CastSection を MVSection より先に置きキャストを前面に）:
  * 1. AgeGate    - 年齢確認オーバーレイ（Client Component / localStorage）
  * 2. Header     - スティッキーヘッダー
  * 3. Banner     - フルスクリーンヒーローセクション
- * 4. MVSection  - メインビジュアル
- * 5. CastSection - キャスト紹介カルーセル
+ * 4. CastSection - キャスト紹介カルーセル
+ * 5. MVSection  - メインビジュアル
  * 6. Advertisement - キャンペーン情報
  * 7. Footer     - フッター
  */
-export default async function DefaultTemplate() {
+export default async function ModernTemplate() {
   const cookieStore = await cookies();
   const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
 
@@ -30,7 +30,7 @@ export default async function DefaultTemplate() {
 
   return (
     <div
-      className="storefront-default min-h-screen flex flex-col"
+      className="storefront-modern min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
       {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
@@ -60,9 +60,9 @@ export default async function DefaultTemplate() {
           </section>
         )}
 
-        <MVSection mvUrl={siteConfig.mv_url} mvType={siteConfig.mv_type} />
-
         <CastSection casts={casts} />
+
+        <MVSection mvUrl={siteConfig.mv_url} mvType={siteConfig.mv_type} />
 
         <Advertisement />
       </main>

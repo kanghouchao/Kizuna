@@ -1,6 +1,19 @@
-/* default 模版のテーマトークン（issue #223 Phase 1）。
-   Phase 3 で modern / classic が独自の theme.css を持つ。
-   トークンは実際に模版間で差分が必要になった時点で追加する（現時点は背景色のみ）。 */
+/* default 模版のテーマトークン（issue #223 Phase 3 で全色トークン化）。
+   模版はこのトークン表と排布のみで差別化する（.claude/rules/design.md）。 */
 .storefront-default {
   --storefront-bg: #080808;
+  --storefront-fg: #f8f4f0;
+  --storefront-accent: #c9a84c;
+  --storefront-muted: #a89880;
+  --storefront-neutral: #484848;
+  --storefront-subtle: #252525;
+  --storefront-danger: #8b1a2e;
+  --storefront-bg-deep: #050505;
+  --storefront-surface-1: #0a0a0a;
+  --storefront-surface-2: #0d0d0d;
+  --storefront-surface-3: #0f0f0f;
+  --storefront-line: #2a2a2a;
+  --storefront-bg-glow: #130d08;
+  --storefront-hairline: rgba(255, 255, 255, 0.04);
+  --storefront-font-display: 'Noto Serif JP', 'Hiragino Mincho Pro', serif;
 }
