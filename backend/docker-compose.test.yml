@@ -1,6 +1,7 @@
 # 統合テスト専用 compose（issue #225）
 # 開発用スタック（プロジェクト名 kizuna）とは独立したプロジェクト名で、
-# データは tmpfs のみ（ボリューム永続化なし）。実行ごとに down -v で使い捨てる。
+# データは tmpfs のみ（ボリューム永続化なし）。実行ごとに down で使い捨てる
+# （gradle キャッシュボリュームだけは依存再取得の flaky 回避のため保持する）。
 name: kizuna-backend-test
 
 services:
