@@ -68,6 +68,7 @@ Forbidden operations (enforced locally via `.claude/settings.json` deny rules + 
 - **Destructive git**: `git reset --hard`, `git clean`, `git branch -D`, `git commit --no-verify`.
 - **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
 - **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed or read.
+- **Never write `@claude` literally in issue/PR text** unless summoning the CI Claude — the literal string triggers a full `.github/workflows/claude.yml` run. Refer to it as `claude.yml`. (GitHub's dropdown mention `@claude[agent]` routes to GitHub's own Copilot-based agent instead and does NOT trigger claude.yml.)
 
 Judge build/test success by **exit code only** — output may be in Japanese locale (「エラー」), so never grep for "error".
 
