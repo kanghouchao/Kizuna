@@ -64,7 +64,7 @@ Invoke the **watch-pr** skill on the new PR. Blocking findings it dispatches spe
 
 What shipped in 1–2 sentences; PR + issue links; CI status; evidence per criterion (behavioral: executed `task e2e` scenario names; visual: screenshot path + what it shows); review findings fixed vs left to the user; deviations from plan; out-of-scope issues filed. Then STOP and wait.
 
-## Post-merge cleanup (after the user says merged)
+## Post-merge cleanup + retro (after the user says merged)
 
 `task down` in the worktree if its stack is up, then from the main checkout:
 
@@ -72,6 +72,8 @@ What shipped in 1–2 sentences; PR + issue links; CI status; evidence per crite
 git worktree remove ../Kizuna-worktrees/<branch>
 git pull && git branch -d <branch>
 ```
+
+Then invoke the **retro** skill — the run is not closed until its friction is mined into fix / issue / memory and briefed.
 
 ## Ground rules
 
