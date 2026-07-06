@@ -4,3 +4,12 @@ Thumbs.db
 
 # vscode settings
 .vscode/
+skills-lock.json
+CONTEXT.md
+
+# playwright MCP の使い捨て出力（QA エビデンス置き場）
+.playwright-mcp/
+
+# .claude/ はローカル専用（個人のエージェント・スキル・ワークフロー）。
+# プロジェクト規範は各ディレクトリの CLAUDE.md（backend/ frontend/ infrastructure/）に置く。
+.claude/

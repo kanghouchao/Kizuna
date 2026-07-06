@@ -1,11 +1,7 @@
----
-paths:
-  - "frontend/**"
----
-
 # Frontend (TypeScript) Conventions
 
 - **Stack**: TypeScript 5.9, React 19, Next.js 16 (App Router), Jest, ESLint, Prettier
+- **UI work**: read [`DESIGN.md`](./DESIGN.md) FIRST (design system: colors/fonts/spacing/components); if a frontend-design skill is available, invoke it before writing markup.
 - **Architecture**: Feature-Sliced Design (FSD). The layer structure is machine-checked by **Steiger** in `task lint` / CI.
 
 ## FSD structure
@@ -38,6 +34,6 @@ frontend/src/
   - Component names: **PascalCase**
   - API-related types (interface/type) and their property names: **snake_case** (matching the backend JSON keys; existing camelCase types are a known mismatch tracked in a separate issue)
   - Internal variables/functions: normal TypeScript conventions, but data coming from the API keeps snake_case
-  - Store-side vocabulary uses the Store prefix: StoreProfile*, StoreUserResponse, storeAuthApi, storeMenuApi (see `docs/CONTEXT.md`)
+  - Store-side vocabulary uses the Store prefix: StoreProfile*, StoreUserResponse, storeAuthApi, storeMenuApi
 - **Coverage**: Jest threshold of 70% lines/statements. Targets are shared/api, shared/lib, and entities (pages and templates are excluded).
 - **Disabling a Steiger rule requires a reason comment in steiger.config.mjs** (typo-in-layer-name / repetitive-naming / insignificant-slice are off by design decision or rule specification).
