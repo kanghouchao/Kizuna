@@ -10,3 +10,8 @@ Thumbs.db
 
 # 個人ローカル設定（.claude/ 本体は入庫対象）
 .claude/settings.local.json
+
+# dev-loop のローカル作業文書（skill が「git-excluded」を前提とするため全クローンで除外する）
+docs/plans/
+docs/agents/
+docs/superpowers/

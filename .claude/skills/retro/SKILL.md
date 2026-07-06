@@ -5,7 +5,7 @@ description: "Retrospect a completed run or session: mine the execution history 
 
 # Retro
 
-Input: the execution history already in context (a dev-loop run, or this session's work). The loop optimizes itself through this step — cleanup alone throws the run's evidence away.
+Input: the execution history already in context (a dev-loop run, or this session's work). When that history is NOT in context — post-merge often lands in a later session or after compaction — reconstruct the friction from the PR's review threads, its commit list, and the issues filed during the run, and say in the brief that the retro ran on reconstructed evidence. The loop optimizes itself through this step — cleanup alone throws the run's evidence away.
 
 ## Steps
 

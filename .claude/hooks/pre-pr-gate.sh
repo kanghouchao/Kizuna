@@ -6,9 +6,10 @@ set -u
 
 payload=$(cat)
 
-# 高速素通し: 該当句が無ければ解析すらしない
+# 高速素通し: gh…pr…create が順に現れなければ解析すらしない
+# （-R 等のグローバルフラグ挟み込みを拾うため、隣接ではなく順序一致で見る）
 case "$payload" in
-  *"gh pr create"*) ;;
+  *gh*pr*create*) ;;
   *) exit 0 ;;
 esac
 
@@ -27,20 +28,32 @@ try:
 except ValueError:
     print("REJECT\tコマンドを解析できない — gh pr create は --title \"...\" --body-file <絶対パス> の単純形式のみ許可")
     sys.exit(0)
-# トークン列としての gh pr create のみ対象（文字列中の言及は素通し）
-if not any(toks[i:i+3] == ["gh", "pr", "create"] for i in range(len(toks) - 2)):
+# トークン列 gh → pr → create の順序一致で検出（隣接不要 — `gh -R <repo> pr create`
+# のようなグローバルフラグ挟み込みも対象）。引用文字列内の言及は 1 トークンなので素通し。
+want = ["gh", "pr", "create"]
+idx = 0
+for t in toks:
+    if t == want[idx]:
+        idx += 1
+        if idx == len(want):
+            break
+if idx < len(want):
     print("ALLOW"); sys.exit(0)
 title = body = None
 for i, t in enumerate(toks):
     if t == "--title" and i + 1 < len(toks):
         title = toks[i + 1]
+    elif t.startswith("--title="):
+        title = t[len("--title="):]
     elif t == "--body-file" and i + 1 < len(toks):
         body = toks[i + 1]
-    elif t in ("--body", "-b", "--fill", "--fill-first", "--fill-verbose", "--web", "-w"):
+    elif t.startswith("--body-file="):
+        body = t[len("--body-file="):]
+    elif t in ("--body", "-b", "--fill", "--fill-first", "--fill-verbose", "--web", "-w") or t.startswith("--body="):
         print(f"REJECT\t{t} は不可 — --title \"...\" --body-file <絶対パス> の形式のみ許可")
         sys.exit(0)
 if not title or not body:
-    print("REJECT\t--title と --body-file が必須")
+    print("REJECT\t--title と --body-file が必須（スペース区切り・= 形式のどちらでも可）")
     sys.exit(0)
 if not body.startswith("/"):
     print("REJECT\t--body-file は絶対パスで指定する（hook は cwd に依存できない）")

@@ -25,7 +25,7 @@ Your prompt gives an **absolute worktree path** and an **absolute plan path**. B
 
 **TDD/BDD.** The `tdd` skill is preloaded — follow its loop at the plan's seam list ONLY (that list IS the pre-agreed seam set). Red before green. Tasks pinned to behavioral acceptance criteria become playwright-bdd `.feature` files + step definitions under `e2e/`, exactly as the plan specifies (Gherkin 日本語キーワード可).
 
-**UI tasks.** Read `frontend/DESIGN.md` FIRST, then invoke the `frontend-design` skill via the Skill tool BEFORE writing any markup — skills do not auto-trigger for you, so invoke it by name; do not skip because the change "seems simple". Admin UI: Tailwind semantic classes only, primary blue-600, no raw hex. Storefront: token-driven via each template's `theme.css`, never fork `_sections/`. Figma node referenced → fetch it via the Figma MCP (`get_design_context` / `get_screenshot`) and match it.
+**UI tasks.** Read `frontend/DESIGN.md` FIRST. If a `frontend-design` skill is available in your environment (it ships as a plugin, not in this repo), invoke it via the Skill tool BEFORE writing any markup — by name, since skills do not auto-trigger for you; without it, `frontend/DESIGN.md` alone is the authority. Admin UI: Tailwind semantic classes only, primary blue-600, no raw hex. Storefront: token-driven via each template's `theme.css`, never fork `_sections/`. Figma node referenced → fetch it via the Figma MCP (`get_design_context` / `get_screenshot`) and match it.
 
 **Merge/rebase conflicts.** Read BOTH sides' intent against master before choosing lines; preserve master's semantics unless the plan explicitly changes them; re-run the touched side's gates after resolving.
 
