@@ -24,6 +24,8 @@ jobs:
       # レビュー結果を PR に投稿するため write が必要（read だと投稿が 403 で全滅する — #249）
       pull-requests: write
       issues: write
+      # Lint and Test の check-run 状態を読むため（#253）
+      checks: read
       id-token: write
 
     steps:
@@ -32,7 +34,37 @@ jobs:
         with:
           fetch-depth: 1
 
+      # 決定論的ゲートが先、AI レビューは後（#253）。
+      # Lint and Test が success になるまで待ち、失敗/タイムアウト時はレビューをスキップする。
+      - name: Wait for Lint and Test
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          for i in $(seq 1 60); do
+            run_info=$(gh api "repos/${{ github.repository }}/commits/${HEAD_SHA}/check-runs" \
+              --jq '[.check_runs[] | select(.name=="Lint and Test")][0] | "\(.status)|\(.conclusion)"' 2>/dev/null || echo "")
+            st="${run_info%%|*}"
+            conclusion="${run_info##*|}"
+            if [ "$st" = "completed" ]; then
+              if [ "$conclusion" = "success" ]; then
+                echo "Lint and Test: success — レビューを実行します"
+                echo "proceed=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              echo "Lint and Test: ${conclusion} — ゲート赤のためレビューをスキップします"
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Lint and Test: ${st:-not-started} — 待機中 ($i/60)"
+            sleep 30
+          done
+          echo "タイムアウト（30 分）— レビューをスキップします"
+          echo "proceed=false" >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code Review
+        if: steps.gate.outputs.proceed == 'true'
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
