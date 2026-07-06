@@ -44,7 +44,7 @@ task lint                           # check
 task format                         # auto-fix
 
 # Local startup
-task up                             # start full stack
+task up                             # start full stack (does NOT rebuild images — run task build first to pick up code changes)
 task down                           # stop
 task logs service=backend           # view logs
 ```
