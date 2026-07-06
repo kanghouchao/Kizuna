@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,10 +61,14 @@ class SeedSequenceAlignmentIT {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.setBearerAuth(centralLogin());
+    // domain には一意制約（uq_central_tenants_domain）があるため、
+    // 同一 DB へ手動で再実行しても衝突しないよう実行ごとに一意化する
     String body =
-        "{\"name\": \"シード整合テストテナント\","
-            + " \"domain\": \"seed-seq-it.kizuna.test\","
-            + " \"email\": \"seed-seq-it@kizuna.test\"}";
+        String.format(
+            "{\"name\": \"シード整合テストテナント\","
+                + " \"domain\": \"seed-seq-it-%s.kizuna.test\","
+                + " \"email\": \"seed-seq-it@kizuna.test\"}",
+            UUID.randomUUID());
 
     ResponseEntity<Void> res =
         rest.postForEntity("/central/tenant", new HttpEntity<>(body, headers), Void.class);
