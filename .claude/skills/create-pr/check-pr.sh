@@ -24,10 +24,37 @@ done
 # 3) Closes #<issue 番号>（Refs 運用の場合は Refs #n でも可）
 grep -Eq '(Closes|Refs) #[0-9]+' "$body_file" || err "'Closes #<n>' / 'Refs #<n>' がない"
 
-# 4) ゲートのチェックボックスが実際にチェック済み（[x]）
-for gate in "task lint" "task test" "task build"; do
-  grep -Eq "^- \[x\] \`?${gate}" "$body_file" || err "ゲート未チェック: ${gate}"
-done
+# 4) ゲートのチェックボックス検査 — diff がコード領域に触れる場合のみ [x] を必須とする。
+#    ドキュメント域のみ（*.md / docs / .claude 等）の変更では task ゲートは情報を持たないため、
+#    「対象外（コード変更なし）」の宣言があれば未チェックを許す。宣言の真偽は diff で検証する。
+#    diff が取れない場合は fail-closed（コード変更ありとみなす）。
+code_touched=1
+base=$(git merge-base origin/master HEAD 2>/dev/null || true)
+if [ -n "$base" ]; then
+  code_touched=0
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    case "$f" in
+      frontend/*|backend/*|e2e/*|infrastructure/*|Taskfile*|.github/workflows/*) code_touched=1 ;;
+    esac
+  done <<EOF
+$(git diff --name-only "$base" HEAD)
+EOF
+fi
+if [ "$code_touched" -eq 1 ]; then
+  for gate in "task lint" "task test" "task build"; do
+    grep -Eq "^- \[x\] \`?${gate}" "$body_file" || err "ゲート未チェック: ${gate}"
+  done
+else
+  gates_ok=1
+  for gate in "task lint" "task test" "task build"; do
+    grep -Eq "^- \[x\] \`?${gate}" "$body_file" || gates_ok=0
+  done
+  if [ "$gates_ok" -eq 0 ]; then
+    grep -q "対象外（コード変更なし）" "$body_file" \
+      || err "ゲート未チェックだが免除宣言「対象外（コード変更なし）」も無い（docs-only 免除は宣言必須）"
+  fi
+fi
 
 # 5) 埋め忘れプレースホルダが残っていない
 grep -q '<!--' "$body_file" && err "テンプレートのコメント（<!-- -->）が残っている"

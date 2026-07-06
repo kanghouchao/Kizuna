@@ -70,8 +70,10 @@ What shipped in 1–2 sentences; PR + issue links; CI status; evidence per crite
 
 ```bash
 git worktree remove ../Kizuna-worktrees/<branch>
-git pull && git branch -d <branch>
+git pull && git fetch --prune
 ```
+
+This repo squash-merges, so the branch tip is never an ancestor of master and `git branch -d` always refuses. Verify the content landed (`git diff <tip> master -- <touched paths>` shows nothing), then hand the exact `git branch -D <branch>` line to the user — force-delete is theirs, never yours.
 
 Then invoke the **retro** skill — the run is not closed until its friction is mined into fix / issue / memory and briefed.
 
