@@ -11,11 +11,36 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # docs-only 判定で HEAD^1（ベース側の親）との diff を取るため 2 世代必要
+          fetch-depth: 2
+
+      # docs-only 判定: コード領域に触れない PR では重いゲートを省略する。
+      # ジョブ自体は success で報告されるため、branch protection と claude-review の
+      # 「Lint and Test 成功待ち」連鎖は保たれる。
+      # 境界は .claude/skills/create-pr/check-pr.sh のコード領域判定と同一に保つこと。
+      # diff が取れない場合は fail-closed（フルゲート実行）。
+      - name: Detect docs-only diff
+        id: diff
+        run: |
+          if ! files=$(git diff --name-only HEAD^1 HEAD); then
+            echo "diff 取得失敗 — fail-closed でフルゲートを実行する"
+            docs_only=false
+          elif printf '%s\n' "$files" | grep -qE '^(frontend/|backend/|e2e/|infrastructure/|Taskfile|\.github/workflows/)'; then
+            docs_only=false
+          else
+            docs_only=true
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "docs_only: $docs_only"
 
       - name: Set up Docker Buildx
+        if: steps.diff.outputs.docs_only != 'true'
         uses: docker/setup-buildx-action@v4.0.0
         with:
           driver-opts: |
@@ -23,29 +48,32 @@ jobs:
             network=host
 
       - name: Set up Task
+        if: steps.diff.outputs.docs_only != 'true'
         uses: arduino/setup-task@v2
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Lint
+        if: steps.diff.outputs.docs_only != 'true'
         run: task lint
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
 
       - name: Test
+        if: steps.diff.outputs.docs_only != 'true'
         run: task test
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
 
       - name: Create reports directory
-        if: always()
+        if: always() && steps.diff.outputs.docs_only != 'true'
         run: task reports
 
       - name: Inject report metadata (branch & PR)
-        if: always()
+        if: always() && steps.diff.outputs.docs_only != 'true'
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number || 'N/A' }}
@@ -53,7 +81,7 @@ jobs:
           bash ./.github/scripts/inject-report-metadata.sh
 
       - name: Upload Pages artifact (from test/)
-        if: always()
+        if: always() && steps.diff.outputs.docs_only != 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           name: backend-test-reports
@@ -61,6 +89,8 @@ jobs:
 
   deploy-reports:
     needs: lint-and-test
+    # docs-only PR ではテスト成果物が無いためデプロイも省略
+    if: needs.lint-and-test.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
