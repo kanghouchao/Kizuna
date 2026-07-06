@@ -17,6 +17,11 @@ out/
 *.iml
 *.ipr
 *.iws
+# Eclipse JDT（VS Code 等の Java language server も生成する）
+.settings/
+.project
+.classpath
+.factorypath
 
 # Logs
 logs/
