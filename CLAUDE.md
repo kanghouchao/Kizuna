@@ -54,8 +54,17 @@ Per-directory `CLAUDE.md` files carry the area conventions and are auto-loaded w
 
 ## Repository-wide guardrails
 
-- **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed.
-- Judge build/test success by **exit code only** — output may be in Japanese locale (「エラー」), so never grep for "error".
+Forbidden operations (enforced locally via `.claude/settings.json` deny rules + hooks; they are policy even where enforcement is absent):
+
+- **Force push in any form** (`--force`, `-f`, `--force-with-lease`) — history rewrites go through a replacement PR.
+- **Merging PRs** (`gh pr merge`, auto-merge) — the repository owner merges every PR by hand.
+- **Destructive git**: `git reset --hard`, `git clean`, `git branch -D`, `git commit --no-verify`.
+- **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
+- **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed or read.
+
+Judge build/test success by **exit code only** — output may be in Japanese locale (「エラー」), so never grep for "error".
+
+Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/pull_request_template.md`. All in Japanese.
 
 ## Do NOT introduce (unless explicitly requested)
 
