@@ -1,5 +1,5 @@
 /* default 模版のテーマトークン（issue #223 Phase 3 で全色トークン化）。
-   模版はこのトークン表と排布のみで差別化する（.claude/rules/design.md）。 */
+   模版はこのトークン表と排布のみで差別化する（frontend/DESIGN.md）。 */
 .storefront-default {
   --storefront-bg: #080808;
   --storefront-fg: #f8f4f0;

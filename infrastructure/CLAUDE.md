@@ -1,8 +1,3 @@
----
-paths:
-  - "infrastructure/**"
----
-
 # Infrastructure Conventions
 
 - **Environment directories**: `infrastructure/development/` (HTTP only) and `infrastructure/release/` (HTTPS, Let's Encrypt, web→websecure redirect). Copy `infrastructure/.env.example` into each environment directory as `.env`. Switch with `task up env=release` (default is development).

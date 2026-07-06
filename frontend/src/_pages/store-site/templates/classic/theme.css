@@ -1,5 +1,5 @@
 /* classic 模版のテーマトークン（issue #223 Phase 3、暖白×松石藍×Noto Serif JP）。
-   値は承認済みパレット A から外推。模版差はこのトークンと排布のみ（.claude/rules/design.md）。
+   値は承認済みパレット A から外推。模版差はこのトークンと排布のみ（frontend/DESIGN.md）。
    明色地のため surface は bg より沈む方向、hairline は暗色側の極薄罫線。
    注: --storefront-subtle は計画のパレット比較表に classic 値の記載が無かったため、
    default の bg→neutral 関係（極薄の近背景トーン）に合わせて外推した値。 */
