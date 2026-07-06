@@ -4,8 +4,10 @@ Thumbs.db
 
 # vscode settings
 .vscode/
-skills-lock.json
-CONTEXT.md
+
+# ルート直下のローカル作業ファイルのみ対象（アンカーなしだと全階層に効いてしまう）
+/skills-lock.json
+/CONTEXT.md
 
 # playwright MCP の使い捨て出力（QA エビデンス置き場）
 .playwright-mcp/

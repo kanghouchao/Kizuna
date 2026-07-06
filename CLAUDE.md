@@ -9,7 +9,14 @@ A multi-tenant CMS/CRM/HRM system for running the operations of multiple stores 
 - Database: PostgreSQL 18+, Redis 8+, Docker volumes for persistence
 - Traefik 3+ for reverse proxy and routing
 
-Java is pinned to 21 by the repo-root `.java-version` (jenv). Builds, tests, and Spotless must run on JDK 21.
+Java is pinned to 21 by `backend/.java-version` (jenv, effective under `backend/`) and `backend/gradle/gradle-daemon-jvm.properties` (Gradle daemon). Builds, tests, and Spotless must run on JDK 21.
+
+## Domain Glossary
+
+- **Central** = group HQ scope; **Store** = per-shop tenant scope. Store-side vocabulary uses the Store prefix (StoreUser, StoreProfile, StoreMenu).
+- The customer-visit aggregate is **Order** — never Reservation or Booking.
+- **CentralMenu and StoreMenu stay separate aggregates** (decided 2026-07; do not unify them).
+- **StoreProfile** = store-facing display settings; **SystemConfig** = central-side system settings. Do not mix.
 
 ## Language Policy
 

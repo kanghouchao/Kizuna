@@ -41,7 +41,7 @@ Each module follows the DDD four layers:
 - **Naming**: classes, methods, and variables are CamelCase. DB columns (snake_case) are mapped by JPA; API JSON keys (snake_case) are mapped by Jackson.
 - **Store-side vocabulary uses the Store prefix**: StoreUser, StoreProfile, StoreMenu
 - **Imports**: no inline FQCN usage, no wildcard imports (`*`); one explicit import per class.
-- **Formatting**: Spotless + Google Java Format. JDK 21 is pinned by the repo-root `.java-version` (jenv), so `./gradlew spotlessApply` runs locally as-is. Fallback only if the active JDK is not 21: `docker run --rm -u root -v "$PWD":/app -w /app gradle:9.2.1-jdk21-ubi-minimal gradle spotlessApply --no-daemon`.
+- **Formatting**: Spotless + Google Java Format. JDK 21 is pinned by `backend/.java-version` (jenv) and `backend/gradle/gradle-daemon-jvm.properties` (daemon JVM), so `./gradlew spotlessApply` runs locally as-is. Fallback only if the active JDK is not 21: `docker run --rm -u root -v "$PWD":/app -w /app gradle:9.2.1-jdk21-ubi-minimal gradle spotlessApply --no-daemon`.
 - **Coverage**: the only Jacoco exclusions are `**/api/dto/**` (DTOs + MapStruct-generated code) and `**/shared/config/**` (pure configuration). **The domain layer must always be covered.**
 - **DB migrations**: Liquibase (YAML under `db/changelog/releases/<version>/central|tenant/`).
 - **Config values**: read from `AppProperties` (shared/config). No hardcoding.
