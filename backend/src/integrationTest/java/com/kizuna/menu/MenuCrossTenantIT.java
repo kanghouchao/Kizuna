@@ -18,7 +18,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * StoreMenu のクロステナント分離を本物の PostgreSQL で検証する統合テスト（issue #227）。
@@ -36,20 +35,12 @@ class MenuCrossTenantIT extends CrossTenantTestSupport {
 
   @Autowired private TenantRepository tenantRepository;
   @Autowired private StoreMenuRepository menuRepository;
-  @Autowired private JdbcTemplate jdbcTemplate;
 
   /** 保存後に採番された第二テナントの実 id（定数 TENANT_B は使わない）。 */
   private long tenantBId;
 
   @BeforeEach
   void prepareSecondTenantWithMenu() {
-    // シードは central_tenants に明示 id=1 で投入しており IDENTITY シーケンスが
-    // 進んでいない（issue #237）。save が id=1 と衝突しないよう先に補正する。
-    jdbcTemplate.queryForObject(
-        "select setval(pg_get_serial_sequence('central_tenants','id'),"
-            + " (select max(id) from central_tenants))",
-        Long.class);
-
     Tenant tenantB =
         tenantRepository
             .findByDomain(TENANT_B_DOMAIN)
