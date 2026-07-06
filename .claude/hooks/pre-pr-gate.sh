@@ -49,11 +49,12 @@ for i, t in enumerate(toks):
         body = toks[i + 1]
     elif t.startswith("--body-file="):
         body = t[len("--body-file="):]
-    elif t in ("--body", "-b", "--fill", "--fill-first", "--fill-verbose", "--web", "-w") or t.startswith("--body="):
+    elif t.split("=")[0] in ("--body", "-b", "--fill", "--fill-first", "--fill-verbose", "--web", "-w"):
+        # = 形式のブールフラグ（--web=true 等）も割った先頭で拒否判定する
         print(f"REJECT\t{t} は不可 — --title \"...\" --body-file <絶対パス> の形式のみ許可")
         sys.exit(0)
 if not title or not body:
-    print("REJECT\t--title と --body-file が必須（スペース区切り・= 形式のどちらでも可）")
+    print("REJECT\t--title と --body-file が必須（長形式のみ・スペース区切りと = 形式どちらでも可。-t/-F 等の短縮形は不可）")
     sys.exit(0)
 if not body.startswith("/"):
     print("REJECT\t--body-file は絶対パスで指定する（hook は cwd に依存できない）")
