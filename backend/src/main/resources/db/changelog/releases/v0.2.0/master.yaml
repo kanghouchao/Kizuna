@@ -3,5 +3,8 @@ databaseChangeLog:
       file: central/01-event-publication.yaml
       relativeToChangelogFile: true
   - include:
+      file: central/02-seed-sequence-sync.yaml
+      relativeToChangelogFile: true
+  - include:
       file: tenant/01-store-profile-site-fields.yaml
       relativeToChangelogFile: true
