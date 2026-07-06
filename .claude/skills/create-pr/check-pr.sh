@@ -35,7 +35,7 @@ if [ -n "$base" ]; then
   while IFS= read -r f; do
     [ -z "$f" ] && continue
     case "$f" in
-      frontend/*|backend/*|e2e/*|infrastructure/*|Taskfile*|.github/workflows/*) code_touched=1 ;;
+      frontend/*|backend/*|e2e/*|infrastructure/*|Taskfile*|.github/workflows/*|.github/scripts/*) code_touched=1 ;;
     esac
   done <<EOF
 $(git diff --name-only "$base" HEAD)

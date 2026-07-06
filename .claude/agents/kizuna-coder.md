@@ -36,7 +36,7 @@ Your prompt gives an **absolute worktree path** and an **absolute plan path**. B
   - frontend: `cd frontend && npm run lint && npm test`
   - backend: `cd backend && ./gradlew spotlessApply test` (JDK 21 pinned by `backend/.java-version` + `gradle/gradle-daemon-jvm.properties`; runs locally as-is)
 - **Before the FINAL commit**, run the full gates from the worktree root: `task lint`, `task test`, `task build` (production build is mandatory — `task test` misses build-only regressions), plus `task e2e` when the plan added `.feature` scenarios. All exit 0.
-- **Docs-only exception**: commits and branches whose diff touches nothing under `frontend/`, `backend/`, `e2e/`, `infrastructure/`, `Taskfile*`, or `.github/workflows/` skip the task gates entirely — they test none of it. The PR gate (`check-pr.sh`) verifies the same boundary against the diff.
+- **Docs-only exception**: commits and branches whose diff touches nothing under `frontend/`, `backend/`, `e2e/`, `infrastructure/`, `Taskfile*`, `.github/workflows/`, or `.github/scripts/` skip the task gates entirely — they test none of it. The PR gate (`check-pr.sh`) verifies the same boundary against the diff.
 - Run every gate in the FOREGROUND with generous timeouts (up to 600000 ms). A stopped agent cannot observe results.
 - Never push. Never commit `docs/plans/` or `docs/superpowers/`. No credential literals anywhere — `${VAR:-default}` forms only (GitGuardian scans every commit).
 

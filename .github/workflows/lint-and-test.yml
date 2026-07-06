@@ -31,7 +31,7 @@ jobs:
           if ! files=$(git diff --name-only HEAD^1 HEAD); then
             echo "diff 取得失敗 — fail-closed でフルゲートを実行する"
             docs_only=false
-          elif printf '%s\n' "$files" | grep -qE '^(frontend/|backend/|e2e/|infrastructure/|Taskfile|\.github/workflows/)'; then
+          elif printf '%s\n' "$files" | grep -qE '^(frontend/|backend/|e2e/|infrastructure/|Taskfile|\.github/workflows/|\.github/scripts/)'; then
             docs_only=false
           else
             docs_only=true
