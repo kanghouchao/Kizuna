@@ -21,8 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      # レビュー結果を PR に投稿するため write が必要（read だと投稿が 403 で全滅する — #249）
+      pull-requests: write
+      issues: write
       id-token: write
 
     steps:
