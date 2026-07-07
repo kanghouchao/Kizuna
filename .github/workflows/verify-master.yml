@@ -67,6 +67,12 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # fresh checkout には gitignore された infrastructure/development/.env が無く、
+      # dev compose の backend/frontend が env_file: - .env を必須とするため、
+      # スタック起動前に追跡済み .env.example から用意する。
+      - name: Prepare dev env file
+        run: cp infrastructure/.env.example infrastructure/development/.env
+
       - name: E2E tests
         run: task e2e
         env:
