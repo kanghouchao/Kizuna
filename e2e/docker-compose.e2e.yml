@@ -12,7 +12,9 @@ services:
     volumes:
       # ソースを bind-mount。成果物（test-results / playwright-report）はホスト e2e/ に残る。
       - .:/e2e
-      # node_modules は名前付き volume にキャッシュし、毎回のフル取得（npm ci）を避ける。
+      # コンテナ側（linux）の node_modules を、bind-mount したホスト e2e/ から分離するための
+      # 名前付き volume。ホスト（別プラットフォーム）の node_modules との衝突を避けるのが目的。
+      # 注: npm ci は毎回 node_modules を削除して作り直すため、これは取得の高速化ではない。
       - e2e-node-modules:/e2e/node_modules
     environment:
       # gateway alias 経由で tenant ドメインへ到達する baseURL。

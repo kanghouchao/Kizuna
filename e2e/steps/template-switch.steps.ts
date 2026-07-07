@@ -1,10 +1,9 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { getPublicTemplateKey, loginAsTenantAdmin, setTemplateKey } from './tenant-api';
+import { BASE_URL } from '../base-url';
 
 const { Given, When, Then, After } = createBdd();
-
-const BASE_URL = process.env.BASE_URL || 'http://store1.kizuna.test';
 
 Given('店舗 {string} の template_key が {string} である', async ({ request }, _store: string, templateKey: string) => {
   // 前回失敗の残留に依存しないよう前提を明示的に確定させる。
