@@ -51,6 +51,8 @@ task logs service=backend           # view logs
 
 Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run lint`; `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
 
+`task build` also runs as a PR gate inside the Lint and Test job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
+
 ## Code Style & Conventions
 
 Per-directory `CLAUDE.md` files carry the area conventions and are auto-loaded when working there:
