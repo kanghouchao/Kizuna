@@ -62,7 +62,8 @@ tasks:
     desc: バックエンドDockerイメージをビルド
     cmds:
       - echo "🏗️  バックエンドDockerイメージをビルド中..."
-      - docker buildx build -t {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} .
+      # --load: docker-container ドライバでも runtime イメージを docker デーモンへ載せる（task up が参照するため）
+      - docker buildx build --load -t {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} .
 
   clean:
     desc: Dockerイメージを削除
