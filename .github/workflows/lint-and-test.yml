@@ -68,6 +68,13 @@ jobs:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
 
+      - name: Build
+        if: steps.diff.outputs.docs_only != 'true'
+        run: task build
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
+
       - name: Create reports directory
         if: always() && steps.diff.outputs.docs_only != 'true'
         run: task reports
