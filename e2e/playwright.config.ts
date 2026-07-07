@@ -14,6 +14,11 @@ const baseURL = process.env.BASE_URL || 'http://store1.kizuna.test';
 export default defineConfig({
   testDir,
   outputDir: 'test-results',
+  // 実 dev スタックの単一テナントの可変状態（template_key）を共有するため直列実行で確定させる。
+  fullyParallel: false,
+  workers: 1,
+  // 失敗時に 1 回だけ再試行し、trace: 'on-first-retry' を機能させる（cold スタックの一過性を吸収）。
+  retries: 1,
   // list レポーターが各シナリオ名を標準出力へ 1 行ずつ出す（受け入れ基準のログ確認用）。
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
