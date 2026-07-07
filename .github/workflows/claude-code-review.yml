@@ -73,8 +73,9 @@ jobs:
           plugins: 'code-review@claude-code-plugins'
           # 指摘ゼロでもトラッキングコメントが残り、「無発見」と「無言」を区別できる
           track_progress: true
-          # --comment: 指摘を resolve 可能な行内 threads として投稿する（#263）
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+          # 行内 threads はプラグインの既定挙動（allowedTools の create_inline_comment + track_progress で出る）。
+          # prompt に --comment を付けると指摘が単一コメントに集約され行内 threads が出なくなるため付けない（#263 実測）。
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           # allowedTools が無いと投稿系ツールがすべて拒否され、レビューが PR に残らない（#251）
           claude_args: |
             --model claude-opus-4-8
