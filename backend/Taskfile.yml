@@ -33,8 +33,8 @@ tasks:
       - echo "✍️  Spotless で自動整形を実行中..."
       - ./gradlew --no-daemon --warning-mode=all spotlessApply
 
-  test:
-    desc: バックエンドの全テストを実行し、reports/backend に収集
+  test-unit:
+    desc: バックエンドの単体テストを実行（Docker test ステージ経由・coverage gate 込み）
     cmds:
       - echo "🧪  バックエンドの単体テストを実行中..."
       - |
@@ -43,11 +43,21 @@ tasks:
           -t {{.DOCKER_IMAGE}}-test:{{.DOCKER_TAG}} \
           --load \
           .
+
+  test-integration:
+    desc: バックエンドの統合テストを実行（compose ネットワーク接続）
+    cmds:
       - echo "🧪  バックエンドの統合テストを実行中（compose ネットワーク接続）..."
       # -v を付けない: 唯一のボリュームは gradle キャッシュで、消すと毎回フル再取得になり
       # 依存解決の flaky 要因になる。DB は tmpfs のためコンテナ削除だけで使い捨てが成立する
       - defer: docker compose -f docker-compose.test.yml down
       - docker compose -f docker-compose.test.yml run --rm integration-test
+
+  test:
+    desc: バックエンドの全テストを実行（unit + integration、後方互換）
+    cmds:
+      - task: test-unit
+      - task: test-integration
 
   test-copy-artifacts:
     desc: テスト成果物を REPORT_DIR/backend にコピー

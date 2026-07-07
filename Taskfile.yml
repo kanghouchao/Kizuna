@@ -61,6 +61,20 @@ tasks:
           echo "✅テスト完了"
         fi
 
+  test-unit:
+    desc: PR ゲート用の単体テストを実行（frontend jest + backend unit + coverage gate）
+    cmds:
+      - echo "🧪 Frontend unit tests..."
+      - task -d frontend test
+      - echo "🧪 Backend unit tests..."
+      - task -d backend test-unit
+
+  test-integration:
+    desc: post-merge 検証用の統合テストを実行（backend integration）
+    cmds:
+      - echo "🧪 Backend integration tests..."
+      - task -d backend test-integration
+
   e2e:
     desc: E2E（playwright-bdd）をフル実スタックで実行（build → up → 実行 → down）
     cmds:
