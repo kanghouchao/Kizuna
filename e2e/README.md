@@ -7,6 +7,8 @@ Playwright テストへ変換して実行します。
 
 ## 実行方法
 
+前提: ホストに `jq` が必要です（`e2e/package.json` から Playwright の版数を抽出し、one-shot コンテナのイメージタグに反映するため）。
+
 リポジトリのルートで次を実行します。
 
 ```bash

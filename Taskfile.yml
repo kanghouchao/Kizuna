@@ -78,6 +78,9 @@ tasks:
   e2e:
     desc: E2E（playwright-bdd）をフル実スタックで実行（build → up → 実行 → down）
     cmds:
+      # Playwright 版数抽出に jq を使うため、重いスタック起動前に存在を確認して fail fast する。
+      - |
+        command -v jq >/dev/null 2>&1 || { echo "❌ jq が必要です（e2e の Playwright 版数抽出に使用）"; exit 1; }
       - echo "🏗️  E2E 用にイメージをビルド..."
       - task: build
       # 成否・途中クラッシュを問わずスタックを必ず停止する（up 失敗時の残骸も回収）。
