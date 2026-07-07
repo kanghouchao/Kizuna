@@ -11,8 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    outputs:
-      docs_only: ${{ steps.diff.outputs.docs_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -74,54 +72,3 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
-
-      - name: Create reports directory
-        if: always() && steps.diff.outputs.docs_only != 'true'
-        run: task reports
-
-      - name: Inject report metadata (branch & PR)
-        if: always() && steps.diff.outputs.docs_only != 'true'
-        env:
-          BRANCH_NAME: ${{ github.head_ref }}
-          PR_NUMBER: ${{ github.event.pull_request.number || 'N/A' }}
-        run: |
-          bash ./.github/scripts/inject-report-metadata.sh
-
-      - name: Upload Pages artifact (from test/)
-        if: always() && steps.diff.outputs.docs_only != 'true'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          name: backend-test-reports
-          path: reports
-
-  deploy-reports:
-    needs: lint-and-test
-    # docs-only PR ではテスト成果物が無いためデプロイも省略
-    if: needs.lint-and-test.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    concurrency:
-      group: reports
-      cancel-in-progress: true
-    environment:
-      # ponytail: 固定名。PR ごとに環境を作ると Pages のアクティブデプロイ上限(100)に達して即失敗する
-      name: reports
-      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        continue-on-error: true
-        uses: actions/deploy-pages@v5.0.0
-        with:
-          artifact_name: backend-test-reports
-
-      # Pages バックエンドは一時的に "Deployment failed, try again later" を返すことがあるため 1 回だけ再試行
-      - name: Retry deploy after transient failure
-        id: deployment-retry
-        if: steps.deployment.outcome == 'failure'
-        uses: actions/deploy-pages@v5.0.0
-        with:
-          artifact_name: backend-test-reports

@@ -46,7 +46,7 @@ tasks:
         fi
 
   test:
-    desc: すべてのサービスのテストを実行（frontend/coverage & backend/reports に収集）
+    desc: すべてのサービスのテストを実行（frontend + backend unit + integration、後方互換）
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
@@ -102,22 +102,6 @@ tasks:
         fi
         echo "🎭 E2E（playwright-bdd）を one-shot コンテナで実行..."
         docker compose -f e2e/docker-compose.e2e.yml run --rm e2e
-
-  reports:
-    desc: テストレポートを収集
-    cmds:
-      - |
-        if [ -n "{{.service}}" ]; then
-          echo "📂 {{.service}}サービスのレポートを収集中..."
-          task -d "{{.service}}" test-copy-artifacts
-        else
-          echo "📂 すべてのサービスのレポートを収集中..."
-          echo "📂 Frontend reports..."
-          task -d frontend test-copy-artifacts
-          echo "📂 Backend reports..."
-          task -d backend test-copy-artifacts
-          echo "✅ レポート収集完了"
-        fi
 
   format:
     desc: すべてのサービスのフォーマットを実行（service=frontend|backend で個別指定可）
