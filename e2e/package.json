@@ -1,0 +1,16 @@
+{
+  "name": "kizuna-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kizuna の playwright-bdd E2E スイート（フル実スタックを外部から検証）",
+  "scripts": {
+    "bddgen": "bddgen",
+    "test": "playwright test",
+    "test:e2e": "bddgen && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.1.0",
+    "playwright-bdd": "9.2.0"
+  }
+}
