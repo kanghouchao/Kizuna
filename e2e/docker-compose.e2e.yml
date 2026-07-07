@@ -6,8 +6,9 @@ name: kizuna-e2e
 
 services:
   e2e:
-    # タグは e2e/package.json の @playwright/test バージョンと一致させること。
-    image: mcr.microsoft.com/playwright:v1.61.1-noble
+    # タグは e2e/package.json の @playwright/test バージョンから派生（root Taskfile の e2e が
+    # PLAYWRIGHT_VERSION を export する）。既定値は単独 compose 実行時のフォールバック。
+    image: mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION:-1.61.1}-noble
     working_dir: /e2e
     volumes:
       # ソースを bind-mount。成果物（test-results / playwright-report）はホスト e2e/ に残る。

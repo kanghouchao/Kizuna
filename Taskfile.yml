@@ -101,6 +101,9 @@ tasks:
           exit 1
         fi
         echo "🎭 E2E（playwright-bdd）を one-shot コンテナで実行..."
+        # Playwright イメージタグを package.json 単一真源から派生（版数ドリフト防止）
+        PLAYWRIGHT_VERSION=$(jq -r '.devDependencies["@playwright/test"]' e2e/package.json)
+        export PLAYWRIGHT_VERSION
         docker compose -f e2e/docker-compose.e2e.yml run --rm e2e
 
   format:
