@@ -46,7 +46,7 @@ tasks:
         fi
 
   test:
-    desc: すべてのサービスのテストを実行（frontend/coverage & backend/reports に収集）
+    desc: すべてのサービスのテストを実行（frontend + backend unit + integration、後方互換）
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
@@ -61,9 +61,26 @@ tasks:
           echo "✅テスト完了"
         fi
 
+  test-unit:
+    desc: PR ゲート用の単体テストを実行（frontend jest + backend unit + coverage gate）
+    cmds:
+      - echo "🧪 Frontend unit tests..."
+      - task -d frontend test
+      - echo "🧪 Backend unit tests..."
+      - task -d backend test-unit
+
+  test-integration:
+    desc: post-merge 検証用の統合テストを実行（backend integration）
+    cmds:
+      - echo "🧪 Backend integration tests..."
+      - task -d backend test-integration
+
   e2e:
     desc: E2E（playwright-bdd）をフル実スタックで実行（build → up → 実行 → down）
     cmds:
+      # Playwright 版数抽出に jq を使うため、重いスタック起動前に存在を確認して fail fast する。
+      - |
+        command -v jq >/dev/null 2>&1 || { echo "❌ jq が必要です（e2e の Playwright 版数抽出に使用）"; exit 1; }
       - echo "🏗️  E2E 用にイメージをビルド..."
       - task: build
       # 成否・途中クラッシュを問わずスタックを必ず停止する（up 失敗時の残骸も回収）。
@@ -87,23 +104,11 @@ tasks:
           exit 1
         fi
         echo "🎭 E2E（playwright-bdd）を one-shot コンテナで実行..."
+        # Playwright イメージタグを package.json 単一真源から派生（版数ドリフト防止）。
+        # ^1.62.0 / ~1.60.0 等の範囲表記でも先頭の semver 数字列のみ取り出す。
+        PLAYWRIGHT_VERSION=$(jq -r '.devDependencies["@playwright/test"]' e2e/package.json | grep -oE '[0-9]+(\.[0-9]+)+' | head -1)
+        export PLAYWRIGHT_VERSION
         docker compose -f e2e/docker-compose.e2e.yml run --rm e2e
-
-  reports:
-    desc: テストレポートを収集
-    cmds:
-      - |
-        if [ -n "{{.service}}" ]; then
-          echo "📂 {{.service}}サービスのレポートを収集中..."
-          task -d "{{.service}}" test-copy-artifacts
-        else
-          echo "📂 すべてのサービスのレポートを収集中..."
-          echo "📂 Frontend reports..."
-          task -d frontend test-copy-artifacts
-          echo "📂 Backend reports..."
-          task -d backend test-copy-artifacts
-          echo "✅ レポート収集完了"
-        fi
 
   format:
     desc: すべてのサービスのフォーマットを実行（service=frontend|backend で個別指定可）

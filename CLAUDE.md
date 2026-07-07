@@ -34,10 +34,12 @@ task build                          # all services
 task build service=frontend         # frontend only
 task build service=backend          # backend only
 
-# Test (70% coverage required)
-task test                           # all tests
+# Test (70% coverage required — coverage is measured on unit tests only)
+task test                           # unit + integration (backward-compatible full run)
+task test-unit                      # frontend Jest + backend unit + coverage gate (the PR gate)
+task test-integration               # backend integration only (post-merge verification)
 task test service=frontend          # Jest only
-task test service=backend           # JUnit + Jacoco only
+task test service=backend           # JUnit + Jacoco + integration
 
 # Lint & format
 task lint                           # check
@@ -52,6 +54,8 @@ task logs service=backend           # view logs
 Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run lint`; `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
 
 `task build` also runs as a PR gate inside the Lint and Test job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
+
+CI is tiered (issue #241). The PR gate — the required **Lint and Test** check — runs **lint + unit(coverage) + build** only (`task test-unit`). Integration and E2E are **not** merge gates: they run post-merge on `push → master` via `.github/workflows/verify-master.yml` (jobs **Integration** = `task test-integration`, **E2E** = `task e2e`) as fix-forward, non-gating checks. Run `task test-integration` / `task e2e` locally before a risky merge. (Test reports are no longer published to Pages — coverage still gates inside the unit `--target test` build.)
 
 ## Code Style & Conventions
 
