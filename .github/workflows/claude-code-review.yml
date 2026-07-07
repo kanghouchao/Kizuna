@@ -71,9 +71,11 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          # 指摘ゼロでもトラッキングコメントが残り、「無発見」と「無言」を区別できる
-          track_progress: true
-          # --comment: 指摘を resolve 可能な行内 threads として投稿する（#263）
+          # track_progress は tracking comment の tag モードを強制し、指摘を単一コメントへ集約して
+          # 行内 threads を抑制する（既定 false）。--comment による行内レビューを活かすため false にする。
+          # 「無発見」は --comment 時に code-review が "No issues found" summary を投稿するため区別可能（#263）。
+          track_progress: false
+          # --comment: 投稿の必須フラグ。指摘ありは行内コメント(create_inline_comment)、無しは summary を投稿する（#263）
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
           # allowedTools が無いと投稿系ツールがすべて拒否され、レビューが PR に残らない（#251）
           claude_args: |
