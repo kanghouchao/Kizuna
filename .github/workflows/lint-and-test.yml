@@ -61,7 +61,7 @@ jobs:
 
       - name: Test
         if: steps.diff.outputs.docs_only != 'true'
-        run: task test
+        run: task test-unit
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
