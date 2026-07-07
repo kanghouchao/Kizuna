@@ -37,7 +37,7 @@ task build service=backend          # backend only
 # Test (70% coverage required — coverage is measured on unit tests only)
 task test                           # unit + integration (backward-compatible full run)
 task test-unit                      # frontend Jest + backend unit + coverage gate (the PR gate)
-task test-integration               # backend integration only (post-merge verification)
+task test-integration               # backend integration only
 task test service=frontend          # Jest only
 task test service=backend           # JUnit + Jacoco + integration
 
@@ -55,7 +55,7 @@ Use the Taskfile (Docker = CI parity) for final verification before committing. 
 
 `task build` also runs as a PR gate inside the Lint and Test job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
 
-CI is tiered (issue #241). The PR gate — the required **Lint and Test** check — runs **lint + unit(coverage) + build** only (`task test-unit`). Integration and E2E are **not** merge gates: they run post-merge on `push → master` via `.github/workflows/verify-master.yml` (jobs **Integration** = `task test-integration`, **E2E** = `task e2e`) as fix-forward, non-gating checks. Run `task test-integration` / `task e2e` locally before a risky merge. (Test reports are no longer published to Pages — coverage still gates inside the unit `--target test` build.)
+CI is tiered (issue #241). The PR gate — the required **Lint and Test** check — runs **lint + unit(coverage) + build** only (`task test-unit`). **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. (Test reports are no longer published to Pages — coverage still gates inside the unit `--target test` build.)
 
 ## Code Style & Conventions
 
