@@ -61,6 +61,34 @@ tasks:
           echo "✅テスト完了"
         fi
 
+  e2e:
+    desc: E2E（playwright-bdd）をフル実スタックで実行（build → up → 実行 → down）
+    cmds:
+      - echo "🏗️  E2E 用にイメージをビルド..."
+      - task: build
+      # 成否・途中クラッシュを問わずスタックを必ず停止する（up 失敗時の残骸も回収）。
+      - defer: { task: down }
+      - echo "🚀 開発スタックを起動..."
+      - task: up
+      - |
+        set -e
+        echo "⏳ gateway 経由で frontend の応答を待機..."
+        ready=0
+        for i in $(seq 1 60); do
+          if curl -sf -H "Host: store1.kizuna.test" http://localhost/ >/dev/null 2>&1; then
+            ready=1
+            echo "✅ frontend 応答確認（${i} 回目）"
+            break
+          fi
+          sleep 2
+        done
+        if [ "$ready" -ne 1 ]; then
+          echo "❌ frontend が規定時間内に応答しませんでした"
+          exit 1
+        fi
+        echo "🎭 E2E（playwright-bdd）を one-shot コンテナで実行..."
+        docker compose -f e2e/docker-compose.e2e.yml run --rm e2e
+
   reports:
     desc: テストレポートを収集
     cmds:

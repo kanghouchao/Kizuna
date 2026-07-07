@@ -1,0 +1,30 @@
+# E2E one-shot 実行 compose（issue #247）
+# 既存の開発スタック（project kizuna）を再利用し、external な kizuna_network に
+# attach してフル実スタックを外部から検証する。自前の DB/backend は立てない。
+# gateway サービスの network alias（store1.kizuna.test / kizuna.test）で名前解決する。
+name: kizuna-e2e
+
+services:
+  e2e:
+    # タグは e2e/package.json の @playwright/test バージョンと一致させること。
+    image: mcr.microsoft.com/playwright:v1.61.1-noble
+    working_dir: /e2e
+    volumes:
+      # ソースを bind-mount。成果物（test-results / playwright-report）はホスト e2e/ に残る。
+      - .:/e2e
+      # node_modules は名前付き volume にキャッシュし、毎回のフル取得（npm ci）を避ける。
+      - e2e-node-modules:/e2e/node_modules
+    environment:
+      # gateway alias 経由で tenant ドメインへ到達する baseURL。
+      BASE_URL: http://store1.kizuna.test
+    command: sh -c "npm ci && npx bddgen && npx playwright test"
+    networks:
+      - kizuna_network
+
+volumes:
+  e2e-node-modules:
+
+networks:
+  # 開発スタックが作成する既存ネットワーク（docker compose -p kizuna の network）。
+  kizuna_network:
+    external: true
