@@ -14,6 +14,7 @@ import com.kizuna.tenant.domain.TenantRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ShiftService {
+
+  private static final Set<String> ALLOWED_STATUSES = Set.of("TENTATIVE", "CONFIRMED");
 
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
@@ -42,6 +45,7 @@ public class ShiftService {
     if (request.getStartTime().equals(request.getEndTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
+    validateStatus(request.getStatus());
     if (!castService.existsForCurrentTenant(request.getCastId())) {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
@@ -63,6 +67,7 @@ public class ShiftService {
     Shift shift =
         shiftRepository.findById(id).orElseThrow(() -> new ServiceException("シフトが見つかりません: " + id));
 
+    validateStatus(request.getStatus());
     if (request.getCastId() != null && !castService.existsForCurrentTenant(request.getCastId())) {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
@@ -88,5 +93,12 @@ public class ShiftService {
       throw new ServiceException("シフトが見つかりません: " + id);
     }
     shiftRepository.deleteById(id);
+  }
+
+  /** status が指定された場合、許可値（TENTATIVE / CONFIRMED）以外を拒否する。null は不変更として許容。 */
+  private void validateStatus(String status) {
+    if (status != null && !ALLOWED_STATUSES.contains(status)) {
+      throw new ServiceException("不正なステータスです: " + status);
+    }
   }
 }

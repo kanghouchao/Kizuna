@@ -205,6 +205,30 @@ class ShiftServiceTest {
   }
 
   @Test
+  void create_rejectsInvalidStatus() {
+    ShiftCreateRequest req = validCreateRequest();
+    req.setStatus("BOGUS");
+
+    assertThatThrownBy(() -> shiftService.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("不正なステータス");
+  }
+
+  @Test
+  void update_rejectsInvalidStatus() {
+    Shift s = Shift.builder().castId("c1").build();
+    s.setId("s1");
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+
+    ShiftUpdateRequest req = new ShiftUpdateRequest();
+    req.setStatus("BOGUS");
+
+    assertThatThrownBy(() -> shiftService.update("s1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("不正なステータス");
+  }
+
+  @Test
   void delete_removes() {
     when(shiftRepository.existsById("s1")).thenReturn(true);
     shiftService.delete("s1");
