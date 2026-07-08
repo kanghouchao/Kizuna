@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: tenant/01-shift-schema.yaml
+      relativeToChangelogFile: true
