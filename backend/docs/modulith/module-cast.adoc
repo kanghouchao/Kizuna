@@ -3,7 +3,11 @@
 |Base package
 |`com.kizuna.cast`
 |Spring components
-|_Repositories_
+|_Services_
+
+* `c.k.c.application.CastService`
+
+_Repositories_
 
 * `c.k.c.domain.CastRepository`
 |Bean references

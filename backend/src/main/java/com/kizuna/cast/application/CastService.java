@@ -46,6 +46,16 @@ public class CastService {
         .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
   }
 
+  /**
+   * 指定 id のキャストが現在テナントに属するか判定する（他モジュールからの帰属チェック用ポート）。 tenantFilter が効くため、他テナントのキャストは存在しないものとして
+   * false を返す。
+   */
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public boolean existsForCurrentTenant(String id) {
+    return castRepository.findById(id).isPresent();
+  }
+
   @TenantScoped
   @Transactional
   public CastResponse create(CastCreateRequest request) {

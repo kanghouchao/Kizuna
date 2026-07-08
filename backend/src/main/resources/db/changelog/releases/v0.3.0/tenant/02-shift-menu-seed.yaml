@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: tenant-v030-002-shift-menu-seed
+      author: kanghouchao
+      changes:
+        # v0.1.0 で入った未実装プレースホルダ（label「シフト管理」/権限なし）を
+        # CAST_MANAGE でゲートした「出勤管理」に置き換える（/tenant/shifts への重複メニューを避ける）。
+        - delete:
+            tableName: t_menus
+            where: "id = 't1-shift'"
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: "t1-shifts" }
+              - column: { name: tenant_id, valueNumeric: 1 }
+              - column: { name: parent_id, value: "t1-hrm" }
+              - column: { name: label, value: "出勤管理" }
+              - column: { name: path, value: "/tenant/shifts" }
+              - column: { name: icon, value: "ClockIcon" }
+              - column: { name: permission, value: "CAST_MANAGE" }
+              - column: { name: sort_order, valueNumeric: 2 }

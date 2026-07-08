@@ -14,6 +14,7 @@ Container_Boundary("Application.Application_boundary", "Application", $tags="") 
   Component(Application.Application.Customer, "Customer", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Notification, "Notification", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Order, "Order", $techn="Module", $descr="", $tags="", $link="")
+  Component(Application.Application.Shift, "Shift", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Settings, "Settings", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Storage, "Storage", $techn="Module", $descr="", $tags="", $link="")
@@ -47,6 +48,9 @@ Rel(Application.Application.Order, Application.Application.User, "uses", $techn=
 Rel(Application.Application.Order, Application.Application.Tenant, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Settings, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Application.Application.Shift, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Shift, Application.Application.Tenant, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Shift, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 @enduml

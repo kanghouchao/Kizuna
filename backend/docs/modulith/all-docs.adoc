@@ -49,3 +49,7 @@ include::module-notification.adoc[]
 plantuml::module-order.puml[,,format=svg]
 include::module-order.adoc[]
 
+== Shift
+plantuml::module-shift.puml[,,format=svg]
+include::module-shift.adoc[]
+
