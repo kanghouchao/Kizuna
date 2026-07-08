@@ -190,6 +190,21 @@ class ShiftServiceTest {
   }
 
   @Test
+  void update_rejectsWhenPartialUpdateMergesToEqualTimes() {
+    // 既存 18:00-22:00 に start だけ 22:00 → 既存 end 22:00 とマージで一致 → 拒否
+    Shift s = Shift.builder().startTime(LocalTime.of(18, 0)).endTime(LocalTime.of(22, 0)).build();
+    s.setId("s1");
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+
+    ShiftUpdateRequest req = new ShiftUpdateRequest();
+    req.setStartTime(LocalTime.of(22, 0));
+
+    assertThatThrownBy(() -> shiftService.update("s1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("開始時刻と終了時刻");
+  }
+
+  @Test
   void delete_removes() {
     when(shiftRepository.existsById("s1")).thenReturn(true);
     shiftService.delete("s1");

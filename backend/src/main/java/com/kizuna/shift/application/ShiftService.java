@@ -12,6 +12,7 @@ import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -66,7 +67,12 @@ public class ShiftService {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
 
-    if (request.getStartTime() != null && request.getStartTime().equals(request.getEndTime())) {
+    // 部分更新のマージ結果（実効の開始・終了）で判定する。片方だけ来て既存値と一致する穴を塞ぐ。
+    LocalTime effectiveStart =
+        request.getStartTime() != null ? request.getStartTime() : shift.getStartTime();
+    LocalTime effectiveEnd =
+        request.getEndTime() != null ? request.getEndTime() : shift.getEndTime();
+    if (effectiveStart != null && effectiveStart.equals(effectiveEnd)) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
 
