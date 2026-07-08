@@ -1,5 +1,6 @@
 package com.kizuna.shift.application;
 
+import com.kizuna.cast.application.CastService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
@@ -24,6 +25,7 @@ public class ShiftService {
   private final ShiftMapper shiftMapper;
   private final TenantContext tenantContext;
   private final TenantRepository tenantRepository;
+  private final CastService castService;
 
   @TenantScoped
   @Transactional(readOnly = true)
@@ -38,6 +40,9 @@ public class ShiftService {
   public ShiftResponse create(ShiftCreateRequest request) {
     if (request.getStartTime().equals(request.getEndTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
+    }
+    if (!castService.existsForCurrentTenant(request.getCastId())) {
+      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
 
     Shift shift = shiftMapper.toEntity(request);
@@ -56,6 +61,10 @@ public class ShiftService {
   public ShiftResponse update(String id, ShiftUpdateRequest request) {
     Shift shift =
         shiftRepository.findById(id).orElseThrow(() -> new ServiceException("シフトが見つかりません: " + id));
+
+    if (request.getCastId() != null && !castService.existsForCurrentTenant(request.getCastId())) {
+      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
+    }
 
     if (request.getStartTime() != null && request.getStartTime().equals(request.getEndTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");

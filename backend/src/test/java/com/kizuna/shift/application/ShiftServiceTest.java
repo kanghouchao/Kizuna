@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.cast.application.CastService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
@@ -34,6 +35,7 @@ class ShiftServiceTest {
   @Mock private ShiftMapper shiftMapper;
   @Mock private TenantContext tenantContext;
   @Mock private TenantRepository tenantRepository;
+  @Mock private CastService castService;
 
   @InjectMocks private ShiftService shiftService;
 
@@ -70,6 +72,7 @@ class ShiftServiceTest {
     Tenant tenant = new Tenant();
     tenant.setId(1L);
 
+    when(castService.existsForCurrentTenant("c1")).thenReturn(true);
     when(shiftMapper.toEntity(req)).thenReturn(entity);
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
@@ -105,6 +108,7 @@ class ShiftServiceTest {
   void create_throwsWhenTenantNotFound() {
     ShiftCreateRequest req = validCreateRequest();
 
+    when(castService.existsForCurrentTenant("c1")).thenReturn(true);
     when(shiftMapper.toEntity(req)).thenReturn(Shift.builder().build());
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
@@ -112,6 +116,17 @@ class ShiftServiceTest {
     assertThatThrownBy(() -> shiftService.create(req))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("テナントが見つかりません");
+  }
+
+  @Test
+  void create_rejectsWhenCastNotInTenant() {
+    ShiftCreateRequest req = validCreateRequest();
+
+    when(castService.existsForCurrentTenant("c1")).thenReturn(false);
+
+    assertThatThrownBy(() -> shiftService.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("キャストが見つかりません");
   }
 
   @Test
@@ -142,6 +157,21 @@ class ShiftServiceTest {
     assertThatThrownBy(() -> shiftService.update("missing", new ShiftUpdateRequest()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("シフトが見つかりません");
+  }
+
+  @Test
+  void update_rejectsWhenCastNotInTenant() {
+    Shift s = Shift.builder().castId("c1").build();
+    s.setId("s1");
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(castService.existsForCurrentTenant("foreign")).thenReturn(false);
+
+    ShiftUpdateRequest req = new ShiftUpdateRequest();
+    req.setCastId("foreign");
+
+    assertThatThrownBy(() -> shiftService.update("s1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("キャストが見つかりません");
   }
 
   @Test

@@ -46,6 +46,36 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
         + "\"}";
   }
 
+  private String createShiftAs(
+      long tenantId, String castId, String workDate, String startTime, String endTime) {
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/tenant/shifts",
+            new HttpEntity<>(
+                shiftBody(castId, workDate, startTime, endTime), tenantHeaders(tenantId)),
+            JsonNode.class);
+    assertThat(created.getStatusCode())
+        .as("前提: tenant %d でのシフト作成が成功すること", tenantId)
+        .isEqualTo(HttpStatus.CREATED);
+    return created.getBody().path("id").asText();
+  }
+
+  private JsonNode findInRange(long tenantId, String range, String shiftId) {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/tenant/shifts?" + range,
+            HttpMethod.GET,
+            new HttpEntity<>(tenantHeaders(tenantId)),
+            JsonNode.class);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    for (JsonNode node : res.getBody()) {
+      if (shiftId.equals(node.path("id").asText())) {
+        return node;
+      }
+    }
+    return null;
+  }
+
   private boolean rangeContains(long tenantId, String range, String shiftId) {
     ResponseEntity<JsonNode> res =
         rest.exchange(
@@ -145,5 +175,51 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     }
     assertThat(found).as("tenant B の操作後も tenant A のシフトは残っていること").isNotNull();
     assertThat(found.path("status").asText()).isEqualTo("CONFIRMED");
+  }
+
+  @Test
+  @DisplayName("他テナントのキャスト id ではシフトを作成できず、区間 GET にも現れないこと")
+  void cannotCreateShiftWithOtherTenantCast() {
+    String foreignCastId = createCastAs(TENANT_B, "他店キャスト（作成不可）");
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/tenant/shifts",
+            new HttpEntity<>(
+                shiftBody(foreignCastId, "2026-07-12", "18:00:00", "23:00:00"),
+                tenantHeaders(TENANT_A)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    // 作成されていないこと（区間 GET が空）
+    ResponseEntity<JsonNode> range =
+        rest.exchange(
+            "/tenant/shifts?from=2026-07-12&to=2026-07-12",
+            HttpMethod.GET,
+            new HttpEntity<>(tenantHeaders(TENANT_A)),
+            JsonNode.class);
+    assertThat(range.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(range.getBody().size()).isEqualTo(0);
+  }
+
+  @Test
+  @DisplayName("自店シフトを他テナントのキャストに付け替えられず、cast_id が変わらないこと")
+  void cannotUpdateShiftToOtherTenantCast() {
+    String ownCastId = createCastAs(TENANT_A, "自店キャスト（付替元）");
+    String shiftId = createShiftAs(TENANT_A, ownCastId, "2026-07-13", "18:00:00", "23:00:00");
+    String foreignCastId = createCastAs(TENANT_B, "他店キャスト（付替先）");
+
+    ResponseEntity<JsonNode> put =
+        rest.exchange(
+            "/tenant/shifts/" + shiftId,
+            HttpMethod.PUT,
+            new HttpEntity<>("{\"cast_id\": \"" + foreignCastId + "\"}", tenantHeaders(TENANT_A)),
+            JsonNode.class);
+    assertThat(put.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    // データ不変: cast_id は自店のキャストのまま
+    JsonNode found = findInRange(TENANT_A, "from=2026-07-13&to=2026-07-13", shiftId);
+    assertThat(found).isNotNull();
+    assertThat(found.path("cast_id").asText()).isEqualTo(ownCastId);
   }
 }
