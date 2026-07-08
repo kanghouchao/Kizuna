@@ -28,12 +28,23 @@ export default function ShiftsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
 
-  // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）
+  // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）。101 人以上でも氏名を解決できるよう全ページ取得する。
   useEffect(() => {
-    castApi
-      .list({ size: 100, sort: 'displayOrder,asc' })
-      .then(page => setCasts(page.content))
-      .catch(() => toast.error('キャストの取得に失敗しました'));
+    const loadAllCasts = async () => {
+      try {
+        const size = 200;
+        const all: CastResponse[] = [];
+        for (let page = 0; ; page += 1) {
+          const res = await castApi.list({ page, size, sort: 'displayOrder,asc' });
+          all.push(...res.content);
+          if (res.content.length < size) break; // 最終ページ
+        }
+        setCasts(all);
+      } catch {
+        toast.error('キャストの取得に失敗しました');
+      }
+    };
+    void loadAllCasts();
   }, []);
 
   // 表示中のタブに応じた取得区間（カレンダー = 月、タイムライン = 単日）
