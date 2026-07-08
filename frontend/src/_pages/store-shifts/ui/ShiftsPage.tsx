@@ -2,7 +2,7 @@
 
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react';
 import { CalendarDaysIcon, ClockIcon } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastResponse, castApi } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
@@ -53,20 +53,30 @@ export default function ShiftsPage() {
     [tab, month, selectedDate]
   );
 
-  const loadShifts = useCallback(async () => {
-    setLoading(true);
-    try {
-      setShifts(await shiftApi.list(range));
-    } catch {
-      toast.error('シフトの取得に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  }, [range]);
+  // range 変更や保存後の再取得。素早い月切替・日クリックで古いリクエストが後から解決しても、
+  // 現在の range に対応する応答だけを反映する（stale 応答による上書き防止）。
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    void loadShifts();
-  }, [loadShifts]);
+    let ignore = false;
+    setLoading(true);
+    shiftApi
+      .list(range)
+      .then(result => {
+        if (!ignore) setShifts(result);
+      })
+      .catch(() => {
+        if (!ignore) toast.error('シフトの取得に失敗しました');
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [range, reloadKey]);
+
+  const reloadShifts = () => setReloadKey(key => key + 1);
 
   const openAdd = () => {
     setEditing(null);
@@ -139,7 +149,7 @@ export default function ShiftsPage() {
         casts={casts}
         editing={editing}
         defaultDate={selectedDate}
-        onSaved={loadShifts}
+        onSaved={reloadShifts}
       />
     </div>
   );
