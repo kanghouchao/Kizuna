@@ -44,7 +44,7 @@ export function ShiftCalendar({
             type="button"
             onClick={onPrevMonth}
             aria-label="前の月"
-            className="rounded-md p-2 text-gray-500 hover:bg-gray-50"
+            className="rounded-md p-2 text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <ChevronLeftIcon className="h-5 w-5" />
           </button>
@@ -52,7 +52,7 @@ export function ShiftCalendar({
             type="button"
             onClick={onNextMonth}
             aria-label="次の月"
-            className="rounded-md p-2 text-gray-500 hover:bg-gray-50"
+            className="rounded-md p-2 text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <ChevronRightIcon className="h-5 w-5" />
           </button>
