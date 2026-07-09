@@ -129,6 +129,46 @@ class TenantIdInterceptorTest {
   }
 
   @Test
+  @DisplayName("認証済みで tenantId claim があれば X-Tenant-ID ヘッダが無くても claim からテナント文脈を設定すること")
+  void preHandle_setsTenantIdFromClaimWhenHeaderMissing() {
+    authenticateWithTenantId(5L);
+    MockHttpServletRequest request = new MockHttpServletRequest();
+
+    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+
+    assertThat(result).isTrue();
+    assertThat(tenantContext.getTenantId()).isEqualTo(5L);
+  }
+
+  @Test
+  @DisplayName("認証済みで tenantId claim があれば X-Tenant-ID が不正形式でも claim からテナント文脈を設定すること")
+  void preHandle_setsTenantIdFromClaimWhenHeaderMalformed() {
+    authenticateWithTenantId(5L);
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Tenant-ID", "not-a-number");
+
+    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+
+    assertThat(result).isTrue();
+    assertThat(tenantContext.getTenantId()).isEqualTo(5L);
+  }
+
+  @Test
+  @DisplayName("認証済みで X-Tenant-ID が別テナントを指すなら X-Role の有無に関係なく 403 で拒否すること")
+  void preHandle_rejectsMismatchEvenWithoutRoleHeader() {
+    authenticateWithTenantId(1L);
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Tenant-ID", "2");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
   @DisplayName("afterCompletion でテナント文脈がクリアされること")
   void afterCompletion_clearsTenantContext() {
     tenantContext.setTenantId(42L);

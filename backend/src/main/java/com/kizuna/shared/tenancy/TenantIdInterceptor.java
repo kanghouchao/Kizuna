@@ -29,16 +29,25 @@ public class TenantIdInterceptor implements HandlerInterceptor {
       @NonNull HttpServletRequest request,
       @NonNull HttpServletResponse response,
       @NonNull Object handler) {
-    if (HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
-        && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID))
-        && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
-      long headerTenantId = Long.parseLong(request.getHeader(HEADER_TENANT_ID));
-      Long jwtTenantId = authenticatedTenantId();
-      if (jwtTenantId != null && !jwtTenantId.equals(headerTenantId)) {
+    Long jwtTenantId = authenticatedTenantId();
+    if (jwtTenantId != null) {
+      // 認証済みテナント JWT: claim を正としてテナント文脈を確定する。ヘッダの有無・形式には依存させない
+      // （X-Role/X-Tenant-ID を省略・改変してこの検証と分離を素通りされるのを防ぐため）。
+      String headerTenantId = request.getHeader(HEADER_TENANT_ID);
+      if (StringUtils.isNumeric(headerTenantId)
+          && !jwtTenantId.equals(Long.parseLong(headerTenantId))) {
+        // X-Tenant-ID が別テナントを指す明確な詐称は拒否する。
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         return false;
       }
-      this.tenantContext.setTenantId(headerTenantId);
+      this.tenantContext.setTenantId(jwtTenantId);
+      return true;
+    }
+    // 認証前（ログイン等）または tenantId claim を持たないトークン: 従来通りヘッダのみで信用する。
+    if (HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
+        && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID))
+        && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
+      this.tenantContext.setTenantId(Long.parseLong(request.getHeader(HEADER_TENANT_ID)));
     }
     return true;
   }
