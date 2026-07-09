@@ -16,7 +16,7 @@ frontend/src/
 ├── widgets/      # Composite UI such as sidebar, header
 ├── features/     # Slices per user action: auth-login, tenant-register, ...
 ├── entities/     # Mirror of the backend domain modules:
-│                 #   tenant, user, menu, cast, customer, order, store-profile, system-config
+│                 #   tenant, user, menu, cast, customer, order, store-profile, system-config, shift
 │                 #   each slice = model (types) / api (requests) / index (public API)
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (generic components)
 ```

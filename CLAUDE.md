@@ -40,6 +40,7 @@ task test-unit                      # frontend Jest + backend unit + coverage ga
 task test-integration               # backend integration only
 task test service=frontend          # Jest only
 task test service=backend           # JUnit + Jacoco + integration
+task e2e                            # Playwright BDD e2e — PR author's local responsibility, not run in CI
 
 # Lint & format
 task lint                           # check
