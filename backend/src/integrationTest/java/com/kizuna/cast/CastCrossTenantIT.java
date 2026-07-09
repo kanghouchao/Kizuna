@@ -52,14 +52,14 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
-    // 200 でデータが漏れないことが本質（ServiceException → 400）
-    assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    // 200 でデータが漏れないことが本質（越権はインターセプタが拒否 → 403）
+    assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
   @DisplayName("他テナントのキャストを更新できず、データも変わらないこと")
   void otherTenantCannotUpdateForeignCast() {
-    // 正向対照: 同一ボディ形式で自テナントの更新は成功する（負向 400 がバリデーション起因でない証明）
+    // 正向対照: 同一ボディ形式で自テナントの更新は成功する（負向 403 がバリデーション起因でない証明）
     String controlId = createCastAs(TENANT_A, "統合テストキャスト（対照）");
     ResponseEntity<JsonNode> ownUpdate =
         rest.exchange(
@@ -77,7 +77,7 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>("{\"name\": \"統合テストキャスト（改ざん）\"}", tenantHeaders(TENANT_B)),
             JsonNode.class);
-    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
     // データ不変: tenant A から見て名前が変わっていない
     ResponseEntity<JsonNode> after =

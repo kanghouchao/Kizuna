@@ -63,8 +63,8 @@ class CustomerCrossTenantIT extends CrossTenantTestSupport {
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
 
-    // ServiceException(@ResponseStatus BAD_REQUEST) → 400。
+    // 越権はインターセプタが JWT と X-Tenant-ID の不一致を拒否 → 403。
     // 重要なのは 200 でデータが漏れないこと（5b39c06 修正前は 200 で漏洩していた）
-    assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 }
