@@ -81,7 +81,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
-    assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
@@ -89,7 +89,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
   void otherTenantCannotUpdateForeignOrder() {
     String castId = createCastAs(TENANT_A, "統合テストキャスト（受注更新用）");
 
-    // 正向対照: 同一ボディ形式で自テナントの更新は成功する（負向 400 がバリデーション起因でない証明）
+    // 正向対照: 同一ボディ形式で自テナントの更新は成功する（負向 403 がバリデーション起因でない証明）
     String controlId = createOrderAs(TENANT_A, castId);
     ResponseEntity<JsonNode> ownUpdate =
         rest.exchange(
@@ -107,7 +107,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>(orderBody(castId, "改ざん"), tenantHeaders(TENANT_B)),
             JsonNode.class);
-    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
     // tenant A からは引き続き読める（レコード自体は健在）
     ResponseEntity<JsonNode> after =
