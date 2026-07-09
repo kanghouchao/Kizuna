@@ -12,7 +12,7 @@
 com.kizuna
 ├── shared/          # Shared kernel (OPEN module): tenancy, web, config, exception, persistence
 ├── tenant/  auth/  user/  cast/  customer/  order/
-└── menu/  settings/  storeprofile/  notification/  storage/
+└── menu/  settings/  storeprofile/  shift/  notification/  storage/
 ```
 
 Each module follows the DDD four layers:
