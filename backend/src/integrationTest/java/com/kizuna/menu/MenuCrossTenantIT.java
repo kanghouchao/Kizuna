@@ -72,13 +72,21 @@ class MenuCrossTenantIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("tenant B のメニュー取得に tenant A のシードメニューが混入しないこと")
-  void tenantBCannotSeeTenantAMenus() {
-    List<String> names = rootMenuNames(tenantBId);
+  @DisplayName("tenant A の JWT に X-Tenant-ID: B を偽装しても 403 で拒否され、tenant B のデータも返らないこと")
+  void spoofedTenantHeaderIsRejectedWithoutLeakingData() {
+    // tenant A のシードユーザーで発行した JWT（tenantId claim = tenant A）に、
+    // X-Tenant-ID ヘッダだけ tenant B を詐称したリクエスト。修正前は 200 で tenant B のメニューが漏れていた。
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/tenant/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(tenantHeaders(tenantBId)),
+            String.class);
 
-    // 漏洩がないことが本 issue の受入条件。containsExactly で「自分の分だけ」も同時に固定する
-    assertThat(names).doesNotContainAnyElementsOf(TENANT_A_SEED_ROOT_LABELS);
-    assertThat(names).containsExactly(TENANT_B_MENU_LABEL);
+    // JWT の tenantId claim と X-Tenant-ID ヘッダの不一致は TenantIdInterceptor が拒否する。
+    // コントローラに到達しないため、tenant B のデータも本文も一切返らない。
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(res.getBody()).as("拒否時は本文を返さない（いずれのテナントのデータも含まない）").isNullOrEmpty();
   }
 
   @Test
