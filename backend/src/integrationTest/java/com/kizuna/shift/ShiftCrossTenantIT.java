@@ -3,9 +3,12 @@ package com.kizuna.shift;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossTenantTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -19,6 +22,19 @@ import org.springframework.http.ResponseEntity;
  * に現れないこと」で確認する。
  */
 class ShiftCrossTenantIT extends CrossTenantTestSupport {
+
+  @Autowired private CastRepository castRepository;
+
+  /**
+   * 他テナント（tenant B）の Cast をリポジトリ直挿しで用意する。 HTTP 経由の作成は tenant A の JWT + X-Tenant-ID: B が
+   * TenantIdInterceptor に 403 で弾かれるようになったため、{@code @TenantScoped} を経由せず tenantFilter が無効な
+   * リポジトリ直接呼び出しで他テナントのデータを書く（MenuCrossTenantIT と同型）。
+   */
+  private String createForeignCast(String name) {
+    Cast cast = Cast.builder().name(name).build();
+    cast.setTenantId(TENANT_B);
+    return castRepository.save(cast).getId();
+  }
 
   private String createCastAs(long tenantId, String name) {
     ResponseEntity<JsonNode> created =
@@ -127,10 +143,16 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     String shiftId = created.getBody().path("id").asText();
 
-    // 読取隔離: tenant B の区間 GET には現れない
-    assertThat(rangeContains(TENANT_B, "from=2026-07-10&to=2026-07-10", shiftId)).isFalse();
+    // 読取隔離: tenant A の JWT に X-Tenant-ID: B を詐称した区間 GET は 403 で拒否され、tenant A のシフトに到達できない
+    ResponseEntity<JsonNode> foreignRange =
+        rest.exchange(
+            "/tenant/shifts?from=2026-07-10&to=2026-07-10",
+            HttpMethod.GET,
+            new HttpEntity<>(tenantHeaders(TENANT_B)),
+            JsonNode.class);
+    assertThat(foreignRange.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-    // 正向対照: 同一ボディ形式で自テナントの更新は成功する（負向 400 がバリデーション起因でない証明）
+    // 正向対照: 同一ボディ形式で自テナントの更新は成功する（負向 403 がバリデーション起因でない証明）
     ResponseEntity<JsonNode> ownUpdate =
         rest.exchange(
             "/tenant/shifts/" + shiftId,
@@ -140,23 +162,23 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     assertThat(ownUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(ownUpdate.getBody().path("status").asText()).isEqualTo("CONFIRMED");
 
-    // 負向: tenant B は更新できない（ServiceException → 400）
+    // 負向: tenant B は更新できない（越権はインターセプタが拒否 → 403）
     ResponseEntity<JsonNode> tampered =
         rest.exchange(
             "/tenant/shifts/" + shiftId,
             HttpMethod.PUT,
             new HttpEntity<>("{\"status\": \"TENTATIVE\"}", tenantHeaders(TENANT_B)),
             JsonNode.class);
-    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-    // 負向: tenant B は削除できない（ServiceException → 400）
+    // 負向: tenant B は削除できない（越権はインターセプタが拒否 → 403）
     ResponseEntity<JsonNode> deleted =
         rest.exchange(
             "/tenant/shifts/" + shiftId,
             HttpMethod.DELETE,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
-    assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
     // データ不変: tenant A からはまだ存在し、status は tenant A が設定した CONFIRMED のまま
     ResponseEntity<JsonNode> after =
@@ -180,7 +202,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("他テナントのキャスト id ではシフトを作成できず、区間 GET にも現れないこと")
   void cannotCreateShiftWithOtherTenantCast() {
-    String foreignCastId = createCastAs(TENANT_B, "他店キャスト（作成不可）");
+    String foreignCastId = createForeignCast("他店キャスト（作成不可）");
 
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
@@ -207,7 +229,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   void cannotUpdateShiftToOtherTenantCast() {
     String ownCastId = createCastAs(TENANT_A, "自店キャスト（付替元）");
     String shiftId = createShiftAs(TENANT_A, ownCastId, "2026-07-13", "18:00:00", "23:00:00");
-    String foreignCastId = createCastAs(TENANT_B, "他店キャスト（付替先）");
+    String foreignCastId = createForeignCast("他店キャスト（付替先）");
 
     ResponseEntity<JsonNode> put =
         rest.exchange(
