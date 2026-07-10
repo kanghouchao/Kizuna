@@ -81,4 +81,6 @@ Then invoke the **retro** skill — the run is not closed until its friction is 
 
 ## Ground rules
 
-Exit-code-only judgement, `${VAR:-default}` credentials, and the forbidden-git list are repo-wide law — root `CLAUDE.md`. Never commit `docs/plans/`, `docs/superpowers/`, `docs/agents/`.
+Exit-code-only judgement, `${VAR:-default}` credentials, and the forbidden-git list are repo-wide law — root `CLAUDE.md`.
+
+Lasting working docs live under `docs/`, never in a system temp dir (`/var/folders`, `/private/tmp`): plans in `docs/plans/`, investigation/diagnostic notes in `docs/research/`. The scratchpad holds only consumed-once throwaway (a PR body, an issue body) — anything a later step or a human might reread belongs under `docs/`. Never commit `docs/plans/`, `docs/agents/`, `docs/superpowers/`, `docs/research/` — all git-excluded.
