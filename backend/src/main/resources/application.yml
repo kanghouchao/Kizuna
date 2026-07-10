@@ -92,8 +92,8 @@ app:
   upload:
     endpoint: ${UPLOAD_S3_ENDPOINT:http://localhost:9000}
     bucket: ${UPLOAD_S3_BUCKET:uploads}
-    access-key: ${UPLOAD_S3_ACCESS_KEY:}
-    secret-key: ${UPLOAD_S3_SECRET_KEY:}
+    access-key: ${UPLOAD_S3_ACCESS_KEY:minioadmin}
+    secret-key: ${UPLOAD_S3_SECRET_KEY:changeme}
     url-prefix: ${UPLOAD_URL_PREFIX:/static/uploads/}
     max-file-size: ${UPLOAD_MAX_FILE_SIZE:10485760}
     allowed-types:
