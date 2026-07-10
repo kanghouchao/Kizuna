@@ -35,7 +35,11 @@ public class AppProperties {
   @Setter
   public static class Upload {
     private String basePath = "/data/uploads";
-    private String urlPrefix = "/static/";
+    private String endpoint = "http://localhost:9000";
+    private String bucket = "uploads";
+    private String accessKey;
+    private String secretKey;
+    private String urlPrefix = "/static/uploads/";
     private long maxFileSize = 10485760;
     private List<String> allowedTypes =
         List.of("image/jpeg", "image/png", "image/gif", "image/webp");
