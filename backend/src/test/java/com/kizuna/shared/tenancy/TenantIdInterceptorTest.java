@@ -15,6 +15,7 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
+import org.springframework.web.method.HandlerMethod;
 
 class TenantIdInterceptorTest {
 
@@ -42,6 +43,18 @@ class TenantIdInterceptorTest {
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
+  /** テスト用ハンドラ: {@link TenantOptional} の有無を切り替えて HandlerMethod を組み立てるための土台。 */
+  static class Handlers {
+    @TenantOptional
+    public void optional() {}
+
+    public void required() {}
+  }
+
+  private HandlerMethod handlerMethod(String methodName) throws NoSuchMethodException {
+    return new HandlerMethod(new Handlers(), Handlers.class.getMethod(methodName));
+  }
+
   @Test
   @DisplayName("X-Role が tenant かつ X-Tenant-ID が数値ならテナント文脈を設定すること")
   void preHandle_setsTenantIdForTenantRole() {
@@ -56,28 +69,32 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("X-Role が tenant でなければテナント文脈を設定しないこと")
+  @DisplayName("X-Role が tenant でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
   void preHandle_ignoresNonTenantRole() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "central");
     request.addHeader("X-Tenant-ID", "42");
+    MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+    boolean result = interceptor.preHandle(request, response, new Object());
 
-    assertThat(result).isTrue();
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
     assertThat(tenantContext.isTenant()).isFalse();
   }
 
   @Test
-  @DisplayName("X-Tenant-ID が数値でなければテナント文脈を設定しないこと")
+  @DisplayName("X-Tenant-ID が数値でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
   void preHandle_ignoresNonNumericTenantId() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "tenant");
     request.addHeader("X-Tenant-ID", "abc");
+    MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+    boolean result = interceptor.preHandle(request, response, new Object());
 
-    assertThat(result).isTrue();
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
     assertThat(tenantContext.isTenant()).isFalse();
   }
 
@@ -159,6 +176,45 @@ class TenantIdInterceptorTest {
     authenticateWithTenantId(1L);
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Tenant-ID", "2");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("テナント文脈を解決できなくても @TenantOptional 付きハンドラは素通りし、文脈を設定しないこと")
+  void preHandle_allowsTenantOptionalHandlerWhenContextUnresolved() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, handlerMethod("optional"));
+
+    assertThat(result).isTrue();
+    assertThat(response.getStatus()).isEqualTo(200);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("テナント文脈を解決できず @TenantOptional も無いハンドラは 403 で拒否すること")
+  void preHandle_rejectsNonOptionalHandlerWhenContextUnresolved() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, handlerMethod("required"));
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("ハンドラが HandlerMethod でなく文脈も解決できない場合は 403 で拒否すること")
+  void preHandle_rejectsNonHandlerMethodWhenContextUnresolved() {
+    MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
