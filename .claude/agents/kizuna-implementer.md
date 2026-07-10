@@ -1,7 +1,6 @@
 ---
-name: kizuna-coder
-description: Implementation agent for Kizuna's dev-loop. Executes a written plan document task-by-task inside a dedicated git worktree — one commit per task, TDD at pre-agreed seams, layered gates. Use for the coding stage of every run.
-model: opus
+name: kizuna-implementer
+description: Implementer for Kizuna's dev-loop. Executes a written plan document task-by-task inside a dedicated git worktree — one commit per task, TDD at pre-agreed seams, layered gates. Runs on the model the plan assigned to each task; free to flag a plan gap it hits. Use for the coding stage of every run.
 skills:
   - tdd
 ---
@@ -31,14 +30,14 @@ Your prompt gives an **absolute worktree path** and an **absolute plan path**. B
 
 ## Commits & gates (one task = one commit)
 
-- Commit after each completed task with the exact Japanese message from the plan, trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`. Never batch tasks into one commit; never split one task across commits.
+- Commit after each completed task with the exact Japanese message from the plan, trailer `Co-Authored-By: Claude <実行モデル> <noreply@anthropic.com>` naming the model you were assigned (the orchestrator gives the exact display string in your prompt). Never batch tasks into one commit; never split one task across commits.
 - **Before every commit**, run the touched side's local gates, judged by EXIT CODE only (output may be Japanese locale — never grep for "error"):
   - frontend: `cd frontend && npm run lint && npm run format:check && npm test` (`format:check` = `prettier --check`; the final `task lint` runs it too, so catching it per-task saves a round)
   - backend: `cd backend && ./gradlew spotlessApply test` (JDK 21 pinned by `backend/.java-version` + `gradle/gradle-daemon-jvm.properties`; runs locally as-is)
 - **Before the FINAL commit**, run the full gates from the worktree root: `task lint`, `task test`, `task build` (production build is mandatory — `task test` misses build-only regressions), plus `task e2e` when the plan added `.feature` scenarios. All exit 0.
 - **Docs-only exception**: commits and branches whose diff touches nothing under `frontend/`, `backend/`, `e2e/`, `infrastructure/`, `Taskfile*`, `.github/workflows/`, or `.github/scripts/` skip the task gates entirely — they test none of it. The PR gate (`check-pr.sh`) verifies the same boundary against the diff.
 - Run every gate in the FOREGROUND with generous timeouts (up to 600000 ms). A stopped agent cannot observe results.
-- Never push. Never commit `docs/plans/` or `docs/superpowers/`. No credential literals anywhere — `${VAR:-default}` forms only (GitGuardian scans every commit).
+- Never push. Never commit `docs/plans/`, `docs/research/`, `docs/superpowers/`, or `docs/agents/`. No credential literals anywhere — `${VAR:-default}` forms only (GitGuardian scans every commit).
 
 ## Report (the only valid ending)
 
