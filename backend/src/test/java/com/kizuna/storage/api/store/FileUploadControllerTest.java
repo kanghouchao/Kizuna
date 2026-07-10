@@ -88,7 +88,7 @@ class FileUploadControllerTest {
 
     assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
     verify(fileStorageService).store("central", "public", file);
-    assertThat(res.getBody().getUrl()).isEqualTo("/static/public/central/x.jpg");
+    assertThat(res.getBody().getUrl()).isEqualTo("/static/uploads/public/central/x.jpg");
   }
 
   @Test

@@ -26,6 +26,7 @@ dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.16"
         mavenBom "org.springframework.modulith:spring-modulith-bom:1.4.12"
+        mavenBom "software.amazon.awssdk:bom:2.47.4"
     }
 }
 
@@ -61,6 +62,10 @@ dependencies {
     implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.15.4'
     implementation 'org.mapstruct:mapstruct:1.6.3'
     implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
+    // S3 互換オブジェクトストレージ（MinIO）連携。s3 モジュールは HTTP クライアント実装を test スコープでしか
+    // 宣言しないため、同期クライアント用に url-connection-client を明示的に追加する（version は BOM で解決）。
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:url-connection-client'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
