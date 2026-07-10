@@ -37,7 +37,7 @@ class TenantCreatedListenerTest {
         .send(
             eq("owner@example.com"),
             eq("[きずな] テナント登録のご案内"),
-            contains("https://store1.example.com/tenant/init-admin-user?token=tok-123"));
+            contains("https://store1.example.com/register?token=tok-123"));
   }
 
   @Test
