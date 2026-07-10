@@ -15,3 +15,7 @@ Thumbs.db
 docs/plans/
 docs/agents/
 docs/superpowers/
+docs/research/
+
+# dev-loop の worktree（プロジェクト内 .worktrees/ に置き、git 追跡対象外にする）
+/.worktrees/
