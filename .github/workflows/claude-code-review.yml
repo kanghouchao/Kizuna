@@ -87,3 +87,29 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 
+      # claude-code-action は結果 JSON の subtype=="success" だけで成否を判定し is_error を見ない
+      # （base-action の run-claude-sdk.ts）。そのため認証切れ等（subtype:"success" かつ is_error:true）でも
+      # ステップが緑になり、レビュー未実行が沈黙する。execution_file を読み is_error=true なら job を明示的に
+      # 失敗させ、SDK が返した実際のエラー文言（コンソールには出ない）を surface する。
+      - name: Assert review actually ran
+        if: ${{ !cancelled() && steps.gate.outputs.proceed == 'true' }}
+        env:
+          EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
+        run: |
+          if [ -z "$EXECUTION_FILE" ] || [ ! -f "$EXECUTION_FILE" ]; then
+            echo "::error::claude-review の execution_file が見つかりません。レビューが実行されたか検証できないため失敗させます。"
+            exit 1
+          fi
+          # jq の // は false も空扱いにするため、is_error(真偽値) は if で明示分類する（false を missing 扱いしない）
+          is_error=$(jq -r '(map(select(.type=="result"))[0]) as $r | if $r == null then "missing" elif $r.is_error == true then "true" else "false" end' "$EXECUTION_FILE")
+          result_text=$(jq -r 'map(select(.type=="result"))[0].result // "(結果テキストなし)"' "$EXECUTION_FILE")
+          if [ "$is_error" = "true" ]; then
+            echo "::error::claude-review の SDK 実行が is_error=true。action は subtype==success のため緑を報告するが、レビューは実行されていない。原因: ${result_text}"
+            exit 1
+          fi
+          if [ "$is_error" = "missing" ]; then
+            echo "::error::claude-review の実行ログに result メッセージが無い。異常終了の可能性があるため失敗させます。"
+            exit 1
+          fi
+          echo "claude-review: is_error=false — レビューが正常に実行されました。"
+
