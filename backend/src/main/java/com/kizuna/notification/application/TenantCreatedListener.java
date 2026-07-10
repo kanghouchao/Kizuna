@@ -1,5 +1,6 @@
 package com.kizuna.notification.application;
 
+import com.kizuna.auth.AuthPaths;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.tenant.domain.event.TenantCreatedEvent;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,8 @@ public class TenantCreatedListener {
     String subject = "[きずな] テナント登録のご案内";
     String link =
         String.format(
-            "%s://%s/init-admin-use?token=%s", appProperties.getScheme(), ev.domain(), ev.token());
+            "%s://%s%s?token=%s",
+            appProperties.getScheme(), ev.domain(), AuthPaths.INIT_ADMIN_USER_PATH, ev.token());
     String body =
         String.format(
             "きずなへようこそ, %s，\n\n登録を完了するには次のリンクをクリックしてください： %s \n\nこのリンクは7日間有効です。", ev.name(), link);

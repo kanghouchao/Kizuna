@@ -1,5 +1,6 @@
 package com.kizuna.auth.api.store;
 
+import com.kizuna.auth.AuthPaths;
 import com.kizuna.auth.api.dto.LoginRequest;
 import com.kizuna.auth.api.dto.PasswordChangeRequest;
 import com.kizuna.auth.api.dto.TenantRegisterRequest;
@@ -58,7 +59,7 @@ public class AuthController {
     return ResponseEntity.noContent().build();
   }
 
-  @PostMapping("/init-admin-user")
+  @PostMapping(AuthPaths.INIT_ADMIN_USER)
   @PermitAll
   @TenantOptional
   public ResponseEntity<TenantRegisterResponse> initializeAdminUser(
