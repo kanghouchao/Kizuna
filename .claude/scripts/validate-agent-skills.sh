@@ -27,8 +27,17 @@ infos = []
 
 def strip_item(raw):
     s = raw.strip()
-    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
-        s = s[1:-1]
+    # クォート付き（`"x" # c` 等）: 内側の値を取り出す。閉じクォート後の行内コメントは許容する
+    m = re.match(r"^(['\"])(.*?)\1\s*(?:#.*)?$", s)
+    if m:
+        return m.group(2)
+    # 非クォート: 行全体がコメントなら空エントリ扱い
+    if s.startswith("#"):
+        return ""
+    # 空白+# 以降は行内コメントとして除去する（`foo#bar` のように空白を伴わない # は名前の一部）
+    m = re.search(r"\s+#", s)
+    if m:
+        return s[: m.start()]
     return s
 
 for path in sorted(glob.glob(os.path.join(agents_dir, "*.md"))):
@@ -71,9 +80,13 @@ for path in sorted(glob.glob(os.path.join(agents_dir, "*.md"))):
         m = re.match(r"^\s+-\s*(.+)$", line)
         if not m:
             break
-        entries.append(strip_item(m.group(1)))
+        raw_entry = m.group(1)
+        entries.append((raw_entry, strip_item(raw_entry)))
 
-    for entry in entries:
+    for raw_entry, entry in entries:
+        if not entry:
+            errors.append(f"{name}: skills エントリが不正です（空、またはコメントのみ）: {raw_entry!r}")
+            continue
         if ":" in entry:
             infos.append(f"{name}: {entry} は名前空間付き参照のため skip（CI ではプラグイン導入状態を検証不可）")
             continue
