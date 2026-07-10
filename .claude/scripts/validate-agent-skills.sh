@@ -72,16 +72,26 @@ for path in sorted(glob.glob(os.path.join(agents_dir, "*.md"))):
         errors.append(f"{name}: skills: が未対応形式です（ブロックリストのみサポート）: {front[skills_idx]!r}")
         continue
 
-    # 後続のブロックリスト項目（`  - name`）を収集（空行・コメント行はブロック終端とみなさずスキップ）
+    # 後続のブロックリスト項目（`  - name`）を収集する。
+    # ・空行/コメント行はスキップ（ブロック終端にしない）。
+    # ・非インデント行（次のトップレベルキー）のときだけブロック終端とする。
+    # ・`-` のみの行（YAML null item）や、項目にもコメントにも一致しないインデント行は、
+    #   黙って走査を打ち切らずエラーとして記録したうえで走査を継続する（#290）。
     entries = []
     for line in front[skills_idx + 1:]:
         if not line.strip() or re.match(r"^\s*#", line):
             continue
-        m = re.match(r"^\s+-\s*(.+)$", line)
-        if not m:
+        if re.match(r"^\S", line):
             break
-        raw_entry = m.group(1)
-        entries.append((raw_entry, strip_item(raw_entry)))
+        m = re.match(r"^\s+-\s*(.+)$", line)
+        if m:
+            raw_entry = m.group(1)
+            entries.append((raw_entry, strip_item(raw_entry)))
+            continue
+        if re.match(r"^\s+-\s*$", line):
+            errors.append(f"{name}: skills エントリが不正です（null item）: {line!r}")
+            continue
+        errors.append(f"{name}: skills ブロック内の行を解釈できません: {line!r}")
 
     for raw_entry, entry in entries:
         if not entry:
