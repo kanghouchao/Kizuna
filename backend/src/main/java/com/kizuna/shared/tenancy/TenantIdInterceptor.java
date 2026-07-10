@@ -11,6 +11,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 @Log4j2
@@ -48,8 +49,17 @@ public class TenantIdInterceptor implements HandlerInterceptor {
         && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID))
         && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
       this.tenantContext.setTenantId(Long.parseLong(request.getHeader(HEADER_TENANT_ID)));
+      return true;
     }
-    return true;
+    // JWT claim・ヘッダのいずれからもテナント文脈を解決できなかった。文脈が無いまま素通りさせると
+    // tenantFilter が有効化されず @TenantScoped クエリが全テナントの行を返す（fail-open）ため、
+    // @TenantOptional を明示したエンドポイントに限り許可し、それ以外は 403 で拒否する（fail-closed）。
+    if (handler instanceof HandlerMethod handlerMethod
+        && handlerMethod.hasMethodAnnotation(TenantOptional.class)) {
+      return true;
+    }
+    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+    return false;
   }
 
   /**
