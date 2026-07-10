@@ -7,8 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.api.dto.ShiftResponse;
@@ -20,10 +24,12 @@ import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -36,6 +42,8 @@ class ShiftServiceTest {
   @Mock private TenantContext tenantContext;
   @Mock private TenantRepository tenantRepository;
   @Mock private CastService castService;
+  @Mock private CastRepository castRepository;
+  @Mock private AppProperties appProperties;
 
   @InjectMocks private ShiftService shiftService;
 
@@ -242,5 +250,96 @@ class ShiftServiceTest {
     assertThatThrownBy(() -> shiftService.delete("missing"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("シフトが見つかりません");
+  }
+
+  private Cast activeCast(String id, String name, String photoUrl) {
+    Cast cast = Cast.builder().name(name).photoUrl(photoUrl).build();
+    cast.setId(id);
+    return cast;
+  }
+
+  @Test
+  void listPublicToday_joinsCastInfoAndPreservesRepoOrder() {
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    Shift first =
+        Shift.builder()
+            .castId("cA")
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(20, 0))
+            .build();
+    Shift second =
+        Shift.builder()
+            .castId("cB")
+            .startTime(LocalTime.of(21, 0))
+            .endTime(LocalTime.of(23, 0))
+            .build();
+    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+        .thenReturn(List.of(first, second));
+    when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
+        .thenReturn(List.of(activeCast("cA", "キャストA", "urlA"), activeCast("cB", "キャストB", "urlB")));
+
+    List<PublicShiftResponse> result = shiftService.listPublicToday();
+
+    assertThat(result).hasSize(2);
+    assertThat(result.get(0).getCastId()).isEqualTo("cA");
+    assertThat(result.get(0).getCastName()).isEqualTo("キャストA");
+    assertThat(result.get(0).getCastPhotoUrl()).isEqualTo("urlA");
+    assertThat(result.get(0).getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(result.get(0).getEndTime()).isEqualTo(LocalTime.of(20, 0));
+    assertThat(result.get(1).getCastId()).isEqualTo("cB");
+    assertThat(result.get(1).getCastName()).isEqualTo("キャストB");
+    assertThat(result.get(1).getCastPhotoUrl()).isEqualTo("urlB");
+  }
+
+  @Test
+  void listPublicToday_queriesTodayInConfiguredTimezoneWithConfirmedStatus() {
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    LocalDate expectedToday = LocalDate.now(ZoneId.of("Asia/Tokyo"));
+    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+        .thenReturn(List.of());
+
+    shiftService.listPublicToday();
+
+    ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
+    ArgumentCaptor<String> statusCaptor = ArgumentCaptor.forClass(String.class);
+    verify(shiftRepository)
+        .findByWorkDateAndStatusOrderByStartTimeAsc(dateCaptor.capture(), statusCaptor.capture());
+    assertThat(dateCaptor.getValue()).isEqualTo(expectedToday);
+    assertThat(statusCaptor.getValue()).isEqualTo("CONFIRMED");
+  }
+
+  @Test
+  void listPublicToday_excludesShiftsWhoseCastIsNotActive() {
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    Shift active =
+        Shift.builder()
+            .castId("cA")
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(20, 0))
+            .build();
+    Shift orphan =
+        Shift.builder()
+            .castId("cGhost")
+            .startTime(LocalTime.of(19, 0))
+            .endTime(LocalTime.of(21, 0))
+            .build();
+    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+        .thenReturn(List.of(active, orphan));
+    when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
+        .thenReturn(List.of(activeCast("cA", "キャストA", "urlA")));
+
+    List<PublicShiftResponse> result = shiftService.listPublicToday();
+
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getCastId()).isEqualTo("cA");
+  }
+
+  @Test
+  void listPublicToday_returnsEmptyWhenNoConfirmedShifts() {
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+        .thenReturn(List.of());
+
+    assertThat(shiftService.listPublicToday()).isEmpty();
   }
 }

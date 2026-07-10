@@ -18,6 +18,9 @@ public class AppProperties {
 
   private String tenantCreatorCachePerfix = "tenant:creator:";
 
+  /** 「本日」判定に用いるタイムゾーン。公開出勤表などの当日算出に使用する。 */
+  private String timezone = "Asia/Tokyo";
+
   /** app.jwt.* */
   private Jwt jwt = new Jwt();
 

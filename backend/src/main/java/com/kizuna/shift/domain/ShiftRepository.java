@@ -9,4 +9,6 @@ public interface ShiftRepository
     extends JpaRepository<Shift, String>, JpaSpecificationExecutor<Shift> {
 
   List<Shift> findByWorkDateBetween(LocalDate from, LocalDate to);
+
+  List<Shift> findByWorkDateAndStatusOrderByStartTimeAsc(LocalDate workDate, String status);
 }

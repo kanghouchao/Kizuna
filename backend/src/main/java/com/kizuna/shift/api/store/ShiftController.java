@@ -1,9 +1,11 @@
 package com.kizuna.shift.api.store;
 
+import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.application.ShiftService;
+import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -55,5 +57,11 @@ public class ShiftController {
   public ResponseEntity<Void> delete(@PathVariable String id) {
     shiftService.delete(id);
     return ResponseEntity.ok().build();
+  }
+
+  @GetMapping("/public")
+  @PermitAll
+  public ResponseEntity<List<PublicShiftResponse>> listPublic() {
+    return ResponseEntity.ok(shiftService.listPublicToday());
   }
 }
