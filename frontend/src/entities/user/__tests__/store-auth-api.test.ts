@@ -7,7 +7,7 @@ jest.mock('@/shared/api/client', () => ({
     put: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
     post: jest.fn(async (url: string, _data?: any) => ({
       data:
-        url === '/tenant/init-admin-use'
+        url === '/tenant/init-admin-user'
           ? {
               tenant_domain: 'tenant.example.com',
               login_url: 'https://tenant.example.com/login',
@@ -21,7 +21,7 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('tenant api', () => {
-  it('register returns data from /tenant/init-admin-use', async () => {
+  it('register returns data from /tenant/init-admin-user', async () => {
     const res = await storeAuthApi.register({} as any);
     expect(res).toEqual({
       tenant_domain: 'tenant.example.com',
