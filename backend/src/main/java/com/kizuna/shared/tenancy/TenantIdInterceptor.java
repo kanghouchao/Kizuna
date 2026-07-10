@@ -30,25 +30,49 @@ public class TenantIdInterceptor implements HandlerInterceptor {
       @NonNull HttpServletRequest request,
       @NonNull HttpServletResponse response,
       @NonNull Object handler) {
-    Long jwtTenantId = authenticatedTenantId();
+    Claims claims = authenticatedClaims();
+    Long jwtTenantId = claims == null ? null : claims.get("tenantId", Long.class);
     if (jwtTenantId != null) {
       // 認証済みテナント JWT: claim を正としてテナント文脈を確定する。ヘッダの有無・形式には依存させない
       // （X-Role/X-Tenant-ID を省略・改変してこの検証と分離を素通りされるのを防ぐため）。
       String headerTenantId = request.getHeader(HEADER_TENANT_ID);
-      if (StringUtils.isNumeric(headerTenantId)
-          && !jwtTenantId.equals(Long.parseLong(headerTenantId))) {
-        // X-Tenant-ID が別テナントを指す明確な詐称は拒否する。
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        return false;
+      if (StringUtils.isNumeric(headerTenantId)) {
+        Long headerValue = tryParseTenantId(headerTenantId);
+        if (headerValue == null) {
+          // 全桁数字だが long 範囲外。素の 500 を避けクリーンに 400 で拒否する（#288）。
+          response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+          return false;
+        }
+        if (!jwtTenantId.equals(headerValue)) {
+          // X-Tenant-ID が別テナントを指す明確な詐称は拒否する。
+          response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+          return false;
+        }
       }
       this.tenantContext.setTenantId(jwtTenantId);
       return true;
     }
-    // 認証前（ログイン等）または tenantId claim を持たないトークン: 従来通りヘッダのみで信用する。
-    if (HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
-        && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID))
+    boolean claimsTenantHeaderPresent =
+        HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
+            && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID));
+    if (claims != null) {
+      // 認証済みだが tenantId claim を持たない（央端 CentralAuth 発行、または tenantId 無しの legacy）。
+      // ヘッダでテナントを名乗る主張は詐称として 403 で拒否する（#294）。詐称ヘッダが無ければ下の
+      // @TenantOptional 判定に委ね、央端の正当な素通り（例: /files/upload の central 保存）を保つ。
+      if (claimsTenantHeaderPresent) {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        return false;
+      }
+    } else if (claimsTenantHeaderPresent
         && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
-      this.tenantContext.setTenantId(Long.parseLong(request.getHeader(HEADER_TENANT_ID)));
+      // 未認証（ログイン前・公開ページ）だけがヘッダのみでテナントを名乗れる。
+      Long headerValue = tryParseTenantId(request.getHeader(HEADER_TENANT_ID));
+      if (headerValue == null) {
+        // 全桁数字だが long 範囲外（#288）。
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        return false;
+      }
+      this.tenantContext.setTenantId(headerValue);
       return true;
     }
     // JWT claim・ヘッダのいずれからもテナント文脈を解決できなかった。文脈が無いまま素通りさせると
@@ -63,15 +87,24 @@ public class TenantIdInterceptor implements HandlerInterceptor {
   }
 
   /**
-   * 認証済みリクエストの JWT に埋め込まれた tenantId claim を返す。未認証、または details に {@link Claims}
-   * を持たない（匿名認証やログイン前など）場合は null を返し、呼び出し側は従来通りヘッダのみで文脈を設定する。
+   * 認証済みリクエストの JWT Claims（JwtAuthenticationFilter が details に載せたもの）を返す。 未認証、または details に {@link
+   * Claims} を持たない（匿名認証やログイン前など）場合は null。
    */
-  private Long authenticatedTenantId() {
+  private Claims authenticatedClaims() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication != null && authentication.getDetails() instanceof Claims claims) {
-      return claims.get("tenantId", Long.class);
+      return claims;
     }
     return null;
+  }
+
+  /** 全桁数字の文字列を long に変換する。long 範囲を超える場合は null（呼び出し側が 400 を返す）。 */
+  private static Long tryParseTenantId(String numericValue) {
+    try {
+      return Long.parseLong(numericValue);
+    } catch (NumberFormatException e) {
+      return null;
+    }
   }
 
   @Override

@@ -43,6 +43,16 @@ class TenantIdInterceptorTest {
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
+  /** 認証済みだが tenantId claim を持たない Claims（央端 / legacy）を模擬する。 */
+  private void authenticateWithoutTenantId() {
+    Claims claims = Jwts.claims().issuer("CentralAuth").build();
+    PreAuthenticatedAuthenticationToken authentication =
+        new PreAuthenticatedAuthenticationToken(
+            "user", "token", List.of(new SimpleGrantedAuthority("CENTRAL_USER")));
+    authentication.setDetails(claims);
+    SecurityContextHolder.getContext().setAuthentication(authentication);
+  }
+
   /** テスト用ハンドラ: {@link TenantOptional} の有無を切り替えて HandlerMethod を組み立てるための土台。 */
   static class Handlers {
     @TenantOptional
@@ -221,6 +231,53 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("認証済みだが tenantId claim が無いトークンが X-Role:tenant で別テナントを名乗ると 403 で拒否すること（#294）")
+  void preHandle_rejectsAuthenticatedTokenWithoutTenantIdClaimSpoofingHeader() {
+    authenticateWithoutTenantId();
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "2");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("未認証で X-Tenant-ID が long 範囲を超える桁数なら 400 で拒否すること（#288）")
+  void preHandle_rejectsOverflowingTenantIdHeaderWith400() {
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "99999999999999999999");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(400);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("認証済みテナント JWT でも X-Tenant-ID が long 範囲を超えるなら 400 で拒否すること（#288）")
+  void preHandle_rejectsOverflowingHeaderForAuthenticatedTenant() {
+    authenticateWithTenantId(1L);
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "99999999999999999999");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(400);
     assertThat(tenantContext.isTenant()).isFalse();
   }
 
