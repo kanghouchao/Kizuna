@@ -47,9 +47,6 @@ artifacts/
 Dockerfile*
 .dockerignore
 
-# Documentation
-*.md
-
 # Temporary files
 *.tmp
 *.temp

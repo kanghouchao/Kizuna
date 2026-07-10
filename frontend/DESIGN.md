@@ -4,10 +4,10 @@ Design rules for all UI work. Structure follows the DESIGN.md convention (design
 
 ## Scope: two visual worlds
 
-| World | Source of truth | Where styles live |
-|---|---|---|
+| World                                                                                 | Source of truth                                                                                                                      | Where styles live                                                                           |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | **Admin UI** (central + tenant management screens: dashboards, lists, settings forms) | Figma file `5r40p5muNqFxwZLa5itKB8` (page 総合ダッシュボード). Screens not yet designed in Figma are extrapolated from these tokens. | Tailwind semantic classes (default v4 palette — the Figma design uses exactly these values) |
-| **Public storefront** (`_pages/store-site/templates/**`) | Template code itself; per-template `theme.css` tokens | `templates/<key>/theme.css` CSS custom properties + shared `_sections/` components |
+| **Public storefront** (`_pages/store-site/templates/**`)                              | Template code itself; per-template `theme.css` tokens                                                                                | `templates/<key>/theme.css` CSS custom properties + shared `_sections/` components          |
 
 Never mix the two vocabularies: no gold-serif storefront styling in admin screens, no admin blue/gray cards in storefront templates.
 
@@ -15,41 +15,41 @@ Never mix the two vocabularies: no gold-serif storefront styling in admin screen
 
 ### Admin UI (Tailwind semantic classes only — never raw hex)
 
-| Token | Tailwind | Usage rules |
-|---|---|---|
-| Page background | `bg-gray-50` | App shell behind cards |
-| Surface | `bg-white` | Cards, sidebar, header |
-| Border | `border-gray-200` | Card and input borders |
-| Text primary | `text-gray-900` | Headings, key figures |
-| Text secondary | `text-gray-600` | Labels, body |
-| Text muted | `text-gray-500` | Hints, "vs 先月"-style annotations |
-| **Primary** | `blue-600` (`text-blue-600`, `bg-blue-600`) | CTAs, links, active states, progress fill. **Primary is blue, not indigo** — new screens use blue-600; existing indigo-600 usages are migrated opportunistically in PRs that already touch them (no dedicated recolor PRs) |
-| Primary tint | `bg-blue-50` | Active nav background, rank chips |
-| Success | `green-600` text / `bg-green-100 text-green-800` pill | Positive trends; 確定 status |
-| Warning | `bg-yellow-100 text-yellow-800` pill | 保留 status |
-| Danger | `red-600` | Destructive actions, errors |
-| Icon chips | `bg-blue-500` / `bg-green-500` / `bg-orange-500` / `bg-purple-500` | Stat-card icons; one hue per metric, white icon |
+| Token           | Tailwind                                                           | Usage rules                                                                                                                                                                                                                |
+| --------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page background | `bg-gray-50`                                                       | App shell behind cards                                                                                                                                                                                                     |
+| Surface         | `bg-white`                                                         | Cards, sidebar, header                                                                                                                                                                                                     |
+| Border          | `border-gray-200`                                                  | Card and input borders                                                                                                                                                                                                     |
+| Text primary    | `text-gray-900`                                                    | Headings, key figures                                                                                                                                                                                                      |
+| Text secondary  | `text-gray-600`                                                    | Labels, body                                                                                                                                                                                                               |
+| Text muted      | `text-gray-500`                                                    | Hints, "vs 先月"-style annotations                                                                                                                                                                                         |
+| **Primary**     | `blue-600` (`text-blue-600`, `bg-blue-600`)                        | CTAs, links, active states, progress fill. **Primary is blue, not indigo** — new screens use blue-600; existing indigo-600 usages are migrated opportunistically in PRs that already touch them (no dedicated recolor PRs) |
+| Primary tint    | `bg-blue-50`                                                       | Active nav background, rank chips                                                                                                                                                                                          |
+| Success         | `green-600` text / `bg-green-100 text-green-800` pill              | Positive trends; 確定 status                                                                                                                                                                                               |
+| Warning         | `bg-yellow-100 text-yellow-800` pill                               | 保留 status                                                                                                                                                                                                                |
+| Danger          | `red-600`                                                          | Destructive actions, errors                                                                                                                                                                                                |
+| Icon chips      | `bg-blue-500` / `bg-green-500` / `bg-orange-500` / `bg-purple-500` | Stat-card icons; one hue per metric, white icon                                                                                                                                                                            |
 
 ### Public storefront (three templates)
 
 Each template owns a `templates/<key>/theme.css` that defines the same `--storefront-*` token contract on a `.storefront-<key>` class; the shared `_sections/` read only these tokens — never raw hex/rgba (sections use `var()` for solid colors and `color-mix(in srgb, var(--token) N%, transparent)` for opacities). Templates differ only via token values and page layout, never by forking `_sections/`. New color needs = a new `--storefront-*` token added to **all** template theme.css files in the same PR, never inline hex in sections.
 
-| token | default (dark luxury) | modern (dark vivid) | classic (light) |
-|---|---|---|---|
-| `--storefront-bg` | `#080808` | `#0b0b12` | `#faf7f2` |
-| `--storefront-fg` | `#f8f4f0` | `#f2eff4` | `#2a2a28` |
-| `--storefront-accent` | `#c9a84c` gold | `#e64980` rose | `#4e8da6` teal |
-| `--storefront-muted` | `#a89880` | `#8a87a0` | `#7a776e` |
-| `--storefront-neutral` | `#484848` | `#3a3a48` | `#d8d4cc` |
-| `--storefront-subtle` | `#252525` | `#1e1e29` | `#ebe7e1` |
-| `--storefront-danger` | `#8b1a2e` | `#8b1a2e` | `#b0453a` |
-| `--storefront-bg-deep` | `#050505` | `#07070c` | `#efe8dc` |
-| `--storefront-surface-1` | `#0a0a0a` | `#10101a` | `#f4f0e9` |
-| `--storefront-surface-2` | `#0d0d0d` | `#13131e` | `#f0ebe2` |
-| `--storefront-surface-3` | `#0f0f0f` | `#161622` | `#ece6db` |
-| `--storefront-line` | `#2a2a2a` | `#24242f` | `#e2ddd3` |
-| `--storefront-bg-glow` | `#130d08` | `#170d14` | `#fffdf8` |
-| `--storefront-hairline` | `rgba(255,255,255,0.04)` | `rgba(255,255,255,0.05)` | `rgba(0,0,0,0.06)` |
+| token                       | default (dark luxury)       | modern (dark vivid)             | classic (light)             |
+| --------------------------- | --------------------------- | ------------------------------- | --------------------------- |
+| `--storefront-bg`           | `#080808`                   | `#0b0b12`                       | `#faf7f2`                   |
+| `--storefront-fg`           | `#f8f4f0`                   | `#f2eff4`                       | `#2a2a28`                   |
+| `--storefront-accent`       | `#c9a84c` gold              | `#e64980` rose                  | `#4e8da6` teal              |
+| `--storefront-muted`        | `#a89880`                   | `#8a87a0`                       | `#7a776e`                   |
+| `--storefront-neutral`      | `#484848`                   | `#3a3a48`                       | `#d8d4cc`                   |
+| `--storefront-subtle`       | `#252525`                   | `#1e1e29`                       | `#ebe7e1`                   |
+| `--storefront-danger`       | `#8b1a2e`                   | `#8b1a2e`                       | `#b0453a`                   |
+| `--storefront-bg-deep`      | `#050505`                   | `#07070c`                       | `#efe8dc`                   |
+| `--storefront-surface-1`    | `#0a0a0a`                   | `#10101a`                       | `#f4f0e9`                   |
+| `--storefront-surface-2`    | `#0d0d0d`                   | `#13131e`                       | `#f0ebe2`                   |
+| `--storefront-surface-3`    | `#0f0f0f`                   | `#161622`                       | `#ece6db`                   |
+| `--storefront-line`         | `#2a2a2a`                   | `#24242f`                       | `#e2ddd3`                   |
+| `--storefront-bg-glow`      | `#130d08`                   | `#170d14`                       | `#fffdf8`                   |
+| `--storefront-hairline`     | `rgba(255,255,255,0.04)`    | `rgba(255,255,255,0.05)`        | `rgba(0,0,0,0.06)`          |
 | `--storefront-font-display` | `'Noto Serif JP', …, serif` | `'Noto Sans JP', …, sans-serif` | `'Noto Serif JP', …, serif` |
 
 `surface-1/2/3` step away from `bg` toward higher contrast (dark templates lighten, classic sinks). `bg-deep` is the Footer band below `bg`; `line` is a weaker border than `neutral`; `bg-glow` is the AgeVerification radial-gradient center; `hairline` is an ultra-thin rule; `subtle` is the faintest near-background text/border tone (legal fine print, copyright line).
