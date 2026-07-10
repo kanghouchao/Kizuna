@@ -63,9 +63,11 @@ for path in sorted(glob.glob(os.path.join(agents_dir, "*.md"))):
         errors.append(f"{name}: skills: が未対応形式です（ブロックリストのみサポート）: {front[skills_idx]!r}")
         continue
 
-    # 後続のブロックリスト項目（`  - name`）を収集
+    # 後続のブロックリスト項目（`  - name`）を収集（空行・コメント行はブロック終端とみなさずスキップ）
     entries = []
     for line in front[skills_idx + 1:]:
+        if not line.strip() or re.match(r"^\s*#", line):
+            continue
         m = re.match(r"^\s+-\s*(.+)$", line)
         if not m:
             break
