@@ -5,7 +5,7 @@ description: "Run Kizuna's dev loop: plan → worktree coding → QA → gated P
 
 # Dev Loop
 
-One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Stage executors: `.claude/agents/kizuna-coder.md` (code) and `.claude/agents/kizuna-qa.md` (verify); companion skills: `create-pr` (stage 5), `watch-pr` (stage 6). Issue-tracker command conventions: `docs/agents/issue-tracker.md` (local-only).
+One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Three roles, one job each: the **planner** is the orchestrator itself — it holds the run's intent and routes each task to a model, and it never hands off and leaves (it keeps designing the next task); the **implementer** (`.claude/agents/kizuna-implementer.md`) codes; the **verifier** (`.claude/agents/kizuna-verifier.md`) adversarially checks. None pins a model — the planner assigns each its model per run (Stage 2). Companion skills: `create-pr` (stage 5), `watch-pr` (stage 6). Issue-tracker command conventions: `docs/agents/issue-tracker.md` (local-only).
 
 **Entry is a converged conversation, not a cold issue.** Discussion happens outside the loop, in normal conversation; the loop starts when the user says start, and stage 1 crystallizes what was already agreed. Invoked cold — no prior discussion in context — on non-trivial or ambiguous work: discuss first (`grilling` skill — one question at a time, each with a recommended answer). The loop never starts on guesses.
 
@@ -28,13 +28,15 @@ One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Sta
   - **behavioral** (assertable by a program) → pinned as a playwright-bdd `.feature` scenario, verified by `task e2e`;
   - **visual/exploratory** (needs eyes) → QA browser run + one screenshot each.
 
-## Stage 2 — Plan (orchestrator)
+## Stage 2 — Plan (the orchestrator is the planner)
 
-Write `docs/plans/<slug>.md` (git-excluded, Japanese). Mandatory sections: **前提事実** (investigated facts with file refs — the coder trusts these) / **Tasks** (each task = exactly one commit, allowed file scope, exact Japanese commit message) / **TDD seams** (the pre-agreed seam set; the coder tests only there) / **BDD scenarios** (`.feature` path + Gherkin per behavioral criterion) / **Acceptance criteria** mapping / **Risk tier** (normal | **high-risk**: auth・permissions・DB migrations・payments・tenant isolation) / branch name (`feat/…`, `fix/…`).
+The planner is the orchestrator itself: it holds the crystallized Stage-1 context, so planning is never delegated to the implementer, and it keeps designing the next task rather than handing off and leaving. Planning is where the judgement is spent — run it on a strong model. Write `docs/plans/<slug>.md` (git-excluded, Japanese). Mandatory sections: **前提事実** (investigated facts with file refs — the implementer trusts these) / **Tasks** (each task = exactly one commit, allowed file scope, exact Japanese commit message, **実行モデル**) / **TDD seams** (the pre-agreed seam set; the implementer tests only there) / **BDD scenarios** (`.feature` path + Gherkin per behavioral criterion) / **Acceptance criteria** mapping / **Risk tier** (normal | **high-risk**: auth・permissions・DB migrations・payments・tenant isolation) / **検証モデル** (the verifier's model this run) / branch name (`feat/…`, `fix/…`).
 
-Post a short plan brief (goal, tasks, seams, risk) and continue without waiting — the next human checkpoint is ②.
+**Model routing** — the thinking lives in the plan, so a cheaper implementer only executes and reports. Set each task's 実行モデル by how much judgement the plan already nailed down (verbatim code + exact scope → `haiku`/`sonnet`; residual judgement at the seam → `opus`), NOT by how mechanical it looks; **high-risk tasks are hard-pinned to `opus`**. A same-model verifier shares the implementer's blind spots, so set 検証モデル independent of — and never weaker than — the task implementers (default `sonnet`, `opus` for high-risk). Routing to a cheap model never means "execute without thinking": the implementer stays free to flag a plan gap it hits as a deviation.
 
-## Stage 3 — Code (subagent kizuna-coder)
+Post a short plan brief (goal, tasks + per-task 実行モデル, seams, risk) and continue without waiting — the next human checkpoint is ②.
+
+## Stage 3 — Code (subagent kizuna-implementer)
 
 From the main checkout:
 
@@ -45,13 +47,13 @@ cp infrastructure/development/.env .worktrees/<branch>/infrastructure/developmen
 
 The worktree lives in `.worktrees/` inside the main checkout (git-ignored, so the main checkout stays clean); pass its **absolute** path to the subagent.
 
-Spawn `kizuna-coder` with the **absolute worktree path** and **absolute plan path**. Done when it reports: one commit per task, every gate exit code, deviations.
+Spawn `kizuna-implementer` with the **absolute worktree path**, the **absolute plan path**, and — running it on each task's assigned **実行モデル** (Agent tool `model` override) — the exact `Co-Authored-By:` trailer for that model. Consecutive same-model tasks may share one spawn; a model change starts a fresh spawn, which reads the accumulated commits + plan as its context. Done when every task is one commit, with each gate's exit code and any deviations reported.
 
-## Stage 4 — QA (subagent kizuna-qa)
+## Stage 4 — QA (subagent kizuna-verifier)
 
-Brief: absolute worktree path, the acceptance criteria with classifications, any narrowing (no UI surface → gates + `task e2e` only). Verification is fully automated — the user never tests by hand.
+Brief: absolute worktree path, the acceptance criteria with classifications, any narrowing (no UI surface → gates + `task e2e` only), and the run's **検証モデル** (Agent `model` override). Verification is fully automated — the user never tests by hand.
 
-FAIL → send the QA report verbatim to the SAME coder via SendMessage (it keeps plan + code context; spawn fresh with plan + report only if it is gone), then re-run QA. Each cycle spends budget.
+FAIL → dispatch the verifier's report verbatim to a fresh `kizuna-implementer` on the failing scope's 実行モデル (plan + report as its context; high-risk → `opus`), then re-run the verifier. Each cycle spends budget.
 
 ## Stage 5 — PR (orchestrator)
 

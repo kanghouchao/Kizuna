@@ -11,7 +11,7 @@ Input: the execution history already in context (a dev-loop run, or this session
 
 ## Steps
 
-1. **Collect friction.** Sweep the history for: plan deviations the coder reported; QA failures and their root causes; budget spent (which loop, why); gates or hooks that missed or false-fired; review-finding patterns; tooling traps hit along the way. Done when: the friction list is written out — an empty list must be argued from the history, never assumed.
+1. **Collect friction.** Sweep the history for: plan deviations the implementer reported; QA failures and their root causes; budget spent (which loop, why); gates or hooks that missed or false-fired; review-finding patterns; tooling traps hit along the way. Done when: the friction list is written out — an empty list must be argued from the history, never assumed.
 2. **Systemic check.** For each item, search open issues for siblings of the same root cause; recurring across runs = systemic → consolidate into ONE umbrella issue that names the root cause and its consumer, closing the variants into it. Done when: every item is marked local or systemic, and no two open issues share a root cause.
 3. **Land every item in exactly one destination:**
    - **Product defect** → the issue tracker IS the product's real plan: confirm its issue was filed during the run; file any missed ones (Japanese, `.github/ISSUE_TEMPLATE/bug.md` structure).
