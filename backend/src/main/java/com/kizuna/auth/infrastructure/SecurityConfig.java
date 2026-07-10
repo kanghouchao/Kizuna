@@ -1,5 +1,6 @@
 package com.kizuna.auth.infrastructure;
 
+import com.kizuna.auth.AuthPaths;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -29,7 +30,7 @@ public class SecurityConfig {
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/central/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/tenant/login"),
-    PathPatternRequestMatcher.withDefaults().matcher("/tenant/init-admin-use"),
+    PathPatternRequestMatcher.withDefaults().matcher(AuthPaths.INIT_ADMIN_USER_PATH),
     PathPatternRequestMatcher.withDefaults().matcher("/files/upload"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
