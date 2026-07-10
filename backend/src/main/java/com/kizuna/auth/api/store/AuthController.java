@@ -6,6 +6,7 @@ import com.kizuna.auth.api.dto.TenantRegisterRequest;
 import com.kizuna.auth.api.dto.TenantRegisterResponse;
 import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.auth.application.TenantAuthService;
+import com.kizuna.shared.tenancy.TenantOptional;
 import com.kizuna.tenant.domain.Tenant;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
@@ -38,6 +39,7 @@ public class AuthController {
 
   @PostMapping("/logout")
   @PermitAll
+  @TenantOptional
   public ResponseEntity<?> logout(
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
     authSessionService.invalidate(authHeader);
@@ -58,6 +60,7 @@ public class AuthController {
 
   @PostMapping("/init-admin-user")
   @PermitAll
+  @TenantOptional
   public ResponseEntity<TenantRegisterResponse> initializeAdminUser(
       @Valid @RequestBody TenantRegisterRequest tenantRegisterRequest) {
     Tenant tenant = authService.initializeAdminUser(tenantRegisterRequest);

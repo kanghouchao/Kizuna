@@ -2,6 +2,7 @@ package com.kizuna.storage.api.store;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.tenancy.TenantOptional;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class FileUploadController {
 
   @PostMapping("/upload")
   @PreAuthorize("isAuthenticated()")
+  @TenantOptional
   public ResponseEntity<FileUploadResponse> upload(
       @RequestParam("file") MultipartFile file,
       @RequestParam(value = "bucket", defaultValue = "public") String bucket) {
