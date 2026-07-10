@@ -37,6 +37,8 @@ tasks:
           echo "🧹 {{.service}} の Lint を実行中..."
           task -d "{{.service}}" lint
         else
+          echo "🧹 Repo lint..."
+          task lint-repo
           echo "🧹 すべてのサービスの Lint を実行中..."
           echo "🧹 Frontend lint..."
           task -d frontend lint
@@ -44,6 +46,16 @@ tasks:
           task -d backend lint
           echo "✅ Lint 完了"
         fi
+
+  lint-repo:
+    desc: リポジトリ横断の Lint（GitHub Actions workflows / .claude 設定）
+    cmds:
+      - echo "🧹 Workflows lint (actionlint)..."
+      - docker run --rm -v "$(pwd):/repo" -w /repo rhysd/actionlint:1.7.12
+      - echo "🧹 .claude/agents の skills 参照検証..."
+      - .claude/scripts/validate-agent-skills.sh
+      - echo "🧹 pre-pr-gate hook 回帰テスト..."
+      - .claude/hooks/tests/pre-pr-gate.test.sh
 
   test:
     desc: すべてのサービスのテストを実行（frontend + backend unit + integration、後方互換）
