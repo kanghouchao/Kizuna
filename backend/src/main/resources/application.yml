@@ -86,6 +86,7 @@ management:
 app:
   domain: ${APP_DOMAIN:localhost}
   scheme: ${APP_SCHEME:http}
+  timezone: ${APP_TIMEZONE:Asia/Tokyo}
   jwt:
     expiration: ${APP_JWT_EXPIRATION_MS:3600000}
     secret: ${APP_JWT_SECRET}

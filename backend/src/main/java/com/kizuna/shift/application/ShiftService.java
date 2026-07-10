@@ -1,9 +1,13 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.api.dto.ShiftResponse;
@@ -13,8 +17,12 @@ import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,12 +38,48 @@ public class ShiftService {
   private final TenantContext tenantContext;
   private final TenantRepository tenantRepository;
   private final CastService castService;
+  private final CastRepository castRepository;
+  private final AppProperties appProperties;
 
   @TenantScoped
   @Transactional(readOnly = true)
   public List<ShiftResponse> list(LocalDate from, LocalDate to) {
     return shiftRepository.findByWorkDateBetween(from, to).stream()
         .map(shiftMapper::toResponse)
+        .toList();
+  }
+
+  /**
+   * 公開出勤表用に「本日（app.timezone）」の確定（CONFIRMED）シフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧 ({@code
+   * /tenant/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
+   * 直接参照して結合する（cast.api.dto は公開面ではないため）。tenantFilter は {@code @TenantScoped} によりセッション全体で有効なので
+   * t_casts 参照も現テナントに絞られる。
+   */
+  @TenantScoped
+  @Transactional(readOnly = true)
+  public List<PublicShiftResponse> listPublicToday() {
+    LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    List<Shift> shifts =
+        shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(today, "CONFIRMED");
+    if (shifts.isEmpty()) {
+      return List.of();
+    }
+    Map<String, Cast> activeCasts =
+        castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE").stream()
+            .collect(Collectors.toMap(Cast::getId, Function.identity()));
+    return shifts.stream()
+        .filter(shift -> activeCasts.containsKey(shift.getCastId()))
+        .map(
+            shift -> {
+              Cast cast = activeCasts.get(shift.getCastId());
+              return PublicShiftResponse.builder()
+                  .castId(shift.getCastId())
+                  .castName(cast.getName())
+                  .castPhotoUrl(cast.getPhotoUrl())
+                  .startTime(shift.getStartTime())
+                  .endTime(shift.getEndTime())
+                  .build();
+            })
         .toList();
   }
 
