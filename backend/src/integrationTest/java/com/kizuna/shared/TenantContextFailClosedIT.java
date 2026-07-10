@@ -86,6 +86,19 @@ class TenantContextFailClosedIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("匿名 + X-Tenant-ID が long 桁あふれの GET /tenant/casts/public は 500 でなく 400 になること（#288）")
+  void anonymousOverflowingTenantIdHeaderReturns400() {
+    HttpHeaders headers = anonymous();
+    headers.set("X-Role", "tenant");
+    headers.set("X-Tenant-ID", "99999999999999999999");
+
+    ResponseEntity<String> res =
+        rest.exchange(CASTS_PUBLIC, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
   @DisplayName("テナント文脈を解決できない POST /tenant/login は 403 で拒否されること")
   void anonymousLoginIsForbidden() {
     ResponseEntity<String> res =
