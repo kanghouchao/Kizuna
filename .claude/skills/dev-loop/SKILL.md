@@ -39,9 +39,11 @@ Post a short plan brief (goal, tasks, seams, risk) and continue without waiting 
 From the main checkout:
 
 ```bash
-git worktree add ../Kizuna-worktrees/<branch> -b <branch> master
-cp infrastructure/development/.env ../Kizuna-worktrees/<branch>/infrastructure/development/.env
+git worktree add .worktrees/<branch> -b <branch> master
+cp infrastructure/development/.env .worktrees/<branch>/infrastructure/development/.env
 ```
+
+The worktree lives in `.worktrees/` inside the main checkout (git-ignored, so the main checkout stays clean); pass its **absolute** path to the subagent.
 
 Spawn `kizuna-coder` with the **absolute worktree path** and **absolute plan path**. Done when it reports: one commit per task, every gate exit code, deviations.
 
@@ -69,7 +71,7 @@ What shipped in 1–2 sentences; PR + issue links; CI status; evidence per crite
 `task down` in the worktree if its stack is up, then from the main checkout:
 
 ```bash
-git worktree remove ../Kizuna-worktrees/<branch>
+git worktree remove .worktrees/<branch>
 git pull && git fetch --prune
 ```
 
