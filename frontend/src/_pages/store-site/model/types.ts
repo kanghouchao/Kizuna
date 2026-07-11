@@ -41,3 +41,14 @@ export interface StorefrontData {
   casts: Cast[];
   siteConfig: SiteConfig;
 }
+
+/**
+ * 公開出勤表のシフト情報
+ */
+export interface PublicShift {
+  cast_id: string;
+  cast_name: string;
+  cast_photo_url?: string;
+  start_time: string;
+  end_time: string;
+}
