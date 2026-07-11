@@ -66,7 +66,8 @@ for path in sorted(glob.glob(os.path.join(agents_dir, "*.md"))):
     if skills_idx is None:
         continue  # skills: キーが無いのは正常
 
-    rest = re.match(r"^skills:\s*(.*)$", front[skills_idx]).group(1).strip()
+    # キー行の行内コメント（`skills: # ...`）は YAML として正当なので除去してから形式判定する（#310）
+    rest = strip_item(re.match(r"^skills:\s*(.*)$", front[skills_idx]).group(1))
     if rest:
         # `skills: [tdd]` のような inline 形式は未対応
         errors.append(f"{name}: skills: が未対応形式です（ブロックリストのみサポート）: {front[skills_idx]!r}")
