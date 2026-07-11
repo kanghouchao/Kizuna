@@ -66,7 +66,15 @@ for path in sorted(glob.glob(os.path.join(agents_dir, "*.md"))):
     if skills_idx is None:
         continue  # skills: キーが無いのは正常
 
-    rest = re.match(r"^skills:\s*(.*)$", front[skills_idx]).group(1).strip()
+    # キー行の行内コメントは、コロン後に YAML として正当な空白区切りがある場合のみ除去する
+    # （`skills: # c` は正当なコメント、`skills:# c` は区切りなし＝コメントではないので loud に拒否する。PR #314 レビュー指摘）
+    raw_rest = re.match(r"^skills:(.*)$", front[skills_idx]).group(1)
+    if raw_rest.strip() == "":
+        rest = ""
+    elif not re.match(r"^\s", raw_rest):
+        rest = raw_rest.strip()  # 区切りなし（`skills:#...` / `skills:[x]` 等）→ 非空のまま未対応形式エラーへ
+    else:
+        rest = strip_item(raw_rest)
     if rest:
         # `skills: [tdd]` のような inline 形式は未対応
         errors.append(f"{name}: skills: が未対応形式です（ブロックリストのみサポート）: {front[skills_idx]!r}")
