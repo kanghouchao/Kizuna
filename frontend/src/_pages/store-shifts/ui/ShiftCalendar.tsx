@@ -100,7 +100,7 @@ export function ShiftCalendar({
               </span>
               {agg && (
                 <div className="mt-1 space-y-1">
-                  <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
                     {agg.total}名
                   </span>
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-gray-500">
