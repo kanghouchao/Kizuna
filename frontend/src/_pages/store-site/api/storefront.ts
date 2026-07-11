@@ -1,4 +1,4 @@
-import { Cast, SiteConfig, StorefrontData } from '../model/types';
+import { Cast, PublicShift, SiteConfig, StorefrontData } from '../model/types';
 import { serverClient } from '@/shared/api/index.server';
 
 /**
@@ -41,6 +41,20 @@ export const storefrontService = {
   async fetchCast(id: string): Promise<Cast | null> {
     const casts = await this.fetchCasts();
     return casts.find(cast => cast.id === id) ?? null;
+  },
+
+  /**
+   * 本日の公開出勤シフト一覧を取得します（当日運用で変わるためキャッシュしない）
+   */
+  async fetchShifts(): Promise<PublicShift[]> {
+    try {
+      return await serverClient.get<PublicShift[]>('/tenant/shifts/public', {
+        cache: 'no-store',
+      });
+    } catch (error) {
+      console.error('出勤情報の取得に失敗しました:', error);
+      return [];
+    }
   },
 
   /**

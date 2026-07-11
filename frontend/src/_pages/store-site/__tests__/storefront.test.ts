@@ -81,6 +81,38 @@ describe('storefrontService', () => {
     });
   });
 
+  describe('fetchShifts', () => {
+    it('serverClient.get を呼び出すこと', async () => {
+      const mockShifts = [
+        {
+          cast_id: '1',
+          cast_name: 'Cast 1',
+          start_time: '20:00:00',
+          end_time: '02:00:00',
+        },
+      ];
+      (serverClient.get as jest.Mock).mockResolvedValue(mockShifts);
+
+      const result = await storefrontService.fetchShifts();
+
+      expect(serverClient.get).toHaveBeenCalledWith('/tenant/shifts/public', {
+        cache: 'no-store',
+      });
+      expect(result).toEqual(mockShifts);
+    });
+
+    it('エラー時に空配列を返すこと', async () => {
+      (serverClient.get as jest.Mock).mockRejectedValue(new Error('Failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await storefrontService.fetchShifts();
+
+      expect(result).toEqual([]);
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
+
   describe('getPageData', () => {
     it('データを集約して返すこと', async () => {
       const mockCasts = [{ id: '1', name: 'Cast 1' }];
