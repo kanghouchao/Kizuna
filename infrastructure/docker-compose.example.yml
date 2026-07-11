@@ -43,6 +43,11 @@ services:
     container_name: backend
     networks:
       - network
+    environment:
+      UPLOAD_S3_ENDPOINT: ${UPLOAD_S3_ENDPOINT:-http://storage:9000}
+      UPLOAD_S3_BUCKET: ${UPLOAD_S3_BUCKET:-uploads}
+      UPLOAD_S3_ACCESS_KEY: ${UPLOAD_S3_ACCESS_KEY:-minioadmin}
+      UPLOAD_S3_SECRET_KEY: ${UPLOAD_S3_SECRET_KEY:-changeme}
     env_file:
       - .env
     depends_on:
