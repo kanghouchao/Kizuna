@@ -51,3 +51,80 @@ export async function getPublicTemplateKey(request: APIRequestContext): Promise<
   const body = await res.json();
   return body.template_key as string;
 }
+
+/** キャストを作成し id を返す（POST /api/tenant/casts, hasAuthority('CAST_MANAGE')）。 */
+export async function createCast(
+  request: APIRequestContext,
+  token: string,
+  name: string
+): Promise<string> {
+  const res = await request.post('/api/tenant/casts', {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+    data: { name },
+  });
+  if (!res.ok()) {
+    throw new Error(`create cast failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.id as string;
+}
+
+/** キャストを削除する（DELETE /api/tenant/casts/{id}, hasAuthority('CAST_MANAGE')）。 */
+export async function deleteCast(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  const res = await request.delete(`/api/tenant/casts/${id}`, {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`delete cast failed: ${res.status()} ${await res.text()}`);
+  }
+}
+
+/** シフト作成パラメータ（JSON キーは snake_case で送信する）。 */
+export interface CreateShiftParams {
+  castId: string;
+  workDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+}
+
+/** シフトを作成し id を返す（POST /api/tenant/shifts, hasAuthority('CAST_MANAGE')）。 */
+export async function createShift(
+  request: APIRequestContext,
+  token: string,
+  params: CreateShiftParams
+): Promise<string> {
+  const res = await request.post('/api/tenant/shifts', {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+    data: {
+      cast_id: params.castId,
+      work_date: params.workDate,
+      start_time: params.startTime,
+      end_time: params.endTime,
+      status: params.status,
+    },
+  });
+  if (!res.ok()) {
+    throw new Error(`create shift failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.id as string;
+}
+
+/** シフトを削除する（DELETE /api/tenant/shifts/{id}, hasAuthority('CAST_MANAGE')）。 */
+export async function deleteShift(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  const res = await request.delete(`/api/tenant/shifts/${id}`, {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`delete shift failed: ${res.status()} ${await res.text()}`);
+  }
+}
