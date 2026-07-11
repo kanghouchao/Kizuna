@@ -19,8 +19,9 @@ Given('店舗 {string} にキャスト {string} を作成する', async ({ reque
 Then('作成したキャストの詳細ページが表示される', async ({ page, $testInfo }) => {
   // fetchCasts は revalidate: 60 の ISR キャッシュのため、作成した cast が公開詳細に
   // 現れるまで最長 60 秒かかる。固定 sleep は使わず有界リトライで吸収する。
-  // toPass の 90000ms は既定のテストタイムアウト（30000ms）を超えるため明示的に延長する。
-  $testInfo.setTimeout(100000);
+  // toPass の 90000ms は既定のテストタイムアウト（30000ms）を超えるため、既定値への加算で延長する
+  // （絶対値だと前置ステップの消費時間次第でリトライ完了前にシナリオが打ち切られる）。
+  $testInfo.setTimeout($testInfo.timeout + 100000);
   await expect(async () => {
     await page.goto(`/casts/${createdCastId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: createdCastName }).first()).toBeVisible();
