@@ -52,6 +52,38 @@ export async function getPublicTemplateKey(request: APIRequestContext): Promise<
   return body.template_key as string;
 }
 
+/** 管理画面向けの店舗設定を取得する（GET /tenant/config, hasAuthority('TENANT_CONFIG')）。 */
+export async function getStoreConfig(
+  request: APIRequestContext,
+  token: string
+): Promise<Record<string, unknown>> {
+  const res = await request.get('/api/tenant/config', {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`get store config failed: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/**
+ * custom_texts のみ更新する（PUT /tenant/config, hasAuthority('TENANT_CONFIG')）。
+ * MapStruct が NullValuePropertyMappingStrategy.IGNORE のため、他フィールドは送らず不変のまま。
+ */
+export async function setCustomTexts(
+  request: APIRequestContext,
+  token: string,
+  customTexts: Record<string, string>
+): Promise<void> {
+  const res = await request.put('/api/tenant/config', {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+    data: { custom_texts: customTexts },
+  });
+  if (!res.ok()) {
+    throw new Error(`update custom_texts failed: ${res.status()} ${await res.text()}`);
+  }
+}
+
 /** キャストを作成し id を返す（POST /api/tenant/casts, hasAuthority('CAST_MANAGE')）。 */
 export async function createCast(
   request: APIRequestContext,
