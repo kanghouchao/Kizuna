@@ -23,7 +23,14 @@ describe('ScheduleSection', () => {
   });
 
   it('シフトがある場合はキャスト名と時間帯を表示すること', () => {
-    const shifts = [makeShift({ cast_id: '1', cast_name: 'Cast 1', start_time: '20:00:00', end_time: '02:00:00' })];
+    const shifts = [
+      makeShift({
+        cast_id: '1',
+        cast_name: 'Cast 1',
+        start_time: '20:00:00',
+        end_time: '02:00:00',
+      }),
+    ];
 
     render(<ScheduleSection shifts={shifts} />);
 
@@ -57,8 +64,18 @@ describe('ScheduleSection', () => {
 
   it('与えられた配列順のまま描画すること（並べ替えしない）', () => {
     const shifts = [
-      makeShift({ cast_id: '1', cast_name: 'Cast B', start_time: '21:00:00', end_time: '23:00:00' }),
-      makeShift({ cast_id: '2', cast_name: 'Cast A', start_time: '18:00:00', end_time: '20:00:00' }),
+      makeShift({
+        cast_id: '1',
+        cast_name: 'Cast B',
+        start_time: '21:00:00',
+        end_time: '23:00:00',
+      }),
+      makeShift({
+        cast_id: '2',
+        cast_name: 'Cast A',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+      }),
     ];
 
     render(<ScheduleSection shifts={shifts} />);

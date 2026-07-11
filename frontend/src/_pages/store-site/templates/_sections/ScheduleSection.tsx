@@ -23,7 +23,10 @@ const formatEndTime = (t: string) => {
 export default function ScheduleSection({ shifts }: ScheduleSectionProps) {
   if (shifts.length === 0) {
     return (
-      <section className="py-16 md:py-24 px-5 sm:px-6" style={{ background: 'var(--storefront-bg)' }}>
+      <section
+        className="py-16 md:py-24 px-5 sm:px-6"
+        style={{ background: 'var(--storefront-bg)' }}
+      >
         <div className="max-w-2xl mx-auto text-center">
           <p
             className="text-[color-mix(in_srgb,var(--storefront-fg)_70%,transparent)] text-base md:text-lg font-light tracking-[0.15em] mb-4"
