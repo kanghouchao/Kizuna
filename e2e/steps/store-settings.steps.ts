@@ -11,6 +11,9 @@ const accessNoteTextarea = (page: Page) =>
   page.locator(`label:text-is("${ACCESS_NOTE_LABEL}") + textarea`);
 
 let originalCustomTexts: Record<string, string> | null = null;
+// 退避ステップが実際に成功したかの哨兵。退避前にシナリオが失敗した場合、
+// After が空オブジェクトで上書きして既存 custom_texts を消し飛ばすのを防ぐ。
+let snapshotCaptured = false;
 let testValue = '';
 
 Given('店舗 {string} の管理画面にログインしている', async ({ page }, _store: string) => {
@@ -25,6 +28,7 @@ Given('店舗設定の現在値を退避する', async ({ request }) => {
   const token = await loginAsTenantAdmin(request);
   const config = await getStoreConfig(request, token);
   originalCustomTexts = (config.custom_texts as Record<string, string> | undefined) ?? null;
+  snapshotCaptured = true;
 });
 
 When('店舗情報ページでアクセス補足を一意な検証値に変更して保存する', async ({ page }) => {
@@ -43,11 +47,14 @@ Then('再読込後もアクセス補足が同じ検証値のままである', as
   await expect(accessNoteTextarea(page)).toHaveValue(testValue);
 });
 
-// custom_texts を無条件で退避値へ復元する（テスト失敗・途中クラッシュでも実行）。
-// 復元 hook 自身が独立してログインし直すため、テスト側の状態に依存しない。ベストエフォート。
+// custom_texts を退避値へ復元する（テスト失敗・途中クラッシュでも実行）。
+// ただし退避が成功していない場合は復元しない — 退避前の失敗で空オブジェクトを
+// PUT すると既存 custom_texts を消し飛ばすため。ベストエフォート。
 After({ tags: '@store-settings' }, async ({ request }) => {
+  if (!snapshotCaptured) return;
   const token = await loginAsTenantAdmin(request);
   await setCustomTexts(request, token, originalCustomTexts ?? {}).catch(() => {});
   originalCustomTexts = null;
+  snapshotCaptured = false;
   testValue = '';
 });
