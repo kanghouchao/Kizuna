@@ -72,6 +72,37 @@ class JwtAuthenticationFilterTest {
   }
 
   @Test
+  @DisplayName("PlatformAuth 発行のトークンは /platform 配下で認証されること")
+  void platformTokenOnPlatformPath() throws Exception {
+    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
+    assertThat(authenticated("/platform/me", "PlatformAuth")).isTrue();
+  }
+
+  @Test
+  @DisplayName("PlatformAuth 発行のトークンは /central 配下で認証されないこと")
+  void platformTokenOnCentralPath() throws Exception {
+    assertThat(authenticated("/central/configs", "PlatformAuth")).isFalse();
+  }
+
+  @Test
+  @DisplayName("PlatformAuth 発行のトークンは /tenant 配下で認証されないこと")
+  void platformTokenOnTenantPath() throws Exception {
+    assertThat(authenticated("/tenant/orders", "PlatformAuth")).isFalse();
+  }
+
+  @Test
+  @DisplayName("CentralAuth 発行のトークンは /platform 配下で認証されないこと")
+  void centralTokenOnPlatformPath() throws Exception {
+    assertThat(authenticated("/platform/me", "CentralAuth")).isFalse();
+  }
+
+  @Test
+  @DisplayName("TenantAuth 発行のトークンは /platform 配下で認証されないこと")
+  void tenantTokenOnPlatformPath() throws Exception {
+    assertThat(authenticated("/platform/me", "TenantAuth")).isFalse();
+  }
+
+  @Test
   @DisplayName("ドメイン外のパスでは issuer を制限しないこと")
   void anyIssuerOnDomainFreePath() throws Exception {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);

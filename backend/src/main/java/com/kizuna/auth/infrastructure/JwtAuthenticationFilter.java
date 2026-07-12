@@ -82,6 +82,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (path.equals("/tenant") || path.startsWith("/tenant/")) {
       return JwtUtil.ISSUER_TENANT.equals(issuer);
     }
+    if (path.equals("/platform") || path.startsWith("/platform/")) {
+      return JwtUtil.ISSUER_PLATFORM.equals(issuer);
+    }
     return true;
   }
 }
