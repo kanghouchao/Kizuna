@@ -53,6 +53,19 @@ class PlatformUserTest {
   }
 
   @Test
+  @DisplayName("email は構築時に小文字へ正規化される")
+  void emailIsNormalizedToLowerCase() {
+    PlatformUser user =
+        seedBuilder()
+            .email("TANAKA.Hanako@KIZUNA.test")
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeIds(Set.of())
+            .build();
+
+    assertThat(user.getEmail()).isEqualTo("tanaka.hanako@kizuna.test");
+  }
+
+  @Test
   @DisplayName("SPECIFIC_STORES はメンバー店舗のみを授権する")
   void specificStoresAuthorizesOnlyMembers() {
     PlatformUser user =

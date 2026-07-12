@@ -7,6 +7,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -44,7 +45,9 @@ public class PlatformAuthService {
 
   @Transactional(readOnly = true)
   public Token login(String email, String password) {
-    PlatformUser user = userRepository.findByEmail(email).orElse(null);
+    // 平台側 email は小文字で保存されるため（保存済みシードは全て小文字）、照合前に正規化する。
+    String normalizedEmail = email.toLowerCase(Locale.ROOT);
+    PlatformUser user = userRepository.findByEmail(normalizedEmail).orElse(null);
     if (user == null) {
       // メール不存在でも既知メール（誤パスワード）と同等の時間を要するようダミー照合を実行する。
       passwordEncoder.matches(password, userNotFoundEncodedPassword);

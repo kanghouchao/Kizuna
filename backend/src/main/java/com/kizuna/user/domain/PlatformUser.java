@@ -11,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import lombok.Builder;
 import lombok.Getter;
@@ -71,7 +72,7 @@ public class PlatformUser extends BaseEntity {
     if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
       throw new InvalidStoreScopeException("ALL_STORES の授権に個別店舗を指定できません");
     }
-    this.email = email;
+    this.email = email == null ? null : email.toLowerCase(Locale.ROOT);
     this.password = password;
     this.displayName = displayName;
     this.enabled = enabled;
