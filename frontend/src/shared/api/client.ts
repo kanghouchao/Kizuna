@@ -1,6 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import { redirectToLogin } from '@/shared/lib';
+import { getPlatformRole, getPlatformStoreId, isStoreRole, redirectToLogin } from '@/shared/lib';
 
 const apiClient = axios.create({
   baseURL: '/api',
@@ -23,15 +23,30 @@ apiClient.interceptors.request.use(
     if (csrfToken) {
       (config.headers as any)['X-XSRF-TOKEN'] = csrfToken;
     }
-    // Attach role and tenant context from middleware cookies
+    // 平台セッションがあれば legacy な x-mw ヘッダ注入をスキップする
     try {
-      const role = Cookies.get('x-mw-role');
-      if (role) {
-        (config.headers as any)['X-Role'] = role;
-        if (role.toLowerCase() === 'tenant') {
-          const tenantId = Cookies.get('x-mw-tenant-id');
-          if (tenantId) {
-            (config.headers as any)['X-Tenant-ID'] = tenantId;
+      const platformRole = getPlatformRole();
+      if (platformRole) {
+        const storeId = getPlatformStoreId();
+        const url = config.url || '';
+        if (
+          isStoreRole(platformRole) &&
+          storeId &&
+          (url.startsWith('/tenant') || url.startsWith('/files'))
+        ) {
+          (config.headers as any)['X-Role'] = 'tenant';
+          (config.headers as any)['X-Tenant-ID'] = storeId;
+        }
+      } else {
+        // Attach role and tenant context from middleware cookies
+        const role = Cookies.get('x-mw-role');
+        if (role) {
+          (config.headers as any)['X-Role'] = role;
+          if (role.toLowerCase() === 'tenant') {
+            const tenantId = Cookies.get('x-mw-tenant-id');
+            if (tenantId) {
+              (config.headers as any)['X-Tenant-ID'] = tenantId;
+            }
           }
         }
       }
