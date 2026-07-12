@@ -1,9 +1,11 @@
 import redirectToLogin, { __setNavigatorForTests, __resetNavigator } from '../navigation';
+import { clearPlatformSession, startPlatformSession } from '../platform-session';
 
 describe('navigation helper', () => {
   afterEach(() => {
     __resetNavigator();
     jest.restoreAllMocks();
+    clearPlatformSession();
   });
 
   it('calls provided navigator with /login when available', () => {
@@ -19,5 +21,13 @@ describe('navigation helper', () => {
     });
     __setNavigatorForTests(badNav);
     expect(() => redirectToLogin()).not.toThrow();
+  });
+
+  it('calls provided navigator with /platform/login when platform-role cookie is present', () => {
+    startPlatformSession('HQ_ADMIN');
+    const navMock = jest.fn();
+    __setNavigatorForTests(navMock);
+    redirectToLogin();
+    expect(navMock).toHaveBeenCalledWith('/platform/login');
   });
 });

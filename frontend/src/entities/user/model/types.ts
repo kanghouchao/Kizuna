@@ -48,3 +48,30 @@ export interface RegisterResponse {
   login_url: string;
   tenant_name?: string;
 }
+
+// 平台ロール（バックエンド user/domain/PlatformRole.java と対応）
+export type PlatformRole = 'HQ_ADMIN' | 'STORE_MANAGER' | 'STORE_STAFF' | 'CAST' | 'MEMBER';
+
+// 平台ユーザーの店舗作用域種別
+export type PlatformStoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
+
+// 平台ログインリクエスト
+export interface PlatformLoginRequest {
+  email: string;
+  password: string;
+}
+
+// 平台 /me レスポンス
+export interface PlatformMeResponse {
+  email: string;
+  display_name: string;
+  role: PlatformRole;
+  store_scope_type: PlatformStoreScopeType;
+  store_ids: number[];
+}
+
+// 平台の授権店舗一覧の1件
+export interface PlatformStore {
+  id: number;
+  name: string;
+}

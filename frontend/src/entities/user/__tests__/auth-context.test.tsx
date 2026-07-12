@@ -17,6 +17,8 @@ jest.mock('../api/store', () => ({ storeAuthApi: { logout: jest.fn() } }));
 jest.mock('@/shared/lib', () => ({
   isTenantDomain: jest.fn(),
   redirectToLogin: jest.fn(),
+  isPlatformSession: jest.fn(() => false),
+  clearPlatformSession: jest.fn(),
 }));
 
 function Consumer() {
