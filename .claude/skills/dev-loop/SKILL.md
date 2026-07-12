@@ -75,8 +75,11 @@ What shipped in 1–2 sentences; PR + issue links; CI status; evidence per crite
 
 ```bash
 git worktree remove .worktrees/<branch>
+git -C <main-checkout> status --porcelain   # BEFORE pull — see below
 git pull && git fetch --prune
 ```
+
+If the status shows a stray modification to a file the run touched, a subagent leaked an edit into the main checkout (run #322: CONTEXT.md, surfaced as a pull collision). Diff it against the merged version — byte-identical → `git restore <file>` is lossless; anything else → AskUserQuestion, never discard. Use `git -C <absolute path>` for every cleanup command — the Bash tool's `cd` does not reliably persist across calls.
 
 This repo squash-merges, so the branch tip is never an ancestor of master and `git branch -d` always refuses. Verify the content landed (`git diff <tip> master -- <touched paths>` shows nothing), then hand the exact `git branch -D <branch>` line to the user — force-delete is theirs, never yours.
 
