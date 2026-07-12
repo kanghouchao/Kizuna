@@ -52,10 +52,30 @@ public class TenantIdInterceptor implements HandlerInterceptor {
       this.tenantContext.setTenantId(jwtTenantId);
       return true;
     }
+    StoreScope scope =
+        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
     boolean claimsTenantHeaderPresent =
         HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
             && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID));
-    if (claims != null) {
+    if (scope != null) {
+      // 平台トークン（#324 過橋）: X-Role: tenant + 数値 X-Tenant-ID を要求し、授権店舗集合で検証する（fail-closed）。
+      if (HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
+          && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
+        Long headerValue = tryParseTenantId(request.getHeader(HEADER_TENANT_ID));
+        if (headerValue == null) {
+          // 全桁数字だが long 範囲外（#288 と同型）。
+          response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+          return false;
+        }
+        if (!scope.authorizes(headerValue)) {
+          response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+          return false;
+        }
+        this.tenantContext.setTenantId(headerValue);
+        return true;
+      }
+      // ヘッダ不備（X-Role 欠落・非数値含む）は店舗文脈なし → 末尾の @TenantOptional 判定へ落とす。
+    } else if (claims != null) {
       // 認証済みだが tenantId claim を持たない（央端 CentralAuth 発行、または tenantId 無しの legacy）。
       // ヘッダでテナントを名乗る主張は詐称として 403 で拒否する（#294）。詐称ヘッダが無ければ下の
       // @TenantOptional 判定に委ね、央端の正当な素通り（例: /files/upload の central 保存）を保つ。

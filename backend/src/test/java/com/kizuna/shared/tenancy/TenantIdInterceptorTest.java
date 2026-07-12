@@ -281,6 +281,122 @@ class TenantIdInterceptorTest {
     assertThat(tenantContext.isTenant()).isFalse();
   }
 
+  /**
+   * 平台トークン（storeScopeType/storeIds claim を持ち tenantId claim は持たない）を模擬する。 storeIds には List
+   * を渡す（ALL_STORES では無視される）。
+   */
+  private void authenticateWithPlatformScope(String scopeType, Object storeIds) {
+    Claims claims =
+        Jwts.claims().add("storeScopeType", scopeType).add("storeIds", storeIds).build();
+    PreAuthenticatedAuthenticationToken authentication =
+        new PreAuthenticatedAuthenticationToken(
+            "platform-user", "token", List.of(new SimpleGrantedAuthority("ROLE_STORE_MANAGER")));
+    authentication.setDetails(claims);
+    SecurityContextHolder.getContext().setAuthentication(authentication);
+  }
+
+  @Test
+  @DisplayName("平台 SPECIFIC{1} が X-Tenant-ID:1 を名乗れば授権内としてテナント文脈を設定すること")
+  void preHandle_platformSpecific_allowsAuthorizedStore() {
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "1");
+
+    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+
+    assertThat(result).isTrue();
+    assertThat(tenantContext.getTenantId()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("平台 SPECIFIC{1} が非授権店舗 X-Tenant-ID:2 を名乗ると 403 で拒否し文脈を設定しないこと")
+  void preHandle_platformSpecific_rejectsUnauthorizedStore() {
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "2");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("平台 ALL_STORES は任意の X-Tenant-ID をテナント文脈に設定すること")
+  void preHandle_platformAllStores_allowsAnyStore() {
+    authenticateWithPlatformScope("ALL_STORES", List.of());
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "999");
+
+    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+
+    assertThat(result).isTrue();
+    assertThat(tenantContext.getTenantId()).isEqualTo(999L);
+  }
+
+  @Test
+  @DisplayName("平台トークンでもテナントヘッダが無ければ @TenantOptional 無しハンドラは 403 で拒否すること")
+  void preHandle_platformScope_noHeader_rejectsRequiredHandler() throws Exception {
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, handlerMethod("required"));
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("平台トークンでもテナントヘッダが無ければ @TenantOptional 付きハンドラは素通りし文脈を設定しないこと")
+  void preHandle_platformScope_noHeader_allowsTenantOptionalHandler() throws Exception {
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, handlerMethod("optional"));
+
+    assertThat(result).isTrue();
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("平台トークンで X-Role が欠落し X-Tenant-ID のみなら店舗文脈は成立せず 403 で拒否すること")
+  void preHandle_platformScope_missingRoleHeader_rejects() {
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Tenant-ID", "1");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("storeIds claim が不正な平台トークンは StoreScope が解決できず 403 で拒否すること（fail-closed）")
+  void preHandle_platformScope_invalidStoreIds_rejects() {
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of("not-a-number"));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "1");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
   @Test
   @DisplayName("afterCompletion でテナント文脈がクリアされること")
   void afterCompletion_clearsTenantContext() {
