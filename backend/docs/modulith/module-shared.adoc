@@ -13,6 +13,7 @@ _Others_
 * `c.k.s.config.JacksonConfig`
 * `c.k.s.config.RedisConfig`
 * `c.k.s.exception.CommonExceptionHandler`
+* `c.k.s.tenancy.StoreSetFilterEnable`
 * `c.k.s.tenancy.TenantContext`
 * `c.k.s.tenancy.TenantFilterEnable`
 * `c.k.s.tenancy.TenantIdInterceptor`
