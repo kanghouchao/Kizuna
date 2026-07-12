@@ -26,6 +26,10 @@ _Avoid_: Branch
 店舗の従業員アカウント。email でログインし、データはテナント単位で分離される。
 _Avoid_: TenantUser（旧名）
 
+**PlatformUser（プラットフォームユーザー）**:
+プラットフォーム共通アカウントとしての「プラットフォーム身分」。email でログインし、授権は「ロール×店舗集合」（店舗集合は「全店舗」「個別店舗」の 2 種のみ）で表す。プラットフォーム化転換（#320/#321）の expand 段階では CentralUser / StoreUser と並存し、旧二本立ての撤去は contract チケットで行う。
+_Avoid_: PlatformAccount、「テナントユーザー」系の呼称
+
 **AuthSession（認証セッション）**:
 発行済みの 1 枚の JWT が表す認証状態。ログアウトとパスワード変更はいずれも唯一の無効化経路（token ブラックリスト）を通じて現在のセッションを失効させる。
 _Avoid_: Token の裸使用（token は担体、session は概念）
@@ -37,6 +41,10 @@ _Avoid_: Token の裸使用（token は担体、session は概念）
 
 **Customer（顧客）**:
 店舗の顧客。CRM の管理対象。単一の店舗に帰属する。
+
+**Member（会員）**:
+プラットフォーム層の会員身分。Customer（店舗 CRM 台帳・店舗層）とは別概念であり、Member は複数店舗の Customer 台帳と紐づき得る。非会員の顧客は存在し続ける（Customer だけがあり Member がない状態）。集約の実装は後続チケット（本項は用語の予約）。
+_Avoid_: Member と Customer の混用、「会員」を店舗台帳の意味で使うこと
 
 **Order（注文）**:
 顧客の店舗における 1 回の予約／受注記録。Customer、Cast、および接客担当（StoreUser）に紐づく。
