@@ -46,7 +46,7 @@ git worktree add .worktrees/<branch> -b <branch> master
 
 The worktree lives in `.worktrees/` inside the main checkout (git-ignored, so the main checkout stays clean); pass its **absolute** path to the subagent.
 
-**`.env` is deny-ruled for agents (read AND write — even `cp` is blocked), so the orchestrator never copies it.** Only when the plan needs the stack (`task e2e` / `task up`): ask the user, right after creating the worktree, to run `! cp infrastructure/development/.env .worktrees/<branch>/infrastructure/development/.env` themselves — compose's `env_file: .env` hard-requires the file, so without it the stack cannot start. Runs with no stack need skip this entirely.
+**`.env` is deny-ruled for agents (read AND write — even `cp` is blocked), so never touch it yourself.** Worktrees self-provision (PR #341): `infrastructure/development/Taskfile.yml`'s `ensure-env` — a dep of `up` — copies `.env` from the main checkout on the first `task up` / `task e2e` inside the worktree, so no user action is needed. The only case that still waits on the user is `ensure-env` failing loud because the MAIN checkout itself lacks `.env` — then ask them to place it per `infrastructure/.env.example`.
 
 Spawn `kizuna-implementer` with the **absolute worktree path**, the **absolute plan path**, and — running it on each task's assigned **実行モデル** (Agent tool `model` override) — the exact `Co-Authored-By:` trailer for that model. Consecutive same-model tasks may share one spawn; a model change starts a fresh spawn, which reads the accumulated commits + plan as its context. Done when every task is one commit, with each gate's exit code and any deviations reported.
 
