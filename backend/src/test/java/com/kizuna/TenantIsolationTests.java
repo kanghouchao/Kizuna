@@ -41,10 +41,16 @@ class TenantIsolationTests {
         continue;
       }
       scanned.add(entity.getSimpleName());
-      Filter filter = entity.getAnnotation(Filter.class);
-      if (filter == null
-          || !"tenantFilter".equals(filter.name())
-          || !EXPECTED_CONDITION.equals(filter.condition())) {
+      // @Filter は Hibernate 6 で repeatable のため、tenantFilter を宣言していれば
+      // 他フィルタ（storeSetFilter 等）が並置されていても違反としない。
+      boolean declaresTenantFilter = false;
+      for (Filter filter : entity.getAnnotationsByType(Filter.class)) {
+        if ("tenantFilter".equals(filter.name()) && EXPECTED_CONDITION.equals(filter.condition())) {
+          declaresTenantFilter = true;
+          break;
+        }
+      }
+      if (!declaresTenantFilter) {
         offenders.add(entity.getName());
       }
     }
@@ -60,11 +66,20 @@ class TenantIsolationTests {
   @Test
   @DisplayName("tenantFilter は主キー直接ロード（EntityManager#find 経由の findById 等）にも適用されること")
   void tenantFilterAppliesToLoadByKey() {
-    FilterDef filterDef = TenantScopedEntity.class.getAnnotation(FilterDef.class);
+    // @FilterDef は Hibernate 6 で repeatable のため、tenantFilter の定義を名前で取り出す
+    // （storeSetFilter 等が並置されていても getAnnotation は container を返し null になるため）。
+    FilterDef tenantFilterDef = null;
+    for (FilterDef filterDef : TenantScopedEntity.class.getAnnotationsByType(FilterDef.class)) {
+      if ("tenantFilter".equals(filterDef.name())) {
+        tenantFilterDef = filterDef;
+        break;
+      }
+    }
 
-    assertThat(filterDef).isNotNull();
-    assertThat(filterDef.name()).isEqualTo("tenantFilter");
-    assertThat(filterDef.applyToLoadByKey())
+    assertThat(tenantFilterDef)
+        .as("TenantScopedEntity が tenantFilter の @FilterDef を宣言していること")
+        .isNotNull();
+    assertThat(tenantFilterDef.applyToLoadByKey())
         .as(
             "applyToLoadByKey=false だと Session#find（Spring Data JPA の findById 実装経路）に"
                 + " filter が効かず、他テナントの ID を直接指定した読み取りが素通りする")
