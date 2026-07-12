@@ -1,0 +1,93 @@
+databaseChangeLog:
+  - changeSet:
+      id: central-009-platform-users-schema
+      author: kanghouchao
+      changes:
+        - createTable:
+            tableName: platform_users
+            remarks: プラットフォーム共通ユーザー（ロール×店舗集合の授権）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_platform_users
+              - column:
+                  name: email
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_platform_users_email
+              - column:
+                  name: password
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: display_name
+                  type: VARCHAR(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: role
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: store_scope_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: platform_user_stores
+            remarks: プラットフォームユーザーの授権店舗集合（SPECIFIC_STORES 時のみ行を持つ）
+            columns:
+              - column:
+                  name: platform_user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: platform_user_stores
+            columnNames: platform_user_id,store_id
+            constraintName: pk_platform_user_stores
+        - addForeignKeyConstraint:
+            constraintName: fk_platform_user_stores_user
+            baseTableName: platform_user_stores
+            baseColumnNames: platform_user_id
+            referencedTableName: platform_users
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_platform_user_stores_store
+            baseTableName: platform_user_stores
+            baseColumnNames: store_id
+            referencedTableName: central_tenants
+            referencedColumnNames: id
