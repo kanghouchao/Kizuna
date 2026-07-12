@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { loadTemplatePage } from '@/_pages/store-site';
+import { PlatformRole, resolvePlatformDestination } from '@/entities/user';
 
 /**
  * ページメタデータの生成
@@ -38,6 +39,18 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
+
+  // 平台セッションがあれば、ロールに応じたコンソールへ自動遷移する（#324）
+  const platformRole = cookieStore.get('platform-role')?.value;
+  if (platformRole) {
+    const destination = resolvePlatformDestination(platformRole as PlatformRole);
+    if (destination === 'central') {
+      redirect('/central/dashboard/');
+    }
+    if (destination === 'store') {
+      redirect('/tenant/dashboard/');
+    }
+  }
 
   // Central ドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
   if (role === 'central') {
