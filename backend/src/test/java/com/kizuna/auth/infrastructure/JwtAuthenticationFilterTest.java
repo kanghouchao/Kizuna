@@ -79,15 +79,17 @@ class JwtAuthenticationFilterTest {
   }
 
   @Test
-  @DisplayName("PlatformAuth 発行のトークンは /central 配下で認証されないこと")
+  @DisplayName("PlatformAuth 発行のトークンは /central 配下で認証されること（過橋 #324）")
   void platformTokenOnCentralPath() throws Exception {
-    assertThat(authenticated("/central/configs", "PlatformAuth")).isFalse();
+    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
+    assertThat(authenticated("/central/configs", "PlatformAuth")).isTrue();
   }
 
   @Test
-  @DisplayName("PlatformAuth 発行のトークンは /tenant 配下で認証されないこと")
+  @DisplayName("PlatformAuth 発行のトークンは /tenant 配下で認証されること（過橋 #324）")
   void platformTokenOnTenantPath() throws Exception {
-    assertThat(authenticated("/tenant/orders", "PlatformAuth")).isFalse();
+    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
+    assertThat(authenticated("/tenant/orders", "PlatformAuth")).isTrue();
   }
 
   @Test
