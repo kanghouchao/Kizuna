@@ -1,13 +1,46 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/entities/user';
-import { isTenantDomain } from '@/shared/lib';
-import { BellIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
+import { platformAuthApi, PlatformStore, useAuth } from '@/entities/user';
+import {
+  getPlatformRole,
+  getPlatformStoreId,
+  isPlatformSession,
+  isStoreRole,
+  isTenantDomain,
+  setPlatformStore,
+} from '@/shared/lib';
+import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export function Header() {
   const { logout } = useAuth();
   const accountHref = isTenantDomain() ? '/tenant/settings/account' : '/central/settings/account';
+
+  const [showStoreSwitch, setShowStoreSwitch] = useState(false);
+  const [stores, setStores] = useState<PlatformStore[]>([]);
+  const [currentStoreId, setCurrentStoreId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (isPlatformSession() && isStoreRole(getPlatformRole())) {
+      setShowStoreSwitch(true);
+      setCurrentStoreId(getPlatformStoreId());
+      platformAuthApi
+        .stores()
+        .then(setStores)
+        .catch(error => console.error('Failed to fetch stores', error));
+    }
+  }, []);
+
+  const currentStoreName = stores.find(store => String(store.id) === currentStoreId)?.name;
+
+  const handleStoreSelect = (id: number) => {
+    if (String(id) !== currentStoreId) {
+      setPlatformStore(id);
+      window.location.reload();
+    }
+  };
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-20">
@@ -21,6 +54,30 @@ export function Header() {
         </button>
 
         <div className="h-8 w-px bg-gray-200" />
+
+        {showStoreSwitch && (
+          <Menu as="div" className="relative">
+            <MenuButton
+              disabled={stores.length === 0}
+              className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <BuildingStorefrontIcon className="h-5 w-5 text-gray-400" />
+              <span>{currentStoreName || '店舗を選択'}</span>
+            </MenuButton>
+            <MenuItems className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 border border-gray-100 focus:outline-none">
+              {stores.map(store => (
+                <MenuItem key={store.id}>
+                  <button
+                    onClick={() => handleStoreSelect(store.id)}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                  >
+                    {store.name}
+                  </button>
+                </MenuItem>
+              ))}
+            </MenuItems>
+          </Menu>
+        )}
 
         <div className="flex items-center space-x-4">
           <div className="text-right hidden sm:block">
