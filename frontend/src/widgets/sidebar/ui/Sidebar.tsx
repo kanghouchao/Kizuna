@@ -25,6 +25,7 @@ import {
   KeyIcon,
 } from '@heroicons/react/24/outline';
 import { centralMenuApi, MenuVO, storeMenuApi } from '@/entities/menu';
+import { getPlatformRole, isStoreRole } from '@/shared/lib';
 
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   HomeIcon,
@@ -53,7 +54,13 @@ export function Sidebar() {
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
-    // Read the role from the cookie set by middleware
+    // 平台セッションがあれば優先する（HQ_ADMIN→central、店舗ロール→tenant）（#324）
+    const platformRole = getPlatformRole();
+    if (platformRole) {
+      setRole(isStoreRole(platformRole) ? 'tenant' : 'central');
+      return;
+    }
+    // なければ既存どおり middleware が設定した cookie から読む
     const mwRole = Cookies.get('x-mw-role');
     if (mwRole) {
       setRole(mwRole);
