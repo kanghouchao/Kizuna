@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.Token;
@@ -61,7 +62,7 @@ class PlatformAuthServiceTest {
     Token res = authService.login("admin@kizuna.test", "pass");
 
     assertThat(res.token()).isEqualTo("platform_token");
-    org.mockito.Mockito.verify(jwtUtil)
+    verify(jwtUtil)
         .generateToken(
             eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
@@ -90,7 +91,7 @@ class PlatformAuthServiceTest {
 
     authService.login("mgr@kizuna.test", "pass");
 
-    org.mockito.Mockito.verify(jwtUtil)
+    verify(jwtUtil)
         .generateToken(eq("mgr@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
     assertThat(claims.get("role")).isEqualTo("STORE_MANAGER");
@@ -107,7 +108,7 @@ class PlatformAuthServiceTest {
         .hasMessage("メールアドレスまたはパスワードが正しくありません");
 
     // 列挙耐性: メール不存在でもダミー bcrypt 照合を 1 回行い、既知メール（誤パスワード）との応答時間差を作らない。
-    org.mockito.Mockito.verify(passwordEncoder).matches(eq("pass"), any());
+    verify(passwordEncoder).matches(eq("pass"), any());
   }
 
   @Test
