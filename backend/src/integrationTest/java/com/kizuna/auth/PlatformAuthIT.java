@@ -176,7 +176,7 @@ class PlatformAuthIT {
   }
 
   @Test
-  @DisplayName("platform トークンで /central/me は 403（issuer 相互拒否）")
+  @DisplayName("platform トークンで /central/me は 404（過橋 #324: 認証は通り、旧 CentralUser 表に不存在で優雅劣化）")
   void platformTokenRejectedOnCentralMe() {
     ResponseEntity<String> res =
         rest.exchange(
@@ -185,16 +185,15 @@ class PlatformAuthIT {
             new HttpEntity<>(bearer(platformToken(SEED_EMAIL, SEED_PASSWORD))),
             String.class);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test
-  @DisplayName("platform トークンで tenant 系 GET は 403（issuer 相互拒否）")
+  @DisplayName(
+      "platform トークンでテナントヘッダなしの tenant 系 GET は 403（過橋 #324: 拒否主体は interceptor fail-closed）")
   void platformTokenRejectedOnTenantEndpoint() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformToken(SEED_EMAIL, SEED_PASSWORD));
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", "1");
 
     ResponseEntity<String> res =
         rest.exchange("/tenant/menus/me", HttpMethod.GET, new HttpEntity<>(headers), String.class);
