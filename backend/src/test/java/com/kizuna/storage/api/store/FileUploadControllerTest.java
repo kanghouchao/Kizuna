@@ -33,6 +33,7 @@ class FileUploadControllerTest {
 
   private static final String ISSUER_TENANT = "TenantAuth";
   private static final String ISSUER_CENTRAL = "CentralAuth";
+  private static final String ISSUER_PLATFORM = "PlatformAuth";
 
   @Mock private FileStorageService fileStorageService;
   @Mock private MultipartFile file;
@@ -69,6 +70,19 @@ class FileUploadControllerTest {
   void upload_rejectsTenantIssuedTokenWithoutTenantContext() {
     // tenantId claim を持たない = テナント文脈は未解決のまま
     authenticateWithIssuer(ISSUER_TENANT);
+
+    assertThatThrownBy(() -> controller.upload(file, "public"))
+        .isInstanceOf(AccessDeniedException.class);
+
+    verify(fileStorageService, never()).store(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("プラットフォーム発行トークンはテナント文脈が無くても central に保存せず拒否すること（#322）")
+  void upload_rejectsPlatformIssuedToken() {
+    // PlatformAuth は tenantId claim を持たず @TenantOptional の許可経路に乗るため、
+    // 中央プレフィクスへ落ちないよう fail-closed で拒否する。
+    authenticateWithIssuer(ISSUER_PLATFORM);
 
     assertThatThrownBy(() -> controller.upload(file, "public"))
         .isInstanceOf(AccessDeniedException.class);

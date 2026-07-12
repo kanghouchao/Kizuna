@@ -29,14 +29,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class SeedSequenceAlignmentIT {
 
-  /** 明示 id を播種している autoIncrement 5 表（issue #237 の setval 対象）。 */
+  /** 明示 id を播種している autoIncrement 表（issue #237 の setval 対象、#322 で platform_users を追加）。 */
   private static final List<String> SEEDED_IDENTITY_TABLES =
       List.of(
           "central_users",
           "central_roles",
           "central_permissions",
           "central_tenants",
-          "central_menus");
+          "central_menus",
+          "platform_users");
 
   @Autowired private TestRestTemplate rest;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -77,7 +78,7 @@ class SeedSequenceAlignmentIT {
   }
 
   @Test
-  @DisplayName("明示 id 播種の autoIncrement 5 表のシーケンスが全て MAX(id) を上回ること")
+  @DisplayName("明示 id 播種の autoIncrement 6 表のシーケンスが全て MAX(id) を上回ること")
   void seededIdentitySequencesAreAligned() {
     for (String table : SEEDED_IDENTITY_TABLES) {
       // 使い捨て DB なので nextval の消費は無害。nextval > MAX(id) は実行順に依存しない述語。

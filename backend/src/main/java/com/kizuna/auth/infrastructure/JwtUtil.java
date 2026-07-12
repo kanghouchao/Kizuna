@@ -23,6 +23,9 @@ public class JwtUtil {
   /** テナントドメインのトークン発行者 */
   public static final String ISSUER_TENANT = "TenantAuth";
 
+  /** プラットフォームドメインのトークン発行者 */
+  public static final String ISSUER_PLATFORM = "PlatformAuth";
+
   private final AppProperties appProperties;
 
   public Token generateToken(

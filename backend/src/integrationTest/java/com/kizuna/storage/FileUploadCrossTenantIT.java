@@ -26,6 +26,10 @@ import org.springframework.util.MultiValueMap;
  * のヘッダ兜底に落ち、指定テナントの prefix にファイルが保存されていた。本テストは詐称ヘッダ付きが 403 で拒否されること（負向）と、 詐称ヘッダ無しの央端アップロードが従来どおり
  * central 領域へ 200 で保存されること（正向対照）を固定する。
  *
+ * <p>あわせてプラットフォーム発行（PlatformAuth）トークンによる同エンドポイントの中央領域アップロードが 403 で拒否されること（#322）も固定する。 PlatformAuth
+ * も {@code tenantId} claim を持たず {@code @TenantOptional} の許可経路に乗るため、低権限のプラットフォーム身分が
+ * 中央共有領域へ書き込めないことを保証する。
+ *
  * <p>中央ログイン前提のため {@link com.kizuna.shared.CrossTenantTestSupport}（tenant ログイン）は継承せず、中央ログインを自前で行う。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -42,6 +46,20 @@ class FileUploadCrossTenantIT {
             new HttpEntity<>("{\"username\": \"admin\", \"password\": \"pass\"}", headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 中央 admin でのログインが成功すること").isEqualTo(HttpStatus.OK);
+    String token = res.getBody().path("token").asText();
+    assertThat(token).isNotBlank();
+    return token;
+  }
+
+  private String platformLogin() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/login",
+            new HttpEntity<>("{\"email\": \"admin@kizuna.test\", \"password\": \"pass\"}", headers),
+            JsonNode.class);
+    assertThat(res.getStatusCode()).as("前提: プラットフォーム HQ 管理者でのログインが成功すること").isEqualTo(HttpStatus.OK);
     String token = res.getBody().path("token").asText();
     assertThat(token).isNotBlank();
     return token;
@@ -71,6 +89,18 @@ class FileUploadCrossTenantIT {
     headers.setBearerAuth(centralLogin());
     headers.set("X-Role", "tenant");
     headers.set("X-Tenant-ID", "1");
+
+    ResponseEntity<String> res =
+        rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("プラットフォームトークンの /files/upload は 403 で拒否され中央領域に保存されないこと（#322）")
+  void platformTokenUploadIsForbidden() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(platformLogin());
 
     ResponseEntity<String> res =
         rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), String.class);
