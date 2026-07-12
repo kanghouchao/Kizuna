@@ -60,8 +60,13 @@ public class PlatformAuthService {
       throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
     }
 
+    // ROLE_ を先頭に、後続に過橋期の旧権限マッピング（#324、#326 で再編）。
+    List<String> authorities = new ArrayList<>();
+    authorities.add("ROLE_" + user.getRole().name());
+    authorities.addAll(user.getRole().grantedPermissions());
+
     Map<String, Object> claims = new HashMap<>();
-    claims.put("authorities", List.of("ROLE_" + user.getRole().name()));
+    claims.put("authorities", authorities);
     claims.put("role", user.getRole().name());
     claims.put("storeScopeType", user.getStoreScopeType().name());
     claims.put("storeIds", new ArrayList<>(user.getStoreIds()));

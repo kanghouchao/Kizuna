@@ -66,7 +66,12 @@ class PlatformAuthServiceTest {
         .generateToken(
             eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
-    assertThat(claims.get("authorities")).isEqualTo(List.of("ROLE_HQ_ADMIN"));
+    @SuppressWarnings("unchecked")
+    List<String> authorities = (List<String>) claims.get("authorities");
+    // ROLE_ が先頭、後続に旧権限マッピング（過橋期）。
+    assertThat(authorities.get(0)).isEqualTo("ROLE_HQ_ADMIN");
+    assertThat(authorities)
+        .containsExactlyInAnyOrder("ROLE_HQ_ADMIN", "TENANT_MANAGE", "SYSTEM_CONFIG");
     assertThat(claims.get("role")).isEqualTo("HQ_ADMIN");
     assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of());
@@ -94,9 +99,44 @@ class PlatformAuthServiceTest {
     verify(jwtUtil)
         .generateToken(eq("mgr@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
+    @SuppressWarnings("unchecked")
+    List<String> authorities = (List<String>) claims.get("authorities");
+    assertThat(authorities.get(0)).isEqualTo("ROLE_STORE_MANAGER");
+    assertThat(authorities)
+        .containsExactlyInAnyOrder(
+            "ROLE_STORE_MANAGER",
+            "ORDER_MANAGE",
+            "CAST_MANAGE",
+            "CUSTOMER_MANAGE",
+            "TENANT_CONFIG");
     assertThat(claims.get("role")).isEqualTo("STORE_MANAGER");
     assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of(1L));
+  }
+
+  @Test
+  void login_cast_issuesRoleAuthorityWithoutLegacyPermissions() {
+    PlatformUser cast =
+        PlatformUser.builder()
+            .email("cast@kizuna.test")
+            .password("stored-hash")
+            .displayName("キャスト")
+            .enabled(true)
+            .role(PlatformRole.CAST)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
+    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    when(jwtUtil.generateToken(eq("cast@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
+        .thenReturn(new Token("t", 1L));
+
+    authService.login("cast@kizuna.test", "pass");
+
+    verify(jwtUtil)
+        .generateToken(eq("cast@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    Map<String, Object> claims = claimsCaptor.getValue();
+    assertThat(claims.get("authorities")).isEqualTo(List.of("ROLE_CAST"));
   }
 
   @Test
