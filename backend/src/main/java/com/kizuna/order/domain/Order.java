@@ -20,6 +20,7 @@ import org.hibernate.annotations.Type;
 @Entity
 @Table(name = "t_orders")
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+@Filter(name = "storeSetFilter", condition = "tenant_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
