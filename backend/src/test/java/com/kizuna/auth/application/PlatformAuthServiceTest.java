@@ -100,6 +100,20 @@ class PlatformAuthServiceTest {
   }
 
   @Test
+  void login_mixedCaseEmail_resolvesToLowercaseUser() {
+    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
+    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    when(jwtUtil.generateToken(eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
+        .thenReturn(new Token("platform_token", 12345L));
+
+    Token res = authService.login("ADMIN@Kizuna.TEST", "pass");
+
+    assertThat(res.token()).isEqualTo("platform_token");
+    // 照合は小文字正規化後の email で行う（保存済みシードは全て小文字）。
+    verify(userRepository).findByEmail("admin@kizuna.test");
+  }
+
+  @Test
   void login_emailNotFound_throwsBadCredentials() {
     when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
 
