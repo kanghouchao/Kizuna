@@ -34,6 +34,10 @@ _Avoid_: PlatformAccount、「テナントユーザー」系の呼称
 発行済みの 1 枚の JWT が表す認証状態。ログアウトとパスワード変更はいずれも唯一の無効化経路（token ブラックリスト）を通じて現在のセッションを失効させる。
 _Avoid_: Token の裸使用（token は担体、session は概念）
 
+**集合作用域（StoreScope / storeSetFilter / @StoreSetScoped）**:
+PlatformUser の授権を表す店舗集合（ALL_STORES または SPECIFIC_STORES の店舗 ID 集合）。読みは Hibernate の第二 filter（`storeSetFilter`）が機構的に濾過する fail-closed 設計（解決不能なら例外）。書きは明示的単一 storeId を受け取り、その storeId が授権集合に含まれるか検証したうえで既存の単店機構（TenantContext + tenantFilter）へ委譲する。
+_Avoid_: 読み・書きを同一機構と混同すること（読みは集合フィルタ、書きは単一 storeId 検証で別経路）
+
 ### 店舗運営
 
 **Cast**:
