@@ -4,6 +4,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderView;
+import com.kizuna.order.domain.PlatformOrderView;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -15,6 +16,9 @@ public interface OrderMapper {
 
   /** 読み側 projection をレスポンスDTOに変換します。 */
   OrderResponse toResponse(OrderView view);
+
+  /** 平台横断一覧の projection をレスポンスDTOに変換します（#323 集合作用域）。 */
+  PlatformOrderResponse toPlatformResponse(PlatformOrderView view);
 
   // ==================== CreateRequest -> Entity ====================
 

@@ -46,4 +46,21 @@ public interface OrderRepository
 
   @Query(VIEW_SELECT + " where o.id = :id")
   Optional<OrderView> findViewById(@Param("id") String id);
+
+  // 平台横断一覧（#323 集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う（機構の実証）。
+  // 店舗（tenant）表示名の join は張らない。
+  String PLATFORM_VIEW_SELECT =
+      """
+      select o.id as id, o.tenantId as storeId, o.storeName as storeName,
+             o.businessDate as businessDate,
+             o.arrivalScheduledStartTime as arrivalScheduledStartTime,
+             o.arrivalScheduledEndTime as arrivalScheduledEndTime,
+             o.status as status
+      from com.kizuna.order.domain.Order o
+      """;
+
+  @Query(
+      value = PLATFORM_VIEW_SELECT,
+      countQuery = "select count(o) from com.kizuna.order.domain.Order o")
+  Page<PlatformOrderView> findPlatformViews(Pageable pageable);
 }
