@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,12 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 統一（プラットフォーム）ログイン。既存の central/tenant 二軌のコードパスに触れないため AuthenticationManager を経由せず、findByEmail +
- * パスワード照合 + enabled 判定を自前で行う。 メール不存在・パスワード不一致は同一メッセージの {@link
- * BadCredentialsException}（ユーザー列挙防止）、無効化ユーザーは {@link DisabledException}。いずれも {@code
+ * enabled 判定 + パスワード照合を自前で行う。判定順は DaoAuthenticationProvider に倣い enabled を先行させ、無効化ユーザーはパスワードの正誤に関わらず
+ * {@link DisabledException} を投げる（無効化アカウントでのパスワード正誤オラクルを塞ぐ）。 メール不存在時は既知メール（誤パスワード）との応答時間差を無くすため、ダミーの
+ * bcrypt 照合を 1 回行ってからパスワード不一致と同一メッセージの {@link BadCredentialsException} を投げる（列挙耐性: メッセージ均一 +
+ * タイミング均一。 DaoAuthenticationProvider.mitigateAgainstTimingAttack と同趣旨）。いずれの例外も {@code
  * AuthenticationException} 系のため 401 で応答される。
  */
 @Service
-@RequiredArgsConstructor
 public class PlatformAuthService {
 
   private static final String INVALID_CREDENTIALS_MESSAGE = "メールアドレスまたはパスワードが正しくありません";
@@ -31,17 +31,30 @@ public class PlatformAuthService {
   private final PasswordEncoder passwordEncoder;
   private final JwtUtil jwtUtil;
 
+  /** メール不存在時のタイミング均一化に用いるダミー bcrypt ハッシュ（秘密値ではない固定文字列を構築時に符号化）。 */
+  private final String userNotFoundEncodedPassword;
+
+  public PlatformAuthService(
+      PlatformUserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+    this.userRepository = userRepository;
+    this.passwordEncoder = passwordEncoder;
+    this.jwtUtil = jwtUtil;
+    this.userNotFoundEncodedPassword = passwordEncoder.encode("userNotFoundPassword");
+  }
+
   @Transactional(readOnly = true)
   public Token login(String email, String password) {
-    PlatformUser user =
-        userRepository
-            .findByEmail(email)
-            .orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
-    if (!passwordEncoder.matches(password, user.getPassword())) {
+    PlatformUser user = userRepository.findByEmail(email).orElse(null);
+    if (user == null) {
+      // メール不存在でも既知メール（誤パスワード）と同等の時間を要するようダミー照合を実行する。
+      passwordEncoder.matches(password, userNotFoundEncodedPassword);
       throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
     }
     if (!user.getEnabled()) {
       throw new DisabledException("アカウントが無効化されています");
+    }
+    if (!passwordEncoder.matches(password, user.getPassword())) {
+      throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
     }
 
     Map<String, Object> claims = new HashMap<>();

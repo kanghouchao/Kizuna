@@ -103,7 +103,11 @@ class PlatformAuthServiceTest {
     when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> authService.login("missing@kizuna.test", "pass"))
-        .isInstanceOf(BadCredentialsException.class);
+        .isInstanceOf(BadCredentialsException.class)
+        .hasMessage("メールアドレスまたはパスワードが正しくありません");
+
+    // 列挙耐性: メール不存在でもダミー bcrypt 照合を 1 回行い、既知メール（誤パスワード）との応答時間差を作らない。
+    org.mockito.Mockito.verify(passwordEncoder).matches(eq("pass"), any());
   }
 
   @Test
@@ -112,25 +116,37 @@ class PlatformAuthServiceTest {
     when(passwordEncoder.matches("wrong", "stored-hash")).thenReturn(false);
 
     assertThatThrownBy(() -> authService.login("admin@kizuna.test", "wrong"))
-        .isInstanceOf(BadCredentialsException.class);
+        .isInstanceOf(BadCredentialsException.class)
+        .hasMessage("メールアドレスまたはパスワードが正しくありません");
   }
 
   @Test
-  void login_disabledUser_throwsDisabled() {
-    PlatformUser disabled =
-        PlatformUser.builder()
-            .email("admin@kizuna.test")
-            .password("stored-hash")
-            .displayName("HQ管理者")
-            .enabled(false)
-            .role(PlatformRole.HQ_ADMIN)
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
-            .build();
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(disabled));
-    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+  void login_disabledUser_correctPassword_throwsDisabled() {
+    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(disabledUser()));
 
+    // enabled 判定がパスワード照合より先行するため、正しいパスワードでも DisabledException になる。
     assertThatThrownBy(() -> authService.login("admin@kizuna.test", "pass"))
         .isInstanceOf(DisabledException.class);
+  }
+
+  @Test
+  void login_disabledUser_wrongPassword_throwsDisabled() {
+    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(disabledUser()));
+
+    // 誤パスワードでも enabled 判定が先行するため DisabledException（無効化アカウントでのパスワード正誤オラクルを塞ぐ）。
+    assertThatThrownBy(() -> authService.login("admin@kizuna.test", "wrong"))
+        .isInstanceOf(DisabledException.class);
+  }
+
+  private PlatformUser disabledUser() {
+    return PlatformUser.builder()
+        .email("admin@kizuna.test")
+        .password("stored-hash")
+        .displayName("HQ管理者")
+        .enabled(false)
+        .role(PlatformRole.HQ_ADMIN)
+        .storeScopeType(StoreScopeType.ALL_STORES)
+        .storeIds(Set.of())
+        .build();
   }
 }
