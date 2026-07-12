@@ -6,8 +6,25 @@ vars:
   service: '{{default "" .service}}'
 
 tasks:
+  ensure-env:
+    desc: worktree に .env が無ければ主検出からコピーする（開発環境のみの補完。release には適用しない）
+    internal: true
+    status:
+      - test -f .env
+    cmds:
+      - |
+        MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+        if [ "$MAIN_ROOT" != "$(git rev-parse --show-toplevel)" ] && [ -f "$MAIN_ROOT/infrastructure/development/.env" ]; then
+          cp "$MAIN_ROOT/infrastructure/development/.env" .env
+          echo "🔑 .env が無いため主検出（$MAIN_ROOT）からコピーした"
+        else
+          echo "❗ .env がありません。infrastructure/.env.example を参照して配置してください" >&2
+          exit 1
+        fi
+
   up:
     desc: サービスを起動
+    deps: [ensure-env]
     cmds:
       - docker compose -p {{.PROJECT_NAME}} up -d --timestamps --wait
 
