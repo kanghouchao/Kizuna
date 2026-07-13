@@ -5,7 +5,7 @@ description: "Run Kizuna's dev loop: plan → worktree coding → QA → gated P
 
 # Dev Loop
 
-One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Three roles, one job each: the **planner** is the orchestrator itself — it holds the run's intent and routes each task to a model, and it never hands off and leaves (it keeps designing the next task); the **implementer** (`.claude/agents/kizuna-implementer.md`) codes; the **verifier** (`.claude/agents/kizuna-verifier.md`) adversarially checks. None pins a model — the planner assigns each its model per run (Stage 2). Companion skills: `create-pr` (stage 5), `watch-pr` (stage 6). Issue-tracker command conventions: `docs/agents/issue-tracker.md` (local-only).
+One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Three roles, one job each: the **planner** is the orchestrator itself — it holds the run's intent and routes each task to a model, and it never hands off and leaves (it keeps designing the next task); the **implementer** (`.claude/agents/kizuna-implementer.md`) codes; the **verifier** (`.claude/agents/kizuna-verifier.md`) adversarially checks. None pins a model — the planner assigns each its model per run (Stage 2). Companion skills: `create-pr` (stage 5), `watch-pr` (stage 6), `code-review` (stage 5, mandatory pre-push gate). Issue-tracker command conventions: `docs/agents/issue-tracker.md` (local-only).
 
 **Entry is a converged conversation, not a cold issue.** Discussion happens outside the loop, in normal conversation; the loop starts when the user says start, and stage 1 crystallizes what was already agreed. Invoked cold — no prior discussion in context — on non-trivial or ambiguous work: discuss first (`grilling` skill — one question at a time, each with a recommended answer). The loop never starts on guesses.
 
@@ -14,13 +14,17 @@ One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Thr
 - **① Entry** — the user has seen the work (issue and/or discussion) and says start.
 - **② Exit** — the run ends at "PR created + acceptance brief (Chinese)" and STOPS. The user reviews and merges every PR by hand; never merge, no auto-merge pre-authorization.
 
-**The loop shape**: ① → crystallize → plan → [ code → QA → fix ]\* → gated PR → [ watch → fix ]\* → brief ②. Both `[…]*` cycles draw on ONE shared budget of **3 fix loops per run**; exhausted → stop with a blocked-brief (Chinese) listing what remains. Out-of-scope defects met along the way are never fixed in-run — file each as a Japanese GitHub issue (`.github/ISSUE_TEMPLATE/bug.md` structure) so it re-enters as a future run.
+**The loop shape**: ① → crystallize+plan (or, given a qualifying plan doc, skip straight to code) → [ code → QA → fix ]\* → gated PR → [ watch → fix ]\* → brief ②. Both `[…]*` cycles draw on ONE shared budget of **3 fix loops per run**; exhausted → stop with a blocked-brief (Chinese) listing what remains. Out-of-scope defects met along the way are never fixed in-run — file each as a Japanese GitHub issue (`.github/ISSUE_TEMPLATE/bug.md` structure) so it re-enters as a future run.
 
 ## Stage 0 — Preflight (main checkout)
 
 `git status --porcelain` clean + on master + `git fetch origin && git rev-list master..origin/master --count` = 0 → proceed silently. Anything else → AskUserQuestion with concrete options (commit / stash / switch / continue as-is); never guess what uncommitted work means. The main checkout stays on master for the whole run — all mutation happens in the worktree.
 
-## Stage 1 — Crystallize (orchestrator)
+## Stage 1 — Entry: plan-first or crystallize (orchestrator)
+
+**Plan-first**: if the user's start message points at an existing `docs/plans/<slug>.md` that already satisfies Stage 2's mandatory-section checklist, skip straight to Stage 3 — the plan's origin (which session, which model, hand-written) is not this skill's concern; the file's format is the only contract. Missing any mandatory section → not eligible, fall through to crystallize below.
+
+**Crystallize** (no qualifying plan doc):
 
 - Pull the agreed conclusion out of the conversation. Where an issue exists, cross-check it with `gh issue view <n> --json title,body,comments` (plain `--comments` can print nothing yet exit 0).
 - Remaining fact-gathering that would sweep more than ~3 files: delegate to Explore agents — the orchestrator consumes conclusions, it does not sweep.
@@ -32,7 +36,7 @@ One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Thr
 
 The planner is the orchestrator itself: it holds the crystallized Stage-1 context, so planning is never delegated to the implementer, and it keeps designing the next task rather than handing off and leaving. Planning is where the judgement is spent — run it on a strong model. Write `docs/plans/<slug>.md` (git-excluded, Japanese). Mandatory sections: **前提事実** (investigated facts with file refs — the implementer trusts these) / **Tasks** (each task = exactly one commit, allowed file scope, exact Japanese commit message, **実行モデル**) / **TDD seams** (the pre-agreed seam set; the implementer tests only there) / **BDD scenarios** (`.feature` path + Gherkin per behavioral criterion) / **Acceptance criteria** mapping / **Risk tier** (normal | **high-risk**: auth・permissions・DB migrations・payments・tenant isolation) / **検証モデル** (the verifier's model this run) / branch name (`feat/…`, `fix/…`).
 
-**Model routing** — the thinking lives in the plan, so a cheaper implementer only executes and reports. Set each task's 実行モデル by how much judgement the plan already nailed down (verbatim code + exact scope → `haiku`/`sonnet`; residual judgement at the seam → `opus`), NOT by how mechanical it looks; **high-risk tasks are hard-pinned to `opus`**. A same-model verifier shares the implementer's blind spots, so set 検証モデル independent of — and never weaker than — the task implementers (default `sonnet`, `opus` for high-risk). Routing to a cheap model never means "execute without thinking": the implementer stays free to flag a plan gap it hits as a deviation.
+**Model routing** — the thinking lives in the plan, so a cheaper implementer only executes and reports. Set each task's 実行モデル by how much judgement the plan already nailed down (verbatim code + exact scope → `haiku`/`sonnet`; residual judgement at the seam → `opus`; the single highest-stakes task in a high-risk plan may go to `fable` if budget allows), NOT by how mechanical it looks; **high-risk tasks are hard-pinned to `opus`** (or `fable`, when the plan explicitly names it). A same-model verifier shares the implementer's blind spots, so set 検証モデル independent of — and never weaker than — the task implementers (default `sonnet`, `opus`/`fable` for high-risk). `fable` quota is limited, so reserve it for high-risk work and only when the plan explicitly specifies it. A **fork** (Agent tool `subagent_type: "fork"`) always inherits the parent session's model regardless of 実行モデル/検証モデル — routing to `fable`/`opus`/etc. only takes effect for a fresh spawn. Routing to a cheap model never means "execute without thinking": the implementer stays free to flag a plan gap it hits as a deviation.
 
 Post a short plan brief (goal, tasks + per-task 実行モデル, seams, risk) and continue without waiting — the next human checkpoint is ②.
 
@@ -58,7 +62,7 @@ FAIL → dispatch the verifier's report verbatim to a fresh `kizuna-implementer`
 
 ## Stage 5 — PR (orchestrator)
 
-- **High-risk plans only**: before pushing, one adversarial pre-review — a FRESH subagent gets the diff and the issue but NOT the plan; it lists candidate defects each with a concrete failure scenario (inputs/state → wrong outcome), then verifies or dismisses each against the code. Blocking findings → fix loop (shared budget). Normal-risk skips this.
+- **Every run**: before pushing, invoke the **code-review** skill (Skill tool — it does not auto-trigger, invoke by name) against the worktree diff, at `medium` effort for normal-risk plans and `high` for high-risk. This replaces the former high-risk-only adversarial pre-review; findings arrive with a failure scenario and a verify pass already applied. Blocking findings → fix loop (shared budget), fixed in the worktree before pushing. Non-blocking findings are recorded for the PR's 備考 (effort level, finding count, unresolved count feed the PR template's ローカル code-review 実施 line).
 - Invoke the **create-pr** skill. Done when: the PR URL is returned.
 
 ## Stage 6 — Watch (loop)
