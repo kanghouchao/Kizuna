@@ -56,6 +56,8 @@ tasks:
       - .claude/scripts/validate-agent-skills.sh
       - echo "🧹 pre-pr-gate hook 回帰テスト..."
       - .claude/hooks/tests/pre-pr-gate.test.sh
+      - echo "🧹 check-pr.sh 回帰テスト..."
+      - .claude/skills/create-pr/check-pr.test.sh
 
   test:
     desc: すべてのサービスのテストを実行（frontend + backend unit + integration、後方互換）
