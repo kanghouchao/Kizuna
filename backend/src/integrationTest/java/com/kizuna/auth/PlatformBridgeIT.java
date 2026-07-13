@@ -332,6 +332,21 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("CAST は授権スコープでも店舗ヘッダで /tenant/menus/me に過橋できず 403 になること（役割線）")
+  void castCannotBridgeToStoreConsole() {
+    // CAST は ALL_STORES を持つが店舗ロールではないため、TenantIdInterceptor が店舗文脈確立の前に 403 で弾く。
+    // /tenant/menus/me は isAuthenticated() のみの端点のため、ロール制限が無いと CAST がテナントストレージ相当へ漏れる。
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/tenant/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bridgeHeaders(platformToken(CAST_EMAIL), TENANT_A)),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
   @DisplayName("店舗文脈ヘッダなしの平台トークンは /tenant/orders で 403 になること（fail-closed）")
   void missingStoreHeaderFailsClosed() {
     ResponseEntity<String> res =

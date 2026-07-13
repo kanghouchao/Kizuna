@@ -282,15 +282,24 @@ class TenantIdInterceptorTest {
   }
 
   /**
-   * 平台トークン（storeScopeType/storeIds claim を持ち tenantId claim は持たない）を模擬する。 storeIds には List
+   * 平台トークン（storeScopeType/storeIds claim を持ち tenantId claim は持たない）を店長ロールで模擬する。 storeIds には List
    * を渡す（ALL_STORES では無視される）。
    */
   private void authenticateWithPlatformScope(String scopeType, Object storeIds) {
+    authenticateWithPlatformScope("STORE_MANAGER", scopeType, storeIds);
+  }
+
+  /** 平台トークンをロール指定で模擬する。role claim は TenantIdInterceptor の店舗ロール限定判定 （店長・スタッフのみ過橋可）に使われる。 */
+  private void authenticateWithPlatformScope(String role, String scopeType, Object storeIds) {
     Claims claims =
-        Jwts.claims().add("storeScopeType", scopeType).add("storeIds", storeIds).build();
+        Jwts.claims()
+            .add("role", role)
+            .add("storeScopeType", scopeType)
+            .add("storeIds", storeIds)
+            .build();
     PreAuthenticatedAuthenticationToken authentication =
         new PreAuthenticatedAuthenticationToken(
-            "platform-user", "token", List.of(new SimpleGrantedAuthority("ROLE_STORE_MANAGER")));
+            "platform-user", "token", List.of(new SimpleGrantedAuthority("ROLE_" + role)));
     authentication.setDetails(claims);
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
@@ -395,6 +404,38 @@ class TenantIdInterceptorTest {
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
     assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("平台 CAST ロールは授権スコープでも店舗ヘッダを名乗ると 403 で拒否し文脈を設定しないこと（役割線）")
+  void preHandle_platformCastRole_rejectsEvenWithAuthorizedScope() {
+    // CAST は ALL_STORES でも過橋不可。scope.authorizes が真になる前にロールで弾き、
+    // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立を塞ぐ。
+    authenticateWithPlatformScope("CAST", "ALL_STORES", List.of());
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "1");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
+  }
+
+  @Test
+  @DisplayName("平台 STORE_STAFF ロールは授権店舗の店舗ヘッダでテナント文脈を設定できること")
+  void preHandle_platformStaffRole_allowsAuthorizedStore() {
+    authenticateWithPlatformScope("STORE_STAFF", "SPECIFIC_STORES", List.of(1));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "1");
+
+    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+
+    assertThat(result).isTrue();
+    assertThat(tenantContext.getTenantId()).isEqualTo(1L);
   }
 
   @Test
