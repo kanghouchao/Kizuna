@@ -13,6 +13,9 @@ if [ ! -f "$check_pr" ]; then
   exit 1
 fi
 
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
 pass=0
 fail=0
 
@@ -55,7 +58,7 @@ EOF
 setup_repo() {
   local fixture_file=$1
   local repo
-  repo=$(mktemp -d)
+  repo=$(mktemp -d -p "$work")
   git -C "$repo" init -q
   git -C "$repo" config user.email test@example.com
   git -C "$repo" config user.name test
@@ -71,11 +74,10 @@ setup_repo() {
 # run <期待exit> <説明> <repo> <body内容>
 run() {
   local want=$1 desc=$2 repo=$3 body_content=$4 got body_file
-  body_file=$(mktemp)
+  body_file=$(mktemp -p "$work")
   printf '%s\n' "$body_content" > "$body_file"
   ( cd "$repo" && "$check_pr" "feat: test" "$body_file" ) >/dev/null 2>&1
   got=$?
-  rm -f "$body_file"
   if [ "$got" -eq "$want" ]; then
     printf 'PASS [exit %s]        %s\n' "$got" "$desc"
     pass=$((pass + 1))
@@ -89,12 +91,10 @@ echo "== コード域 diff =="
 repo_code=$(setup_repo "frontend/src/App.tsx")
 run 1 'コード域diff + レビュー行なし → 不合格' "$repo_code" "$(full_body "" 1 "")"
 run 0 'コード域diff + レビュー行あり → 合格' "$repo_code" "$(full_body "- [x] ローカル code-review 実施（effort: medium/指摘: 0件/未修正: 0件）" 1 "")"
-rm -rf "$repo_code"
 
 echo "== docs-only diff =="
 repo_docs=$(setup_repo "docs/note.md")
 run 0 'docs-only + 免除宣言 + レビュー行なし → 合格' "$repo_docs" "$(full_body "" 0 "対象外（コード変更なし）")"
-rm -rf "$repo_docs"
 
 echo "----------------------------------------"
 printf '合計: PASS=%s FAIL=%s\n' "$pass" "$fail"

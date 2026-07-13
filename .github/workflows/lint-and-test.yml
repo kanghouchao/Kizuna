@@ -21,6 +21,8 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # リポジトリ横断 lint（workflows / .claude）は軽量なため docs-only でも常時実行する。
+      # これにより .claude のみの変更（docs-only 扱い）でも壊れを CI で検知できる（#290/#301）。
       - name: Repo lint
         run: task lint-repo
 
