@@ -32,7 +32,7 @@ export default function PlatformLoginForm() {
       const destination = resolvePlatformDestination(me.role);
 
       if (destination === 'central') {
-        startPlatformSession(me.role);
+        startPlatformSession(me.role, expires_at);
         router.push('/central/dashboard/');
         return;
       }
@@ -45,8 +45,8 @@ export default function PlatformLoginForm() {
           toast.error('利用可能な店舗がありません。管理者にお問い合わせください');
           return;
         }
-        startPlatformSession(me.role);
-        setPlatformStore(stores[0].id);
+        startPlatformSession(me.role, expires_at);
+        setPlatformStore(stores[0].id, expires_at);
         router.push('/tenant/dashboard/');
         return;
       }

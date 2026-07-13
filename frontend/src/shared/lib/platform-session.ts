@@ -12,12 +12,17 @@ export function getPlatformStoreId(): string | undefined {
   return Cookies.get(PLATFORM_STORE_ID_COOKIE);
 }
 
-export function startPlatformSession(role: string): void {
-  Cookies.set(PLATFORM_ROLE_COOKIE, role);
+/** expiresAt（epoch millis）を渡すと token cookie と同じ有効期限を設定し、cookie 間の失効ズレを防ぐ。 */
+export function startPlatformSession(role: string, expiresAt?: number): void {
+  Cookies.set(PLATFORM_ROLE_COOKIE, role, expiresAt ? { expires: new Date(expiresAt) } : undefined);
 }
 
-export function setPlatformStore(id: number | string): void {
-  Cookies.set(PLATFORM_STORE_ID_COOKIE, String(id));
+export function setPlatformStore(id: number | string, expiresAt?: number): void {
+  Cookies.set(
+    PLATFORM_STORE_ID_COOKIE,
+    String(id),
+    expiresAt ? { expires: new Date(expiresAt) } : undefined
+  );
 }
 
 export function clearPlatformSession(): void {
