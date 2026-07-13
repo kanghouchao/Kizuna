@@ -30,6 +30,8 @@ _Avoid_: TenantUser（旧名）
 プラットフォーム共通アカウントとしての「プラットフォーム身分」。email でログインし、授権は「ロール×店舗集合」（店舗集合は「全店舗」「個別店舗」の 2 種のみ）で表す。プラットフォーム化転換（#320/#321）の expand 段階では CentralUser / StoreUser と並存し、旧二本立ての撤去は contract チケットで行う。
 _Avoid_: PlatformAccount、「テナントユーザー」系の呼称
 
+統一ログイン（`/platform/login`）はロールに応じて自動ルーティングする（HQ_ADMIN → Central、STORE_MANAGER/STORE_STAFF → Store）。店舗コンソールは平台トークン + `X-Tenant-ID` を集合作用域（授権店舗集合）で fail-closed 検証したうえで旧業務 API に過橋する（#324）。この過橋は expand 段階の互換層であり、旧二本立ての撤去は #326 で行う。
+
 **AuthSession（認証セッション）**:
 発行済みの 1 枚の JWT が表す認証状態。ログアウトとパスワード変更はいずれも唯一の無効化経路（token ブラックリスト）を通じて現在のセッションを失効させる。
 _Avoid_: Token の裸使用（token は担体、session は概念）
