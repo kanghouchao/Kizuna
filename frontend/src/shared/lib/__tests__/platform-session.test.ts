@@ -1,3 +1,4 @@
+import Cookies from 'js-cookie';
 import {
   clearPlatformSession,
   getPlatformRole,
@@ -43,5 +44,27 @@ describe('platform-session', () => {
     expect(isStoreRole('HQ_ADMIN')).toBe(false);
     expect(isStoreRole('CAST')).toBe(false);
     expect(isStoreRole(undefined)).toBe(false);
+  });
+
+  it('startPlatformSession sets the platform-role cookie with the same expiry as expiresAt', () => {
+    const setSpy = jest.spyOn(Cookies, 'set');
+    const expiresAt = Date.now() + 60_000;
+
+    startPlatformSession('HQ_ADMIN', expiresAt);
+
+    expect(setSpy).toHaveBeenCalledWith('platform-role', 'HQ_ADMIN', {
+      expires: new Date(expiresAt),
+    });
+    setSpy.mockRestore();
+  });
+
+  it('setPlatformStore sets the platform-store-id cookie with the same expiry as expiresAt', () => {
+    const setSpy = jest.spyOn(Cookies, 'set');
+    const expiresAt = Date.now() + 60_000;
+
+    setPlatformStore(2, expiresAt);
+
+    expect(setSpy).toHaveBeenCalledWith('platform-store-id', '2', { expires: new Date(expiresAt) });
+    setSpy.mockRestore();
   });
 });

@@ -43,6 +43,11 @@ export default async function Home() {
   // 平台セッションがあれば、ロールに応じたコンソールへ自動遷移する（#324）
   const platformRole = cookieStore.get('platform-role')?.value;
   if (platformRole) {
+    const platformToken = cookieStore.get('token')?.value;
+    if (!platformToken) {
+      // token 失効後も platform-role cookie が残っていると /tenant・/central のガードと無限リダイレクトになるため、先に検出する
+      redirect('/platform/login');
+    }
     const destination = resolvePlatformDestination(platformRole as PlatformRole);
     if (destination === 'central') {
       redirect('/central/dashboard/');
