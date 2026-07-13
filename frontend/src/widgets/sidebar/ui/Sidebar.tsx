@@ -51,6 +51,7 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
 export function Sidebar() {
   const pathname = usePathname();
   const [role, setRole] = useState<string>('central');
+  const [roleResolved, setRoleResolved] = useState(false);
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function Sidebar() {
     const platformRole = getPlatformRole();
     if (platformRole) {
       setRole(isStoreRole(platformRole) ? 'tenant' : 'central');
+      setRoleResolved(true);
       return;
     }
     // なければ既存どおり middleware が設定した cookie から読む
@@ -65,9 +67,15 @@ export function Sidebar() {
     if (mwRole) {
       setRole(mwRole);
     }
+    setRoleResolved(true);
   }, []);
 
   useEffect(() => {
+    // ロール解決前に初期値 'central' でメニューを取得すると、ロール確定後の取得と競合してしまうため待つ（#324）
+    if (!roleResolved) {
+      return;
+    }
+
     const fetchMenus = async () => {
       try {
         let menus: MenuVO[] = [];
@@ -106,7 +114,7 @@ export function Sidebar() {
     };
 
     fetchMenus();
-  }, [role]);
+  }, [role, roleResolved]);
 
   return (
     <aside className="w-64 bg-slate-800 text-white shrink-0 hidden md:block border-r border-slate-700">
