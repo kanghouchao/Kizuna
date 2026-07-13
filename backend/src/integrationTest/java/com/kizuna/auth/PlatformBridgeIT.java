@@ -297,18 +297,38 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("過橋で店舗メニュー GET /tenant/menus/me が非空を返すこと（サイドバー成立）")
+  @DisplayName("過橋で店舗メニュー GET /tenant/menus/me が権限ゲート項目（予約・案件管理）まで返すこと（サイドバー成立）")
   void bridgeServesStoreMenus() {
-    ResponseEntity<JsonNode> res =
+    ResponseEntity<String> res =
         rest.exchange(
             "/tenant/menus/me",
             HttpMethod.GET,
             new HttpEntity<>(bridgeHeaders(platformToken(MANAGER_EMAIL), TENANT_A)),
-            JsonNode.class);
+            String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody().isArray()).isTrue();
-    assertThat(res.getBody()).isNotEmpty();
+    // 平台トークンの authorities に PERM_ 形式が併載されていないと ORDER_MANAGE ゲートの子項目が
+    // フィルタで消える。生ボディに権限ゲートラベルが現れることで可視性の復旧を固定する（非空断言では捕捉できない）。
+    assertThat(res.getBody())
+        .as("ORDER_MANAGE ゲートの「予約・案件管理」が可視であること（PERM_ 形式の併載）")
+        .contains("予約・案件管理");
+  }
+
+  @Test
+  @DisplayName("過橋で中央メニュー GET /central/menus/me が権限ゲート項目（テナント一覧）まで返すこと")
+  void bridgeServesCentralMenus() {
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/central/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // HQ の TENANT_MANAGE が PERM_ 形式で併載されていないと「テナント一覧」がフィルタで消える。
+    assertThat(res.getBody())
+        .as("TENANT_MANAGE ゲートの「テナント一覧」が可視であること（PERM_ 形式の併載）")
+        .contains("テナント一覧");
   }
 
   @Test

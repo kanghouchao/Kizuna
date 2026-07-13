@@ -68,10 +68,16 @@ class PlatformAuthServiceTest {
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
-    // ROLE_ が先頭、後続に旧権限マッピング（過橋期）。
+    // ROLE_ が先頭、後続に旧権限マッピング（過橋期）を生形式と PERM_ 形式で併載する。
+    // PERM_ 形式は menu の可視性判定（MenuTreeAssembler）が参照するため、CustomUserDetailsService と同じ規約で両形式を出す。
     assertThat(authorities.get(0)).isEqualTo("ROLE_HQ_ADMIN");
     assertThat(authorities)
-        .containsExactlyInAnyOrder("ROLE_HQ_ADMIN", "TENANT_MANAGE", "SYSTEM_CONFIG");
+        .containsExactlyInAnyOrder(
+            "ROLE_HQ_ADMIN",
+            "TENANT_MANAGE",
+            "SYSTEM_CONFIG",
+            "PERM_TENANT_MANAGE",
+            "PERM_SYSTEM_CONFIG");
     assertThat(claims.get("role")).isEqualTo("HQ_ADMIN");
     assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of());
@@ -108,7 +114,11 @@ class PlatformAuthServiceTest {
             "ORDER_MANAGE",
             "CAST_MANAGE",
             "CUSTOMER_MANAGE",
-            "TENANT_CONFIG");
+            "TENANT_CONFIG",
+            "PERM_ORDER_MANAGE",
+            "PERM_CAST_MANAGE",
+            "PERM_CUSTOMER_MANAGE",
+            "PERM_TENANT_CONFIG");
     assertThat(claims.get("role")).isEqualTo("STORE_MANAGER");
     assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of(1L));
