@@ -54,9 +54,9 @@ task logs service=backend           # view logs
 
 Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run lint`; `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
 
-`task build` also runs as a PR gate inside the Lint and Test job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
+`task build` also runs as a PR gate inside each side's `Lint and Test (frontend)` / `Lint and Test (backend)` job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
 
-CI is tiered (issue #241). The PR gate — the required **Lint and Test** check — runs **lint + unit(coverage) + build** only (`task test-unit`). **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. (Test reports are no longer published to Pages — coverage still gates inside the unit `--target test` build.)
+CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only: every PR requires a pre-push `code-review` skill run (dev-loop Stage 5), enforced by check-pr.sh's ローカル code-review 実施 line — there is no CI-side automated review job; `claude.yml`'s `@claude` mention response is the only Claude-triggered GitHub Action remaining. (Test reports are no longer published to Pages — coverage still gates inside each side's unit `--target test` build.)
 
 ## Code Style & Conventions
 
