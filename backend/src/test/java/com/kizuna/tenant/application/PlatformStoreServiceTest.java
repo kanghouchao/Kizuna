@@ -2,6 +2,7 @@ package com.kizuna.tenant.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -67,7 +68,7 @@ class PlatformStoreServiceTest {
     assertThat(result)
         .containsExactly(new PlatformStoreResponse(1L, "A店"), new PlatformStoreResponse(2L, "B店"));
     verify(tenantRepository).findAll();
-    verify(tenantRepository, never()).findAllById(org.mockito.ArgumentMatchers.any());
+    verify(tenantRepository, never()).findAllById(any());
   }
 
   @Test
