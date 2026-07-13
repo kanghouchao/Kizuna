@@ -6,8 +6,26 @@ on:
       - master
 
 jobs:
-  lint-and-test:
-    name: Lint and Test
+  repo-lint:
+    name: Repo Lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Repo lint
+        run: task lint-repo
+
+  lint-and-test-frontend:
+    name: Lint and Test (frontend)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,9 +37,9 @@ jobs:
           fetch-depth: 2
 
       # docs-only 判定: コード領域に触れない PR では重いゲートを省略する。
-      # ジョブ自体は success で報告されるため、branch protection と claude-review の
-      # 「Lint and Test 成功待ち」連鎖は保たれる。
       # 境界は .claude/skills/create-pr/check-pr.sh のコード領域判定と同一に保つこと。
+      # エリア連動スキップ（backend のみの diff で本 job を省く等）はしない —
+      # frontend/backend 両 job とも同じ全域境界を見る（#346 スコープ外）。
       # diff が取れない場合は fail-closed（フルゲート実行）。
       - name: Detect docs-only diff
         id: diff
@@ -51,28 +69,89 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # リポジトリ横断 lint（workflows / .claude）は軽量なため docs-only でも常時実行する。
-      # これにより .claude のみの変更（docs-only 扱い）でも壊れを CI で検知できる（#290/#301）。
-      - name: Repo lint
-        run: task lint-repo
-
       - name: Lint
         if: steps.diff.outputs.docs_only != 'true'
-        run: task lint
+        run: task -d frontend lint
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
 
       - name: Test
         if: steps.diff.outputs.docs_only != 'true'
-        run: task test-unit
+        run: task -d frontend test
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
 
       - name: Build
         if: steps.diff.outputs.docs_only != 'true'
-        run: task build
+        run: task -d frontend build
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
+
+  lint-and-test-backend:
+    name: Lint and Test (backend)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # docs-only 判定で HEAD^1（ベース側の親）との diff を取るため 2 世代必要
+          fetch-depth: 2
+
+      # docs-only 判定: コード領域に触れない PR では重いゲートを省略する。
+      # 境界は .claude/skills/create-pr/check-pr.sh のコード領域判定と同一に保つこと。
+      # エリア連動スキップ（frontend のみの diff で本 job を省く等）はしない —
+      # frontend/backend 両 job とも同じ全域境界を見る（#346 スコープ外）。
+      # diff が取れない場合は fail-closed（フルゲート実行）。
+      - name: Detect docs-only diff
+        id: diff
+        run: |
+          if ! files=$(git diff --name-only HEAD^1 HEAD); then
+            echo "diff 取得失敗 — fail-closed でフルゲートを実行する"
+            docs_only=false
+          elif printf '%s\n' "$files" | grep -qE '^(frontend/|backend/|e2e/|infrastructure/|Taskfile|\.github/workflows/|\.github/scripts/)'; then
+            docs_only=false
+          else
+            docs_only=true
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "docs_only: $docs_only"
+
+      - name: Set up Docker Buildx
+        if: steps.diff.outputs.docs_only != 'true'
+        uses: docker/setup-buildx-action@v4.0.0
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Set up Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lint
+        if: steps.diff.outputs.docs_only != 'true'
+        run: task -d backend lint
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
+
+      - name: Test
+        if: steps.diff.outputs.docs_only != 'true'
+        run: task -d backend test-unit
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
+
+      - name: Build
+        if: steps.diff.outputs.docs_only != 'true'
+        run: task -d backend build
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
