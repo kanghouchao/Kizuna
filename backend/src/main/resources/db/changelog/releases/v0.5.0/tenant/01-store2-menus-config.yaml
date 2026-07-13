@@ -1,24 +1,35 @@
 databaseChangeLog:
   - changeSet:
-      id: tenant-v050-001-store2-menus-config-seed
+      id: tenant-v050-001-store2-menus-config-seed-v2
       author: kanghouchao
+      # tenant_id を固定値 2 から自然キー（store2 の domain）の部分問い合わせに置き換えた冪等版（#324）。
+      # central 側で store2 が IDENTITY 採番されるため、ここでは domain から実 id を解決する。
+      # t2-main / store2 の設定行が既存の DB では MARK_RAN で無害スキップする。
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM t_menus WHERE id = 't2-main'
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM t_tenant_configs WHERE tenant_id = (SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')
       changes:
-        # 店舗2（tenant_id=2）のメニュー。tenant1 の現行実効セット（v0.1.0 08-initial-data + v0.3.0 shift-menu-seed
-        # 反映後）を id t1-*→t2-* で複製する（#324 統一ログインデモ）。親を先に挿入する（parent_id FK）。
+        # 店舗2（tenant_id = store2 の domain から解決）のメニュー。tenant1 の現行実効セット（v0.1.0 08-initial-data
+        # + v0.3.0 shift-menu-seed 反映後）を id t1-*→t2-* で複製する（#324 統一ログインデモ）。親を先に挿入する（parent_id FK）。
 
         # Main
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-main" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: label, value: "メイン" }
               - column: { name: sort_order, valueNumeric: 10 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-dashboard" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-main" }
               - column: { name: label, value: "ダッシュボード" }
               - column: { name: path, value: "/tenant/dashboard" }
@@ -30,14 +41,14 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-ops" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: label, value: "業務管理" }
               - column: { name: sort_order, valueNumeric: 20 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-orders" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-ops" }
               - column: { name: label, value: "予約・案件管理" }
               - column: { name: path, value: "/tenant/orders" }
@@ -50,14 +61,14 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-hrm" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: label, value: "HRM" }
               - column: { name: sort_order, valueNumeric: 30 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-cast" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-hrm" }
               - column: { name: label, value: "キャスト管理" }
               - column: { name: path, value: "/tenant/casts" }
@@ -68,7 +79,7 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-shifts" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-hrm" }
               - column: { name: label, value: "出勤管理" }
               - column: { name: path, value: "/tenant/shifts" }
@@ -79,7 +90,7 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-staff" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-hrm" }
               - column: { name: label, value: "スタッフ管理" }
               - column: { name: path, value: "/tenant/staff" }
@@ -91,14 +102,14 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-crm" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: label, value: "CRM" }
               - column: { name: sort_order, valueNumeric: 40 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-customers" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-crm" }
               - column: { name: label, value: "顧客一覧" }
               - column: { name: path, value: "/tenant/customers" }
@@ -111,14 +122,14 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-cms" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: label, value: "CMS" }
               - column: { name: sort_order, valueNumeric: 50 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-news" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-cms" }
               - column: { name: label, value: "お知らせ管理" }
               - column: { name: path, value: "/tenant/news" }
@@ -128,7 +139,7 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-pages" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-cms" }
               - column: { name: label, value: "ページ管理" }
               - column: { name: path, value: "/tenant/pages" }
@@ -138,7 +149,7 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-media" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-cms" }
               - column: { name: label, value: "バナー・画像" }
               - column: { name: path, value: "/tenant/media" }
@@ -150,14 +161,14 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-settings-group" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: label, value: "設定" }
               - column: { name: sort_order, valueNumeric: 60 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-profile" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-settings-group" }
               - column: { name: label, value: "店舗情報" }
               - column: { name: path, value: "/tenant/settings/profile" }
@@ -168,7 +179,7 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: "t2-roles" }
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: parent_id, value: "t2-settings-group" }
               - column: { name: label, value: "ロール・権限" }
               - column: { name: path, value: "/tenant/settings/roles" }
@@ -179,7 +190,7 @@ databaseChangeLog:
         - insert:
             tableName: t_tenant_configs
             columns:
-              - column: { name: tenant_id, valueNumeric: 2 }
+              - column: { name: tenant_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
               - column: { name: template_key, value: default }
               - column: { name: mv_type, value: image }
               - column: { name: description, value: Sample Tenant 2 のサイトへようこそ }

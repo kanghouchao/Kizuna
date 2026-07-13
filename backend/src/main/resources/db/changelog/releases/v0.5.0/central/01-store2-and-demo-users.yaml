@@ -1,13 +1,24 @@
 databaseChangeLog:
   - changeSet:
-      id: central-v050-001-store2-and-demo-users-seed
+      id: central-v050-001-store2-and-demo-users-seed-v2
       author: kanghouchao
+      # 固定 id を排除し IDENTITY 採番に委ねる冪等版（#324）。旧版は central_tenants/platform_users を
+      # 明示 id で挿入していたため、先に実運用テナントを登録済みの DB では PK 衝突で起動不能だった。
+      # 自然キー（store2 の domain / デモ 2 名の email）が既に存在する DB では MARK_RAN で無害スキップする。
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM central_tenants WHERE domain = 'store2.kizuna.test'
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM platform_users WHERE email IN ('tanaka.hanako@kizuna.test', 'yamada.jiro@kizuna.test')
       changes:
         # 統一ログインデモ用の店舗2。旧認証系（t_users 等）は持たず、平台ログイン専用（#324）。
+        # id は明示せず IDENTITY 採番に委ねる（全新 DB では店舗1=1 の次で 2 が採番される）。
         - insert:
             tableName: central_tenants
             columns:
-              - column: { name: id, valueNumeric: 2 }
               - column: { name: name, value: Sample Tenant 2 }
               - column: { name: domain, value: store2.kizuna.test }
               - column: { name: email, value: admin@store2.kizuna.com }
@@ -16,7 +27,6 @@ databaseChangeLog:
         - insert:
             tableName: platform_users
             columns:
-              - column: { name: id, valueNumeric: 2 }
               - column: { name: email, value: tanaka.hanako@kizuna.test }
               - column: { name: password, value: "$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue" }
               - column: { name: display_name, value: "田中花子" }
@@ -27,7 +37,6 @@ databaseChangeLog:
         - insert:
             tableName: platform_users
             columns:
-              - column: { name: id, valueNumeric: 3 }
               - column: { name: email, value: yamada.jiro@kizuna.test }
               - column: { name: password, value: "$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue" }
               - column: { name: display_name, value: "山田次郎" }
@@ -35,28 +44,20 @@ databaseChangeLog:
               - column: { name: role, value: STORE_STAFF }
               - column: { name: store_scope_type, value: SPECIFIC_STORES }
 
-        # 授権店舗集合（SPECIFIC_STORES の実体）。
+        # 授権店舗集合（SPECIFIC_STORES の実体）。id 非固定化に伴い、自然キー（email / domain）の
+        # 部分問い合わせで FK を解決する（単一 Postgres DB なので跨表 subselect が使える）。
         - insert:
             tableName: platform_user_stores
             columns:
-              - column: { name: platform_user_id, valueNumeric: 2 }
-              - column: { name: store_id, valueNumeric: 1 }
+              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM platform_users WHERE email = 'tanaka.hanako@kizuna.test')" }
+              - column: { name: store_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store1.kizuna.test')" }
         - insert:
             tableName: platform_user_stores
             columns:
-              - column: { name: platform_user_id, valueNumeric: 2 }
-              - column: { name: store_id, valueNumeric: 2 }
+              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM platform_users WHERE email = 'tanaka.hanako@kizuna.test')" }
+              - column: { name: store_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store2.kizuna.test')" }
         - insert:
             tableName: platform_user_stores
             columns:
-              - column: { name: platform_user_id, valueNumeric: 3 }
-              - column: { name: store_id, valueNumeric: 1 }
-  - changeSet:
-      id: central-v050-002-store2-demo-users-sequence-sync
-      author: kanghouchao
-      changes:
-        # 明示 id で挿入した autoIncrement 表の IDENTITY シーケンスを MAX(id) へ整合させる（issue #237、SeedSequenceAlignmentIT）。
-        - sql:
-            sql: SELECT setval(pg_get_serial_sequence('central_tenants','id'), (SELECT MAX(id) FROM central_tenants))
-        - sql:
-            sql: SELECT setval(pg_get_serial_sequence('platform_users','id'), (SELECT MAX(id) FROM platform_users))
+              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM platform_users WHERE email = 'yamada.jiro@kizuna.test')" }
+              - column: { name: store_id, valueComputed: "(SELECT id FROM central_tenants WHERE domain = 'store1.kizuna.test')" }
