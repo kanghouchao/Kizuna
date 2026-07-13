@@ -3,6 +3,7 @@ package com.kizuna.shared.tenancy;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
@@ -24,6 +25,12 @@ public class TenantIdInterceptor implements HandlerInterceptor {
   private static final String HEADER_ROLE = "X-Role";
   private static final String HEADER_TENANT_ID = "X-Tenant-ID";
   private static final String HEADER_ROLE_TENANT = "tenant";
+
+  /**
+   * 平台トークンで店舗文脈（X-Tenant-ID）を確立できる PlatformRole の role claim 値。 shared 層は user モジュールへ依存しないため enum
+   * ではなく文字列で保持する（StoreScope の scopeType 判定と同方針）。
+   */
+  private static final Set<String> STORE_BRIDGE_ROLES = Set.of("STORE_MANAGER", "STORE_STAFF");
 
   @Override
   public boolean preHandle(
@@ -61,6 +68,13 @@ public class TenantIdInterceptor implements HandlerInterceptor {
       // 平台トークン（#324 過橋）: X-Role: tenant + 数値 X-Tenant-ID を要求し、授権店舗集合で検証する（fail-closed）。
       if (HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
           && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
+        // 店舗文脈を名乗れるのは店舗ロール（店長・スタッフ）のみ。CAST/MEMBER/HQ_ADMIN が店舗ヘッダを
+        // 名乗るのは詐称として 403 で拒否する（#294 と同型）。授権スコープ検証より前に弾き、
+        // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立の漏れを塞ぐ。
+        if (!STORE_BRIDGE_ROLES.contains(claims.get("role", String.class))) {
+          response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+          return false;
+        }
         Long headerValue = tryParseTenantId(request.getHeader(HEADER_TENANT_ID));
         if (headerValue == null) {
           // 全桁数字だが long 範囲外（#288 と同型）。
