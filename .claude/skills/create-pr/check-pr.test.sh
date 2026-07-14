@@ -91,10 +91,12 @@ echo "== コード域 diff =="
 repo_code=$(setup_repo "frontend/src/App.tsx")
 run 1 'コード域diff + レビュー行なし → 不合格' "$repo_code" "$(full_body "" 1 "")"
 run 0 'コード域diff + レビュー行あり → 合格' "$repo_code" "$(full_body "- [x] ローカル code-review 実施（effort: medium/指摘: 0件/未修正: 0件）" 1 "")"
+run 1 'コード域diff + レビュー行チェックだが未記入スケルトン → 不合格' "$repo_code" "$(full_body "- [x] ローカル code-review 実施（effort: / 指摘: 件 / 未修正: 件）" 1 "")"
 
 echo "== docs-only diff =="
 repo_docs=$(setup_repo "docs/note.md")
 run 0 'docs-only + 免除宣言 + レビュー行なし → 合格' "$repo_docs" "$(full_body "" 0 "対象外（コード変更なし）")"
+run 1 'docs-only + レビュー行チェックだが未記入スケルトン + 免除宣言なし → 不合格' "$repo_docs" "$(full_body "- [x] ローカル code-review 実施（effort: / 指摘: 件 / 未修正: 件）" 1 "")"
 
 echo "----------------------------------------"
 printf '合計: PASS=%s FAIL=%s\n' "$pass" "$fail"
