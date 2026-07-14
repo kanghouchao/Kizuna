@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
+import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformRole;
@@ -71,6 +72,15 @@ class PlatformStaffServiceTest {
     req.setEmail(email);
     req.setPassword(password);
     req.setDisplayName("表示名");
+    req.setRole(role);
+    req.setStoreScopeType(scopeType);
+    req.setStoreIds(storeIds);
+    return req;
+  }
+
+  private PlatformStaffUpdateRequest updateRequest(
+      PlatformRole role, StoreScopeType scopeType, Set<Long> storeIds) {
+    PlatformStaffUpdateRequest req = new PlatformStaffUpdateRequest();
     req.setRole(role);
     req.setStoreScopeType(scopeType);
     req.setStoreIds(storeIds);
@@ -194,5 +204,70 @@ class PlatformStaffServiceTest {
     when(repository.save(any())).thenThrow(new DataIntegrityViolationException("fk violation"));
 
     assertThatThrownBy(() -> service.create(req)).isInstanceOf(InvalidStoreScopeException.class);
+  }
+
+  @Test
+  void update_reassignsRoleAndScopeAndSaves() {
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", PlatformRole.HQ_ADMIN, StoreScopeType.ALL_STORES, Set.of());
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.save(existing)).thenReturn(existing);
+
+    Optional<PlatformStaffResponse> res =
+        service.update(
+            3L,
+            updateRequest(PlatformRole.STORE_MANAGER, StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
+
+    assertThat(existing.getRole()).isEqualTo(PlatformRole.STORE_MANAGER);
+    assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(existing.getStoreIds()).containsExactly(1L);
+    assertThat(res).isPresent();
+    assertThat(res.get().id()).isEqualTo(3L);
+    assertThat(res.get().role()).isEqualTo(PlatformRole.STORE_MANAGER);
+  }
+
+  @Test
+  void update_unknownId_returnsEmptyWithoutSaving() {
+    when(repository.findById(404L)).thenReturn(Optional.empty());
+
+    Optional<PlatformStaffResponse> res =
+        service.update(
+            404L, updateRequest(PlatformRole.STORE_STAFF, StoreScopeType.ALL_STORES, Set.of()));
+
+    assertThat(res).isEmpty();
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  void update_nonStaffRole_throwsWithoutLookup() {
+    assertThatThrownBy(
+            () ->
+                service.update(
+                    3L, updateRequest(PlatformRole.MEMBER, StoreScopeType.ALL_STORES, Set.of())))
+        .isInstanceOf(ServiceException.class);
+
+    verify(repository, never()).findById(any());
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  void update_unknownStoreId_convertsToInvalidStoreScope() {
+    PlatformUser existing =
+        staff(
+            7L,
+            "target@kizuna.test",
+            PlatformRole.STORE_STAFF,
+            StoreScopeType.ALL_STORES,
+            Set.of());
+    when(repository.findById(7L)).thenReturn(Optional.of(existing));
+    when(repository.save(existing)).thenThrow(new DataIntegrityViolationException("fk violation"));
+
+    assertThatThrownBy(
+            () ->
+                service.update(
+                    7L,
+                    updateRequest(
+                        PlatformRole.STORE_MANAGER, StoreScopeType.SPECIFIC_STORES, Set.of(999L))))
+        .isInstanceOf(InvalidStoreScopeException.class);
   }
 }
