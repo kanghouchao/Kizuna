@@ -1,14 +1,21 @@
 package com.kizuna.user.application;
 
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
+import com.kizuna.user.domain.DuplicateStaffEmailException;
+import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformRole;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,12 +31,46 @@ public class PlatformStaffService {
       EnumSet.of(PlatformRole.HQ_ADMIN, PlatformRole.STORE_MANAGER, PlatformRole.STORE_STAFF);
 
   private final PlatformUserRepository repository;
+  private final PasswordEncoder passwordEncoder;
 
   @Transactional(readOnly = true)
   public List<PlatformStaffResponse> list() {
     return repository.findByRoleInOrderByDisplayNameAsc(STAFF_ROLES).stream()
         .map(PlatformStaffService::toResponse)
         .toList();
+  }
+
+  public PlatformStaffResponse create(PlatformStaffCreateRequest req) {
+    requireStaffRole(req.getRole());
+    if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
+      throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
+    }
+    PlatformUser user =
+        PlatformUser.builder()
+            .email(req.getEmail())
+            .password(passwordEncoder.encode(req.getPassword()))
+            .displayName(req.getDisplayName())
+            .enabled(true)
+            .role(req.getRole())
+            .storeScopeType(req.getStoreScopeType())
+            .storeIds(req.getStoreIds())
+            .build();
+    return toResponse(save(user));
+  }
+
+  private static void requireStaffRole(PlatformRole role) {
+    if (!STAFF_ROLES.contains(role)) {
+      throw new ServiceException("スタッフ管理では HQ/店長/スタッフのロールのみ作成できます");
+    }
+  }
+
+  /** 保存時の FK 違反（存在しない店舗 id）をドメイン検証エラー（400）へ変換する。 */
+  private PlatformUser save(PlatformUser user) {
+    try {
+      return repository.save(user);
+    } catch (DataIntegrityViolationException ex) {
+      throw new InvalidStoreScopeException("指定された店舗が存在しません");
+    }
   }
 
   private static PlatformStaffResponse toResponse(PlatformUser user) {
