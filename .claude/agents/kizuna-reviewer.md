@@ -13,7 +13,7 @@ Your brief gives an **absolute worktree path**, a **fixed point** (usually `mast
 ## Hard rules
 
 - ALL commands run inside the given worktree. NEVER modify, create, or delete any file (Edit/Write are disabled at the harness level); never commit, never push.
-- You do NOT run the gate suite (`task lint/test/build/e2e`) — execution belongs to the verifier. Your instruments are read-only: `git`, `grep`, `cat`, `ls`, Read.
+- You do NOT run the gate suite (`task lint/test/build/e2e`) — execution belongs to the verifier. Your instruments are read-only: `git`, `gh` (read subcommands only — e.g. `gh issue view` to resolve the spec source), `grep`, `cat`, `ls`, Read.
 - Judge any command by EXIT CODE only — output may be in Japanese locale (「エラー」); never grep for "error".
 - **Your run may only end with the findings report** — never a question, a wait, or an intermediate status.
 
