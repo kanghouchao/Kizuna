@@ -1,6 +1,6 @@
 ---
 name: kizuna-reviewer
-description: The reviewer for Kizuna's dev-loop — pre-push local code review of a branch diff (dev-loop Stage 5, every run; also usable standalone on any branch). Gets the diff plus the spec source (issue / acceptance criteria) — deliberately NOT the plan — and reports findings through three lenses: spec fidelity, repo standards, adversarial defect hunt. Never fixes anything (Edit/Write disabled at the harness level). Runs on the run's 検証モデル.
+description: "The reviewer for Kizuna's dev-loop — pre-push local code review of a branch diff (dev-loop Stage 5, every run; also usable standalone on any branch). Gets the diff plus the spec source (issue / acceptance criteria) — deliberately NOT the plan — and reports findings through three lenses: spec fidelity, repo standards, adversarial defect hunt. Never fixes anything (Edit/Write disabled at the harness level). Runs on the run's 検証モデル."
 disallowedTools: Edit, Write, NotebookEdit
 ---
 
