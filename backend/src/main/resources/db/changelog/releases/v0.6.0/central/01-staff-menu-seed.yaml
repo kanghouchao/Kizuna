@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: central-013-staff-menu-seed
+      author: kanghouchao
+      changes:
+        # スタッフ・権限管理（/central/staff、HQ 限定）の中央メニュー。到達するのは HQ_ADMIN のみのため
+        # permission 列は付けず、防衛線はコントローラの @PreAuthorize に一本化する（#325）。
+        - insert:
+            tableName: central_menus
+            columns:
+              - column: { name: id, valueNumeric: 6 }
+              - column: { name: parent_id, valueNumeric: 1 }
+              - column: { name: label, value: "スタッフ管理" }
+              - column: { name: path, value: "/central/staff" }
+              - column: { name: icon, value: "UsersIcon" }
+              - column: { name: sort_order, valueNumeric: 3 }
+  - changeSet:
+      id: central-014-staff-menu-seed-sequence-sync
+      author: kanghouchao
+      changes:
+        # 明示 id 挿入で未進行の IDENTITY シーケンスを MAX(id) へ整合させる（v0.4.0 platform-users-seed に倣う）。
+        - sql:
+            sql: SELECT setval(pg_get_serial_sequence('central_menus','id'), (SELECT MAX(id) FROM central_menus))
