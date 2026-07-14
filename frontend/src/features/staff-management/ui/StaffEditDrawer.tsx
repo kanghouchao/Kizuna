@@ -13,6 +13,7 @@ import {
 } from '@/entities/user';
 import { getApiErrorMessage, useManagedList } from '@/shared/lib';
 import { STAFF_ROLE_OPTIONS, staffRoleLabel } from '../lib/roles';
+import { storeSetLabel } from '../lib/storeSetLabel';
 import { StoreSetPicker } from './StoreSetPicker';
 
 interface StaffEditDrawerProps {
@@ -26,17 +27,6 @@ interface StaffEditDrawerProps {
 
 const inputClass =
   'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
-
-/** 担当店舗の表示文字列（「全店舗」または店舗名をカンマ区切り、#325 D6）。 */
-function storeSetLabel(
-  storeScopeType: PlatformStoreScopeType,
-  storeIds: number[],
-  stores: PlatformStore[]
-): string {
-  if (storeScopeType === 'ALL_STORES') return '全店舗';
-  const names = stores.filter(store => storeIds.includes(store.id)).map(store => store.name);
-  return names.length > 0 ? names.join('・') : '未選択';
-}
 
 /** スタッフの権限編集ドロワー（ロール・店舗集合のみ、氏名/メールは非表示。「この設定の結果」要約付き、#325 D6）。 */
 export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDrawerProps) {
