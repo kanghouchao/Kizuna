@@ -3,6 +3,7 @@ package com.kizuna.user.application;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
+import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformRole;
@@ -12,6 +13,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -56,6 +58,17 @@ public class PlatformStaffService {
             .storeIds(req.getStoreIds())
             .build();
     return toResponse(save(user));
+  }
+
+  public Optional<PlatformStaffResponse> update(Long id, PlatformStaffUpdateRequest req) {
+    requireStaffRole(req.getRole());
+    return repository
+        .findById(id)
+        .map(
+            user -> {
+              user.reassign(req.getRole(), req.getStoreScopeType(), req.getStoreIds());
+              return toResponse(save(user));
+            });
   }
 
   private static void requireStaffRole(PlatformRole role) {
