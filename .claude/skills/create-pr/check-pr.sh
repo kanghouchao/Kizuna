@@ -59,13 +59,14 @@ fi
 # 5) ローカル code-review 実施行 — diff がコード領域に触れる場合のみ [x] を必須とする。
 #    docs-only は上のゲートチェックボックスと同じ免除宣言「対象外（コード変更なし）」で免除する
 #    （$code_touched は上のブロックで確定済みの値を再利用する）。
+review_line_re='^- \[x\] ローカル code-review 実施（effort: (medium|high)( |/|／).*指摘: [0-9]+件.*未修正: [0-9]+件）'
 if [ "$code_touched" -eq 1 ]; then
-  grep -Eq '^- \[x\] ローカル code-review 実施' "$body_file" \
-    || err "ローカル code-review 実施行が未チェック"
+  grep -Eq "$review_line_re" "$body_file" \
+    || err "ローカル code-review 実施行が未チェック、または effort/指摘/未修正 の記載が不完全"
 else
-  grep -Eq '^- \[x\] ローカル code-review 実施' "$body_file" \
+  grep -Eq "$review_line_re" "$body_file" \
     || grep -q "対象外（コード変更なし）" "$body_file" \
-    || err "ローカル code-review 実施行が未チェックだが免除宣言「対象外（コード変更なし）」も無い"
+    || err "ローカル code-review 実施行が未チェック、または effort/指摘/未修正 の記載が不完全（免除宣言「対象外（コード変更なし）」も無い）"
 fi
 
 # 6) 埋め忘れプレースホルダが残っていない
