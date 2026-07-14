@@ -66,12 +66,7 @@ public class PlatformUser extends BaseEntity {
       StoreScopeType storeScopeType,
       Set<Long> storeIds) {
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
-    if (storeScopeType == StoreScopeType.SPECIFIC_STORES && stores.isEmpty()) {
-      throw new InvalidStoreScopeException("SPECIFIC_STORES の授権には少なくとも 1 つの店舗が必要です");
-    }
-    if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
-      throw new InvalidStoreScopeException("ALL_STORES の授権に個別店舗を指定できません");
-    }
+    validateScope(storeScopeType, stores);
     this.email = email == null ? null : email.toLowerCase(Locale.ROOT);
     this.password = password;
     this.displayName = displayName;
@@ -79,6 +74,24 @@ public class PlatformUser extends BaseEntity {
     this.role = role;
     this.storeScopeType = storeScopeType;
     this.storeIds = new HashSet<>(stores);
+  }
+
+  /** ロール×店舗集合を再割当てする。構築時と同一の不変条件を検証する（email/password/displayName は変更しない）。 */
+  public void reassign(PlatformRole role, StoreScopeType storeScopeType, Set<Long> storeIds) {
+    Set<Long> stores = storeIds == null ? Set.of() : storeIds;
+    validateScope(storeScopeType, stores);
+    this.role = role;
+    this.storeScopeType = storeScopeType;
+    this.storeIds = new HashSet<>(stores);
+  }
+
+  private static void validateScope(StoreScopeType storeScopeType, Set<Long> stores) {
+    if (storeScopeType == StoreScopeType.SPECIFIC_STORES && stores.isEmpty()) {
+      throw new InvalidStoreScopeException("SPECIFIC_STORES の授権には少なくとも 1 つの店舗が必要です");
+    }
+    if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
+      throw new InvalidStoreScopeException("ALL_STORES の授権に個別店舗を指定できません");
+    }
   }
 
   /** 指定店舗を授権するか。ALL_STORES は常に true、SPECIFIC_STORES は店舗集合のメンバーのみ true。 */
