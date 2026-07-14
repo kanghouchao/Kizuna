@@ -39,6 +39,3 @@ logs/
 *.bak
 *.pid
 *.lock
-
-# Test Reports
-reports/
