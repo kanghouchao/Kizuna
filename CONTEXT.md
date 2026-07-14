@@ -40,6 +40,8 @@ _Avoid_: Token の裸使用（token は担体、session は概念）
 PlatformUser の授権を表す店舗集合（ALL_STORES または SPECIFIC_STORES の店舗 ID 集合）。読みは Hibernate の第二 filter（`storeSetFilter`）が機構的に濾過する fail-closed 設計（解決不能なら例外）。書きは明示的単一 storeId を受け取り、その storeId が授権集合に含まれるか検証したうえで既存の単店機構（TenantContext + tenantFilter）へ委譲する。
 _Avoid_: 読み・書きを同一機構と混同すること（読みは集合フィルタ、書きは単一 storeId 検証で別経路）
 
+スタッフ管理（`/platform/staff`、HQ_ADMIN 限定）で PlatformUser のロール×店舗集合を付与・変更できる（#325）。対象は HQ_ADMIN/STORE_MANAGER/STORE_STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う。JWT はステートレスなため、変更は対象スタッフの次回ログインから反映される（即時セッション失効はしない）。
+
 ### 店舗運営
 
 **Cast**:
