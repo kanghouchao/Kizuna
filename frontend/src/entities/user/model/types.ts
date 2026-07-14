@@ -75,3 +75,30 @@ export interface PlatformStore {
   id: number;
   name: string;
 }
+
+// スタッフ（ロール×店舗集合）の応答
+export interface PlatformStaffResponse {
+  id: number;
+  email: string;
+  display_name: string;
+  role: PlatformRole;
+  store_scope_type: PlatformStoreScopeType;
+  store_ids: number[];
+}
+
+// スタッフ新規作成リクエスト
+export interface PlatformStaffCreateRequest {
+  email: string;
+  password: string;
+  display_name: string;
+  role: PlatformRole;
+  store_scope_type: PlatformStoreScopeType;
+  store_ids: number[];
+}
+
+// スタッフ権限編集リクエスト
+export interface PlatformStaffUpdateRequest {
+  role: PlatformRole;
+  store_scope_type: PlatformStoreScopeType;
+  store_ids: number[];
+}
