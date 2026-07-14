@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: central/01-staff-menu-seed.yaml
+      relativeToChangelogFile: true
