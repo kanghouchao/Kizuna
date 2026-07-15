@@ -49,6 +49,17 @@ public class Cast extends TenantScopedEntity {
   @Column(name = "display_order")
   private Integer displayOrder;
 
+  @Column(name = "platform_user_id")
+  private Long platformUserId;
+
+  /** 平台身分（PlatformUser）を紐づける。既に紐づき済みなら状態例外を投げる（防御的不変条件）。 */
+  public void linkPlatformUser(Long platformUserId) {
+    if (this.platformUserId != null) {
+      throw new CastInvitationStateException("この档案には既に平台身分が紐づいています");
+    }
+    this.platformUserId = platformUserId;
+  }
+
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(CastPatch patch) {
     if (patch.name() != null) {
