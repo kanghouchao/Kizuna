@@ -32,7 +32,7 @@ public class ShiftController {
   private final ShiftService shiftService;
 
   @GetMapping
-  @PreAuthorize("hasAuthority('CAST_MANAGE')")
+  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
   public ResponseEntity<List<ShiftResponse>> list(
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
@@ -40,20 +40,20 @@ public class ShiftController {
   }
 
   @PostMapping
-  @PreAuthorize("hasAuthority('CAST_MANAGE')")
+  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
   public ResponseEntity<ShiftResponse> create(@Valid @RequestBody ShiftCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED).body(shiftService.create(request));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAuthority('CAST_MANAGE')")
+  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
   public ResponseEntity<ShiftResponse> update(
       @PathVariable String id, @Valid @RequestBody ShiftUpdateRequest request) {
     return ResponseEntity.ok(shiftService.update(id, request));
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAuthority('CAST_MANAGE')")
+  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     shiftService.delete(id);
     return ResponseEntity.ok().build();

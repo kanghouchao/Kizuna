@@ -307,10 +307,10 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    // 平台トークンの authorities に PERM_ 形式が併載されていないと ORDER_MANAGE ゲートの子項目が
-    // フィルタで消える。生ボディに権限ゲートラベルが現れることで可視性の復旧を固定する（非空断言では捕捉できない）。
+    // 旧権限モデル撤去（#326）で permission 列は null 化済みのため、MenuTreeAssembler.visible() の
+    // null 判定分岐により無条件可視になる。生ボディに権限ゲートラベルが現れることで可視性を固定する（非空断言では捕捉できない）。
     assertThat(res.getBody())
-        .as("ORDER_MANAGE ゲートの「予約・案件管理」が可視であること（PERM_ 形式の併載）")
+        .as("旧 ORDER_MANAGE ゲートの「予約・案件管理」が可視であること（permission 列 null 化により無条件可視）")
         .contains("予約・案件管理");
   }
 
@@ -325,9 +325,10 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    // HQ の TENANT_MANAGE が PERM_ 形式で併載されていないと「テナント一覧」がフィルタで消える。
+    // 旧権限モデル撤去（#326）で permission 列は null 化済みのため、MenuTreeAssembler.visible() の
+    // null 判定分岐により無条件可視になる。
     assertThat(res.getBody())
-        .as("TENANT_MANAGE ゲートの「テナント一覧」が可視であること（PERM_ 形式の併載）")
+        .as("旧 TENANT_MANAGE ゲートの「テナント一覧」が可視であること（permission 列 null 化により無条件可視）")
         .contains("テナント一覧");
   }
 
