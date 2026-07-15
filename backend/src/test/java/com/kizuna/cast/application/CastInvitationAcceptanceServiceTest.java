@@ -3,6 +3,7 @@ package com.kizuna.cast.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -143,6 +144,9 @@ class CastInvitationAcceptanceServiceTest {
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast));
     when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+    when(castInvitationRepository.claimPending(
+            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+        .thenReturn(1);
     when(passwordEncoder.encode("password1")).thenReturn("encoded");
     when(platformUserRepository.save(any()))
         .thenAnswer(
@@ -157,7 +161,10 @@ class CastInvitationAcceptanceServiceTest {
         service.acceptAsNewUser("tok", acceptRequest("New@Example.com"));
 
     assertThat(response.storeName()).isEqualTo("店舗A");
-    assertThat(invitation.getStatus()).isEqualTo(CastInvitation.Status.ACCEPTED);
+    // 招待の状態遷移は条件付き UPDATE（claimPending）が担う。エンティティは受諾後に変更しない。
+    verify(castInvitationRepository)
+        .claimPending(
+            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED));
     assertThat(cast.getPlatformUserId()).isEqualTo(42L);
 
     ArgumentCaptor<PlatformUser> captor = ArgumentCaptor.forClass(PlatformUser.class);
@@ -201,6 +208,24 @@ class CastInvitationAcceptanceServiceTest {
   }
 
   @Test
+  void acceptAsNewUser_rejectsWhenInvitationAlreadyClaimed() {
+    // 読み込み時点では PENDING・未期限だが、並行受諾で先着に奪われ claimPending が 0 行になる状況を模擬する。
+    CastInvitation invitation =
+        invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+    when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
+    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+    when(castInvitationRepository.claimPending(
+            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+        .thenReturn(0);
+
+    // クレームが 0 行なら受諾権を確定できず、身分作成の前に弾かれること（二重登録の防止）。
+    assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("New@Example.com")))
+        .isInstanceOf(CastInvitationStateException.class);
+    verify(platformUserRepository, never()).save(any());
+  }
+
+  @Test
   void acceptAsExistingUser_addsStoreAndLinks() {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
@@ -209,6 +234,9 @@ class CastInvitationAcceptanceServiceTest {
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c2")).thenReturn(Optional.of(cast));
     when(platformUserRepository.findByEmail("cast@example.com")).thenReturn(Optional.of(existing));
+    when(castInvitationRepository.claimPending(
+            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+        .thenReturn(1);
     stubTenant(2L, "店舗B");
 
     CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com");
@@ -217,7 +245,10 @@ class CastInvitationAcceptanceServiceTest {
     assertThat(existing.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
     assertThat(existing.getRole()).isEqualTo(PlatformRole.CAST);
     assertThat(cast.getPlatformUserId()).isEqualTo(7L);
-    assertThat(invitation.getStatus()).isEqualTo(CastInvitation.Status.ACCEPTED);
+    // 招待の状態遷移は条件付き UPDATE（claimPending）が担う。エンティティは受諾後に変更しない。
+    verify(castInvitationRepository)
+        .claimPending(
+            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED));
     verify(platformUserRepository).save(existing);
   }
 

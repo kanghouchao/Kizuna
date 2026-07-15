@@ -6,6 +6,7 @@ import com.kizuna.cast.api.dto.CastInvitationDetailResponse;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
+import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.tenant.domain.Tenant;
@@ -67,7 +68,7 @@ public class CastInvitationAcceptanceService {
         .isPresent()) {
       throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
     }
-    invitation.accept(OffsetDateTime.now());
+    claim(invitation);
 
     PlatformUser user =
         saveUser(
@@ -80,7 +81,7 @@ public class CastInvitationAcceptanceService {
                 .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(invitation.getTenantId()))
                 .build());
-    link(cast, invitation, user.getId());
+    link(cast, user.getId());
     return new CastAcceptanceResponse(storeName(invitation.getTenantId()));
   }
 
@@ -96,20 +97,39 @@ public class CastInvitationAcceptanceService {
     if (user.getRole() != PlatformRole.CAST) {
       throw new AccessDeniedException("CAST アカウントのみ既存受諾できます");
     }
-    invitation.accept(OffsetDateTime.now());
+    claim(invitation);
 
     Set<Long> storeIds = new HashSet<>(user.getStoreIds());
     storeIds.add(invitation.getTenantId());
     user.reassign(PlatformRole.CAST, StoreScopeType.SPECIFIC_STORES, storeIds);
     platformUserRepository.save(user);
-    link(cast, invitation, user.getId());
+    link(cast, user.getId());
     return new CastAcceptanceResponse(storeName(invitation.getTenantId()));
   }
 
-  private void link(Cast cast, CastInvitation invitation, Long platformUserId) {
+  /**
+   * 招待を原子的にクレームする（身分作成・紐づけの前に受諾権を確定する）。
+   *
+   * <p>期限切れは物理状態が PENDING のままで条件付き UPDATE では弾けないため、事前検証で拒否する。 PENDING→ACCEPTED の遷移自体は条件付き UPDATE
+   * の更新行数で直列化し、並行受諾では先着のみ 1 行を更新できる。 遷移は DB 側で確定するため、読み込んだ招待エンティティは受諾後に変更も再取得もしない（＝フラッシュで上書きされない）。
+   * よって永続化コンテキストのクリアは不要。
+   */
+  private void claim(CastInvitation invitation) {
+    OffsetDateTime now = OffsetDateTime.now();
+    if (invitation.isExpired(now)) {
+      throw new CastInvitationStateException("この招待は有効期限が切れています");
+    }
+    int claimed =
+        castInvitationRepository.claimPending(
+            invitation.getId(), now, CastInvitation.Status.PENDING, CastInvitation.Status.ACCEPTED);
+    if (claimed != 1) {
+      throw new CastInvitationStateException("この招待は既に受諾済みまたは失効しています");
+    }
+  }
+
+  private void link(Cast cast, Long platformUserId) {
     cast.linkPlatformUser(platformUserId);
     castRepository.save(cast);
-    castInvitationRepository.save(invitation);
   }
 
   private CastInvitation findByToken(String token) {
