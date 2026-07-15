@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 public class OrderResponse {
   private String id;
   private String storeName;
-  private String receptionistId;
+  private Long receptionistId;
   private String receptionistName; // Helper for display
   private LocalDate businessDate;
   private LocalTime arrivalScheduledStartTime;

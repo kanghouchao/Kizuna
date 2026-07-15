@@ -16,7 +16,7 @@ public interface OrderRepository
   String VIEW_SELECT =
       """
       select o.id as id, o.storeName as storeName,
-             o.receptionistId as receptionistId, u.nickname as receptionistName,
+             o.receptionistId as receptionistId, u.displayName as receptionistName,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,
@@ -32,7 +32,7 @@ public interface OrderRepository
       from com.kizuna.order.domain.Order o
         left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
         left join com.kizuna.cast.domain.Cast k on k.id = o.castId
-        left join com.kizuna.user.domain.StoreUser u on u.id = o.receptionistId
+        left join com.kizuna.user.domain.PlatformUser u on u.id = o.receptionistId
       """;
 
   @Query(

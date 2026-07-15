@@ -14,7 +14,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.StoreUserRepository;
+import com.kizuna.user.domain.PlatformUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +28,7 @@ public class OrderService {
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final CastRepository castRepository;
-  private final StoreUserRepository storeUserRepository;
+  private final PlatformUserRepository platformUserRepository;
   private final TenantRepository tenantRepository;
   private final TenantContext tenantContext;
   private final OrderMapper orderMapper;
@@ -68,7 +68,7 @@ public class OrderService {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
     order.assignCast(request.getCastId());
-    if (!storeUserRepository.existsById(request.getReceptionistId())) {
+    if (!platformUserRepository.existsById(request.getReceptionistId())) {
       throw new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId());
     }
     order.assignReceptionist(request.getReceptionistId());
@@ -87,7 +87,7 @@ public class OrderService {
     order.apply(orderMapper.toPatch(request));
 
     // 関連 ID の更新（存在確認のうえ）
-    if (!storeUserRepository.existsById(request.getReceptionistId())) {
+    if (!platformUserRepository.existsById(request.getReceptionistId())) {
       throw new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId());
     }
     order.assignReceptionist(request.getReceptionistId());

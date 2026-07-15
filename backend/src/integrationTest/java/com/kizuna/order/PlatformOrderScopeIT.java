@@ -58,8 +58,8 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   /** マーカー受注が一覧の先頭ページに現れるよう、他 IT の受注より新しい営業日を使う。 */
   private static final LocalDate MARKER_DATE = LocalDate.of(2999, 1, 1);
 
-  /** tenant/08-initial-data.yaml のシードユーザー（受付担当として使用）。 */
-  private static final String SEED_RECEPTIONIST_ID = "user-1";
+  /** v0.4.0 central/02 の HQ 管理者シード(platform_users id=1)。受付担当として使用。 */
+  private static final long SEED_RECEPTIONIST_ID = 1L;
 
   @Autowired private OrderRepository orderRepository;
   @Autowired private TenantRepository tenantRepository;
@@ -254,7 +254,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   void writeWithoutStoreIdIsRejected() {
     String body =
         String.format(
-            "{\"receptionist_id\": \"%s\", \"business_date\": \"%s\", \"cast_id\": \"dummy-cast\"}",
+            "{\"receptionist_id\": %d, \"business_date\": \"%s\", \"cast_id\": \"dummy-cast\"}",
             SEED_RECEPTIONIST_ID, LocalDate.now());
 
     ResponseEntity<JsonNode> res =
@@ -273,7 +273,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
 
     String body =
         String.format(
-            "{\"store_id\": %d, \"receptionist_id\": \"%s\", \"business_date\": \"%s\","
+            "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
                 + " \"cast_id\": \"dummy-cast\"}",
             tenantBId, SEED_RECEPTIONIST_ID, LocalDate.now());
 
@@ -296,7 +296,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
 
     String body =
         String.format(
-            "{\"store_id\": %d, \"receptionist_id\": \"%s\", \"business_date\": \"%s\","
+            "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
                 + " \"cast_id\": \"%s\"}",
             TENANT_A, SEED_RECEPTIONIST_ID, LocalDate.now(), castId);
 

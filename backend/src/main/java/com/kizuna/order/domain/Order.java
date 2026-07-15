@@ -31,7 +31,7 @@ public class Order extends TenantScopedEntity {
   private String storeName;
 
   @Column(name = "receptionist_id")
-  private String receptionistId;
+  private Long receptionistId;
 
   @Column(name = "business_date", nullable = false)
   private LocalDate businessDate;
@@ -107,7 +107,7 @@ public class Order extends TenantScopedEntity {
   }
 
   /** 受付担当者を割り当てる（存在確認は application 層の責務）。 */
-  public void assignReceptionist(String receptionistId) {
+  public void assignReceptionist(Long receptionistId) {
     this.receptionistId = receptionistId;
   }
 

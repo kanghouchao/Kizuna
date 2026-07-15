@@ -20,8 +20,8 @@ import org.springframework.http.ResponseEntity;
  */
 class OrderCrossTenantIT extends CrossTenantTestSupport {
 
-  /** tenant/08-initial-data.yaml のシードユーザー（受付担当として使用）。 */
-  private static final String SEED_RECEPTIONIST_ID = "user-1";
+  /** v0.4.0 central/02 の HQ 管理者シード(platform_users id=1)。受付担当として使用。 */
+  private static final long SEED_RECEPTIONIST_ID = 1L;
 
   private String createCastAs(long tenantId, String name) {
     ResponseEntity<JsonNode> created =
@@ -36,9 +36,9 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
   }
 
   private String orderBody(String castId, String remarks) {
-    return "{\"receptionist_id\": \""
+    return "{\"receptionist_id\": "
         + SEED_RECEPTIONIST_ID
-        + "\", \"business_date\": \""
+        + ", \"business_date\": \""
         + LocalDate.now()
         + "\", \"cast_id\": \""
         + castId
