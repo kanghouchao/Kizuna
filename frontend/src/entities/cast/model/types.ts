@@ -1,3 +1,6 @@
+// キャストの招待状態（四態。cast/domain/CastInvitationStatus.java と対応）
+export type CastInvitationStatus = 'NOT_INVITED' | 'INVITED' | 'EXPIRED' | 'LINKED';
+
 // キャスト（Cast）レスポンス
 export interface CastResponse {
   id: string;
@@ -11,6 +14,7 @@ export interface CastResponse {
   waist?: number;
   hip?: number;
   display_order?: number;
+  invitation_status: CastInvitationStatus;
   created_at: string;
   updated_at: string;
 }
@@ -41,4 +45,10 @@ export interface CastUpdateRequest {
   waist?: number;
   hip?: number;
   display_order?: number;
+}
+
+// キャスト招待発行レスポンス
+export interface CastInvitationIssueResponse {
+  token: string;
+  expires_at: string;
 }
