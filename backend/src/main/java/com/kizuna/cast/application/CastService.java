@@ -5,12 +5,14 @@ import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,25 +27,27 @@ public class CastService {
   private final CastMapper castMapper;
   private final TenantContext tenantContext;
   private final TenantRepository tenantRepository;
+  private final CastInvitationService castInvitationService;
 
   @TenantScoped
   @Transactional(readOnly = true)
   public Page<CastResponse> list(String search, Pageable pageable) {
-    if (search != null && !search.isEmpty()) {
-      return castRepository
-          .findByNameContainingIgnoreCase(search, pageable)
-          .map(castMapper::toResponse);
-    }
-    return castRepository.findAll(pageable).map(castMapper::toResponse);
+    Page<Cast> page =
+        search != null && !search.isEmpty()
+            ? castRepository.findByNameContainingIgnoreCase(search, pageable)
+            : castRepository.findAll(pageable);
+    Map<String, CastInvitationStatus> statuses =
+        castInvitationService.deriveStatuses(page.getContent());
+    return page.map(cast -> castMapper.toResponse(cast, statuses.get(cast.getId())));
   }
 
   @TenantScoped
   @Transactional(readOnly = true)
   public CastResponse get(String id) {
-    return castRepository
-        .findById(id)
-        .map(castMapper::toResponse)
-        .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
+    Cast cast =
+        castRepository.findById(id).orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
+    CastInvitationStatus status = castInvitationService.deriveStatuses(List.of(cast)).get(id);
+    return castMapper.toResponse(cast, status);
   }
 
   /**
