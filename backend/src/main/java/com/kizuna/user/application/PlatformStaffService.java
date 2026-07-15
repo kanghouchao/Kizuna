@@ -32,6 +32,8 @@ public class PlatformStaffService {
   private static final Set<PlatformRole> STAFF_ROLES =
       EnumSet.of(PlatformRole.HQ_ADMIN, PlatformRole.STORE_MANAGER, PlatformRole.STORE_STAFF);
 
+  private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_platform_users_email";
+
   private final PlatformUserRepository repository;
   private final PasswordEncoder passwordEncoder;
 
@@ -64,6 +66,8 @@ public class PlatformStaffService {
     requireStaffRole(req.getRole());
     return repository
         .findById(id)
+        // 対象の現在ロールがスタッフ集合外（CAST/MEMBER）なら不可視として空を返す（list/create と同じ扱い）。
+        .filter(user -> STAFF_ROLES.contains(user.getRole()))
         .map(
             user -> {
               user.reassign(req.getRole(), req.getStoreScopeType(), req.getStoreIds());
@@ -77,11 +81,18 @@ public class PlatformStaffService {
     }
   }
 
-  /** 保存時の FK 違反（存在しない店舗 id）をドメイン検証エラー（400）へ変換する。 */
+  /**
+   * 保存時の整合性違反を原因別に分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、それ以外（存在しない店舗 id の FK 違反）は店舗エラーへ変換する（いずれも
+   * 400）。
+   */
   private PlatformUser save(PlatformUser user) {
     try {
       return repository.save(user);
     } catch (DataIntegrityViolationException ex) {
+      String cause = ex.getMostSpecificCause().getMessage();
+      if (cause != null && cause.contains(EMAIL_UNIQUE_CONSTRAINT)) {
+        throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
+      }
       throw new InvalidStoreScopeException("指定された店舗が存在しません");
     }
   }
