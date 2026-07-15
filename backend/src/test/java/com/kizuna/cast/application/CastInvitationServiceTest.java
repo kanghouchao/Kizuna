@@ -25,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class CastInvitationServiceTest {
@@ -56,7 +57,7 @@ class CastInvitationServiceTest {
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.findByCastIdAndStatus("c1", CastInvitation.Status.PENDING))
         .thenReturn(List.of());
-    when(castInvitationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     OffsetDateTime before = OffsetDateTime.now();
     CastInvitationResponse response = castInvitationService.issue("c1");
@@ -75,7 +76,7 @@ class CastInvitationServiceTest {
     assertThatThrownBy(() -> castInvitationService.issue("missing"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("キャストが見つかりません");
-    verify(castInvitationRepository, never()).save(any());
+    verify(castInvitationRepository, never()).saveAndFlush(any());
   }
 
   @Test
@@ -84,7 +85,7 @@ class CastInvitationServiceTest {
 
     assertThatThrownBy(() -> castInvitationService.issue("c1"))
         .isInstanceOf(CastInvitationStateException.class);
-    verify(castInvitationRepository, never()).save(any());
+    verify(castInvitationRepository, never()).saveAndFlush(any());
   }
 
   @Test
@@ -94,12 +95,26 @@ class CastInvitationServiceTest {
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.findByCastIdAndStatus("c1", CastInvitation.Status.PENDING))
         .thenReturn(List.of(existing));
-    when(castInvitationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     castInvitationService.issue("c1");
 
     assertThat(existing.getStatus()).isEqualTo(CastInvitation.Status.INVALIDATED);
-    verify(castInvitationRepository).save(any());
+    verify(castInvitationRepository).saveAndFlush(any());
+  }
+
+  @Test
+  void issue_convertsPendingUniqueViolationToStateException() {
+    // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定した場合、部分ユニーク
+    // インデックス違反（DataIntegrityViolationException）となる。これを意味のある 400 に変換する。
+    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castInvitationRepository.findByCastIdAndStatus("c1", CastInvitation.Status.PENDING))
+        .thenReturn(List.of());
+    when(castInvitationRepository.saveAndFlush(any()))
+        .thenThrow(new DataIntegrityViolationException("uq_t_cast_invitations_pending_cast"));
+
+    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+        .isInstanceOf(CastInvitationStateException.class);
   }
 
   @Test

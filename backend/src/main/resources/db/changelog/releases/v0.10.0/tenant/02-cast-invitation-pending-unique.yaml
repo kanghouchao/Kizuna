@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: tenant-v0100-003-cast-invitation-pending-unique
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              -- 档案あたり有効(PENDING)な招待は最大 1 件に制限する部分ユニークインデックス。
+              -- token 一意制約だけでは異なるトークンの二重 PENDING を防げず、issue() が並行すると
+              -- 複数の有効トークンが発行されうるため、DB レベルで直列化する（#327 codex 指摘）。
+              CREATE UNIQUE INDEX uq_t_cast_invitations_pending_cast
+              ON t_cast_invitations (cast_id)
+              WHERE status = 'PENDING';
