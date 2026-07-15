@@ -1,12 +1,10 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { centralAuthApi } from '../api/central';
-import { storeAuthApi } from '../api/store';
 import { platformAuthApi } from '../api/platform';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
-import { clearPlatformSession, isPlatformSession, isTenantDomain } from '@/shared/lib';
+import { clearPlatformSession } from '@/shared/lib';
 
 interface AuthContextType {
   logout: () => void;
@@ -28,29 +26,16 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const router = useRouter();
-  const getAuthApi = () => (isTenantDomain() ? storeAuthApi : centralAuthApi);
 
   const logout = async () => {
-    if (isPlatformSession()) {
-      try {
-        await platformAuthApi.logout();
-      } catch (error) {
-        console.error('Logout failed:', error);
-      } finally {
-        Cookies.remove('token');
-        clearPlatformSession();
-        router.push('/platform/login');
-      }
-      return;
-    }
-
     try {
-      await getAuthApi().logout();
+      await platformAuthApi.logout();
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
       Cookies.remove('token');
-      router.push('/login');
+      clearPlatformSession();
+      router.push('/platform/login');
     }
   };
 

@@ -70,6 +70,11 @@ export interface PlatformMeResponse {
   store_ids: number[];
 }
 
+// 平台自己プロフィール更新リクエスト
+export interface PlatformMeUpdateRequest {
+  display_name: string;
+}
+
 // 平台の授権店舗一覧の1件
 export interface PlatformStore {
   id: number;
