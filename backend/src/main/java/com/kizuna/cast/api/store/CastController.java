@@ -1,8 +1,10 @@
 package com.kizuna.cast.api.store;
 
 import com.kizuna.cast.api.dto.CastCreateRequest;
+import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CastController {
 
   private final CastService castService;
+  private final CastInvitationService castInvitationService;
 
   @GetMapping
   @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
@@ -63,6 +66,12 @@ public class CastController {
   public ResponseEntity<Void> delete(@PathVariable String id) {
     castService.delete(id);
     return ResponseEntity.ok().build();
+  }
+
+  @PostMapping("/{id}/invitation")
+  @PreAuthorize("hasAuthority('ROLE_STORE_MANAGER')")
+  public ResponseEntity<CastInvitationResponse> issueInvitation(@PathVariable String id) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(castInvitationService.issue(id));
   }
 
   @GetMapping("/public")

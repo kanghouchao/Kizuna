@@ -3,6 +3,7 @@ package com.kizuna.cast.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
@@ -19,6 +21,7 @@ import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,12 +39,14 @@ class CastServiceTest {
   @Mock private CastMapper castMapper;
   @Mock private TenantContext tenantContext;
   @Mock private TenantRepository tenantRepository;
+  @Mock private CastInvitationService castInvitationService;
 
   @InjectMocks private CastService castService;
 
   @Test
   void list_returnsPage() {
     Cast g = Cast.builder().name("Test").build();
+    g.setId("g1");
     Page<Cast> page = new PageImpl<>(List.of(g));
 
     CastResponse resp = new CastResponse();
@@ -49,7 +54,9 @@ class CastServiceTest {
 
     when(castRepository.findByNameContainingIgnoreCase(eq("test"), any(PageRequest.class)))
         .thenReturn(page);
-    when(castMapper.toResponse(g)).thenReturn(resp);
+    when(castInvitationService.deriveStatuses(anyList()))
+        .thenReturn(Map.of("g1", CastInvitationStatus.NOT_INVITED));
+    when(castMapper.toResponse(g, CastInvitationStatus.NOT_INVITED)).thenReturn(resp);
 
     Page<CastResponse> result = castService.list("test", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
@@ -59,13 +66,16 @@ class CastServiceTest {
   @Test
   void list_withoutSearch_returnsAll() {
     Cast g = Cast.builder().name("All").build();
+    g.setId("g1");
     Page<Cast> page = new PageImpl<>(List.of(g));
 
     CastResponse resp = new CastResponse();
     resp.setName("All");
 
     when(castRepository.findAll(any(PageRequest.class))).thenReturn(page);
-    when(castMapper.toResponse(g)).thenReturn(resp);
+    when(castInvitationService.deriveStatuses(anyList()))
+        .thenReturn(Map.of("g1", CastInvitationStatus.INVITED));
+    when(castMapper.toResponse(g, CastInvitationStatus.INVITED)).thenReturn(resp);
 
     Page<CastResponse> result = castService.list(null, PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
@@ -81,7 +91,9 @@ class CastServiceTest {
     resp.setId("g1");
 
     when(castRepository.findById("g1")).thenReturn(Optional.of(g));
-    when(castMapper.toResponse(g)).thenReturn(resp);
+    when(castInvitationService.deriveStatuses(anyList()))
+        .thenReturn(Map.of("g1", CastInvitationStatus.LINKED));
+    when(castMapper.toResponse(g, CastInvitationStatus.LINKED)).thenReturn(resp);
 
     assertThat(castService.get("g1").getId()).isEqualTo("g1");
   }

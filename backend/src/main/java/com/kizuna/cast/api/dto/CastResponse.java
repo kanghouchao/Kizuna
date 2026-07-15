@@ -1,5 +1,6 @@
 package com.kizuna.cast.api.dto;
 
+import com.kizuna.cast.domain.CastInvitationStatus;
 import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +23,7 @@ public class CastResponse {
   private Integer waist;
   private Integer hip;
   private Integer displayOrder;
+  private CastInvitationStatus invitationStatus;
   private OffsetDateTime createdAt;
   private OffsetDateTime updatedAt;
 }
