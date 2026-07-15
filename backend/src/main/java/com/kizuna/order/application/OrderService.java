@@ -28,9 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderService {
 
-  // 受付担当者になれる実スタッフロール（CAST/MEMBER は受付担当として記録しない）
+  // 受付担当者になれる実スタッフロール（店舗常駐ロールのみ。CAST/MEMBER は受付担当として記録しない。
+  // HQ_ADMIN は通常 ALL_STORES を持ち authorizes(storeId) が常に true になるため、
+  // 店舗スコープ検証を無力化しないよう対象外にする）
   private static final Set<PlatformRole> RECEPTIONIST_ROLES =
-      EnumSet.of(PlatformRole.HQ_ADMIN, PlatformRole.STORE_MANAGER, PlatformRole.STORE_STAFF);
+      EnumSet.of(PlatformRole.STORE_MANAGER, PlatformRole.STORE_STAFF);
 
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
