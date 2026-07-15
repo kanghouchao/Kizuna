@@ -5,13 +5,7 @@
 |Spring components
 |_Repositories_
 
-* `c.k.u.domain.CentralUserRepository`
 * `c.k.u.domain.PlatformUserRepository`
-* `c.k.u.domain.StoreUserRepository`
-|Bean references
-|* `c.k.s.tenancy.TenantContext` (in Shared)
 |Aggregate roots
-|* `c.k.u.domain.CentralUser`
-* `c.k.u.domain.PlatformUser`
-* `c.k.u.domain.StoreUser`
+|* `c.k.u.domain.PlatformUser`
 |===

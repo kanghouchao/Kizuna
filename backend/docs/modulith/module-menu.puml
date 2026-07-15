@@ -16,7 +16,7 @@ Container_Boundary("Application.Application_boundary", "Application", $tags="") 
 
 Rel(Application.Application.Menu, Application.Application.User, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Menu, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.User, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 @enduml
