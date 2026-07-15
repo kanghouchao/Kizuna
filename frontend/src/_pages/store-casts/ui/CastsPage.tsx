@@ -8,16 +8,22 @@ import {
   PencilSquareIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import { useManagedList } from '@/shared/lib';
+import { getPlatformRole, useManagedList } from '@/shared/lib';
 import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */
 export default function CastListPage() {
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
+  // 招待発行は店長ロール限定（発行APIが ROLE_STORE_MANAGER のみ許可するため。裁定6）。
+  // クライアント側 cookie 読み取りは hydration 差異を避けるため useEffect で解決する。
+  const [isManager, setIsManager] = useState(false);
+  useEffect(() => {
+    setIsManager(getPlatformRole() === 'STORE_MANAGER');
+  }, []);
   const {
     items: casts,
     isLoading,
@@ -193,11 +199,13 @@ export default function CastListPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                      <InvitationButton
-                        castId={cast.id}
-                        status={cast.invitation_status}
-                        onIssued={handleIssued}
-                      />
+                      {isManager && (
+                        <InvitationButton
+                          castId={cast.id}
+                          status={cast.invitation_status}
+                          onIssued={handleIssued}
+                        />
+                      )}
                       <Link
                         href={`/tenant/casts/${cast.id}/edit`}
                         className="text-gray-400 hover:text-amber-600 inline-block"
