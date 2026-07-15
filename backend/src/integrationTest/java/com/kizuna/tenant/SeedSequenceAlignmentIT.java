@@ -21,36 +21,31 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * シード（明示 id 挿入）後に IDENTITY シーケンスが MAX(id) へ整合されることを本物の PostgreSQL で検証する統合テスト（issue #237）。
  *
  * <p>使い捨て tmpfs DB（{@code docker-compose.test.yml}）に対して毎回全新初期化された状態で走るため、issue の再現条件（seed が明示 id=1
- * を挿入し IDENTITY シーケンスが未進行）がそのまま成立する。changeset で setval 整合されていれば、中央 API からの初回テナント作成が リトライ不要で成功し、5
+ * を挿入し IDENTITY シーケンスが未進行）がそのまま成立する。changeset で setval 整合されていれば、中央 API からの初回テナント作成が リトライ不要で成功し、3
  * 表のシーケンスが全て MAX(id) を上回る。
  *
- * <p>{@link com.kizuna.shared.CrossTenantTestSupport} は tenant ログイン前提のため継承せず、中央ログインを自前で行う。
+ * <p>{@link com.kizuna.shared.CrossTenantTestSupport} は店舗スタッフでの平台ログイン前提のため継承せず、HQ
+ * 管理者での平台ログインを自前で行う。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class SeedSequenceAlignmentIT {
 
   /** 明示 id を播種している autoIncrement 表（issue #237 の setval 対象、#322 で platform_users を追加）。 */
   private static final List<String> SEEDED_IDENTITY_TABLES =
-      List.of(
-          "central_users",
-          "central_roles",
-          "central_permissions",
-          "central_tenants",
-          "central_menus",
-          "platform_users");
+      List.of("central_tenants", "central_menus", "platform_users");
 
   @Autowired private TestRestTemplate rest;
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  private String centralLogin() {
+  private String platformLogin() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
-            "/central/login",
-            new HttpEntity<>("{\"username\": \"admin\", \"password\": \"pass\"}", headers),
+            "/platform/login",
+            new HttpEntity<>("{\"email\": \"admin@kizuna.test\", \"password\": \"pass\"}", headers),
             JsonNode.class);
-    assertThat(res.getStatusCode()).as("前提: 中央 admin でのログインが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(res.getStatusCode()).as("前提: HQ 管理者での平台ログインが成功すること").isEqualTo(HttpStatus.OK);
     String token = res.getBody().path("token").asText();
     assertThat(token).isNotBlank();
     return token;
@@ -61,7 +56,7 @@ class SeedSequenceAlignmentIT {
   void firstTenantCreationSucceedsOnFreshDb() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.setBearerAuth(centralLogin());
+    headers.setBearerAuth(platformLogin());
     // domain には一意制約（uq_central_tenants_domain）があるため、
     // 同一 DB へ手動で再実行しても衝突しないよう実行ごとに一意化する
     String body =
@@ -78,7 +73,7 @@ class SeedSequenceAlignmentIT {
   }
 
   @Test
-  @DisplayName("明示 id 播種の autoIncrement 6 表のシーケンスが全て MAX(id) を上回ること")
+  @DisplayName("明示 id 播種の autoIncrement 3 表のシーケンスが全て MAX(id) を上回ること")
   void seededIdentitySequencesAreAligned() {
     for (String table : SEEDED_IDENTITY_TABLES) {
       // 使い捨て DB なので nextval の消費は無害。nextval > MAX(id) は実行順に依存しない述語。

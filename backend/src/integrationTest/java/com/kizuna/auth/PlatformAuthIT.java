@@ -24,9 +24,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * 統一（プラットフォーム）認証境界の統合テスト（#322）。本物の PostgreSQL/Redis に対して検証する。
  *
- * <p>様式は {@link InitAdminUserCsrfIT}（完全匿名 POST による CSRF 免除の固定）と {@link
- * com.kizuna.menu.MenuCrossTenantIT}（リポジトリ直挿 + 実データ断言）に倣う。プラットフォームトークンと 既存 central/tenant
- * トークンの相互拒否、および三軌の共存を HTTP 境界で固定する。
+ * <p>様式は {@link com.kizuna.menu.MenuCrossTenantIT}（リポジトリ直挿 + 実データ断言）に倣う。 匿名ログインの CSRF 免除、シード資格情報での
+ * me 応答、および平台トークンの店舗端点への過橋拒否を HTTP 境界で固定する。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class PlatformAuthIT {
@@ -63,16 +62,6 @@ class PlatformAuthIT {
     String token = res.getBody().path("token").asText();
     assertThat(token).isNotBlank();
     return token;
-  }
-
-  private String centralToken() {
-    ResponseEntity<JsonNode> res =
-        rest.postForEntity(
-            "/central/login",
-            new HttpEntity<>("{\"username\": \"admin\", \"password\": \"pass\"}", jsonHeaders()),
-            JsonNode.class);
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    return res.getBody().path("token").asText();
   }
 
   private ResponseEntity<JsonNode> getPlatformMe(String token) {
@@ -141,54 +130,6 @@ class PlatformAuthIT {
   }
 
   @Test
-  @DisplayName("既存 central / tenant ログインが無変更で 200 を返す（三軌の共存）")
-  void existingCentralAndTenantLoginStillWork() {
-    ResponseEntity<JsonNode> central =
-        rest.postForEntity(
-            "/central/login",
-            new HttpEntity<>("{\"username\": \"admin\", \"password\": \"pass\"}", jsonHeaders()),
-            JsonNode.class);
-    assertThat(central.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(central.getBody().path("token").asText()).isNotBlank();
-
-    HttpHeaders tenantHeaders = jsonHeaders();
-    tenantHeaders.set("X-Role", "tenant");
-    tenantHeaders.set("X-Tenant-ID", "1");
-    ResponseEntity<JsonNode> tenant =
-        rest.postForEntity(
-            "/tenant/login",
-            new HttpEntity<>(
-                "{\"username\": \"admin@store1.kizuna.com\", \"password\": \"pass\"}",
-                tenantHeaders),
-            JsonNode.class);
-    assertThat(tenant.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(tenant.getBody().path("token").asText()).isNotBlank();
-  }
-
-  @Test
-  @DisplayName("central トークンで /platform/me は 403（issuer 相互拒否）")
-  void centralTokenRejectedOnPlatformMe() {
-    ResponseEntity<String> res =
-        rest.exchange(
-            "/platform/me", HttpMethod.GET, new HttpEntity<>(bearer(centralToken())), String.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-  }
-
-  @Test
-  @DisplayName("platform トークンで /central/me は 404（過橋 #324: 認証は通り、旧 CentralUser 表に不存在で優雅劣化）")
-  void platformTokenRejectedOnCentralMe() {
-    ResponseEntity<String> res =
-        rest.exchange(
-            "/central/me",
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(platformToken(SEED_EMAIL, SEED_PASSWORD))),
-            String.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-  }
-
-  @Test
   @DisplayName(
       "platform トークンでテナントヘッダなしの tenant 系 GET は 403（過橋 #324: 拒否主体は interceptor fail-closed）")
   void platformTokenRejectedOnTenantEndpoint() {
@@ -199,11 +140,5 @@ class PlatformAuthIT {
         rest.exchange("/tenant/menus/me", HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-  }
-
-  private static HttpHeaders bearer(String token) {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(token);
-    return headers;
   }
 }

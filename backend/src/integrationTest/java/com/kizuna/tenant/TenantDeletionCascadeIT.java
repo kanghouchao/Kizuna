@@ -33,8 +33,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * platform_user_stores→central_tenants の FK が既定の NO ACTION だったため、SPECIFIC_STORES ユーザーが
  * 授権している店舗を削除すると FK 違反でテナント削除自体が失敗していた（本 IT はその退行のガード）。
  *
- * <p>様式は {@link SeedSequenceAlignmentIT}（中央ログイン + JdbcTemplate による実 DB 断言）に倣う。使い捨て tmpfs DB のためシード
- * tenant 1 は決して削除せず、第二テナントを直挿して検証する。
+ * <p>様式は {@link SeedSequenceAlignmentIT}（HQ 管理者の平台ログイン + JdbcTemplate による実 DB 断言）に倣う。使い捨て tmpfs DB
+ * のためシード tenant 1 は決して削除せず、第二テナントを直挿して検証する。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class TenantDeletionCascadeIT {
@@ -45,15 +45,15 @@ class TenantDeletionCascadeIT {
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
-  private String centralLogin() {
+  private String platformLogin() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
-            "/central/login",
-            new HttpEntity<>("{\"username\": \"admin\", \"password\": \"pass\"}", headers),
+            "/platform/login",
+            new HttpEntity<>("{\"email\": \"admin@kizuna.test\", \"password\": \"pass\"}", headers),
             JsonNode.class);
-    assertThat(res.getStatusCode()).as("前提: 中央 admin でのログインが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(res.getStatusCode()).as("前提: HQ 管理者での平台ログインが成功すること").isEqualTo(HttpStatus.OK);
     String token = res.getBody().path("token").asText();
     assertThat(token).isNotBlank();
     return token;
@@ -88,7 +88,7 @@ class TenantDeletionCascadeIT {
 
     // 実削除フロー: 中央 admin トークンで DELETE /central/tenant/{id}。
     HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(centralLogin());
+    headers.setBearerAuth(platformLogin());
     ResponseEntity<Void> res =
         rest.exchange(
             "/central/tenant/" + storeId, HttpMethod.DELETE, new HttpEntity<>(headers), Void.class);

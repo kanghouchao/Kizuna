@@ -1,11 +1,8 @@
 package com.kizuna.auth.infrastructure;
 
-import com.kizuna.auth.AuthPaths;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -28,10 +25,7 @@ public class SecurityConfig {
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
-    PathPatternRequestMatcher.withDefaults().matcher("/central/login"),
-    PathPatternRequestMatcher.withDefaults().matcher("/tenant/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/platform/login"),
-    PathPatternRequestMatcher.withDefaults().matcher(AuthPaths.INIT_ADMIN_USER_PATH),
     PathPatternRequestMatcher.withDefaults().matcher("/files/upload"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
@@ -59,11 +53,5 @@ public class SecurityConfig {
   @Bean
   public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();
-  }
-
-  @Bean
-  public AuthenticationManager authenticationManager(
-      AuthenticationConfiguration authenticationConfiguration) throws Exception {
-    return authenticationConfiguration.getAuthenticationManager();
   }
 }
