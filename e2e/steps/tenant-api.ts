@@ -7,17 +7,20 @@ export const TENANT_HEADERS = {
   'X-Role': 'tenant',
   'X-Tenant-ID': STORE1_TENANT_ID,
 };
-export const ADMIN_EMAIL = 'admin@store1.kizuna.com';
+export const ADMIN_EMAIL = 'tanaka.hanako@kizuna.test';
 export const ADMIN_PASSWORD = 'pass';
 
-/** テナント管理者でログインし JWT を返す（/tenant/login は CSRF 免除）。 */
+/**
+ * 店長ロール（STORE_MANAGER・store1/store2 双方に授権された v0.5.0 シード）の平台ユーザーで
+ * ログインし JWT を返す。返却トークンは TENANT_HEADERS（X-Role/X-Tenant-ID）と併用することで
+ * /tenant/** に店舗文脈を確立できる（STORE_BRIDGE_ROLES ブリッジ）。/platform/login は CSRF 免除。
+ */
 export async function loginAsTenantAdmin(request: APIRequestContext): Promise<string> {
-  const res = await request.post('/api/tenant/login', {
-    headers: TENANT_HEADERS,
-    data: { username: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  const res = await request.post('/api/platform/login', {
+    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });
   if (!res.ok()) {
-    throw new Error(`tenant login failed: ${res.status()} ${await res.text()}`);
+    throw new Error(`platform login failed: ${res.status()} ${await res.text()}`);
   }
   const body = await res.json();
   return body.token as string;
