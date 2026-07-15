@@ -58,8 +58,8 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   /** マーカー受注が一覧の先頭ページに現れるよう、他 IT の受注より新しい営業日を使う。 */
   private static final LocalDate MARKER_DATE = LocalDate.of(2999, 1, 1);
 
-  /** v0.4.0 central/02 の HQ 管理者シード(platform_users id=1)。受付担当として使用。 */
-  private static final long SEED_RECEPTIONIST_ID = 1L;
+  /** v0.5.0 central/01 の山田次郎シード(platform_users id=3, STORE_STAFF, SPECIFIC_STORES{1})。受付担当として使用。 */
+  private static final long SEED_RECEPTIONIST_ID = 3L;
 
   @Autowired private OrderRepository orderRepository;
   @Autowired private TenantRepository tenantRepository;
