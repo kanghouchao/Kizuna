@@ -1,8 +1,8 @@
 package com.kizuna.user.domain;
 
 /**
- * SecurityContext に載せる authority 文字列の符号化規約。 生成側（CustomUserDetailsService）と消費側（menu 等）はここを経由し、
- * 接頭辞を文字列リテラルで再現しないこと。
+ * SecurityContext に載せる authority 文字列の符号化規約。 消費側（{@link
+ * com.kizuna.menu.application.MenuTreeAssembler} 等）はここを経由し、接頭辞を文字列リテラルで再現しないこと。
  */
 public final class Authorities {
 
