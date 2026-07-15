@@ -19,47 +19,39 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 /**
- * 央端（CentralAuth）トークンによる {@code /files/upload} のテナント冒認（#294）を本物の PostgreSQL/Redis/MinIO で固定する統合テスト。
+ * 平台トークンによる {@code /files/upload} の中央保存判定を本物の PostgreSQL/Redis/MinIO で固定する統合テスト。
  *
  * <p>{@code /files/**} は {@code JwtAuthenticationFilter.issuerMatchesDomain} の issuer
- * 制約外のため央端トークンでも認証が通る。 修正前は、央端トークンに {@code X-Role:tenant} + {@code X-Tenant-ID} を付けると interceptor
- * のヘッダ兜底に落ち、指定テナントの prefix にファイルが保存されていた。本テストは詐称ヘッダ付きが 403 で拒否されること（負向）と、 詐称ヘッダ無しの央端アップロードが従来どおり
- * central 領域へ 200 で保存されること（正向対照）を固定する。
+ * 制約外のため平台トークンでも 認証が通る。中央領域（central prefix）への保存は HQ 管理者（role claim = HQ_ADMIN）のみに限定し、それ以外のロール・
+ * テナント詐称ヘッダは fail-closed で 403 拒否する（#294 / #322 / #326）。
  *
- * <p>あわせてプラットフォーム発行（PlatformAuth）トークンによる同エンドポイントの中央領域アップロードが 403 で拒否されること（#322）も固定する。 PlatformAuth
- * も {@code tenantId} claim を持たず {@code @TenantOptional} の許可経路に乗るため、低権限のプラットフォーム身分が
- * 中央共有領域へ書き込めないことを保証する。
+ * <p>HQ トークンに {@code X-Role:tenant} + {@code X-Tenant-ID} を付けても、{@code TenantIdInterceptor} の
+ * STORE_BRIDGE_ROLES が HQ_ADMIN を含まないため店舗文脈は確立できず 403 で拒否される（負向）。詐称ヘッダ無しの HQ アップロードは従来どおり central
+ * 領域へ 200 で保存される（正向対照）。HQ 以外の平台トークン（店舗スタッフ）は詐称ヘッダ無しでも 中央保存を拒否される（follow-up: 低権限身分の中央共有領域書き込み封鎖）。
  *
- * <p>中央ログイン前提のため {@link com.kizuna.shared.CrossTenantTestSupport}（tenant ログイン）は継承せず、中央ログインを自前で行う。
+ * <p>中央ログイン前提を廃し、v0.4.0/v0.5.0 の平台シードでログインする。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class FileUploadCrossTenantIT {
 
+  /** v0.4.0 シードの HQ 管理者（ALL_STORES）。中央保存を許可される唯一のロール。 */
+  private static final String HQ_EMAIL = "admin@kizuna.test";
+
+  /** v0.5.0 シードの店舗スタッフ（SPECIFIC_STORES {1}）。中央保存は拒否される。 */
+  private static final String STAFF_EMAIL = "yamada.jiro@kizuna.test";
+
   @Autowired private TestRestTemplate rest;
 
-  private String centralLogin() {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    ResponseEntity<JsonNode> res =
-        rest.postForEntity(
-            "/central/login",
-            new HttpEntity<>("{\"username\": \"admin\", \"password\": \"pass\"}", headers),
-            JsonNode.class);
-    assertThat(res.getStatusCode()).as("前提: 中央 admin でのログインが成功すること").isEqualTo(HttpStatus.OK);
-    String token = res.getBody().path("token").asText();
-    assertThat(token).isNotBlank();
-    return token;
-  }
-
-  private String platformLogin() {
+  private String platformLogin(String email) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/platform/login",
-            new HttpEntity<>("{\"email\": \"admin@kizuna.test\", \"password\": \"pass\"}", headers),
+            new HttpEntity<>(
+                String.format("{\"email\": \"%s\", \"password\": \"pass\"}", email), headers),
             JsonNode.class);
-    assertThat(res.getStatusCode()).as("前提: プラットフォーム HQ 管理者でのログインが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(res.getStatusCode()).as("前提: %s の平台ログインが成功すること", email).isEqualTo(HttpStatus.OK);
     String token = res.getBody().path("token").asText();
     assertThat(token).isNotBlank();
     return token;
@@ -82,11 +74,10 @@ class FileUploadCrossTenantIT {
   }
 
   @Test
-  @DisplayName(
-      "央端トークン + X-Role:tenant + X-Tenant-ID の /files/upload は 403 で拒否されテナントに保存されないこと（#294）")
-  void centralTokenWithSpoofedTenantHeaderIsForbidden() {
+  @DisplayName("HQ トークン + X-Role:tenant + X-Tenant-ID の /files/upload は 403 で拒否されること（過橋の店舗ロール制限）")
+  void hqTokenWithSpoofedTenantHeaderIsForbidden() {
     HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(centralLogin());
+    headers.setBearerAuth(platformLogin(HQ_EMAIL));
     headers.set("X-Role", "tenant");
     headers.set("X-Tenant-ID", "1");
 
@@ -97,10 +88,10 @@ class FileUploadCrossTenantIT {
   }
 
   @Test
-  @DisplayName("プラットフォームトークンの /files/upload は 403 で拒否され中央領域に保存されないこと（#322）")
-  void platformTokenUploadIsForbidden() {
+  @DisplayName("HQ 以外の平台トークン（店舗スタッフ）の /files/upload は 403 で拒否され中央領域に保存されないこと")
+  void nonHqPlatformTokenUploadIsForbidden() {
     HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(platformLogin());
+    headers.setBearerAuth(platformLogin(STAFF_EMAIL));
 
     ResponseEntity<String> res =
         rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), String.class);
@@ -109,10 +100,10 @@ class FileUploadCrossTenantIT {
   }
 
   @Test
-  @DisplayName("央端トークン（詐称ヘッダ無し）の /files/upload は従来どおり central 領域へ 200 で保存されること")
-  void centralTokenWithoutSpoofUploadsToCentral() {
+  @DisplayName("HQ トークン（詐称ヘッダ無し）の /files/upload は central 領域へ 200 で保存されること")
+  void hqTokenWithoutSpoofUploadsToCentral() {
     HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(centralLogin());
+    headers.setBearerAuth(platformLogin(HQ_EMAIL));
 
     ResponseEntity<JsonNode> res =
         rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), JsonNode.class);

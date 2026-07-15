@@ -332,6 +332,21 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("HQ 以外の平台トークンでは GET /central/menus/me が 403 になること（follow-up #1: 中央メニューの可視漏れ封鎖）")
+  void nonHqCannotReadCentralMenus() {
+    // 中央には TenantIdInterceptor 相当の防御が無いため、isAuthenticated() のみだと店長・スタッフ等の
+    // どの平台トークンでも中央メニューを読めてしまう（#325 review follow-up #1）。ROLE_HQ_ADMIN 限定へ強化する。
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/central/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(MANAGER_EMAIL))),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
   @DisplayName("CAST は授権スコープでも店舗ヘッダで /tenant/menus/me に過橋できず 403 になること（役割線）")
   void castCannotBridgeToStoreConsole() {
     // CAST は ALL_STORES を持つが店舗ロールではないため、TenantIdInterceptor が店舗文脈確立の前に 403 で弾く。
