@@ -7,7 +7,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.shared.config.AppProperties;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
@@ -18,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -49,11 +47,7 @@ class CentralTenantServiceCacheTest {
 
     @Bean
     CentralTenantService centralTenantService(TenantRepository tenantRepository) {
-      return new CentralTenantService(
-          tenantRepository,
-          mock(StoreProfileRepository.class),
-          mock(ApplicationEventPublisher.class),
-          mock(AppProperties.class));
+      return new CentralTenantService(tenantRepository, mock(StoreProfileRepository.class));
     }
   }
 

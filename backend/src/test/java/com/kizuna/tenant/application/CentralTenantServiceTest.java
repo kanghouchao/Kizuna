@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.tenant.api.dto.TenantCreateDTO;
@@ -16,7 +15,6 @@ import com.kizuna.tenant.api.dto.TenantUpdateDTO;
 import com.kizuna.tenant.api.dto.TenantVO;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.tenant.domain.event.TenantCreatedEvent;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -24,7 +22,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 
@@ -33,8 +30,6 @@ class CentralTenantServiceTest {
 
   @Mock private TenantRepository tenantRepository;
   @Mock private StoreProfileRepository storeProfileRepository;
-  @Mock private ApplicationEventPublisher eventPublisher;
-  @Mock private AppProperties appProperties;
   @InjectMocks private CentralTenantService tenantService;
 
   @Test
@@ -47,7 +42,7 @@ class CentralTenantServiceTest {
   }
 
   @Test
-  void create_savesAndPublishes() {
+  void create_savesTenantAndDefaultStoreProfile() {
     TenantCreateDTO req = new TenantCreateDTO();
     req.setName("T1");
     req.setDomain("d1.com");
@@ -55,11 +50,11 @@ class CentralTenantServiceTest {
     Tenant t = new Tenant();
     t.setId(1L);
     when(tenantRepository.save(any())).thenReturn(t);
-    when(appProperties.getTenantCreatorCachePerfix()).thenReturn("prefix-");
 
     tenantService.create(req);
+
+    verify(tenantRepository).save(any());
     verify(storeProfileRepository).save(any());
-    verify(eventPublisher).publishEvent(any(TenantCreatedEvent.class));
   }
 
   @Test

@@ -24,7 +24,6 @@ _Others_
 * `app.jwt.expiration` -- `java.lang.Long`, default `0`
 * `app.jwt.secret` -- `java.lang.String`
 * `app.scheme` -- `c.k.s.config.AppProperties.Scheme`, default `http`
-* `app.tenant-creator-cache-perfix` -- `java.lang.String`, default `tenant:creator:`
 * `app.timezone` -- `java.lang.String`, default `Asia/Tokyo`. 「本日」判定に用いるタイムゾーン。公開出勤表などの当日算出に使用する。
 * `app.upload.access-key` -- `java.lang.String`
 * `app.upload.allowed-types` -- `java.util.List<java.lang.String>`
