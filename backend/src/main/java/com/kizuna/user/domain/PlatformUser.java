@@ -85,6 +85,16 @@ public class PlatformUser extends BaseEntity {
     this.storeIds = new HashSet<>(stores);
   }
 
+  /** 表示名を更新する（自己プロフィール更新用。不変条件なし）。 */
+  public void updateDisplayName(String displayName) {
+    this.displayName = displayName;
+  }
+
+  /** エンコード済みパスワードで置き換える（呼び出し側で符号化済みであること）。 */
+  public void changePassword(String encodedPassword) {
+    this.password = encodedPassword;
+  }
+
   private static void validateScope(StoreScopeType storeScopeType, Set<Long> stores) {
     if (storeScopeType == StoreScopeType.SPECIFIC_STORES && stores.isEmpty()) {
       throw new InvalidStoreScopeException("SPECIFIC_STORES の授権には少なくとも 1 つの店舗が必要です");
