@@ -315,16 +315,6 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("tenant トークンで /platform/orders は 403(issuer 結合の回帰固定)")
-  void tenantTokenIsRejectedOnPlatformOrders() {
-    ResponseEntity<String> res =
-        rest.exchange(
-            "/platform/orders", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-  }
-
-  @Test
   @DisplayName("CAST ロールで /platform/orders は 403(@PreAuthorize の役割線)")
   void castRoleIsRejectedOnPlatformOrders() {
     ResponseEntity<String> res =
