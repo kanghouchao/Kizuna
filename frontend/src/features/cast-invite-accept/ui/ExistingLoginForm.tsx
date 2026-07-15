@@ -5,7 +5,14 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
 import { PlatformLoginRequest, platformAuthApi } from '@/entities/user';
-import { clearPlatformSession, getApiErrorMessage } from '@/shared/lib';
+import {
+  clearPlatformSession,
+  getApiErrorMessage,
+  getPlatformRole,
+  getPlatformStoreId,
+  setPlatformStore,
+  startPlatformSession,
+} from '@/shared/lib';
 
 interface ExistingLoginFormProps {
   token: string;
@@ -26,6 +33,11 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
 
   const submit = async (values: PlatformLoginRequest) => {
     let newTokenWritten = false;
+    // ログイン成功で旧セッションを消す前に退避しておく。受諾API失敗時にこれが無いと、
+    // clearPlatformSession() 済みの旧 platform-role/platform-store-id に戻れず訪問者がログアウト状態に落ちる（#327 codex指摘）
+    const previousRole = getPlatformRole();
+    const previousStoreId = getPlatformStoreId();
+    const previousToken = Cookies.get('token');
     try {
       const { token: authToken, expires_at } = await platformAuthApi.login(values);
       // 招待を開く前に別ロールで平台にログイン済みだった場合、旧セッションの platform-role/platform-store-id が
@@ -43,6 +55,17 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
       // （書き込み後の失敗のみ後始末する。#327 codex指摘）
       if (newTokenWritten) {
         Cookies.remove('token');
+        // 受諾APIの失敗（招待の失効/競合、通信断など）。旧セッションが存在した場合はここで復元する。
+        // 未ログイン訪問者だった場合（退避値が無い）は何もしない（#327 codex指摘）
+        if (previousRole) {
+          startPlatformSession(previousRole);
+        }
+        if (previousStoreId) {
+          setPlatformStore(previousStoreId);
+        }
+        if (previousToken) {
+          Cookies.set('token', previousToken);
+        }
       }
       toast.error(getApiErrorMessage(error, 'ログインまたは受諾に失敗しました'));
     }
