@@ -5,10 +5,10 @@ export function handleRouteProtection(request: NextRequest, role: 'central' | 't
   const hasToken = request.cookies.has('token');
 
   // 1. Central Route Protection
-  // If accessing /central/* without a token, redirect to /login
+  // If accessing /central/* without a token, redirect to /platform/login
   if (path.startsWith('/central') && !hasToken) {
     console.error('🔒 Unauthorized access to /central, redirecting to login');
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/platform/login', request.url));
   }
 
   // 2. Tenant Route Protection

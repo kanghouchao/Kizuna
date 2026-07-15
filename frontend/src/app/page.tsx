@@ -60,7 +60,7 @@ export default async function Home() {
   // Central ドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
   if (role === 'central') {
     const token = cookieStore.get('token')?.value;
-    redirect(token ? '/central/dashboard/' : '/login');
+    redirect(token ? '/central/dashboard/' : '/platform/login');
   }
 
   // Tenant ドメイン（店舗フロント側）の場合、模版を表示

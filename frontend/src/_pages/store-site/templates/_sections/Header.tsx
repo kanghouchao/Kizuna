@@ -72,7 +72,7 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
             <div className="flex items-center gap-3 md:gap-4">
               {/* ログインボタン（sm以上で表示） */}
               <Link
-                href="/login"
+                href="/platform/login"
                 className="hidden sm:block text-[9px] tracking-[0.3em] border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] px-4 py-1.5 md:px-5 md:py-2 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
                 style={{ fontFamily: 'var(--storefront-font-display)' }}
               >
@@ -155,7 +155,7 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
 
           {/* ログインボタン（xs） */}
           <Link
-            href="/login"
+            href="/platform/login"
             onClick={closeMenu}
             className="text-[10px] tracking-[0.4em] border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] px-8 py-3 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
             style={{ fontFamily: 'var(--storefront-font-display)' }}
