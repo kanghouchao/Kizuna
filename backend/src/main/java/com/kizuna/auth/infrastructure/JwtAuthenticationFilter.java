@@ -72,22 +72,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   }
 
   /**
-   * リクエストパスの属するドメインとトークンの issuer が一致するか検証する。 Central / Tenant は署名キーを共有しているため、issuer
-   * の照合でドメイン間のトークン流用を防ぐ。ドメイン外のパス（/files 等）は制限しない。
-   *
-   * <p>統一ログイン（#324）の過橋: 平台トークン（PlatformAuth）は /central・/tenant の旧業務端点でも受理する。
-   * 央端/店端の相互流用は不変で拒否し、店舗文脈の授権検証は TenantIdInterceptor（StoreScope）が担う。
+   * リクエストパスの属するドメインとトークンの issuer が一致するか検証する。
+   * 統一（プラットフォーム）認証への一本化後、業務ドメイン（/central・/tenant・/platform）は いずれも PlatformAuth
+   * 発行のトークンのみを受理する。ドメイン外のパス（/files 等）は制限しない。 店舗文脈の授権検証は TenantIdInterceptor（StoreScope）が担う。
    */
   private boolean issuerMatchesDomain(String issuer, String path) {
-    if (path.equals("/central") || path.startsWith("/central/")) {
-      return JwtUtil.ISSUER_CENTRAL.equals(issuer) || JwtUtil.ISSUER_PLATFORM.equals(issuer);
-    }
-    if (path.equals("/tenant") || path.startsWith("/tenant/")) {
-      return JwtUtil.ISSUER_TENANT.equals(issuer) || JwtUtil.ISSUER_PLATFORM.equals(issuer);
-    }
-    if (path.equals("/platform") || path.startsWith("/platform/")) {
-      return JwtUtil.ISSUER_PLATFORM.equals(issuer);
-    }
-    return true;
+    boolean restrictedDomain =
+        path.equals("/central")
+            || path.startsWith("/central/")
+            || path.equals("/tenant")
+            || path.startsWith("/tenant/")
+            || path.equals("/platform")
+            || path.startsWith("/platform/");
+    return !restrictedDomain || JwtUtil.ISSUER_PLATFORM.equals(issuer);
   }
 }

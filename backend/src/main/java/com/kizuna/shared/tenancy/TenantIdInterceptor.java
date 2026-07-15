@@ -38,27 +38,6 @@ public class TenantIdInterceptor implements HandlerInterceptor {
       @NonNull HttpServletResponse response,
       @NonNull Object handler) {
     Claims claims = authenticatedClaims();
-    Long jwtTenantId = claims == null ? null : claims.get("tenantId", Long.class);
-    if (jwtTenantId != null) {
-      // 認証済みテナント JWT: claim を正としてテナント文脈を確定する。ヘッダの有無・形式には依存させない
-      // （X-Role/X-Tenant-ID を省略・改変してこの検証と分離を素通りされるのを防ぐため）。
-      String headerTenantId = request.getHeader(HEADER_TENANT_ID);
-      if (StringUtils.isNumeric(headerTenantId)) {
-        Long headerValue = tryParseTenantId(headerTenantId);
-        if (headerValue == null) {
-          // 全桁数字だが long 範囲外。素の 500 を避けクリーンに 400 で拒否する（#288）。
-          response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-          return false;
-        }
-        if (!jwtTenantId.equals(headerValue)) {
-          // X-Tenant-ID が別テナントを指す明確な詐称は拒否する。
-          response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-          return false;
-        }
-      }
-      this.tenantContext.setTenantId(jwtTenantId);
-      return true;
-    }
     StoreScope scope =
         StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
     boolean claimsTenantHeaderPresent =

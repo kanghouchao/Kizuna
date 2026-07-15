@@ -53,25 +53,6 @@ class JwtAuthenticationFilterTest {
   }
 
   @Test
-  @DisplayName("CentralAuth 発行のトークンは /central 配下で認証されること")
-  void centralTokenOnCentralPath() throws Exception {
-    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
-    assertThat(authenticated("/central/configs", "CentralAuth")).isTrue();
-  }
-
-  @Test
-  @DisplayName("TenantAuth 発行のトークンは /central 配下で認証されないこと")
-  void tenantTokenOnCentralPath() throws Exception {
-    assertThat(authenticated("/central/configs", "TenantAuth")).isFalse();
-  }
-
-  @Test
-  @DisplayName("CentralAuth 発行のトークンは /tenant 配下で認証されないこと")
-  void centralTokenOnTenantPath() throws Exception {
-    assertThat(authenticated("/tenant/orders", "CentralAuth")).isFalse();
-  }
-
-  @Test
   @DisplayName("PlatformAuth 発行のトークンは /platform 配下で認証されること")
   void platformTokenOnPlatformPath() throws Exception {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
@@ -93,28 +74,22 @@ class JwtAuthenticationFilterTest {
   }
 
   @Test
-  @DisplayName("CentralAuth 発行のトークンは /platform 配下で認証されないこと")
-  void centralTokenOnPlatformPath() throws Exception {
-    assertThat(authenticated("/platform/me", "CentralAuth")).isFalse();
-  }
-
-  @Test
-  @DisplayName("TenantAuth 発行のトークンは /platform 配下で認証されないこと")
-  void tenantTokenOnPlatformPath() throws Exception {
-    assertThat(authenticated("/platform/me", "TenantAuth")).isFalse();
+  @DisplayName("非 PlatformAuth 発行のトークンは制限ドメインで認証されないこと")
+  void nonPlatformTokenOnRestrictedPath() throws Exception {
+    assertThat(authenticated("/central/configs", "OtherAuth")).isFalse();
   }
 
   @Test
   @DisplayName("ドメイン外のパスでは issuer を制限しないこと")
   void anyIssuerOnDomainFreePath() throws Exception {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
-    assertThat(authenticated("/files/upload", "TenantAuth")).isTrue();
+    assertThat(authenticated("/files/upload", "OtherAuth")).isTrue();
   }
 
   @Test
   @DisplayName("ブラックリスト登録済みのトークンは認証されないこと")
   void blacklistedToken() throws Exception {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(true);
-    assertThat(authenticated("/central/configs", "CentralAuth")).isFalse();
+    assertThat(authenticated("/central/configs", "PlatformAuth")).isFalse();
   }
 }
