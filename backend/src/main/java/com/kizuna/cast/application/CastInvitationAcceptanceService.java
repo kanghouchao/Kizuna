@@ -85,7 +85,10 @@ public class CastInvitationAcceptanceService {
     return new CastAcceptanceResponse(storeName(invitation.getTenantId()));
   }
 
-  /** 既存の CAST アカウントで受諾する。所属店舗集合に招待店舗を冪等 union し、档案へ紐づけて招待を受諾済みにする。 */
+  /**
+   * 既存の CAST アカウントで受諾する。SPECIFIC_STORES は所属店舗集合に招待店舗を冪等 union し、ALL_STORES
+   * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにする。
+   */
   @Transactional
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
     CastInvitation invitation = findByToken(token);
@@ -99,10 +102,14 @@ public class CastInvitationAcceptanceService {
     }
     claim(invitation);
 
-    Set<Long> storeIds = new HashSet<>(user.getStoreIds());
-    storeIds.add(invitation.getTenantId());
-    user.reassign(PlatformRole.CAST, StoreScopeType.SPECIFIC_STORES, storeIds);
-    platformUserRepository.save(user);
+    // ALL_STORES は既に全店アクセス権を持つため、SPECIFIC_STORES へ降格させない（不変条件で storeIds は空）。
+    // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する。
+    if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES) {
+      Set<Long> storeIds = new HashSet<>(user.getStoreIds());
+      storeIds.add(invitation.getTenantId());
+      user.reassign(PlatformRole.CAST, StoreScopeType.SPECIFIC_STORES, storeIds);
+      platformUserRepository.save(user);
+    }
     link(cast, user.getId());
     return new CastAcceptanceResponse(storeName(invitation.getTenantId()));
   }
