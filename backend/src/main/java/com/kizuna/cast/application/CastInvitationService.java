@@ -28,6 +28,7 @@ public class CastInvitationService {
 
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private static final int TOKEN_BYTES = 32;
+  private static final String ALREADY_LINKED_MESSAGE = "この档案は既に平台身分と連携済みのため招待を発行できません";
 
   private final CastRepository castRepository;
   private final CastInvitationRepository castInvitationRepository;
@@ -39,6 +40,12 @@ public class CastInvitationService {
    * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
    * status = 'PENDING'}）が DB レベルで保証する。 これにより店長の二重クリック等で issue() が並行しても、複数の有効トークンが同時に発行される事態を塞ぐ
    * （token 一意制約だけでは異なるトークンの二重 PENDING を防げないため — #327）。
+   *
+   * <p>並行する受諾（{@link CastInvitationAcceptanceService}）との競合は次の 2 段で直列化する（#327 codex 指摘）。 ①旧 PENDING
+   * の失効を、管理エンティティの {@code invalidate()} ではなく条件付き一括 UPDATE（{@code WHERE status =
+   * PENDING}）で行う。これにより受諾が先に ACCEPTED へ遷移させた行は対象外となり、受諾確定済みの招待を INVALIDATED へ巻き戻さない。 ②失効 UPDATE
+   * は受諾側の行ロック解放 （＝受諾トランザクションのコミット）を待って完了するため、その後に档案の紐づけを DB 再読込で再確認し、
+   * 並行受諾が档案を紐づけていれば新規発行を中止する（連携済み档案に有効トークンが残る矛盾を塞ぐ）。
    */
   @TenantScoped
   @Transactional
@@ -48,17 +55,20 @@ public class CastInvitationService {
             .findById(castId)
             .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + castId));
     if (cast.getPlatformUserId() != null) {
-      throw new CastInvitationStateException("この档案は既に平台身分と連携済みのため招待を発行できません");
+      throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }
 
-    List<CastInvitation> existingPending =
-        castInvitationRepository.findByCastIdAndStatus(castId, CastInvitation.Status.PENDING);
-    if (!existingPending.isEmpty()) {
-      existingPending.forEach(CastInvitation::invalidate);
-      // 失効の UPDATE を新規 PENDING の INSERT より前に確定させる。Hibernate は既定で INSERT を
-      // UPDATE より先に実行するため、明示 flush しないと旧 PENDING が残ったまま新 PENDING を
-      // INSERT してしまい、部分ユニークインデックスに衝突する（通常の再発行が失敗する）。
-      castInvitationRepository.flush();
+    // 旧 PENDING を条件付き一括 UPDATE（WHERE status = PENDING）で失効させる。並行受諾が先に ACCEPTED へ
+    // 遷移させた行は条件に一致せず対象外となるため、受諾確定済みの招待を INVALIDATED へ巻き戻さない。
+    // 一括 UPDATE は即時 SQL のため管理エンティティを介さず、旧 PENDING が新 PENDING の INSERT より前に確定する。
+    castInvitationRepository.invalidatePending(
+        castId, CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
+
+    // 失効 UPDATE は受諾側の行ロック解放（＝受諾トランザクションのコミット）を待って完了するため、この時点で
+    // 並行受諾は確定済み。档案が紐づいていないかを DB から再読込（スカラ投影で一次キャッシュを回避）して再確認し、
+    // 紐づき済みなら新規発行を中止する。これで連携済み档案に有効トークンが残る矛盾を塞ぐ。
+    if (castRepository.findPlatformUserIdById(castId).isPresent()) {
+      throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }
 
     CastInvitation invitation =
