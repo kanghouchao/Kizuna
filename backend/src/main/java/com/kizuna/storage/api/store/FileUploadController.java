@@ -23,11 +23,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class FileUploadController {
 
-  // JwtUtil.ISSUER_TENANT / ISSUER_PLATFORM と一致させること。storage → auth.infrastructure は Modulith 上
-  // 不可視のため定数を直接参照せずローカルに複製している（発行者名はトークンの署名対象で実質不変）。
-  private static final String TENANT_ISSUER = "TenantAuth";
-  private static final String PLATFORM_ISSUER = "PlatformAuth";
-
   private final FileStorageService fileStorageService;
   private final TenantContext tenantContext;
   private final AppProperties appProperties;
@@ -54,29 +49,24 @@ public class FileUploadController {
   /**
    * 保存先プレフィクスを決める。テナント文脈があればそのテナント配下、無ければ中央領域（central）へ保存する。
    *
-   * <p>ただしテナント発行（TenantAuth）のトークンでテナント文脈を解決できない場合、およびプラットフォーム発行（PlatformAuth）の トークンの場合は 403
-   * で拒否する。いずれも {@code tenantId} claim を持たず {@code @TenantOptional} の許可経路に乗るため、
-   * テナント／プラットフォームの資産を中央共有領域へ誤って 保存しないよう fail-closed で弾く（#287 / #322）。中央発行（CentralAuth）は
-   * テナント文脈を持たないのが正当なため従来どおり central へ保存する。
+   * <p>中央領域への保存は HQ 管理者（role claim = HQ_ADMIN）のみ許可する。テナント文脈を解決できないテナントロール、および HQ_ADMIN
+   * 以外の平台ロール（店長・スタッフ・キャスト等）は {@code tenantId} claim を持たず {@code @TenantOptional} の許可経路に乗るため、
+   * 資産を中央共有領域へ誤って保存しないよう fail-closed で 403 拒否する（#287 / #322 / #326）。
    */
   private String resolveStoragePrefix() {
     if (tenantContext.isTenant()) {
       return String.valueOf(tenantContext.getTenantId());
     }
-    String issuer = tokenIssuer();
-    if (TENANT_ISSUER.equals(issuer)) {
-      throw new AccessDeniedException("テナント文脈を解決できないため、アップロードを拒否しました");
-    }
-    if (PLATFORM_ISSUER.equals(issuer)) {
-      throw new AccessDeniedException("プラットフォームトークンでは中央領域へのアップロードを許可していません");
+    if (!"HQ_ADMIN".equals(tokenRole())) {
+      throw new AccessDeniedException("中央領域へのアップロードは HQ 管理者のみ許可されています");
     }
     return "central";
   }
 
-  private String tokenIssuer() {
+  private String tokenRole() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication != null && authentication.getDetails() instanceof Claims claims) {
-      return claims.getIssuer();
+      return claims.get("role", String.class);
     }
     return null;
   }

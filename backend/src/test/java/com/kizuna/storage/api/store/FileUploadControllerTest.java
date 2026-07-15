@@ -31,10 +31,6 @@ import org.springframework.web.multipart.MultipartFile;
 @ExtendWith(MockitoExtension.class)
 class FileUploadControllerTest {
 
-  private static final String ISSUER_TENANT = "TenantAuth";
-  private static final String ISSUER_CENTRAL = "CentralAuth";
-  private static final String ISSUER_PLATFORM = "PlatformAuth";
-
   @Mock private FileStorageService fileStorageService;
   @Mock private MultipartFile file;
 
@@ -55,45 +51,20 @@ class FileUploadControllerTest {
     tenantContext.clear();
   }
 
-  /** 指定した issuer の JWT で認証済みリクエストを模擬する（details に実 Claims をセット）。 */
-  private void authenticateWithIssuer(String issuer) {
-    Claims claims = Jwts.claims().issuer(issuer).build();
+  /** 指定した role claim の JWT で認証済みリクエストを模擬する（details に実 Claims をセット）。 */
+  private void authenticateWithRole(String role) {
+    Claims claims = Jwts.claims().add("role", role).build();
     PreAuthenticatedAuthenticationToken authentication =
         new PreAuthenticatedAuthenticationToken(
-            "user", "token", List.of(new SimpleGrantedAuthority("STORE_USER")));
+            "user", "token", List.of(new SimpleGrantedAuthority("ROLE_" + role)));
     authentication.setDetails(claims);
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
   @Test
-  @DisplayName("テナント発行トークンでテナント文脈を解決できない場合はアップロードを拒否し、central に保存しないこと")
-  void upload_rejectsTenantIssuedTokenWithoutTenantContext() {
-    // tenantId claim を持たない = テナント文脈は未解決のまま
-    authenticateWithIssuer(ISSUER_TENANT);
-
-    assertThatThrownBy(() -> controller.upload(file, "public"))
-        .isInstanceOf(AccessDeniedException.class);
-
-    verify(fileStorageService, never()).store(any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("プラットフォーム発行トークンはテナント文脈が無くても central に保存せず拒否すること（#322）")
-  void upload_rejectsPlatformIssuedToken() {
-    // PlatformAuth は tenantId claim を持たず @TenantOptional の許可経路に乗るため、
-    // 中央プレフィクスへ落ちないよう fail-closed で拒否する。
-    authenticateWithIssuer(ISSUER_PLATFORM);
-
-    assertThatThrownBy(() -> controller.upload(file, "public"))
-        .isInstanceOf(AccessDeniedException.class);
-
-    verify(fileStorageService, never()).store(any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("中央発行トークンはテナント文脈が無くても central 配下に保存すること")
-  void upload_storesUnderCentralForCentralIssuedToken() {
-    authenticateWithIssuer(ISSUER_CENTRAL);
+  @DisplayName("HQ_ADMIN role のトークンはテナント文脈が無くても central 配下に保存すること")
+  void upload_storesUnderCentralForHqAdminRole() {
+    authenticateWithRole("HQ_ADMIN");
     when(fileStorageService.store("central", "public", file)).thenReturn("public/central/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);
@@ -106,10 +77,21 @@ class FileUploadControllerTest {
   }
 
   @Test
+  @DisplayName("HQ_ADMIN 以外の role のトークンはテナント文脈が無い場合、central に保存せず拒否すること")
+  void upload_rejectsNonHqAdminRoleWithoutTenantContext() {
+    authenticateWithRole("STORE_STAFF");
+
+    assertThatThrownBy(() -> controller.upload(file, "public"))
+        .isInstanceOf(AccessDeniedException.class);
+
+    verify(fileStorageService, never()).store(any(), any(), any());
+  }
+
+  @Test
   @DisplayName("テナント文脈が解決済みならそのテナント配下に保存すること")
   void upload_storesUnderTenantPrefixWhenContextResolved() {
     tenantContext.setTenantId(5L);
-    authenticateWithIssuer(ISSUER_TENANT);
+    authenticateWithRole("STORE_STAFF");
     when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);
