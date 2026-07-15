@@ -1,7 +1,9 @@
 package com.kizuna.auth.application;
 
+import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.Authorities;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -32,15 +34,20 @@ public class PlatformAuthService {
   private final PlatformUserRepository userRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtUtil jwtUtil;
+  private final AuthSessionService authSessionService;
 
   /** メール不存在時のタイミング均一化に用いるダミー bcrypt ハッシュ（秘密値ではない固定文字列を構築時に符号化）。 */
   private final String userNotFoundEncodedPassword;
 
   public PlatformAuthService(
-      PlatformUserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+      PlatformUserRepository userRepository,
+      PasswordEncoder passwordEncoder,
+      JwtUtil jwtUtil,
+      AuthSessionService authSessionService) {
     this.userRepository = userRepository;
     this.passwordEncoder = passwordEncoder;
     this.jwtUtil = jwtUtil;
+    this.authSessionService = authSessionService;
     this.userNotFoundEncodedPassword = passwordEncoder.encode("userNotFoundPassword");
   }
 
@@ -78,5 +85,34 @@ public class PlatformAuthService {
     claims.put("storeScopeType", user.getStoreScopeType().name());
     claims.put("storeIds", new ArrayList<>(user.getStoreIds()));
     return jwtUtil.generateToken(user.getEmail(), JwtUtil.ISSUER_PLATFORM, claims);
+  }
+
+  /** 自己プロフィール（表示名）を更新し、更新後の me レスポンスを返す。 */
+  @Transactional
+  public PlatformMeResponse updateMe(String email, String displayName) {
+    PlatformUser user =
+        userRepository.findByEmail(email).orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
+    user.updateDisplayName(displayName);
+    userRepository.save(user);
+    return new PlatformMeResponse(
+        user.getEmail(),
+        user.getDisplayName(),
+        user.getRole().name(),
+        user.getStoreScopeType().name(),
+        user.getStoreIds().stream().sorted().toList());
+  }
+
+  /** パスワード変更。成功時は現在のセッションを失効させる（要再ログイン）。 */
+  @Transactional
+  public void changePassword(
+      String email, String currentPassword, String newPassword, String currentToken) {
+    PlatformUser user =
+        userRepository.findByEmail(email).orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
+    if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+      throw new ServiceException("現在のパスワードが正しくありません");
+    }
+    user.changePassword(passwordEncoder.encode(newPassword));
+    userRepository.save(user);
+    authSessionService.invalidate(currentToken);
   }
 }

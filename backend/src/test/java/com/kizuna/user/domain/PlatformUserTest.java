@@ -115,4 +115,26 @@ class PlatformUserTest {
             () -> user.reassign(PlatformRole.HQ_ADMIN, StoreScopeType.ALL_STORES, Set.of(1L)))
         .isInstanceOf(InvalidStoreScopeException.class);
   }
+
+  @Test
+  @DisplayName("updateDisplayName は表示名を更新する")
+  void updateDisplayNameUpdatesDisplayName() {
+    PlatformUser user =
+        seedBuilder().storeScopeType(StoreScopeType.ALL_STORES).storeIds(Set.of()).build();
+
+    user.updateDisplayName("新しい表示名");
+
+    assertThat(user.getDisplayName()).isEqualTo("新しい表示名");
+  }
+
+  @Test
+  @DisplayName("changePassword はエンコード済みパスワードで置き換える")
+  void changePasswordReplacesPassword() {
+    PlatformUser user =
+        seedBuilder().storeScopeType(StoreScopeType.ALL_STORES).storeIds(Set.of()).build();
+
+    user.changePassword("new-encoded-hash");
+
+    assertThat(user.getPassword()).isEqualTo("new-encoded-hash");
+  }
 }

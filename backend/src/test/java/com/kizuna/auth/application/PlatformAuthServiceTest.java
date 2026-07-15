@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.PlatformRole;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -34,6 +37,7 @@ class PlatformAuthServiceTest {
   @Mock private PlatformUserRepository userRepository;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private JwtUtil jwtUtil;
+  @Mock private AuthSessionService authSessionService;
 
   @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
 
@@ -201,6 +205,58 @@ class PlatformAuthServiceTest {
     // 誤パスワードでも enabled 判定が先行するため DisabledException（無効化アカウントでのパスワード正誤オラクルを塞ぐ）。
     assertThatThrownBy(() -> authService.login("admin@kizuna.test", "wrong"))
         .isInstanceOf(DisabledException.class);
+  }
+
+  @Test
+  void updateMe_emailNotFound_throwsServiceException() {
+    when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> authService.updateMe("missing@kizuna.test", "新表示名"))
+        .isInstanceOf(ServiceException.class);
+  }
+
+  @Test
+  void updateMe_success_updatesDisplayNameAndReturnsResponse() {
+    PlatformUser user = hqAdmin();
+    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
+
+    PlatformMeResponse res = authService.updateMe("admin@kizuna.test", "新しい表示名");
+
+    assertThat(user.getDisplayName()).isEqualTo("新しい表示名");
+    assertThat(res.displayName()).isEqualTo("新しい表示名");
+    assertThat(res.email()).isEqualTo("admin@kizuna.test");
+    verify(userRepository).save(user);
+  }
+
+  @Test
+  void changePassword_wrongCurrentPassword_throwsServiceExceptionAndKeepsSession() {
+    PlatformUser user = hqAdmin();
+    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
+    when(passwordEncoder.matches("wrong", "stored-hash")).thenReturn(false);
+
+    assertThatThrownBy(
+            () ->
+                authService.changePassword(
+                    "admin@kizuna.test", "wrong", "new-password-123", "Bearer tok"))
+        .isInstanceOf(ServiceException.class);
+
+    verify(userRepository, never()).save(any());
+    verify(authSessionService, never()).invalidate(any());
+  }
+
+  @Test
+  void changePassword_success_encodesSavesAndInvalidatesSession() {
+    PlatformUser user = hqAdmin();
+    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
+    when(passwordEncoder.matches("current-pass", "stored-hash")).thenReturn(true);
+    when(passwordEncoder.encode("new-password-123")).thenReturn("new-encoded-hash");
+
+    authService.changePassword(
+        "admin@kizuna.test", "current-pass", "new-password-123", "Bearer tok");
+
+    assertThat(user.getPassword()).isEqualTo("new-encoded-hash");
+    verify(userRepository).save(user);
+    verify(authSessionService).invalidate("Bearer tok");
   }
 
   private PlatformUser disabledUser() {
