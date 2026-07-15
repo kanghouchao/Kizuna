@@ -3,10 +3,6 @@
 |Base package
 |`com.kizuna.auth`
 |Bean references
-|* `c.k.u.domain.CentralUserRepository` (in User)
-* `c.k.u.domain.PlatformUserRepository` (in User)
-* `c.k.u.domain.StoreUserRepository` (in User)
-* `c.k.t.domain.TenantRepository` (in Tenant)
-* `c.k.s.tenancy.TenantContext` (in Shared)
+|* `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.s.config.AppProperties` (in Shared)
 |===
