@@ -14,7 +14,10 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.user.domain.PlatformRole;
 import com.kizuna.user.domain.PlatformUserRepository;
+import java.util.EnumSet;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class OrderService {
+
+  // 受付担当者になれる実スタッフロール（CAST/MEMBER は受付担当として記録しない）
+  private static final Set<PlatformRole> RECEPTIONIST_ROLES =
+      EnumSet.of(PlatformRole.HQ_ADMIN, PlatformRole.STORE_MANAGER, PlatformRole.STORE_STAFF);
 
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
@@ -68,9 +75,7 @@ public class OrderService {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
     order.assignCast(request.getCastId());
-    if (!platformUserRepository.existsById(request.getReceptionistId())) {
-      throw new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId());
-    }
+    validateReceptionist(request.getReceptionistId());
     order.assignReceptionist(request.getReceptionistId());
 
     Order saved = orderRepository.save(order);
@@ -87,9 +92,7 @@ public class OrderService {
     order.apply(orderMapper.toPatch(request));
 
     // 関連 ID の更新（存在確認のうえ）
-    if (!platformUserRepository.existsById(request.getReceptionistId())) {
-      throw new ServiceException("受付担当者が見つかりません: " + request.getReceptionistId());
-    }
+    validateReceptionist(request.getReceptionistId());
     order.assignReceptionist(request.getReceptionistId());
     if (!castRepository.existsById(request.getCastId())) {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
@@ -118,6 +121,16 @@ public class OrderService {
     } catch (IllegalArgumentException e) {
       throw new ServiceException("不正な注文ステータスです: " + raw);
     }
+  }
+
+  // 受付担当者は「実スタッフロール」かつ「現テナント(店舗)を授権する PlatformUser」でなければならない。
+  // platform_users には tenant_id が無いため、単なる存在確認では他店舗/HQ/CAST/MEMBER も通ってしまう。
+  private void validateReceptionist(Long receptionistId) {
+    Long storeId = tenantContext.getTenantId();
+    platformUserRepository
+        .findById(receptionistId)
+        .filter(user -> RECEPTIONIST_ROLES.contains(user.getRole()) && user.authorizes(storeId))
+        .orElseThrow(() -> new ServiceException("受付担当者が見つかりません: " + receptionistId));
   }
 
   @TenantScoped
