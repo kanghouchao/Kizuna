@@ -1,6 +1,7 @@
 package com.kizuna.order.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.time.LocalTime;
 import java.util.List;
 import lombok.Data;
@@ -9,8 +10,8 @@ import lombok.Data;
 public class OrderUpdateRequest {
   private String storeName;
 
-  @NotBlank(message = "受付は必須です")
-  private String receptionistId;
+  @NotNull(message = "受付は必須です")
+  private Long receptionistId;
 
   private LocalTime arrivalScheduledStartTime;
   private LocalTime arrivalScheduledEndTime;

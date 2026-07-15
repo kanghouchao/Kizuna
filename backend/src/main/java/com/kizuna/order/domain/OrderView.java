@@ -11,7 +11,7 @@ public interface OrderView {
 
   String getStoreName();
 
-  String getReceptionistId();
+  Long getReceptionistId();
 
   String getReceptionistName();
 
