@@ -22,13 +22,13 @@ public class StoreProfileController {
   private final StoreProfileService tenantConfigService;
 
   @GetMapping
-  @PreAuthorize("hasAuthority('TENANT_CONFIG')")
+  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
   public ResponseEntity<StoreProfileResponse> get() {
     return ResponseEntity.ok(tenantConfigService.get());
   }
 
   @PutMapping
-  @PreAuthorize("hasAuthority('TENANT_CONFIG')")
+  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
   public ResponseEntity<StoreProfileResponse> update(
       @Valid @RequestBody StoreProfileUpdateRequest request) {
     return ResponseEntity.ok(tenantConfigService.update(request));

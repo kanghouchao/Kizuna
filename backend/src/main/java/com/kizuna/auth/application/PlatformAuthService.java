@@ -4,7 +4,6 @@ import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.domain.Authorities;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.ArrayList;
@@ -68,16 +67,7 @@ public class PlatformAuthService {
       throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
     }
 
-    // ROLE_ を先頭に、後続に過橋期の旧権限マッピング（#324、#326 で再編）。
-    // 各権限は生形式（例: ORDER_MANAGE）と PERM_ 形式（例: PERM_ORDER_MANAGE）を併載する。
-    // menu の可視性判定（MenuTreeAssembler）は PERM_ 形式を参照するため、legacy トークンを組む
-    // CustomUserDetailsService と同一の符号化規約に揃える（PERM_ 接頭辞は Authorities に集約）。
-    List<String> authorities = new ArrayList<>();
-    authorities.add("ROLE_" + user.getRole().name());
-    for (String permission : user.getRole().grantedPermissions()) {
-      authorities.add(permission);
-      authorities.add(Authorities.permission(permission));
-    }
+    List<String> authorities = List.of("ROLE_" + user.getRole().name());
 
     Map<String, Object> claims = new HashMap<>();
     claims.put("authorities", authorities);

@@ -23,7 +23,7 @@ public class CentralConfigController {
   private final SystemConfigService systemConfigService;
 
   @GetMapping
-  @PreAuthorize("hasAuthority('SYSTEM_CONFIG')")
+  @PreAuthorize("hasAuthority('ROLE_HQ_ADMIN')")
   public ResponseEntity<List<SystemConfigResponse>> list(
       @RequestParam(required = false) String category) {
     if (category != null && !category.isBlank()) {
@@ -33,7 +33,7 @@ public class CentralConfigController {
   }
 
   @PutMapping
-  @PreAuthorize("hasAuthority('SYSTEM_CONFIG')")
+  @PreAuthorize("hasAuthority('ROLE_HQ_ADMIN')")
   public ResponseEntity<SystemConfigResponse> update(
       @Valid @RequestBody SystemConfigUpdateRequest request) {
     return ResponseEntity.ok(systemConfigService.updateConfig(request));
