@@ -9,9 +9,6 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-jest.mock('../api/central', () => ({ centralAuthApi: { logout: jest.fn() } }));
-jest.mock('../api/store', () => ({ storeAuthApi: { logout: jest.fn() } }));
-
 function Consumer() {
   const { logout } = useAuth();
   return <button onClick={logout}>logout</button>;
