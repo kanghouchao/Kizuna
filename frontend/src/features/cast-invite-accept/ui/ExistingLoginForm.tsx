@@ -25,16 +25,22 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   } = useForm<PlatformLoginRequest>({ defaultValues: { email: '', password: '' } });
 
   const submit = async (values: PlatformLoginRequest) => {
+    let newTokenWritten = false;
     try {
       const { token: authToken, expires_at } = await platformAuthApi.login(values);
       // 招待を開く前に別ロールで平台にログイン済みだった場合、旧セッションの platform-role/platform-store-id が
       // 残ったままだと apiClient やルート遷移が旧ロールの文脈を CAST の token に対して使ってしまう（#327 codex指摘）
       clearPlatformSession();
       Cookies.set('token', authToken, { expires: new Date(expires_at) });
+      newTokenWritten = true;
       const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
       onSuccess(response);
     } catch (error) {
-      Cookies.remove('token');
+      // login 自体が失敗した場合は新 token を書き込んでいないため、既存セッションの token には触れない
+      // （書き込み後の失敗のみ後始末する。#327 codex指摘）
+      if (newTokenWritten) {
+        Cookies.remove('token');
+      }
       toast.error(getApiErrorMessage(error, 'ログインまたは受諾に失敗しました'));
     }
   };
