@@ -34,6 +34,9 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
       Cookies.set('token', authToken, { expires: new Date(expires_at) });
       newTokenWritten = true;
       const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
+      // 受諾はここで完了し、ポータルセッションは開始しない（#328 未着手）。一時的に張った CAST token を
+      // 残すと token 単独の存在チェックで central/tenant コンソールへ誤って通されるため必ず消去する（#327 codex指摘）
+      Cookies.remove('token');
       onSuccess(response);
     } catch (error) {
       // login 自体が失敗した場合は新 token を書き込んでいないため、既存セッションの token には触れない
