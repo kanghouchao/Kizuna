@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
 import { PlatformLoginRequest, platformAuthApi } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/lib';
+import { clearPlatformSession, getApiErrorMessage } from '@/shared/lib';
 
 interface ExistingLoginFormProps {
   token: string;
@@ -27,6 +27,9 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   const submit = async (values: PlatformLoginRequest) => {
     try {
       const { token: authToken, expires_at } = await platformAuthApi.login(values);
+      // 招待を開く前に別ロールで平台にログイン済みだった場合、旧セッションの platform-role/platform-store-id が
+      // 残ったままだと apiClient やルート遷移が旧ロールの文脈を CAST の token に対して使ってしまう（#327 codex指摘）
+      clearPlatformSession();
       Cookies.set('token', authToken, { expires: new Date(expires_at) });
       const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
       onSuccess(response);
