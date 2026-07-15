@@ -1,6 +1,7 @@
 package com.kizuna.cast;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.cast.domain.Cast;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -145,6 +147,39 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
     assertThat(
             castInvitationRepository.findByCastIdAndStatus(castId, CastInvitation.Status.PENDING))
         .hasSize(1);
+  }
+
+  @Test
+  @DisplayName("同一档案に PENDING 招待を2件保存すると部分ユニークインデックスが2件目を拒否すること（並行発行の直列化）")
+  void secondPendingInvitationForSameCastIsRejected() {
+    // 二重クリック等で issue() が並行した際に複数の有効トークンが発行される事態を、DB の
+    // 部分ユニークインデックス uq_t_cast_invitations_pending_cast が塞ぐことを直接確認する。
+    // テストスレッドは @TenantScoped を経由しないためリポジトリ直挿で PENDING を2件試みる。
+    String castId = createCast(TENANT_A, managerToken, "PENDING一意テスト");
+
+    CastInvitation first = pendingInvitation(castId, "cast-inv-it-pending-a-" + System.nanoTime());
+    castInvitationRepository.save(first);
+
+    CastInvitation second = pendingInvitation(castId, "cast-inv-it-pending-b-" + System.nanoTime());
+    assertThatThrownBy(() -> castInvitationRepository.save(second))
+        .isInstanceOf(DataIntegrityViolationException.class);
+
+    // 有効な PENDING は最初の 1 件のみ（2件目は永続化されていない）。
+    assertThat(
+            castInvitationRepository.findByCastIdAndStatus(castId, CastInvitation.Status.PENDING))
+        .hasSize(1);
+  }
+
+  private CastInvitation pendingInvitation(String castId, String token) {
+    CastInvitation invitation =
+        CastInvitation.builder()
+            .castId(castId)
+            .token(token)
+            .status(CastInvitation.Status.PENDING)
+            .expiresAt(OffsetDateTime.now().plusHours(72))
+            .build();
+    invitation.setTenantId(TENANT_A);
+    return invitation;
   }
 
   @Test

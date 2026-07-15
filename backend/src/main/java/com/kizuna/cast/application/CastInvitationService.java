@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,10 @@ public class CastInvitationService {
   /**
    * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 tenantFilter により他テナントの档案は見えず
    * ServiceException となる（越権はインターセプタが先に 403）。
+   *
+   * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
+   * status = 'PENDING'}）が DB レベルで保証する。 これにより店長の二重クリック等で issue() が並行しても、複数の有効トークンが同時に発行される事態を塞ぐ
+   * （token 一意制約だけでは異なるトークンの二重 PENDING を防げないため — #327）。
    */
   @TenantScoped
   @Transactional
@@ -46,9 +51,15 @@ public class CastInvitationService {
       throw new CastInvitationStateException("この档案は既に平台身分と連携済みのため招待を発行できません");
     }
 
-    castInvitationRepository
-        .findByCastIdAndStatus(castId, CastInvitation.Status.PENDING)
-        .forEach(CastInvitation::invalidate);
+    List<CastInvitation> existingPending =
+        castInvitationRepository.findByCastIdAndStatus(castId, CastInvitation.Status.PENDING);
+    if (!existingPending.isEmpty()) {
+      existingPending.forEach(CastInvitation::invalidate);
+      // 失効の UPDATE を新規 PENDING の INSERT より前に確定させる。Hibernate は既定で INSERT を
+      // UPDATE より先に実行するため、明示 flush しないと旧 PENDING が残ったまま新 PENDING を
+      // INSERT してしまい、部分ユニークインデックスに衝突する（通常の再発行が失敗する）。
+      castInvitationRepository.flush();
+    }
 
     CastInvitation invitation =
         CastInvitation.builder()
@@ -57,8 +68,14 @@ public class CastInvitationService {
             .expiresAt(OffsetDateTime.now().plus(CastInvitation.VALIDITY))
             .build();
     invitation.setTenantId(cast.getTenantId());
-    CastInvitation saved = castInvitationRepository.save(invitation);
-    return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
+    try {
+      CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
+      return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
+    } catch (DataIntegrityViolationException ex) {
+      // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定していた場合、部分ユニーク
+      // インデックス違反となる。意味のある 400（CastInvitationStateException）へ変換する。
+      throw new CastInvitationStateException("招待の発行が他の操作と競合しました。時間をおいて再度お試しください");
+    }
   }
 
   /** ページ内の档案について招待状態（四態）を一括導出する。呼び出し元の tenantFilter 有効なトランザクション内で使う。 */
