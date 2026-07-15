@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,9 +26,13 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -56,8 +61,29 @@ class OrderServiceTest {
   @Captor ArgumentCaptor<Order> orderCaptor;
   @Captor ArgumentCaptor<Customer> customerCaptor;
 
+  private static final long TENANT_ID = 1L;
+
   private OrderPatch emptyPatch() {
     return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null, null);
+  }
+
+  private PlatformUser receptionist(
+      PlatformRole role, StoreScopeType scopeType, Set<Long> storeIds) {
+    return PlatformUser.builder()
+        .email("receptionist@kizuna.test")
+        .password("pw")
+        .displayName("受付担当")
+        .enabled(true)
+        .role(role)
+        .storeScopeType(scopeType)
+        .storeIds(storeIds)
+        .build();
+  }
+
+  /** 現テナント(store_id=1)を授権するスタッフロールの受付担当者。 */
+  private PlatformUser authorizedReceptionist() {
+    return receptionist(
+        PlatformRole.STORE_STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(TENANT_ID));
   }
 
   @Test
@@ -116,7 +142,7 @@ class OrderServiceTest {
     when(orderMapper.toEntity(req)).thenReturn(entity);
     when(customerRepository.existsById("c1")).thenReturn(true);
     when(castRepository.existsById("g1")).thenReturn(true);
-    when(platformUserRepository.existsById(1L)).thenReturn(true);
+    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -146,7 +172,7 @@ class OrderServiceTest {
     when(customerRepository.findByPhoneNumberAndTenantId("09012345678", 1L))
         .thenReturn(Optional.empty());
     when(castRepository.existsById("g1")).thenReturn(true);
-    when(platformUserRepository.existsById(1L)).thenReturn(true);
+    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
 
     when(orderMapper.toCustomer(req)).thenReturn(newCustomer);
 
@@ -163,13 +189,58 @@ class OrderServiceTest {
   }
 
   @Test
+  void createRejectsReceptionistAuthorizedForDifferentStore() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(castRepository.existsById("g1")).thenReturn(true);
+    // 別店舗(store_id=2)専用スコープ: 現テナント(=1)を授権しない
+    when(platformUserRepository.findById(1L))
+        .thenReturn(
+            Optional.of(
+                receptionist(
+                    PlatformRole.STORE_STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("受付担当者が見つかりません");
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void createRejectsCastRoleReceptionist() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(castRepository.existsById("g1")).thenReturn(true);
+    // 全店舗授権でも CAST ロールは受付担当者になれない
+    when(platformUserRepository.findById(1L))
+        .thenReturn(
+            Optional.of(receptionist(PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of())));
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("受付担当者が見つかりません");
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
   void updateModifiesAssociations() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
 
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
-    when(platformUserRepository.existsById(2L)).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -190,12 +261,13 @@ class OrderServiceTest {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(
             new OrderPatch(
                 "新しい店名", null, null, null, null, null, null, null, null, null, null, null));
     when(castRepository.existsById("g2")).thenReturn(true);
-    when(platformUserRepository.existsById(2L)).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -213,10 +285,11 @@ class OrderServiceTest {
   @Test
   void updateAppliesLegalStatusTransition() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
-    when(platformUserRepository.existsById(2L)).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -235,10 +308,11 @@ class OrderServiceTest {
   @Test
   void updateRejectsIllegalStatusTransition() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
-    when(platformUserRepository.existsById(2L)).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -252,10 +326,11 @@ class OrderServiceTest {
   @Test
   void updateRejectsUnknownStatusValue() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
-    when(platformUserRepository.existsById(2L)).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -268,16 +343,61 @@ class OrderServiceTest {
   @Test
   void updateThrowsWhenCastNotFound() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("none")).thenReturn(false);
-    when(platformUserRepository.existsById(2L)).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("none");
     req.setReceptionistId(2L);
 
     assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
+  }
+
+  @Test
+  void updateRejectsReceptionistAuthorizedForDifferentStore() {
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    // 別店舗(store_id=2)専用スコープ: 現テナント(=1)を授権しない
+    when(platformUserRepository.findById(2L))
+        .thenReturn(
+            Optional.of(
+                receptionist(
+                    PlatformRole.STORE_STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId(2L);
+
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("受付担当者が見つかりません");
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void updateRejectsCastRoleReceptionist() {
+    Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    // 全店舗授権でも CAST ロールは受付担当者になれない
+    when(platformUserRepository.findById(2L))
+        .thenReturn(
+            Optional.of(receptionist(PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of())));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId(2L);
+
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("受付担当者が見つかりません");
+    verify(orderRepository, never()).save(any());
   }
 
   @Test
