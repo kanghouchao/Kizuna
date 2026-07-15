@@ -207,6 +207,29 @@ class PlatformStaffServiceTest {
   }
 
   @Test
+  void create_duplicateEmailUniqueViolation_convertsToDuplicateEmail() {
+    // 事前 findByEmail を通過した後に DB 一意制約で敗者が弾かれるレース。店舗エラーではなく重複エラーへ分類する。
+    PlatformStaffCreateRequest req =
+        createRequest(
+            "race@kizuna.test",
+            "rawpass",
+            PlatformRole.STORE_MANAGER,
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(1L));
+    when(repository.findByEmail("race@kizuna.test")).thenReturn(Optional.empty());
+    when(encoder.encode("rawpass")).thenReturn("ENCODED");
+    when(repository.save(any()))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "save failed",
+                new RuntimeException(
+                    "ERROR: duplicate key value violates unique constraint"
+                        + " \"uq_platform_users_email\"")));
+
+    assertThatThrownBy(() -> service.create(req)).isInstanceOf(DuplicateStaffEmailException.class);
+  }
+
+  @Test
   void update_reassignsRoleAndScopeAndSaves() {
     PlatformUser existing =
         staff(3L, "target@kizuna.test", PlatformRole.HQ_ADMIN, StoreScopeType.ALL_STORES, Set.of());
@@ -233,6 +256,21 @@ class PlatformStaffServiceTest {
     Optional<PlatformStaffResponse> res =
         service.update(
             404L, updateRequest(PlatformRole.STORE_STAFF, StoreScopeType.ALL_STORES, Set.of()));
+
+    assertThat(res).isEmpty();
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  void update_targetIsNonStaffRole_returnsEmptyWithoutSaving() {
+    // CAST/MEMBER はスタッフ管理の可視対象外。id を直接指定してもスタッフへ昇格させない（現在ロール検証）。
+    PlatformUser cast =
+        staff(8L, "cast@kizuna.test", PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of());
+    when(repository.findById(8L)).thenReturn(Optional.of(cast));
+
+    Optional<PlatformStaffResponse> res =
+        service.update(
+            8L, updateRequest(PlatformRole.STORE_STAFF, StoreScopeType.ALL_STORES, Set.of()));
 
     assertThat(res).isEmpty();
     verify(repository, never()).save(any());
@@ -269,5 +307,32 @@ class PlatformStaffServiceTest {
                     updateRequest(
                         PlatformRole.STORE_MANAGER, StoreScopeType.SPECIFIC_STORES, Set.of(999L))))
         .isInstanceOf(InvalidStoreScopeException.class);
+  }
+
+  @Test
+  void update_duplicateEmailUniqueViolation_convertsToDuplicateEmail() {
+    PlatformUser existing =
+        staff(
+            9L,
+            "target@kizuna.test",
+            PlatformRole.STORE_STAFF,
+            StoreScopeType.ALL_STORES,
+            Set.of());
+    when(repository.findById(9L)).thenReturn(Optional.of(existing));
+    when(repository.save(existing))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "save failed",
+                new RuntimeException(
+                    "ERROR: duplicate key value violates unique constraint"
+                        + " \"uq_platform_users_email\"")));
+
+    assertThatThrownBy(
+            () ->
+                service.update(
+                    9L,
+                    updateRequest(
+                        PlatformRole.STORE_MANAGER, StoreScopeType.SPECIFIC_STORES, Set.of(1L))))
+        .isInstanceOf(DuplicateStaffEmailException.class);
   }
 }
