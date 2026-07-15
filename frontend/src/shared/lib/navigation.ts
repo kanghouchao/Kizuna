@@ -1,5 +1,4 @@
 // navigation helper with injectable navigator for easier testing
-import { getPlatformRole } from './platform-session';
 
 type NavigatorFn = (url: string) => void;
 
@@ -19,7 +18,7 @@ export function redirectToLogin() {
   if (typeof window !== 'undefined') {
     try {
       if (!window.location.pathname.includes('/login')) {
-        navigatorFn(getPlatformRole() ? '/platform/login' : '/login');
+        navigatorFn('/platform/login');
       }
     } catch {
       // reading pathname may throw in some environments; ignore

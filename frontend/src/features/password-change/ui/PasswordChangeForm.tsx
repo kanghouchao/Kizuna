@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { centralAuthApi, storeAuthApi, useAuth } from '@/entities/user';
-import { getApiErrorMessage, isTenantDomain } from '@/shared/lib';
+import { platformAuthApi, useAuth } from '@/entities/user';
+import { getApiErrorMessage } from '@/shared/lib';
 
 /** パスワード変更フォーム。成功するとトークンが失効するため、ログアウトして再ログインを促す。 */
 export function PasswordChangeForm() {
@@ -25,8 +25,7 @@ export function PasswordChangeForm() {
     }
     setIsSubmitting(true);
     try {
-      const api = isTenantDomain() ? storeAuthApi : centralAuthApi;
-      await api.changePassword({
+      await platformAuthApi.changePassword({
         current_password: currentPassword,
         new_password: newPassword,
       });

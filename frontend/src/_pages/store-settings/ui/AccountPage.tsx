@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { storeAuthApi } from '@/entities/user';
+import { platformAuthApi } from '@/entities/user';
 import { PasswordChangeForm } from '@/features/password-change';
 
 /** アカウント設定ページ（プロフィール + パスワード変更） */
@@ -15,8 +15,8 @@ export default function AccountPage() {
   useEffect(() => {
     const fetchMe = async () => {
       try {
-        const me = await storeAuthApi.me();
-        setNickname(me.nickname);
+        const me = await platformAuthApi.me();
+        setNickname(me.display_name);
         setEmail(me.email);
       } catch {
         toast.error('アカウント情報の取得に失敗しました');
@@ -31,8 +31,8 @@ export default function AccountPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const me = await storeAuthApi.updateMe({ nickname });
-      setNickname(me.nickname);
+      const me = await platformAuthApi.updateMe({ display_name: nickname });
+      setNickname(me.display_name);
       toast.success('プロフィールを更新しました');
     } catch {
       toast.error('プロフィールの更新に失敗しました');
