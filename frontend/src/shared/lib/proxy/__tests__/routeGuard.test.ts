@@ -30,12 +30,12 @@ describe('routeGuard', () => {
     jest.clearAllMocks();
   });
 
-  it('redirects to /login when accessing /central without token', () => {
+  it('redirects to /platform/login when accessing /central without token', () => {
     const req = createRequest('/central/dashboard', false);
     const res = handleRouteProtection(req, 'central');
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: '/login' })
+      expect.objectContaining({ pathname: '/platform/login' })
     );
     expect(res).not.toBeNull();
   });

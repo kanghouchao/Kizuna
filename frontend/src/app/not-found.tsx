@@ -18,7 +18,7 @@ export default function NotFound() {
             ホームへ戻る
           </Link>
           <Link
-            href="/login"
+            href="/platform/login"
             className="w-full rounded-md border border-indigo-200 px-4 py-2 text-indigo-700 hover:bg-white"
           >
             ログイン画面を開く
