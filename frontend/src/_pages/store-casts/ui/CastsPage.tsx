@@ -10,13 +10,14 @@ import {
 } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
-import { InvitationButton } from '@/features/cast-invitation';
+import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
 import { useManagedList } from '@/shared/lib';
 import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */
 export default function CastListPage() {
   const [search, setSearch] = useState('');
+  const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   const {
     items: casts,
     isLoading,
@@ -31,6 +32,13 @@ export default function CastListPage() {
 
   /** 検索を実行する */
   const handleSearch = () => {
+    void refetch();
+  };
+
+  /** 招待発行成功時: モーダル表示と一覧の再取得を行う（isLoading に連動して行がアンマウントされても、
+   *  モーダル state はページ層が持つためモーダルは表示され続ける） */
+  const handleIssued = (result: IssuedInvitation) => {
+    setIssuedInvitation(result);
     void refetch();
   };
 
@@ -188,7 +196,7 @@ export default function CastListPage() {
                       <InvitationButton
                         castId={cast.id}
                         status={cast.invitation_status}
-                        onIssued={refetch}
+                        onIssued={handleIssued}
                       />
                       <Link
                         href={`/tenant/casts/${cast.id}/edit`}
@@ -210,6 +218,17 @@ export default function CastListPage() {
           </table>
         )}
       </div>
+
+      <InvitationModal
+        open={issuedInvitation !== null}
+        link={
+          issuedInvitation && typeof window !== 'undefined'
+            ? `${window.location.origin}/platform/invite/${issuedInvitation.token}`
+            : ''
+        }
+        expiresAt={issuedInvitation?.expiresAt ?? null}
+        onClose={() => setIssuedInvitation(null)}
+      />
     </div>
   );
 }
