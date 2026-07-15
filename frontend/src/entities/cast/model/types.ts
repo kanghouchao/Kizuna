@@ -52,3 +52,26 @@ export interface CastInvitationIssueResponse {
   token: string;
   expires_at: string;
 }
+
+// 招待照会（公開ランディング）の受諾可否状態
+export type CastInvitationViewStatus = 'VALID' | 'EXPIRED' | 'USED';
+
+// 招待照会（公開ランディング）レスポンス
+export interface CastInvitationDetailResponse {
+  store_name: string;
+  cast_name: string;
+  status: CastInvitationViewStatus;
+  expires_at: string;
+}
+
+// 招待の新規登録受諾リクエスト
+export interface CastInvitationAcceptRequest {
+  email: string;
+  password: string;
+  display_name: string;
+}
+
+// 招待受諾の完了応答
+export interface CastAcceptanceResponse {
+  store_name: string;
+}
