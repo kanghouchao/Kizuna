@@ -1,5 +1,10 @@
 import { Page, PaginationParams, apiClient } from '@/shared/api';
-import { CastCreateRequest, CastResponse, CastUpdateRequest } from '../model/types';
+import {
+  CastCreateRequest,
+  CastInvitationIssueResponse,
+  CastResponse,
+  CastUpdateRequest,
+} from '../model/types';
 
 export const castApi = {
   /** キャスト一覧を取得する */
@@ -29,6 +34,11 @@ export const castApi = {
   /** 公開キャスト一覧を取得する */
   listPublic: async (): Promise<CastResponse[]> => {
     const response = await apiClient.get('/tenant/casts/public');
+    return response.data;
+  },
+  /** キャストへの招待を発行する（店長限定。再発行時は旧招待が失効する） */
+  issueInvitation: async (id: string): Promise<CastInvitationIssueResponse> => {
+    const response = await apiClient.post(`/tenant/casts/${id}/invitation`);
     return response.data;
   },
 };

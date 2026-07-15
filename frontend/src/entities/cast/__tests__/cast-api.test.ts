@@ -29,4 +29,10 @@ describe('castApi', () => {
   it('listPublic は /tenant/casts/public を GET する', async () => {
     expect(await castApi.listPublic()).toEqual({ ok: true, url: '/tenant/casts/public' });
   });
+  it('issueInvitation は /tenant/casts/:id/invitation を POST する', async () => {
+    expect(await castApi.issueInvitation('c1')).toEqual({
+      ok: true,
+      url: '/tenant/casts/c1/invitation',
+    });
+  });
 });

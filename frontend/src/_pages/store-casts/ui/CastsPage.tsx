@@ -9,7 +9,8 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { useState } from 'react';
-import { CastResponse, castApi } from '@/entities/cast';
+import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
+import { InvitationButton } from '@/features/cast-invitation';
 import { useManagedList } from '@/shared/lib';
 import { toast } from 'react-hot-toast';
 
@@ -124,6 +125,9 @@ export default function CastListPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   ステータス
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  招待状態
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   アクション
                 </th>
@@ -132,6 +136,7 @@ export default function CastListPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {casts.map(cast => {
                 const status = statusLabel(cast.status);
+                const invitation = castInvitationStatusLabel(cast.invitation_status);
                 return (
                   <tr key={cast.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -172,7 +177,19 @@ export default function CastListPage() {
                         {status.text}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${invitation.color}`}
+                      >
+                        {invitation.text}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                      <InvitationButton
+                        castId={cast.id}
+                        status={cast.invitation_status}
+                        onIssued={refetch}
+                      />
                       <Link
                         href={`/tenant/casts/${cast.id}/edit`}
                         className="text-gray-400 hover:text-amber-600 inline-block"
