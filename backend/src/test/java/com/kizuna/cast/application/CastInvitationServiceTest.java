@@ -3,6 +3,7 @@ package com.kizuna.cast.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -55,8 +57,6 @@ class CastInvitationServiceTest {
   @Test
   void issue_createsPendingInvitationWith72hExpiry() {
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
-    when(castInvitationRepository.findByCastIdAndStatus("c1", CastInvitation.Status.PENDING))
-        .thenReturn(List.of());
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     OffsetDateTime before = OffsetDateTime.now();
@@ -89,18 +89,19 @@ class CastInvitationServiceTest {
   }
 
   @Test
-  void issue_invalidatesExistingPendingBeforeReissuing() {
-    CastInvitation existing =
-        invitation("c1", CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(10));
+  void issue_invalidatesPendingViaConditionalUpdateBeforeReissuing() {
+    // 旧 PENDING の失効は管理エンティティの invalidate() ではなく条件付き一括 UPDATE で行い、
+    // それが新規 PENDING の INSERT より前に実行されることを確認する（受諾との直列化・#327）。
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
-    when(castInvitationRepository.findByCastIdAndStatus("c1", CastInvitation.Status.PENDING))
-        .thenReturn(List.of(existing));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     castInvitationService.issue("c1");
 
-    assertThat(existing.getStatus()).isEqualTo(CastInvitation.Status.INVALIDATED);
-    verify(castInvitationRepository).saveAndFlush(any());
+    InOrder inOrder = inOrder(castInvitationRepository);
+    inOrder
+        .verify(castInvitationRepository)
+        .invalidatePending("c1", CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
+    inOrder.verify(castInvitationRepository).saveAndFlush(any());
   }
 
   @Test
@@ -108,13 +109,23 @@ class CastInvitationServiceTest {
     // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定した場合、部分ユニーク
     // インデックス違反（DataIntegrityViolationException）となる。これを意味のある 400 に変換する。
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
-    when(castInvitationRepository.findByCastIdAndStatus("c1", CastInvitation.Status.PENDING))
-        .thenReturn(List.of());
     when(castInvitationRepository.saveAndFlush(any()))
         .thenThrow(new DataIntegrityViolationException("uq_t_cast_invitations_pending_cast"));
 
     assertThatThrownBy(() -> castInvitationService.issue("c1"))
         .isInstanceOf(CastInvitationStateException.class);
+  }
+
+  @Test
+  void issue_abortsWhenCastGetsLinkedConcurrentlyBeforeReissuing() {
+    // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が档案を紐づけた状況を模す。
+    // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する（#327）。
+    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findPlatformUserIdById("c1")).thenReturn(Optional.of(77L));
+
+    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+        .isInstanceOf(CastInvitationStateException.class);
+    verify(castInvitationRepository, never()).saveAndFlush(any());
   }
 
   @Test

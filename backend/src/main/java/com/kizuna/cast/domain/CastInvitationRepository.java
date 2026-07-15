@@ -32,4 +32,20 @@ public interface CastInvitationRepository extends JpaRepository<CastInvitation, 
       @Param("now") OffsetDateTime now,
       @Param("pending") CastInvitation.Status pending,
       @Param("accepted") CastInvitation.Status accepted);
+
+  /**
+   * 档案の PENDING 招待のみを条件付きで INVALIDATED へ一括遷移させ（再発行時の旧票失効）、更新行数を返す。
+   *
+   * <p>{@code status = PENDING} を条件にするため、並行する受諾が先に ACCEPTED へ遷移させた行は一致せず更新対象から外れる （Postgres の READ
+   * COMMITTED 再チェックにより、受諾コミット後は WHERE 条件を満たさなくなる）。 これにより受諾確定済みの招待を INVALIDATED へ巻き戻さない（{@link
+   * #claimPending} と対称の直列化）。
+   */
+  @Modifying
+  @Query(
+      "update CastInvitation i set i.status = :invalidated "
+          + "where i.castId = :castId and i.status = :pending")
+  int invalidatePending(
+      @Param("castId") String castId,
+      @Param("pending") CastInvitation.Status pending,
+      @Param("invalidated") CastInvitation.Status invalidated);
 }

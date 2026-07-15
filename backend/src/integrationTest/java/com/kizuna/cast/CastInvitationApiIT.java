@@ -150,6 +150,36 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("受諾確定済み(ACCEPTED)の招待がある档案で再発行しても、ACCEPTED 行が INVALIDATED に巻き戻らないこと")
+  void reissueDoesNotRollBackAcceptedInvitation() {
+    // 並行受諾が先に確定した状況を DB 状態で模す。再発行の失効は条件付き一括 UPDATE（WHERE status =
+    // PENDING）で行うため、ACCEPTED の招待は失効の対象外となり INVALIDATED へ巻き戻らない（#327 codex 指摘）。
+    // 档案は未紐づけのまま（受諾の紐づけ確定前の窓）なので、再発行自体は新 PENDING の発行として成功する。
+    String castId = createCast(TENANT_A, managerToken, "受諾済み巻き戻し防止テスト");
+    CastInvitation accepted =
+        CastInvitation.builder()
+            .castId(castId)
+            .token("cast-inv-it-accepted-" + System.nanoTime())
+            .status(CastInvitation.Status.ACCEPTED)
+            .expiresAt(OffsetDateTime.now().plusHours(72))
+            .acceptedAt(OffsetDateTime.now())
+            .build();
+    accepted.setTenantId(TENANT_A);
+    String acceptedId = castInvitationRepository.save(accepted).getId();
+
+    ResponseEntity<JsonNode> res = issueInvitation(castId, TENANT_A, managerToken);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    // 受諾確定済みの招待は失効の対象外で、ACCEPTED のまま巻き戻っていない。
+    assertThat(castInvitationRepository.findById(acceptedId).orElseThrow().getStatus())
+        .isEqualTo(CastInvitation.Status.ACCEPTED);
+    // 新たに発行された PENDING は 1 件のみ（ACCEPTED はそのまま残る）。
+    assertThat(
+            castInvitationRepository.findByCastIdAndStatus(castId, CastInvitation.Status.PENDING))
+        .hasSize(1);
+  }
+
+  @Test
   @DisplayName("同一档案に PENDING 招待を2件保存すると部分ユニークインデックスが2件目を拒否すること（並行発行の直列化）")
   void secondPendingInvitationForSameCastIsRejected() {
     // 二重クリック等で issue() が並行した際に複数の有効トークンが発行される事態を、DB の
