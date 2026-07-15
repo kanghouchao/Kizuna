@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: tenant-v080-001-drop-legacy-auth-tables
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        # 旧 TenantAuth の認証テーブル群を撤去する（PlatformAuth へ統一済み、#326）。
+        # 子表（関連テーブル）→親表の順で dropTable する。t_pages・central_group_admins は
+        # 旧二本立て認証と無関係な既存 debt のため対象外（スコープ境界）。
+        - dropTable:
+            tableName: t_user_roles
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_role_permissions
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_users
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_roles
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_permissions
+            cascadeConstraints: true
