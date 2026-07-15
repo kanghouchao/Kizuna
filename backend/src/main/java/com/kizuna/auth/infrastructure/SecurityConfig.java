@@ -27,6 +27,8 @@ public class SecurityConfig {
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/platform/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/files/upload"),
+    // 匿名 POST の招待新規登録受諾（Bearer なしのため Bearer 免除に該当しない）。既存受諾(/existing)は Bearer 付きで既存免除に該当する。
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*/acceptance"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
       return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");
