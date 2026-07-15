@@ -132,6 +132,19 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("短すぎるパスワードでの新規登録受諾は 400 で拒否され、副作用がないこと")
+  void tooShortPasswordRegistrationIsRejected() {
+    String castId = createCast(TENANT_A, "短パスワード受諾テスト");
+    String token = issue(castId, TENANT_A);
+    String email = "cast-shortpw-it-" + System.nanoTime() + "@kizuna.test";
+
+    ResponseEntity<JsonNode> res = acceptNewUser(token, email, "a", "花子");
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
   @DisplayName("既存 CAST アカウントの受諾で所属店舗が追加され、档案に紐づくこと")
   void existingCastAcceptanceAddsStoreAndLinks() {
     PlatformUser castUser = ensureExistingCastUser();
