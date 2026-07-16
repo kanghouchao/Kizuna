@@ -27,6 +27,7 @@ First read the spec source, then the full diff (`git diff <fixed-point>...HEAD` 
    - **Authorized-path usability**: does the change actually work for the users it is FOR, not only "can others break in" — missing authority prefixes, menus hidden from legitimate roles, dead routes.
    - **Frontend session lifecycle**: token/cookie expiry, redirect loops, races before role/menu resolution, stale client state.
    - **Tenant isolation**: strong assertions (could ANOTHER tenant's real data leak, not just "ownership mismatch"), and `onDelete` semantics on every new FK that references tenant-owned tables.
+   - **Concurrency / atomicity**: for every read-modify-write on state two concurrent requests could both reach (a status transition, a collection union/reassign, an "invalidate the old ones then insert the new one" sequence), trace whether the read and the write are actually atomic — a plain read-then-save with no conditional update, lock, or equivalent is a lost-update or double-insert waiting to happen (#327: 4 separate race variants shipped from the same undesigned seam, all in code this lens had already reviewed once).
    - **Gates/parsers**: any silent skip/break path — flag the whole defect CLASS (whitelist + fail-loud), never just the reported instance.
    - **Fail-open defaults** on auth/permission seams.
 
