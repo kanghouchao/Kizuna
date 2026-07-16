@@ -1,3 +1,4 @@
+import { CastCustomFieldView } from '@/entities/cast';
 import { PartnerLink, SnsLink } from '@/entities/store-profile';
 
 /**
@@ -13,6 +14,7 @@ export interface Cast {
   bust?: number;
   waist?: number;
   hip?: number;
+  custom_fields?: CastCustomFieldView[];
 }
 
 /**
