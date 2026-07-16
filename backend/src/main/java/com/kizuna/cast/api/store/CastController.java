@@ -2,6 +2,7 @@ package com.kizuna.cast.api.store;
 
 import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastInvitationResponse;
+import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.application.CastInvitationService;
@@ -76,7 +77,7 @@ public class CastController {
 
   @GetMapping("/public")
   @PermitAll
-  public ResponseEntity<List<CastResponse>> listPublic() {
+  public ResponseEntity<List<CastPublicResponse>> listPublic() {
     return ResponseEntity.ok(castService.listActive());
   }
 }

@@ -2,6 +2,7 @@ package com.kizuna.cast.application;
 
 import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
+import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
@@ -127,9 +128,11 @@ public class CastService {
 
   @TenantScoped
   @Transactional(readOnly = true)
-  public List<CastResponse> listActive() {
+  public List<CastPublicResponse> listActive() {
+    List<CastFieldDefinition> publicDefinitions =
+        castFieldDefinitionRepository.findByIsPublicTrueOrderByDisplayOrderAsc();
     return castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE").stream()
-        .map(castMapper::toResponse)
+        .map(cast -> castMapper.toPublicResponse(cast, publicDefinitions))
         .toList();
   }
 }
