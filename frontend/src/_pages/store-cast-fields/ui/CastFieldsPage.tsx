@@ -118,6 +118,7 @@ export default function CastFieldsPage() {
                         e.stopPropagation();
                         void handleDelete(definition.id, definition.label);
                       }}
+                      aria-label="削除"
                       className="text-gray-400 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
                     >
                       <TrashIcon className="h-5 w-5" />
