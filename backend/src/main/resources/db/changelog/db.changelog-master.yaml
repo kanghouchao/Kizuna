@@ -29,3 +29,6 @@ databaseChangeLog:
   - include:
       file: releases/v0.10.0/master.yaml
       relativeToChangelogFile: true
+  - include:
+      file: releases/v0.11.0/master.yaml
+      relativeToChangelogFile: true

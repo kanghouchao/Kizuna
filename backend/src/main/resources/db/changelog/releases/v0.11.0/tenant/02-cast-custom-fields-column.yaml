@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: tenant-v0110-002-cast-custom-fields-column
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_casts
+            columns:
+              - column:
+                  name: custom_fields
+                  type: JSONB
+                  remarks: カスタムフィールド値（key→value。既存行は NULL、アプリ側で空マップ扱い）

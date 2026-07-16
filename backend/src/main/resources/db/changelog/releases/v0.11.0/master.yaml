@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: tenant/01-cast-field-definitions.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: tenant/02-cast-custom-fields-column.yaml
+      relativeToChangelogFile: true
