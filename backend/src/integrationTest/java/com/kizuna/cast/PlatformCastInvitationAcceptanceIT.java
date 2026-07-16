@@ -3,6 +3,7 @@ package com.kizuna.cast;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.kizuna.cast.application.CastInvitationAcceptanceService;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastRepository;
@@ -14,6 +15,11 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import java.time.OffsetDateTime;
 import java.util.Set;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +48,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Autowired private TenantRepository tenantRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private CastInvitationAcceptanceService acceptanceService;
 
   private String managerToken;
 
@@ -185,6 +192,56 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("同一 SPECIFIC_STORES CAST の並行受諾で店舗集合の更新が取りこぼされないこと")
+  void concurrentExistingAcceptancesDoNotLoseStoreUpdates() throws Exception {
+    String email = "cast-concurrent-it-" + System.nanoTime() + "@kizuna.test";
+    // 店舗{1} 所属の CAST を用意する。
+    platformUserRepository.save(
+        PlatformUser.builder()
+            .email(email)
+            .password(passwordEncoder.encode(PASSWORD))
+            .displayName("並行受諾IT")
+            .enabled(true)
+            .role(PlatformRole.CAST)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(TENANT_A))
+            .build());
+
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      // ロックが無いと storeIds の read-modify-write が競合し、後着の save が先着の追加を上書きする。
+      // 片方が既存店舗{1}(冪等)、もう片方が新規店舗{2} を追加する構図を反復し、
+      // 「最後書き勝ちで店舗2が消える」取りこぼしを確実に顕在化させる。
+      for (int i = 0; i < 8; i++) {
+        // 反復ごとに新しい档案と招待を用意する（招待は使い捨て、档案は二重紐づけ防御があるため）。
+        String castA = createCast(TENANT_A, "並行受諾A" + i);
+        String castB = createCast(TENANT_B, "並行受諾B" + i);
+        String tokenA =
+            directInsertInvitation(
+                castA, TENANT_A, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+        String tokenB =
+            directInsertInvitation(
+                castB, TENANT_B, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+        // 前反復の追加をリセットし、店舗{1} からやり直す。
+        resetStores(email, Set.of(TENANT_A));
+
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        Future<?> f1 = pool.submit(acceptTask(barrier, tokenA, email));
+        Future<?> f2 = pool.submit(acceptTask(barrier, tokenB, email));
+        f1.get(30, TimeUnit.SECONDS);
+        f2.get(30, TimeUnit.SECONDS);
+
+        PlatformUser reloaded = platformUserRepository.findByEmail(email).orElseThrow();
+        assertThat(reloaded.getStoreIds())
+            .as("反復 %d: 並行受諾後に両店舗が保持されること", i)
+            .contains(TENANT_A, TENANT_B);
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
   @DisplayName("CAST 以外のアカウントでの既存受諾は 403 で拒否されること")
   void existingAcceptanceWithNonCastRoleIsForbidden() {
     String castId = createCast(TENANT_A, "既存受諾非CASTテスト");
@@ -286,6 +343,11 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
 
   private String directInsertInvitation(
       String castId, CastInvitation.Status status, OffsetDateTime expiresAt) {
+    return directInsertInvitation(castId, TENANT_A, status, expiresAt);
+  }
+
+  private String directInsertInvitation(
+      String castId, long tenantId, CastInvitation.Status status, OffsetDateTime expiresAt) {
     String token = "cast-inv-it-" + System.nanoTime();
     CastInvitation invitation =
         CastInvitation.builder()
@@ -294,9 +356,26 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
             .status(status)
             .expiresAt(expiresAt)
             .build();
-    invitation.setTenantId(TENANT_A);
+    invitation.setTenantId(tenantId);
     castInvitationRepository.save(invitation);
     return token;
+  }
+
+  private void resetStores(String email, Set<Long> stores) {
+    PlatformUser user = platformUserRepository.findByEmail(email).orElseThrow();
+    user.reassign(PlatformRole.CAST, StoreScopeType.SPECIFIC_STORES, stores);
+    platformUserRepository.save(user);
+  }
+
+  private Runnable acceptTask(CyclicBarrier barrier, String token, String email) {
+    return () -> {
+      try {
+        barrier.await(10, TimeUnit.SECONDS);
+        acceptanceService.acceptAsExistingUser(token, email);
+      } catch (Exception ignored) {
+        // 競合下では例外（デッドロック等）もあり得るが、取りこぼしは最終状態の断言で検証する。
+      }
+    };
   }
 
   private ResponseEntity<JsonNode> acceptNewUser(
