@@ -11,6 +11,7 @@ import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,7 +57,13 @@ public class CastFieldDefinitionService {
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
     definition.setTenantId(tenantContext.getTenantId());
-    return mapper.toResponse(repository.save(definition));
+    try {
+      return mapper.toResponse(repository.saveAndFlush(definition));
+    } catch (DataIntegrityViolationException ex) {
+      // 事前チェックをすり抜けた並行 create が (tenant_id, key) 一意制約に当たったレース。
+      // 事前チェックと同一の 400（ServiceException）へ変換する（saveAndFlush で違反をこの try 内に顕在化させる）。
+      throw new ServiceException("このキーは既に登録されています: " + request.getKey());
+    }
   }
 
   @TenantScoped
