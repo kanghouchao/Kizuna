@@ -7,6 +7,7 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class CastFieldDefinitionService {
 
   private final CastFieldDefinitionRepository repository;
   private final CastFieldDefinitionMapper mapper;
+  private final TenantContext tenantContext;
 
   @TenantScoped
   @Transactional(readOnly = true)
@@ -53,6 +55,7 @@ public class CastFieldDefinitionService {
             .displayOrder(nextOrder)
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
+    definition.setTenantId(tenantContext.getTenantId());
     return mapper.toResponse(repository.save(definition));
   }
 
