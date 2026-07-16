@@ -248,7 +248,8 @@ class CastInvitationAcceptanceServiceTest {
     PlatformUser existing = user(7L, PlatformRole.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c2")).thenReturn(Optional.of(cast));
-    when(platformUserRepository.findByEmail("cast@example.com")).thenReturn(Optional.of(existing));
+    when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
+        .thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
@@ -275,7 +276,8 @@ class CastInvitationAcceptanceServiceTest {
     PlatformUser existing = allStoresUser(7L);
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c2")).thenReturn(Optional.of(cast));
-    when(platformUserRepository.findByEmail("cast@example.com")).thenReturn(Optional.of(existing));
+    when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
+        .thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
@@ -298,11 +300,17 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c2")).thenReturn(Optional.of(cast("c2", "花子档案")));
-    when(platformUserRepository.findByEmail("staff@example.com"))
+    // 悲観ロック取得は招待クレーム後（招待→PlatformUser のロック順）。ロック行のロールが非CASTなら弾く。
+    when(castInvitationRepository.claimPending(
+            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+        .thenReturn(1);
+    when(platformUserRepository.findByEmailForUpdate("staff@example.com"))
         .thenReturn(Optional.of(user(8L, PlatformRole.STORE_STAFF, Set.of(1L))));
 
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "staff@example.com"))
         .isInstanceOf(AccessDeniedException.class);
+    // 招待エンティティは直接変更しない。クレームの UPDATE は AccessDeniedException で
+    // @Transactional ごとロールバックされ、招待は消費されない。
     assertThat(invitation.getStatus()).isEqualTo(CastInvitation.Status.PENDING);
     verify(platformUserRepository, never()).save(any());
   }

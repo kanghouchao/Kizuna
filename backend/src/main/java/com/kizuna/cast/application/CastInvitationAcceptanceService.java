@@ -93,14 +93,19 @@ public class CastInvitationAcceptanceService {
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
     CastInvitation invitation = findByToken(token);
     Cast cast = requireCast(invitation.getCastId());
+    claim(invitation);
+
+    // 招待をクレーム（招待行を先にロック）した後に PlatformUser 行を悲観排他ロックで取得する。
+    // 招待行 → PlatformUser 行 のロック順を維持し（逆順ロックの経路は無い＝デッドロック回避）、
+    // ロック取得後の新鮮な読み込みで storeIds の read-modify-write を直列化して並行受諾の取りこぼしを防ぐ。
+    // 非CAST・不在ユーザーの防御的拒否は RuntimeException によりトランザクションごとロールバックされ、招待は消費されない。
     PlatformUser user =
         platformUserRepository
-            .findByEmail(email)
+            .findByEmailForUpdate(email)
             .orElseThrow(() -> new AccessDeniedException("アクセス権限がありません"));
     if (user.getRole() != PlatformRole.CAST) {
       throw new AccessDeniedException("CAST アカウントのみ既存受諾できます");
     }
-    claim(invitation);
 
     // ALL_STORES は既に全店アクセス権を持つため、SPECIFIC_STORES へ降格させない（不変条件で storeIds は空）。
     // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する。
