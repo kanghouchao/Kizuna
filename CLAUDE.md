@@ -56,7 +56,7 @@ Use the Taskfile (Docker = CI parity) for final verification before committing. 
 
 `task build` also runs as a PR gate inside each side's `Lint and Test (frontend)` / `Lint and Test (backend)` job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
 
-CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only: every PR requires a pre-push review by the committed `kizuna-reviewer` agent (`.claude/agents/kizuna-reviewer.md`, dev-loop Stage 5), enforced by check-pr.sh's ローカル code-review 実施 line — there is no CI-side automated review job; `claude.yml`'s `@claude` mention response is the only Claude-triggered GitHub Action remaining.
+CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only: every PR requires a pre-push review by the committed `kizuna-reviewer` agent (`.claude/agents/kizuna-reviewer.md`, dev-loop Stage 5), enforced by check-pr.sh's ローカル code-review 実施 line — there is no CI-side automated review job, and no Claude-triggered GitHub Action remains (`claude.yml` was removed).
 
 ## Code Style & Conventions
 
@@ -75,7 +75,6 @@ Forbidden operations (enforced locally via `.claude/settings.json` deny rules + 
 - **Destructive git**: `git reset --hard`, `git clean`, `git branch -D`, `git commit --no-verify`.
 - **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
 - **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed or read.
-- **Never write `@claude` literally in issue/PR text** unless summoning the CI Claude — the literal string triggers a full `.github/workflows/claude.yml` run. Refer to it as `claude.yml`. (GitHub's dropdown mention `@claude[agent]` routes to GitHub's own Copilot-based agent instead and does NOT trigger claude.yml.)
 
 Judge build/test success by **exit code only** — output may be in Japanese locale (「エラー」), so never grep for "error".
 
