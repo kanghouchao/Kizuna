@@ -1,6 +1,9 @@
 import { Page, PaginationParams, apiClient } from '@/shared/api';
 import {
   CastCreateRequest,
+  CastFieldDefinitionCreateRequest,
+  CastFieldDefinitionResponse,
+  CastFieldDefinitionUpdateRequest,
   CastInvitationIssueResponse,
   CastResponse,
   CastUpdateRequest,
@@ -40,5 +43,30 @@ export const castApi = {
   issueInvitation: async (id: string): Promise<CastInvitationIssueResponse> => {
     const response = await apiClient.post(`/tenant/casts/${id}/invitation`);
     return response.data;
+  },
+};
+
+export const castFieldDefinitionApi = {
+  /** カスタムフィールド定義一覧を取得する */
+  list: async (): Promise<CastFieldDefinitionResponse[]> => {
+    const response = await apiClient.get('/tenant/casts/fields');
+    return response.data;
+  },
+  /** カスタムフィールド定義を新規作成する */
+  create: async (data: CastFieldDefinitionCreateRequest): Promise<CastFieldDefinitionResponse> => {
+    const response = await apiClient.post('/tenant/casts/fields', data);
+    return response.data;
+  },
+  /** カスタムフィールド定義を更新する */
+  update: async (
+    id: string,
+    data: CastFieldDefinitionUpdateRequest
+  ): Promise<CastFieldDefinitionResponse> => {
+    const response = await apiClient.put(`/tenant/casts/fields/${id}`, data);
+    return response.data;
+  },
+  /** カスタムフィールド定義を削除する */
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/tenant/casts/fields/${id}`);
   },
 };

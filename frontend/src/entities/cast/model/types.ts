@@ -47,6 +47,31 @@ export interface CastUpdateRequest {
   display_order?: number;
 }
 
+// カスタムフィールド定義レスポンス
+export interface CastFieldDefinitionResponse {
+  id: string;
+  key: string;
+  label: string;
+  display_order: number;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// カスタムフィールド定義作成リクエスト（key は不変のため作成時のみ指定）
+export interface CastFieldDefinitionCreateRequest {
+  key: string;
+  label: string;
+  is_public?: boolean;
+}
+
+// カスタムフィールド定義更新リクエスト（key は含まない）
+export interface CastFieldDefinitionUpdateRequest {
+  label?: string;
+  display_order?: number;
+  is_public?: boolean;
+}
+
 // キャスト招待発行レスポンス
 export interface CastInvitationIssueResponse {
   token: string;
