@@ -207,6 +207,52 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("STORE_STAFF は定義一覧を取得できるが、定義の作成・更新・削除は 403 で拒否されること")
+  void staffCanListDefinitionsButCannotMutateThem() {
+    // 基底クラスの yamada.jiro（STORE_STAFF・店舗1授権、token）で自テナント(=1)を操作する。
+    // 値入力には活きた定義の読み取りが必要なため一覧(GET)は STAFF にも許可する
+    // （#277 裁定「値の入力自体は既存 PUT /tenant/casts/{id} のまま MANAGER+STAFF」）。
+    // 一方、定義そのものの CRUD は構造変更のため ROLE_STORE_MANAGER 限定を維持する。
+
+    ResponseEntity<String> list =
+        rest.exchange(
+            "/tenant/casts/fields",
+            HttpMethod.GET,
+            new HttpEntity<>(tenantHeaders(TENANT_A)),
+            String.class);
+    assertThat(list.getStatusCode()).as("STAFF は定義一覧を取得できる").isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<String> create =
+        rest.exchange(
+            "/tenant/casts/fields",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                "{\"key\": \"staff_denied_"
+                    + nonce
+                    + "\", \"label\": \"拒否\", \"is_public\": false}",
+                tenantHeaders(TENANT_A)),
+            String.class);
+    assertThat(create.getStatusCode()).as("STAFF は定義を作成できない").isEqualTo(HttpStatus.FORBIDDEN);
+
+    // 認可は method security でメソッド本体より前に効くため、存在しない id でも 403 が先行する。
+    ResponseEntity<String> update =
+        rest.exchange(
+            "/tenant/casts/fields/nonexistent",
+            HttpMethod.PUT,
+            new HttpEntity<>("{\"label\": \"改ざん\"}", tenantHeaders(TENANT_A)),
+            String.class);
+    assertThat(update.getStatusCode()).as("STAFF は定義を更新できない").isEqualTo(HttpStatus.FORBIDDEN);
+
+    ResponseEntity<String> delete =
+        rest.exchange(
+            "/tenant/casts/fields/nonexistent",
+            HttpMethod.DELETE,
+            new HttpEntity<>(tenantHeaders(TENANT_A)),
+            String.class);
+    assertThat(delete.getStatusCode()).as("STAFF は定義を削除できない").isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
   @DisplayName("他テナントを詐称したヘッダは定義エンドポイントでも 403 で拒否され、本文を返さないこと")
   void spoofedForeignTenantHeaderIsRejected() {
     // 基底クラスの yamada（店舗{1} 授権）で X-Tenant-ID: 2 を詐称 → インターセプタのスコープ検証が 403 で弾く。

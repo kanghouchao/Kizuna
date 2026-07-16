@@ -26,8 +26,10 @@ public class CastFieldDefinitionController {
 
   private final CastFieldDefinitionService service;
 
+  // 一覧(読み取り)は値入力(MANAGER+STAFF)がキャスト編集フォームで活きた定義を描画するために必要なので
+  // STAFF にも許可する。定義そのものの作成・更新・削除は構造変更のため ROLE_STORE_MANAGER 限定を維持する（#277）。
   @GetMapping
-  @PreAuthorize("hasAuthority('ROLE_STORE_MANAGER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
   public ResponseEntity<List<CastFieldDefinitionResponse>> list() {
     return ResponseEntity.ok(service.list());
   }
