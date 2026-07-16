@@ -20,6 +20,32 @@ export interface CastResponse {
   updated_at: string;
 }
 
+// 公開カスタムフィールド1件（表示順どおりに整形済み）
+export interface CastCustomFieldView {
+  key: string;
+  label: string;
+  value: string;
+}
+
+// 公開キャスト詳細レスポンス（GET /tenant/casts/public）。管理用 CastResponse と異なり
+// invitation_status を持たず、custom_fields は公開・生存・値ありの定義のみを表示順に整形した配列。
+export interface CastPublicResponse {
+  id: string;
+  name: string;
+  status: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+  custom_fields: CastCustomFieldView[];
+  created_at: string;
+  updated_at: string;
+}
+
 // キャスト作成リクエスト
 export interface CastCreateRequest {
   name: string;

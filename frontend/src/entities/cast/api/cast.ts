@@ -5,6 +5,7 @@ import {
   CastFieldDefinitionResponse,
   CastFieldDefinitionUpdateRequest,
   CastInvitationIssueResponse,
+  CastPublicResponse,
   CastResponse,
   CastUpdateRequest,
 } from '../model/types';
@@ -35,7 +36,7 @@ export const castApi = {
     await apiClient.delete(`/tenant/casts/${id}`);
   },
   /** 公開キャスト一覧を取得する */
-  listPublic: async (): Promise<CastResponse[]> => {
+  listPublic: async (): Promise<CastPublicResponse[]> => {
     const response = await apiClient.get('/tenant/casts/public');
     return response.data;
   },

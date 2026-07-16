@@ -17,6 +17,8 @@ export default function CastDetailSection({ cast }: CastDetailSectionProps) {
   if (cast.bust) profile.push({ label: 'バスト', value: `${cast.bust}` });
   if (cast.waist) profile.push({ label: 'ウエスト', value: `${cast.waist}` });
   if (cast.hip) profile.push({ label: 'ヒップ', value: `${cast.hip}` });
+  // custom_fields はサーバ側で公開・生存・値ありの定義のみを表示順に整形済みのため、そのまま追加する
+  cast.custom_fields?.forEach(field => profile.push({ label: field.label, value: field.value }));
 
   return (
     <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: 'var(--storefront-bg)' }}>
