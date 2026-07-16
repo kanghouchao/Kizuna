@@ -22,7 +22,7 @@ One run turns **one agreed piece of work** into a reviewed, PR-ready branch. Fou
 
 ## Stage 1 — Entry: plan-first or crystallize (orchestrator)
 
-**Plan-first**: if the user's start message points at an existing `docs/plans/<slug>.md` that already satisfies Stage 2's mandatory-section checklist, skip straight to Stage 3 — the plan's origin (which session, which model, hand-written) is not this skill's concern; the file's format is the only contract. Missing any mandatory section → not eligible, fall through to crystallize below.
+**Plan-first**: if the user's start message points at an existing `docs/plans/<slug>.md` that already satisfies Stage 2's mandatory-section checklist, skip straight to Stage 3 — the plan's origin (which session, which model, hand-written) is not this skill's concern; the file's format is the only contract. Missing any mandatory section → not eligible, fall through to crystallize below. The checklist is a content check, not a header check: for a **high-risk** plan, a `TDD seams` section present in name only — no concurrency seam despite the plan touching shared mutable state reachable by two or more concurrent actors — fails the same as a missing section; fall through to crystallize (which folds the gap into the existing plan rather than discarding it) instead of proceeding to Stage 3 with the hole unaddressed.
 
 **Crystallize** (no qualifying plan doc):
 
