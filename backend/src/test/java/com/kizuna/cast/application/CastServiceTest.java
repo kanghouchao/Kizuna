@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +14,8 @@ import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastFieldDefinition;
+import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
@@ -40,8 +43,22 @@ class CastServiceTest {
   @Mock private TenantContext tenantContext;
   @Mock private TenantRepository tenantRepository;
   @Mock private CastInvitationService castInvitationService;
+  @Mock private CastFieldDefinitionRepository castFieldDefinitionRepository;
 
   @InjectMocks private CastService castService;
+
+  private CastPatch customFieldsPatch(java.util.Map<String, String> customFields) {
+    return new CastPatch(null, null, null, null, null, null, null, null, null, null, customFields);
+  }
+
+  private CastFieldDefinition definitionWithKey(String key) {
+    return CastFieldDefinition.builder()
+        .key(key)
+        .label(key)
+        .displayOrder(0)
+        .isPublic(false)
+        .build();
+  }
 
   @Test
   void list_returnsPage() {
@@ -164,7 +181,7 @@ class CastServiceTest {
 
     when(castMapper.toPatch(req))
         .thenReturn(
-            new CastPatch("G_Updated", null, null, null, null, null, null, null, null, null));
+            new CastPatch("G_Updated", null, null, null, null, null, null, null, null, null, null));
 
     CastResponse resp = new CastResponse();
     resp.setName("G_Updated");
@@ -173,6 +190,76 @@ class CastServiceTest {
     CastResponse result = castService.update("g1", req);
     assertThat(result.getName()).isEqualTo("G_Updated");
     assertThat(g.getName()).isEqualTo("G_Updated");
+  }
+
+  @Test
+  void update_rejectsUnknownCustomFieldKey() {
+    Cast g = new Cast();
+    g.setId("g1");
+    when(castRepository.findById("g1")).thenReturn(Optional.of(g));
+
+    CastUpdateRequest req = new CastUpdateRequest();
+    when(castMapper.toPatch(req)).thenReturn(customFieldsPatch(Map.of("unknown_key", "値")));
+    when(castFieldDefinitionRepository.findAllByOrderByDisplayOrderAsc())
+        .thenReturn(List.of(definitionWithKey("blood_type")));
+
+    assertThatThrownBy(() -> castService.update("g1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("未知のカスタムフィールドキー");
+    verify(castRepository, never()).save(any());
+  }
+
+  @Test
+  void update_rejectsTooLongCustomFieldValue() {
+    Cast g = new Cast();
+    g.setId("g1");
+    when(castRepository.findById("g1")).thenReturn(Optional.of(g));
+
+    CastUpdateRequest req = new CastUpdateRequest();
+    when(castMapper.toPatch(req))
+        .thenReturn(customFieldsPatch(Map.of("blood_type", "x".repeat(501))));
+    when(castFieldDefinitionRepository.findAllByOrderByDisplayOrderAsc())
+        .thenReturn(List.of(definitionWithKey("blood_type")));
+
+    assertThatThrownBy(() -> castService.update("g1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("500文字以内");
+    verify(castRepository, never()).save(any());
+  }
+
+  @Test
+  void update_acceptsLiveKeysAndFullReplaces() {
+    Cast g = Cast.builder().name("G").customFields(Map.of("blood_type", "旧")).build();
+    g.setId("g1");
+    when(castRepository.findById("g1")).thenReturn(Optional.of(g));
+    when(castRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+    when(castMapper.toResponse(g)).thenReturn(new CastResponse());
+
+    CastUpdateRequest req = new CastUpdateRequest();
+    when(castMapper.toPatch(req)).thenReturn(customFieldsPatch(Map.of("blood_type", "A型")));
+    when(castFieldDefinitionRepository.findAllByOrderByDisplayOrderAsc())
+        .thenReturn(List.of(definitionWithKey("blood_type")));
+
+    castService.update("g1", req);
+
+    assertThat(g.getCustomFields()).containsExactlyInAnyOrderEntriesOf(Map.of("blood_type", "A型"));
+  }
+
+  @Test
+  void update_nullCustomFieldsLeavesExistingUnchanged() {
+    Cast g = Cast.builder().name("G").customFields(Map.of("blood_type", "A型")).build();
+    g.setId("g1");
+    when(castRepository.findById("g1")).thenReturn(Optional.of(g));
+    when(castRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+    when(castMapper.toResponse(g)).thenReturn(new CastResponse());
+
+    CastUpdateRequest req = new CastUpdateRequest();
+    when(castMapper.toPatch(req)).thenReturn(customFieldsPatch(null));
+
+    castService.update("g1", req);
+
+    assertThat(g.getCustomFields()).containsExactlyInAnyOrderEntriesOf(Map.of("blood_type", "A型"));
+    verify(castFieldDefinitionRepository, never()).findAllByOrderByDisplayOrderAsc();
   }
 
   @Test

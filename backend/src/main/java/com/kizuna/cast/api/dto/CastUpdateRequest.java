@@ -1,5 +1,6 @@
 package com.kizuna.cast.api.dto;
 
+import java.util.Map;
 import lombok.Data;
 
 @Data
@@ -14,4 +15,5 @@ public class CastUpdateRequest {
   private Integer waist;
   private Integer hip;
   private Integer displayOrder;
+  private Map<String, String> customFields;
 }

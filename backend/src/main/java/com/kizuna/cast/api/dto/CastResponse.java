@@ -2,6 +2,7 @@ package com.kizuna.cast.api.dto;
 
 import com.kizuna.cast.domain.CastInvitationStatus;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,6 +25,7 @@ public class CastResponse {
   private Integer hip;
   private Integer displayOrder;
   private CastInvitationStatus invitationStatus;
+  private Map<String, String> customFields;
   private OffsetDateTime createdAt;
   private OffsetDateTime updatedAt;
 }
