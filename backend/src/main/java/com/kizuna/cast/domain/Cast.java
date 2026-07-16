@@ -1,14 +1,18 @@
 package com.kizuna.cast.domain;
 
 import com.kizuna.shared.persistence.TenantScopedEntity;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "t_casts")
@@ -52,6 +56,11 @@ public class Cast extends TenantScopedEntity {
   @Column(name = "platform_user_id")
   private Long platformUserId;
 
+  @Type(JsonBinaryType.class)
+  @Column(name = "custom_fields", columnDefinition = "jsonb")
+  @Builder.Default
+  private Map<String, String> customFields = new HashMap<>();
+
   /** 平台身分（PlatformUser）を紐づける。既に紐づき済みなら状態例外を投げる（防御的不変条件）。 */
   public void linkPlatformUser(Long platformUserId) {
     if (this.platformUserId != null) {
@@ -91,6 +100,9 @@ public class Cast extends TenantScopedEntity {
     }
     if (patch.displayOrder() != null) {
       this.displayOrder = patch.displayOrder();
+    }
+    if (patch.customFields() != null) {
+      this.customFields = patch.customFields();
     }
   }
 

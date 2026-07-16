@@ -5,7 +5,10 @@ import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastFieldDefinition;
+import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationStatus;
+import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
@@ -13,6 +16,8 @@ import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,11 +28,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastService {
 
+  /** カスタムフィールド値の最大文字数。 */
+  static final int MAX_VALUE_LENGTH = 500;
+
   private final CastRepository castRepository;
   private final CastMapper castMapper;
   private final TenantContext tenantContext;
   private final TenantRepository tenantRepository;
   private final CastInvitationService castInvitationService;
+  private final CastFieldDefinitionRepository castFieldDefinitionRepository;
 
   @TenantScoped
   @Transactional(readOnly = true)
@@ -80,9 +89,31 @@ public class CastService {
     Cast cast =
         castRepository.findById(id).orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
 
-    cast.apply(castMapper.toPatch(request));
+    CastPatch patch = castMapper.toPatch(request);
+    if (patch.customFields() != null) {
+      validateCustomFields(patch.customFields());
+    }
+    cast.apply(patch);
 
     return castMapper.toResponse(castRepository.save(cast));
+  }
+
+  /** カスタムフィールド値を検証する。未知 key・値の文字数超過はいずれも {@link ServiceException}（400）。 */
+  private void validateCustomFields(Map<String, String> customFields) {
+    Set<String> liveKeys =
+        castFieldDefinitionRepository.findAllByOrderByDisplayOrderAsc().stream()
+            .map(CastFieldDefinition::getKey)
+            .collect(Collectors.toSet());
+    for (Map.Entry<String, String> entry : customFields.entrySet()) {
+      if (!liveKeys.contains(entry.getKey())) {
+        throw new ServiceException("未知のカスタムフィールドキーです: " + entry.getKey());
+      }
+      String value = entry.getValue();
+      if (value != null && value.length() > MAX_VALUE_LENGTH) {
+        throw new ServiceException(
+            "カスタムフィールドの値は" + MAX_VALUE_LENGTH + "文字以内で入力してください: " + entry.getKey());
+      }
+    }
   }
 
   @TenantScoped
