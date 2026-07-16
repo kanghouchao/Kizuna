@@ -7,6 +7,7 @@ import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
   TrashIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
@@ -79,13 +80,25 @@ export default function CastListPage() {
           <h1 className="text-2xl font-bold text-gray-900">キャスト管理</h1>
           <p className="text-sm text-gray-500 mt-1">キャスト情報の登録・編集ができます。</p>
         </div>
-        <Link
-          href="/tenant/casts/create"
-          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-        >
-          <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-          新規キャスト登録
-        </Link>
+        <div className="flex items-center gap-3">
+          {/* 定義管理ページ（/tenant/casts/fields）への入口。定義CRUDは店長限定のため店長のみ表示する（裁定6と同型）。 */}
+          {isManager && (
+            <Link
+              href="/tenant/casts/fields"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              <Cog6ToothIcon className="-ml-1 mr-2 h-5 w-5" />
+              カスタムフィールド管理
+            </Link>
+          )}
+          <Link
+            href="/tenant/casts/create"
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+          >
+            <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+            新規キャスト登録
+          </Link>
+        </div>
       </div>
 
       {/* 検索バー */}
