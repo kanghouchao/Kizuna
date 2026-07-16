@@ -18,5 +18,6 @@ public class CastInvitationAcceptRequest {
   private String password;
 
   @NotBlank(message = "display_name is required")
+  @Size(max = 150)
   private String displayName;
 }
