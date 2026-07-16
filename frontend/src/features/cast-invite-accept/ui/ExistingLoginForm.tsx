@@ -39,7 +39,12 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
     const previousStoreId = getPlatformStoreId();
     const previousToken = Cookies.get('token');
     try {
-      const { token: authToken, expires_at } = await platformAuthApi.login(values);
+      // グローバル401ハンドラ（apiClient）に token 除去+リダイレクトをやらせない。ここでの401（パスワード誤り/
+      // アカウント無効化）は下の catch 節で自前のセッション退避・復元を行うため、先に画面遷移されると無意味になる
+      // （#327 codex指摘）
+      const { token: authToken, expires_at } = await platformAuthApi.login(values, {
+        skipAuthRedirect: true,
+      });
       // 招待を開く前に別ロールで平台にログイン済みだった場合、旧セッションの platform-role/platform-store-id が
       // 残ったままだと apiClient やルート遷移が旧ロールの文脈を CAST の token に対して使ってしまう（#327 codex指摘）
       clearPlatformSession();

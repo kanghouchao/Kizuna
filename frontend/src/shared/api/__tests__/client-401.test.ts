@@ -49,4 +49,23 @@ describe('apiClient 401 interceptor', () => {
 
     apiClient.defaults.adapter = original;
   });
+
+  it('does not clear token or redirect on 401 when the request config sets skipAuthRedirect (#327 codex指摘: 招待受諾のインラインログインはグローバル401処理をバイパスする必要がある)', async () => {
+    const removeSpy = jest.spyOn(Cookies, 'remove');
+    const original = apiClient.defaults.adapter as any;
+    apiClient.defaults.adapter = (async (config: any) => {
+      const error: any = new Error('Unauthorized');
+      error.response = { status: 401 };
+      error.config = config;
+      return Promise.reject(error);
+    }) as any;
+
+    await expect(
+      apiClient.post('/platform/login', {}, { skipAuthRedirect: true } as any)
+    ).rejects.toBeDefined();
+    expect(removeSpy).not.toHaveBeenCalledWith('token');
+    expect(redirectMock).not.toHaveBeenCalled();
+
+    apiClient.defaults.adapter = original;
+  });
 });

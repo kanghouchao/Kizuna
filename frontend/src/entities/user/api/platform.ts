@@ -9,8 +9,15 @@ import {
 } from '../model/types';
 
 export const platformAuthApi = {
-  login: async (credentials: PlatformLoginRequest): Promise<LoginResponse> => {
-    const response = await apiClient.post('/platform/login', credentials);
+  login: async (
+    credentials: PlatformLoginRequest,
+    options?: { skipAuthRedirect?: boolean }
+  ): Promise<LoginResponse> => {
+    // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
+    // skipAuthRedirect でグローバルな 401 ハンドリング（token 除去/リダイレクト）から除外する（#327 codex指摘）
+    const response = await apiClient.post('/platform/login', credentials, {
+      skipAuthRedirect: options?.skipAuthRedirect,
+    } as any);
     return response.data;
   },
   me: async (): Promise<PlatformMeResponse> => {
