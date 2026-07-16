@@ -145,6 +145,21 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   }
 
   @Test
+  @DisplayName("列長(150)を超える表示名での新規登録受諾は 400 で拒否され、副作用がないこと")
+  void tooLongDisplayNameRegistrationIsRejected() {
+    String castId = createCast(TENANT_A, "長すぎ表示名受諾テスト");
+    String token = issue(castId, TENANT_A);
+    String email = "cast-longname-it-" + System.nanoTime() + "@kizuna.test";
+    // platform_users.display_name は VARCHAR(150)。151 文字は列長超過で、@Size が無いと生の DB エラー(500)になる。
+    String displayName = "あ".repeat(151);
+
+    ResponseEntity<JsonNode> res = acceptNewUser(token, email, "password1234", displayName);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
   @DisplayName("既存 CAST アカウントの受諾で所属店舗が追加され、档案に紐づくこと")
   void existingCastAcceptanceAddsStoreAndLinks() {
     PlatformUser castUser = ensureExistingCastUser();
