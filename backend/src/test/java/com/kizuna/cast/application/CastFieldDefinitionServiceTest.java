@@ -23,6 +23,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class CastFieldDefinitionServiceTest {
@@ -46,13 +47,13 @@ class CastFieldDefinitionServiceTest {
     when(repository.count()).thenReturn(0L);
     when(repository.findMaxDisplayOrder()).thenReturn(null);
     when(tenantContext.getTenantId()).thenReturn(7L);
-    when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+    when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
     service.create(createRequest("blood_type", "血液型"));
 
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
-    verify(repository).save(captor.capture());
+    verify(repository).saveAndFlush(captor.capture());
     assertThat(captor.getValue().getDisplayOrder()).isEqualTo(0);
     assertThat(captor.getValue().getTenantId()).isEqualTo(7L);
   }
@@ -62,13 +63,13 @@ class CastFieldDefinitionServiceTest {
     when(repository.existsByKey("hobby")).thenReturn(false);
     when(repository.count()).thenReturn(3L);
     when(repository.findMaxDisplayOrder()).thenReturn(5);
-    when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+    when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
     service.create(createRequest("hobby", "趣味"));
 
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
-    verify(repository).save(captor.capture());
+    verify(repository).saveAndFlush(captor.capture());
     assertThat(captor.getValue().getDisplayOrder()).isEqualTo(6);
   }
 
@@ -77,13 +78,13 @@ class CastFieldDefinitionServiceTest {
     when(repository.existsByKey("hobby")).thenReturn(false);
     when(repository.count()).thenReturn(0L);
     when(repository.findMaxDisplayOrder()).thenReturn(null);
-    when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+    when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
     service.create(createRequest("hobby", "趣味"));
 
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
-    verify(repository).save(captor.capture());
+    verify(repository).saveAndFlush(captor.capture());
     assertThat(captor.getValue().getIsPublic()).isFalse();
   }
 
@@ -95,7 +96,7 @@ class CastFieldDefinitionServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録されています");
 
-    verify(repository, never()).save(any());
+    verify(repository, never()).saveAndFlush(any());
   }
 
   @Test
@@ -107,7 +108,22 @@ class CastFieldDefinitionServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("最大20件");
 
-    verify(repository, never()).save(any());
+    verify(repository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void create_convertsDbDuplicateKeyRaceTo400() {
+    // 事前チェックをすり抜けた並行 create が DB の (tenant_id, key) 一意制約に当たるレース。
+    // save 時の DataIntegrityViolationException を、事前チェックと同一の 400 へ変換する。
+    when(repository.existsByKey("blood_type")).thenReturn(false);
+    when(repository.count()).thenReturn(0L);
+    when(repository.findMaxDisplayOrder()).thenReturn(null);
+    when(repository.saveAndFlush(any()))
+        .thenThrow(new DataIntegrityViolationException("uq_t_cast_field_definitions_tenant_key"));
+
+    assertThatThrownBy(() -> service.create(createRequest("blood_type", "血液型")))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("既に登録されています");
   }
 
   @Test
