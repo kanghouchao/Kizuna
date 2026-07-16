@@ -2,7 +2,9 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
+import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
 import { ImageUpload } from '@/shared/ui';
+import { useManagedList } from '@/shared/lib';
 
 /** キャストフォームのデータ型 */
 export interface CastFormData {
@@ -16,11 +18,15 @@ export interface CastFormData {
   waist: number | null;
   hip: number | null;
   display_order: number;
+  // 活きた定義に対応する入力欄のみ登録される（孤児キーは含まれない）
+  custom_fields?: Record<string, string>;
 }
 
 interface CastFormProps {
   /** 編集時の初期データ */
   initialData?: Partial<CastFormData>;
+  /** 編集時の既存カスタムフィールド値（活きた定義の分のみ動的欄の初期値に使う。孤児値は描画しない） */
+  existingCustomFields?: Record<string, string>;
   /** フォーム送信時のコールバック */
   onSubmit: (data: CastFormData) => void;
   /** 送信中フラグ */
@@ -28,7 +34,12 @@ interface CastFormProps {
 }
 
 /** キャスト登録・編集フォームコンポーネント */
-export function CastForm({ initialData, onSubmit, isSubmitting }: CastFormProps) {
+export function CastForm({
+  initialData,
+  existingCustomFields,
+  onSubmit,
+  isSubmitting,
+}: CastFormProps) {
   const router = useRouter();
   const { register, handleSubmit, setValue, watch } = useForm<CastFormData>({
     defaultValues: {
@@ -47,6 +58,15 @@ export function CastForm({ initialData, onSubmit, isSubmitting }: CastFormProps)
   });
 
   const photoUrl = watch('photo_url');
+
+  // カスタムフィールドの動的欄は編集時のみ表示する（値の入力自体は既存 PUT のまま、
+  // 作成時は付与するキャストがまだ無いため定義取得自体を行わない）。
+  const isEdit = initialData !== undefined;
+  const { items: definitions, isLoading: isLoadingDefinitions } =
+    useManagedList<CastFieldDefinitionResponse>(
+      () => (isEdit ? castFieldDefinitionApi.list() : Promise.resolve([])),
+      'カスタムフィールド定義の取得に失敗しました'
+    );
 
   return (
     <form
@@ -161,6 +181,42 @@ export function CastForm({ initialData, onSubmit, isSubmitting }: CastFormProps)
           placeholder="自己紹介を入力してください..."
         />
       </section>
+
+      {/* カスタムフィールド（編集時のみ。作成時はキャストがまだ無いため値を付与できない） */}
+      {isEdit && (
+        <section>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-blue-600 pl-3">
+            カスタムフィールド
+          </h3>
+          {isLoadingDefinitions ? (
+            <div className="p-6 text-center text-sm text-gray-500">読み込み中...</div>
+          ) : definitions.length === 0 ? (
+            <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-gray-500 text-sm">
+              カスタムフィールドは登録されていません
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {definitions.map(definition => (
+                <div key={definition.key}>
+                  <label
+                    htmlFor={`cast-custom-field-${definition.key}`}
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    {definition.label}
+                  </label>
+                  <input
+                    id={`cast-custom-field-${definition.key}`}
+                    type="text"
+                    defaultValue={existingCustomFields?.[definition.key] ?? ''}
+                    {...register(`custom_fields.${definition.key}`)}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ボタン */}
       <div className="flex justify-end space-x-4 pt-6 border-t border-gray-100">

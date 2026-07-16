@@ -44,6 +44,7 @@ export default function CastEditPage() {
         waist: data.waist ?? undefined,
         hip: data.hip ?? undefined,
         display_order: data.display_order ?? undefined,
+        custom_fields: data.custom_fields,
       };
       await castApi.update(id, requestData);
       toast.success('キャスト情報を更新しました');
@@ -80,6 +81,7 @@ export default function CastEditPage() {
           hip: cast.hip ?? null,
           display_order: cast.display_order ?? 0,
         }}
+        existingCustomFields={cast.custom_fields}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
       />

@@ -15,6 +15,7 @@ export interface CastResponse {
   hip?: number;
   display_order?: number;
   invitation_status: CastInvitationStatus;
+  custom_fields?: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
@@ -45,6 +46,8 @@ export interface CastUpdateRequest {
   waist?: number;
   hip?: number;
   display_order?: number;
+  // 省略時は既存値を変更しない。指定時は全置換（マージしない）。
+  custom_fields?: Record<string, string>;
 }
 
 // カスタムフィールド定義レスポンス
