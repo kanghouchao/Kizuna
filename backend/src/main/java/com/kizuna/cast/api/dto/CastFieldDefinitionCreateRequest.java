@@ -9,7 +9,9 @@ import lombok.Data;
 public class CastFieldDefinitionCreateRequest {
 
   @NotBlank
-  @Pattern(regexp = "^[a-z][a-z0-9_]*$", message = "キーは英小文字で始まり英小文字・数字・アンダースコアのみ使用できます")
+  @Pattern(
+      regexp = "^(?!constructor$|prototype$)[a-z][a-z0-9_]*$",
+      message = "キーは英小文字で始まり英小文字・数字・アンダースコアのみ使用でき、予約語(constructor・prototype)は使用できません")
   @Size(max = 50)
   private String key;
 

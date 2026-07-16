@@ -69,7 +69,13 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
               <input
                 id="field-key"
                 type="text"
-                {...register('key', { required: true, pattern: /^[a-z][a-z0-9_]*$/ })}
+                {...register('key', {
+                  required: true,
+                  // バックエンドの @Pattern と同期。constructor・prototype は
+                  // react-hook-form の register 内部予約名で、定義化するとキャスト
+                  // 編集フォームの描画をクラッシュさせるため作成時に拒否する(#277)。
+                  pattern: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
+                })}
                 className={inputClass}
               />
               <p className="mt-1 text-xs text-gray-500">
