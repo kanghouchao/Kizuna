@@ -207,7 +207,13 @@ export function CastForm({
                   <input
                     id={`cast-custom-field-${definition.key}`}
                     type="text"
-                    defaultValue={existingCustomFields?.[definition.key] ?? ''}
+                    // 自身が所有するキーのみ初期値に採用する。プレーンオブジェクトの
+                    // ブラケットアクセスは 'constructor' 等の継承プロパティを拾うため hasOwn で防ぐ。
+                    defaultValue={
+                      existingCustomFields && Object.hasOwn(existingCustomFields, definition.key)
+                        ? existingCustomFields[definition.key]
+                        : ''
+                    }
                     {...register(`custom_fields.${definition.key}`)}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
