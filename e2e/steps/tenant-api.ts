@@ -118,6 +118,50 @@ export async function deleteCast(
   }
 }
 
+/** カスタムフィールド定義作成パラメータ（JSON キーは snake_case で送信する）。 */
+export interface CreateCastFieldDefinitionParams {
+  key: string;
+  label: string;
+  isPublic: boolean;
+}
+
+/**
+ * カスタムフィールド定義を作成し id を返す
+ * （POST /api/tenant/casts/fields, hasAuthority('ROLE_STORE_MANAGER')）。
+ */
+export async function createCastFieldDefinition(
+  request: APIRequestContext,
+  token: string,
+  params: CreateCastFieldDefinitionParams
+): Promise<string> {
+  const res = await request.post('/api/tenant/casts/fields', {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+    data: { key: params.key, label: params.label, is_public: params.isPublic },
+  });
+  if (!res.ok()) {
+    throw new Error(`create cast field definition failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.id as string;
+}
+
+/**
+ * カスタムフィールド定義を削除する
+ * （DELETE /api/tenant/casts/fields/{id}, hasAuthority('ROLE_STORE_MANAGER')）。
+ */
+export async function deleteCastFieldDefinition(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  const res = await request.delete(`/api/tenant/casts/fields/${id}`, {
+    headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`delete cast field definition failed: ${res.status()} ${await res.text()}`);
+  }
+}
+
 /** シフト作成パラメータ（JSON キーは snake_case で送信する）。 */
 export interface CreateShiftParams {
   castId: string;
