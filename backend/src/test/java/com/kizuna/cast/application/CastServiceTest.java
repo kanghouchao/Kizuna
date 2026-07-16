@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
+import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
@@ -288,25 +289,28 @@ class CastServiceTest {
   }
 
   @Test
-  void listActive_returnsOnlyActiveCasts() {
+  void listActive_returnsPublicResponsesWithPublicDefinitions() {
     Cast active1 = new Cast();
     active1.setId("g1");
 
     Cast active2 = new Cast();
     active2.setId("g2");
 
+    List<CastFieldDefinition> publicDefs = List.of(definitionWithKey("blood_type"));
+    when(castFieldDefinitionRepository.findByIsPublicTrueOrderByDisplayOrderAsc())
+        .thenReturn(publicDefs);
     when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
         .thenReturn(List.of(active1, active2));
 
-    CastResponse r1 = new CastResponse();
+    CastPublicResponse r1 = new CastPublicResponse();
     r1.setId("g1");
-    CastResponse r2 = new CastResponse();
+    CastPublicResponse r2 = new CastPublicResponse();
     r2.setId("g2");
 
-    when(castMapper.toResponse(active1)).thenReturn(r1);
-    when(castMapper.toResponse(active2)).thenReturn(r2);
+    when(castMapper.toPublicResponse(active1, publicDefs)).thenReturn(r1);
+    when(castMapper.toPublicResponse(active2, publicDefs)).thenReturn(r2);
 
-    List<CastResponse> result = castService.listActive();
+    List<CastPublicResponse> result = castService.listActive();
 
     assertThat(result).hasSize(2);
     assertThat(result.get(0).getId()).isEqualTo("g1");
