@@ -66,6 +66,11 @@ apiClient.interceptors.response.use(
   },
   error => {
     if (error.response?.status === 401) {
+      // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
+      // config.skipAuthRedirect でグローバルな token 除去/リダイレクトから除外する（#327 codex指摘）
+      if ((error.config as any)?.skipAuthRedirect) {
+        return Promise.reject(error);
+      }
       Cookies.remove('token');
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         redirectToLogin();
