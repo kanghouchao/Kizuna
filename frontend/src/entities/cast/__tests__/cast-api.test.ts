@@ -1,4 +1,4 @@
-import { castApi } from '@/entities/cast';
+import { castApi, castFieldDefinitionApi } from '@/entities/cast';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -34,5 +34,29 @@ describe('castApi', () => {
       ok: true,
       url: '/tenant/casts/c1/invitation',
     });
+  });
+});
+
+describe('castFieldDefinitionApi', () => {
+  it('list は /tenant/casts/fields を GET する', async () => {
+    expect(await castFieldDefinitionApi.list()).toEqual({
+      ok: true,
+      url: '/tenant/casts/fields',
+    });
+  });
+  it('create は /tenant/casts/fields を POST する', async () => {
+    expect(await castFieldDefinitionApi.create({ key: 'blood_type', label: '血液型' })).toEqual({
+      ok: true,
+      url: '/tenant/casts/fields',
+    });
+  });
+  it('update は /tenant/casts/fields/:id を PUT する', async () => {
+    expect(await castFieldDefinitionApi.update('f1', {})).toEqual({
+      ok: true,
+      url: '/tenant/casts/fields/f1',
+    });
+  });
+  it('delete は /tenant/casts/fields/:id を DELETE する', async () => {
+    await expect(castFieldDefinitionApi.delete('f1')).resolves.toBeUndefined();
   });
 });
