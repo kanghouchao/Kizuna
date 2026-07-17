@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: central/01-authorization-schema.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: central/02-capability-bundle-seed.yaml
+      relativeToChangelogFile: true
