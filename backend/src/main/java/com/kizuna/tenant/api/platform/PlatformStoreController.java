@@ -19,7 +19,7 @@ public class PlatformStoreController {
   private final PlatformStoreService platformStoreService;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_HQ_ADMIN','ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_STORE_VIEW')")
   public ResponseEntity<List<PlatformStoreResponse>> list() {
     return ResponseEntity.ok(platformStoreService.listAuthorizedStores());
   }

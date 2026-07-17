@@ -9,10 +9,10 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossTenantTestSupport;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.concurrent.CyclicBarrier;
@@ -68,7 +68,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
 
     assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
     PlatformUser user = platformUserRepository.findByEmail(email).orElseThrow();
-    assertThat(user.getRole()).isEqualTo(PlatformRole.CAST);
+    assertThat(user.getUserType()).isEqualTo(UserType.CAST);
     assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(user.getStoreIds()).contains(TENANT_A);
     assertThat(castRepository.findById(castId).orElseThrow().getPlatformUserId())
@@ -202,7 +202,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
             .password(passwordEncoder.encode(PASSWORD))
             .displayName("並行受諾IT")
             .enabled(true)
-            .role(PlatformRole.CAST)
+            .userType(UserType.CAST)
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(TENANT_A))
             .build());
@@ -247,7 +247,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
     String castId = createCast(TENANT_A, "既存受諾非CASTテスト");
     String token = issue(castId, TENANT_A);
 
-    // token（基底クラスの yamada = STORE_STAFF）で既存受諾 → @PreAuthorize ROLE_CAST で 403
+    // token（基底クラスの yamada = STAFF（店舗スタッフ束））で既存受諾 → @PreAuthorize ROLE_CAST で 403
     ResponseEntity<String> res =
         rest.exchange(
             "/platform/cast-invitations/" + token + "/acceptance/existing",
@@ -313,7 +313,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
                         .password(passwordEncoder.encode(PASSWORD))
                         .displayName("既存キャストIT")
                         .enabled(true)
-                        .role(PlatformRole.CAST)
+                        .userType(UserType.CAST)
                         .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of(TENANT_A))
                         .build()));
@@ -363,7 +363,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
 
   private void resetStores(String email, Set<Long> stores) {
     PlatformUser user = platformUserRepository.findByEmail(email).orElseThrow();
-    user.reassign(PlatformRole.CAST, StoreScopeType.SPECIFIC_STORES, stores);
+    user.reassignStores(StoreScopeType.SPECIFIC_STORES, stores);
     platformUserRepository.save(user);
   }
 

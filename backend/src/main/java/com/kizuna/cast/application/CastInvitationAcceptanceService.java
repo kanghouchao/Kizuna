@@ -11,10 +11,10 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Locale;
@@ -77,7 +77,7 @@ public class CastInvitationAcceptanceService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .displayName(request.getDisplayName())
                 .enabled(true)
-                .role(PlatformRole.CAST)
+                .userType(UserType.CAST)
                 .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(invitation.getTenantId()))
                 .build());
@@ -103,16 +103,16 @@ public class CastInvitationAcceptanceService {
         platformUserRepository
             .findByEmailForUpdate(email)
             .orElseThrow(() -> new AccessDeniedException("アクセス権限がありません"));
-    if (user.getRole() != PlatformRole.CAST) {
+    if (user.getUserType() != UserType.CAST) {
       throw new AccessDeniedException("CAST アカウントのみ既存受諾できます");
     }
 
     // ALL_STORES は既に全店アクセス権を持つため、SPECIFIC_STORES へ降格させない（不変条件で storeIds は空）。
-    // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する。
+    // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する（束・精算範囲は触らない — CAST は保持しない）。
     if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES) {
       Set<Long> storeIds = new HashSet<>(user.getStoreIds());
       storeIds.add(invitation.getTenantId());
-      user.reassign(PlatformRole.CAST, StoreScopeType.SPECIFIC_STORES, storeIds);
+      user.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
       platformUserRepository.save(user);
     }
     link(cast, user.getId());

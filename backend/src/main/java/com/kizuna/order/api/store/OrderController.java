@@ -29,7 +29,7 @@ public class OrderController {
   private final OrderService orderService;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Page<OrderResponse>> list(
       @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
@@ -37,27 +37,27 @@ public class OrderController {
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> get(@PathVariable String id) {
     return ResponseEntity.ok(orderService.get(id));
   }
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> create(@Valid @RequestBody OrderCreateRequest request) {
     return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
         .body(orderService.create(request));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> update(
       @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
     return ResponseEntity.ok(orderService.update(id, request));
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     orderService.delete(id);
     return ResponseEntity.ok().build();

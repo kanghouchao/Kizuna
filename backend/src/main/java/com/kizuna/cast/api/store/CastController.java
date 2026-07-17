@@ -36,7 +36,7 @@ public class CastController {
   private final CastInvitationService castInvitationService;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<Page<CastResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
@@ -44,33 +44,33 @@ public class CastController {
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastResponse> get(@PathVariable String id) {
     return ResponseEntity.ok(castService.get(id));
   }
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastResponse> create(@Valid @RequestBody CastCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED).body(castService.create(request));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastResponse> update(
       @PathVariable String id, @Valid @RequestBody CastUpdateRequest request) {
     return ResponseEntity.ok(castService.update(id, request));
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     castService.delete(id);
     return ResponseEntity.ok().build();
   }
 
   @PostMapping("/{id}/invitation")
-  @PreAuthorize("hasAuthority('ROLE_STORE_MANAGER')")
+  @PreAuthorize("hasAuthority('PERM_CAST_INVITE')")
   public ResponseEntity<CastInvitationResponse> issueInvitation(@PathVariable String id) {
     return ResponseEntity.status(HttpStatus.CREATED).body(castInvitationService.issue(id));
   }

@@ -28,14 +28,14 @@ public class PlatformOrderController {
   private final PlatformOrderService platformOrderService;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_HQ_ADMIN','ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_SET_MANAGE')")
   public ResponseEntity<Page<PlatformOrderResponse>> list(
       @PageableDefault(sort = "businessDate", direction = Sort.Direction.DESC) Pageable pageable) {
     return ResponseEntity.ok(platformOrderService.list(pageable));
   }
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_HQ_ADMIN','ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_SET_MANAGE')")
   public ResponseEntity<OrderResponse> create(
       @Valid @RequestBody PlatformOrderCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED).body(platformOrderService.create(request));

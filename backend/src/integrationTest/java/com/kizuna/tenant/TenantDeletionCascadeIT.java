@@ -5,10 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,7 @@ class TenantDeletionCascadeIT {
   @Autowired private TenantRepository tenantRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
 
   private String platformLogin() {
     HttpHeaders headers = new HttpHeaders();
@@ -77,7 +79,9 @@ class TenantDeletionCascadeIT {
                 .password(passwordEncoder.encode("pass"))
                 .displayName("店舗授権カスケード検証")
                 .enabled(true)
-                .role(PlatformRole.STORE_MANAGER)
+                .userType(UserType.STAFF)
+                .bundleIds(
+                    Set.of(capabilityBundleRepository.findByName("店長").orElseThrow().getId()))
                 .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(storeId))
                 .build());

@@ -9,10 +9,11 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossTenantTestSupport;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,6 +69,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   @Autowired private CastRepository castRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
 
   @BeforeEach
   void prepareBridgeFixture() {
@@ -75,9 +77,13 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     ensureMarkerOrder(TENANT_A, MARKER_S1_STORE_NAME, MARKER_S1_REMARKS);
     ensureMarkerOrder(TENANT_B, CANARY_S2_STORE_NAME, CANARY_S2_REMARKS);
 
-    ensurePlatformUser(CAST_EMAIL, PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of());
+    ensurePlatformUser(CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
     ensurePlatformUser(
-        LOGOUT_EMAIL, PlatformRole.STORE_STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(TENANT_A));
+        LOGOUT_EMAIL,
+        UserType.STAFF,
+        bundleIdsOf("店舗スタッフ"),
+        StoreScopeType.SPECIFIC_STORES,
+        Set.of(TENANT_A));
   }
 
   /** リポジトリ直挿（テストスレッドは @TenantScoped を経由せず tenantFilter が無効なので他テナントにも書ける）。 */
@@ -104,7 +110,11 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   private void ensurePlatformUser(
-      String email, PlatformRole role, StoreScopeType scopeType, Set<Long> storeIds) {
+      String email,
+      UserType userType,
+      Set<Long> bundleIds,
+      StoreScopeType scopeType,
+      Set<Long> storeIds) {
     platformUserRepository
         .findByEmail(email)
         .orElseGet(
@@ -113,12 +123,18 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
                     PlatformUser.builder()
                         .email(email)
                         .password(passwordEncoder.encode(PASSWORD))
-                        .displayName("過橋IT " + role.name())
+                        .displayName("過橋IT " + userType.name())
                         .enabled(true)
-                        .role(role)
+                        .userType(userType)
+                        .bundleIds(bundleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
+  }
+
+  /** 種子の既定束を名称で解決する（束はデータ — id を決め打ちしない）。 */
+  private Set<Long> bundleIdsOf(String bundleName) {
+    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
   }
 
   private ResponseEntity<JsonNode> platformLogin(String email, String password) {
@@ -336,7 +352,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   @DisplayName("HQ 以外の平台トークンでは GET /central/menus/me が 403 になること（follow-up #1: 中央メニューの可視漏れ封鎖）")
   void nonHqCannotReadCentralMenus() {
     // 中央には TenantIdInterceptor 相当の防御が無いため、isAuthenticated() のみだと店長・スタッフ等の
-    // どの平台トークンでも中央メニューを読めてしまう（#325 review follow-up #1）。ROLE_HQ_ADMIN 限定へ強化する。
+    // どの平台トークンでも中央メニューを読めてしまう（#325 review follow-up #1）。PERM_CENTRAL_MENU_VIEW（HQ管理者束のみ保持）限定へ強化する。
     ResponseEntity<String> res =
         rest.exchange(
             "/central/menus/me",

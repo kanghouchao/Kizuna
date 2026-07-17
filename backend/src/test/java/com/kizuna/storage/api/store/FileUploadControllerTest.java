@@ -11,8 +11,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
+import com.kizuna.user.domain.Capability;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,20 +50,20 @@ class FileUploadControllerTest {
     tenantContext.clear();
   }
 
-  /** 指定した role claim の JWT で認証済みリクエストを模擬する（details に実 Claims をセット）。 */
-  private void authenticateWithRole(String role) {
-    Claims claims = Jwts.claims().add("role", role).build();
+  /** 指定した authority 群で認証済みリクエストを模擬する（central 保存可否は SecurityContext の authority で判定される）。 */
+  private void authenticateWithAuthorities(String... authorities) {
     PreAuthenticatedAuthenticationToken authentication =
         new PreAuthenticatedAuthenticationToken(
-            "user", "token", List.of(new SimpleGrantedAuthority("ROLE_" + role)));
-    authentication.setDetails(claims);
+            "user",
+            "token",
+            List.of(authorities).stream().map(SimpleGrantedAuthority::new).toList());
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
   @Test
-  @DisplayName("HQ_ADMIN role のトークンはテナント文脈が無くても central 配下に保存すること")
-  void upload_storesUnderCentralForHqAdminRole() {
-    authenticateWithRole("HQ_ADMIN");
+  @DisplayName("CENTRAL_ASSET_MANAGE 能力のトークンはテナント文脈が無くても central 配下に保存すること")
+  void upload_storesUnderCentralForCentralAssetManage() {
+    authenticateWithAuthorities(Capability.CENTRAL_ASSET_MANAGE.authority());
     when(fileStorageService.store("central", "public", file)).thenReturn("public/central/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);
@@ -77,9 +76,9 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("HQ_ADMIN 以外の role のトークンはテナント文脈が無い場合、central に保存せず拒否すること")
-  void upload_rejectsNonHqAdminRoleWithoutTenantContext() {
-    authenticateWithRole("STORE_STAFF");
+  @DisplayName("CENTRAL_ASSET_MANAGE の無いトークンはテナント文脈が無い場合、central に保存せず拒否すること")
+  void upload_rejectsWithoutCentralAssetManageAndTenantContext() {
+    authenticateWithAuthorities("PERM_ORDER_MANAGE");
 
     assertThatThrownBy(() -> controller.upload(file, "public"))
         .isInstanceOf(AccessDeniedException.class);
@@ -91,7 +90,7 @@ class FileUploadControllerTest {
   @DisplayName("テナント文脈が解決済みならそのテナント配下に保存すること")
   void upload_storesUnderTenantPrefixWhenContextResolved() {
     tenantContext.setTenantId(5L);
-    authenticateWithRole("STORE_STAFF");
+    authenticateWithAuthorities("PERM_ORDER_MANAGE");
     when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);

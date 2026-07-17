@@ -52,8 +52,8 @@ class CentralConfigControllerTest {
   @MockitoBean private TokenBlacklistService tokenBlacklistService;
 
   @Test
-  @DisplayName("ROLE_HQ_ADMIN 権限があれば設定一覧を取得できること")
-  @WithMockUser(authorities = "ROLE_HQ_ADMIN")
+  @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限があれば設定一覧を取得できること")
+  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void listWithAuthority() throws Exception {
     // 準備
     SystemConfigResponse response =
@@ -68,7 +68,7 @@ class CentralConfigControllerTest {
   }
 
   @Test
-  @DisplayName("ROLE_HQ_ADMIN 権限がなければ 403 を返すこと")
+  @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限がなければ 403 を返すこと")
   @WithMockUser(authorities = "OTHER_PERMISSION")
   void listWithoutAuthority() throws Exception {
     // 実行・検証
@@ -76,7 +76,7 @@ class CentralConfigControllerTest {
   }
 
   @Test
-  @DisplayName("ROLE_HQ_ADMIN 権限がなければ更新も 403 を返すこと")
+  @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限がなければ更新も 403 を返すこと")
   @WithMockUser(authorities = "OTHER_PERMISSION")
   void updateWithoutAuthority() throws Exception {
     // 実行・検証
@@ -91,7 +91,7 @@ class CentralConfigControllerTest {
 
   @Test
   @DisplayName("存在しない設定キーの更新は 400 とエラーメッセージを返すこと")
-  @WithMockUser(authorities = "ROLE_HQ_ADMIN")
+  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void updateUnknownKey() throws Exception {
     // 準備
     when(systemConfigService.updateConfig(any(SystemConfigUpdateRequest.class)))

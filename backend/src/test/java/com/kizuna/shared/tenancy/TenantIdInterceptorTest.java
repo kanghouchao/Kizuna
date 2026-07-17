@@ -186,24 +186,28 @@ class TenantIdInterceptorTest {
   }
 
   /**
-   * 平台トークン（storeScopeType/storeIds claim を持ち tenantId claim は持たない）を店長ロールで模擬する。 storeIds には List
-   * を渡す（ALL_STORES では無視される）。
+   * 平台トークン（storeScopeType/storeIds claim を持ち tenantId claim は持たない）を店舗文脈確立可
+   * （storeBridge=true）で模擬する。storeIds には List を渡す（ALL_STORES では無視される）。
    */
   private void authenticateWithPlatformScope(String scopeType, Object storeIds) {
-    authenticateWithPlatformScope("STORE_MANAGER", scopeType, storeIds);
+    authenticateWithPlatformScope(true, scopeType, storeIds);
   }
 
-  /** 平台トークンをロール指定で模擬する。role claim は TenantIdInterceptor の店舗ロール限定判定 （店長・スタッフのみ過橋可）に使われる。 */
-  private void authenticateWithPlatformScope(String role, String scopeType, Object storeIds) {
+  /**
+   * 平台トークンを storeBridge 指定で模擬する。storeBridge claim は TenantIdInterceptor の店舗文脈確立判定に使われる（STORE
+   * コンソール能力の保持者のみ true — #398）。
+   */
+  private void authenticateWithPlatformScope(
+      boolean storeBridge, String scopeType, Object storeIds) {
     Claims claims =
         Jwts.claims()
-            .add("role", role)
+            .add("storeBridge", storeBridge)
             .add("storeScopeType", scopeType)
             .add("storeIds", storeIds)
             .build();
     PreAuthenticatedAuthenticationToken authentication =
         new PreAuthenticatedAuthenticationToken(
-            "platform-user", "token", List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+            "platform-user", "token", List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
     authentication.setDetails(claims);
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
@@ -311,11 +315,11 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("平台 CAST ロールは授権スコープでも店舗ヘッダを名乗ると 403 で拒否し文脈を設定しないこと（役割線）")
-  void preHandle_platformCastRole_rejectsEvenWithAuthorizedScope() {
-    // CAST は ALL_STORES でも過橋不可。scope.authorizes が真になる前にロールで弾き、
-    // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立を塞ぐ。
-    authenticateWithPlatformScope("CAST", "ALL_STORES", List.of());
+  @DisplayName("storeBridge=false の平台トークンは授権スコープでも店舗ヘッダを名乗ると 403 で拒否し文脈を設定しないこと（本人種別線）")
+  void preHandle_withoutStoreBridge_rejectsEvenWithAuthorizedScope() {
+    // CAST/MEMBER/HQ 系（STORE コンソール能力なし）は ALL_STORES でも過橋不可。scope.authorizes が
+    // 真になる前に storeBridge で弾き、isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立を塞ぐ。
+    authenticateWithPlatformScope(false, "ALL_STORES", List.of());
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "tenant");
     request.addHeader("X-Tenant-ID", "1");
@@ -329,9 +333,9 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("平台 STORE_STAFF ロールは授権店舗の店舗ヘッダでテナント文脈を設定できること")
-  void preHandle_platformStaffRole_allowsAuthorizedStore() {
-    authenticateWithPlatformScope("STORE_STAFF", "SPECIFIC_STORES", List.of(1));
+  @DisplayName("storeBridge=true の平台トークンは授権店舗の店舗ヘッダでテナント文脈を設定できること")
+  void preHandle_withStoreBridge_allowsAuthorizedStore() {
+    authenticateWithPlatformScope(true, "SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "tenant");
     request.addHeader("X-Tenant-ID", "1");
@@ -340,6 +344,30 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isTrue();
     assertThat(tenantContext.getTenantId()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("storeBridge claim を持たない旧形式の平台トークンは店舗ヘッダを名乗ると 403 で拒否すること（fail-closed）")
+  void preHandle_missingStoreBridgeClaim_rejects() {
+    // 部署前に発行された旧トークンは storeBridge claim を持たない。欠落は false と同様に扱い、
+    // 再ログインを促す（授権変更は次回ログイン反映の既定と同じ受け入れ面）。
+    Claims claims =
+        Jwts.claims().add("storeScopeType", "ALL_STORES").add("storeIds", List.of()).build();
+    PreAuthenticatedAuthenticationToken authentication =
+        new PreAuthenticatedAuthenticationToken(
+            "platform-user", "token", List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
+    authentication.setDetails(claims);
+    SecurityContextHolder.getContext().setAuthentication(authentication);
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("X-Role", "tenant");
+    request.addHeader("X-Tenant-ID", "1");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    boolean result = interceptor.preHandle(request, response, new Object());
+
+    assertThat(result).isFalse();
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(tenantContext.isTenant()).isFalse();
   }
 
   @Test

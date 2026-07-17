@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,13 +27,16 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.Capability;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -52,6 +56,7 @@ class OrderServiceTest {
   @Mock CustomerRepository customerRepository;
   @Mock CastRepository castRepository;
   @Mock PlatformUserRepository platformUserRepository;
+  @Mock CapabilityBundleRepository capabilityBundleRepository;
   @Mock TenantRepository tenantRepository;
   @Mock TenantContext tenantContext;
   @Mock OrderMapper orderMapper;
@@ -67,23 +72,37 @@ class OrderServiceTest {
     return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null, null);
   }
 
+  /** 受付担当ヘルパーが持つ既定束 id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
+  private static final long STAFF_BUNDLE_ID = 30L;
+
+  @BeforeEach
+  void stubReceptionistBundle() {
+    // 受付担当検証は「束のいずれかが ORDER_MANAGE を含むか」を照会する。happy path 用に既定束は
+    // 含む前提で lenient stub し、検証へ到達しないテストで UnnecessaryStubbing を出さない。
+    lenient()
+        .when(
+            capabilityBundleRepository.anyBundleHasCapability(
+                Set.of(STAFF_BUNDLE_ID), Capability.ORDER_MANAGE))
+        .thenReturn(true);
+  }
+
   private PlatformUser receptionist(
-      PlatformRole role, StoreScopeType scopeType, Set<Long> storeIds) {
+      UserType userType, StoreScopeType scopeType, Set<Long> storeIds) {
     return PlatformUser.builder()
         .email("receptionist@kizuna.test")
         .password("pw")
         .displayName("受付担当")
         .enabled(true)
-        .role(role)
+        .userType(userType)
+        .bundleIds(userType == UserType.STAFF ? Set.of(STAFF_BUNDLE_ID) : Set.of())
         .storeScopeType(scopeType)
         .storeIds(storeIds)
         .build();
   }
 
-  /** 現テナント(store_id=1)を授権するスタッフロールの受付担当者。 */
+  /** 現テナント(store_id=1)を授権し ORDER_MANAGE 能力を持つ受付担当者。 */
   private PlatformUser authorizedReceptionist() {
-    return receptionist(
-        PlatformRole.STORE_STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(TENANT_ID));
+    return receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(TENANT_ID));
   }
 
   @Test
@@ -201,9 +220,7 @@ class OrderServiceTest {
     // 別店舗(store_id=2)専用スコープ: 現テナント(=1)を授権しない
     when(platformUserRepository.findById(1L))
         .thenReturn(
-            Optional.of(
-                receptionist(
-                    PlatformRole.STORE_STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+            Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)
@@ -221,10 +238,41 @@ class OrderServiceTest {
     when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
-    // 全店舗授権でも CAST ロールは受付担当者になれない
+    // 全店舗授権でも CAST 本人種別は受付担当者になれない
     when(platformUserRepository.findById(1L))
-        .thenReturn(
-            Optional.of(receptionist(PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of())));
+        .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("受付担当者が見つかりません");
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void createRejectsStaffWithoutOrderManageCapability() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(castRepository.existsById("g1")).thenReturn(true);
+    // 店舗を授権していても、束が ORDER_MANAGE を含まない STAFF（HQ 系束のみ等）は受付担当者になれない。
+    PlatformUser staffWithoutOrderManage =
+        PlatformUser.builder()
+            .email("hq@kizuna.test")
+            .password("pw")
+            .displayName("HQ系スタッフ")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(31L))
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeIds(Set.of())
+            .build();
+    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
+    when(capabilityBundleRepository.anyBundleHasCapability(Set.of(31L), Capability.ORDER_MANAGE))
+        .thenReturn(false);
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)
@@ -365,9 +413,7 @@ class OrderServiceTest {
     // 別店舗(store_id=2)専用スコープ: 現テナント(=1)を授権しない
     when(platformUserRepository.findById(2L))
         .thenReturn(
-            Optional.of(
-                receptionist(
-                    PlatformRole.STORE_STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+            Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -385,10 +431,9 @@ class OrderServiceTest {
     when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
-    // 全店舗授権でも CAST ロールは受付担当者になれない
+    // 全店舗授権でも CAST 本人種別は受付担当者になれない
     when(platformUserRepository.findById(2L))
-        .thenReturn(
-            Optional.of(receptionist(PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of())));
+        .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
