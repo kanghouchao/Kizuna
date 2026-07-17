@@ -18,7 +18,7 @@ public class CentralMenuController {
   private final CentralMenuService menuService;
 
   @GetMapping("/me")
-  @PreAuthorize("hasAuthority('ROLE_HQ_ADMIN')")
+  @PreAuthorize("hasAuthority('PERM_CENTRAL_MENU_VIEW')")
   public ResponseEntity<List<MenuVO>> getMyMenus() {
     return ResponseEntity.ok(menuService.getMyMenus());
   }

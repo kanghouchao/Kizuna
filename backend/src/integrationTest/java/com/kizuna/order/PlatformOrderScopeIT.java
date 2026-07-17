@@ -9,10 +9,11 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossTenantTestSupport;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -65,6 +66,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   @Autowired private TenantRepository tenantRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
 
   /** 保存後に採番された第二テナントの実 id。 */
   private long tenantBId;
@@ -83,10 +85,11 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
 
     ensurePlatformUser(
         SPECIFIC_EMAIL,
-        PlatformRole.STORE_MANAGER,
+        UserType.STAFF,
+        bundleIdsOf("店長"),
         StoreScopeType.SPECIFIC_STORES,
         Set.of(TENANT_A));
-    ensurePlatformUser(CAST_EMAIL, PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of());
+    ensurePlatformUser(CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
   }
 
   /** リポジトリ直挿（テストスレッドは @TenantScoped を経由せず tenantFilter が無効なので他テナントにも書ける）。 */
@@ -113,7 +116,11 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   }
 
   private void ensurePlatformUser(
-      String email, PlatformRole role, StoreScopeType scopeType, Set<Long> storeIds) {
+      String email,
+      UserType userType,
+      Set<Long> bundleIds,
+      StoreScopeType scopeType,
+      Set<Long> storeIds) {
     platformUserRepository
         .findByEmail(email)
         .orElseGet(
@@ -122,12 +129,18 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
                     PlatformUser.builder()
                         .email(email)
                         .password(passwordEncoder.encode(PASSWORD))
-                        .displayName("集合作用域IT " + role.name())
+                        .displayName("集合作用域IT " + userType.name())
                         .enabled(true)
-                        .role(role)
+                        .userType(userType)
+                        .bundleIds(bundleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
+  }
+
+  /** 種子の既定束を名称で解決する（束はデータ — id を決め打ちしない）。 */
+  private Set<Long> bundleIdsOf(String bundleName) {
+    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
   }
 
   private String platformToken(String email, String password) {

@@ -12,10 +12,13 @@ import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.Capability;
+import com.kizuna.user.domain.CapabilityBundle;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,7 +37,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @ExtendWith(MockitoExtension.class)
 class PlatformAuthServiceTest {
 
+  private static final long HQ_BUNDLE_ID = 10L;
+  private static final long STORE_BUNDLE_ID = 20L;
+
   @Mock private PlatformUserRepository userRepository;
+  @Mock private CapabilityBundleRepository capabilityBundleRepository;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private JwtUtil jwtUtil;
   @Mock private AuthSessionService authSessionService;
@@ -49,16 +56,34 @@ class PlatformAuthServiceTest {
         .password("stored-hash")
         .displayName("HQ管理者")
         .enabled(true)
-        .role(PlatformRole.HQ_ADMIN)
+        .userType(UserType.STAFF)
+        .bundleIds(Set.of(HQ_BUNDLE_ID))
         .storeScopeType(StoreScopeType.ALL_STORES)
         .storeIds(Set.of())
         .build();
   }
 
+  private CapabilityBundle hqBundle() {
+    return CapabilityBundle.builder()
+        .name("HQ管理者")
+        .capabilities(
+            Set.of(
+                Capability.TENANT_MANAGE,
+                Capability.STAFF_MANAGE,
+                Capability.SYSTEM_CONFIG_MANAGE,
+                Capability.CENTRAL_MENU_VIEW,
+                Capability.CENTRAL_ASSET_MANAGE,
+                Capability.STORE_VIEW,
+                Capability.ORDER_SET_MANAGE))
+        .build();
+  }
+
   @Test
-  void login_success_issuesPlatformTokenWithRoleAndScopeClaims() {
+  void login_staff_issuesSortedPermAuthoritiesWithoutRoleClaim() {
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
     when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
+        .thenReturn(List.of(hqBundle()));
     Token mockToken = new Token("platform_token", 12345L);
     when(jwtUtil.generateToken(eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
         .thenReturn(mockToken);
@@ -72,46 +97,98 @@ class PlatformAuthServiceTest {
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
-    assertThat(authorities).isEqualTo(List.of("ROLE_HQ_ADMIN"));
-    assertThat(claims.get("role")).isEqualTo("HQ_ADMIN");
+    assertThat(authorities)
+        .isEqualTo(
+            List.of(
+                "PERM_CENTRAL_ASSET_MANAGE",
+                "PERM_CENTRAL_MENU_VIEW",
+                "PERM_ORDER_SET_MANAGE",
+                "PERM_STAFF_MANAGE",
+                "PERM_STORE_VIEW",
+                "PERM_SYSTEM_CONFIG_MANAGE",
+                "PERM_TENANT_MANAGE"));
+    assertThat(claims.get("userType")).isEqualTo("STAFF");
+    // HQ は STORE コンソール能力を持たないため店舗文脈を確立できない（僭称ヘッダは従来どおり 403）。
+    assertThat(claims.get("storeBridge")).isEqualTo(false);
+    assertThat(claims).doesNotContainKey("role");
     assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of());
   }
 
   @Test
-  void login_success_specificStores_carriesStoreIdsClaim() {
-    PlatformUser manager =
+  void login_staffWithStoreCapabilities_setsStoreBridgeTrue() {
+    PlatformUser staff =
         PlatformUser.builder()
-            .email("mgr@kizuna.test")
+            .email("staff@kizuna.test")
             .password("stored-hash")
-            .displayName("店長")
+            .displayName("店舗スタッフ")
             .enabled(true)
-            .role(PlatformRole.STORE_MANAGER)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(STORE_BUNDLE_ID))
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
-    when(userRepository.findByEmail("mgr@kizuna.test")).thenReturn(Optional.of(manager));
+    when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(staff));
     when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
-    when(jwtUtil.generateToken(eq("mgr@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
+    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
+        .thenReturn(
+            List.of(
+                CapabilityBundle.builder()
+                    .name("店舗スタッフ")
+                    .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_VIEW))
+                    .build()));
+    when(jwtUtil.generateToken(eq("staff@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
         .thenReturn(new Token("t", 1L));
 
-    authService.login("mgr@kizuna.test", "pass");
+    authService.login("staff@kizuna.test", "pass");
 
     verify(jwtUtil)
-        .generateToken(eq("mgr@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+        .generateToken(
+            eq("staff@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
-    assertThat(authorities).isEqualTo(List.of("ROLE_STORE_MANAGER"));
-    assertThat(claims.get("role")).isEqualTo("STORE_MANAGER");
+    assertThat(authorities).isEqualTo(List.of("PERM_ORDER_MANAGE", "PERM_STORE_VIEW"));
+    assertThat(claims.get("storeBridge")).isEqualTo(true);
     assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of(1L));
+  }
+
+  @Test
+  void login_cast_issuesRoleCastOnlyWithoutStoreBridge() {
+    PlatformUser cast =
+        PlatformUser.builder()
+            .email("cast@kizuna.test")
+            .password("stored-hash")
+            .displayName("キャスト")
+            .enabled(true)
+            .userType(UserType.CAST)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
+    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    when(jwtUtil.generateToken(eq("cast@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
+        .thenReturn(new Token("t", 1L));
+
+    authService.login("cast@kizuna.test", "pass");
+
+    verify(jwtUtil)
+        .generateToken(eq("cast@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    Map<String, Object> claims = claimsCaptor.getValue();
+    @SuppressWarnings("unchecked")
+    List<String> authorities = (List<String>) claims.get("authorities");
+    assertThat(authorities).isEqualTo(List.of("ROLE_CAST"));
+    assertThat(claims.get("userType")).isEqualTo("CAST");
+    assertThat(claims.get("storeBridge")).isEqualTo(false);
   }
 
   @Test
   void login_mixedCaseEmail_resolvesToLowercaseUser() {
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
     when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
+        .thenReturn(List.of(hqBundle()));
     when(jwtUtil.generateToken(eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
         .thenReturn(new Token("platform_token", 12345L));
 
@@ -163,6 +240,42 @@ class PlatformAuthServiceTest {
   }
 
   @Test
+  void me_staff_returnsCapabilitiesAndDerivedConsole() {
+    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
+        .thenReturn(List.of(hqBundle()));
+
+    Optional<PlatformMeResponse> res = authService.me("admin@kizuna.test");
+
+    assertThat(res).isPresent();
+    assertThat(res.get().userType()).isEqualTo("STAFF");
+    assertThat(res.get().console()).isEqualTo("central");
+    assertThat(res.get().capabilities()).contains("TENANT_MANAGE", "STAFF_MANAGE");
+  }
+
+  @Test
+  void me_cast_returnsNoneConsoleWithoutCapabilities() {
+    PlatformUser cast =
+        PlatformUser.builder()
+            .email("cast@kizuna.test")
+            .password("stored-hash")
+            .displayName("キャスト")
+            .enabled(true)
+            .userType(UserType.CAST)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
+
+    Optional<PlatformMeResponse> res = authService.me("cast@kizuna.test");
+
+    assertThat(res).isPresent();
+    assertThat(res.get().userType()).isEqualTo("CAST");
+    assertThat(res.get().console()).isEqualTo("none");
+    assertThat(res.get().capabilities()).isEmpty();
+  }
+
+  @Test
   void updateMe_emailNotFound_throwsServiceException() {
     when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
 
@@ -174,6 +287,8 @@ class PlatformAuthServiceTest {
   void updateMe_success_updatesDisplayNameAndReturnsResponse() {
     PlatformUser user = hqAdmin();
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
+        .thenReturn(List.of(hqBundle()));
 
     PlatformMeResponse res = authService.updateMe("admin@kizuna.test", "新しい表示名");
 
@@ -220,7 +335,8 @@ class PlatformAuthServiceTest {
         .password("stored-hash")
         .displayName("HQ管理者")
         .enabled(false)
-        .role(PlatformRole.HQ_ADMIN)
+        .userType(UserType.STAFF)
+        .bundleIds(Set.of(HQ_BUNDLE_ID))
         .storeScopeType(StoreScopeType.ALL_STORES)
         .storeIds(Set.of())
         .build();

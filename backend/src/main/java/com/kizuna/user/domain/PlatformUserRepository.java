@@ -1,7 +1,6 @@
 package com.kizuna.user.domain;
 
 import jakarta.persistence.LockModeType;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Lock;
@@ -12,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 public interface PlatformUserRepository extends CrudRepository<PlatformUser, Long> {
   Optional<PlatformUser> findByEmail(String email);
 
-  List<PlatformUser> findByRoleInOrderByDisplayNameAsc(Collection<PlatformRole> roles);
+  List<PlatformUser> findByUserTypeOrderByDisplayNameAsc(UserType userType);
 
   /**
    * email でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR UPDATE）を掛ける。

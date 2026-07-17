@@ -5,7 +5,11 @@
 |Spring components
 |_Repositories_
 
+* `c.k.u.domain.CapabilityBundleRepository`
+* `c.k.u.domain.GrantHistoryRepository`
 * `c.k.u.domain.PlatformUserRepository`
 |Aggregate roots
-|* `c.k.u.domain.PlatformUser`
+|* `c.k.u.domain.CapabilityBundle`
+* `c.k.u.domain.GrantHistory`
+* `c.k.u.domain.PlatformUser`
 |===

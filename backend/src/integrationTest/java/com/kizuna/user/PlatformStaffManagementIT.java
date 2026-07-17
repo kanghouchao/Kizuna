@@ -6,10 +6,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.shared.CrossTenantTestSupport;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +55,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
   @Autowired private TenantRepository tenantRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
 
   private long storeAId;
   private long storeBId;
@@ -63,8 +65,9 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
     storeAId = ensureTenant(STORE_A_DOMAIN, STORE_A_NAME);
     storeBId = ensureTenant(STORE_B_DOMAIN, STORE_B_NAME);
     ensurePlatformUser(
-        NON_HQ_EMAIL, PlatformRole.STORE_MANAGER, StoreScopeType.ALL_STORES, Set.of());
-    ensurePlatformUser(CAST_CANARY_EMAIL, PlatformRole.CAST, StoreScopeType.ALL_STORES, Set.of());
+        NON_HQ_EMAIL, UserType.STAFF, bundleIdsOf("店長"), StoreScopeType.ALL_STORES, Set.of());
+    ensurePlatformUser(
+        CAST_CANARY_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
   }
 
   private long ensureTenant(String domain, String name) {
@@ -75,7 +78,11 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
   }
 
   private void ensurePlatformUser(
-      String email, PlatformRole role, StoreScopeType scopeType, Set<Long> storeIds) {
+      String email,
+      UserType userType,
+      Set<Long> bundleIds,
+      StoreScopeType scopeType,
+      Set<Long> storeIds) {
     platformUserRepository
         .findByEmail(email)
         .orElseGet(
@@ -84,12 +91,18 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
                     PlatformUser.builder()
                         .email(email)
                         .password(passwordEncoder.encode(PASSWORD))
-                        .displayName("スタッフ管理IT " + role.name())
+                        .displayName("スタッフ管理IT " + userType.name())
                         .enabled(true)
-                        .role(role)
+                        .userType(userType)
+                        .bundleIds(bundleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
+  }
+
+  /** 種子の既定束を名称で解決する（束はデータ — id を決め打ちしない）。 */
+  private Set<Long> bundleIdsOf(String bundleName) {
+    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
   }
 
   private String platformToken(String email, String password) {

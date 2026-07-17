@@ -22,13 +22,13 @@ public class StoreProfileController {
   private final StoreProfileService tenantConfigService;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
   public ResponseEntity<StoreProfileResponse> get() {
     return ResponseEntity.ok(tenantConfigService.get());
   }
 
   @PutMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
   public ResponseEntity<StoreProfileResponse> update(
       @Valid @RequestBody StoreProfileUpdateRequest request) {
     return ResponseEntity.ok(tenantConfigService.update(request));

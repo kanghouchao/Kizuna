@@ -3,10 +3,11 @@ package com.kizuna.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ class PlatformAuthIT {
   private static final String SPECIFIC_PASSWORD = "pass";
 
   @Autowired private TestRestTemplate rest;
+  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
@@ -96,7 +98,9 @@ class PlatformAuthIT {
     JsonNode body = res.getBody();
     assertThat(body.path("email").asText()).isEqualTo(SEED_EMAIL);
     assertThat(body.path("display_name").asText()).isEqualTo(SEED_DISPLAY_NAME);
-    assertThat(body.path("role").asText()).isEqualTo("HQ_ADMIN");
+    assertThat(body.path("user_type").asText()).isEqualTo("STAFF");
+    assertThat(body.path("console").asText()).isEqualTo("central");
+    assertThat(body.path("capabilities").toString()).contains("STAFF_MANAGE");
     assertThat(body.path("store_scope_type").asText()).isEqualTo("ALL_STORES");
     assertThat(body.path("store_ids")).isEmpty();
   }
@@ -114,7 +118,8 @@ class PlatformAuthIT {
                         .password(passwordEncoder.encode(SPECIFIC_PASSWORD))
                         .displayName("個別店舗担当")
                         .enabled(true)
-                        .role(PlatformRole.STORE_MANAGER)
+                        .userType(UserType.STAFF)
+                        .bundleIds(managerBundleIds())
                         .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of(1L))
                         .build()));
@@ -140,5 +145,10 @@ class PlatformAuthIT {
         rest.exchange("/tenant/menus/me", HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  /** 種子の既定束「店長」を名称で解決する（束はデータ — id を決め打ちしない）。 */
+  private Set<Long> managerBundleIds() {
+    return Set.of(capabilityBundleRepository.findByName("店長").orElseThrow().getId());
   }
 }

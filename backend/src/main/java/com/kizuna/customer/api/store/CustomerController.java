@@ -29,7 +29,7 @@ public class CustomerController {
   private final CustomerService customerService;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Page<CustomerResponse>> list(
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String rank,
@@ -39,27 +39,27 @@ public class CustomerController {
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> get(@PathVariable String id) {
     return ResponseEntity.ok(customerService.get(id));
   }
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> create(
       @Valid @RequestBody CustomerCreateRequest request) {
     return ResponseEntity.ok(customerService.create(request));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> update(
       @PathVariable String id, @Valid @RequestBody CustomerUpdateRequest request) {
     return ResponseEntity.ok(customerService.update(id, request));
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     customerService.delete(id);
     return ResponseEntity.ok().build();

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 平台スタッフ（ロール×店舗集合）管理 API。全操作 HQ 限定（#325）。 */
+/** 平台スタッフ（能力束×店舗集合×精算範囲）管理 API。全操作 STAFF_MANAGE 能力限定（#325 / #398）。 */
 @RestController
 @RequestMapping("/platform/staff")
 @RequiredArgsConstructor
@@ -26,20 +26,20 @@ public class PlatformStaffController {
   private final PlatformStaffService platformStaffService;
 
   @GetMapping
-  @PreAuthorize("hasAuthority('ROLE_HQ_ADMIN')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<List<PlatformStaffResponse>> list() {
     return ResponseEntity.ok(platformStaffService.list());
   }
 
   @PostMapping
-  @PreAuthorize("hasAuthority('ROLE_HQ_ADMIN')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> create(
       @Valid @RequestBody PlatformStaffCreateRequest req) {
     return ResponseEntity.ok(platformStaffService.create(req));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAuthority('ROLE_HQ_ADMIN')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> update(
       @PathVariable Long id, @Valid @RequestBody PlatformStaffUpdateRequest req) {
     return platformStaffService

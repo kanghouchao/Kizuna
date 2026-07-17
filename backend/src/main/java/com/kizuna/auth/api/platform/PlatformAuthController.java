@@ -7,8 +7,6 @@ import com.kizuna.auth.api.dto.PlatformMeUpdateRequest;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.auth.application.PlatformAuthService;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -30,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlatformAuthController {
 
   private final PlatformAuthService authService;
-  private final PlatformUserRepository userRepository;
   private final AuthSessionService authSessionService;
 
   @PostMapping("/login")
@@ -53,15 +50,10 @@ public class PlatformAuthController {
     if (principal == null || principal.getName() == null) {
       return ResponseEntity.status(401).build();
     }
-    PlatformUser user = userRepository.findByEmail(principal.getName()).orElse(null);
-    if (user == null) return ResponseEntity.status(404).build();
-    return ResponseEntity.ok(
-        new PlatformMeResponse(
-            user.getEmail(),
-            user.getDisplayName(),
-            user.getRole().name(),
-            user.getStoreScopeType().name(),
-            user.getStoreIds().stream().sorted().toList()));
+    return authService
+        .me(principal.getName())
+        .map(ResponseEntity::ok)
+        .orElseGet(() -> ResponseEntity.status(404).build());
   }
 
   @PutMapping("/me")

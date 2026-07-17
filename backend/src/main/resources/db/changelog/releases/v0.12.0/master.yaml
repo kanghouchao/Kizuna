@@ -5,3 +5,9 @@ databaseChangeLog:
   - include:
       file: central/02-capability-bundle-seed.yaml
       relativeToChangelogFile: true
+  - include:
+      file: central/03-fold-roles-into-bundles.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: central/04-drop-role-column.yaml
+      relativeToChangelogFile: true

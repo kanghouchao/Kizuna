@@ -19,10 +19,10 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.Set;
@@ -65,14 +65,15 @@ class CastInvitationAcceptanceServiceTest {
     return cast;
   }
 
-  private PlatformUser user(long id, PlatformRole role, Set<Long> storeIds) {
+  private PlatformUser user(long id, UserType userType, Set<Long> storeIds) {
     PlatformUser user =
         PlatformUser.builder()
             .email("cast@example.com")
             .password("x")
             .displayName("既存キャスト")
             .enabled(true)
-            .role(role)
+            .userType(userType)
+            .bundleIds(userType == UserType.STAFF ? Set.of(99L) : Set.of())
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(storeIds)
             .build();
@@ -87,7 +88,7 @@ class CastInvitationAcceptanceServiceTest {
             .password("x")
             .displayName("全店キャスト")
             .enabled(true)
-            .role(PlatformRole.CAST)
+            .userType(UserType.CAST)
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
@@ -185,7 +186,7 @@ class CastInvitationAcceptanceServiceTest {
     ArgumentCaptor<PlatformUser> captor = ArgumentCaptor.forClass(PlatformUser.class);
     verify(platformUserRepository).save(captor.capture());
     PlatformUser saved = captor.getValue();
-    assertThat(saved.getRole()).isEqualTo(PlatformRole.CAST);
+    assertThat(saved.getUserType()).isEqualTo(UserType.CAST);
     assertThat(saved.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(saved.getStoreIds()).containsExactly(1L);
     assertThat(saved.getPassword()).isEqualTo("encoded");
@@ -198,7 +199,7 @@ class CastInvitationAcceptanceServiceTest {
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
     when(platformUserRepository.findByEmail("dup@example.com"))
-        .thenReturn(Optional.of(user(9L, PlatformRole.CAST, Set.of(1L))));
+        .thenReturn(Optional.of(user(9L, UserType.CAST, Set.of(1L))));
 
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("Dup@Example.com")))
         .isInstanceOf(ServiceException.class)
@@ -245,7 +246,7 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     Cast cast = cast("c2", "花子档案（店舗B）");
-    PlatformUser existing = user(7L, PlatformRole.CAST, Set.of(1L));
+    PlatformUser existing = user(7L, UserType.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c2")).thenReturn(Optional.of(cast));
     when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
@@ -259,7 +260,7 @@ class CastInvitationAcceptanceServiceTest {
 
     assertThat(response.storeName()).isEqualTo("店舗B");
     assertThat(existing.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
-    assertThat(existing.getRole()).isEqualTo(PlatformRole.CAST);
+    assertThat(existing.getUserType()).isEqualTo(UserType.CAST);
     assertThat(cast.getPlatformUserId()).isEqualTo(7L);
     // 招待の状態遷移は条件付き UPDATE（claimPending）が担う。エンティティは受諾後に変更しない。
     verify(castInvitationRepository)
@@ -300,12 +301,12 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findById("c2")).thenReturn(Optional.of(cast("c2", "花子档案")));
-    // 悲観ロック取得は招待クレーム後（招待→PlatformUser のロック順）。ロック行のロールが非CASTなら弾く。
+    // 悲観ロック取得は招待クレーム後（招待→PlatformUser のロック順）。ロック行の本人種別が非CASTなら弾く。
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     when(platformUserRepository.findByEmailForUpdate("staff@example.com"))
-        .thenReturn(Optional.of(user(8L, PlatformRole.STORE_STAFF, Set.of(1L))));
+        .thenReturn(Optional.of(user(8L, UserType.STAFF, Set.of(1L))));
 
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "staff@example.com"))
         .isInstanceOf(AccessDeniedException.class);

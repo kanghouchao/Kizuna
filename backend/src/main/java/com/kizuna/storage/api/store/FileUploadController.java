@@ -5,7 +5,7 @@ import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantOptional;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
-import io.jsonwebtoken.Claims;
+import com.kizuna.user.domain.Capability;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -49,25 +49,27 @@ public class FileUploadController {
   /**
    * 保存先プレフィクスを決める。テナント文脈があればそのテナント配下、無ければ中央領域（central）へ保存する。
    *
-   * <p>中央領域への保存は HQ 管理者（role claim = HQ_ADMIN）のみ許可する。テナント文脈を解決できないテナントロール、および HQ_ADMIN
-   * 以外の平台ロール（店長・スタッフ・キャスト等）は {@code tenantId} claim を持たず {@code @TenantOptional} の許可経路に乗るため、
-   * 資産を中央共有領域へ誤って保存しないよう fail-closed で 403 拒否する（#287 / #322 / #326）。
+   * <p>中央領域への保存は中央資産管理能力（{@code PERM_CENTRAL_ASSET_MANAGE}）の保持者のみ許可する。テナント文脈を解決できない 店舗系・キャスト等は
+   * {@code @TenantOptional} の許可経路に乗るため、資産を中央共有領域へ誤って保存しないよう fail-closed で 403 拒否する（#287 / #322 /
+   * #326 / #398）。
    */
   private String resolveStoragePrefix() {
     if (tenantContext.isTenant()) {
       return String.valueOf(tenantContext.getTenantId());
     }
-    if (!"HQ_ADMIN".equals(tokenRole())) {
-      throw new AccessDeniedException("中央領域へのアップロードは HQ 管理者のみ許可されています");
+    if (!hasCentralAssetManage()) {
+      throw new AccessDeniedException("中央領域へのアップロードは中央資産管理能力の保持者のみ許可されています");
     }
     return "central";
   }
 
-  private String tokenRole() {
+  private boolean hasCentralAssetManage() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication != null && authentication.getDetails() instanceof Claims claims) {
-      return claims.get("role", String.class);
+    if (authentication == null) {
+      return false;
     }
-    return null;
+    String required = Capability.CENTRAL_ASSET_MANAGE.authority();
+    return authentication.getAuthorities().stream()
+        .anyMatch(granted -> required.equals(granted.getAuthority()));
   }
 }

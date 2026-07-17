@@ -4,13 +4,20 @@ import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.domain.Capability;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserType;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
  * bcrypt 照合を 1 回行ってからパスワード不一致と同一メッセージの {@link BadCredentialsException} を投げる（列挙耐性: メッセージ均一 +
  * タイミング均一。 DaoAuthenticationProvider.mitigateAgainstTimingAttack と同趣旨）。いずれの例外も {@code
  * AuthenticationException} 系のため 401 で応答される。
+ *
+ * <p>authorities の発行（#382 / #398）: STAFF は保持束の能力並集を {@code PERM_} 形式で発行し、CAST / MEMBER は本人種別標識
+ * {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話失効なし — #325 既定）。
  */
 @Service
 public class PlatformAuthService {
@@ -31,6 +41,7 @@ public class PlatformAuthService {
   private static final String INVALID_CREDENTIALS_MESSAGE = "メールアドレスまたはパスワードが正しくありません";
 
   private final PlatformUserRepository userRepository;
+  private final CapabilityBundleRepository capabilityBundleRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtUtil jwtUtil;
   private final AuthSessionService authSessionService;
@@ -40,10 +51,12 @@ public class PlatformAuthService {
 
   public PlatformAuthService(
       PlatformUserRepository userRepository,
+      CapabilityBundleRepository capabilityBundleRepository,
       PasswordEncoder passwordEncoder,
       JwtUtil jwtUtil,
       AuthSessionService authSessionService) {
     this.userRepository = userRepository;
+    this.capabilityBundleRepository = capabilityBundleRepository;
     this.passwordEncoder = passwordEncoder;
     this.jwtUtil = jwtUtil;
     this.authSessionService = authSessionService;
@@ -67,14 +80,22 @@ public class PlatformAuthService {
       throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
     }
 
-    List<String> authorities = List.of("ROLE_" + user.getRole().name());
-
+    Set<Capability> capabilities = capabilitiesOf(user);
     Map<String, Object> claims = new HashMap<>();
-    claims.put("authorities", authorities);
-    claims.put("role", user.getRole().name());
+    claims.put("authorities", buildAuthorities(user, capabilities));
+    claims.put("userType", user.getUserType().name());
+    // 店舗文脈（X-Tenant-ID）を確立できるか。STORE コンソール能力の保持者のみ true（SHARED は含めない —
+    // HQ の跨店参照は店舗文脈を確立せず、僭称ヘッダは従来どおり 403）。TenantIdInterceptor が消費する。
+    claims.put("storeBridge", hasStoreConsole(capabilities));
     claims.put("storeScopeType", user.getStoreScopeType().name());
     claims.put("storeIds", new ArrayList<>(user.getStoreIds()));
     return jwtUtil.generateToken(user.getEmail(), JwtUtil.ISSUER_PLATFORM, claims);
+  }
+
+  /** me 応答を返す（GET /platform/me）。ユーザー不在は空を返し、HTTP 表現は呼び出し側が決める。 */
+  @Transactional(readOnly = true)
+  public Optional<PlatformMeResponse> me(String email) {
+    return userRepository.findByEmail(email).map(this::toMeResponse);
   }
 
   /** 自己プロフィール（表示名）を更新し、更新後の me レスポンスを返す。 */
@@ -84,12 +105,7 @@ public class PlatformAuthService {
         userRepository.findByEmail(email).orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
     user.updateDisplayName(displayName);
     userRepository.save(user);
-    return new PlatformMeResponse(
-        user.getEmail(),
-        user.getDisplayName(),
-        user.getRole().name(),
-        user.getStoreScopeType().name(),
-        user.getStoreIds().stream().sorted().toList());
+    return toMeResponse(user);
   }
 
   /** パスワード変更。成功時は現在のセッションを失効させる（要再ログイン）。 */
@@ -104,5 +120,54 @@ public class PlatformAuthService {
     user.changePassword(passwordEncoder.encode(newPassword));
     userRepository.save(user);
     authSessionService.invalidate(currentToken);
+  }
+
+  private PlatformMeResponse toMeResponse(PlatformUser user) {
+    Set<Capability> capabilities = capabilitiesOf(user);
+    return new PlatformMeResponse(
+        user.getEmail(),
+        user.getDisplayName(),
+        user.getUserType().name(),
+        capabilities.stream().map(Enum::name).sorted().toList(),
+        consoleOf(user, capabilities),
+        user.getStoreScopeType().name(),
+        user.getStoreIds().stream().sorted().toList());
+  }
+
+  /** 保持束の能力並集。STAFF 以外は能力を持たない（本人種別 — #320 既定）。 */
+  private Set<Capability> capabilitiesOf(PlatformUser user) {
+    if (user.getUserType() != UserType.STAFF) {
+      return Set.of();
+    }
+    return capabilityBundleRepository.findAllById(user.getBundleIds()).stream()
+        .flatMap(bundle -> bundle.getCapabilities().stream())
+        .collect(Collectors.toCollection(() -> EnumSet.noneOf(Capability.class)));
+  }
+
+  private static List<String> buildAuthorities(PlatformUser user, Set<Capability> capabilities) {
+    return switch (user.getUserType()) {
+      case STAFF -> capabilities.stream().map(Capability::authority).sorted().toList();
+      case CAST -> List.of("ROLE_CAST");
+      case MEMBER -> List.of("ROLE_MEMBER");
+    };
+  }
+
+  private static boolean hasStoreConsole(Set<Capability> capabilities) {
+    return capabilities.stream()
+        .anyMatch(capability -> capability.getConsole() == Capability.Console.STORE);
+  }
+
+  /** ログイン後の着地先。CENTRAL 能力保持者は central 優先（兼務者のコンソール切替導線は別票）。 */
+  private static String consoleOf(PlatformUser user, Set<Capability> capabilities) {
+    if (user.getUserType() != UserType.STAFF) {
+      return "none";
+    }
+    boolean central =
+        capabilities.stream()
+            .anyMatch(capability -> capability.getConsole() == Capability.Console.CENTRAL);
+    if (central) {
+      return "central";
+    }
+    return hasStoreConsole(capabilities) ? "store" : "none";
   }
 }

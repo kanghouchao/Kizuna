@@ -4,5 +4,6 @@
 |`com.kizuna.auth`
 |Bean references
 |* `c.k.u.domain.PlatformUserRepository` (in User)
+* `c.k.u.domain.CapabilityBundleRepository` (in User)
 * `c.k.s.config.AppProperties` (in Shared)
 |===

@@ -26,30 +26,31 @@ public class CastFieldDefinitionController {
 
   private final CastFieldDefinitionService service;
 
-  // 一覧(読み取り)は値入力(MANAGER+STAFF)がキャスト編集フォームで活きた定義を描画するために必要なので
-  // STAFF にも許可する。定義そのものの作成・更新・削除は構造変更のため ROLE_STORE_MANAGER 限定を維持する（#277）。
+  // 一覧(読み取り)は値入力担当（CAST_MANAGE 保持者）がキャスト編集フォームで活きた定義を描画するために必要なので
+  // 閲覧能力（CAST_FIELD_DEF_VIEW）で許可する。定義そのものの作成・更新・削除は構造変更のため
+  // 管理能力（CAST_FIELD_DEF_MANAGE — 既定束では店長のみ）限定を維持する（#277 / #398）。
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_STORE_MANAGER','ROLE_STORE_STAFF')")
+  @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_VIEW')")
   public ResponseEntity<List<CastFieldDefinitionResponse>> list() {
     return ResponseEntity.ok(service.list());
   }
 
   @PostMapping
-  @PreAuthorize("hasAuthority('ROLE_STORE_MANAGER')")
+  @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<CastFieldDefinitionResponse> create(
       @Valid @RequestBody CastFieldDefinitionCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAuthority('ROLE_STORE_MANAGER')")
+  @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<CastFieldDefinitionResponse> update(
       @PathVariable String id, @Valid @RequestBody CastFieldDefinitionUpdateRequest request) {
     return ResponseEntity.ok(service.update(id, request));
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAuthority('ROLE_STORE_MANAGER')")
+  @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     service.delete(id);
     return ResponseEntity.ok().build();

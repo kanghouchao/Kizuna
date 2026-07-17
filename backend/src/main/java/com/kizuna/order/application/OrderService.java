@@ -14,10 +14,10 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.tenancy.TenantContext;
 import com.kizuna.shared.tenancy.TenantScoped;
 import com.kizuna.tenant.domain.TenantRepository;
-import com.kizuna.user.domain.PlatformRole;
+import com.kizuna.user.domain.Capability;
+import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
-import java.util.EnumSet;
-import java.util.Set;
+import com.kizuna.user.domain.UserType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,16 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderService {
 
-  // 受付担当者になれる実スタッフロール（店舗常駐ロールのみ。CAST/MEMBER は受付担当として記録しない。
-  // HQ_ADMIN は通常 ALL_STORES を持ち authorizes(storeId) が常に true になるため、
-  // 店舗スコープ検証を無力化しないよう対象外にする）
-  private static final Set<PlatformRole> RECEPTIONIST_ROLES =
-      EnumSet.of(PlatformRole.STORE_MANAGER, PlatformRole.STORE_STAFF);
-
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final CastRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
+  private final CapabilityBundleRepository capabilityBundleRepository;
   private final TenantRepository tenantRepository;
   private final TenantContext tenantContext;
   private final OrderMapper orderMapper;
@@ -125,13 +120,19 @@ public class OrderService {
     }
   }
 
-  // 受付担当者は「実スタッフロール」かつ「現テナント(店舗)を授権する PlatformUser」でなければならない。
-  // platform_users には tenant_id が無いため、単なる存在確認では他店舗/HQ/CAST/MEMBER も通ってしまう。
+  // 受付担当者は「受注管理能力（ORDER_MANAGE）を持つ STAFF」かつ「現テナント(店舗)を授権する PlatformUser」で
+  // なければならない。platform_users には tenant_id が無いため、単なる存在確認では他店舗/CAST/MEMBER も通ってしまう。
+  // userType 判定を先行させ、束を持たない CAST/MEMBER で束問い合わせ（空 in 句）へ進まないようにする。
   private void validateReceptionist(Long receptionistId) {
     Long storeId = tenantContext.getTenantId();
     platformUserRepository
         .findById(receptionistId)
-        .filter(user -> RECEPTIONIST_ROLES.contains(user.getRole()) && user.authorizes(storeId))
+        .filter(
+            user ->
+                user.getUserType() == UserType.STAFF
+                    && user.authorizes(storeId)
+                    && capabilityBundleRepository.anyBundleHasCapability(
+                        user.getBundleIds(), Capability.ORDER_MANAGE))
         .orElseThrow(() -> new ServiceException("受付担当者が見つかりません: " + receptionistId));
   }
 
