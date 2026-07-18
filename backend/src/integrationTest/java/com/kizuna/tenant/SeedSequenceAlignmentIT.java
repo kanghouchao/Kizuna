@@ -57,7 +57,7 @@ class SeedSequenceAlignmentIT {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.setBearerAuth(platformLogin());
-    // domain には一意制約（uq_central_tenants_domain）があるため、
+    // domain には一意制約（uq_t_stores_domain）があるため、
     // 同一 DB へ手動で再実行しても衝突しないよう実行ごとに一意化する
     String body =
         String.format(

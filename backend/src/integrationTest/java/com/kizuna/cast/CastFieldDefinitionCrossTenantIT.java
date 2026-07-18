@@ -23,12 +23,12 @@ import org.springframework.http.ResponseEntity;
 /**
  * カスタムフィールド定義・値のクロステナント分離を本物の PostgreSQL で検証する統合テスト（issue #277）。
  *
- * <p>新規テーブル {@code t_cast_field_definitions} と {@code t_casts.custom_fields} に tenantFilter
- * が実際に効くこと （#227 の applyToLoadByKey 型の穴が無いこと）を、リポジトリ直挿し＋実データ非混入の強アサーションで固定する
+ * <p>新規テーブル {@code t_cast_field_definitions} と {@code t_casts.custom_fields} に storeFilter が実際に効くこと
+ * （#227 の applyToLoadByKey 型の穴が無いこと）を、リポジトリ直挿し＋実データ非混入の強アサーションで固定する
  * （弱い「所有者不一致」ではなく他テナントの値・ラベルが本文に一切現れないことを断言）。
  *
  * <p>定義 CRUD は {@code ROLE_STORE_MANAGER} 限定のため、店舗{1,2} 授権の店長シードユーザー tanaka.hanako を使う。 tanaka
- * は両テナントに授権されるため、越境は「インターセプタのスコープ拒否 403」ではなく「tenantFilter による不可視化 → 400（見つからない）」として現れる。純粋なヘッダ詐称 403
+ * は両テナントに授権されるため、越境は「インターセプタのスコープ拒否 403」ではなく「storeFilter による不可視化 → 400（見つからない）」として現れる。純粋なヘッダ詐称 403
  * は基底クラスの yamada（店舗{1} 授権）で別途固定する。
  */
 class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
@@ -89,7 +89,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     return id;
   }
 
-  /** tenantFilter を経由しない直挿しで第二テナント(=2)に定義を用意する（save で tenant_id を明示）。 */
+  /** storeFilter を経由しない直挿しで第二テナント(=2)に定義を用意する（save で store_id を明示）。 */
   private CastFieldDefinition insertDefinitionForTenantB(
       String key, String label, boolean isPublic) {
     CastFieldDefinition definition =
@@ -111,7 +111,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("他テナントの定義は tenantFilter で不可視化され、GET一覧に現れず PUT/DELETE も 400 になること")
+  @DisplayName("他テナントの定義は storeFilter で不可視化され、GET一覧に現れず PUT/DELETE も 400 になること")
   void foreignTenantDefinitionIsInvisibleAndUnmutable() {
     String keyA = "blood_type_" + nonce;
     String idA = createDefinitionAs(TENANT_A, keyA, "血液型A", true);

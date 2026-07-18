@@ -215,7 +215,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("他テナントの档案 ID を自店文脈から発行しても 400 で拒否され、他テナントのデータが不変であること")
   void crossTenantIssueIsRejectedAndForeignDataUnchanged() {
-    // リポジトリ直挿（テストスレッドは @TenantScoped を経由せず tenantFilter が無効なので他テナントにも書ける）。
+    // リポジトリ直挿（テストスレッドは @TenantScoped を経由せず storeFilter が無効なので他テナントにも書ける）。
     Cast foreignCast = Cast.builder().name("他テナント機密キャスト").build();
     foreignCast.setStoreId(foreignTenantId);
     String foreignCastId = castRepository.save(foreignCast).getId();

@@ -61,8 +61,8 @@ public class CastService {
   }
 
   /**
-   * 指定 id のキャストが現在テナントに属するか判定する（他モジュールからの帰属チェック用ポート）。 tenantFilter が効くため、他テナントのキャストは存在しないものとして
-   * false を返す。
+   * 指定 id のキャストが現在テナントに属するか判定する（他モジュールからの帰属チェック用ポート）。 storeFilter が効くため、他テナントのキャストは存在しないものとして false
+   * を返す。
    */
   @TenantScoped
   @Transactional(readOnly = true)

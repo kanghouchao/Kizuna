@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * カスタムフィールド定義の CRUD ユースケース。
  *
- * <p>重複 key・件数上限はいずれも {@link ServiceException}（400）で統一する。DB 一意制約 {@code (tenant_id, key)}
+ * <p>重複 key・件数上限はいずれも {@link ServiceException}（400）で統一する。DB 一意制約 {@code (store_id, key)}
  * を最終防波堤とし、悲観ロックは導入しない（{@code CastInvitationAcceptanceService} のメール重複チェックと同じ許容パターン）。
  */
 @Service
@@ -60,7 +60,7 @@ public class CastFieldDefinitionService {
     try {
       return mapper.toResponse(repository.saveAndFlush(definition));
     } catch (DataIntegrityViolationException ex) {
-      // 事前チェックをすり抜けた並行 create が (tenant_id, key) 一意制約に当たったレース。
+      // 事前チェックをすり抜けた並行 create が (store_id, key) 一意制約に当たったレース。
       // 事前チェックと同一の 400（ServiceException）へ変換する（saveAndFlush で違反をこの try 内に顕在化させる）。
       throw new ServiceException("このキーは既に登録されています: " + request.getKey());
     }

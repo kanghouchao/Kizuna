@@ -43,7 +43,7 @@ Each module follows the DDD four layers:
 - **Imports**: no inline FQCN usage, no wildcard imports (`*`); one explicit import per class.
 - **Formatting**: Spotless + Google Java Format. JDK 21 is pinned by `backend/.java-version` (jenv) and `backend/gradle/gradle-daemon-jvm.properties` (daemon JVM), so `./gradlew spotlessApply` runs locally as-is. Fallback only if the active JDK is not 21: `docker run --rm -u root -v "$PWD":/app -w /app gradle:9.2.1-jdk21-ubi-minimal gradle spotlessApply --no-daemon`.
 - **Coverage**: the only Jacoco exclusions are `**/api/dto/**` (DTOs + MapStruct-generated code) and `**/shared/config/**` (pure configuration). **The domain layer must always be covered.**
-- **DB migrations**: Liquibase (YAML under `db/changelog/releases/<version>/central|tenant/`).
+- **DB migrations**: Liquibase (YAML under `db/changelog/releases/<version>/platform|store/` from v0.14.0 onward; historical releases ≤ v0.13.0 keep `central|tenant/`).
 - **Config values**: read from `AppProperties` (shared/config). No hardcoding.
 - **Logging**: keep the `req=<id> tenant=<id>` format.
 - **Modulith docs**: `ModularityTests` generates them under `backend/docs/modulith/` (committed). The Documenter's Rel-line ordering is unstable, so unless there is a structural change, revert the diff with checkout.

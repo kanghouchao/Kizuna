@@ -52,7 +52,7 @@ public class ShiftService {
   /**
    * 公開出勤表用に「本日（app.timezone）」の確定（CONFIRMED）シフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧 ({@code
    * /tenant/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
-   * 直接参照して結合する（cast.api.dto は公開面ではないため）。tenantFilter は {@code @TenantScoped} によりセッション全体で有効なので
+   * 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は {@code @TenantScoped} によりセッション全体で有効なので
    * t_casts 参照も現テナントに絞られる。
    */
   @TenantScoped

@@ -34,7 +34,7 @@ public class CastInvitationService {
   private final CastInvitationRepository castInvitationRepository;
 
   /**
-   * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 tenantFilter により他テナントの档案は見えず
+   * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 storeFilter により他テナントの档案は見えず
    * ServiceException となる（越権はインターセプタが先に 403）。
    *
    * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
@@ -88,7 +88,7 @@ public class CastInvitationService {
     }
   }
 
-  /** ページ内の档案について招待状態（四態）を一括導出する。呼び出し元の tenantFilter 有効なトランザクション内で使う。 */
+  /** ページ内の档案について招待状態（四態）を一括導出する。呼び出し元の storeFilter 有効なトランザクション内で使う。 */
   public Map<String, CastInvitationStatus> deriveStatuses(List<Cast> casts) {
     if (casts.isEmpty()) {
       return Map.of();

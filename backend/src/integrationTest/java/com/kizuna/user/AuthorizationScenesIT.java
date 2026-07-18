@@ -82,7 +82,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
         StoreScopeType.SPECIFIC_STORES,
         Set.of(TENANT_A));
 
-    // 内部キャスト情報のカナリア（リポジトリ直挿 — テストスレッドは tenantFilter を経由しない）。
+    // 内部キャスト情報のカナリア（リポジトリ直挿 — テストスレッドは storeFilter を経由しない）。
     boolean canaryExists =
         castRepository.findAll().stream().anyMatch(c -> CAST_CANARY_NAME.equals(c.getName()));
     if (!canaryExists) {

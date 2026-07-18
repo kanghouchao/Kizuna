@@ -14,8 +14,8 @@ import org.springframework.http.ResponseEntity;
 /**
  * Customer のクロステナント分離を本物の PostgreSQL で検証する統合テスト。
  *
- * <p>commit 5b39c06（tenantFilter の applyToLoadByKey=true 補完）の回帰テスト。 tenant A が作成した Customer を
- * tenant B が GET /tenant/customers/{id}（findById 経由） で読めないことを固定する。PR-B の手動 curl 検証の自動化（issue #225）。
+ * <p>commit 5b39c06（storeFilter の applyToLoadByKey=true 補完）の回帰テスト。 tenant A が作成した Customer を tenant
+ * B が GET /tenant/customers/{id}（findById 経由） で読めないことを固定する。PR-B の手動 curl 検証の自動化（issue #225）。
  *
  * <p>認証・テナントヘッダ組立は {@link CrossTenantTestSupport} に共通化（issue #226 で 3 クラス目の重複を抽出）。
  */

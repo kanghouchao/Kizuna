@@ -86,7 +86,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         Set.of(TENANT_A));
   }
 
-  /** リポジトリ直挿（テストスレッドは @TenantScoped を経由せず tenantFilter が無効なので他テナントにも書ける）。 */
+  /** リポジトリ直挿（テストスレッドは @TenantScoped を経由せず storeFilter が無効なので他テナントにも書ける）。 */
   private void ensureMarkerOrder(long tenantId, String storeName, String remarks) {
     boolean exists =
         orderRepository.findAll().stream()
