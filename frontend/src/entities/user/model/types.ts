@@ -89,6 +89,8 @@ export interface PlatformStaffResponse {
   store_ids: number[];
   settlement_scope_type: PlatformStoreScopeType | null;
   settlement_store_ids: number[];
+  // 楽観ロック用バージョン（更新リクエストへそのまま往復する — #400）
+  version: number;
 }
 
 // スタッフ新規作成リクエスト
@@ -111,6 +113,8 @@ export interface PlatformStaffUpdateRequest {
   settlement_scope_type?: PlatformStoreScopeType | null;
   settlement_store_ids?: number[];
   enabled?: boolean;
+  // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409 — #400）
+  version: number;
 }
 
 // 付与履歴の操作種別

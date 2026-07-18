@@ -1,4 +1,5 @@
 import { platformStaffApi } from '@/entities/user';
+import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -25,14 +26,20 @@ describe('platformStaffApi', () => {
     });
     expect(res).toEqual({ ok: true, url: '/platform/staff' });
   });
-  it('update は /platform/staff/:id を PUT する', async () => {
+  it('update は /platform/staff/:id を PUT し version を往復する', async () => {
     const res = await platformStaffApi.update(1, {
       bundle_ids: [1, 2],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
       enabled: false,
+      version: 7,
     });
     expect(res).toEqual({ ok: true, url: '/platform/staff/1' });
+    // 楽観ロックの往復契約: 更新ボディに version が含まれること（#400）
+    expect(apiClient.put).toHaveBeenCalledWith(
+      '/platform/staff/1',
+      expect.objectContaining({ version: 7 })
+    );
   });
   it('bundles は /platform/capability-bundles を GET する', async () => {
     const res = await platformStaffApi.bundles();
