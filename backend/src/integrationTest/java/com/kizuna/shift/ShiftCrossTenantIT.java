@@ -43,8 +43,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
 
   /**
    * クロステナント検証用の第二テナントを用意し、採番された実 id を返す（MenuCrossTenantIT と同型）。 シードにはテナント 1 しか無く、定数 {@code
-   * TENANT_B}=2 は central_tenants に実在しないため、直挿し先の tenant_id を FK 違反させずに得るには実テナントを find-or-create
-   * する必要がある。
+   * TENANT_B}=2 は t_stores に実在しないため、直挿し先の store_id を FK 違反させずに得るには実テナントを find-or-create する必要がある。
    */
   private long ensureForeignTenantId() {
     return tenantRepository
@@ -57,7 +56,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
 
   /**
    * 他テナントの Cast をリポジトリ直挿しで用意する。 HTTP 経由の作成は tenant A の JWT + 他テナントの X-Tenant-ID が
-   * TenantIdInterceptor に 403 で弾かれるため、{@code @TenantScoped} を経由せず tenantFilter が無効な
+   * TenantIdInterceptor に 403 で弾かれるため、{@code @TenantScoped} を経由せず storeFilter が無効な
    * リポジトリ直接呼び出しで他テナントのデータを書く（MenuCrossTenantIT と同型）。帰属先は実在する第二テナントの採番 id を使う。
    */
   private String createForeignCast(String name) {

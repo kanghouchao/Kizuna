@@ -23,7 +23,7 @@ import org.springframework.http.ResponseEntity;
  * StoreMenu のクロステナント分離を本物の PostgreSQL で検証する統合テスト（issue #227）。
  *
  * <p>StoreMenu には作成 API がなくデータは Liquibase シード（tenant 1 のみ）に由来するため、
- * リポジトリ直挿しで第二テナントとそのメニューを自前で用意する（リポジトリ直接呼び出しは {@code @TenantScoped} を経由せず tenantFilter
+ * リポジトリ直挿しで第二テナントとそのメニューを自前で用意する（リポジトリ直接呼び出しは {@code @TenantScoped} を経由せず storeFilter
  * が無効なので、他テナントのデータも書ける）。 GET /tenant/menus/me が X-Tenant-ID の切替でテナント間のメニューを混在させないことを固定する。
  */
 class MenuCrossTenantIT extends CrossTenantTestSupport {

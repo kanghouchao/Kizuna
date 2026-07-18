@@ -121,7 +121,7 @@ public class OrderService {
   }
 
   // 受付担当者は「有効(enabled)かつ受注管理能力（ORDER_MANAGE）を持つ STAFF」かつ「現テナント(店舗)を授権する
-  // PlatformUser」でなければならない。platform_users には tenant_id が無いため、単なる存在確認では
+  // PlatformUser」でなければならない。t_users には store_id が無いため、単なる存在確認では
   // 他店舗/CAST/MEMBER も通ってしまう。停止済み(enabled=false)の口座は束・授権を保持したままなので明示的に弾く。
   // userType 判定を先行させ、束を持たない CAST/MEMBER で束問い合わせ（空 in 句）へ進まないようにする。
   private void validateReceptionist(Long receptionistId) {

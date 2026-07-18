@@ -15,7 +15,7 @@ import lombok.ToString;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 
-/** テナントスコープのエンティティ基盤。tenant_id は ID 参照（D3）で保持し、tenantFilter で行レベル分離する。 */
+/** テナントスコープのエンティティ基盤。store_id は ID 参照（D3）で保持し、storeFilter で行レベル分離する。 */
 @MappedSuperclass
 @Getter
 @Setter

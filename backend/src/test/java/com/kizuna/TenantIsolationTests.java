@@ -19,8 +19,8 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 /**
  * テナント行レベル分離の不変量を機械検証する（#208, PR-B）。
  *
- * <p>tenant_id 列を持つ @Entity は、継承経路（TenantScopedEntity）に関わらず、サービス層の {@code @TenantScoped}（{@code
- * TenantFilterEnable}）が有効化する Hibernate フィルタ {@code tenantFilter} の対象でなければならない。 {@code @Filter}
+ * <p>store_id 列を持つ @Entity は、継承経路（StoreScopedEntity）に関わらず、サービス層の {@code @TenantScoped}（{@code
+ * TenantFilterEnable}）が有効化する Hibernate フィルタ {@code storeFilter} の対象でなければならない。 {@code @Filter}
  * が無いエンティティはフィルタが有効でも全テナントの行を返してしまう（#216 の「@Filter を忘れる」事故と同型）。
  */
 class TenantIsolationTests {
@@ -28,8 +28,8 @@ class TenantIsolationTests {
   private static final String EXPECTED_CONDITION = "store_id = :storeId";
 
   @Test
-  @DisplayName("tenant_id 列を持つ全 @Entity が tenantFilter の @Filter を宣言していること")
-  void allTenantScopedEntitiesDeclareTenantFilter() throws Exception {
+  @DisplayName("store_id 列を持つ全 @Entity が storeFilter の @Filter を宣言していること")
+  void allStoreScopedEntitiesDeclareStoreFilter() throws Exception {
     ClassPathScanningCandidateComponentProvider scanner =
         new ClassPathScanningCandidateComponentProvider(false);
     scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
@@ -38,20 +38,20 @@ class TenantIsolationTests {
     List<String> scanned = new ArrayList<>();
     for (var candidate : scanner.findCandidateComponents("com.kizuna")) {
       Class<?> entity = Class.forName(candidate.getBeanClassName());
-      if (!hasTenantIdColumn(entity)) {
+      if (!hasStoreIdColumn(entity)) {
         continue;
       }
       scanned.add(entity.getSimpleName());
-      // @Filter は Hibernate 6 で repeatable のため、tenantFilter を宣言していれば
+      // @Filter は Hibernate 6 で repeatable のため、storeFilter を宣言していれば
       // 他フィルタ（storeSetFilter 等）が並置されていても違反としない。
-      boolean declaresTenantFilter = false;
+      boolean declaresStoreFilter = false;
       for (Filter filter : entity.getAnnotationsByType(Filter.class)) {
         if ("storeFilter".equals(filter.name()) && EXPECTED_CONDITION.equals(filter.condition())) {
-          declaresTenantFilter = true;
+          declaresStoreFilter = true;
           break;
         }
       }
-      if (!declaresTenantFilter) {
+      if (!declaresStoreFilter) {
         offenders.add(entity.getName());
       }
     }
@@ -59,36 +59,36 @@ class TenantIsolationTests {
     assertThat(scanned).isNotEmpty();
     assertThat(offenders)
         .as(
-            "@Filter(name=\"tenantFilter\", condition=\"%s\") が無い tenant_id 列保持エンティティ",
+            "@Filter(name=\"storeFilter\", condition=\"%s\") が無い store_id 列保持エンティティ",
             EXPECTED_CONDITION)
         .isEmpty();
   }
 
   @Test
-  @DisplayName("tenantFilter は主キー直接ロード（EntityManager#find 経由の findById 等）にも適用されること")
+  @DisplayName("storeFilter は主キー直接ロード（EntityManager#find 経由の findById 等）にも適用されること")
   void tenantFilterAppliesToLoadByKey() {
-    // @FilterDef は Hibernate 6 で repeatable のため、tenantFilter の定義を名前で取り出す
+    // @FilterDef は Hibernate 6 で repeatable のため、storeFilter の定義を名前で取り出す
     // （storeSetFilter 等が並置されていても getAnnotation は container を返し null になるため）。
-    FilterDef tenantFilterDef = null;
+    FilterDef storeFilterDef = null;
     for (FilterDef filterDef : StoreScopedEntity.class.getAnnotationsByType(FilterDef.class)) {
       if ("storeFilter".equals(filterDef.name())) {
-        tenantFilterDef = filterDef;
+        storeFilterDef = filterDef;
         break;
       }
     }
 
-    assertThat(tenantFilterDef)
-        .as("TenantScopedEntity が tenantFilter の @FilterDef を宣言していること")
+    assertThat(storeFilterDef)
+        .as("StoreScopedEntity が storeFilter の @FilterDef を宣言していること")
         .isNotNull();
-    assertThat(tenantFilterDef.applyToLoadByKey())
+    assertThat(storeFilterDef.applyToLoadByKey())
         .as(
             "applyToLoadByKey=false だと Session#find（Spring Data JPA の findById 実装経路）に"
                 + " filter が効かず、他テナントの ID を直接指定した読み取りが素通りする")
         .isTrue();
   }
 
-  /** tenant_id 列は TenantScopedEntity 経由（継承フィールド）でも、エンティティ自身の宣言でも良い。 */
-  private static boolean hasTenantIdColumn(Class<?> type) {
+  /** store_id 列は StoreScopedEntity 経由（継承フィールド）でも、エンティティ自身の宣言でも良い。 */
+  private static boolean hasStoreIdColumn(Class<?> type) {
     for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
       for (Field field : c.getDeclaredFields()) {
         // @ElementCollection の @Column は集合テーブルの列（PlatformUser.storeIds 等の授権店舗集合）であり、
