@@ -20,9 +20,7 @@ import { toast } from 'react-hot-toast';
 export default function CastListPage() {
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
-  // 招待発行は店長ロール限定（発行APIが ROLE_STORE_MANAGER のみ許可するため。裁定6）。
-  // クライアント側 cookie 読み取りは hydration 差異を避けるため useEffect で解決する。
-  // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ。#398）
+  // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ。裁定6の後継 #398）
   const [canInvite, setCanInvite] = useState(false);
   const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
   useEffect(() => {

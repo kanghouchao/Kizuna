@@ -21,14 +21,15 @@ _Others_
 * `c.k.s.web.RequestCorrelationFilter`
 |Properties
 |* `app.domain` -- `java.lang.String`
-* `app.jwt.expiration` -- `java.lang.Long`
+* `app.jwt.expiration` -- `java.lang.Long`, default `0`
 * `app.jwt.secret` -- `java.lang.String`
-* `app.timezone` -- `java.lang.String`
+* `app.scheme` -- `c.k.s.config.AppProperties.Scheme`, default `http`
+* `app.timezone` -- `java.lang.String`, default `Asia/Tokyo`. 「本日」判定に用いるタイムゾーン。公開出勤表などの当日算出に使用する。
 * `app.upload.access-key` -- `java.lang.String`
 * `app.upload.allowed-types` -- `java.util.List<java.lang.String>`
-* `app.upload.bucket` -- `java.lang.String`
-* `app.upload.endpoint` -- `java.lang.String`
-* `app.upload.max-file-size` -- `java.lang.Long`
+* `app.upload.bucket` -- `java.lang.String`, default `uploads`
+* `app.upload.endpoint` -- `java.lang.String`, default `http://localhost:9000`
+* `app.upload.max-file-size` -- `java.lang.Long`, default `10485760`
 * `app.upload.secret-key` -- `java.lang.String`
-* `app.upload.url-prefix` -- `java.lang.String`
+* `app.upload.url-prefix` -- `java.lang.String`, default `/static/uploads/`
 |===

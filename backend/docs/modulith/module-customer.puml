@@ -9,14 +9,14 @@ top to bottom direction
 !include <C4/C4_Component>
 
 Container_Boundary("Application.Application_boundary", "Application", $tags="") {
-  Component(Application.Application.Tenant, "Tenant", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Customer, "Customer", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
+  Component(Application.Application.Tenant, "Tenant", $techn="Module", $descr="", $tags="", $link="")
 }
 
+Rel(Application.Application.Tenant, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Customer, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Customer, Application.Application.Tenant, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Tenant, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 @enduml
