@@ -51,7 +51,7 @@ public interface OrderRepository
   // 店舗（tenant）表示名の join は張らない。
   String PLATFORM_VIEW_SELECT =
       """
-      select o.id as id, o.tenantId as storeId, o.storeName as storeName,
+      select o.id as id, o.storeId as storeId, o.storeName as storeName,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,

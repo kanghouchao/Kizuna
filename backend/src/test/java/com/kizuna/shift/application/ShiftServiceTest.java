@@ -98,7 +98,7 @@ class ShiftServiceTest {
 
     ShiftResponse res = shiftService.create(req);
     assertThat(res.getId()).isEqualTo("s_new");
-    assertThat(entity.getTenantId()).isEqualTo(1L);
+    assertThat(entity.getStoreId()).isEqualTo(1L);
   }
 
   @Test

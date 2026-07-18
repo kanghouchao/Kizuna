@@ -5,3 +5,6 @@ databaseChangeLog:
   - include:
       file: store/01-rename-store-profile-table.yaml
       relativeToChangelogFile: true
+  - include:
+      file: store/02-rename-tenant-id-columns.yaml
+      relativeToChangelogFile: true

@@ -24,7 +24,7 @@ import org.hibernate.annotations.ParamDef;
 @FilterDef(
     name = "tenantFilter",
     applyToLoadByKey = true,
-    parameters = @ParamDef(name = "tenantId", type = Long.class))
+    parameters = @ParamDef(name = "storeId", type = Long.class))
 @FilterDef(
     name = "storeSetFilter",
     applyToLoadByKey = true,
@@ -33,8 +33,8 @@ public abstract class TenantScopedEntity {
 
   @Id @SnowflakeId private String id;
 
-  @Column(name = "tenant_id", updatable = false)
-  private Long tenantId;
+  @Column(name = "store_id", updatable = false)
+  private Long storeId;
 
   @Column(name = "created_at", nullable = false)
   private OffsetDateTime createdAt;

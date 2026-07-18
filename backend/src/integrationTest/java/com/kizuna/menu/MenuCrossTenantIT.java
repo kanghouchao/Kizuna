@@ -51,7 +51,7 @@ class MenuCrossTenantIT extends CrossTenantTestSupport {
     if (!menuRepository.existsById(TENANT_B_MENU_ID)) {
       StoreMenu menu = new StoreMenu();
       menu.setId(TENANT_B_MENU_ID);
-      menu.setTenantId(tenantBId);
+      menu.setStoreId(tenantBId);
       menu.setLabel(TENANT_B_MENU_LABEL);
       menu.setSortOrder(10);
       menuRepository.save(menu);

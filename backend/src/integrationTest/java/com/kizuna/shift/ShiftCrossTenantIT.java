@@ -62,7 +62,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
    */
   private String createForeignCast(String name) {
     Cast cast = Cast.builder().name(name).build();
-    cast.setTenantId(ensureForeignTenantId());
+    cast.setStoreId(ensureForeignTenantId());
     return castRepository.save(cast).getId();
   }
 
@@ -335,7 +335,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   /** 第二テナントの ACTIVE な Cast をリポジトリ直挿しで用意する（公開エンドポイントは ACTIVE のみ結合するため）。 */
   private String createActiveForeignCast(String name, long tenantId) {
     Cast cast = Cast.builder().name(name).status("ACTIVE").build();
-    cast.setTenantId(tenantId);
+    cast.setStoreId(tenantId);
     return castRepository.save(cast).getId();
   }
 
@@ -350,7 +350,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
             .endTime(endTime)
             .status("CONFIRMED")
             .build();
-    shift.setTenantId(tenantId);
+    shift.setStoreId(tenantId);
     shiftRepository.save(shift);
   }
 

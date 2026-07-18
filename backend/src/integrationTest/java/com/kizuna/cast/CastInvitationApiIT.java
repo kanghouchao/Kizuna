@@ -164,7 +164,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
             .expiresAt(OffsetDateTime.now().plusHours(72))
             .acceptedAt(OffsetDateTime.now())
             .build();
-    accepted.setTenantId(TENANT_A);
+    accepted.setStoreId(TENANT_A);
     String acceptedId = castInvitationRepository.save(accepted).getId();
 
     ResponseEntity<JsonNode> res = issueInvitation(castId, TENANT_A, managerToken);
@@ -208,7 +208,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
             .status(CastInvitation.Status.PENDING)
             .expiresAt(OffsetDateTime.now().plusHours(72))
             .build();
-    invitation.setTenantId(TENANT_A);
+    invitation.setStoreId(TENANT_A);
     return invitation;
   }
 
@@ -217,7 +217,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   void crossTenantIssueIsRejectedAndForeignDataUnchanged() {
     // リポジトリ直挿（テストスレッドは @TenantScoped を経由せず tenantFilter が無効なので他テナントにも書ける）。
     Cast foreignCast = Cast.builder().name("他テナント機密キャスト").build();
-    foreignCast.setTenantId(foreignTenantId);
+    foreignCast.setStoreId(foreignTenantId);
     String foreignCastId = castRepository.save(foreignCast).getId();
 
     // tanaka の授権店舗(店舗1)文脈から、他テナントの档案 ID を発行しようとする。
@@ -250,7 +250,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
             .status(CastInvitation.Status.PENDING)
             .expiresAt(OffsetDateTime.now().minusHours(1))
             .build();
-    expiredInvitation.setTenantId(TENANT_A);
+    expiredInvitation.setStoreId(TENANT_A);
     castInvitationRepository.save(expiredInvitation);
 
     // 連携済み: 档案に平台身分を紐づける。

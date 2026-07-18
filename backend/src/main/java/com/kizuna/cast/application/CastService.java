@@ -75,7 +75,7 @@ public class CastService {
   public CastResponse create(CastCreateRequest request) {
     Cast cast = castMapper.toEntity(request);
 
-    cast.setTenantId(
+    cast.setStoreId(
         tenantRepository
             .findById(tenantContext.getTenantId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))

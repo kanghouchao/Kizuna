@@ -99,14 +99,14 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
             .displayOrder(0)
             .isPublic(isPublic)
             .build();
-    definition.setTenantId(TENANT_B);
+    definition.setStoreId(TENANT_B);
     return fieldDefinitionRepository.save(definition);
   }
 
   private Cast insertActiveCastForTenantB(Map<String, String> customFields) {
     Cast cast =
         Cast.builder().name("テナントBキャスト").status("ACTIVE").customFields(customFields).build();
-    cast.setTenantId(TENANT_B);
+    cast.setStoreId(TENANT_B);
     return castRepository.save(cast);
   }
 

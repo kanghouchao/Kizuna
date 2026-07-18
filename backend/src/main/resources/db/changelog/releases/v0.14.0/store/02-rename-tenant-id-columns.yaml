@@ -1,0 +1,115 @@
+databaseChangeLog:
+  # 店舗スコープ 8 表の tenant_id 列を store_id へ改名する（#404 / #405）。
+  # 対象は central_tenants(→t_stores) を参照する live 8 表のみ。
+  # #406 判断待ちの遺留表（t_pages / t_resource_* / central_group_*）の tenant_id は改名しない。
+  # 組み込み renameColumn は自動ロールバック対応のため単独 changeSet に置き、
+  # FK・インデックス・無名 unique の raw SQL 改名は明示 rollback を持つ別 changeSet に分ける。
+  - changeSet:
+      id: store-v0140-003-rename-tenant-id-columns
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - renameColumn:
+            tableName: t_orders
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+        - renameColumn:
+            tableName: t_casts
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+        - renameColumn:
+            tableName: t_customers
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+        - renameColumn:
+            tableName: t_shifts
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+        - renameColumn:
+            tableName: t_cast_field_definitions
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+        - renameColumn:
+            tableName: t_cast_invitations
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+        - renameColumn:
+            tableName: t_menus
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+        - renameColumn:
+            tableName: t_store_profiles
+            oldColumnName: tenant_id
+            newColumnName: store_id
+            columnDataType: BIGINT
+  - changeSet:
+      id: store-v0140-004-rename-tenant-scoped-constraints
+      author: kanghouchao
+      # FK・インデックス・無名 unique 制約名は列改名に追随しないため raw SQL で改名する。
+      # 無名 unique（t_tenant_configs_tenant_id_key）は列 unique:true の PostgreSQL 自動名。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: ALTER TABLE t_orders RENAME CONSTRAINT fk_t_orders_tenant TO fk_t_orders_store
+        - sql:
+            sql: ALTER TABLE t_casts RENAME CONSTRAINT fk_t_casts_tenant TO fk_t_casts_store
+        - sql:
+            sql: ALTER TABLE t_customers RENAME CONSTRAINT fk_t_customers_tenant TO fk_t_customers_store
+        - sql:
+            sql: ALTER TABLE t_shifts RENAME CONSTRAINT fk_t_shifts_tenant TO fk_t_shifts_store
+        - sql:
+            sql: ALTER TABLE t_cast_invitations RENAME CONSTRAINT fk_t_cast_invitations_tenant TO fk_t_cast_invitations_store
+        - sql:
+            sql: ALTER TABLE t_cast_field_definitions RENAME CONSTRAINT fk_t_cast_field_definitions_tenant TO fk_t_cast_field_definitions_store
+        - sql:
+            sql: ALTER TABLE t_menus RENAME CONSTRAINT fk_t_menus_tenant TO fk_t_menus_store
+        - sql:
+            sql: ALTER TABLE t_store_profiles RENAME CONSTRAINT fk_tenant_config_tenant TO fk_t_store_profiles_store
+        - sql:
+            sql: ALTER INDEX idx_t_menus_tenant RENAME TO idx_t_menus_store
+        - sql:
+            sql: ALTER INDEX idx_t_shifts_tenant_work_date RENAME TO idx_t_shifts_store_work_date
+        - sql:
+            sql: ALTER INDEX idx_tenant_config_tenant_id RENAME TO idx_t_store_profiles_store_id
+        - sql:
+            sql: ALTER TABLE t_cast_field_definitions RENAME CONSTRAINT uq_t_cast_field_definitions_tenant_key TO uq_t_cast_field_definitions_store_key
+        - sql:
+            sql: ALTER TABLE t_store_profiles RENAME CONSTRAINT t_tenant_configs_tenant_id_key TO uq_t_store_profiles_store_id
+      rollback:
+        - sql:
+            sql: ALTER TABLE t_store_profiles RENAME CONSTRAINT uq_t_store_profiles_store_id TO t_tenant_configs_tenant_id_key
+        - sql:
+            sql: ALTER TABLE t_cast_field_definitions RENAME CONSTRAINT uq_t_cast_field_definitions_store_key TO uq_t_cast_field_definitions_tenant_key
+        - sql:
+            sql: ALTER INDEX idx_t_store_profiles_store_id RENAME TO idx_tenant_config_tenant_id
+        - sql:
+            sql: ALTER INDEX idx_t_shifts_store_work_date RENAME TO idx_t_shifts_tenant_work_date
+        - sql:
+            sql: ALTER INDEX idx_t_menus_store RENAME TO idx_t_menus_tenant
+        - sql:
+            sql: ALTER TABLE t_store_profiles RENAME CONSTRAINT fk_t_store_profiles_store TO fk_tenant_config_tenant
+        - sql:
+            sql: ALTER TABLE t_menus RENAME CONSTRAINT fk_t_menus_store TO fk_t_menus_tenant
+        - sql:
+            sql: ALTER TABLE t_cast_field_definitions RENAME CONSTRAINT fk_t_cast_field_definitions_store TO fk_t_cast_field_definitions_tenant
+        - sql:
+            sql: ALTER TABLE t_cast_invitations RENAME CONSTRAINT fk_t_cast_invitations_store TO fk_t_cast_invitations_tenant
+        - sql:
+            sql: ALTER TABLE t_shifts RENAME CONSTRAINT fk_t_shifts_store TO fk_t_shifts_tenant
+        - sql:
+            sql: ALTER TABLE t_customers RENAME CONSTRAINT fk_t_customers_store TO fk_t_customers_tenant
+        - sql:
+            sql: ALTER TABLE t_casts RENAME CONSTRAINT fk_t_casts_store TO fk_t_casts_tenant
+        - sql:
+            sql: ALTER TABLE t_orders RENAME CONSTRAINT fk_t_orders_store TO fk_t_orders_tenant

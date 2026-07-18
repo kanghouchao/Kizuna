@@ -25,6 +25,6 @@ public class StoreMenuService {
       return Collections.emptyList();
     }
     return MenuTreeAssembler.assemble(
-        menuRepository.findByTenantIdAndParentIsNullOrderBySortOrderAsc(tenantId));
+        menuRepository.findByStoreIdAndParentIsNullOrderBySortOrderAsc(tenantId));
   }
 }

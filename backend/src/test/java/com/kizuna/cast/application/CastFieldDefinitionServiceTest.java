@@ -55,7 +55,7 @@ class CastFieldDefinitionServiceTest {
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
     verify(repository).saveAndFlush(captor.capture());
     assertThat(captor.getValue().getDisplayOrder()).isEqualTo(0);
-    assertThat(captor.getValue().getTenantId()).isEqualTo(7L);
+    assertThat(captor.getValue().getStoreId()).isEqualTo(7L);
   }
 
   @Test
@@ -119,7 +119,7 @@ class CastFieldDefinitionServiceTest {
     when(repository.count()).thenReturn(0L);
     when(repository.findMaxDisplayOrder()).thenReturn(null);
     when(repository.saveAndFlush(any()))
-        .thenThrow(new DataIntegrityViolationException("uq_t_cast_field_definitions_tenant_key"));
+        .thenThrow(new DataIntegrityViolationException("uq_t_cast_field_definitions_store_key"));
 
     assertThatThrownBy(() -> service.create(createRequest("blood_type", "血液型")))
         .isInstanceOf(ServiceException.class)

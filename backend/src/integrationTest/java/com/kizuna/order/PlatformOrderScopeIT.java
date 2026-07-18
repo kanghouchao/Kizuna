@@ -98,8 +98,8 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
         orderRepository.findAll().stream()
             .anyMatch(
                 o ->
-                    o.getTenantId() != null
-                        && tenantId == o.getTenantId()
+                    o.getStoreId() != null
+                        && tenantId == o.getStoreId()
                         && storeName.equals(o.getStoreName()));
     if (exists) {
       return;
@@ -111,7 +111,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
             .businessDate(MARKER_DATE)
             .status(OrderStatus.CREATED)
             .build();
-    order.setTenantId(tenantId);
+    order.setStoreId(tenantId);
     orderRepository.save(order);
   }
 
@@ -178,7 +178,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
 
   private long orderCountForTenant(long tenantId) {
     return orderRepository.findAll().stream()
-        .filter(o -> o.getTenantId() != null && tenantId == o.getTenantId())
+        .filter(o -> o.getStoreId() != null && tenantId == o.getStoreId())
         .count();
   }
 
@@ -324,7 +324,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
     assertThat(newId).isNotBlank();
 
     Order created = orderRepository.findById(newId).orElseThrow();
-    assertThat(created.getTenantId()).as("授権店舗(tenant 1)に永続化されていること").isEqualTo(TENANT_A);
+    assertThat(created.getStoreId()).as("授権店舗(tenant 1)に永続化されていること").isEqualTo(TENANT_A);
   }
 
   @Test

@@ -77,7 +77,7 @@ public class CastInvitationService {
             .token(generateToken())
             .expiresAt(OffsetDateTime.now().plus(CastInvitation.VALIDITY))
             .build();
-    invitation.setTenantId(cast.getTenantId());
+    invitation.setStoreId(cast.getStoreId());
     try {
       CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
       return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());

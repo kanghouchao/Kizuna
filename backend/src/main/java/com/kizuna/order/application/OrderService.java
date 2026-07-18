@@ -58,7 +58,7 @@ public class OrderService {
     Order order = orderMapper.toEntity(request);
 
     // テナントの設定
-    order.setTenantId(
+    order.setStoreId(
         tenantRepository
             .findById(tenantContext.getTenantId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
@@ -157,12 +157,12 @@ public class OrderService {
       // 顧客の検索または作成
       Customer customer =
           customerRepository
-              .findByPhoneNumberAndTenantId(req.getPhoneNumber(), tenantContext.getTenantId())
+              .findByPhoneNumberAndStoreId(req.getPhoneNumber(), tenantContext.getTenantId())
               .orElseGet(
                   () -> {
                     Customer newCustomer = orderMapper.toCustomer(req);
                     // テナントを明示的に設定
-                    newCustomer.setTenantId(
+                    newCustomer.setStoreId(
                         tenantRepository
                             .findById(tenantContext.getTenantId())
                             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))

@@ -33,15 +33,15 @@ import org.hibernate.annotations.Type;
 @AllArgsConstructor
 @Builder
 @ToString
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+@Filter(name = "tenantFilter", condition = "store_id = :storeId")
 public class StoreProfile {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(name = "tenant_id", nullable = false, unique = true, updatable = false)
-  private Long tenantId;
+  @Column(name = "store_id", nullable = false, unique = true, updatable = false)
+  private Long storeId;
 
   @Column(name = "template_key", length = 50)
   @Builder.Default
@@ -120,12 +120,12 @@ public class StoreProfile {
   /**
    * テナント用のデフォルト設定を生成する。
    *
-   * @param tenantId 対象テナントの ID
+   * @param storeId 対象テナントの ID
    * @return デフォルト値が設定された StoreProfile インスタンス
    */
-  public static StoreProfile createDefault(Long tenantId) {
+  public static StoreProfile createDefault(Long storeId) {
     return StoreProfile.builder()
-        .tenantId(tenantId)
+        .storeId(storeId)
         .templateKey("default")
         .mvType("image")
         .snsLinks(new ArrayList<>())

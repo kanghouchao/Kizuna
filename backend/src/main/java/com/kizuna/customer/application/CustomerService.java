@@ -82,7 +82,7 @@ public class CustomerService {
   public CustomerResponse create(CustomerCreateRequest request) {
     Customer customer = customerMapper.toEntity(request);
 
-    customer.setTenantId(
+    customer.setStoreId(
         tenantRepository
             .findById(tenantContext.getTenantId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
