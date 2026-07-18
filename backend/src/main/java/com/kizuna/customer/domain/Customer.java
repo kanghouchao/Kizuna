@@ -12,7 +12,7 @@ import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_customers")
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+@Filter(name = "tenantFilter", condition = "store_id = :storeId")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

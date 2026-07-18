@@ -55,7 +55,7 @@ class CastInvitationAcceptanceServiceTest {
             .status(status)
             .expiresAt(expiresAt)
             .build();
-    invitation.setTenantId(tenantId);
+    invitation.setStoreId(tenantId);
     return invitation;
   }
 

@@ -96,7 +96,7 @@ public class ShiftService {
 
     Shift shift = shiftMapper.toEntity(request);
 
-    shift.setTenantId(
+    shift.setStoreId(
         tenantRepository
             .findById(tenantContext.getTenantId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))

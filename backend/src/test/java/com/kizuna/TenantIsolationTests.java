@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.shared.persistence.TenantScopedEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -24,7 +25,7 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
  */
 class TenantIsolationTests {
 
-  private static final String EXPECTED_CONDITION = "tenant_id = :tenantId";
+  private static final String EXPECTED_CONDITION = "store_id = :storeId";
 
   @Test
   @DisplayName("tenant_id 列を持つ全 @Entity が tenantFilter の @Filter を宣言していること")
@@ -90,8 +91,13 @@ class TenantIsolationTests {
   private static boolean hasTenantIdColumn(Class<?> type) {
     for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
       for (Field field : c.getDeclaredFields()) {
+        // @ElementCollection の @Column は集合テーブルの列（PlatformUser.storeIds 等の授権店舗集合）であり、
+        // 本体テーブルの行識別列ではないため店舗フィルタの対象判定から除外する。
+        if (field.isAnnotationPresent(ElementCollection.class)) {
+          continue;
+        }
         Column column = field.getAnnotation(Column.class);
-        if (column != null && "tenant_id".equals(column.name())) {
+        if (column != null && "store_id".equals(column.name())) {
           return true;
         }
       }

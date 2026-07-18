@@ -57,7 +57,7 @@ class StoreMenuServiceTest {
     m2.setPermission("ADMIN_ONLY"); // 権限に存在しない
     m2.setChildren(List.of());
 
-    when(menuRepository.findByTenantIdAndParentIsNullOrderBySortOrderAsc(1L))
+    when(menuRepository.findByStoreIdAndParentIsNullOrderBySortOrderAsc(1L))
         .thenReturn(List.of(m1, m2));
 
     List<MenuVO> result = menuService.getMyMenus();

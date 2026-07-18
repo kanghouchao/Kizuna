@@ -87,7 +87,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
         castRepository.findAll().stream().anyMatch(c -> CAST_CANARY_NAME.equals(c.getName()));
     if (!canaryExists) {
       Cast cast = Cast.builder().name(CAST_CANARY_NAME).status("在籍").build();
-      cast.setTenantId(TENANT_A);
+      cast.setStoreId(TENANT_A);
       castRepository.save(cast);
     }
   }

@@ -47,7 +47,7 @@ class StoreProfileServiceTest {
   void get_returnsExistingConfig() {
     StoreProfile config = createTestConfig();
     StoreProfileResponse expected = createTestResponse();
-    when(storeProfileRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
     StoreProfileResponse response = tenantConfigService.get();
@@ -59,7 +59,7 @@ class StoreProfileServiceTest {
 
   @Test
   void get_throwsExceptionIfNotExists() {
-    when(storeProfileRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.empty());
+    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> tenantConfigService.get())
         .isInstanceOf(ServiceException.class)
@@ -69,7 +69,7 @@ class StoreProfileServiceTest {
   @Test
   void update_modifiesFields() {
     StoreProfile config = createTestConfig();
-    when(storeProfileRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
@@ -102,7 +102,7 @@ class StoreProfileServiceTest {
   @Test
   void update_modifiesSnsLinks() {
     StoreProfile config = createTestConfig();
-    when(storeProfileRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
@@ -124,7 +124,7 @@ class StoreProfileServiceTest {
   @Test
   void update_modifiesPartnerLinks() {
     StoreProfile config = createTestConfig();
-    when(storeProfileRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
@@ -145,7 +145,7 @@ class StoreProfileServiceTest {
 
   @Test
   void update_throwsExceptionIfNotExists() {
-    when(storeProfileRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.empty());
+    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.empty());
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
 

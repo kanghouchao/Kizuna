@@ -188,7 +188,7 @@ class OrderServiceTest {
     when(tenantContext.getTenantId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(customerRepository.findByPhoneNumberAndTenantId("09012345678", 1L))
+    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", 1L))
         .thenReturn(Optional.empty());
     when(castRepository.existsById("g1")).thenReturn(true);
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));

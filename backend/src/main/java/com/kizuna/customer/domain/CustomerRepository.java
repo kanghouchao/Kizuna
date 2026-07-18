@@ -9,5 +9,5 @@ public interface CustomerRepository
 
   Optional<Customer> findByPhoneNumber(String phoneNumber);
 
-  Optional<Customer> findByPhoneNumberAndTenantId(String phoneNumber, Long tenantId);
+  Optional<Customer> findByPhoneNumberAndStoreId(String phoneNumber, Long storeId);
 }

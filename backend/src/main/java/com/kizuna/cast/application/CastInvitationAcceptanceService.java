@@ -52,7 +52,7 @@ public class CastInvitationAcceptanceService {
     CastInvitation invitation = findByToken(token);
     Cast cast = requireCast(invitation.getCastId());
     return new CastInvitationDetailResponse(
-        storeName(invitation.getTenantId()),
+        storeName(invitation.getStoreId()),
         cast.getName(),
         viewStatus(invitation),
         invitation.getExpiresAt());
@@ -79,10 +79,10 @@ public class CastInvitationAcceptanceService {
                 .enabled(true)
                 .userType(UserType.CAST)
                 .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                .storeIds(Set.of(invitation.getTenantId()))
+                .storeIds(Set.of(invitation.getStoreId()))
                 .build());
     link(cast, user.getId());
-    return new CastAcceptanceResponse(storeName(invitation.getTenantId()));
+    return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
   }
 
   /**
@@ -111,12 +111,12 @@ public class CastInvitationAcceptanceService {
     // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する（束・精算範囲は触らない — CAST は保持しない）。
     if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES) {
       Set<Long> storeIds = new HashSet<>(user.getStoreIds());
-      storeIds.add(invitation.getTenantId());
+      storeIds.add(invitation.getStoreId());
       user.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
       platformUserRepository.save(user);
     }
     link(cast, user.getId());
-    return new CastAcceptanceResponse(storeName(invitation.getTenantId()));
+    return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
   }
 
   /**

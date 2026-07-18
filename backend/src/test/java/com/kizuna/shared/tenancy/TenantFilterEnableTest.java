@@ -44,7 +44,7 @@ class TenantFilterEnableTest {
     Object result = aspect.enableTenantFilterForTenantServiceMethods(pjp);
 
     assertThat(result).isEqualTo("result");
-    verify(filter).setParameter("tenantId", 42L);
+    verify(filter).setParameter("storeId", 42L);
     verify(pjp).proceed();
   }
 

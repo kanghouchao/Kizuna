@@ -25,13 +25,13 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Setter
 @Entity
 @Table(name = "t_menus")
-@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+@Filter(name = "tenantFilter", condition = "store_id = :storeId")
 public class StoreMenu implements MenuNode {
 
   @Id private String id;
 
-  @Column(name = "tenant_id", nullable = false)
-  private Long tenantId;
+  @Column(name = "store_id", nullable = false)
+  private Long storeId;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "parent_id")

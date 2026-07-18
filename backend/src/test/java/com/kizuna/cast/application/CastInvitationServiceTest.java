@@ -40,7 +40,7 @@ class CastInvitationServiceTest {
   private Cast cast(String id, Long platformUserId) {
     Cast cast = Cast.builder().name("キャスト").platformUserId(platformUserId).build();
     cast.setId(id);
-    cast.setTenantId(1L);
+    cast.setStoreId(1L);
     return cast;
   }
 

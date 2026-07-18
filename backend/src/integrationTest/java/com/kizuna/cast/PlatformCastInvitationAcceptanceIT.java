@@ -356,7 +356,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
             .status(status)
             .expiresAt(expiresAt)
             .build();
-    invitation.setTenantId(tenantId);
+    invitation.setStoreId(tenantId);
     castInvitationRepository.save(invitation);
     return token;
   }

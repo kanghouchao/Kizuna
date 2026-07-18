@@ -33,7 +33,7 @@ public class TenantFilterEnable {
       entityManager
           .unwrap(org.hibernate.Session.class)
           .enableFilter("tenantFilter")
-          .setParameter("tenantId", tenantContext.getTenantId());
+          .setParameter("storeId", tenantContext.getTenantId());
     }
     return pjp.proceed();
   }

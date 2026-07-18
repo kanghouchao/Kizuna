@@ -56,7 +56,7 @@ public class CastFieldDefinitionService {
             .displayOrder(nextOrder)
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
-    definition.setTenantId(tenantContext.getTenantId());
+    definition.setStoreId(tenantContext.getTenantId());
     try {
       return mapper.toResponse(repository.saveAndFlush(definition));
     } catch (DataIntegrityViolationException ex) {

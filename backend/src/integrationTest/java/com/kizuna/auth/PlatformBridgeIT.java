@@ -92,8 +92,8 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         orderRepository.findAll().stream()
             .anyMatch(
                 o ->
-                    o.getTenantId() != null
-                        && tenantId == o.getTenantId()
+                    o.getStoreId() != null
+                        && tenantId == o.getStoreId()
                         && remarks.equals(o.getRemarks()));
     if (exists) {
       return;
@@ -105,7 +105,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
             .businessDate(MARKER_DATE)
             .status(OrderStatus.CREATED)
             .build();
-    order.setTenantId(tenantId);
+    order.setStoreId(tenantId);
     orderRepository.save(order);
   }
 
@@ -187,7 +187,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
 
   private long castCountForTenant(long tenantId) {
     return castRepository.findAll().stream()
-        .filter(c -> c.getTenantId() != null && tenantId == c.getTenantId())
+        .filter(c -> c.getStoreId() != null && tenantId == c.getStoreId())
         .count();
   }
 

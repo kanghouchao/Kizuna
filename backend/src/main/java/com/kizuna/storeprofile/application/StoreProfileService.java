@@ -26,7 +26,7 @@ public class StoreProfileService {
     Long tenantId = tenantContext.getTenantId();
     StoreProfile config =
         storeProfileRepository
-            .findByTenantId(tenantId)
+            .findByStoreId(tenantId)
             .orElseThrow(() -> new ServiceException("テナント設定が見つかりません"));
     return storeProfileMapper.toResponse(config);
   }
@@ -37,7 +37,7 @@ public class StoreProfileService {
     Long tenantId = tenantContext.getTenantId();
     StoreProfile config =
         storeProfileRepository
-            .findByTenantId(tenantId)
+            .findByStoreId(tenantId)
             .orElseThrow(() -> new ServiceException("テナント設定が見つかりません"));
     storeProfileMapper.updateEntityFromRequest(request, config);
     return storeProfileMapper.toResponse(storeProfileRepository.saveAndFlush(config));

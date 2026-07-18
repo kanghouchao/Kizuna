@@ -28,7 +28,7 @@ public interface StoreProfileMapper {
    */
   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "tenantId", ignore = true)
+  @Mapping(target = "storeId", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
   void updateEntityFromRequest(
