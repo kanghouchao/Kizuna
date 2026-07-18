@@ -5,22 +5,19 @@
 |Spring components
 |_Services_
 
-* `c.k.c.application.CastFieldDefinitionService`
 * `c.k.c.application.CastInvitationAcceptanceService`
 * `c.k.c.application.CastInvitationService`
 * `c.k.c.application.CastService`
 
 _Repositories_
 
-* `c.k.c.domain.CastFieldDefinitionRepository`
 * `c.k.c.domain.CastInvitationRepository`
 * `c.k.c.domain.CastRepository`
 |Bean references
-|* `c.k.s.tenancy.TenantContext` (in Shared)
-* `c.k.u.domain.PlatformUserRepository` (in User)
+|* `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.t.domain.TenantRepository` (in Tenant)
+* `c.k.s.tenancy.TenantContext` (in Shared)
 |Aggregate roots
 |* `c.k.c.domain.Cast`
-* `c.k.c.domain.CastFieldDefinition`
 * `c.k.c.domain.CastInvitation`
 |===

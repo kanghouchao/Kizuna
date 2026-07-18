@@ -34,8 +34,8 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   const submit = async (values: PlatformLoginRequest) => {
     let newTokenWritten = false;
     // ログイン成功で旧セッションを消す前に退避しておく。受諾API失敗時にこれが無いと、
-    // clearPlatformSession() 済みの旧 platform-role/platform-store-id に戻れず訪問者がログアウト状態に落ちる（#327 codex指摘）
-    const previousRole = getPlatformConsole();
+    // clearPlatformSession() 済みの旧 platform-role(コンソール値)/platform-store-id に戻れず訪問者がログアウト状態に落ちる（#327 codex指摘）
+    const previousConsole = getPlatformConsole();
     const previousStoreId = getPlatformStoreId();
     const previousToken = Cookies.get('token');
     try {
@@ -62,8 +62,8 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
         Cookies.remove('token');
         // 受諾APIの失敗（招待の失効/競合、通信断など）。旧セッションが存在した場合はここで復元する。
         // 未ログイン訪問者だった場合（退避値が無い）は何もしない（#327 codex指摘）
-        if (previousRole) {
-          startPlatformSession(previousRole);
+        if (previousConsole) {
+          startPlatformSession(previousConsole);
         }
         if (previousStoreId) {
           setPlatformStore(previousStoreId);

@@ -15,10 +15,10 @@ export function getPlatformStoreId(): string | undefined {
 }
 
 /** expiresAt（epoch millis）を渡すと token cookie と同じ有効期限を設定し、cookie 間の失効ズレを防ぐ。 */
-export function startPlatformSession(console: string, expiresAt?: number): void {
+export function startPlatformSession(platformConsole: string, expiresAt?: number): void {
   Cookies.set(
     PLATFORM_ROLE_COOKIE,
-    console,
+    platformConsole,
     expiresAt ? { expires: new Date(expiresAt) } : undefined
   );
 }
@@ -42,6 +42,6 @@ export function isPlatformSession(): boolean {
 }
 
 /** 店舗コンソールかどうか。旧形式（ロール名）の cookie 値は false になる（fail-closed — 要再ログイン）。 */
-export function isStoreConsole(console: string | undefined): boolean {
-  return console === 'store';
+export function isStoreConsole(platformConsole: string | undefined): boolean {
+  return platformConsole === 'store';
 }
