@@ -91,12 +91,25 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
         settlement_scope_type: settlementScopeType,
         settlement_store_ids: settlementStoreIds,
         enabled,
+        // 楽観ロック用バージョン（応答の version をそのまま往復する — #400）
+        version: staff.version,
       });
       toast.success('権限を更新しました');
       onUpdated();
       onClose();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, '権限の更新に失敗しました'));
+      const status =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { status?: number } }).response?.status
+          : undefined;
+      if (status === 409) {
+        // 楽観ロック競合（#400 裁定3）: 固定文言の toast を出し、一覧を再取得してドロワーの内容を
+        // 最新値へ自動リフレッシュする（staff prop の更新で useEffect が再初期化。ローカル編集は破棄、ドロワーは開いたまま）。
+        toast.error('他の管理者が更新しました。最新の内容を確認してください');
+        onUpdated();
+      } else {
+        toast.error(getApiErrorMessage(error, '権限の更新に失敗しました'));
+      }
     } finally {
       setIsSubmitting(false);
     }

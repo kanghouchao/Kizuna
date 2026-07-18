@@ -31,7 +31,10 @@ export default function StaffPage() {
     '店舗一覧の取得に失敗しました'
   );
   const [createOpen, setCreateOpen] = useState(false);
-  const [editing, setEditing] = useState<PlatformStaffResponse | null>(null);
+  // 編集対象は id で保持し、staff オブジェクトは現在の一覧から導出する。
+  // これにより refetch がそのままドロワー内容の最新化になる（409 リフレッシュ — #400）。
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const editingStaff = staff.find(member => member.id === editingId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -82,7 +85,7 @@ export default function StaffPage() {
                 <tr
                   key={member.id}
                   className="cursor-pointer hover:bg-gray-50"
-                  onClick={() => setEditing(member)}
+                  onClick={() => setEditingId(member.id)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {member.display_name}
@@ -108,7 +111,7 @@ export default function StaffPage() {
                     <button
                       onClick={e => {
                         e.stopPropagation();
-                        setEditing(member);
+                        setEditingId(member.id);
                       }}
                       className="rounded text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
@@ -128,9 +131,9 @@ export default function StaffPage() {
         onCreated={refetch}
       />
       <StaffEditDrawer
-        open={editing !== null}
-        staff={editing}
-        onClose={() => setEditing(null)}
+        open={editingId !== null}
+        staff={editingStaff}
+        onClose={() => setEditingId(null)}
         onUpdated={refetch}
       />
     </div>
