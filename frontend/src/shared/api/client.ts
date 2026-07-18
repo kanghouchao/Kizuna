@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import {
+  clearPlatformSession,
   getPlatformConsole,
   getPlatformStoreId,
   isStoreConsole,
@@ -79,6 +80,20 @@ apiClient.interceptors.response.use(
       Cookies.remove('token');
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         redirectToLogin();
+      }
+    }
+    if (error.response?.status === 403) {
+      // 旧形式（ロール名）の platform-role cookie を持つ有効期限内トークンは #398 の能力化で
+      // 全端点 403 になるが 401 経路に乗らず、再ログイン導線が無いままデッドロックする。
+      // cookie 値がコンソール値（central/store）でない場合に限りセッションを破棄して再ログインへ促す
+      //（新形式のセッションで正当に 403 を受けた場合は何もしない）。
+      const platformConsole = getPlatformConsole();
+      if (platformConsole && platformConsole !== 'central' && platformConsole !== 'store') {
+        Cookies.remove('token');
+        clearPlatformSession();
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          redirectToLogin();
+        }
       }
     }
     return Promise.reject(error);
