@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -96,6 +97,11 @@ public class StoreProfile {
 
   @Column(name = "updated_at", nullable = false)
   private OffsetDateTime updatedAt;
+
+  /** 楽観ロック用バージョン（全実体共通 — #400）。 */
+  @Version
+  @Column(nullable = false)
+  private Long version;
 
   @PrePersist
   protected void onCreate() {

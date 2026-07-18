@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: central/01-optimistic-lock-version.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: tenant/01-optimistic-lock-version.yaml
+      relativeToChangelogFile: true

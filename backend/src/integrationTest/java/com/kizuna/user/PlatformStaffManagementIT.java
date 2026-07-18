@@ -127,10 +127,11 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
         email, PASSWORD, bundleIdsJson, scopeType, storeIds);
   }
 
-  private static String updateBody(String bundleIdsJson, String scopeType, String storeIds) {
+  private static String updateBody(
+      String bundleIdsJson, String scopeType, String storeIds, long version) {
     return String.format(
-        "{\"bundle_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s}",
-        bundleIdsJson, scopeType, storeIds);
+        "{\"bundle_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s,\"version\":%d}",
+        bundleIdsJson, scopeType, storeIds, version);
   }
 
   /** 束名を JSON の id 配列へ解決する（例: ["店長"] → "[3]"）。 */
@@ -227,6 +228,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
     long staffId = created.getBody().path("id").asLong();
+    long version = created.getBody().path("version").asLong();
 
     ResponseEntity<String> before =
         rest.exchange(
@@ -244,7 +246,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                updateBody(bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]"),
+                updateBody(bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", version),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -409,6 +411,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
     long staffId = created.getBody().path("id").asLong();
+    long version = created.getBody().path("version").asLong();
 
     // 停止（enabled=false）。授権内容は同値のまま。
     ResponseEntity<JsonNode> stopped =
@@ -418,7 +421,10 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
             new HttpEntity<>(
                 "{\"bundle_ids\":"
                     + bundlesJson("店舗スタッフ")
-                    + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false}",
+                    + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
+                    + "\"version\":"
+                    + version
+                    + "}",
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(stopped.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -493,6 +499,160 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
         .as("履歴快照に精算範囲が残ること")
         .contains("settlement_scope_type")
         .contains("SPECIFIC_STORES");
+  }
+
+  /** 付与履歴の行数を返す（陳腐更新の拒否で履歴が増えないことの断言に使う）。 */
+  private int grantHistorySize(String token, long staffId) {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/staff/" + staffId + "/grant-history",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(token)),
+            JsonNode.class);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    return res.getBody().size();
+  }
+
+  /** スタッフ一覧から email 一致の 1 件を返す（見つからなければ失敗）。 */
+  private JsonNode findStaffByEmail(String token, String email) {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/staff", HttpMethod.GET, new HttpEntity<>(bearer(token)), JsonNode.class);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    for (JsonNode node : res.getBody()) {
+      if (email.equals(node.path("email").asText())) {
+        return node;
+      }
+    }
+    throw new AssertionError("スタッフ一覧に " + email + " が見つかりません");
+  }
+
+  @Test
+  @DisplayName("同一 version の二連 PUT は 2 発目が 409 になり、授権・enabled が巻き戻らず付与履歴も増えないこと(#400 AC1)")
+  void staleUpdateWithSameVersionIsRejectedWithoutRollback() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    String email = "staff-it-stale@kizuna.test";
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    long staffId = created.getBody().path("id").asLong();
+    long initialVersion = created.getBody().path("version").asLong();
+
+    // 1 発目: 返却された version での更新は成功し、応答は増加した version を返す。
+    ResponseEntity<JsonNode> first =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody(
+                    bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", initialVersion),
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(first.getBody().path("version").asLong())
+        .as("更新成功の応答は増加した version を返すこと")
+        .isGreaterThan(initialVersion);
+
+    int historyCountAfterFirst = grantHistorySize(hq, staffId);
+
+    // 2 発目: 同じ（陳腐化した）version で店舗集合を A へ戻し停止も試みる上書きは 409。
+    ResponseEntity<JsonNode> second =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                "{\"bundle_ids\":"
+                    + bundlesJson("店長")
+                    + ",\"store_scope_type\":\"SPECIFIC_STORES\",\"store_ids\":["
+                    + storeAId
+                    + "],\"enabled\":false,\"version\":"
+                    + initialVersion
+                    + "}",
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+    // 授権・enabled は 1 発目の内容のまま巻き戻らない。
+    JsonNode target = findStaffByEmail(hq, email);
+    assertThat(target.path("enabled").asBoolean()).as("陳腐更新で停止へ巻き戻らないこと").isTrue();
+    assertThat(target.path("store_ids")).hasSize(1);
+    assertThat(target.path("store_ids").get(0).asLong())
+        .as("店舗集合は 1 発目の B のまま残ること")
+        .isEqualTo(storeBId);
+
+    // 付与履歴の行も増えない。
+    assertThat(grantHistorySize(hq, staffId))
+        .as("拒否された陳腐更新で付与履歴が増えないこと")
+        .isEqualTo(historyCountAfterFirst);
+  }
+
+  @Test
+  @DisplayName("陳腐 version による停止解除は 409 で拒否され、停止済みアカウントが静黙復活しないこと(#400 AC2)")
+  void staleResumeIsRejectedAndUserStaysStopped() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    String email = "staff-it-stale-resume@kizuna.test";
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, bundlesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    long staffId = created.getBody().path("id").asLong();
+    long preStopVersion = created.getBody().path("version").asLong();
+
+    // 現行 version で停止する（成功）。
+    ResponseEntity<JsonNode> stopped =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                "{\"bundle_ids\":"
+                    + bundlesJson("店舗スタッフ")
+                    + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
+                    + "\"version\":"
+                    + preStopVersion
+                    + "}",
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(stopped.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(stopped.getBody().path("enabled").asBoolean()).isFalse();
+
+    // 停止前の陳腐 version による再開（enabled=true）の試みは 409。
+    ResponseEntity<JsonNode> resumeAttempt =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                "{\"bundle_ids\":"
+                    + bundlesJson("店舗スタッフ")
+                    + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":true,"
+                    + "\"version\":"
+                    + preStopVersion
+                    + "}",
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(resumeAttempt.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+    // 停止のまま: 一覧でも enabled=false、ログインも不可。
+    assertThat(findStaffByEmail(hq, email).path("enabled").asBoolean())
+        .as("陳腐 version の停止解除で停止済みアカウントが復活しないこと")
+        .isFalse();
+    ResponseEntity<JsonNode> login =
+        rest.postForEntity(
+            "/platform/login",
+            new HttpEntity<>(
+                String.format("{\"email\": \"%s\", \"password\": \"%s\"}", email, PASSWORD),
+                jsonHeaders()),
+            JsonNode.class);
+    assertThat(login.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
   @Test
