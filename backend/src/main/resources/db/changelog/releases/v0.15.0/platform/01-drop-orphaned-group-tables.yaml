@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0150-001-drop-orphaned-group-tables
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        # v0.1.0 時代の「租户组（グループ）」構想の遺留テーブル群を撤去する（#406）。
+        # 2026-07-11 の平台化転向（PlatformUser + StoreScope）が同じ業務要求を別機構で
+        # 満たしており、JPA エンティティもコード参照も持たない死んだテーブルである。
+        # 子表（関連テーブル）→親表の順で dropTable する。
+        - dropTable:
+            tableName: central_group_tenants
+            cascadeConstraints: true
+        - dropTable:
+            tableName: central_group_admins
+            cascadeConstraints: true
+        - dropTable:
+            tableName: central_groups
+            cascadeConstraints: true
