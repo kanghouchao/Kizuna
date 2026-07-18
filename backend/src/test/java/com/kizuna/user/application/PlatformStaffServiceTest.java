@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
@@ -16,6 +18,9 @@ import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundle;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
+import com.kizuna.user.domain.GrantAction;
+import com.kizuna.user.domain.GrantHistory;
+import com.kizuna.user.domain.GrantHistoryRepository;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -30,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -44,11 +50,19 @@ class PlatformStaffServiceTest {
 
   @Mock private CapabilityBundleRepository capabilityBundleRepository;
 
+  @Mock private GrantHistoryRepository grantHistoryRepository;
+
   @Mock private PasswordEncoder encoder;
+
+  @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
   @InjectMocks private PlatformStaffService service;
 
   @Captor private ArgumentCaptor<PlatformUser> userCaptor;
+
+  @Captor private ArgumentCaptor<GrantHistory> historyCaptor;
+
+  private static final String ACTOR = "actor@kizuna.test";
 
   private CapabilityBundle bundle(long id, String name) {
     CapabilityBundle bundle =
@@ -152,7 +166,7 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.save(userCaptor.capture()))
+    when(repository.saveAndFlush(userCaptor.capture()))
         .thenAnswer(
             invocation -> {
               PlatformUser saved = invocation.getArgument(0);
@@ -160,7 +174,7 @@ class PlatformStaffServiceTest {
               return saved;
             });
 
-    PlatformStaffResponse res = service.create(req);
+    PlatformStaffResponse res = service.create(req, ACTOR);
 
     verify(encoder).encode("rawpass");
     PlatformUser saved = userCaptor.getValue();
@@ -193,9 +207,9 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findByEmail("acct@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.save(userCaptor.capture())).thenAnswer(i -> i.getArgument(0));
+    when(repository.saveAndFlush(userCaptor.capture())).thenAnswer(i -> i.getArgument(0));
 
-    PlatformStaffResponse res = service.create(req);
+    PlatformStaffResponse res = service.create(req, ACTOR);
 
     assertThat(userCaptor.getValue().getSettlementScopeType())
         .isEqualTo(StoreScopeType.SPECIFIC_STORES);
@@ -221,7 +235,8 @@ class PlatformStaffServiceTest {
                     StoreScopeType.ALL_STORES,
                     Set.of())));
 
-    assertThatThrownBy(() -> service.create(req)).isInstanceOf(DuplicateStaffEmailException.class);
+    assertThatThrownBy(() -> service.create(req, ACTOR))
+        .isInstanceOf(DuplicateStaffEmailException.class);
 
     verify(repository, never()).save(any());
   }
@@ -233,7 +248,7 @@ class PlatformStaffServiceTest {
             "new@kizuna.test", "rawpass", Set.of(999L), StoreScopeType.ALL_STORES, Set.of());
     when(capabilityBundleRepository.findAllById(Set.of(999L))).thenReturn(List.of());
 
-    assertThatThrownBy(() -> service.create(req))
+    assertThatThrownBy(() -> service.create(req, ACTOR))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("能力束");
 
@@ -254,9 +269,11 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findByEmail("fk@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.save(any())).thenThrow(new DataIntegrityViolationException("fk violation"));
+    when(repository.saveAndFlush(any()))
+        .thenThrow(new DataIntegrityViolationException("fk violation"));
 
-    assertThatThrownBy(() -> service.create(req)).isInstanceOf(InvalidStoreScopeException.class);
+    assertThatThrownBy(() -> service.create(req, ACTOR))
+        .isInstanceOf(InvalidStoreScopeException.class);
   }
 
   @Test
@@ -273,7 +290,7 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findByEmail("race@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.save(any()))
+    when(repository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
@@ -281,7 +298,8 @@ class PlatformStaffServiceTest {
                     "ERROR: duplicate key value violates unique constraint"
                         + " \"uq_platform_users_email\"")));
 
-    assertThatThrownBy(() -> service.create(req)).isInstanceOf(DuplicateStaffEmailException.class);
+    assertThatThrownBy(() -> service.create(req, ACTOR))
+        .isInstanceOf(DuplicateStaffEmailException.class);
   }
 
   @Test
@@ -291,11 +309,13 @@ class PlatformStaffServiceTest {
     when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.save(existing)).thenReturn(existing);
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
 
     Optional<PlatformStaffResponse> res =
         service.update(
-            3L, updateRequest(Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
+            3L,
+            updateRequest(Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+            ACTOR);
 
     assertThat(existing.getBundleIds()).containsExactly(MANAGER_BUNDLE);
     assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
@@ -313,7 +333,8 @@ class PlatformStaffServiceTest {
     when(repository.findById(404L)).thenReturn(Optional.empty());
 
     Optional<PlatformStaffResponse> res =
-        service.update(404L, updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of()));
+        service.update(
+            404L, updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
     assertThat(res).isEmpty();
     verify(repository, never()).save(any());
@@ -327,7 +348,8 @@ class PlatformStaffServiceTest {
     when(repository.findById(8L)).thenReturn(Optional.of(castUser(8L, "cast@kizuna.test")));
 
     Optional<PlatformStaffResponse> res =
-        service.update(8L, updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of()));
+        service.update(
+            8L, updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
     assertThat(res).isEmpty();
     verify(repository, never()).save(any());
@@ -340,7 +362,7 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    3L, updateRequest(Set.of(999L), StoreScopeType.ALL_STORES, Set.of())))
+                    3L, updateRequest(Set.of(999L), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("能力束");
 
@@ -355,14 +377,16 @@ class PlatformStaffServiceTest {
     when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findById(7L)).thenReturn(Optional.of(existing));
-    when(repository.save(existing)).thenThrow(new DataIntegrityViolationException("fk violation"));
+    when(repository.saveAndFlush(existing))
+        .thenThrow(new DataIntegrityViolationException("fk violation"));
 
     assertThatThrownBy(
             () ->
                 service.update(
                     7L,
                     updateRequest(
-                        Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(999L))))
+                        Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(999L)),
+                    ACTOR))
         .isInstanceOf(InvalidStoreScopeException.class);
   }
 
@@ -373,7 +397,7 @@ class PlatformStaffServiceTest {
     when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findById(9L)).thenReturn(Optional.of(existing));
-    when(repository.save(existing))
+    when(repository.saveAndFlush(existing))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
@@ -386,7 +410,138 @@ class PlatformStaffServiceTest {
                 service.update(
                     9L,
                     updateRequest(
-                        Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L))))
+                        Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+                    ACTOR))
         .isInstanceOf(DuplicateStaffEmailException.class);
+  }
+
+  @Test
+  void create_recordsGrantHistoryWithActorAndSnapshot() {
+    PlatformStaffCreateRequest req =
+        createRequest(
+            "new@kizuna.test",
+            "rawpass",
+            Set.of(MANAGER_BUNDLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(1L));
+    when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
+        .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
+    when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
+    when(encoder.encode("rawpass")).thenReturn("ENCODED");
+    when(repository.saveAndFlush(any(PlatformUser.class)))
+        .thenAnswer(
+            invocation -> {
+              PlatformUser saved = invocation.getArgument(0);
+              saved.setId(9L);
+              return saved;
+            });
+
+    service.create(req, ACTOR);
+
+    verify(grantHistoryRepository).save(historyCaptor.capture());
+    GrantHistory history = historyCaptor.getValue();
+    assertThat(history.getPlatformUserId()).isEqualTo(9L);
+    assertThat(history.getActorEmail()).isEqualTo(ACTOR);
+    assertThat(history.getAction()).isEqualTo(GrantAction.GRANT);
+    assertThat(history.getDetail()).contains("店長").contains("SPECIFIC_STORES");
+  }
+
+  @Test
+  void update_recordsChangeHistory() {
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
+        .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
+
+    service.update(
+        3L,
+        updateRequest(Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+        ACTOR);
+
+    verify(grantHistoryRepository).save(historyCaptor.capture());
+    GrantHistory history = historyCaptor.getValue();
+    assertThat(history.getPlatformUserId()).isEqualTo(3L);
+    assertThat(history.getAction()).isEqualTo(GrantAction.CHANGE);
+    assertThat(history.getActorEmail()).isEqualTo(ACTOR);
+  }
+
+  @Test
+  void update_disabling_stopsUserAndRecordsStopHistory() {
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE)))
+        .thenReturn(List.of(bundle(HQ_BUNDLE, "HQ管理者")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
+    PlatformStaffUpdateRequest req =
+        updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    req.setEnabled(false);
+
+    Optional<PlatformStaffResponse> res = service.update(3L, req, ACTOR);
+
+    assertThat(existing.getEnabled()).isFalse();
+    assertThat(res).isPresent();
+    assertThat(res.get().enabled()).isFalse();
+    // 授権内容の CHANGE と停止の STOP を別行で記録する（実行主体つき）。
+    verify(grantHistoryRepository, times(2)).save(historyCaptor.capture());
+    assertThat(historyCaptor.getAllValues())
+        .extracting(GrantHistory::getAction)
+        .containsExactly(GrantAction.CHANGE, GrantAction.STOP);
+  }
+
+  @Test
+  void update_reEnabling_resumesUserAndRecordsResumeHistory() {
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    existing.stop();
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE)))
+        .thenReturn(List.of(bundle(HQ_BUNDLE, "HQ管理者")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
+    PlatformStaffUpdateRequest req =
+        updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    req.setEnabled(true);
+
+    service.update(3L, req, ACTOR);
+
+    assertThat(existing.getEnabled()).isTrue();
+    verify(grantHistoryRepository, times(2)).save(historyCaptor.capture());
+    assertThat(historyCaptor.getAllValues())
+        .extracting(GrantHistory::getAction)
+        .containsExactly(GrantAction.CHANGE, GrantAction.RESUME);
+  }
+
+  @Test
+  void grantHistory_returnsEntriesForStaffTarget() {
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    GrantHistory entry =
+        GrantHistory.builder()
+            .platformUserId(3L)
+            .actorEmail(ACTOR)
+            .action(GrantAction.GRANT)
+            .detail("{}")
+            .build();
+    when(grantHistoryRepository.findByPlatformUserIdOrderByCreatedAtDesc(3L))
+        .thenReturn(List.of(entry));
+
+    var res = service.grantHistory(3L);
+
+    assertThat(res).isPresent();
+    assertThat(res.get()).hasSize(1);
+    assertThat(res.get().get(0).actorEmail()).isEqualTo(ACTOR);
+    assertThat(res.get().get(0).action()).isEqualTo(GrantAction.GRANT);
+  }
+
+  @Test
+  void grantHistory_unknownOrNonStaffTarget_returnsEmpty() {
+    when(repository.findById(404L)).thenReturn(Optional.empty());
+    when(repository.findById(8L)).thenReturn(Optional.of(castUser(8L, "cast@kizuna.test")));
+
+    assertThat(service.grantHistory(404L)).isEmpty();
+    assertThat(service.grantHistory(8L)).isEmpty();
   }
 }
