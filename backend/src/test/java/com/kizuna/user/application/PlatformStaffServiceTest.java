@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
@@ -24,6 +25,7 @@ import com.kizuna.user.domain.GrantHistoryRepository;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
@@ -85,6 +87,8 @@ class PlatformStaffServiceTest {
             .storeIds(storeIds)
             .build();
     user.setId(id);
+    // 永続化済みエンティティを模す（DB の version 列は 0 で初期化される — #400）。
+    user.setVersion(0L);
     return user;
   }
 
@@ -125,6 +129,8 @@ class PlatformStaffServiceTest {
     req.setBundleIds(bundleIds);
     req.setStoreScopeType(scopeType);
     req.setStoreIds(storeIds);
+    // staff() ヘルパの現行 version と一致させる（版の往復 — #400）。
+    req.setVersion(0L);
     return req;
   }
 
@@ -171,6 +177,7 @@ class PlatformStaffServiceTest {
             invocation -> {
               PlatformUser saved = invocation.getArgument(0);
               saved.setId(9L);
+              saved.setVersion(0L);
               return saved;
             });
 
@@ -190,6 +197,7 @@ class PlatformStaffServiceTest {
     assertThat(res.bundles())
         .containsExactly(new PlatformStaffResponse.BundleRef(MANAGER_BUNDLE, "店長"));
     assertThat(res.enabled()).isTrue();
+    assertThat(res.version()).as("作成応答も version を持つこと(#400)").isZero();
   }
 
   @Test
@@ -207,7 +215,13 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findByEmail("acct@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.saveAndFlush(userCaptor.capture())).thenAnswer(i -> i.getArgument(0));
+    when(repository.saveAndFlush(userCaptor.capture()))
+        .thenAnswer(
+            i -> {
+              PlatformUser saved = i.getArgument(0);
+              saved.setVersion(0L);
+              return saved;
+            });
 
     PlatformStaffResponse res = service.create(req, ACTOR);
 
@@ -309,7 +323,13 @@ class PlatformStaffServiceTest {
     when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
+    // saveAndFlush は flush 時に version を増加させる（実挙動の模倣 — #400）。
+    when(repository.saveAndFlush(existing))
+        .thenAnswer(
+            i -> {
+              existing.setVersion(existing.getVersion() + 1);
+              return existing;
+            });
 
     Optional<PlatformStaffResponse> res =
         service.update(
@@ -324,6 +344,31 @@ class PlatformStaffServiceTest {
     assertThat(res.get().id()).isEqualTo(3L);
     assertThat(res.get().bundles())
         .containsExactly(new PlatformStaffResponse.BundleRef(MANAGER_BUNDLE, "店長"));
+    assertThat(res.get().version()).as("応答は保存後の増加した version を返すこと(#400)").isEqualTo(1L);
+  }
+
+  @Test
+  void update_staleVersion_throwsConflictWithoutSavingOrRecordingHistory() {
+    // 陳腐化した編集フォームの提出（version 不一致）は reassign 前に 409 系例外で拒否する（#400）。
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    existing.setVersion(5L);
+    when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
+        .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    PlatformStaffUpdateRequest req =
+        updateRequest(Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    req.setVersion(4L);
+
+    assertThatThrownBy(() -> service.update(3L, req, ACTOR))
+        .isInstanceOf(StaleStaffUpdateException.class)
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("他の管理者が更新しました。最新の内容を確認してください");
+
+    // 授権は再割当されず、保存も付与履歴の記録も行われない。
+    assertThat(existing.getBundleIds()).containsExactly(HQ_BUNDLE);
+    verify(repository, never()).saveAndFlush(any());
+    verifyNoInteractions(grantHistoryRepository);
   }
 
   @Test
@@ -433,6 +478,7 @@ class PlatformStaffServiceTest {
             invocation -> {
               PlatformUser saved = invocation.getArgument(0);
               saved.setId(9L);
+              saved.setVersion(0L);
               return saved;
             });
 
