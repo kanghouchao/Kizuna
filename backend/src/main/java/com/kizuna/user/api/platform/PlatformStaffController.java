@@ -1,10 +1,12 @@
 package com.kizuna.user.api.platform;
 
+import com.kizuna.user.api.dto.GrantHistoryEntryResponse;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
 import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.application.PlatformStaffService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -34,16 +36,27 @@ public class PlatformStaffController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> create(
-      @Valid @RequestBody PlatformStaffCreateRequest req) {
-    return ResponseEntity.ok(platformStaffService.create(req));
+      @Valid @RequestBody PlatformStaffCreateRequest req, Principal principal) {
+    return ResponseEntity.ok(platformStaffService.create(req, principal.getName()));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> update(
-      @PathVariable Long id, @Valid @RequestBody PlatformStaffUpdateRequest req) {
+      @PathVariable Long id,
+      @Valid @RequestBody PlatformStaffUpdateRequest req,
+      Principal principal) {
     return platformStaffService
-        .update(id, req)
+        .update(id, req, principal.getName())
+        .map(ResponseEntity::ok)
+        .orElseGet(() -> ResponseEntity.notFound().build());
+  }
+
+  @GetMapping("/{id}/grant-history")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
+  public ResponseEntity<List<GrantHistoryEntryResponse>> grantHistory(@PathVariable Long id) {
+    return platformStaffService
+        .grantHistory(id)
         .map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.notFound().build());
   }

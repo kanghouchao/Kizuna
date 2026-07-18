@@ -3,12 +3,12 @@ package com.kizuna.user.domain;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
-public interface PlatformUserRepository extends CrudRepository<PlatformUser, Long> {
+public interface PlatformUserRepository extends JpaRepository<PlatformUser, Long> {
   Optional<PlatformUser> findByEmail(String email);
 
   List<PlatformUser> findByUserTypeOrderByDisplayNameAsc(UserType userType);

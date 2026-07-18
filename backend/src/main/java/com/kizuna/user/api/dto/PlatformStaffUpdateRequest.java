@@ -29,4 +29,7 @@ public class PlatformStaffUpdateRequest {
   private StoreScopeType settlementScopeType;
 
   private Set<Long> settlementStoreIds;
+
+  /** 停止・再開。null は現状維持。false=停止（行は残り、過去の実行主体記録を保持）、true=再開。 */
+  private Boolean enabled;
 }
