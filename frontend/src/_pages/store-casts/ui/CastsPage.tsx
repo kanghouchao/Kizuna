@@ -11,8 +11,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
+import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import { getPlatformRole, useManagedList } from '@/shared/lib';
+import { useManagedList } from '@/shared/lib';
 import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */
@@ -21,9 +22,19 @@ export default function CastListPage() {
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   // 招待発行は店長ロール限定（発行APIが ROLE_STORE_MANAGER のみ許可するため。裁定6）。
   // クライアント側 cookie 読み取りは hydration 差異を避けるため useEffect で解決する。
-  const [isManager, setIsManager] = useState(false);
+  // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ。#398）
+  const [canInvite, setCanInvite] = useState(false);
+  const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
   useEffect(() => {
-    setIsManager(getPlatformRole() === 'STORE_MANAGER');
+    platformAuthApi
+      .me()
+      .then(me => {
+        setCanInvite(me.capabilities.includes('CAST_INVITE'));
+        setCanManageFieldDefs(me.capabilities.includes('CAST_FIELD_DEF_MANAGE'));
+      })
+      .catch(() => {
+        // 取得失敗時は導線を出さない（fail-closed）。操作自体はサーバ側が拒否する。
+      });
   }, []);
   const {
     items: casts,
@@ -81,8 +92,8 @@ export default function CastListPage() {
           <p className="text-sm text-gray-500 mt-1">キャスト情報の登録・編集ができます。</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* 定義管理ページ（/tenant/casts/fields）への入口。定義CRUDは店長限定のため店長のみ表示する（裁定6と同型）。 */}
-          {isManager && (
+          {/* 定義管理ページ（/tenant/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定（裁定6と同型）。 */}
+          {canManageFieldDefs && (
             <Link
               href="/tenant/casts/fields"
               className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -212,7 +223,7 @@ export default function CastListPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                      {isManager && (
+                      {canInvite && (
                         <InvitationButton
                           castId={cast.id}
                           status={cast.invitation_status}

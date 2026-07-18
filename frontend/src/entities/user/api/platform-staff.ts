@@ -1,5 +1,7 @@
 import { apiClient } from '@/shared/api';
 import {
+  CapabilityBundleResponse,
+  GrantHistoryEntryResponse,
   PlatformStaffCreateRequest,
   PlatformStaffResponse,
   PlatformStaffUpdateRequest,
@@ -16,6 +18,14 @@ export const platformStaffApi = {
   },
   update: async (id: number, data: PlatformStaffUpdateRequest): Promise<PlatformStaffResponse> => {
     const response = await apiClient.put(`/platform/staff/${id}`, data);
+    return response.data;
+  },
+  bundles: async (): Promise<CapabilityBundleResponse[]> => {
+    const response = await apiClient.get('/platform/capability-bundles');
+    return response.data;
+  },
+  grantHistory: async (id: number): Promise<GrantHistoryEntryResponse[]> => {
+    const response = await apiClient.get(`/platform/staff/${id}/grant-history`);
     return response.data;
   },
 };

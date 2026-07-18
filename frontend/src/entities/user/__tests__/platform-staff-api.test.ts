@@ -19,7 +19,7 @@ describe('platformStaffApi', () => {
       email: 'staff@example.com',
       password: 'pass1234',
       display_name: '新規スタッフ',
-      role: 'STORE_STAFF',
+      bundle_ids: [2],
       store_scope_type: 'SPECIFIC_STORES',
       store_ids: [1],
     });
@@ -27,10 +27,19 @@ describe('platformStaffApi', () => {
   });
   it('update は /platform/staff/:id を PUT する', async () => {
     const res = await platformStaffApi.update(1, {
-      role: 'STORE_MANAGER',
+      bundle_ids: [1, 2],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
+      enabled: false,
     });
     expect(res).toEqual({ ok: true, url: '/platform/staff/1' });
+  });
+  it('bundles は /platform/capability-bundles を GET する', async () => {
+    const res = await platformStaffApi.bundles();
+    expect(res).toEqual({ ok: true, url: '/platform/capability-bundles' });
+  });
+  it('grantHistory は /platform/staff/:id/grant-history を GET する', async () => {
+    const res = await platformStaffApi.grantHistory(3);
+    expect(res).toEqual({ ok: true, url: '/platform/staff/3/grant-history' });
   });
 });

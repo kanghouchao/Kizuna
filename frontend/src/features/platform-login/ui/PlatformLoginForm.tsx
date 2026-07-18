@@ -29,10 +29,10 @@ export default function PlatformLoginForm() {
       Cookies.set('token', token, { expires: new Date(expires_at) });
 
       const me = await platformAuthApi.me();
-      const destination = resolvePlatformDestination(me.role);
+      const destination = resolvePlatformDestination(me.console);
 
       if (destination === 'central') {
-        startPlatformSession(me.role, expires_at);
+        startPlatformSession(me.console, expires_at);
         router.push('/central/dashboard/');
         return;
       }
@@ -45,16 +45,16 @@ export default function PlatformLoginForm() {
           toast.error('利用可能な店舗がありません。管理者にお問い合わせください');
           return;
         }
-        startPlatformSession(me.role, expires_at);
+        startPlatformSession(me.console, expires_at);
         setPlatformStore(stores[0].id, expires_at);
         router.push('/tenant/dashboard/');
         return;
       }
 
-      // CAST / MEMBER 向けポータルは #324 のスコープ外
+      // console='none'（CAST/MEMBER・能力なし）のポータルは未提供
       Cookies.remove('token');
       clearPlatformSession();
-      toast.error('このロールのポータルは準備中です');
+      toast.error('この利用者種別のポータルは準備中です');
     } catch (error) {
       console.error('Platform login failed:', error);
       toast.error(

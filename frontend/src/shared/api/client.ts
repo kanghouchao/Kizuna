@@ -1,6 +1,11 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import { getPlatformRole, getPlatformStoreId, isStoreRole, redirectToLogin } from '@/shared/lib';
+import {
+  getPlatformConsole,
+  getPlatformStoreId,
+  isStoreConsole,
+  redirectToLogin,
+} from '@/shared/lib';
 
 const apiClient = axios.create({
   baseURL: '/api',
@@ -25,12 +30,12 @@ apiClient.interceptors.request.use(
     }
     // 平台セッションがあれば legacy な x-mw ヘッダ注入をスキップする
     try {
-      const platformRole = getPlatformRole();
-      if (platformRole) {
+      const platformConsole = getPlatformConsole();
+      if (platformConsole) {
         const storeId = getPlatformStoreId();
         const url = config.url || '';
         if (
-          isStoreRole(platformRole) &&
+          isStoreConsole(platformConsole) &&
           storeId &&
           (url.startsWith('/tenant') || url.startsWith('/files'))
         ) {

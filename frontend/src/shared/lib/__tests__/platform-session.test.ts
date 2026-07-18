@@ -1,10 +1,10 @@
 import Cookies from 'js-cookie';
 import {
   clearPlatformSession,
-  getPlatformRole,
+  getPlatformConsole,
   getPlatformStoreId,
   isPlatformSession,
-  isStoreRole,
+  isStoreConsole,
   setPlatformStore,
   startPlatformSession,
 } from '../platform-session';
@@ -14,9 +14,9 @@ describe('platform-session', () => {
     clearPlatformSession();
   });
 
-  it('startPlatformSession sets the platform-role cookie, readable via getPlatformRole', () => {
-    startPlatformSession('HQ_ADMIN');
-    expect(getPlatformRole()).toBe('HQ_ADMIN');
+  it('startPlatformSession sets the platform-role cookie, readable via getPlatformConsole', () => {
+    startPlatformSession('central');
+    expect(getPlatformConsole()).toBe('central');
   });
 
   it('setPlatformStore sets the platform-store-id cookie, readable via getPlatformStoreId', () => {
@@ -26,33 +26,34 @@ describe('platform-session', () => {
 
   it('isPlatformSession is true only when platform-role cookie is present', () => {
     expect(isPlatformSession()).toBe(false);
-    startPlatformSession('STORE_MANAGER');
+    startPlatformSession('store');
     expect(isPlatformSession()).toBe(true);
   });
 
   it('clearPlatformSession removes both cookies', () => {
-    startPlatformSession('HQ_ADMIN');
+    startPlatformSession('central');
     setPlatformStore(1);
     clearPlatformSession();
-    expect(getPlatformRole()).toBeUndefined();
+    expect(getPlatformConsole()).toBeUndefined();
     expect(getPlatformStoreId()).toBeUndefined();
   });
 
-  it('isStoreRole is true for STORE_MANAGER and STORE_STAFF only', () => {
-    expect(isStoreRole('STORE_MANAGER')).toBe(true);
-    expect(isStoreRole('STORE_STAFF')).toBe(true);
-    expect(isStoreRole('HQ_ADMIN')).toBe(false);
-    expect(isStoreRole('CAST')).toBe(false);
-    expect(isStoreRole(undefined)).toBe(false);
+  it('isStoreConsole is true only for the store console value', () => {
+    expect(isStoreConsole('store')).toBe(true);
+    expect(isStoreConsole('central')).toBe(false);
+    expect(isStoreConsole('none')).toBe(false);
+    // 旧形式（ロール名）の cookie が残っていても店舗文脈を確立しない（fail-closed）。
+    expect(isStoreConsole('STORE_MANAGER')).toBe(false);
+    expect(isStoreConsole(undefined)).toBe(false);
   });
 
   it('startPlatformSession sets the platform-role cookie with the same expiry as expiresAt', () => {
     const setSpy = jest.spyOn(Cookies, 'set');
     const expiresAt = Date.now() + 60_000;
 
-    startPlatformSession('HQ_ADMIN', expiresAt);
+    startPlatformSession('central', expiresAt);
 
-    expect(setSpy).toHaveBeenCalledWith('platform-role', 'HQ_ADMIN', {
+    expect(setSpy).toHaveBeenCalledWith('platform-role', 'central', {
       expires: new Date(expiresAt),
     });
     setSpy.mockRestore();

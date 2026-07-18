@@ -11,7 +11,7 @@ import {
 import {
   StaffCreateModal,
   StaffEditDrawer,
-  staffRoleLabel,
+  bundleSetLabel,
   storeSetLabel,
 } from '@/features/staff-management';
 import { useManagedList } from '@/shared/lib';
@@ -38,7 +38,9 @@ export default function StaffPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">スタッフ管理</h1>
-          <p className="mt-1 text-sm text-gray-500">ロール・担当店舗の付与と編集ができます。</p>
+          <p className="mt-1 text-sm text-gray-500">
+            権限束・担当店舗・精算範囲の付与と編集ができます。
+          </p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}
@@ -62,7 +64,10 @@ export default function StaffPage() {
                   氏名
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ロール
+                  権限束
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  状態
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   担当店舗
@@ -83,7 +88,18 @@ export default function StaffPage() {
                     {member.display_name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {staffRoleLabel(member.role)}
+                    {bundleSetLabel(member.bundles)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {member.enabled ? (
+                      <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                        有効
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                        停止中
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {storeSetLabel(member.store_scope_type, member.store_ids, stores)}

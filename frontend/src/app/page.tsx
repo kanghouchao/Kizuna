@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { loadTemplatePage } from '@/_pages/store-site';
-import { PlatformRole, resolvePlatformDestination } from '@/entities/user';
+import { PlatformConsole, resolvePlatformDestination } from '@/entities/user';
 
 /**
  * ページメタデータの生成
@@ -40,15 +40,15 @@ export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  // 平台セッションがあれば、ロールに応じたコンソールへ自動遷移する（#324）
-  const platformRole = cookieStore.get('platform-role')?.value;
-  if (platformRole) {
+  // 平台セッションがあれば、コンソール値に応じて自動遷移する（#324/#398 — cookie 値は central/store）
+  const platformConsole = cookieStore.get('platform-role')?.value;
+  if (platformConsole) {
     const platformToken = cookieStore.get('token')?.value;
     if (!platformToken) {
       // token 失効後も platform-role cookie が残っていると /tenant・/central のガードと無限リダイレクトになるため、先に検出する
       redirect('/platform/login');
     }
-    const destination = resolvePlatformDestination(platformRole as PlatformRole);
+    const destination = resolvePlatformDestination(platformConsole as PlatformConsole);
     if (destination === 'central') {
       redirect('/central/dashboard/');
     }

@@ -4,10 +4,10 @@ export { getApiErrorMessage } from './apiError';
 export { useManagedList } from './useManagedList';
 export {
   clearPlatformSession,
-  getPlatformRole,
+  getPlatformConsole,
   getPlatformStoreId,
   isPlatformSession,
-  isStoreRole,
+  isStoreConsole,
   setPlatformStore,
   startPlatformSession,
 } from './platform-session';

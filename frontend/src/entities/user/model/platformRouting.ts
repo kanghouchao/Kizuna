@@ -1,17 +1,18 @@
-import { PlatformRole } from './types';
+import { PlatformConsole } from './types';
 
 export type PlatformDestination = 'central' | 'store' | 'unsupported';
 
-/** 平台ロールからログイン後の遷移先を解決する純関数。 */
-export function resolvePlatformDestination(role: PlatformRole): PlatformDestination {
-  switch (role) {
-    case 'HQ_ADMIN':
+/**
+ * 平台コンソール（/me の console — サーバ側が能力目録から導出）からログイン後の遷移先を解決する純関数。
+ * 旧形式（ロール名）の cookie 値や未知値は unsupported（fail-closed）。
+ */
+export function resolvePlatformDestination(console: PlatformConsole): PlatformDestination {
+  switch (console) {
+    case 'central':
       return 'central';
-    case 'STORE_MANAGER':
-    case 'STORE_STAFF':
+    case 'store':
       return 'store';
-    case 'CAST':
-    case 'MEMBER':
+    default:
       return 'unsupported';
   }
 }

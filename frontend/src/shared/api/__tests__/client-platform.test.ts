@@ -28,10 +28,10 @@ describe('apiClient platform branch', () => {
     (Cookies.remove as jest.Mock).mockImplementation(() => undefined);
   });
 
-  it('injects X-Role/X-Tenant-ID for /tenant requests when a store role is selected', async () => {
+  it('injects X-Role/X-Tenant-ID for /tenant requests when a store console is selected', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'platform-role') return 'STORE_MANAGER';
+      if (key === 'platform-role') return 'store';
       if (key === 'platform-store-id') return '2';
       return undefined;
     });
@@ -40,10 +40,10 @@ describe('apiClient platform branch', () => {
     expect(headers['X-Tenant-ID']).toBe('2');
   });
 
-  it('injects X-Role/X-Tenant-ID for /files requests when a store role is selected', async () => {
+  it('injects X-Role/X-Tenant-ID for /files requests when a store console is selected', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'platform-role') return 'STORE_MANAGER';
+      if (key === 'platform-role') return 'store';
       if (key === 'platform-store-id') return '2';
       return undefined;
     });
@@ -55,7 +55,7 @@ describe('apiClient platform branch', () => {
   it('does not inject tenant headers for /central requests even with a store role selected', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'platform-role') return 'STORE_MANAGER';
+      if (key === 'platform-role') return 'store';
       if (key === 'platform-store-id') return '2';
       return undefined;
     });
@@ -64,10 +64,10 @@ describe('apiClient platform branch', () => {
     expect(headers['X-Tenant-ID']).toBeUndefined();
   });
 
-  it('skips the legacy x-mw branch entirely when a platform session is active (HQ_ADMIN, no store)', async () => {
+  it('skips the legacy x-mw branch entirely when a platform session is active (central console, no store)', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'platform-role') return 'HQ_ADMIN';
+      if (key === 'platform-role') return 'central';
       if (key === 'x-mw-role') return 'tenant';
       if (key === 'x-mw-tenant-id') return '99';
       return undefined;
