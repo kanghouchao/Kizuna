@@ -24,8 +24,8 @@ When('スタッフ管理画面を開く', async ({ page }) => {
 });
 
 When(
-  '氏名 {string}・ロール {string}・店舗 {string} でスタッフを追加する',
-  async ({ page }, baseName: string, roleLabel: string, storeName: string) => {
+  '氏名 {string}・権限束 {string}・店舗 {string} でスタッフを追加する',
+  async ({ page }, baseName: string, bundleLabel: string, storeName: string) => {
     createdStaffName = `${baseName}-${Date.now()}`;
     createdStaffEmail = `staff-e2e-${Date.now()}@kizuna.test`;
     await page.getByRole('button', { name: 'スタッフを追加', exact: true }).click();
@@ -37,7 +37,8 @@ When(
     await dialog.getByLabel('メールアドレス', { exact: true }).fill(createdStaffEmail);
     await dialog.getByLabel('初期パスワード', { exact: true }).fill('pass1234');
     await dialog.getByLabel('氏名', { exact: true }).fill(createdStaffName);
-    await dialog.getByLabel('ロール', { exact: true }).selectOption({ label: roleLabel });
+    // 権限束はチェックボックス複数選択（#398 — ロール単選ドロップダウンの後継）。
+    await dialog.getByRole('checkbox', { name: bundleLabel, exact: true }).check();
     await dialog.getByRole('radio', { name: '個別店舗', exact: true }).click();
     await dialog.getByRole('checkbox', { name: storeName, exact: true }).check();
     await dialog.getByRole('button', { name: '追加する', exact: true }).click();
@@ -48,11 +49,11 @@ When(
 
 Then(
   'スタッフ一覧に {string} が {string} として表示される',
-  async ({ page }, _label: string, roleLabel: string) => {
+  async ({ page }, _label: string, bundleLabel: string) => {
     // {string} は可読性のための表記。実際の照合は一意名（createdStaffName）で行う。
     const row = page.getByRole('row', { name: new RegExp(createdStaffName) });
     await expect(row).toBeVisible({ timeout: 15000 });
-    await expect(row.getByText(roleLabel, { exact: true })).toBeVisible();
+    await expect(row.getByText(bundleLabel, { exact: true })).toBeVisible();
   }
 );
 
@@ -67,7 +68,11 @@ When('{string} の編集ドロワーを開く', async ({ page }, _label: string)
 
 When('店舗集合を {string} に変更する', async ({ page }, scopeLabel: string) => {
   const dialog = page.getByRole('dialog', { name: `${createdStaffName} の権限を編集` });
-  await dialog.getByRole('radio', { name: scopeLabel, exact: true }).click();
+  // ドロワーには担当店舗と精算範囲の 2 つのラジオ群があり「全店舗」ラベルが重複するため、
+  // input の name 属性（store-scope-type）で担当店舗側に限定する（strict mode 対応、#398）。
+  await dialog
+    .locator('label:has(input[name="store-scope-type"])', { hasText: scopeLabel })
+    .click();
 });
 
 Then('設定結果の要約に {string} が表示される', async ({ page }, text: string) => {
