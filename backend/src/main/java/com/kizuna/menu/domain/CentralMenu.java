@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,4 +57,9 @@ public class CentralMenu implements MenuNode {
   @UpdateTimestamp
   @Column(name = "updated_at")
   private LocalDateTime updatedAt;
+
+  /** 楽観ロック用バージョン（全実体共通 — #400）。 */
+  @Version
+  @Column(nullable = false)
+  private Long version;
 }

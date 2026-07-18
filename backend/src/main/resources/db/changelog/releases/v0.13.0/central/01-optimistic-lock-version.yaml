@@ -1,0 +1,69 @@
+databaseChangeLog:
+  - changeSet:
+      id: central-v0130-001-optimistic-lock-version
+      author: kanghouchao
+      # 全実体への @Version 楽観ロック導入（#400）。中央側 6 表へ version 列を追加し、既存行は 0 で初期化する。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: central_configs
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン（既存行は 0 で初期化）
+        - addColumn:
+            tableName: central_tenants
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン（既存行は 0 で初期化）
+        - addColumn:
+            tableName: central_menus
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン（既存行は 0 で初期化）
+        - addColumn:
+            tableName: platform_capability_bundles
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン（既存行は 0 で初期化）
+        - addColumn:
+            tableName: platform_grant_history
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン（既存行は 0 で初期化）
+        - addColumn:
+            tableName: platform_users
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン（既存行は 0 で初期化）

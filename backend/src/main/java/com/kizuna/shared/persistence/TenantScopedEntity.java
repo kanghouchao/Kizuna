@@ -5,6 +5,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Version;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,6 +40,11 @@ public abstract class TenantScopedEntity {
 
   @Column(name = "updated_at", nullable = false)
   private OffsetDateTime updatedAt;
+
+  /** 楽観ロック用バージョン（全実体共通 — #400）。 */
+  @Version
+  @Column(nullable = false)
+  private Long version;
 
   @PrePersist
   protected void onCreate() {
