@@ -17,6 +17,7 @@ import com.kizuna.user.domain.GrantHistoryRepository;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.UserType;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -130,6 +131,11 @@ public class PlatformStaffService {
         .filter(user -> user.getUserType() == UserType.STAFF)
         .map(
             user -> {
+              // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
+              // ため、応答で往復させた version を明示比対して 409 で拒否する（#400）。
+              if (!user.getVersion().equals(req.getVersion())) {
+                throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
+              }
               user.reassignGrants(
                   req.getBundleIds(),
                   req.getStoreScopeType(),
@@ -239,6 +245,7 @@ public class PlatformStaffService {
         user.getStoreScopeType(),
         new HashSet<>(user.getStoreIds()),
         user.getSettlementScopeType(),
-        new HashSet<>(user.getSettlementStoreIds()));
+        new HashSet<>(user.getSettlementStoreIds()),
+        user.getVersion());
   }
 }
