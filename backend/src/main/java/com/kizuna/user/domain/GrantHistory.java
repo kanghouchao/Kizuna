@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
  * <p>対象ユーザーは跨集約 ID 参照（{@code platformUserId}）。detail には束名・店舗集合・精算範囲の快照（JSON 文字列）を保存する。
  */
 @Entity
-@Table(name = "platform_grant_history")
+@Table(name = "t_grant_history")
 @Getter
 @NoArgsConstructor
 public class GrantHistory extends BaseEntity {

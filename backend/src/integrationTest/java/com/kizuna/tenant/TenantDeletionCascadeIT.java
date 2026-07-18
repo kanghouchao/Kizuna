@@ -107,11 +107,11 @@ class TenantDeletionCascadeIT {
 
   private long countStoreGrants(long storeId) {
     return jdbcTemplate.queryForObject(
-        "SELECT count(*) FROM platform_user_stores WHERE store_id = ?", Long.class, storeId);
+        "SELECT count(*) FROM t_user_stores WHERE store_id = ?", Long.class, storeId);
   }
 
   private long countPlatformUser(long userId) {
     return jdbcTemplate.queryForObject(
-        "SELECT count(*) FROM platform_users WHERE id = ?", Long.class, userId);
+        "SELECT count(*) FROM t_users WHERE id = ?", Long.class, userId);
   }
 }
