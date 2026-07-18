@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { platformAuthApi, PlatformStore, useAuth } from '@/entities/user';
 import {
-  getPlatformRole,
+  getPlatformConsole,
   getPlatformStoreId,
   isPlatformSession,
-  isStoreRole,
+  isStoreConsole,
   isTenantDomain,
   setPlatformStore,
 } from '@/shared/lib';
@@ -23,7 +23,7 @@ export function Header() {
   const [currentStoreId, setCurrentStoreId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (isPlatformSession() && isStoreRole(getPlatformRole())) {
+    if (isPlatformSession() && isStoreConsole(getPlatformConsole())) {
       setShowStoreSwitch(true);
       setCurrentStoreId(getPlatformStoreId());
       platformAuthApi

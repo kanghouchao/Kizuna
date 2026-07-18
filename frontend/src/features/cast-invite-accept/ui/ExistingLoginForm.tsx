@@ -8,7 +8,7 @@ import { PlatformLoginRequest, platformAuthApi } from '@/entities/user';
 import {
   clearPlatformSession,
   getApiErrorMessage,
-  getPlatformRole,
+  getPlatformConsole,
   getPlatformStoreId,
   setPlatformStore,
   startPlatformSession,
@@ -35,7 +35,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
     let newTokenWritten = false;
     // ログイン成功で旧セッションを消す前に退避しておく。受諾API失敗時にこれが無いと、
     // clearPlatformSession() 済みの旧 platform-role/platform-store-id に戻れず訪問者がログアウト状態に落ちる（#327 codex指摘）
-    const previousRole = getPlatformRole();
+    const previousRole = getPlatformConsole();
     const previousStoreId = getPlatformStoreId();
     const previousToken = Cookies.get('token');
     try {

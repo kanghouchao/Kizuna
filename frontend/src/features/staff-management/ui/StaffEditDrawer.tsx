@@ -4,7 +4,8 @@ import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import {
-  PlatformRole,
+  CapabilityBundleResponse,
+  GrantHistoryEntryResponse,
   PlatformStaffResponse,
   PlatformStore,
   PlatformStoreScopeType,
@@ -12,8 +13,10 @@ import {
   platformStaffApi,
 } from '@/entities/user';
 import { getApiErrorMessage, useManagedList } from '@/shared/lib';
-import { STAFF_ROLE_OPTIONS, staffRoleLabel } from '../lib/roles';
+import { bundleSetLabel } from '../lib/bundleSetLabel';
 import { storeSetLabel } from '../lib/storeSetLabel';
+import { BundlePicker } from './BundlePicker';
+import { SettlementScopePicker } from './SettlementScopePicker';
 import { StoreSetPicker } from './StoreSetPicker';
 
 interface StaffEditDrawerProps {
@@ -25,40 +28,69 @@ interface StaffEditDrawerProps {
   onUpdated: () => void;
 }
 
-const inputClass =
-  'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
+const GRANT_ACTION_LABELS: Record<string, string> = {
+  GRANT: '付与',
+  CHANGE: '変更',
+  STOP: '停止',
+  RESUME: '再開',
+};
 
-/** スタッフの権限編集ドロワー（ロール・店舗集合のみ、氏名/メールは非表示。「この設定の結果」要約付き、#325 D6）。 */
+/** スタッフの授権編集ドロワー（権限束・店舗集合・精算範囲・停止/再開と付与履歴。「この設定の結果」要約付き、#325 D6 / #398）。 */
 export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDrawerProps) {
-  const [role, setRole] = useState<PlatformRole>('STORE_STAFF');
+  const [bundleIds, setBundleIds] = useState<number[]>([]);
   const [storeScopeType, setStoreScopeType] = useState<PlatformStoreScopeType>('ALL_STORES');
   const [storeIds, setStoreIds] = useState<number[]>([]);
+  const [settlementScopeType, setSettlementScopeType] = useState<PlatformStoreScopeType | null>(
+    null
+  );
+  const [settlementStoreIds, setSettlementStoreIds] = useState<number[]>([]);
+  const [enabled, setEnabled] = useState(true);
+  const [history, setHistory] = useState<GrantHistoryEntryResponse[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { items: stores } = useManagedList<PlatformStore>(
     () => platformAuthApi.stores(),
     '店舗一覧の取得に失敗しました'
   );
+  const { items: bundles, isLoading: bundlesLoading } = useManagedList<CapabilityBundleResponse>(
+    () => platformStaffApi.bundles(),
+    '権限束一覧の取得に失敗しました'
+  );
 
   useEffect(() => {
     if (!open || !staff) return;
-    setRole(staff.role);
+    setBundleIds(staff.bundles.map(bundle => bundle.id));
     setStoreScopeType(staff.store_scope_type);
     setStoreIds(staff.store_ids);
+    setSettlementScopeType(staff.settlement_scope_type);
+    setSettlementStoreIds(staff.settlement_store_ids);
+    setEnabled(staff.enabled);
+    platformStaffApi
+      .grantHistory(staff.id)
+      .then(setHistory)
+      .catch(() => setHistory([]));
   }, [open, staff]);
 
   const summary = useMemo(() => {
     const scopeLabel = storeSetLabel(storeScopeType, storeIds, stores);
-    return `${staff?.display_name ?? ''}さんは ${staffRoleLabel(role)} として ${scopeLabel} のデータにアクセスできます`;
-  }, [role, storeScopeType, storeIds, stores, staff]);
+    const selectedBundles = bundles.filter(bundle => bundleIds.includes(bundle.id));
+    return `${staff?.display_name ?? ''}さんは ${bundleSetLabel(selectedBundles)} として ${scopeLabel} のデータにアクセスできます`;
+  }, [bundles, bundleIds, storeScopeType, storeIds, stores, staff]);
 
   const submit = async () => {
     if (!staff) return;
+    if (bundleIds.length === 0) {
+      toast.error('権限束を 1 つ以上選択してください');
+      return;
+    }
     setIsSubmitting(true);
     try {
       await platformStaffApi.update(staff.id, {
-        role,
+        bundle_ids: bundleIds,
         store_scope_type: storeScopeType,
         store_ids: storeIds,
+        settlement_scope_type: settlementScopeType,
+        settlement_store_ids: settlementStoreIds,
+        enabled,
       });
       toast.success('権限を更新しました');
       onUpdated();
@@ -79,26 +111,12 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
             {staff?.display_name} の権限を編集
           </DialogTitle>
           <div className="flex-1 space-y-4 px-6 py-5">
-            <div>
-              <label
-                htmlFor="staff-edit-role"
-                className="mb-1 block text-sm font-medium text-gray-700"
-              >
-                ロール
-              </label>
-              <select
-                id="staff-edit-role"
-                value={role}
-                onChange={e => setRole(e.target.value as PlatformRole)}
-                className={inputClass}
-              >
-                {STAFF_ROLE_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <BundlePicker
+              bundles={bundles}
+              isLoading={bundlesLoading}
+              bundleIds={bundleIds}
+              onChange={setBundleIds}
+            />
             <StoreSetPicker
               storeScopeType={storeScopeType}
               storeIds={storeIds}
@@ -107,9 +125,63 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
                 setStoreIds(next.storeIds);
               }}
             />
+            <SettlementScopePicker
+              scopeType={settlementScopeType}
+              storeIds={settlementStoreIds}
+              onChange={next => {
+                setSettlementScopeType(next.scopeType);
+                setSettlementStoreIds(next.storeIds);
+              }}
+            />
+            <div>
+              <span className="mb-1 block text-sm font-medium text-gray-700">状態</span>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="staff-enabled"
+                    checked={enabled}
+                    onChange={() => setEnabled(true)}
+                    className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  有効
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="staff-enabled"
+                    checked={!enabled}
+                    onChange={() => setEnabled(false)}
+                    className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  停止
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                停止してもアカウントは削除されず、過去の操作記録は保持されます。
+              </p>
+            </div>
             <div>
               <p className="mb-1 text-sm font-medium text-gray-700">この設定の結果</p>
               <p className="rounded-md bg-blue-50 p-3 text-sm text-blue-800">{summary}</p>
+            </div>
+            <div>
+              <p className="mb-1 text-sm font-medium text-gray-700">付与履歴</p>
+              {history.length === 0 ? (
+                <p className="text-sm text-gray-500">履歴はありません</p>
+              ) : (
+                <ul className="space-y-1 rounded-md border border-gray-200 p-3">
+                  {history.map(entry => (
+                    <li key={entry.id} className="text-xs text-gray-600">
+                      <span className="font-medium text-gray-900">
+                        {GRANT_ACTION_LABELS[entry.action] ?? entry.action}
+                      </span>
+                      {' — '}
+                      {new Date(entry.created_at).toLocaleString('ja-JP')} / {entry.actor_email}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
           <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">

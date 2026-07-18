@@ -4,7 +4,7 @@ import { ExistingLoginForm } from '../ExistingLoginForm';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
 import { platformAuthApi } from '@/entities/user';
 import {
-  getPlatformRole,
+  getPlatformConsole,
   getPlatformStoreId,
   setPlatformStore,
   startPlatformSession,
@@ -97,7 +97,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
 
-    expect(getPlatformRole()).toBeUndefined();
+    expect(getPlatformConsole()).toBeUndefined();
     expect(getPlatformStoreId()).toBeUndefined();
     expect(tokenDuringAcceptance).toBe('cast-jwt');
   });
@@ -121,7 +121,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
 
     expect(Cookies.get('token')).toBeUndefined();
-    expect(getPlatformRole()).toBeUndefined();
+    expect(getPlatformConsole()).toBeUndefined();
     expect(getPlatformStoreId()).toBeUndefined();
   });
 
@@ -141,7 +141,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     expect(mockedAcceptanceApi.acceptAsExistingUser).not.toHaveBeenCalled();
     expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getPlatformRole()).toBe('STORE_MANAGER');
+    expect(getPlatformConsole()).toBe('STORE_MANAGER');
     expect(getPlatformStoreId()).toBe('7');
   });
 
@@ -171,7 +171,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     expect(onSuccess).not.toHaveBeenCalled();
     expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getPlatformRole()).toBe('STORE_MANAGER');
+    expect(getPlatformConsole()).toBe('STORE_MANAGER');
     expect(getPlatformStoreId()).toBe('7');
   });
 });

@@ -25,7 +25,7 @@ import {
   KeyIcon,
 } from '@heroicons/react/24/outline';
 import { centralMenuApi, MenuVO, storeMenuApi } from '@/entities/menu';
-import { getPlatformRole, isStoreRole } from '@/shared/lib';
+import { getPlatformConsole, isStoreConsole } from '@/shared/lib';
 
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   HomeIcon,
@@ -55,10 +55,10 @@ export function Sidebar() {
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
-    // 平台セッションがあれば優先する（HQ_ADMIN→central、店舗ロール→tenant）（#324）
-    const platformRole = getPlatformRole();
-    if (platformRole) {
-      setRole(isStoreRole(platformRole) ? 'tenant' : 'central');
+    // 平台セッションがあれば優先する（コンソール値: central / store — #324/#398）
+    const platformConsole = getPlatformConsole();
+    if (platformConsole) {
+      setRole(isStoreConsole(platformConsole) ? 'tenant' : 'central');
       setRoleResolved(true);
       return;
     }

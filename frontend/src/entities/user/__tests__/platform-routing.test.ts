@@ -1,19 +1,16 @@
 import { resolvePlatformDestination } from '@/entities/user';
 
 describe('resolvePlatformDestination', () => {
-  it('routes HQ_ADMIN to central', () => {
-    expect(resolvePlatformDestination('HQ_ADMIN')).toBe('central');
+  it('routes central console to central', () => {
+    expect(resolvePlatformDestination('central')).toBe('central');
   });
-  it('routes STORE_MANAGER to store', () => {
-    expect(resolvePlatformDestination('STORE_MANAGER')).toBe('store');
+  it('routes store console to store', () => {
+    expect(resolvePlatformDestination('store')).toBe('store');
   });
-  it('routes STORE_STAFF to store', () => {
-    expect(resolvePlatformDestination('STORE_STAFF')).toBe('store');
+  it('routes none console (CAST/MEMBER or capability-less) to unsupported', () => {
+    expect(resolvePlatformDestination('none')).toBe('unsupported');
   });
-  it('routes CAST to unsupported', () => {
-    expect(resolvePlatformDestination('CAST')).toBe('unsupported');
-  });
-  it('routes MEMBER to unsupported', () => {
-    expect(resolvePlatformDestination('MEMBER')).toBe('unsupported');
+  it('routes unknown cookie values to unsupported (fail-closed)', () => {
+    expect(resolvePlatformDestination('HQ_ADMIN' as never)).toBe('unsupported');
   });
 });

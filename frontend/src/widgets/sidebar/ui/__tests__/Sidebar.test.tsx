@@ -22,7 +22,7 @@ describe('Sidebar', () => {
 
   it('does not fetch central menus when a store platform-role cookie is present — only store menus are fetched (#324)', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'platform-role') return 'STORE_MANAGER';
+      if (key === 'platform-role') return 'store';
       return undefined;
     });
 

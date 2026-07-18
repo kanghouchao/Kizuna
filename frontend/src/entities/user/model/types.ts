@@ -10,8 +10,29 @@ export interface LoginResponse {
   expires_at: number;
 }
 
-// 平台ロール（バックエンド user/domain/PlatformRole.java と対応）
-export type PlatformRole = 'HQ_ADMIN' | 'STORE_MANAGER' | 'STORE_STAFF' | 'CAST' | 'MEMBER';
+// 本人種別（バックエンド user/domain/UserType.java と対応。#398 で固定ロールは廃止）
+export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
+
+// 能力（バックエンド user/domain/Capability.java と対応）
+export type PlatformCapability =
+  | 'TENANT_MANAGE'
+  | 'STAFF_MANAGE'
+  | 'SYSTEM_CONFIG_MANAGE'
+  | 'CENTRAL_MENU_VIEW'
+  | 'CENTRAL_ASSET_MANAGE'
+  | 'STORE_VIEW'
+  | 'ORDER_SET_MANAGE'
+  | 'ORDER_MANAGE'
+  | 'CUSTOMER_MANAGE'
+  | 'SHIFT_MANAGE'
+  | 'CAST_MANAGE'
+  | 'CAST_INVITE'
+  | 'CAST_FIELD_DEF_VIEW'
+  | 'CAST_FIELD_DEF_MANAGE'
+  | 'STORE_PROFILE_MANAGE';
+
+// ログイン後の着地先（サーバ側が能力目録から導出する — /me の console）
+export type PlatformConsole = 'central' | 'store' | 'none';
 
 // 平台ユーザーの店舗作用域種別
 export type PlatformStoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
@@ -26,7 +47,9 @@ export interface PlatformLoginRequest {
 export interface PlatformMeResponse {
   email: string;
   display_name: string;
-  role: PlatformRole;
+  user_type: PlatformUserType;
+  capabilities: PlatformCapability[];
+  console: PlatformConsole;
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
 }
@@ -42,14 +65,30 @@ export interface PlatformStore {
   name: string;
 }
 
-// スタッフ（ロール×店舗集合）の応答
+// 能力束への参照（id と名称）
+export interface CapabilityBundleRef {
+  id: number;
+  name: string;
+}
+
+// 能力束一覧の1件（授与 UI の選択肢）
+export interface CapabilityBundleResponse {
+  id: number;
+  name: string;
+  capabilities: PlatformCapability[];
+}
+
+// スタッフ（能力束×店舗集合×精算範囲）の応答
 export interface PlatformStaffResponse {
   id: number;
   email: string;
   display_name: string;
-  role: PlatformRole;
+  enabled: boolean;
+  bundles: CapabilityBundleRef[];
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
+  settlement_scope_type: PlatformStoreScopeType | null;
+  settlement_store_ids: number[];
 }
 
 // スタッフ新規作成リクエスト
@@ -57,14 +96,31 @@ export interface PlatformStaffCreateRequest {
   email: string;
   password: string;
   display_name: string;
-  role: PlatformRole;
+  bundle_ids: number[];
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
+  settlement_scope_type?: PlatformStoreScopeType | null;
+  settlement_store_ids?: number[];
 }
 
-// スタッフ権限編集リクエスト
+// スタッフ授権編集リクエスト（enabled: 未指定=現状維持、false=停止、true=再開）
 export interface PlatformStaffUpdateRequest {
-  role: PlatformRole;
+  bundle_ids: number[];
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
+  settlement_scope_type?: PlatformStoreScopeType | null;
+  settlement_store_ids?: number[];
+  enabled?: boolean;
+}
+
+// 付与履歴の操作種別
+export type GrantAction = 'GRANT' | 'CHANGE' | 'STOP' | 'RESUME';
+
+// 付与履歴の1件
+export interface GrantHistoryEntryResponse {
+  id: number;
+  actor_email: string;
+  action: GrantAction;
+  detail: string;
+  created_at: string;
 }
