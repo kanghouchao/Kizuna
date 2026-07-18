@@ -6,6 +6,7 @@ import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -53,6 +54,23 @@ public class CommonExceptionHandler {
     Map<String, Object> body = new HashMap<>();
     body.put("error", ex.getMessage());
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+  }
+
+  @ExceptionHandler(ConflictException.class)
+  public ResponseEntity<Map<String, Object>> handle(ConflictException ex) {
+    log.warn(ex.getMessage());
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+  }
+
+  /** JPA @Version の楽観ロック競合（並行トランザクションの敗者）を 500 でなく 409 へ映射する（#400）。 */
+  @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+  public ResponseEntity<Map<String, Object>> handle(ObjectOptimisticLockingFailureException ex) {
+    log.warn(ex.getMessage());
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", "他の操作と競合しました。最新の状態を取得してやり直してください");
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
