@@ -9,6 +9,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Version;
 import java.time.OffsetDateTime;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -30,6 +31,7 @@ public abstract class BaseEntity {
   private OffsetDateTime updatedAt;
 
   /** 楽観ロック用バージョン（全実体共通 — #400）。 */
+  @Setter(AccessLevel.NONE) // 新規 public setter 禁止規約: バージョンは JPA が管理し外部から設定させない（#400）
   @Version
   @Column(nullable = false)
   private Long version;
