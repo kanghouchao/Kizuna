@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0150-001-drop-orphaned-content-tables
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        # v0.1.0 時代の遺留コンテンツ／汎用リソースエンジンのテーブル群を撤去する（#406）。
+        # t_pages は #392（公開コンテンツの正式スペック）に、t_resource_* は同スペックへ
+        # 取って代わられ、JPA エンティティもコード参照も持たない死んだテーブルである。
+        # 子表（関連テーブル）→親表の順で dropTable する。
+        - dropTable:
+            tableName: t_resource_versions
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_resource_tag_links
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_resource_tenant_access
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_resources
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_resource_schemas
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_resource_tags
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_resource_types
+            cascadeConstraints: true
+        - dropTable:
+            tableName: t_pages
+            cascadeConstraints: true

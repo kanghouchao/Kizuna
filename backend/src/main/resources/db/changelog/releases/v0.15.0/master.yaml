@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: store/01-drop-orphaned-content-tables.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: platform/01-drop-orphaned-group-tables.yaml
+      relativeToChangelogFile: true
