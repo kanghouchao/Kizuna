@@ -38,7 +38,7 @@ class TenantFilterEnableTest {
   void enablesFilterWhenTenantContextPresent() throws Throwable {
     tenantContext.setTenantId(42L);
     when(entityManager.unwrap(Session.class)).thenReturn(session);
-    when(session.enableFilter("tenantFilter")).thenReturn(filter);
+    when(session.enableFilter("storeFilter")).thenReturn(filter);
     when(pjp.proceed()).thenReturn("result");
 
     Object result = aspect.enableTenantFilterForTenantServiceMethods(pjp);

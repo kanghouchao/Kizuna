@@ -1,6 +1,6 @@
 package com.kizuna.shift.domain;
 
-import com.kizuna.shared.persistence.TenantScopedEntity;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -14,12 +14,12 @@ import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_shifts")
-@Filter(name = "tenantFilter", condition = "store_id = :storeId")
+@Filter(name = "storeFilter", condition = "store_id = :storeId")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Shift extends TenantScopedEntity {
+public class Shift extends StoreScopedEntity {
 
   @Column(name = "cast_id", nullable = false, length = 64)
   private String castId;

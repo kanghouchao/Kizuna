@@ -1,6 +1,6 @@
 package com.kizuna.customer.domain;
 
-import com.kizuna.shared.persistence.TenantScopedEntity;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -12,12 +12,12 @@ import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_customers")
-@Filter(name = "tenantFilter", condition = "store_id = :storeId")
+@Filter(name = "storeFilter", condition = "store_id = :storeId")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Customer extends TenantScopedEntity {
+public class Customer extends StoreScopedEntity {
 
   @Column(name = "name")
   private String name;

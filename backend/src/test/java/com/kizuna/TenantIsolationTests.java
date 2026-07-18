@@ -2,7 +2,7 @@ package com.kizuna;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.shared.persistence.TenantScopedEntity;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
@@ -46,7 +46,7 @@ class TenantIsolationTests {
       // 他フィルタ（storeSetFilter 等）が並置されていても違反としない。
       boolean declaresTenantFilter = false;
       for (Filter filter : entity.getAnnotationsByType(Filter.class)) {
-        if ("tenantFilter".equals(filter.name()) && EXPECTED_CONDITION.equals(filter.condition())) {
+        if ("storeFilter".equals(filter.name()) && EXPECTED_CONDITION.equals(filter.condition())) {
           declaresTenantFilter = true;
           break;
         }
@@ -70,8 +70,8 @@ class TenantIsolationTests {
     // @FilterDef は Hibernate 6 で repeatable のため、tenantFilter の定義を名前で取り出す
     // （storeSetFilter 等が並置されていても getAnnotation は container を返し null になるため）。
     FilterDef tenantFilterDef = null;
-    for (FilterDef filterDef : TenantScopedEntity.class.getAnnotationsByType(FilterDef.class)) {
-      if ("tenantFilter".equals(filterDef.name())) {
+    for (FilterDef filterDef : StoreScopedEntity.class.getAnnotationsByType(FilterDef.class)) {
+      if ("storeFilter".equals(filterDef.name())) {
         tenantFilterDef = filterDef;
         break;
       }

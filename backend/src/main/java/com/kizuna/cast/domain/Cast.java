@@ -1,6 +1,6 @@
 package com.kizuna.cast.domain;
 
-import com.kizuna.shared.persistence.TenantScopedEntity;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,12 +16,12 @@ import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "t_casts")
-@Filter(name = "tenantFilter", condition = "store_id = :storeId")
+@Filter(name = "storeFilter", condition = "store_id = :storeId")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Cast extends TenantScopedEntity {
+public class Cast extends StoreScopedEntity {
 
   @Column(name = "name", nullable = false)
   private String name;
