@@ -33,7 +33,7 @@ import org.hibernate.annotations.Type;
 @AllArgsConstructor
 @Builder
 @ToString
-@Filter(name = "tenantFilter", condition = "store_id = :storeId")
+@Filter(name = "storeFilter", condition = "store_id = :storeId")
 public class StoreProfile {
 
   @Id

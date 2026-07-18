@@ -22,14 +22,14 @@ import org.hibernate.annotations.ParamDef;
 @NoArgsConstructor
 @ToString
 @FilterDef(
-    name = "tenantFilter",
+    name = "storeFilter",
     applyToLoadByKey = true,
     parameters = @ParamDef(name = "storeId", type = Long.class))
 @FilterDef(
     name = "storeSetFilter",
     applyToLoadByKey = true,
     parameters = @ParamDef(name = "storeIds", type = Long.class))
-public abstract class TenantScopedEntity {
+public abstract class StoreScopedEntity {
 
   @Id @SnowflakeId private String id;
 

@@ -1,6 +1,6 @@
 package com.kizuna.order.domain;
 
-import com.kizuna.shared.persistence.TenantScopedEntity;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,13 +19,13 @@ import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "t_orders")
-@Filter(name = "tenantFilter", condition = "store_id = :storeId")
+@Filter(name = "storeFilter", condition = "store_id = :storeId")
 @Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Order extends TenantScopedEntity {
+public class Order extends StoreScopedEntity {
 
   @Column(name = "store_name")
   private String storeName;

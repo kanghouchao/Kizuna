@@ -32,7 +32,7 @@ public class TenantFilterEnable {
     if (tenantContext.isTenant()) {
       entityManager
           .unwrap(org.hibernate.Session.class)
-          .enableFilter("tenantFilter")
+          .enableFilter("storeFilter")
           .setParameter("storeId", tenantContext.getTenantId());
     }
     return pjp.proceed();

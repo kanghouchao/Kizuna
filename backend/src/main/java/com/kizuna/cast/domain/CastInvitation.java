@@ -1,6 +1,6 @@
 package com.kizuna.cast.domain;
 
-import com.kizuna.shared.persistence.TenantScopedEntity;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,12 +17,12 @@ import org.hibernate.annotations.Filter;
 /** キャスト招待集約。1 档案につき有効な招待は最新の 1 枚のみ（再発行で旧 PENDING は失効する）。 リンク発行後の受諾で {@link Cast} に平台身分を紐づける。 */
 @Entity
 @Table(name = "t_cast_invitations")
-@Filter(name = "tenantFilter", condition = "store_id = :storeId")
+@Filter(name = "storeFilter", condition = "store_id = :storeId")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CastInvitation extends TenantScopedEntity {
+public class CastInvitation extends StoreScopedEntity {
 
   /** 招待リンクの有効期間（ドメイン所有の定数）。 */
   public static final Duration VALIDITY = Duration.ofHours(72);
