@@ -281,6 +281,27 @@ class OrderServiceTest {
   }
 
   @Test
+  void createRejectsStoppedReceptionist() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+
+    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(castRepository.existsById("g1")).thenReturn(true);
+    // 停止(enabled=false)された STAFF は束・店舗授権を保持したままだが、受付担当者にはなれない（PR#399 codex 指摘）。
+    PlatformUser stopped = authorizedReceptionist();
+    stopped.stop();
+    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(stopped));
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("受付担当者が見つかりません");
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
   void updateModifiesAssociations() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
 
