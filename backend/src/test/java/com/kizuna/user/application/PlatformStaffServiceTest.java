@@ -41,6 +41,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class PlatformStaffServiceTest {
@@ -88,7 +89,7 @@ class PlatformStaffServiceTest {
             .build();
     user.setId(id);
     // 永続化済みエンティティを模す（DB の version 列は 0 で初期化される — #400）。
-    user.setVersion(0L);
+    ReflectionTestUtils.setField(user, "version", 0L);
     return user;
   }
 
@@ -177,7 +178,7 @@ class PlatformStaffServiceTest {
             invocation -> {
               PlatformUser saved = invocation.getArgument(0);
               saved.setId(9L);
-              saved.setVersion(0L);
+              ReflectionTestUtils.setField(saved, "version", 0L);
               return saved;
             });
 
@@ -219,7 +220,7 @@ class PlatformStaffServiceTest {
         .thenAnswer(
             i -> {
               PlatformUser saved = i.getArgument(0);
-              saved.setVersion(0L);
+              ReflectionTestUtils.setField(saved, "version", 0L);
               return saved;
             });
 
@@ -327,7 +328,7 @@ class PlatformStaffServiceTest {
     when(repository.saveAndFlush(existing))
         .thenAnswer(
             i -> {
-              existing.setVersion(existing.getVersion() + 1);
+              ReflectionTestUtils.setField(existing, "version", existing.getVersion() + 1);
               return existing;
             });
 
@@ -352,7 +353,7 @@ class PlatformStaffServiceTest {
     // 陳腐化した編集フォームの提出（version 不一致）は reassign 前に 409 系例外で拒否する（#400）。
     PlatformUser existing =
         staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
-    existing.setVersion(5L);
+    ReflectionTestUtils.setField(existing, "version", 5L);
     when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
@@ -478,7 +479,7 @@ class PlatformStaffServiceTest {
             invocation -> {
               PlatformUser saved = invocation.getArgument(0);
               saved.setId(9L);
-              saved.setVersion(0L);
+              ReflectionTestUtils.setField(saved, "version", 0L);
               return saved;
             });
 

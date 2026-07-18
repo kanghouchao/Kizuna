@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -99,6 +100,7 @@ public class StoreProfile {
   private OffsetDateTime updatedAt;
 
   /** 楽観ロック用バージョン（全実体共通 — #400）。 */
+  @Setter(AccessLevel.NONE) // 新規 public setter 禁止規約: バージョンは JPA が管理し外部から設定させない（#400）
   @Version
   @Column(nullable = false)
   private Long version;
