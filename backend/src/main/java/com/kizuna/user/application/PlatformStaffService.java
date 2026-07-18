@@ -45,7 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PlatformStaffService {
 
-  private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_platform_users_email";
+  private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_t_users_email";
 
   private final PlatformUserRepository repository;
   private final CapabilityBundleRepository capabilityBundleRepository;

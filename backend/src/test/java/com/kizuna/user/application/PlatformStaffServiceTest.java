@@ -311,7 +311,7 @@ class PlatformStaffServiceTest {
                 "save failed",
                 new RuntimeException(
                     "ERROR: duplicate key value violates unique constraint"
-                        + " \"uq_platform_users_email\"")));
+                        + " \"uq_t_users_email\"")));
 
     assertThatThrownBy(() -> service.create(req, ACTOR))
         .isInstanceOf(DuplicateStaffEmailException.class);
@@ -449,7 +449,7 @@ class PlatformStaffServiceTest {
                 "save failed",
                 new RuntimeException(
                     "ERROR: duplicate key value violates unique constraint"
-                        + " \"uq_platform_users_email\"")));
+                        + " \"uq_t_users_email\"")));
 
     assertThatThrownBy(
             () ->

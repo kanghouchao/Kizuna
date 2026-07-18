@@ -33,7 +33,7 @@ import lombok.NoArgsConstructor;
  * </ul>
  */
 @Entity
-@Table(name = "platform_users")
+@Table(name = "t_users")
 @Getter
 @NoArgsConstructor
 public class PlatformUser extends BaseEntity {
@@ -55,9 +55,7 @@ public class PlatformUser extends BaseEntity {
   private UserType userType;
 
   @ElementCollection(fetch = FetchType.EAGER)
-  @CollectionTable(
-      name = "platform_user_bundles",
-      joinColumns = @JoinColumn(name = "platform_user_id"))
+  @CollectionTable(name = "t_user_bundles", joinColumns = @JoinColumn(name = "platform_user_id"))
   @Column(name = "bundle_id")
   private Set<Long> bundleIds = new HashSet<>();
 
@@ -66,9 +64,7 @@ public class PlatformUser extends BaseEntity {
   private StoreScopeType storeScopeType;
 
   @ElementCollection(fetch = FetchType.EAGER)
-  @CollectionTable(
-      name = "platform_user_stores",
-      joinColumns = @JoinColumn(name = "platform_user_id"))
+  @CollectionTable(name = "t_user_stores", joinColumns = @JoinColumn(name = "platform_user_id"))
   @Column(name = "store_id")
   private Set<Long> storeIds = new HashSet<>();
 
@@ -79,7 +75,7 @@ public class PlatformUser extends BaseEntity {
 
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(
-      name = "platform_user_settlement_stores",
+      name = "t_user_settlement_stores",
       joinColumns = @JoinColumn(name = "platform_user_id"))
   @Column(name = "store_id")
   private Set<Long> settlementStoreIds = new HashSet<>();

@@ -32,7 +32,7 @@ class SeedSequenceAlignmentIT {
 
   /** 明示 id を播種している autoIncrement 表（issue #237 の setval 対象、#322 で platform_users を追加）。 */
   private static final List<String> SEEDED_IDENTITY_TABLES =
-      List.of("central_tenants", "central_menus", "platform_users");
+      List.of("t_stores", "central_menus", "t_users");
 
   @Autowired private TestRestTemplate rest;
   @Autowired private JdbcTemplate jdbcTemplate;

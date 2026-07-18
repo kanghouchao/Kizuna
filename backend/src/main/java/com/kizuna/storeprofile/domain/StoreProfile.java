@@ -26,7 +26,7 @@ import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.Type;
 
 @Entity
-@Table(name = "t_tenant_configs")
+@Table(name = "t_store_profiles")
 @Getter
 @Setter
 @NoArgsConstructor

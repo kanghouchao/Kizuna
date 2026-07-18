@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: platform/01-rename-platform-tables.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: store/01-rename-store-profile-table.yaml
+      relativeToChangelogFile: true

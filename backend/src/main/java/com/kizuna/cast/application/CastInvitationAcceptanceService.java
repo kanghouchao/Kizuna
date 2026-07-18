@@ -36,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastInvitationAcceptanceService {
 
-  private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_platform_users_email";
+  private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_t_users_email";
   private static final String DUPLICATE_EMAIL_MESSAGE =
       "このメールアドレスは既に登録されています。既存アカウントでログインして受諾してください";
 

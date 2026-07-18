@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
  * の集合で保持する（跨集約 ID 参照）。
  */
 @Entity
-@Table(name = "platform_capability_bundles")
+@Table(name = "t_capability_bundles")
 @Getter
 @NoArgsConstructor
 public class CapabilityBundle extends BaseEntity {
@@ -33,7 +33,7 @@ public class CapabilityBundle extends BaseEntity {
 
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(
-      name = "platform_capability_bundle_items",
+      name = "t_capability_bundle_items",
       joinColumns = @JoinColumn(name = "bundle_id"))
   @Column(name = "capability", nullable = false, length = 50)
   @Enumerated(EnumType.STRING)
