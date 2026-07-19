@@ -47,6 +47,7 @@ apiClient.interceptors.request.use(
         // Attach role and tenant context from middleware cookies
         const role = Cookies.get('x-mw-role');
         if (role) {
+          // 内部 role 語彙('tenant')は票 D で改名予定のため、wire 値('store')への変換をこの注入点で行う。
           const wireRole = role.toLowerCase() === 'tenant' ? 'store' : role;
           (config.headers as any)['X-Role'] = wireRole;
           if (role.toLowerCase() === 'tenant') {

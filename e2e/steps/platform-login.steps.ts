@@ -6,7 +6,7 @@ import { createCast, deleteCast, loginAsTenantAdmin } from './tenant-api';
 const { Given, When, Then, After } = createBdd();
 
 // 統一ログインは central ドメイン（kizuna.test）で提供され、店舗ロールのセッションも
-// 平台 cookie + X-Tenant-ID 注入で central ドメイン上のまま /tenant/* を操作する（#324 D8/D9）。
+// 平台 cookie + X-Store-ID 注入で central ドメイン上のまま /tenant/* を操作する（#324 D8/D9）。
 // cookie はオリジン別に分離されるため、ログイン後の遷移先も含め常に CENTRAL_URL を用いる。
 const PLATFORM_LOGIN_URL = `${CENTRAL_URL}/platform/login`;
 const CASTS_URL = `${CENTRAL_URL}/tenant/casts`;

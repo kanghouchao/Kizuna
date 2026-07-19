@@ -87,6 +87,17 @@ class PlatformStoreApiIT {
   }
 
   @Test
+  @DisplayName("GET /platform/stores/lookup は domain 未指定なら未認証でも 400 になること（params 分岐廃止・独立子路径化の確認）")
+  void lookupWithoutDomainIsBadRequest() {
+    // params="domain" 分岐時は /lookup が getById("lookup") に吸われ未認証 403 になっていた。
+    // 独立子路径化後は必須 @RequestParam の欠落として CommonExceptionHandler が 400 へ映射する。
+    ResponseEntity<String> res =
+        rest.exchange("/platform/stores/lookup", HttpMethod.GET, HttpEntity.EMPTY, String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
   @DisplayName("GET /platform/stores は STORE_MANAGE 無しトークン(店長)で 403、HQ 管理者で 200 になること（受入基準3）")
   void storeManagementListRequiresStoreManage() {
     assertThat(get("/platform/stores", platformToken(MANAGER_EMAIL)).getStatusCode())
