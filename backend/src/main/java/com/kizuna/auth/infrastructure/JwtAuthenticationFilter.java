@@ -72,16 +72,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   }
 
   /**
-   * リクエストパスの属するドメインとトークンの issuer が一致するか検証する。
-   * 統一（プラットフォーム）認証への一本化後、業務ドメイン（/central・/tenant・/platform）は いずれも PlatformAuth
-   * 発行のトークンのみを受理する。ドメイン外のパス（/files 等）は制限しない。 店舗文脈の授権検証は TenantIdInterceptor（StoreScope）が担う。
+   * リクエストパスの属するドメインとトークンの issuer が一致するか検証する。 統一（プラットフォーム）認証への一本化後、業務ドメイン（/store・/platform）は いずれも
+   * PlatformAuth 発行のトークンのみを受理する。ドメイン外のパス（/files 等）は制限しない。 店舗文脈の授権検証は
+   * TenantIdInterceptor（StoreScope）が担う。
    */
   private boolean issuerMatchesDomain(String issuer, String path) {
     boolean restrictedDomain =
-        path.equals("/central")
-            || path.startsWith("/central/")
-            || path.equals("/tenant")
-            || path.startsWith("/tenant/")
+        path.equals("/store")
+            || path.startsWith("/store/")
             || path.equals("/platform")
             || path.startsWith("/platform/");
     return !restrictedDomain || JwtUtil.ISSUER_PLATFORM.equals(issuer);

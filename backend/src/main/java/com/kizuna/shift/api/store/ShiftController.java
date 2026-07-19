@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/tenant/shifts")
+@RequestMapping("/store/shifts")
 @RequiredArgsConstructor
 public class ShiftController {
 

@@ -22,7 +22,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
   @Override
   public void addInterceptors(@NonNull InterceptorRegistry registry) {
     // メンテナンス判定はテナントコンテキスト設定より先に行う
-    registry.addInterceptor(maintenanceModeInterceptor).addPathPatterns("/tenant/**");
-    registry.addInterceptor(tenantIdInterceptor).addPathPatterns("/tenant/**", "/files/**");
+    registry.addInterceptor(maintenanceModeInterceptor).addPathPatterns("/store/**");
+    registry.addInterceptor(tenantIdInterceptor).addPathPatterns("/store/**", "/files/**");
   }
 }
