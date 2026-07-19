@@ -58,13 +58,12 @@ public class PlatformStoreController {
   }
 
   /**
-   * Get tenant by domain - Accessible to all (no authentication required) - It is for frontend to
-   * get tenant info in middleware
+   * 公開ドメイン照会。未認証で呼べ、frontend の middleware が店舗情報を解決するために用いる。
    *
-   * @param domain the domain of the tenant
-   * @return TenantDto
+   * @param domain 照会対象の店舗ドメイン
+   * @return 該当店舗の {@link TenantVO}、存在しなければ 404
    */
-  @GetMapping(value = "/lookup", params = "domain")
+  @GetMapping("/lookup")
   @PermitAll
   public ResponseEntity<TenantVO> getByDomain(@RequestParam String domain) {
     return tenantService

@@ -10,6 +10,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -37,6 +38,15 @@ public class CommonExceptionHandler {
         .getFieldErrors()
         .forEach(fe -> fieldErrors.put(fe.getField(), fe.getDefaultMessage()));
     body.put("details", fieldErrors);
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+  }
+
+  /** 必須クエリ／リクエストパラメータの欠落を、既定の 500 でなくクライアント誤りとして 400 へ映射する（#415）。 */
+  @ExceptionHandler(MissingServletRequestParameterException.class)
+  public ResponseEntity<Map<String, Object>> handle(MissingServletRequestParameterException ex) {
+    log.warn(ex.getMessage());
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", ex.getMessage());
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
   }
 
