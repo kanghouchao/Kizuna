@@ -61,9 +61,9 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("CENTRAL_ASSET_MANAGE 能力のトークンはテナント文脈が無くても central 配下に保存すること")
-  void upload_storesUnderCentralForCentralAssetManage() {
-    authenticateWithAuthorities(Capability.CENTRAL_ASSET_MANAGE.authority());
+  @DisplayName("PLATFORM_ASSET_MANAGE 能力のトークンはテナント文脈が無くても central 配下に保存すること")
+  void upload_storesUnderCentralForPlatformAssetManage() {
+    authenticateWithAuthorities(Capability.PLATFORM_ASSET_MANAGE.authority());
     when(fileStorageService.store("central", "public", file)).thenReturn("public/central/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);
@@ -76,8 +76,8 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("CENTRAL_ASSET_MANAGE の無いトークンはテナント文脈が無い場合、central に保存せず拒否すること")
-  void upload_rejectsWithoutCentralAssetManageAndTenantContext() {
+  @DisplayName("PLATFORM_ASSET_MANAGE の無いトークンはテナント文脈が無い場合、central に保存せず拒否すること")
+  void upload_rejectsWithoutPlatformAssetManageAndTenantContext() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
 
     assertThatThrownBy(() -> controller.upload(file, "public"))

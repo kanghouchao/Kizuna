@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0160-006-sweep-store-menu-view
+      author: kanghouchao
+      # 店舗系操作能力を 1 つでも持つ全束へ標識能力 STORE_MENU_VIEW を付与する（codex 指摘、PR #411 / #409）。
+      # 統合後の店舗コンソール根は STORE_MENU_VIEW でゲートされるため、02 の店長・店舗スタッフ名指しシードだけでは
+      # ORDER_MANAGE 等を既に持つ既存の非既定束が /tenant/* を認可されつつサイドバー空化する。束はデータ駆動
+      # （固定ロール一覧を作らない裁定）のため、付与も名指しでなく実データの掃引で行う。
+      # NOT IN ガードで自然に冪等（再適用でも二重挿入なし。共有 dev 卷では店長・店舗スタッフが既に保持=完全 no-op）。
+      # 中央側に対称の掃引は不要: 旧 CENTRAL_MENU_VIEW 非保持束は統合前も中央メニューへ到達できず、統合後の空化は回帰でない。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              INSERT INTO t_capability_bundle_items (bundle_id, capability)
+              SELECT DISTINCT bundle_id, 'STORE_MENU_VIEW'
+              FROM t_capability_bundle_items
+              WHERE capability IN (
+                'ORDER_MANAGE', 'CUSTOMER_MANAGE', 'SHIFT_MANAGE', 'CAST_MANAGE',
+                'CAST_INVITE', 'CAST_FIELD_DEF_VIEW', 'CAST_FIELD_DEF_MANAGE', 'STORE_PROFILE_MANAGE')
+              AND bundle_id NOT IN (
+                SELECT bundle_id FROM t_capability_bundle_items WHERE capability = 'STORE_MENU_VIEW')

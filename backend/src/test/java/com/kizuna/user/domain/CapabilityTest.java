@@ -14,8 +14,8 @@ class CapabilityTest {
   @DisplayName("authority は Authorities.permission と同一の PERM_ 接頭辞表現を返す")
   void authorityUsesPermissionEncoding() {
     assertThat(Capability.ORDER_MANAGE.authority()).isEqualTo("PERM_ORDER_MANAGE");
-    assertThat(Capability.TENANT_MANAGE.authority())
-        .isEqualTo(Authorities.permission(Capability.TENANT_MANAGE.name()));
+    assertThat(Capability.STORE_MANAGE.authority())
+        .isEqualTo(Authorities.permission(Capability.STORE_MANAGE.name()));
   }
 
   @Test
@@ -23,11 +23,11 @@ class CapabilityTest {
   void centralCapabilities() {
     assertThat(byConsole(Capability.Console.CENTRAL))
         .containsExactlyInAnyOrder(
-            Capability.TENANT_MANAGE,
+            Capability.STORE_MANAGE,
             Capability.STAFF_MANAGE,
             Capability.SYSTEM_CONFIG_MANAGE,
-            Capability.CENTRAL_MENU_VIEW,
-            Capability.CENTRAL_ASSET_MANAGE);
+            Capability.PLATFORM_MENU_VIEW,
+            Capability.PLATFORM_ASSET_MANAGE);
   }
 
   @Test
@@ -38,7 +38,7 @@ class CapabilityTest {
   }
 
   @Test
-  @DisplayName("STORE コンソールの能力は店舗業務系の 8 個")
+  @DisplayName("STORE コンソールの能力は店舗業務系の 9 個")
   void storeCapabilities() {
     assertThat(byConsole(Capability.Console.STORE))
         .containsExactlyInAnyOrder(
@@ -49,13 +49,14 @@ class CapabilityTest {
             Capability.CAST_INVITE,
             Capability.CAST_FIELD_DEF_VIEW,
             Capability.CAST_FIELD_DEF_MANAGE,
-            Capability.STORE_PROFILE_MANAGE);
+            Capability.STORE_PROFILE_MANAGE,
+            Capability.STORE_MENU_VIEW);
   }
 
   @Test
-  @DisplayName("能力目録は既存端点に対応する 15 個で全てコンソール分類を持つ")
+  @DisplayName("能力目録は 16 個で全てコンソール分類を持つ")
   void catalogIsComplete() {
-    assertThat(Capability.values()).hasSize(15);
+    assertThat(Capability.values()).hasSize(16);
     assertThat(Arrays.stream(Capability.values()).map(Capability::getConsole)).doesNotContainNull();
   }
 

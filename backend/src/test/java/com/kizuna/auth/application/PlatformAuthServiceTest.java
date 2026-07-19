@@ -68,11 +68,11 @@ class PlatformAuthServiceTest {
         .name("HQ管理者")
         .capabilities(
             Set.of(
-                Capability.TENANT_MANAGE,
+                Capability.STORE_MANAGE,
                 Capability.STAFF_MANAGE,
                 Capability.SYSTEM_CONFIG_MANAGE,
-                Capability.CENTRAL_MENU_VIEW,
-                Capability.CENTRAL_ASSET_MANAGE,
+                Capability.PLATFORM_MENU_VIEW,
+                Capability.PLATFORM_ASSET_MANAGE,
                 Capability.STORE_VIEW,
                 Capability.ORDER_SET_MANAGE))
         .build();
@@ -100,13 +100,13 @@ class PlatformAuthServiceTest {
     assertThat(authorities)
         .isEqualTo(
             List.of(
-                "PERM_CENTRAL_ASSET_MANAGE",
-                "PERM_CENTRAL_MENU_VIEW",
                 "PERM_ORDER_SET_MANAGE",
+                "PERM_PLATFORM_ASSET_MANAGE",
+                "PERM_PLATFORM_MENU_VIEW",
                 "PERM_STAFF_MANAGE",
+                "PERM_STORE_MANAGE",
                 "PERM_STORE_VIEW",
-                "PERM_SYSTEM_CONFIG_MANAGE",
-                "PERM_TENANT_MANAGE"));
+                "PERM_SYSTEM_CONFIG_MANAGE"));
     assertThat(claims.get("userType")).isEqualTo("STAFF");
     // HQ は STORE コンソール能力を持たないため店舗文脈を確立できない（僭称ヘッダは従来どおり 403）。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
@@ -152,6 +152,75 @@ class PlatformAuthServiceTest {
     assertThat(claims.get("storeBridge")).isEqualTo(true);
     assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of(1L));
+  }
+
+  @Test
+  void login_staffWithOnlyStoreMenuMarker_doesNotSetStoreBridge() {
+    PlatformUser staff =
+        PlatformUser.builder()
+            .email("menu@kizuna.test")
+            .password("stored-hash")
+            .displayName("店舗メニュー標識のみ")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(STORE_BUNDLE_ID))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("menu@kizuna.test")).thenReturn(Optional.of(staff));
+    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
+        .thenReturn(
+            List.of(
+                CapabilityBundle.builder()
+                    .name("店舗メニュー標識のみ")
+                    .capabilities(Set.of(Capability.STORE_MENU_VIEW))
+                    .build()));
+    when(jwtUtil.generateToken(eq("menu@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
+        .thenReturn(new Token("t", 1L));
+
+    authService.login("menu@kizuna.test", "pass");
+
+    verify(jwtUtil)
+        .generateToken(eq("menu@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    Map<String, Object> claims = claimsCaptor.getValue();
+    // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できない（PR #411 codex 指摘）。
+    assertThat(claims.get("storeBridge")).isEqualTo(false);
+  }
+
+  @Test
+  void login_staffWithOperationalStoreCapabilityAndMenuMarker_setsStoreBridgeTrue() {
+    PlatformUser staff =
+        PlatformUser.builder()
+            .email("manager@kizuna.test")
+            .password("stored-hash")
+            .displayName("店長")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(STORE_BUNDLE_ID))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("manager@kizuna.test")).thenReturn(Optional.of(staff));
+    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
+        .thenReturn(
+            List.of(
+                CapabilityBundle.builder()
+                    .name("店長")
+                    .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_MENU_VIEW))
+                    .build()));
+    when(jwtUtil.generateToken(eq("manager@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
+        .thenReturn(new Token("t", 1L));
+
+    authService.login("manager@kizuna.test", "pass");
+
+    verify(jwtUtil)
+        .generateToken(
+            eq("manager@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    Map<String, Object> claims = claimsCaptor.getValue();
+    // 実運用の STORE 能力（ORDER_MANAGE）を保持するため、標識との併存でも店舗文脈を確立できる。
+    assertThat(claims.get("storeBridge")).isEqualTo(true);
   }
 
   @Test
@@ -250,7 +319,7 @@ class PlatformAuthServiceTest {
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
     assertThat(res.get().console()).isEqualTo("central");
-    assertThat(res.get().capabilities()).contains("TENANT_MANAGE", "STAFF_MANAGE");
+    assertThat(res.get().capabilities()).contains("STORE_MANAGE", "STAFF_MANAGE");
   }
 
   @Test
@@ -273,6 +342,36 @@ class PlatformAuthServiceTest {
     assertThat(res.get().userType()).isEqualTo("CAST");
     assertThat(res.get().console()).isEqualTo("none");
     assertThat(res.get().capabilities()).isEmpty();
+  }
+
+  @Test
+  void me_staffWithOnlyStoreMenuMarker_returnsNoneConsole() {
+    PlatformUser staff =
+        PlatformUser.builder()
+            .email("menu@kizuna.test")
+            .password("stored-hash")
+            .displayName("店舗メニュー標識のみ")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(STORE_BUNDLE_ID))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("menu@kizuna.test")).thenReturn(Optional.of(staff));
+    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
+        .thenReturn(
+            List.of(
+                CapabilityBundle.builder()
+                    .name("店舗メニュー標識のみ")
+                    .capabilities(Set.of(Capability.STORE_MENU_VIEW))
+                    .build()));
+
+    Optional<PlatformMeResponse> res = authService.me("menu@kizuna.test");
+
+    assertThat(res).isPresent();
+    // 標識のみの束は店舗コンソールに着地しない（fail-closed — PR #411 codex 指摘）。
+    assertThat(res.get().console()).isEqualTo("none");
+    assertThat(res.get().capabilities()).containsExactly("STORE_MENU_VIEW");
   }
 
   @Test

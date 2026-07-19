@@ -1,4 +1,4 @@
-import { centralMenuApi, storeMenuApi } from '@/entities/menu';
+import { menuApi } from '@/entities/menu';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -11,10 +11,7 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('menu api', () => {
-  it('centralMenuApi.getMenus は /central/menus/me を GET する', async () => {
-    expect(await centralMenuApi.getMenus()).toEqual({ ok: true, url: '/central/menus/me' });
-  });
-  it('storeMenuApi.getMenus は /tenant/menus/me を GET する', async () => {
-    expect(await storeMenuApi.getMenus()).toEqual({ ok: true, url: '/tenant/menus/me' });
+  it('menuApi.getMenus は /platform/menus/me を GET する', async () => {
+    expect(await menuApi.getMenus()).toEqual({ ok: true, url: '/platform/menus/me' });
   });
 });

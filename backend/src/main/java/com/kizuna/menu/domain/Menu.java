@@ -18,29 +18,25 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.UpdateTimestamp;
 
+/** プラットフォーム統合メニュー木の 1 ノード（#404 決定2 / #409 で Central/Store を単一集約へ統合）。 */
 @Getter
 @Setter
 @Entity
 @Table(name = "t_menus")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-public class StoreMenu implements MenuNode {
+public class Menu {
 
   @Id private String id;
-
-  @Column(name = "store_id", nullable = false)
-  private Long storeId;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "parent_id")
   @JsonIgnore
-  private StoreMenu parent;
+  private Menu parent;
 
   @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
   @OrderBy("sortOrder ASC")
-  private List<StoreMenu> children = new ArrayList<>();
+  private List<Menu> children = new ArrayList<>();
 
   @Column(nullable = false)
   private String label;

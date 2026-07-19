@@ -59,7 +59,7 @@ describe('apiClient platform branch', () => {
       if (key === 'platform-store-id') return '2';
       return undefined;
     });
-    const headers = await requestTo('/central/menus/me');
+    const headers = await requestTo('/central/configs');
     expect(headers['X-Role']).toBeUndefined();
     expect(headers['X-Tenant-ID']).toBeUndefined();
   });

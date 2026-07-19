@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - include:
+      file: platform/01-capability-convergence.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: platform/02-menu-unification.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: platform/03-store-menu-view-sweep.yaml
+      relativeToChangelogFile: true

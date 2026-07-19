@@ -153,8 +153,13 @@ public class PlatformAuthService {
   }
 
   private static boolean hasStoreConsole(Set<Capability> capabilities) {
+    // 標識能力はコンソール入場・店舗文脈確立の資格にしない（PR #411 codex 指摘）。STORE_MENU_VIEW 単独では
+    // storeBridge も店舗コンソール着地も許さず、実運用の STORE 能力（STORE_MENU_VIEW 以外）を要求する。
     return capabilities.stream()
-        .anyMatch(capability -> capability.getConsole() == Capability.Console.STORE);
+        .anyMatch(
+            capability ->
+                capability.getConsole() == Capability.Console.STORE
+                    && capability != Capability.STORE_MENU_VIEW);
   }
 
   /** ログイン後の着地先。CENTRAL 能力保持者は central 優先（兼務者のコンソール切替導線は別票）。 */

@@ -4,7 +4,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface StoreMenuRepository extends JpaRepository<StoreMenu, String> {
+public interface MenuRepository extends JpaRepository<Menu, String> {
   @EntityGraph(attributePaths = {"children"})
-  List<StoreMenu> findByStoreIdAndParentIsNullOrderBySortOrderAsc(Long storeId);
+  List<Menu> findByParentIsNullOrderBySortOrderAsc();
 }

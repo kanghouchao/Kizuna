@@ -15,7 +15,7 @@ import lombok.Getter;
 public enum Capability {
 
   /** 店舗（組織）の閲覧・登録・更新・削除（CentralTenantController）。 */
-  TENANT_MANAGE(Console.CENTRAL),
+  STORE_MANAGE(Console.CENTRAL),
 
   /** 社内アカウント・権限の閲覧・付与・変更・停止と付与履歴の閲覧（PlatformStaffController / CapabilityBundleController）。 */
   STAFF_MANAGE(Console.CENTRAL),
@@ -23,11 +23,11 @@ public enum Capability {
   /** 共通設定の閲覧・更新（CentralConfigController）。 */
   SYSTEM_CONFIG_MANAGE(Console.CENTRAL),
 
-  /** 中央コンソールメニューの閲覧（CentralMenuController）。 */
-  CENTRAL_MENU_VIEW(Console.CENTRAL),
+  /** プラットフォームコンソールメニューの標識能力。 */
+  PLATFORM_MENU_VIEW(Console.CENTRAL),
 
   /** 中央共有領域への資産アップロード（登録・出力 — FileUploadController の central 保存経路）。 */
-  CENTRAL_ASSET_MANAGE(Console.CENTRAL),
+  PLATFORM_ASSET_MANAGE(Console.CENTRAL),
 
   /** 授権店舗一覧の閲覧（PlatformStoreController）。 */
   STORE_VIEW(Console.SHARED),
@@ -57,7 +57,10 @@ public enum Capability {
   CAST_FIELD_DEF_MANAGE(Console.STORE),
 
   /** 店舗公開プロフィールの閲覧・更新・公開（StoreProfileController）。 */
-  STORE_PROFILE_MANAGE(Console.STORE);
+  STORE_PROFILE_MANAGE(Console.STORE),
+
+  /** 店舗コンソールメニューの標識能力。 */
+  STORE_MENU_VIEW(Console.STORE);
 
   /** 能力が属するコンソール。ログイン後の着地先導出と店舗文脈ブリッジ（storeBridge claim）の判定に用いる。 */
   public enum Console {

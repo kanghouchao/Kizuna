@@ -13,9 +13,9 @@ Java is pinned to 21 by `backend/.java-version` (jenv, effective under `backend/
 
 ## Domain Glossary
 
-- **Central** = group HQ scope; **Store** = per-shop tenant scope. Store-side vocabulary uses the Store prefix (StoreUser, StoreProfile, StoreMenu).
+- **Central** = group HQ scope; **Store** = per-shop tenant scope. Store-side vocabulary uses the Store prefix (StoreUser, StoreProfile).
 - The customer-visit aggregate is **Order** — never Reservation or Booking.
-- **CentralMenu and StoreMenu stay separate aggregates** (decided 2026-07; do not unify them).
+- **CentralMenu and StoreMenu were unified into a single platform Menu aggregate** (decided 2026-07-18, #404 decision 2).
 - **StoreProfile** = store-facing display settings; **SystemConfig** = central-side system settings. Do not mix.
 
 ## Language Policy

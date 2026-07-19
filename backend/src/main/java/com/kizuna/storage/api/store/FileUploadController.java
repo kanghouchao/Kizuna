@@ -49,7 +49,7 @@ public class FileUploadController {
   /**
    * 保存先プレフィクスを決める。テナント文脈があればそのテナント配下、無ければ中央領域（central）へ保存する。
    *
-   * <p>中央領域への保存は中央資産管理能力（{@code PERM_CENTRAL_ASSET_MANAGE}）の保持者のみ許可する。テナント文脈を解決できない 店舗系・キャスト等は
+   * <p>中央領域への保存は中央資産管理能力（{@code PERM_PLATFORM_ASSET_MANAGE}）の保持者のみ許可する。テナント文脈を解決できない 店舗系・キャスト等は
    * {@code @TenantOptional} の許可経路に乗るため、資産を中央共有領域へ誤って保存しないよう fail-closed で 403 拒否する（#287 / #322 /
    * #326 / #398）。
    */
@@ -68,7 +68,7 @@ public class FileUploadController {
     if (authentication == null) {
       return false;
     }
-    String required = Capability.CENTRAL_ASSET_MANAGE.authority();
+    String required = Capability.PLATFORM_ASSET_MANAGE.authority();
     return authentication.getAuthorities().stream()
         .anyMatch(granted -> required.equals(granted.getAuthority()));
   }

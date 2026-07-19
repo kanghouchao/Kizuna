@@ -24,7 +24,7 @@ import {
   BuildingStorefrontIcon,
   KeyIcon,
 } from '@heroicons/react/24/outline';
-import { centralMenuApi, MenuVO, storeMenuApi } from '@/entities/menu';
+import { menuApi, MenuVO } from '@/entities/menu';
 import { getPlatformConsole, isStoreConsole } from '@/shared/lib';
 
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
@@ -51,7 +51,6 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
 export function Sidebar() {
   const pathname = usePathname();
   const [role, setRole] = useState<string>('central');
-  const [roleResolved, setRoleResolved] = useState(false);
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
@@ -59,7 +58,6 @@ export function Sidebar() {
     const platformConsole = getPlatformConsole();
     if (platformConsole) {
       setRole(isStoreConsole(platformConsole) ? 'tenant' : 'central');
-      setRoleResolved(true);
       return;
     }
     // なければ既存どおり middleware が設定した cookie から読む
@@ -67,23 +65,12 @@ export function Sidebar() {
     if (mwRole) {
       setRole(mwRole);
     }
-    setRoleResolved(true);
   }, []);
 
   useEffect(() => {
-    // ロール解決前に初期値 'central' でメニューを取得すると、ロール確定後の取得と競合してしまうため待つ（#324）
-    if (!roleResolved) {
-      return;
-    }
-
     const fetchMenus = async () => {
       try {
-        let menus: MenuVO[] = [];
-        if (role === 'central') {
-          menus = await centralMenuApi.getMenus();
-        } else if (role === 'tenant') {
-          menus = await storeMenuApi.getMenus();
-        }
+        const menus: MenuVO[] = await menuApi.getMenus();
 
         const mappedNavigation = menus.map(section => ({
           name: section.name,
@@ -98,13 +85,18 @@ export function Sidebar() {
       } catch (error) {
         console.error('Failed to fetch menus', error);
         // Fallback to basic Dashboard if API fails
+        // role state ではなく role effect と同じ解決順（platform console → x-mw-role cookie）で直接判定する。
+        const platformConsole = getPlatformConsole();
+        const isStore = platformConsole
+          ? isStoreConsole(platformConsole)
+          : Cookies.get('x-mw-role') === 'tenant';
         setNavigation([
           {
             name: 'メイン',
             items: [
               {
                 name: 'ダッシュボード',
-                href: role === 'tenant' ? '/tenant/dashboard' : '/central/dashboard',
+                href: isStore ? '/tenant/dashboard' : '/central/dashboard',
                 icon: HomeIcon,
               },
             ],
@@ -114,7 +106,7 @@ export function Sidebar() {
     };
 
     fetchMenus();
-  }, [role, roleResolved]);
+  }, []);
 
   return (
     <aside className="w-64 bg-slate-800 text-white shrink-0 hidden md:block border-r border-slate-700">
