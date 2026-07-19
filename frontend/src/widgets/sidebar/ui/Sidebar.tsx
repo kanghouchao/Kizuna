@@ -85,13 +85,18 @@ export function Sidebar() {
       } catch (error) {
         console.error('Failed to fetch menus', error);
         // Fallback to basic Dashboard if API fails
+        // role state ではなく role effect と同じ解決順（platform console → x-mw-role cookie）で直接判定する。
+        const platformConsole = getPlatformConsole();
+        const isStore = platformConsole
+          ? isStoreConsole(platformConsole)
+          : Cookies.get('x-mw-role') === 'tenant';
         setNavigation([
           {
             name: 'メイン',
             items: [
               {
                 name: 'ダッシュボード',
-                href: role === 'tenant' ? '/tenant/dashboard' : '/central/dashboard',
+                href: isStore ? '/tenant/dashboard' : '/central/dashboard',
                 icon: HomeIcon,
               },
             ],
@@ -101,7 +106,7 @@ export function Sidebar() {
     };
 
     fetchMenus();
-  }, [role]);
+  }, []);
 
   return (
     <aside className="w-64 bg-slate-800 text-white shrink-0 hidden md:block border-r border-slate-700">

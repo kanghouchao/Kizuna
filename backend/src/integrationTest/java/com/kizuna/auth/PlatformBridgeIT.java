@@ -327,7 +327,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     assertThat(res.getBody()).as("中央操作項目が可視であること").contains("テナント一覧", "スタッフ管理", "システム設定");
     assertThat(res.getBody())
         .as("店舗コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
-        .doesNotContain("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
+        .doesNotContain("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報", "業務管理", "HRM", "CRM");
   }
 
   @Test
@@ -345,6 +345,26 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     assertThat(res.getBody())
         .as("店舗操作項目が可視であること")
         .contains("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
+    assertThat(res.getBody())
+        .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
+        .doesNotContain("テナント一覧", "スタッフ管理", "システム設定");
+  }
+
+  @Test
+  @DisplayName("店舗スタッフの統合メニュー GET /platform/menus/me は店舗項目のみを返し、中央項目は一切現れないこと（強断言）")
+  void staffSeesOnlyStoreMenusViaUnifiedEndpoint() {
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/platform/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(STAFF_EMAIL))),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // 店舗スタッフ束は STORE_MENU_VIEW + 店舗 8 能力を持つが PLATFORM_MENU_VIEW を持たないため、中央グループは fail-closed で剔除される。
+    assertThat(res.getBody())
+        .as("店舗操作項目が可視であること")
+        .contains("ダッシュボード", "予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
     assertThat(res.getBody())
         .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
         .doesNotContain("テナント一覧", "スタッフ管理", "システム設定");

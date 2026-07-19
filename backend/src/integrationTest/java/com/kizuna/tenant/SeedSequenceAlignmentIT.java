@@ -31,8 +31,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class SeedSequenceAlignmentIT {
 
   /**
-   * 明示 id を播種している autoIncrement 表（issue #237 の setval 対象、#322 で platform_users を追加）。 #409 で
-   * central_menus は統合メニュー化により廃止された。
+   * 明示 id を播種している autoIncrement 表（issue #237 の setval 対象）。 #409 で central_menus は統合メニュー化により廃止された。
    */
   private static final List<String> SEEDED_IDENTITY_TABLES = List.of("t_stores", "t_users");
 

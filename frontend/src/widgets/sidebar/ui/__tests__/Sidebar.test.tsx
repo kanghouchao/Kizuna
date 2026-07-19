@@ -19,7 +19,7 @@ describe('Sidebar', () => {
     jest.clearAllMocks();
   });
 
-  it('store コンソール cookie でも central コンソール cookie でも同一 menuApi が呼ばれる', async () => {
+  it('store コンソール cookie でも同一 menuApi が呼ばれる', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'platform-role') return 'store';
       return undefined;
@@ -28,6 +28,7 @@ describe('Sidebar', () => {
     render(<Sidebar />);
 
     await waitFor(() => expect(menuApi.getMenus).toHaveBeenCalled());
+    expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
   });
 
   it('central コンソール cookie でも同一 menuApi が呼ばれる', async () => {
@@ -39,5 +40,6 @@ describe('Sidebar', () => {
     render(<Sidebar />);
 
     await waitFor(() => expect(menuApi.getMenus).toHaveBeenCalled());
+    expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
   });
 });
