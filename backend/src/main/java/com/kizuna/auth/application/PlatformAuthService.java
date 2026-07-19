@@ -84,7 +84,7 @@ public class PlatformAuthService {
     Map<String, Object> claims = new HashMap<>();
     claims.put("authorities", buildAuthorities(user, capabilities));
     claims.put("userType", user.getUserType().name());
-    // 店舗文脈（X-Tenant-ID）を確立できるか。STORE コンソール能力の保持者のみ true（SHARED は含めない —
+    // 店舗文脈（X-Store-ID）を確立できるか。STORE コンソール能力の保持者のみ true（SHARED は含めない —
     // HQ の跨店参照は店舗文脈を確立せず、僭称ヘッダは従来どおり 403）。TenantIdInterceptor が消費する。
     claims.put("storeBridge", hasStoreConsole(capabilities));
     claims.put("storeScopeType", user.getStoreScopeType().name());
