@@ -31,7 +31,7 @@ public class CentralTenantController {
   private final CentralTenantService tenantService;
 
   @GetMapping("tenants")
-  @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<PaginatedTenantVO<TenantVO>> list(
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(name = "per_page", defaultValue = "10") int perPage,
@@ -40,7 +40,7 @@ public class CentralTenantController {
   }
 
   @GetMapping("tenant/{id}")
-  @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<TenantVO> getById(@PathVariable String id) {
     return tenantService
         .getById(id)
@@ -65,28 +65,28 @@ public class CentralTenantController {
   }
 
   @PostMapping("tenant")
-  @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<Void> create(@Valid @RequestBody TenantCreateDTO tenant) {
     tenantService.create(tenant);
     return ResponseEntity.noContent().build();
   }
 
   @PutMapping("tenant/{id}")
-  @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<Void> update(@PathVariable String id, @RequestBody TenantUpdateDTO tenant) {
     tenantService.update(id, tenant);
     return ResponseEntity.noContent().build();
   }
 
   @DeleteMapping("tenant/{id}")
-  @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     tenantService.delete(id);
     return ResponseEntity.noContent().build();
   }
 
   @GetMapping("tenants/stats")
-  @PreAuthorize("hasAuthority('PERM_TENANT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<TenantStatusVO> stats() {
     return ResponseEntity.ok(tenantService.stats());
   }

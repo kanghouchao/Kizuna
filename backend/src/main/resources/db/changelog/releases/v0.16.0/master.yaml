@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: platform/01-capability-convergence.yaml
+      relativeToChangelogFile: true

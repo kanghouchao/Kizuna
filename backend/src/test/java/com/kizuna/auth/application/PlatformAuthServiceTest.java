@@ -68,11 +68,11 @@ class PlatformAuthServiceTest {
         .name("HQ管理者")
         .capabilities(
             Set.of(
-                Capability.TENANT_MANAGE,
+                Capability.STORE_MANAGE,
                 Capability.STAFF_MANAGE,
                 Capability.SYSTEM_CONFIG_MANAGE,
-                Capability.CENTRAL_MENU_VIEW,
-                Capability.CENTRAL_ASSET_MANAGE,
+                Capability.PLATFORM_MENU_VIEW,
+                Capability.PLATFORM_ASSET_MANAGE,
                 Capability.STORE_VIEW,
                 Capability.ORDER_SET_MANAGE))
         .build();
@@ -100,13 +100,13 @@ class PlatformAuthServiceTest {
     assertThat(authorities)
         .isEqualTo(
             List.of(
-                "PERM_CENTRAL_ASSET_MANAGE",
-                "PERM_CENTRAL_MENU_VIEW",
                 "PERM_ORDER_SET_MANAGE",
+                "PERM_PLATFORM_ASSET_MANAGE",
+                "PERM_PLATFORM_MENU_VIEW",
                 "PERM_STAFF_MANAGE",
+                "PERM_STORE_MANAGE",
                 "PERM_STORE_VIEW",
-                "PERM_SYSTEM_CONFIG_MANAGE",
-                "PERM_TENANT_MANAGE"));
+                "PERM_SYSTEM_CONFIG_MANAGE"));
     assertThat(claims.get("userType")).isEqualTo("STAFF");
     // HQ は STORE コンソール能力を持たないため店舗文脈を確立できない（僭称ヘッダは従来どおり 403）。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
@@ -250,7 +250,7 @@ class PlatformAuthServiceTest {
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
     assertThat(res.get().console()).isEqualTo("central");
-    assertThat(res.get().capabilities()).contains("TENANT_MANAGE", "STAFF_MANAGE");
+    assertThat(res.get().capabilities()).contains("STORE_MANAGE", "STAFF_MANAGE");
   }
 
   @Test

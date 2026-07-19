@@ -10,7 +10,7 @@ public final class Authorities {
 
   private Authorities() {}
 
-  /** 権限名（例: TENANT_MANAGE）を SecurityContext 上の authority 表現（PERM_TENANT_MANAGE）へ。 */
+  /** 権限名（例: STORE_MANAGE）を SecurityContext 上の authority 表現（PERM_STORE_MANAGE）へ。 */
   public static String permission(String permissionName) {
     return PERMISSION_PREFIX + permissionName;
   }

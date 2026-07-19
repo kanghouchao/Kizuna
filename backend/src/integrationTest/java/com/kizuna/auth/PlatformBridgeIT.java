@@ -293,7 +293,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("HQ は /central/tenants へ過橋でき、店長は TENANT_MANAGE なしのため 403 になること")
+  @DisplayName("HQ は /central/tenants へ過橋でき、店長は STORE_MANAGE なしのため 403 になること")
   void hqBridgesToCentralButManagerDoesNot() {
     ResponseEntity<String> hq =
         rest.exchange(
