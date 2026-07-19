@@ -49,6 +49,9 @@ tasks:
       - echo "🧪  バックエンドの統合テストを実行中（compose ネットワーク接続）..."
       # -v を付けない: 唯一のボリュームは gradle キャッシュで、消すと毎回フル再取得になり
       # 依存解決の flaky 要因になる。DB は tmpfs のためコンテナ削除だけで使い捨てが成立する
+      # 事前 down: 前回 run が中断されると defer が走らず依存コンテナが残留し、
+      # `docker compose run` がそれを静かに再利用して tmpfs DB の汚れが偽陽性を生む（#412）
+      - docker compose -f docker-compose.test.yml down
       - defer: docker compose -f docker-compose.test.yml down
       - docker compose -f docker-compose.test.yml run --rm integration-test
 
