@@ -147,7 +147,7 @@ After({ tags: '@cast-custom-fields' }, async ({ request }) => {
     await deleteCast(request, token, currentCastId).catch(() => {});
   }
   if (createdFieldKey) {
-    const res = await request.get('/api/tenant/casts/fields', {
+    const res = await request.get('/api/store/casts/fields', {
       headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
     });
     if (res.ok()) {

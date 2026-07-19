@@ -49,4 +49,4 @@ Each module follows the DDD four layers:
 - **Modulith docs**: `ModularityTests` generates them under `backend/docs/modulith/` (committed). The Documenter's Rel-line ordering is unstable, so unless there is a structural change, revert the diff with checkout.
 - **Optional filter queries**: the JPQL `(:param is null or ...)` pattern can cause a runtime 500 due to PostgreSQL parameter type inference (see `CustomerService.searchSpec`). Build variable filter conditions with a `Specification` instead.
 - **Build verification**: Gradle failure messages may be non-English depending on the local JVM locale. Do not judge success/failure with `grep error`; check the exit code or the presence of `BUILD FAILED`.
-- **Manual API verification**: when hitting a tenant-scoped endpoint directly with curl, the `X-Role: tenant` and `X-Tenant-ID: <id>` headers are required (see `TenantIdInterceptor`). Without them the request is treated as central.
+- **Manual API verification**: when hitting a store-scoped endpoint directly with curl, the `X-Role: store` and `X-Store-ID: <id>` headers are required (see `TenantIdInterceptor`). Without them the request is treated as central.

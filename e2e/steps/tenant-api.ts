@@ -1,19 +1,19 @@
 import type { APIRequestContext } from '@playwright/test';
 
-// store1 は seed 済み（tenant_id=1）。tenant API は Host に加えて
-// X-Role / X-Tenant-ID ヘッダでテナントコンテキストを確定する。
+// store1 は seed 済み（tenant_id=1）。store API は Host に加えて
+// X-Role / X-Store-ID ヘッダでテナントコンテキストを確定する。
 export const STORE1_TENANT_ID = '1';
 export const TENANT_HEADERS = {
-  'X-Role': 'tenant',
-  'X-Tenant-ID': STORE1_TENANT_ID,
+  'X-Role': 'store',
+  'X-Store-ID': STORE1_TENANT_ID,
 };
 export const ADMIN_EMAIL = 'tanaka.hanako@kizuna.test';
 export const ADMIN_PASSWORD = 'pass';
 
 /**
  * 店長ロール（STORE_MANAGER・store1/store2 双方に授権された v0.5.0 シード）の平台ユーザーで
- * ログインし JWT を返す。返却トークンは TENANT_HEADERS（X-Role/X-Tenant-ID）と併用することで
- * /tenant/** に店舗文脈を確立できる（STORE_BRIDGE_ROLES ブリッジ）。/platform/login は CSRF 免除。
+ * ログインし JWT を返す。返却トークンは TENANT_HEADERS（X-Role/X-Store-ID）と併用することで
+ * /store/** に店舗文脈を確立できる（STORE_BRIDGE_ROLES ブリッジ）。/platform/login は CSRF 免除。
  */
 export async function loginAsTenantAdmin(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/platform/login', {
@@ -27,7 +27,7 @@ export async function loginAsTenantAdmin(request: APIRequestContext): Promise<st
 }
 
 /**
- * template_key を変更する（PUT /tenant/config, hasAuthority('TENANT_CONFIG')）。
+ * template_key を変更する（PUT /store/config, hasAuthority('TENANT_CONFIG')）。
  * backend は Jackson SNAKE_CASE 設定のため JSON キーは template_key。
  * Bearer トークン付きリクエストは CSRF 免除。
  */
@@ -36,7 +36,7 @@ export async function setTemplateKey(
   token: string,
   templateKey: string
 ): Promise<void> {
-  const res = await request.put('/api/tenant/config', {
+  const res = await request.put('/api/store/config', {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
     data: { template_key: templateKey },
   });
@@ -45,9 +45,9 @@ export async function setTemplateKey(
   }
 }
 
-/** 公開設定から現在の template_key を取得する（GET /tenant/config/public）。 */
+/** 公開設定から現在の template_key を取得する（GET /store/config/public）。 */
 export async function getPublicTemplateKey(request: APIRequestContext): Promise<string> {
-  const res = await request.get('/api/tenant/config/public', { headers: TENANT_HEADERS });
+  const res = await request.get('/api/store/config/public', { headers: TENANT_HEADERS });
   if (!res.ok()) {
     throw new Error(`get public config failed: ${res.status()} ${await res.text()}`);
   }
@@ -55,12 +55,12 @@ export async function getPublicTemplateKey(request: APIRequestContext): Promise<
   return body.template_key as string;
 }
 
-/** 管理画面向けの店舗設定を取得する（GET /tenant/config, hasAuthority('TENANT_CONFIG')）。 */
+/** 管理画面向けの店舗設定を取得する（GET /store/config, hasAuthority('TENANT_CONFIG')）。 */
 export async function getStoreConfig(
   request: APIRequestContext,
   token: string
 ): Promise<Record<string, unknown>> {
-  const res = await request.get('/api/tenant/config', {
+  const res = await request.get('/api/store/config', {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
@@ -70,7 +70,7 @@ export async function getStoreConfig(
 }
 
 /**
- * custom_texts のみ更新する（PUT /tenant/config, hasAuthority('TENANT_CONFIG')）。
+ * custom_texts のみ更新する（PUT /store/config, hasAuthority('TENANT_CONFIG')）。
  * MapStruct が NullValuePropertyMappingStrategy.IGNORE のため、他フィールドは送らず不変のまま。
  */
 export async function setCustomTexts(
@@ -78,7 +78,7 @@ export async function setCustomTexts(
   token: string,
   customTexts: Record<string, string>
 ): Promise<void> {
-  const res = await request.put('/api/tenant/config', {
+  const res = await request.put('/api/store/config', {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
     data: { custom_texts: customTexts },
   });
@@ -87,13 +87,13 @@ export async function setCustomTexts(
   }
 }
 
-/** キャストを作成し id を返す（POST /api/tenant/casts, hasAuthority('CAST_MANAGE')）。 */
+/** キャストを作成し id を返す（POST /api/store/casts, hasAuthority('CAST_MANAGE')）。 */
 export async function createCast(
   request: APIRequestContext,
   token: string,
   name: string
 ): Promise<string> {
-  const res = await request.post('/api/tenant/casts', {
+  const res = await request.post('/api/store/casts', {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
     data: { name },
   });
@@ -104,13 +104,13 @@ export async function createCast(
   return body.id as string;
 }
 
-/** キャストを削除する（DELETE /api/tenant/casts/{id}, hasAuthority('CAST_MANAGE')）。 */
+/** キャストを削除する（DELETE /api/store/casts/{id}, hasAuthority('CAST_MANAGE')）。 */
 export async function deleteCast(
   request: APIRequestContext,
   token: string,
   id: string
 ): Promise<void> {
-  const res = await request.delete(`/api/tenant/casts/${id}`, {
+  const res = await request.delete(`/api/store/casts/${id}`, {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
@@ -127,14 +127,14 @@ export interface CreateCastFieldDefinitionParams {
 
 /**
  * カスタムフィールド定義を作成し id を返す
- * （POST /api/tenant/casts/fields, hasAuthority('ROLE_STORE_MANAGER')）。
+ * （POST /api/store/casts/fields, hasAuthority('ROLE_STORE_MANAGER')）。
  */
 export async function createCastFieldDefinition(
   request: APIRequestContext,
   token: string,
   params: CreateCastFieldDefinitionParams
 ): Promise<string> {
-  const res = await request.post('/api/tenant/casts/fields', {
+  const res = await request.post('/api/store/casts/fields', {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
     data: { key: params.key, label: params.label, is_public: params.isPublic },
   });
@@ -147,14 +147,14 @@ export async function createCastFieldDefinition(
 
 /**
  * カスタムフィールド定義を削除する
- * （DELETE /api/tenant/casts/fields/{id}, hasAuthority('ROLE_STORE_MANAGER')）。
+ * （DELETE /api/store/casts/fields/{id}, hasAuthority('ROLE_STORE_MANAGER')）。
  */
 export async function deleteCastFieldDefinition(
   request: APIRequestContext,
   token: string,
   id: string
 ): Promise<void> {
-  const res = await request.delete(`/api/tenant/casts/fields/${id}`, {
+  const res = await request.delete(`/api/store/casts/fields/${id}`, {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
@@ -171,13 +171,13 @@ export interface CreateShiftParams {
   status: string;
 }
 
-/** シフトを作成し id を返す（POST /api/tenant/shifts, hasAuthority('CAST_MANAGE')）。 */
+/** シフトを作成し id を返す（POST /api/store/shifts, hasAuthority('CAST_MANAGE')）。 */
 export async function createShift(
   request: APIRequestContext,
   token: string,
   params: CreateShiftParams
 ): Promise<string> {
-  const res = await request.post('/api/tenant/shifts', {
+  const res = await request.post('/api/store/shifts', {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
     data: {
       cast_id: params.castId,
@@ -194,13 +194,13 @@ export async function createShift(
   return body.id as string;
 }
 
-/** シフトを削除する（DELETE /api/tenant/shifts/{id}, hasAuthority('CAST_MANAGE')）。 */
+/** シフトを削除する（DELETE /api/store/shifts/{id}, hasAuthority('CAST_MANAGE')）。 */
 export async function deleteShift(
   request: APIRequestContext,
   token: string,
   id: string
 ): Promise<void> {
-  const res = await request.delete(`/api/tenant/shifts/${id}`, {
+  const res = await request.delete(`/api/store/shifts/${id}`, {
     headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
