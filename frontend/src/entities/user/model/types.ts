@@ -15,11 +15,11 @@ export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
 
 // 能力（バックエンド user/domain/Capability.java と対応）
 export type PlatformCapability =
-  | 'TENANT_MANAGE'
+  | 'STORE_MANAGE'
   | 'STAFF_MANAGE'
   | 'SYSTEM_CONFIG_MANAGE'
-  | 'CENTRAL_MENU_VIEW'
-  | 'CENTRAL_ASSET_MANAGE'
+  | 'PLATFORM_MENU_VIEW'
+  | 'PLATFORM_ASSET_MANAGE'
   | 'STORE_VIEW'
   | 'ORDER_SET_MANAGE'
   | 'ORDER_MANAGE'
@@ -29,7 +29,8 @@ export type PlatformCapability =
   | 'CAST_INVITE'
   | 'CAST_FIELD_DEF_VIEW'
   | 'CAST_FIELD_DEF_MANAGE'
-  | 'STORE_PROFILE_MANAGE';
+  | 'STORE_PROFILE_MANAGE'
+  | 'STORE_MENU_VIEW';
 
 // ログイン後の着地先（サーバ側が能力目録から導出する — /me の console）
 export type PlatformConsole = 'central' | 'store' | 'none';
