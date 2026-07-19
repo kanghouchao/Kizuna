@@ -60,23 +60,23 @@ class JwtAuthenticationFilterTest {
   }
 
   @Test
-  @DisplayName("PlatformAuth 発行のトークンは /central 配下で認証されること（過橋 #324）")
-  void platformTokenOnCentralPath() throws Exception {
+  @DisplayName("PlatformAuth 発行のトークンは /platform/configs で認証されること（過橋 #324）")
+  void platformTokenOnPlatformConfigsPath() throws Exception {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
-    assertThat(authenticated("/central/configs", "PlatformAuth")).isTrue();
+    assertThat(authenticated("/platform/configs", "PlatformAuth")).isTrue();
   }
 
   @Test
-  @DisplayName("PlatformAuth 発行のトークンは /tenant 配下で認証されること（過橋 #324）")
-  void platformTokenOnTenantPath() throws Exception {
+  @DisplayName("PlatformAuth 発行のトークンは /store 配下で認証されること（過橋 #324）")
+  void platformTokenOnStorePath() throws Exception {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
-    assertThat(authenticated("/tenant/orders", "PlatformAuth")).isTrue();
+    assertThat(authenticated("/store/orders", "PlatformAuth")).isTrue();
   }
 
   @Test
   @DisplayName("非 PlatformAuth 発行のトークンは制限ドメインで認証されないこと")
   void nonPlatformTokenOnRestrictedPath() throws Exception {
-    assertThat(authenticated("/central/configs", "OtherAuth")).isFalse();
+    assertThat(authenticated("/store/orders", "OtherAuth")).isFalse();
   }
 
   @Test
@@ -90,6 +90,6 @@ class JwtAuthenticationFilterTest {
   @DisplayName("ブラックリスト登録済みのトークンは認証されないこと")
   void blacklistedToken() throws Exception {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(true);
-    assertThat(authenticated("/central/configs", "PlatformAuth")).isFalse();
+    assertThat(authenticated("/platform/configs", "PlatformAuth")).isFalse();
   }
 }

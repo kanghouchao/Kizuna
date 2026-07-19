@@ -25,7 +25,7 @@ class MaintenanceModeInterceptorTest {
   @DisplayName("メンテナンスモード中はリクエストを 503 で拒否すること")
   void preHandle_maintenanceOn() throws Exception {
     when(systemConfigService.getConfigValue("maintenance_mode")).thenReturn(Optional.of("true"));
-    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/tenant/orders");
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/store/orders");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -39,7 +39,7 @@ class MaintenanceModeInterceptorTest {
   @DisplayName("メンテナンスモードでなければ通過すること")
   void preHandle_maintenanceOff() throws Exception {
     when(systemConfigService.getConfigValue("maintenance_mode")).thenReturn(Optional.of("false"));
-    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/tenant/orders");
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/store/orders");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -52,7 +52,7 @@ class MaintenanceModeInterceptorTest {
   @DisplayName("設定が存在しない場合は通過すること")
   void preHandle_configMissing() throws Exception {
     when(systemConfigService.getConfigValue("maintenance_mode")).thenReturn(Optional.empty());
-    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/tenant/orders");
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/store/orders");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     assertThat(interceptor.preHandle(request, response, new Object())).isTrue();

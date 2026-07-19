@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/tenant/casts/fields")
+@RequestMapping("/store/casts/fields")
 @RequiredArgsConstructor
 public class CastFieldDefinitionController {
 
