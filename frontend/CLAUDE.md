@@ -38,6 +38,6 @@ frontend/src/
   - Component names: **PascalCase**
   - API-related types (interface/type) and their property names: **snake_case** (matching the backend JSON keys; existing camelCase types are a known mismatch tracked in a separate issue)
   - Internal variables/functions: normal TypeScript conventions, but data coming from the API keeps snake_case
-  - Store-side vocabulary uses the Store prefix: StoreProfile*, StoreUserResponse, storeAuthApi, storeMenuApi
+  - Store-side vocabulary uses the Store prefix: StoreProfile*, StoreUserResponse, storeAuthApi
 - **Coverage**: Jest threshold of 70% lines/statements. Targets are shared/api, shared/lib, and entities (pages and templates are excluded).
 - **Disabling a Steiger rule requires a reason comment in steiger.config.mjs** (typo-in-layer-name / repetitive-naming / insignificant-slice are off by design decision or rule specification).
