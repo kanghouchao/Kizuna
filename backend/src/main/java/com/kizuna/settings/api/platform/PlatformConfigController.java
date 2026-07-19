@@ -1,4 +1,4 @@
-package com.kizuna.settings.api.central;
+package com.kizuna.settings.api.platform;
 
 import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/central/configs")
+@RequestMapping("/platform/configs")
 @RequiredArgsConstructor
-public class CentralConfigController {
+public class PlatformConfigController {
 
   private final SystemConfigService systemConfigService;
 
