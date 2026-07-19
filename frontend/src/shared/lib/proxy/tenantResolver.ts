@@ -47,7 +47,7 @@ export async function resolveTenant(request: NextRequest): Promise<{
 
   // Cookie にテナント情報がない場合、バックエンド API を呼び出す（バックエンドにキャッシュあり）
   const validationApiUrl =
-    process.env.TENANT_VALIDATION_API_URL || 'http://backend:8080/central/tenant';
+    process.env.STORE_LOOKUP_API_URL || 'http://backend:8080/platform/stores/lookup';
   const url = validationApiUrl + `?domain=${encodeURIComponent(hostname)}`;
 
   try {
@@ -60,7 +60,7 @@ export async function resolveTenant(request: NextRequest): Promise<{
       const isValid = Boolean(tenantId || tenantName || data.domain);
 
       // 中央応答（TenantVO）は template_key を返さないため、含まれていれば従来どおり採用し、
-      // 無ければテナント側の /tenant/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
+      // 無ければテナント側の /store/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
       let templateKey = 'default';
       if (data.template_key) {
         templateKey = String(data.template_key);
@@ -94,17 +94,17 @@ export async function resolveTenant(request: NextRequest): Promise<{
 }
 
 // テナント側の StoreProfile から template_key を取得する。
-// 認証トークン不要・キャッシュ無しで、X-Role/X-Tenant-ID ヘッダのみで動作する公開エンドポイント。
+// 認証トークン不要・キャッシュ無しで、X-Role/X-Store-ID ヘッダのみで動作する公開エンドポイント。
 // 取得失敗・欠落時は 'default' に回落し、決して throw しない。
 async function fetchTemplateKey(tenantId: string): Promise<string> {
   const configApiUrl =
-    process.env.TENANT_CONFIG_API_URL || 'http://backend:8080/tenant/config/public';
+    process.env.STORE_CONFIG_API_URL || 'http://backend:8080/store/config/public';
 
   try {
     const res = await fetch(configApiUrl, {
       headers: {
-        'X-Role': 'tenant',
-        'X-Tenant-ID': tenantId,
+        'X-Role': 'store',
+        'X-Store-ID': tenantId,
       },
     });
     const config = await res.json().catch(() => null);

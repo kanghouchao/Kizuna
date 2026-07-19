@@ -6,13 +6,13 @@ import { cookies } from 'next/headers';
  *
  * 機能:
  * - バックエンドAPIのベースURLの自動解決
- * - テナントコンテキスト (X-Tenant-ID) の自動注入
+ * - テナントコンテキスト (X-Store-ID) の自動注入
  * - 共通のエラーハンドリング
  */
 export const serverClient = {
   /**
    * GETリクエストを実行します
-   * @param path APIパス (例: '/tenant/casts/public')
+   * @param path APIパス (例: '/store/casts/public')
    * @param options fetchオプション
    */
   async get<T>(path: string, options?: RequestInit): Promise<T> {
@@ -36,7 +36,7 @@ export const serverClient = {
    */
   resolveUrl(path: string): string {
     const backendUrl =
-      process.env.TENANT_VALIDATION_API_URL?.replace('/central/tenant', '') ||
+      process.env.STORE_LOOKUP_API_URL?.replace('/platform/stores/lookup', '') ||
       'http://backend:8080';
 
     // pathがスラッシュで始まっていない場合の補正
@@ -54,11 +54,11 @@ export const serverClient = {
 
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-Role': 'tenant', // ストアフロントからのアクセスは常に tenant ロール
+      'X-Role': 'store', // ストアフロントからのアクセスは常に store ロール
     };
 
     if (tenantId) {
-      defaultHeaders['X-Tenant-ID'] = tenantId;
+      defaultHeaders['X-Store-ID'] = tenantId;
     }
 
     return {

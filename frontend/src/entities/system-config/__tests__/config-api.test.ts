@@ -11,16 +11,16 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('systemConfigService', () => {
-  it('getAllConfigs は /central/configs を GET する', async () => {
+  it('getAllConfigs は /platform/configs を GET する', async () => {
     expect(await systemConfigService.getAllConfigs()).toEqual({
       ok: true,
-      url: '/central/configs',
+      url: '/platform/configs',
     });
   });
-  it('updateConfig は /central/configs を PUT する', async () => {
+  it('updateConfig は /platform/configs を PUT する', async () => {
     expect(await systemConfigService.updateConfig({ config_key: 'k', config_value: 'v' })).toEqual({
       ok: true,
-      url: '/central/configs',
+      url: '/platform/configs',
     });
   });
 });

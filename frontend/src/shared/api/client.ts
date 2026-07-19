@@ -38,20 +38,21 @@ apiClient.interceptors.request.use(
         if (
           isStoreConsole(platformConsole) &&
           storeId &&
-          (url.startsWith('/tenant') || url.startsWith('/files'))
+          (url.startsWith('/store') || url.startsWith('/files'))
         ) {
-          (config.headers as any)['X-Role'] = 'tenant';
-          (config.headers as any)['X-Tenant-ID'] = storeId;
+          (config.headers as any)['X-Role'] = 'store';
+          (config.headers as any)['X-Store-ID'] = storeId;
         }
       } else {
         // Attach role and tenant context from middleware cookies
         const role = Cookies.get('x-mw-role');
         if (role) {
-          (config.headers as any)['X-Role'] = role;
+          const wireRole = role.toLowerCase() === 'tenant' ? 'store' : role;
+          (config.headers as any)['X-Role'] = wireRole;
           if (role.toLowerCase() === 'tenant') {
             const tenantId = Cookies.get('x-mw-tenant-id');
             if (tenantId) {
-              (config.headers as any)['X-Tenant-ID'] = tenantId;
+              (config.headers as any)['X-Store-ID'] = tenantId;
             }
           }
         }

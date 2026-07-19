@@ -11,22 +11,22 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('customerApi', () => {
-  it('list は /tenant/customers を GET する', async () => {
-    expect(await customerApi.list()).toEqual({ ok: true, url: '/tenant/customers' });
+  it('list は /store/customers を GET する', async () => {
+    expect(await customerApi.list()).toEqual({ ok: true, url: '/store/customers' });
   });
-  it('get は /tenant/customers/:id を GET する', async () => {
-    expect(await customerApi.get('c1')).toEqual({ ok: true, url: '/tenant/customers/c1' });
+  it('get は /store/customers/:id を GET する', async () => {
+    expect(await customerApi.get('c1')).toEqual({ ok: true, url: '/store/customers/c1' });
   });
-  it('create は /tenant/customers を POST する', async () => {
+  it('create は /store/customers を POST する', async () => {
     expect(await customerApi.create({ name: 'A' })).toEqual({
       ok: true,
-      url: '/tenant/customers',
+      url: '/store/customers',
     });
   });
-  it('update は /tenant/customers/:id を PUT する', async () => {
-    expect(await customerApi.update('c1', {})).toEqual({ ok: true, url: '/tenant/customers/c1' });
+  it('update は /store/customers/:id を PUT する', async () => {
+    expect(await customerApi.update('c1', {})).toEqual({ ok: true, url: '/store/customers/c1' });
   });
-  it('delete は /tenant/customers/:id を DELETE する', async () => {
+  it('delete は /store/customers/:id を DELETE する', async () => {
     await expect(customerApi.delete('c1')).resolves.toBeUndefined();
   });
 });

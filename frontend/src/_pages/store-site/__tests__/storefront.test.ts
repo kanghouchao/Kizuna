@@ -20,7 +20,7 @@ describe('storefrontService', () => {
 
       const result = await storefrontService.fetchCasts();
 
-      expect(serverClient.get).toHaveBeenCalledWith('/tenant/casts/public', expect.any(Object));
+      expect(serverClient.get).toHaveBeenCalledWith('/store/casts/public', expect.any(Object));
       expect(result).toEqual(mockCasts);
     });
 
@@ -65,7 +65,7 @@ describe('storefrontService', () => {
 
       const result = await storefrontService.fetchSiteConfig();
 
-      expect(serverClient.get).toHaveBeenCalledWith('/tenant/config/public', expect.any(Object));
+      expect(serverClient.get).toHaveBeenCalledWith('/store/config/public', expect.any(Object));
       expect(result).toEqual(mockConfig);
     });
 
@@ -95,7 +95,7 @@ describe('storefrontService', () => {
 
       const result = await storefrontService.fetchShifts();
 
-      expect(serverClient.get).toHaveBeenCalledWith('/tenant/shifts/public', {
+      expect(serverClient.get).toHaveBeenCalledWith('/store/shifts/public', {
         cache: 'no-store',
       });
       expect(result).toEqual(mockShifts);

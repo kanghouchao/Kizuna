@@ -14,7 +14,7 @@ global.fetch = jest.fn();
 describe('serverClient', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.TENANT_VALIDATION_API_URL = 'http://test-backend';
+    process.env.STORE_LOOKUP_API_URL = 'http://test-backend';
   });
 
   describe('resolveUrl', () => {
@@ -27,7 +27,7 @@ describe('serverClient', () => {
     });
 
     it('環境変数が未設定の場合にlocalhostへフォールバックすること', () => {
-      delete process.env.TENANT_VALIDATION_API_URL;
+      delete process.env.STORE_LOOKUP_API_URL;
       expect(serverClient.resolveUrl('/test')).toBe('http://backend:8080/test');
     });
   });
@@ -38,14 +38,14 @@ describe('serverClient', () => {
       const headers = await serverClient.getHeaders();
       expect(headers).toEqual({
         'Content-Type': 'application/json',
-        'X-Role': 'tenant',
+        'X-Role': 'store',
       });
     });
 
-    it('CookieからX-Tenant-IDを注入すること', async () => {
+    it('CookieからX-Store-IDを注入すること', async () => {
       mockCookieStore.get.mockReturnValue({ value: '123' });
       const headers = await serverClient.getHeaders();
-      expect(headers).toHaveProperty('X-Tenant-ID', '123');
+      expect(headers).toHaveProperty('X-Store-ID', '123');
     });
 
     it('カスタムヘッダーをマージすること', async () => {
@@ -69,7 +69,7 @@ describe('serverClient', () => {
         'http://test-backend/test',
         expect.objectContaining({
           headers: expect.objectContaining({
-            'X-Tenant-ID': '123',
+            'X-Store-ID': '123',
           }),
         })
       );

@@ -26,7 +26,7 @@ export const storefrontService = {
   async fetchCasts(): Promise<Cast[]> {
     try {
       // serverClient が URL解決、ヘッダー注入を自動で行います
-      return await serverClient.get<Cast[]>('/tenant/casts/public', {
+      return await serverClient.get<Cast[]>('/store/casts/public', {
         next: { revalidate: 60 },
       });
     } catch (error) {
@@ -48,7 +48,7 @@ export const storefrontService = {
    */
   async fetchShifts(): Promise<PublicShift[]> {
     try {
-      return await serverClient.get<PublicShift[]>('/tenant/shifts/public', {
+      return await serverClient.get<PublicShift[]>('/store/shifts/public', {
         cache: 'no-store',
       });
     } catch (error) {
@@ -62,7 +62,7 @@ export const storefrontService = {
    */
   async fetchSiteConfig(): Promise<SiteConfig> {
     try {
-      return await serverClient.get<SiteConfig>('/tenant/config/public', {
+      return await serverClient.get<SiteConfig>('/store/config/public', {
         next: { revalidate: 60 },
       });
     } catch (error) {
