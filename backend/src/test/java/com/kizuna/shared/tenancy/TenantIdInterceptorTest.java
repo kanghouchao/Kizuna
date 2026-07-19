@@ -56,11 +56,11 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("X-Role が tenant かつ X-Tenant-ID が数値ならテナント文脈を設定すること")
+  @DisplayName("X-Role が store かつ X-Store-ID が数値ならテナント文脈を設定すること")
   void preHandle_setsTenantIdForTenantRole() {
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "42");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "42");
 
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
@@ -69,11 +69,11 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("X-Role が tenant でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
+  @DisplayName("X-Role が store でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
   void preHandle_ignoresNonTenantRole() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "central");
-    request.addHeader("X-Tenant-ID", "42");
+    request.addHeader("X-Store-ID", "42");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -84,11 +84,11 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("X-Tenant-ID が数値でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
+  @DisplayName("X-Store-ID が数値でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
   void preHandle_ignoresNonNumericTenantId() {
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "abc");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "abc");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -106,8 +106,8 @@ class TenantIdInterceptorTest {
             new AnonymousAuthenticationToken(
                 "key", "anonymous", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "7");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "7");
 
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
@@ -155,12 +155,12 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("認証済みだが tenantId claim が無いトークンが X-Role:tenant で別テナントを名乗ると 403 で拒否すること（#294）")
+  @DisplayName("認証済みだが tenantId claim が無いトークンが X-Role:store で別テナントを名乗ると 403 で拒否すること（#294）")
   void preHandle_rejectsAuthenticatedTokenWithoutTenantIdClaimSpoofingHeader() {
     authenticateWithoutTenantId();
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "2");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "2");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -171,11 +171,11 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("未認証で X-Tenant-ID が long 範囲を超える桁数なら 400 で拒否すること（#288）")
+  @DisplayName("未認証で X-Store-ID が long 範囲を超える桁数なら 400 で拒否すること（#288）")
   void preHandle_rejectsOverflowingTenantIdHeaderWith400() {
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "99999999999999999999");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "99999999999999999999");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -213,12 +213,12 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("平台 SPECIFIC{1} が X-Tenant-ID:1 を名乗れば授権内としてテナント文脈を設定すること")
+  @DisplayName("平台 SPECIFIC{1} が X-Store-ID:1 を名乗れば授権内としてテナント文脈を設定すること")
   void preHandle_platformSpecific_allowsAuthorizedStore() {
     authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "1");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "1");
 
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
@@ -227,12 +227,12 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("平台 SPECIFIC{1} が非授権店舗 X-Tenant-ID:2 を名乗ると 403 で拒否し文脈を設定しないこと")
+  @DisplayName("平台 SPECIFIC{1} が非授権店舗 X-Store-ID:2 を名乗ると 403 で拒否し文脈を設定しないこと")
   void preHandle_platformSpecific_rejectsUnauthorizedStore() {
     authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "2");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "2");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -243,12 +243,12 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("平台 ALL_STORES は任意の X-Tenant-ID をテナント文脈に設定すること")
+  @DisplayName("平台 ALL_STORES は任意の X-Store-ID をテナント文脈に設定すること")
   void preHandle_platformAllStores_allowsAnyStore() {
     authenticateWithPlatformScope("ALL_STORES", List.of());
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "999");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "999");
 
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
@@ -284,11 +284,11 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("平台トークンで X-Role が欠落し X-Tenant-ID のみなら店舗文脈は成立せず 403 で拒否すること")
+  @DisplayName("平台トークンで X-Role が欠落し X-Store-ID のみなら店舗文脈は成立せず 403 で拒否すること")
   void preHandle_platformScope_missingRoleHeader_rejects() {
     authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Tenant-ID", "1");
+    request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -303,8 +303,8 @@ class TenantIdInterceptorTest {
   void preHandle_platformScope_invalidStoreIds_rejects() {
     authenticateWithPlatformScope("SPECIFIC_STORES", List.of("not-a-number"));
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "1");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -321,8 +321,8 @@ class TenantIdInterceptorTest {
     // 真になる前に storeBridge で弾き、isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立を塞ぐ。
     authenticateWithPlatformScope(false, "ALL_STORES", List.of());
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "1");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());
@@ -337,8 +337,8 @@ class TenantIdInterceptorTest {
   void preHandle_withStoreBridge_allowsAuthorizedStore() {
     authenticateWithPlatformScope(true, "SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "1");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "1");
 
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
@@ -359,8 +359,8 @@ class TenantIdInterceptorTest {
     authentication.setDetails(claims);
     SecurityContextHolder.getContext().setAuthentication(authentication);
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "tenant");
-    request.addHeader("X-Tenant-ID", "1");
+    request.addHeader("X-Role", "store");
+    request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     boolean result = interceptor.preHandle(request, response, new Object());

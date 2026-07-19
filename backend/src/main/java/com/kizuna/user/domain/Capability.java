@@ -66,7 +66,7 @@ public enum Capability {
   public enum Console {
     /** 中央（HQ）コンソール専用。 */
     CENTRAL,
-    /** 店舗コンソール専用。保持者は店舗文脈（X-Tenant-ID）を確立できる。 */
+    /** 店舗コンソール専用。保持者は店舗文脈（X-Store-ID）を確立できる。 */
     STORE,
     /** 中央・店舗の両方から利用する跨店参照系。 */
     SHARED

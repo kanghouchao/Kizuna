@@ -22,11 +22,11 @@ public class TenantIdInterceptor implements HandlerInterceptor {
   private final TenantContext tenantContext;
 
   private static final String HEADER_ROLE = "X-Role";
-  private static final String HEADER_TENANT_ID = "X-Tenant-ID";
-  private static final String HEADER_ROLE_TENANT = "tenant";
+  private static final String HEADER_TENANT_ID = "X-Store-ID";
+  private static final String HEADER_ROLE_TENANT = "store";
 
   /**
-   * 平台トークンで店舗文脈（X-Tenant-ID）を確立できるかを示す claim 名。値はログイン時に STORE コンソール能力の保持から導出される（#398 —
+   * 平台トークンで店舗文脈（X-Store-ID）を確立できるかを示す claim 名。値はログイン時に STORE コンソール能力の保持から導出される（#398 —
    * PlatformAuthService）。 shared 層は user モジュールへ依存しないため能力目録を参照せず、導出済みの boolean claim だけを消費する。
    */
   private static final String CLAIM_STORE_BRIDGE = "storeBridge";
@@ -43,7 +43,7 @@ public class TenantIdInterceptor implements HandlerInterceptor {
         HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
             && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID));
     if (scope != null) {
-      // 平台トークン（#324 過橋）: X-Role: tenant + 数値 X-Tenant-ID を要求し、授権店舗集合で検証する（fail-closed）。
+      // 平台トークン（#324 過橋）: X-Role: store + 数値 X-Store-ID を要求し、授権店舗集合で検証する（fail-closed）。
       if (HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
           && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
         // 店舗文脈を名乗れるのは STORE コンソール能力の保持者（storeBridge claim）のみ。CAST/MEMBER/HQ が
