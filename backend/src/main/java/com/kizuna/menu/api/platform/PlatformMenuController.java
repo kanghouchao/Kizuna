@@ -1,7 +1,7 @@
-package com.kizuna.menu.api.store;
+package com.kizuna.menu.api.platform;
 
 import com.kizuna.menu.api.dto.MenuVO;
-import com.kizuna.menu.application.StoreMenuService;
+import com.kizuna.menu.application.MenuService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -11,11 +11,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/tenant/menus")
+@RequestMapping("/platform/menus")
 @RequiredArgsConstructor
-public class MenuController {
+public class PlatformMenuController {
 
-  private final StoreMenuService menuService;
+  private final MenuService menuService;
 
   @GetMapping("/me")
   @PreAuthorize("isAuthenticated()")

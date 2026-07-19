@@ -313,69 +313,91 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("過橋で店舗メニュー GET /tenant/menus/me が権限ゲート項目（予約・案件管理）まで返すこと（サイドバー成立）")
-  void bridgeServesStoreMenus() {
+  @DisplayName("HQ の統合メニュー GET /platform/menus/me は中央項目のみを返し、店舗項目は一切現れないこと（強断言）")
+  void hqSeesOnlyPlatformMenusViaUnifiedEndpoint() {
     ResponseEntity<String> res =
         rest.exchange(
-            "/tenant/menus/me",
-            HttpMethod.GET,
-            new HttpEntity<>(bridgeHeaders(platformToken(MANAGER_EMAIL), TENANT_A)),
-            String.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    // 旧権限モデル撤去（#326）で permission 列は null 化済みのため、MenuTreeAssembler.visible() の
-    // null 判定分岐により無条件可視になる。生ボディに権限ゲートラベルが現れることで可視性を固定する（非空断言では捕捉できない）。
-    assertThat(res.getBody())
-        .as("旧 ORDER_MANAGE ゲートの「予約・案件管理」が可視であること（permission 列 null 化により無条件可視）")
-        .contains("予約・案件管理");
-  }
-
-  @Test
-  @DisplayName("過橋で中央メニュー GET /central/menus/me が権限ゲート項目（テナント一覧）まで返すこと")
-  void bridgeServesCentralMenus() {
-    ResponseEntity<String> res =
-        rest.exchange(
-            "/central/menus/me",
+            "/platform/menus/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    // 旧権限モデル撤去（#326）で permission 列は null 化済みのため、MenuTreeAssembler.visible() の
-    // null 判定分岐により無条件可視になる。
+    // HQ管理者束は中央 5 能力 + SHARED 2 のみで STORE_MENU_VIEW を持たないため、店舗グループは fail-closed で剔除される。
+    assertThat(res.getBody()).as("中央操作項目が可視であること").contains("テナント一覧", "スタッフ管理", "システム設定");
     assertThat(res.getBody())
-        .as("旧 TENANT_MANAGE ゲートの「テナント一覧」が可視であること（permission 列 null 化により無条件可視）")
-        .contains("テナント一覧");
+        .as("店舗コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
+        .doesNotContain("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
   }
 
   @Test
-  @DisplayName("HQ 以外の平台トークンでは GET /central/menus/me が 403 になること（follow-up #1: 中央メニューの可視漏れ封鎖）")
-  void nonHqCannotReadCentralMenus() {
-    // 中央には TenantIdInterceptor 相当の防御が無いため、isAuthenticated() のみだと店長・スタッフ等の
-    // どの平台トークンでも中央メニューを読めてしまう（#325 review follow-up #1）。PERM_CENTRAL_MENU_VIEW（HQ管理者束のみ保持）限定へ強化する。
+  @DisplayName("店長の統合メニュー GET /platform/menus/me は店舗項目のみを返し、中央項目は一切現れないこと（強断言）")
+  void managerSeesOnlyStoreMenusViaUnifiedEndpoint() {
     ResponseEntity<String> res =
         rest.exchange(
-            "/central/menus/me",
+            "/platform/menus/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(MANAGER_EMAIL))),
             String.class);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // 店長束は STORE_MENU_VIEW + 店舗 8 能力を持つが PLATFORM_MENU_VIEW を持たないため、中央グループは fail-closed で剔除される。
+    assertThat(res.getBody())
+        .as("店舗操作項目が可視であること")
+        .contains("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
+    assertThat(res.getBody())
+        .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
+        .doesNotContain("テナント一覧", "スタッフ管理", "システム設定");
   }
 
   @Test
-  @DisplayName("CAST は授権スコープでも店舗ヘッダで /tenant/menus/me に過橋できず 403 になること（役割線）")
+  @DisplayName("CAST の統合メニュー GET /platform/menus/me は 200 で空配列になること（PERM_* 皆無で fail-closed）")
+  void castSeesEmptyUnifiedMenu() {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(CAST_EMAIL))),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(res.getBody().isArray()).isTrue();
+    assertThat(res.getBody().size()).as("全ノードが permission 非 null のため CAST には 1 件も可視でない").isZero();
+  }
+
+  @Test
+  @DisplayName("CAST は授権スコープでも店舗ヘッダで /tenant 端点に過橋できず 403 になること（役割線）")
   void castCannotBridgeToStoreConsole() {
     // CAST は ALL_STORES を持つが店舗ロールではないため、TenantIdInterceptor が店舗文脈確立の前に 403 で弾く。
-    // /tenant/menus/me は isAuthenticated() のみの端点のため、ロール制限が無いと CAST がテナントストレージ相当へ漏れる。
+    // メニュー端点は /platform へ統一されたため、役割線は別の /tenant 端点（受注）で保全する。
     ResponseEntity<String> res =
         rest.exchange(
-            "/tenant/menus/me",
+            "/tenant/orders",
             HttpMethod.GET,
             new HttpEntity<>(bridgeHeaders(platformToken(CAST_EMAIL), TENANT_A)),
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("統合前の旧メニュー端点 GET /central/menus/me・/tenant/menus/me は 404 になること")
+  void oldMenuEndpointsAreGone() {
+    ResponseEntity<String> central =
+        rest.exchange(
+            "/central/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
+            String.class);
+    assertThat(central.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    ResponseEntity<String> store =
+        rest.exchange(
+            "/tenant/menus/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bridgeHeaders(platformToken(MANAGER_EMAIL), TENANT_A)),
+            String.class);
+    assertThat(store.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test

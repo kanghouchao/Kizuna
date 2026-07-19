@@ -1,7 +1,7 @@
 package com.kizuna.menu.application;
 
 import com.kizuna.menu.api.dto.MenuVO;
-import com.kizuna.menu.domain.MenuNode;
+import com.kizuna.menu.domain.Menu;
 import com.kizuna.user.domain.Authorities;
 import java.util.Collections;
 import java.util.List;
@@ -11,12 +11,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-/** メニュー木の組み立て（権限フィルタ + VO 変換）。Central / Store 両作用域が共用する唯一の実装。 */
+/** メニュー木の組み立て（権限フィルタ + VO 変換）。統合 Menu 集約の唯一の組み立て実装。 */
 final class MenuTreeAssembler {
 
   private MenuTreeAssembler() {}
 
-  static List<MenuVO> assemble(List<? extends MenuNode> roots) {
+  static List<MenuVO> assemble(List<Menu> roots) {
     Set<String> userAuthorities = currentUserAuthorities();
     return roots.stream()
         .filter(menu -> visible(menu, userAuthorities))
@@ -24,7 +24,7 @@ final class MenuTreeAssembler {
         .collect(Collectors.toList());
   }
 
-  private static MenuVO toVO(MenuNode menu, Set<String> userAuthorities) {
+  private static MenuVO toVO(Menu menu, Set<String> userAuthorities) {
     List<MenuVO> children =
         menu.getChildren() == null
             ? Collections.emptyList()
@@ -36,7 +36,7 @@ final class MenuTreeAssembler {
     return new MenuVO(menu.getLabel(), menu.getPath(), menu.getIcon(), children);
   }
 
-  private static boolean visible(MenuNode menu, Set<String> userAuthorities) {
+  private static boolean visible(Menu menu, Set<String> userAuthorities) {
     if (menu.getPermission() == null || menu.getPermission().isEmpty()) {
       return true;
     }
