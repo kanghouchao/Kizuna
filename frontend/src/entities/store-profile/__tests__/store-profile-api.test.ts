@@ -11,10 +11,10 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('storeProfileApi', () => {
-  it('get は /tenant/config を GET する', async () => {
-    expect(await storeProfileApi.get()).toEqual({ ok: true, url: '/tenant/config' });
+  it('get は /store/config を GET する', async () => {
+    expect(await storeProfileApi.get()).toEqual({ ok: true, url: '/store/config' });
   });
-  it('update は /tenant/config を PUT する', async () => {
-    expect(await storeProfileApi.update({})).toEqual({ ok: true, url: '/tenant/config' });
+  it('update は /store/config を PUT する', async () => {
+    expect(await storeProfileApi.update({})).toEqual({ ok: true, url: '/store/config' });
   });
 });

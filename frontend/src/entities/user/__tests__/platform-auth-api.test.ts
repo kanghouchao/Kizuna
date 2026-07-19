@@ -31,9 +31,9 @@ describe('platform api', () => {
     const res = await platformAuthApi.updateMe({ display_name: 'A' });
     expect(res).toEqual({ ok: true, url: '/platform/me' });
   });
-  it('stores calls /platform/stores', async () => {
+  it('stores calls /platform/stores/me', async () => {
     const res = await platformAuthApi.stores();
-    expect(res).toEqual({ ok: true, url: '/platform/stores' });
+    expect(res).toEqual({ ok: true, url: '/platform/stores/me' });
   });
   it('changePassword PUTs /platform/password', async () => {
     await expect(

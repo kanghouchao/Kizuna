@@ -28,19 +28,19 @@ describe('apiClient platform branch', () => {
     (Cookies.remove as jest.Mock).mockImplementation(() => undefined);
   });
 
-  it('injects X-Role/X-Tenant-ID for /tenant requests when a store console is selected', async () => {
+  it('injects X-Role/X-Store-ID for /store requests when a store console is selected', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
       if (key === 'platform-role') return 'store';
       if (key === 'platform-store-id') return '2';
       return undefined;
     });
-    const headers = await requestTo('/tenant/me');
-    expect(headers['X-Role']).toBe('tenant');
-    expect(headers['X-Tenant-ID']).toBe('2');
+    const headers = await requestTo('/store/me');
+    expect(headers['X-Role']).toBe('store');
+    expect(headers['X-Store-ID']).toBe('2');
   });
 
-  it('injects X-Role/X-Tenant-ID for /files requests when a store console is selected', async () => {
+  it('injects X-Role/X-Store-ID for /files requests when a store console is selected', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
       if (key === 'platform-role') return 'store';
@@ -48,20 +48,20 @@ describe('apiClient platform branch', () => {
       return undefined;
     });
     const headers = await requestTo('/files/upload');
-    expect(headers['X-Role']).toBe('tenant');
-    expect(headers['X-Tenant-ID']).toBe('2');
+    expect(headers['X-Role']).toBe('store');
+    expect(headers['X-Store-ID']).toBe('2');
   });
 
-  it('does not inject tenant headers for /central requests even with a store role selected', async () => {
+  it('does not inject store headers for /platform requests even with a store role selected', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
       if (key === 'platform-role') return 'store';
       if (key === 'platform-store-id') return '2';
       return undefined;
     });
-    const headers = await requestTo('/central/configs');
+    const headers = await requestTo('/platform/configs');
     expect(headers['X-Role']).toBeUndefined();
-    expect(headers['X-Tenant-ID']).toBeUndefined();
+    expect(headers['X-Store-ID']).toBeUndefined();
   });
 
   it('skips the legacy x-mw branch entirely when a platform session is active (central console, no store)', async () => {
@@ -72,9 +72,9 @@ describe('apiClient platform branch', () => {
       if (key === 'x-mw-tenant-id') return '99';
       return undefined;
     });
-    const headers = await requestTo('/tenant/me');
+    const headers = await requestTo('/store/me');
     expect(headers['X-Role']).toBeUndefined();
-    expect(headers['X-Tenant-ID']).toBeUndefined();
+    expect(headers['X-Store-ID']).toBeUndefined();
   });
 
   it('falls back to the legacy x-mw branch when no platform session is active', async () => {
@@ -84,8 +84,8 @@ describe('apiClient platform branch', () => {
       if (key === 'x-mw-tenant-id') return '7';
       return undefined;
     });
-    const headers = await requestTo('/tenant/me');
-    expect(headers['X-Role']).toBe('tenant');
-    expect(headers['X-Tenant-ID']).toBe('7');
+    const headers = await requestTo('/store/me');
+    expect(headers['X-Role']).toBe('store');
+    expect(headers['X-Store-ID']).toBe('7');
   });
 });

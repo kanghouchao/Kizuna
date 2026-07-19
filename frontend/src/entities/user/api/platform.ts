@@ -29,7 +29,7 @@ export const platformAuthApi = {
     return response.data;
   },
   stores: async (): Promise<PlatformStore[]> => {
-    const response = await apiClient.get('/platform/stores');
+    const response = await apiClient.get('/platform/stores/me');
     return response.data;
   },
   changePassword: async (data: PasswordChangeRequest): Promise<void> => {

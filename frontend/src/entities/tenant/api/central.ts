@@ -7,26 +7,26 @@ export const centralTenantApi = {
     per_page?: number;
     search?: string;
   }): Promise<PaginatedResponse<Tenant>> => {
-    const response = await apiClient.get('/central/tenants', { params });
+    const response = await apiClient.get('/platform/stores', { params });
     return response.data;
   },
   getById: async (id: string): Promise<Tenant> => {
-    const response = await apiClient.get(`/central/tenant/${id}`);
+    const response = await apiClient.get(`/platform/stores/${id}`);
     return response.data;
   },
   create: async (data: CreateTenantRequest): Promise<Tenant> => {
-    const response = await apiClient.post('/central/tenant', data);
+    const response = await apiClient.post('/platform/stores', data);
     return response.data;
   },
   update: async (id: string, data: UpdateTenantRequest): Promise<Tenant> => {
-    const response = await apiClient.put(`/central/tenant/${id}`, data);
+    const response = await apiClient.put(`/platform/stores/${id}`, data);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/central/tenant/${id}`);
+    await apiClient.delete(`/platform/stores/${id}`);
   },
   getStats: async (): Promise<TenantStats> => {
-    const response = await apiClient.get('/central/tenants/stats');
+    const response = await apiClient.get('/platform/stores/stats');
     return response.data;
   },
 };

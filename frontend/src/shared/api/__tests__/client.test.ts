@@ -19,7 +19,7 @@ describe('apiClient request interceptor', () => {
       config,
     })) as any;
 
-    const res = await apiClient.get('/central/me');
+    const res = await apiClient.get('/platform/me');
     expect(res.config.headers?.Authorization).toBe('Bearer abc123');
     expect((res.config.headers as any)['X-XSRF-TOKEN']).toBe('abc123');
 
@@ -43,9 +43,9 @@ describe('apiClient request interceptor', () => {
       config,
     })) as any;
 
-    const res = await apiClient.get('/tenant/me');
-    expect((res.config.headers as any)['X-Role']).toBe('tenant');
-    expect((res.config.headers as any)['X-Tenant-ID']).toBe('42');
+    const res = await apiClient.get('/store/me');
+    expect((res.config.headers as any)['X-Role']).toBe('store');
+    expect((res.config.headers as any)['X-Store-ID']).toBe('42');
     expect((res.config.headers as any)['X-XSRF-TOKEN']).toBeUndefined();
 
     apiClient.defaults.adapter = original;

@@ -177,11 +177,11 @@ describe('tenantResolver', () => {
     const result = await resolveTenant(req);
 
     expect(result.tenantData?.templateKey).toBe('modern');
-    // 追撃 fetch は X-Role: tenant + X-Tenant-ID ヘッダで行う
+    // 追撃 fetch は X-Role: store + X-Store-ID ヘッダで行う
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('config/public'),
       expect.objectContaining({
-        headers: expect.objectContaining({ 'X-Role': 'tenant', 'X-Tenant-ID': 't1' }),
+        headers: expect.objectContaining({ 'X-Role': 'store', 'X-Store-ID': 't1' }),
       })
     );
   });

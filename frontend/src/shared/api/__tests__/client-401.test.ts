@@ -54,7 +54,7 @@ describe('apiClient 401/403 interceptor', () => {
   it('clears token and redirects on 401', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(401, () => apiClient.get('/central/me'));
+    await withRejectingAdapter(401, () => apiClient.get('/platform/me'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
     // assert that our navigation helper was called (no real navigation in jsdom)
@@ -76,7 +76,7 @@ describe('apiClient 401/403 interceptor', () => {
     platformConsoleValue = 'STORE_MANAGER';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(403, () => apiClient.get('/tenant/orders'));
+    await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
     expect(clearPlatformSessionMock).toHaveBeenCalled();
@@ -87,7 +87,7 @@ describe('apiClient 401/403 interceptor', () => {
     platformConsoleValue = 'store';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(403, () => apiClient.get('/central/tenants'));
+    await withRejectingAdapter(403, () => apiClient.get('/platform/stores'));
 
     expect(removeSpy).not.toHaveBeenCalledWith('token');
     expect(clearPlatformSessionMock).not.toHaveBeenCalled();

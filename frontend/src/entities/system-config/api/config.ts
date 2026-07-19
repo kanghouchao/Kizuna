@@ -1,7 +1,7 @@
 import { SystemConfigResponse, SystemConfigUpdateRequest } from '../model/types';
 import { apiClient } from '@/shared/api';
 
-const BASE_URL = '/central/configs';
+const BASE_URL = '/platform/configs';
 
 export const systemConfigService = {
   // 設定一覧の取得 (Client Component用)
