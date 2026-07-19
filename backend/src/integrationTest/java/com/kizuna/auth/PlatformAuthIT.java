@@ -142,7 +142,7 @@ class PlatformAuthIT {
     headers.setBearerAuth(platformToken(SEED_EMAIL, SEED_PASSWORD));
 
     ResponseEntity<String> res =
-        rest.exchange("/tenant/orders", HttpMethod.GET, new HttpEntity<>(headers), String.class);
+        rest.exchange("/store/orders", HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }

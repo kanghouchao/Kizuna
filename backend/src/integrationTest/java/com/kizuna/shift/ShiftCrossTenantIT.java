@@ -32,7 +32,7 @@ import org.springframework.http.ResponseEntity;
  */
 class ShiftCrossTenantIT extends CrossTenantTestSupport {
 
-  private static final String SHIFTS_PUBLIC = "/tenant/shifts/public";
+  private static final String SHIFTS_PUBLIC = "/store/shifts/public";
   private static final String FOREIGN_TENANT_DOMAIN = "shift-it.kizuna.test";
 
   @Autowired private CastRepository castRepository;
@@ -55,7 +55,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   }
 
   /**
-   * 他テナントの Cast をリポジトリ直挿しで用意する。 HTTP 経由の作成は tenant A の JWT + 他テナントの X-Tenant-ID が
+   * 他テナントの Cast をリポジトリ直挿しで用意する。 HTTP 経由の作成は tenant A の JWT + 他テナントの X-Store-ID が
    * TenantIdInterceptor に 403 で弾かれるため、{@code @TenantScoped} を経由せず storeFilter が無効な
    * リポジトリ直接呼び出しで他テナントのデータを書く（MenuCrossTenantIT と同型）。帰属先は実在する第二テナントの採番 id を使う。
    */
@@ -68,7 +68,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   private String createCastAs(long tenantId, String name) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
@@ -110,7 +110,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
       long tenantId, String castId, String workDate, String startTime, String endTime) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/shifts",
+            "/store/shifts",
             new HttpEntity<>(
                 shiftBody(castId, workDate, startTime, endTime), tenantHeaders(tenantId)),
             JsonNode.class);
@@ -123,7 +123,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   private JsonNode findInRange(long tenantId, String range, String shiftId) {
     ResponseEntity<JsonNode> res =
         rest.exchange(
-            "/tenant/shifts?" + range,
+            "/store/shifts?" + range,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(tenantId)),
             JsonNode.class);
@@ -139,7 +139,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   private boolean rangeContains(long tenantId, String range, String shiftId) {
     ResponseEntity<JsonNode> res =
         rest.exchange(
-            "/tenant/shifts?" + range,
+            "/store/shifts?" + range,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(tenantId)),
             JsonNode.class);
@@ -159,7 +159,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/shifts",
+            "/store/shifts",
             new HttpEntity<>(
                 shiftBody(castId, "2026-07-08", "18:00:00", "23:00:00"), tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -180,17 +180,17 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     String castId = createCastAs(TENANT_A, "統合テストキャスト（隔離）");
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/shifts",
+            "/store/shifts",
             new HttpEntity<>(
                 shiftBody(castId, "2026-07-10", "19:00:00", "23:00:00"), tenantHeaders(TENANT_A)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     String shiftId = created.getBody().path("id").asText();
 
-    // 読取隔離: tenant A の JWT に X-Tenant-ID: B を詐称した区間 GET は 403 で拒否され、tenant A のシフトに到達できない
+    // 読取隔離: tenant A の JWT に X-Store-ID: B を詐称した区間 GET は 403 で拒否され、tenant A のシフトに到達できない
     ResponseEntity<JsonNode> foreignRange =
         rest.exchange(
-            "/tenant/shifts?from=2026-07-10&to=2026-07-10",
+            "/store/shifts?from=2026-07-10&to=2026-07-10",
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
@@ -199,7 +199,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     // 正向対照: 同一ボディ形式で自テナントの更新は成功する（負向 403 がバリデーション起因でない証明）
     ResponseEntity<JsonNode> ownUpdate =
         rest.exchange(
-            "/tenant/shifts/" + shiftId,
+            "/store/shifts/" + shiftId,
             HttpMethod.PUT,
             new HttpEntity<>("{\"status\": \"CONFIRMED\"}", tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -209,7 +209,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     // 負向: tenant B は更新できない（越権はインターセプタが拒否 → 403）
     ResponseEntity<JsonNode> tampered =
         rest.exchange(
-            "/tenant/shifts/" + shiftId,
+            "/store/shifts/" + shiftId,
             HttpMethod.PUT,
             new HttpEntity<>("{\"status\": \"TENTATIVE\"}", tenantHeaders(TENANT_B)),
             JsonNode.class);
@@ -218,7 +218,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     // 負向: tenant B は削除できない（越権はインターセプタが拒否 → 403）
     ResponseEntity<JsonNode> deleted =
         rest.exchange(
-            "/tenant/shifts/" + shiftId,
+            "/store/shifts/" + shiftId,
             HttpMethod.DELETE,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
@@ -227,7 +227,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     // データ不変: tenant A からはまだ存在し、status は tenant A が設定した CONFIRMED のまま
     ResponseEntity<JsonNode> after =
         rest.exchange(
-            "/tenant/shifts?from=2026-07-10&to=2026-07-10",
+            "/store/shifts?from=2026-07-10&to=2026-07-10",
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -250,7 +250,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/shifts",
+            "/store/shifts",
             new HttpEntity<>(
                 shiftBody(foreignCastId, "2026-07-12", "18:00:00", "23:00:00"),
                 tenantHeaders(TENANT_A)),
@@ -261,7 +261,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     // 実 DB は実行間で残留し得るため件数一致ではなく「含まない」で判定する。
     ResponseEntity<JsonNode> range =
         rest.exchange(
-            "/tenant/shifts?from=2026-07-12&to=2026-07-12",
+            "/store/shifts?from=2026-07-12&to=2026-07-12",
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -285,7 +285,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> put =
         rest.exchange(
-            "/tenant/shifts/" + shiftId,
+            "/store/shifts/" + shiftId,
             HttpMethod.PUT,
             new HttpEntity<>("{\"cast_id\": \"" + foreignCastId + "\"}", tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -297,13 +297,13 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
     assertThat(found.path("cast_id").asText()).isEqualTo(ownCastId);
   }
 
-  // ---- 公開出勤表 GET /tenant/shifts/public（issue #279）----
+  // ---- 公開出勤表 GET /store/shifts/public（issue #279）----
 
-  /** テナント文脈のみ（未認証: X-Role + X-Tenant-ID、Authorization なし）の公開エンドポイント用ヘッダ。 */
+  /** テナント文脈のみ（未認証: X-Role + X-Store-ID、Authorization なし）の公開エンドポイント用ヘッダ。 */
   private HttpHeaders publicHeaders(long tenantId) {
     HttpHeaders headers = new HttpHeaders();
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", String.valueOf(tenantId));
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", String.valueOf(tenantId));
     return headers;
   }
 
@@ -321,7 +321,7 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
       String status) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/shifts",
+            "/store/shifts",
             new HttpEntity<>(
                 shiftBody(castId, workDate, startTime, endTime, status), tenantHeaders(tenantId)),
             JsonNode.class);

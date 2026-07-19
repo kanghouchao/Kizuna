@@ -22,7 +22,7 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
   private String createCastAs(long tenantId, String name) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
@@ -40,7 +40,7 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> own =
         rest.exchange(
-            "/tenant/casts/" + id,
+            "/store/casts/" + id,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -48,7 +48,7 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> leaked =
         rest.exchange(
-            "/tenant/casts/" + id,
+            "/store/casts/" + id,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
@@ -63,7 +63,7 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
     String controlId = createCastAs(TENANT_A, "統合テストキャスト（対照）");
     ResponseEntity<JsonNode> ownUpdate =
         rest.exchange(
-            "/tenant/casts/" + controlId,
+            "/store/casts/" + controlId,
             HttpMethod.PUT,
             new HttpEntity<>("{\"name\": \"統合テストキャスト（対照・更新後）\"}", tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -73,7 +73,7 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
     String id = createCastAs(TENANT_A, "統合テストキャスト（更新前）");
     ResponseEntity<JsonNode> tampered =
         rest.exchange(
-            "/tenant/casts/" + id,
+            "/store/casts/" + id,
             HttpMethod.PUT,
             new HttpEntity<>("{\"name\": \"統合テストキャスト（改ざん）\"}", tenantHeaders(TENANT_B)),
             JsonNode.class);
@@ -82,7 +82,7 @@ class CastCrossTenantIT extends CrossTenantTestSupport {
     // データ不変: tenant A から見て名前が変わっていない
     ResponseEntity<JsonNode> after =
         rest.exchange(
-            "/tenant/casts/" + id,
+            "/store/casts/" + id,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             JsonNode.class);

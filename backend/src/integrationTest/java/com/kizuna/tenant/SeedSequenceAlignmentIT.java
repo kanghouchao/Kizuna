@@ -68,7 +68,7 @@ class SeedSequenceAlignmentIT {
             UUID.randomUUID());
 
     ResponseEntity<Void> res =
-        rest.postForEntity("/central/tenant", new HttpEntity<>(body, headers), Void.class);
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
   }

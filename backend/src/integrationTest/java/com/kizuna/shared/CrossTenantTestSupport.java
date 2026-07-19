@@ -17,7 +17,7 @@ import org.springframework.http.ResponseEntity;
  * クロステナント統合テストの共通土台。
  *
  * <p>シードユーザー yamada.jiro@kizuna.test/pass（STORE_STAFF・授権店舗 = 店舗1）で平台ログインして JWT を保持し、 認証 = JWT /
- * テナント文脈 = X-Tenant-ID ヘッダという本番構造どおりのリクエストヘッダを組み立てる （Bearer ヘッダ付きリクエストは CSRF 免除）。issue #225 の
+ * テナント文脈 = X-Store-ID ヘッダという本番構造どおりのリクエストヘッダを組み立てる （Bearer ヘッダ付きリクエストは CSRF 免除）。issue #225 の
  * CustomerCrossTenantIT から抽出（3 クラス目の重複解消）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -48,8 +48,8 @@ public abstract class CrossTenantTestSupport {
   protected HttpHeaders tenantHeaders(long tenantId) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", String.valueOf(tenantId));
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", String.valueOf(tenantId));
     headers.setBearerAuth(token);
     return headers;
   }

@@ -182,7 +182,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> stores =
         rest.exchange(
-            "/platform/stores",
+            "/platform/stores/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(CASE1_EMAIL, PASSWORD))),
             String.class);
@@ -232,7 +232,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> before =
         rest.exchange(
-            "/platform/stores",
+            "/platform/stores/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(CASE3_EMAIL, PASSWORD))),
             String.class);
@@ -253,7 +253,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> after =
         rest.exchange(
-            "/platform/stores",
+            "/platform/stores/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(CASE3_EMAIL, PASSWORD))),
             String.class);
@@ -385,15 +385,15 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> central =
         rest.exchange(
-            "/central/tenants", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
+            "/platform/stores", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
     assertThat(central.getStatusCode()).as("HQ管理者束で中央端点へ到達できること").isEqualTo(HttpStatus.OK);
 
     HttpHeaders storeHeaders = bearer(token);
-    storeHeaders.add("X-Role", "tenant");
-    storeHeaders.add("X-Tenant-ID", String.valueOf(storeAId));
+    storeHeaders.add("X-Role", "store");
+    storeHeaders.add("X-Store-ID", String.valueOf(storeAId));
     ResponseEntity<String> store =
         rest.exchange(
-            "/tenant/orders", HttpMethod.GET, new HttpEntity<>(storeHeaders), String.class);
+            "/store/orders", HttpMethod.GET, new HttpEntity<>(storeHeaders), String.class);
     assertThat(store.getStatusCode()).as("店長束で店舗端点へ到達できること(storeBridge)").isEqualTo(HttpStatus.OK);
   }
 
