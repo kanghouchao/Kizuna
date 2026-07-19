@@ -1,4 +1,4 @@
-package com.kizuna.settings.api.central;
+package com.kizuna.settings.api.platform;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -29,13 +29,13 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(CentralConfigController.class)
+@WebMvcTest(PlatformConfigController.class)
 @Import({
-  CentralConfigControllerTest.MethodSecurityConfig.class,
+  PlatformConfigControllerTest.MethodSecurityConfig.class,
   JacksonConfig.class,
   TenantContext.class
 })
-class CentralConfigControllerTest {
+class PlatformConfigControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
@@ -62,7 +62,7 @@ class CentralConfigControllerTest {
 
     // 実行・検証
     mockMvc
-        .perform(get("/central/configs"))
+        .perform(get("/platform/configs"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].config_key").value("site_name"));
   }
@@ -72,7 +72,7 @@ class CentralConfigControllerTest {
   @WithMockUser(authorities = "OTHER_PERMISSION")
   void listWithoutAuthority() throws Exception {
     // 実行・検証
-    mockMvc.perform(get("/central/configs")).andExpect(status().isForbidden());
+    mockMvc.perform(get("/platform/configs")).andExpect(status().isForbidden());
   }
 
   @Test
@@ -82,7 +82,7 @@ class CentralConfigControllerTest {
     // 実行・検証
     mockMvc
         .perform(
-            put("/central/configs")
+            put("/platform/configs")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"config_key\":\"site_name\",\"config_value\":\"新しい名前\"}"))
@@ -100,7 +100,7 @@ class CentralConfigControllerTest {
     // 実行・検証
     mockMvc
         .perform(
-            put("/central/configs")
+            put("/platform/configs")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"config_key\":\"unknown_key\",\"config_value\":\"v\"}"))
