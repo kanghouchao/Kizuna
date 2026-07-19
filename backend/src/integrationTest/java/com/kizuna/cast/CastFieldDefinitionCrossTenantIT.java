@@ -59,8 +59,8 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
   private HttpHeaders managerHeaders(long tenantId) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", String.valueOf(tenantId));
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", String.valueOf(tenantId));
     headers.setBearerAuth(managerToken);
     return headers;
   }
@@ -68,7 +68,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
   private String createDefinitionAs(long tenantId, String key, String label, boolean isPublic) {
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
-            "/tenant/casts/fields",
+            "/store/casts/fields",
             new HttpEntity<>(
                 "{\"key\": \""
                     + key
@@ -123,7 +123,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // 一覧の非混入: tenant A の一覧に tenant B の key/label が一切現れない
     ResponseEntity<String> listA =
         rest.exchange(
-            "/tenant/casts/fields",
+            "/store/casts/fields",
             HttpMethod.GET,
             new HttpEntity<>(managerHeaders(TENANT_A)),
             String.class);
@@ -133,7 +133,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // 正向対照: tenant B の一覧では tenant B の定義が見える（idB が存在することの証明）
     ResponseEntity<String> listB =
         rest.exchange(
-            "/tenant/casts/fields",
+            "/store/casts/fields",
             HttpMethod.GET,
             new HttpEntity<>(managerHeaders(TENANT_B)),
             String.class);
@@ -143,7 +143,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // 変更不可: tenant A 文脈で tenant B の定義を PUT/DELETE すると不可視で 400
     ResponseEntity<JsonNode> putForeign =
         rest.exchange(
-            "/tenant/casts/fields/" + idB,
+            "/store/casts/fields/" + idB,
             HttpMethod.PUT,
             new HttpEntity<>("{\"label\": \"改ざん\"}", managerHeaders(TENANT_A)),
             JsonNode.class);
@@ -151,7 +151,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> deleteForeign =
         rest.exchange(
-            "/tenant/casts/fields/" + idB,
+            "/store/casts/fields/" + idB,
             HttpMethod.DELETE,
             new HttpEntity<>(managerHeaders(TENANT_A)),
             JsonNode.class);
@@ -160,7 +160,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // データ不変: tenant B からは idB の定義がなお見える（改ざん・削除されていない）
     ResponseEntity<String> listBAfter =
         rest.exchange(
-            "/tenant/casts/fields",
+            "/store/casts/fields",
             HttpMethod.GET,
             new HttpEntity<>(managerHeaders(TENANT_B)),
             String.class);
@@ -169,7 +169,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // 正向対照: tenant A は自テナントの定義を更新できる（400 がバリデーション起因でない証明）
     ResponseEntity<JsonNode> putOwn =
         rest.exchange(
-            "/tenant/casts/fields/" + idA,
+            "/store/casts/fields/" + idA,
             HttpMethod.PUT,
             new HttpEntity<>("{\"label\": \"血液型A更新\"}", managerHeaders(TENANT_A)),
             JsonNode.class);
@@ -188,7 +188,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // 正向対照: tenant B の公開APIでは値・ラベルが現れる（漏れうるデータであることの証明）
     ResponseEntity<String> underB =
         rest.exchange(
-            "/tenant/casts/public",
+            "/store/casts/public",
             HttpMethod.GET,
             new HttpEntity<>(managerHeaders(TENANT_B)),
             String.class);
@@ -198,7 +198,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // 非混入: tenant A の公開APIには tenant B の値・ラベルが一切含まれない（実データそのものの非混入）
     ResponseEntity<String> underA =
         rest.exchange(
-            "/tenant/casts/public",
+            "/store/casts/public",
             HttpMethod.GET,
             new HttpEntity<>(managerHeaders(TENANT_A)),
             String.class);
@@ -211,12 +211,12 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
   void staffCanListDefinitionsButCannotMutateThem() {
     // 基底クラスの yamada.jiro（STORE_STAFF・店舗1授権、token）で自テナント(=1)を操作する。
     // 値入力には活きた定義の読み取りが必要なため一覧(GET)は STAFF にも許可する
-    // （#277 裁定「値の入力自体は既存 PUT /tenant/casts/{id} のまま MANAGER+STAFF」）。
+    // （#277 裁定「値の入力自体は既存 PUT /store/casts/{id} のまま MANAGER+STAFF」）。
     // 一方、定義そのものの CRUD は構造変更のため ROLE_STORE_MANAGER 限定を維持する。
 
     ResponseEntity<String> list =
         rest.exchange(
-            "/tenant/casts/fields",
+            "/store/casts/fields",
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             String.class);
@@ -224,7 +224,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> create =
         rest.exchange(
-            "/tenant/casts/fields",
+            "/store/casts/fields",
             HttpMethod.POST,
             new HttpEntity<>(
                 "{\"key\": \"staff_denied_"
@@ -237,7 +237,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
     // 認可は method security でメソッド本体より前に効くため、存在しない id でも 403 が先行する。
     ResponseEntity<String> update =
         rest.exchange(
-            "/tenant/casts/fields/nonexistent",
+            "/store/casts/fields/nonexistent",
             HttpMethod.PUT,
             new HttpEntity<>("{\"label\": \"改ざん\"}", tenantHeaders(TENANT_A)),
             String.class);
@@ -245,7 +245,7 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> delete =
         rest.exchange(
-            "/tenant/casts/fields/nonexistent",
+            "/store/casts/fields/nonexistent",
             HttpMethod.DELETE,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             String.class);
@@ -255,10 +255,10 @@ class CastFieldDefinitionCrossTenantIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("他テナントを詐称したヘッダは定義エンドポイントでも 403 で拒否され、本文を返さないこと")
   void spoofedForeignTenantHeaderIsRejected() {
-    // 基底クラスの yamada（店舗{1} 授権）で X-Tenant-ID: 2 を詐称 → インターセプタのスコープ検証が 403 で弾く。
+    // 基底クラスの yamada（店舗{1} 授権）で X-Store-ID: 2 を詐称 → インターセプタのスコープ検証が 403 で弾く。
     ResponseEntity<String> spoofed =
         rest.exchange(
-            "/tenant/casts/fields",
+            "/store/casts/fields",
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             String.class);

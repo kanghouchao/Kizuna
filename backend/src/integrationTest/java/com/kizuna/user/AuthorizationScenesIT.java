@@ -137,8 +137,8 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
 
   private static HttpHeaders storeHeaders(String token, long storeId) {
     HttpHeaders headers = bearer(token);
-    headers.add("X-Role", "tenant");
-    headers.add("X-Tenant-ID", String.valueOf(storeId));
+    headers.add("X-Role", "store");
+    headers.add("X-Store-ID", String.valueOf(storeId));
     return headers;
   }
 
@@ -154,13 +154,13 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> stores =
         rest.exchange(
-            "/platform/stores", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
+            "/platform/stores/me", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
     assertThat(stores.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
     // 授権店舗の店舗ヘッダを名乗っても storeBridge を持たないため 403（TenantIdInterceptor fail-closed）。
     ResponseEntity<String> orders =
         rest.exchange(
-            "/tenant/orders",
+            "/store/orders",
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(token, TENANT_A)),
             String.class);
@@ -179,7 +179,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> orders =
         rest.exchange(
-            "/tenant/orders",
+            "/store/orders",
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(token, TENANT_A)),
             String.class);
@@ -194,7 +194,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
     // STORE_PROFILE_MANAGE を含む束で店舗档案(公開側設定)へ到達できる — 束はデータであり発版を要しない。
     ResponseEntity<String> profile =
         rest.exchange(
-            "/tenant/config",
+            "/store/config",
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(token, TENANT_A)),
             String.class);
@@ -206,7 +206,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
     // CAST_MANAGE を持たないため内部キャスト一覧へは 403。
     ResponseEntity<String> casts =
         rest.exchange(
-            "/tenant/casts",
+            "/store/casts",
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(token, TENANT_A)),
             String.class);
@@ -215,7 +215,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
     // 中央端点にも到達できない（CENTRAL 能力なし）。
     ResponseEntity<String> central =
         rest.exchange(
-            "/central/tenants", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
+            "/platform/stores", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
     assertThat(central.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 }

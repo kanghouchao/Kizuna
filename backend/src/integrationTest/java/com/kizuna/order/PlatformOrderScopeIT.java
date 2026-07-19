@@ -185,7 +185,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   private String createCastAs(long tenantId, String name) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())

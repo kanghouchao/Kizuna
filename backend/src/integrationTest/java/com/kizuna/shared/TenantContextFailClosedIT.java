@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 /**
  * 公開エンドポイントのテナント未解決時 fail-closed 化（#287）を本物の PostgreSQL/Redis で検証する統合テスト。
  *
- * <p>X-Tenant-ID ヘッダからテナント文脈を解決できないリクエストが、{@code @TenantOptional} の無いエンドポイント（casts/public）では 403
+ * <p>X-Store-ID ヘッダからテナント文脈を解決できないリクエストが、{@code @TenantOptional} の無いエンドポイント（casts/public）では 403
  * で拒否されることを固定する。
  *
  * <p><b>漏洩検証データに関する注記</b>: {@code t_casts.tenant_id} は {@code central_tenants(id)} への外部キーを持ち、シードには
@@ -25,7 +25,7 @@ import org.springframework.http.ResponseEntity;
  */
 class TenantContextFailClosedIT extends CrossTenantTestSupport {
 
-  private static final String CASTS_PUBLIC = "/tenant/casts/public";
+  private static final String CASTS_PUBLIC = "/store/casts/public";
 
   /** 認証・テナント文脈を一切持たない完全匿名ヘッダ。 */
   private HttpHeaders anonymous() {
@@ -37,7 +37,7 @@ class TenantContextFailClosedIT extends CrossTenantTestSupport {
   private void createActiveCastAs(long tenantId, String name) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
@@ -46,15 +46,15 @@ class TenantContextFailClosedIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("完全匿名で GET /tenant/casts/public を叩くと 403 になり、既存キャストのデータが漏れないこと")
+  @DisplayName("完全匿名で GET /store/casts/public を叩くと 403 になり、既存キャストのデータが漏れないこと")
   void anonymousPublicCastsIsForbiddenAndLeaksNoData() {
     String castName = "漏洩検証キャスト_" + UUID.randomUUID();
     createActiveCastAs(TENANT_A, castName);
 
-    // 正向対照: 適切なテナント文脈（X-Role/X-Tenant-ID）があれば公開エンドポイントは 200 でデータを返す。
+    // 正向対照: 適切なテナント文脈（X-Role/X-Store-ID）があれば公開エンドポイントは 200 でデータを返す。
     HttpHeaders tenantContextHeaders = new HttpHeaders();
-    tenantContextHeaders.set("X-Role", "tenant");
-    tenantContextHeaders.set("X-Tenant-ID", String.valueOf(TENANT_A));
+    tenantContextHeaders.set("X-Role", "store");
+    tenantContextHeaders.set("X-Store-ID", String.valueOf(TENANT_A));
     ResponseEntity<String> withContext =
         rest.exchange(
             CASTS_PUBLIC, HttpMethod.GET, new HttpEntity<>(tenantContextHeaders), String.class);
@@ -72,11 +72,11 @@ class TenantContextFailClosedIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("匿名 + X-Tenant-ID が long 桁あふれの GET /tenant/casts/public は 500 でなく 400 になること（#288）")
+  @DisplayName("匿名 + X-Store-ID が long 桁あふれの GET /store/casts/public は 500 でなく 400 になること（#288）")
   void anonymousOverflowingTenantIdHeaderReturns400() {
     HttpHeaders headers = anonymous();
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", "99999999999999999999");
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", "99999999999999999999");
 
     ResponseEntity<String> res =
         rest.exchange(CASTS_PUBLIC, HttpMethod.GET, new HttpEntity<>(headers), String.class);

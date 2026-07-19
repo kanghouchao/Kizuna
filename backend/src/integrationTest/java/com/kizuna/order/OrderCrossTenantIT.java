@@ -26,7 +26,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
   private String createCastAs(long tenantId, String name) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
@@ -50,7 +50,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
   private String createOrderAs(long tenantId, String castId) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/tenant/orders",
+            "/store/orders",
             new HttpEntity<>(orderBody(castId, "統合テスト受注"), tenantHeaders(tenantId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
@@ -69,7 +69,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> own =
         rest.exchange(
-            "/tenant/orders/" + orderId,
+            "/store/orders/" + orderId,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -77,7 +77,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> leaked =
         rest.exchange(
-            "/tenant/orders/" + orderId,
+            "/store/orders/" + orderId,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_B)),
             JsonNode.class);
@@ -93,7 +93,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
     String controlId = createOrderAs(TENANT_A, castId);
     ResponseEntity<JsonNode> ownUpdate =
         rest.exchange(
-            "/tenant/orders/" + controlId,
+            "/store/orders/" + controlId,
             HttpMethod.PUT,
             new HttpEntity<>(orderBody(castId, "対照・更新後"), tenantHeaders(TENANT_A)),
             JsonNode.class);
@@ -103,7 +103,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
     String orderId = createOrderAs(TENANT_A, castId);
     ResponseEntity<JsonNode> tampered =
         rest.exchange(
-            "/tenant/orders/" + orderId,
+            "/store/orders/" + orderId,
             HttpMethod.PUT,
             new HttpEntity<>(orderBody(castId, "改ざん"), tenantHeaders(TENANT_B)),
             JsonNode.class);
@@ -112,7 +112,7 @@ class OrderCrossTenantIT extends CrossTenantTestSupport {
     // tenant A からは引き続き読める（レコード自体は健在）
     ResponseEntity<JsonNode> after =
         rest.exchange(
-            "/tenant/orders/" + orderId,
+            "/store/orders/" + orderId,
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A)),
             JsonNode.class);

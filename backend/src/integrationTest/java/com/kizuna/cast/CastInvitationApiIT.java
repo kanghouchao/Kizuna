@@ -86,14 +86,14 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("HQ_ADMIN が X-Role: tenant を名乗っても発行できないこと（インターセプタ 403）")
+  @DisplayName("HQ_ADMIN が X-Role: store を名乗っても発行できないこと（インターセプタ 403）")
   void hqAdminCannotIssueViaTenantRole() {
     String castId = createCast(TENANT_A, managerToken, "HQ発行不可テスト");
     String adminToken = platformToken(HQ_ADMIN_EMAIL, PASSWORD);
 
     ResponseEntity<String> res =
         rest.exchange(
-            "/tenant/casts/" + castId + "/invitation",
+            "/store/casts/" + castId + "/invitation",
             HttpMethod.POST,
             new HttpEntity<>(tenantHeaders(TENANT_A, adminToken)),
             String.class);
@@ -102,12 +102,12 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("授権外店舗の X-Tenant-ID での発行はインターセプタが fail-closed で 403 拒否すること")
+  @DisplayName("授権外店舗の X-Store-ID での発行はインターセプタが fail-closed で 403 拒否すること")
   void unauthorizedStoreHeaderIsRejected() {
     // tanaka は店舗{1,2}のみ授権。foreignTenantId は授権外。
     ResponseEntity<String> res =
         rest.exchange(
-            "/tenant/casts/dummy-cast/invitation",
+            "/store/casts/dummy-cast/invitation",
             HttpMethod.POST,
             new HttpEntity<>(tenantHeaders(foreignTenantId, managerToken)),
             String.class);
@@ -261,7 +261,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
 
     ResponseEntity<JsonNode> res =
         rest.exchange(
-            "/tenant/casts?search=" + marker + "&size=500",
+            "/store/casts?search=" + marker + "&size=500",
             HttpMethod.GET,
             new HttpEntity<>(tenantHeaders(TENANT_A, managerToken)),
             JsonNode.class);
@@ -285,7 +285,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   private String createCast(long tenantId, String bearerToken, String name) {
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId, bearerToken)),
             JsonNode.class);
     assertThat(res.getStatusCode().is2xxSuccessful())
@@ -297,7 +297,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   private ResponseEntity<JsonNode> issueInvitation(
       String castId, long tenantId, String bearerToken) {
     return rest.postForEntity(
-        "/tenant/casts/" + castId + "/invitation",
+        "/store/casts/" + castId + "/invitation",
         new HttpEntity<>(tenantHeaders(tenantId, bearerToken)),
         JsonNode.class);
   }
@@ -321,8 +321,8 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   private HttpHeaders tenantHeaders(long tenantId, String bearerToken) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", String.valueOf(tenantId));
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", String.valueOf(tenantId));
     headers.setBearerAuth(bearerToken);
     return headers;
   }

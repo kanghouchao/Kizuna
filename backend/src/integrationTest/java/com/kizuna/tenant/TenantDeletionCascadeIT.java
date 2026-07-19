@@ -90,12 +90,15 @@ class TenantDeletionCascadeIT {
     // 前提: 削除前は授権行が 1 件存在する（空振りで緑にならないことを固定）。
     assertThat(countStoreGrants(storeId)).as("削除前は店舗授権行が存在すること").isEqualTo(1L);
 
-    // 実削除フロー: 中央 admin トークンで DELETE /central/tenant/{id}。
+    // 実削除フロー: 中央 admin トークンで DELETE /platform/stores/{id}。
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin());
     ResponseEntity<Void> res =
         rest.exchange(
-            "/central/tenant/" + storeId, HttpMethod.DELETE, new HttpEntity<>(headers), Void.class);
+            "/platform/stores/" + storeId,
+            HttpMethod.DELETE,
+            new HttpEntity<>(headers),
+            Void.class);
 
     // FK が ON DELETE CASCADE でなければテナント削除は FK 違反で失敗する（本修正前の退行）。
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);

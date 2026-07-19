@@ -322,7 +322,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   private String createCast(long tenantId, String name) {
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId, managerToken)),
             JsonNode.class);
     assertThat(res.getStatusCode().is2xxSuccessful())
@@ -334,7 +334,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   private String issue(String castId, long tenantId) {
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
-            "/tenant/casts/" + castId + "/invitation",
+            "/store/casts/" + castId + "/invitation",
             new HttpEntity<>(tenantHeaders(tenantId, managerToken)),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 招待発行が成功すること").isEqualTo(HttpStatus.CREATED);
@@ -415,8 +415,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   private HttpHeaders tenantHeaders(long tenantId, String bearerToken) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", String.valueOf(tenantId));
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", String.valueOf(tenantId));
     headers.setBearerAuth(bearerToken);
     return headers;
   }

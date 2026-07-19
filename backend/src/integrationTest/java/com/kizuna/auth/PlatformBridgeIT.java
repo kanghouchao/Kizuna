@@ -33,7 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * 平台トークン過橋（#324 統一ログイン・案 A）の授権検証と実データ非漏洩を本物の PostgreSQL で固定する統合テスト。
  *
- * <p>平台トークンを /central・/tenant で直接受理し、店舗文脈は TenantIdInterceptor が X-Tenant-ID を 授権店舗集合（StoreScope）で
+ * <p>平台トークンを /platform・/store で直接受理し、店舗文脈は TenantIdInterceptor が X-Store-ID を 授権店舗集合（StoreScope）で
  * fail-closed 検証する。断言は {@link com.kizuna.order.PlatformOrderScopeIT}
  * の強断言様式（応答生ボディに授権外店舗の実データが一切現れないこと）に倣う。シードユーザーは v0.5.0（田中花子=STORE_MANAGER{1,2} /
  * 山田次郎=STORE_STAFF{1} / HQ=ALL_STORES）。
@@ -166,11 +166,11 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     return headers;
   }
 
-  /** 平台トークン + 店舗文脈ヘッダ（X-Role: tenant / X-Tenant-ID）。過橋の正規リクエスト形。 */
+  /** 平台トークン + 店舗文脈ヘッダ（X-Role: store / X-Store-ID）。過橋の正規リクエスト形。 */
   private static HttpHeaders bridgeHeaders(String token, long tenantId) {
     HttpHeaders headers = bearer(token);
-    headers.set("X-Role", "tenant");
-    headers.set("X-Tenant-ID", String.valueOf(tenantId));
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", String.valueOf(tenantId));
     return headers;
   }
 
@@ -182,7 +182,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
 
   private ResponseEntity<String> getTenantOrdersRaw(HttpHeaders headers) {
     return rest.exchange(
-        "/tenant/orders?size=500", HttpMethod.GET, new HttpEntity<>(headers), String.class);
+        "/store/orders?size=500", HttpMethod.GET, new HttpEntity<>(headers), String.class);
   }
 
   private long castCountForTenant(long tenantId) {
@@ -233,7 +233,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     long before = castCountForTenant(TENANT_B);
     ResponseEntity<String> write =
         rest.postForEntity(
-            "/tenant/casts",
+            "/store/casts",
             new HttpEntity<>("{\"name\": \"過橋IT不正書込キャスト\"}", bridgeJsonHeaders(token, TENANT_B)),
             String.class);
     assertThat(write.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -241,14 +241,14 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("GET /platform/stores は授権店舗のみを返し、非授権店舗の実データが生ボディに現れないこと")
+  @DisplayName("GET /platform/stores/me は授権店舗のみを返し、非授権店舗の実データが生ボディに現れないこと")
   void storeListOmitsUnauthorizedStore() throws Exception {
     ObjectMapper mapper = new ObjectMapper();
 
     // スタッフ（SPECIFIC{1}）: 店舗1のみ。店舗2の店名は生ボディにも現れない（強断言）。
     ResponseEntity<String> staff =
         rest.exchange(
-            "/platform/stores",
+            "/platform/stores/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(STAFF_EMAIL))),
             String.class);
@@ -259,7 +259,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     // 店長（SPECIFIC{1,2}）: 授権 2 店舗が id 昇順で返る。
     ResponseEntity<String> manager =
         rest.exchange(
-            "/platform/stores",
+            "/platform/stores/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(MANAGER_EMAIL))),
             String.class);
@@ -269,7 +269,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     // HQ（ALL_STORES）: 全店（他 IT が作る店舗もあり得るため包含断言）。
     ResponseEntity<String> hq =
         rest.exchange(
-            "/platform/stores",
+            "/platform/stores/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
             String.class);
@@ -279,7 +279,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
     // CAST: 役割線の外（@PreAuthorize）。
     ResponseEntity<String> cast =
         rest.exchange(
-            "/platform/stores",
+            "/platform/stores/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(CAST_EMAIL))),
             String.class);
@@ -293,11 +293,11 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("HQ は /central/tenants へ過橋でき、店長は STORE_MANAGE なしのため 403 になること")
+  @DisplayName("HQ は /platform/stores へ過橋でき、店長は STORE_MANAGE なしのため 403 になること")
   void hqBridgesToCentralButManagerDoesNot() {
     ResponseEntity<String> hq =
         rest.exchange(
-            "/central/tenants",
+            "/platform/stores",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
             String.class);
@@ -305,7 +305,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> manager =
         rest.exchange(
-            "/central/tenants",
+            "/platform/stores",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(MANAGER_EMAIL))),
             String.class);
@@ -386,13 +386,13 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("CAST は授権スコープでも店舗ヘッダで /tenant 端点に過橋できず 403 になること（役割線）")
+  @DisplayName("CAST は授権スコープでも店舗ヘッダで /store 端点に過橋できず 403 になること（役割線）")
   void castCannotBridgeToStoreConsole() {
     // CAST は ALL_STORES を持つが店舗ロールではないため、TenantIdInterceptor が店舗文脈確立の前に 403 で弾く。
-    // メニュー端点は /platform へ統一されたため、役割線は別の /tenant 端点（受注）で保全する。
+    // メニュー端点は /platform へ統一されたため、役割線は別の /store 端点（受注）で保全する。
     ResponseEntity<String> res =
         rest.exchange(
-            "/tenant/orders",
+            "/store/orders",
             HttpMethod.GET,
             new HttpEntity<>(bridgeHeaders(platformToken(CAST_EMAIL), TENANT_A)),
             String.class);
@@ -421,11 +421,11 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("店舗文脈ヘッダなしの平台トークンは /tenant/orders で 403 になること（fail-closed）")
+  @DisplayName("店舗文脈ヘッダなしの平台トークンは /store/orders で 403 になること（fail-closed）")
   void missingStoreHeaderFailsClosed() {
     ResponseEntity<String> res =
         rest.exchange(
-            "/tenant/orders",
+            "/store/orders",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(MANAGER_EMAIL))),
             String.class);
