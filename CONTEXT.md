@@ -58,7 +58,7 @@ _Avoid_: TenantConfig（旧名。SystemConfig と紛らわしい）
 ### プラットフォーム設定
 
 **SystemConfig（システム設定）**:
-プラットフォームレベルのキーバリュー設定（SMTP、メンテナンスモード等）。Central のみが管理できる。
+プラットフォームレベルのキーバリュー設定（SMTP、メンテナンスモード等）。SYSTEM_CONFIG_MANAGE 能力の保持者のみが管理できる。
 _Avoid_: Config（裸使用。StoreProfile と混同しやすい）
 
 **Menu（メニュー）**:
