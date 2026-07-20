@@ -9,7 +9,16 @@ const { Given, When, Then, After } = createBdd();
 // 平台 cookie + X-Store-ID 注入で platform ドメイン上のまま /store/* を操作する（#324 D8/D9）。
 // cookie はオリジン別に分離されるため、ログイン後の遷移先も含め常に PLATFORM_URL を用いる。
 const PLATFORM_LOGIN_URL = `${PLATFORM_URL}/platform/login`;
-const CASTS_URL = `${PLATFORM_URL}/store/casts`;
+
+// ルート移設（#413）で店舗管理画面 URL に storeId が必須になったため、キャスト一覧 URL は
+// 固定文字列をやめ、現在ページの /store/{id}/ から storeId を都度読み取って組み立てる
+//（seed id をハードコードしない — 計画決定ログ #5）。
+function currentStoreId(page: Page): string {
+  return new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
+}
+function castsUrl(page: Page): string {
+  return `${PLATFORM_URL}/store/${currentStoreId(page)}/casts`;
+}
 
 // Header の店舗切替ドロップダウンは Headless UI Menu（唯一の aria-haspopup 要素）。
 // アカウントメニューは group-hover の素の要素で aria-haspopup を持たないため一意に特定できる。
@@ -58,7 +67,8 @@ Then('中央ダッシュボードへ遷移する', async ({ page }) => {
 });
 
 Then('店舗ダッシュボードへ遷移する', async ({ page }) => {
-  await expect(page).toHaveURL(/\/store\/dashboard\/?$/, { timeout: 15000 });
+  // ルート移設（#413）でログイン後の店舗ダッシュボードは /store/{storeId}/dashboard になる。
+  await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
 });
 
 Then(
@@ -83,22 +93,24 @@ Then('店舗切替に {string} が表示されない', async ({ page }, storeNam
 
 Then('キャスト一覧に {string} が表示される', async ({ page }, _label: string) => {
   // {string} は可読性のための表記。実際の照合は一意名（createdCastName）で行う。
-  await page.goto(CASTS_URL, { waitUntil: 'domcontentloaded' });
+  await page.goto(castsUrl(page), { waitUntil: 'domcontentloaded' });
   await expect(page.getByText(createdCastName, { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
 When('店舗を {string} に切り替える', async ({ page }, storeName: string) => {
+  const previousStoreId = currentStoreId(page);
   const menu = await openStoreSwitch(page);
   await menu.getByText(storeName, { exact: true }).click();
-  // handleStoreSelect は setPlatformStore(id) 後に window.location.reload() する。
-  // リロード後のヘッダに切替先店舗名が反映される＝新しい店舗文脈が有効になったことを待つ。
-  await expect(storeSwitchToggle(page)).toContainText(storeName, { timeout: 15000 });
+  // handleStoreSelect は setPlatformStore(id) 後、現在地の storeId を差し替えて router.push する
+  //（旧実装の window.location.reload は #413 で廃止）。URL の店舗 segment が別 id へ変わる＝
+  // 新しい店舗文脈が有効になったことを待つ。
+  await expect.poll(() => currentStoreId(page), { timeout: 15000 }).not.toBe(previousStoreId);
 });
 
 Then('キャスト一覧に {string} が表示されない', async ({ page }, _label: string) => {
   // 切替後の店舗2はキャスト未登録のため一覧は空。cookie は切替時に同期設定済みなので
   // 再取得のため一覧を開き直し、空表示の確定後に播種キャストの非表示を断言する。
-  await page.goto(CASTS_URL, { waitUntil: 'domcontentloaded' });
+  await page.goto(castsUrl(page), { waitUntil: 'domcontentloaded' });
   await expect(page.getByText('キャストが登録されていません', { exact: true })).toBeVisible({
     timeout: 15000,
   });

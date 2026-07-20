@@ -47,6 +47,48 @@ When(
   }
 );
 
+When(
+  '氏名 {string}・権限束 {string} と {string}・店舗 {string} でスタッフを追加する',
+  async (
+    { page },
+    baseName: string,
+    bundleLabel1: string,
+    bundleLabel2: string,
+    storeName: string
+  ) => {
+    createdStaffName = `${baseName}-${Date.now()}`;
+    createdStaffEmail = `staff-e2e-${Date.now()}@kizuna.test`;
+    await page.getByRole('button', { name: 'スタッフを追加', exact: true }).click();
+
+    const heading = page.getByRole('heading', { name: 'スタッフを追加', exact: true });
+    await expect(heading).toBeVisible();
+
+    const dialog = page.getByRole('dialog', { name: 'スタッフを追加' });
+    await dialog.getByLabel('メールアドレス', { exact: true }).fill(createdStaffEmail);
+    await dialog.getByLabel('初期パスワード', { exact: true }).fill('pass1234');
+    await dialog.getByLabel('氏名', { exact: true }).fill(createdStaffName);
+    // 権限束を2つチェックして混成束（例: HQ管理者＋店長）ユーザーを作る（#413 の回帰再現）。
+    await dialog.getByRole('checkbox', { name: bundleLabel1, exact: true }).check();
+    await dialog.getByRole('checkbox', { name: bundleLabel2, exact: true }).check();
+    await dialog.getByRole('radio', { name: '個別店舗', exact: true }).click();
+    await dialog.getByRole('checkbox', { name: storeName, exact: true }).check();
+    await dialog.getByRole('button', { name: '追加する', exact: true }).click();
+    // 成功時のみモーダルが閉じる（失敗時はエラートーストのまま開いたまま、#325）。
+    await expect(heading).toBeHidden({ timeout: 15000 });
+  }
+);
+
+When(
+  '作成したスタッフのメールとパスワード {string} でログインする',
+  async ({ page }, password: string) => {
+    // 直前の「スタッフを追加する」ステップで採番した一意メール（createdStaffEmail）でログインする。
+    // 統一ログインのフォーム操作は platform-login.steps.ts の「メール...でログインする」と同型。
+    await page.getByLabel('メールアドレス', { exact: true }).fill(createdStaffEmail);
+    await page.getByLabel('パスワード', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'ログイン', exact: true }).click();
+  }
+);
+
 Then(
   'スタッフ一覧に {string} が {string} として表示される',
   async ({ page }, _label: string, bundleLabel: string) => {
