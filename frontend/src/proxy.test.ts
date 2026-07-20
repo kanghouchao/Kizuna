@@ -1,11 +1,11 @@
 import { proxy } from './proxy';
-import { resolveTenant } from './shared/lib/proxy/tenantResolver';
+import { resolveStore } from './shared/lib/proxy/storeResolver';
 import { handleRouteProtection } from './shared/lib/proxy/routeGuard';
 import { NextRequest } from 'next/server';
 
 // Mock dependencies BEFORE importing proxy
-jest.mock('./shared/lib/proxy/tenantResolver', () => ({
-  resolveTenant: jest.fn(),
+jest.mock('./shared/lib/proxy/storeResolver', () => ({
+  resolveStore: jest.fn(),
 }));
 
 jest.mock('./shared/lib/proxy/routeGuard', () => ({
@@ -38,7 +38,7 @@ jest.mock('next/server', () => {
 });
 
 describe('proxy integration', () => {
-  const mockResolveTenant = resolveTenant as jest.Mock;
+  const mockResolveStore = resolveStore as jest.Mock;
   const mockHandleRouteProtection = handleRouteProtection as jest.Mock;
 
   const createRequest = (hostname = 'store.test') =>
@@ -54,26 +54,26 @@ describe('proxy integration', () => {
   });
 
   it('delegates to routeGuard and returns redirect if needed', async () => {
-    mockResolveTenant.mockResolvedValue({ role: 'central' });
+    mockResolveStore.mockResolvedValue({ role: 'platform' });
     const redirectResponse = { status: 307 };
     mockHandleRouteProtection.mockReturnValue(redirectResponse);
 
     const req = createRequest();
     const res = await proxy(req);
 
-    expect(mockResolveTenant).toHaveBeenCalledWith(req);
-    expect(mockHandleRouteProtection).toHaveBeenCalledWith(req, 'central');
+    expect(mockResolveStore).toHaveBeenCalledWith(req);
+    expect(mockHandleRouteProtection).toHaveBeenCalledWith(req, 'platform');
     expect(res).toBe(redirectResponse);
   });
 
   it('sets cookies and proceeds if routeGuard allows', async () => {
-    mockResolveTenant.mockResolvedValue({
-      role: 'tenant',
-      tenantData: {
+    mockResolveStore.mockResolvedValue({
+      role: 'store',
+      storeData: {
         isValid: true,
         templateKey: 'dark',
-        tenantId: 't1',
-        tenantName: 'Shop',
+        storeId: 't1',
+        storeName: 'Shop',
       },
     });
     mockHandleRouteProtection.mockReturnValue(null);
@@ -82,9 +82,9 @@ describe('proxy integration', () => {
     const res = (await proxy(req)) as any;
 
     expect(res.status).toBe(200);
-    expect(res.cookies.get('x-mw-role').value).toBe('tenant');
-    expect(res.cookies.get('x-mw-tenant-id').value).toBe('t1');
-    expect(res.cookies.get('x-mw-tenant-template').value).toBe('dark');
-    expect(res.cookies.get('x-mw-tenant-domain').value).toBe('store.test');
+    expect(res.cookies.get('x-mw-role').value).toBe('store');
+    expect(res.cookies.get('x-mw-store-id').value).toBe('t1');
+    expect(res.cookies.get('x-mw-store-template').value).toBe('dark');
+    expect(res.cookies.get('x-mw-store-domain').value).toBe('store.test');
   });
 });

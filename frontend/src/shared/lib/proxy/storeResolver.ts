@@ -1,17 +1,17 @@
 import { NextRequest } from 'next/server';
 
-export interface TenantData {
+export interface StoreData {
   isValid: boolean;
   templateKey: string;
-  tenantId: string;
-  tenantName: string;
+  storeId: string;
+  storeName: string;
 }
 
 const ADMIN_DOMAINS = new Set([process.env.APP_DOMAIN || 'kizuna.test']);
 
-export async function resolveTenant(request: NextRequest): Promise<{
-  role: 'central' | 'tenant';
-  tenantData?: TenantData;
+export async function resolveStore(request: NextRequest): Promise<{
+  role: 'platform' | 'store';
+  storeData?: StoreData;
 }> {
   const rawHost =
     request.headers.get('x-forwarded-host') ||
@@ -20,32 +20,32 @@ export async function resolveTenant(request: NextRequest): Promise<{
   const hostname = rawHost.split(',')[0].trim().split(':')[0].toLowerCase();
 
   if (ADMIN_DOMAINS.has(hostname)) {
-    return { role: 'central' };
+    return { role: 'platform' };
   }
 
-  // Cookie のテナント情報を優先使用（重複クエリを回避）
+  // Cookie の店舗情報を優先使用（重複クエリを回避）
   // ただし、Cookie に保存されたドメインと現在のホスト名が一致し、
   // かつ template cookie が存在する場合のみ信頼する。
   // template cookie が無い場合は黙って 'default' 扱いにせず、
   // バックエンド再解決に落として正しい template_key を取得し直す。
-  const existingTenantId = request.cookies.get('x-mw-tenant-id')?.value;
-  const existingDomain = request.cookies.get('x-mw-tenant-domain')?.value;
-  const existingTemplate = request.cookies.get('x-mw-tenant-template')?.value;
+  const existingStoreId = request.cookies.get('x-mw-store-id')?.value;
+  const existingDomain = request.cookies.get('x-mw-store-domain')?.value;
+  const existingTemplate = request.cookies.get('x-mw-store-template')?.value;
 
-  if (existingTenantId && existingDomain === hostname && existingTemplate) {
-    const existingTenantName = request.cookies.get('x-mw-tenant-name')?.value || '';
+  if (existingStoreId && existingDomain === hostname && existingTemplate) {
+    const existingStoreName = request.cookies.get('x-mw-store-name')?.value || '';
     return {
-      role: 'tenant',
-      tenantData: {
+      role: 'store',
+      storeData: {
         isValid: true,
         templateKey: existingTemplate,
-        tenantId: existingTenantId,
-        tenantName: existingTenantName,
+        storeId: existingStoreId,
+        storeName: existingStoreName,
       },
     };
   }
 
-  // Cookie にテナント情報がない場合、バックエンド API を呼び出す（バックエンドにキャッシュあり）
+  // Cookie に店舗情報がない場合、バックエンド API を呼び出す（バックエンドにキャッシュあり）
   const validationApiUrl =
     process.env.STORE_LOOKUP_API_URL || 'http://backend:8080/platform/stores/lookup';
   const url = validationApiUrl + `?domain=${encodeURIComponent(hostname)}`;
@@ -55,48 +55,48 @@ export async function resolveTenant(request: NextRequest): Promise<{
     const data = await res.json().catch(() => null);
 
     if (data && typeof data === 'object') {
-      const tenantId = String(data.tenant_id ?? data.id ?? '');
-      const tenantName = String(data.tenant_name ?? data.name ?? '');
-      const isValid = Boolean(tenantId || tenantName || data.domain);
+      const storeId = String(data.tenant_id ?? data.id ?? '');
+      const storeName = String(data.tenant_name ?? data.name ?? '');
+      const isValid = Boolean(storeId || storeName || data.domain);
 
       // 中央応答（TenantVO）は template_key を返さないため、含まれていれば従来どおり採用し、
-      // 無ければテナント側の /store/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
+      // 無ければ店舗側の /store/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
       let templateKey = 'default';
       if (data.template_key) {
         templateKey = String(data.template_key);
-      } else if (isValid && tenantId) {
-        templateKey = await fetchTemplateKey(tenantId);
+      } else if (isValid && storeId) {
+        templateKey = await fetchTemplateKey(storeId);
       }
 
       return {
-        role: 'tenant',
-        tenantData: {
+        role: 'store',
+        storeData: {
           isValid,
           templateKey,
-          tenantId,
-          tenantName,
+          storeId,
+          storeName,
         },
       };
     }
   } catch (error) {
-    console.error('🚨 テナント解決に失敗:', error);
+    console.error('🚨 店舗解決に失敗:', error);
   }
 
   return {
-    role: 'tenant',
-    tenantData: {
+    role: 'store',
+    storeData: {
       isValid: false,
       templateKey: 'default',
-      tenantId: '',
-      tenantName: '',
+      storeId: '',
+      storeName: '',
     },
   };
 }
 
-// テナント側の StoreProfile から template_key を取得する。
+// 店舗側の StoreProfile から template_key を取得する。
 // 認証トークン不要・キャッシュ無しで、X-Role/X-Store-ID ヘッダのみで動作する公開エンドポイント。
 // 取得失敗・欠落時は 'default' に回落し、決して throw しない。
-async function fetchTemplateKey(tenantId: string): Promise<string> {
+async function fetchTemplateKey(storeId: string): Promise<string> {
   const configApiUrl =
     process.env.STORE_CONFIG_API_URL || 'http://backend:8080/store/config/public';
 
@@ -104,7 +104,7 @@ async function fetchTemplateKey(tenantId: string): Promise<string> {
     const res = await fetch(configApiUrl, {
       headers: {
         'X-Role': 'store',
-        'X-Store-ID': tenantId,
+        'X-Store-ID': storeId,
       },
     });
     const config = await res.json().catch(() => null);
@@ -112,7 +112,7 @@ async function fetchTemplateKey(tenantId: string): Promise<string> {
       return String(config.template_key);
     }
   } catch (error) {
-    console.error('🚨 テナント設定の取得に失敗:', error);
+    console.error('🚨 店舗設定の取得に失敗:', error);
   }
 
   return 'default';

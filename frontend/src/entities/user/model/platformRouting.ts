@@ -1,6 +1,6 @@
 import { PlatformConsole } from './types';
 
-export type PlatformDestination = 'central' | 'store' | 'unsupported';
+export type PlatformDestination = 'platform' | 'store' | 'unsupported';
 
 /**
  * 平台コンソール（/me の console — サーバ側が能力目録から導出）からログイン後の遷移先を解決する純関数。
@@ -9,7 +9,7 @@ export type PlatformDestination = 'central' | 'store' | 'unsupported';
 export function resolvePlatformDestination(platformConsole: PlatformConsole): PlatformDestination {
   switch (platformConsole) {
     case 'central':
-      return 'central';
+      return 'platform';
     case 'store':
       return 'store';
     default:

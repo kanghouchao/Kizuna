@@ -50,14 +50,14 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [role, setRole] = useState<string>('central');
+  const [role, setRole] = useState<string>('platform');
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
     // 平台セッションがあれば優先する（コンソール値: central / store — #324/#398）
     const platformConsole = getPlatformConsole();
     if (platformConsole) {
-      setRole(isStoreConsole(platformConsole) ? 'tenant' : 'central');
+      setRole(isStoreConsole(platformConsole) ? 'store' : 'platform');
       return;
     }
     // なければ既存どおり middleware が設定した cookie から読む
@@ -89,7 +89,7 @@ export function Sidebar() {
         const platformConsole = getPlatformConsole();
         const isStore = platformConsole
           ? isStoreConsole(platformConsole)
-          : Cookies.get('x-mw-role') === 'tenant';
+          : Cookies.get('x-mw-role') === 'store';
         setNavigation([
           {
             name: 'メイン',
@@ -112,7 +112,7 @@ export function Sidebar() {
     <aside className="w-64 bg-slate-800 text-white shrink-0 hidden md:block border-r border-slate-700">
       <div className="h-16 flex items-center px-6 border-b border-slate-700">
         <span className="text-xl font-bold tracking-wider text-indigo-400">
-          {role === 'tenant' ? 'TENANT' : 'CENTRAL'}
+          {role === 'store' ? 'STORE' : 'PLATFORM'}
         </span>
       </div>
       <div className="p-4 overflow-y-auto h-[calc(100vh-4rem)] custom-scrollbar">

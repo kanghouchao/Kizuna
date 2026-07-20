@@ -15,7 +15,7 @@ interface ClassicCastDetailPageProps {
 /** キャスト詳細ページ（classic 模版）。 */
 export default async function ClassicCastDetailPage({ castId }: ClassicCastDetailPageProps) {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const [cast, siteConfig] = await Promise.all([
     storefrontService.fetchCast(castId),
     storefrontService.fetchSiteConfig(),

@@ -10,7 +10,7 @@ import './theme.css';
 /** 出勤表ページ（default 模版）。 */
 export default async function DefaultSchedulePage() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const [siteConfig, shifts] = await Promise.all([
     storefrontService.fetchSiteConfig(),
     storefrontService.fetchShifts(),

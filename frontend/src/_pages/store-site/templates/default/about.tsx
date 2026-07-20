@@ -10,7 +10,7 @@ import './theme.css';
 /** 店舗情報・アクセスページ（default 模版）。 */
 export default async function DefaultAboutPage() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const siteConfig = await storefrontService.fetchSiteConfig();
 
   return (

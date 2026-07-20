@@ -10,7 +10,7 @@ import './theme.css';
 /** 料金ページ（classic 模版）。 */
 export default async function ClassicMenuPage() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const siteConfig = await storefrontService.fetchSiteConfig();
 
   return (

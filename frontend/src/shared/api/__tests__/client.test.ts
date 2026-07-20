@@ -26,11 +26,11 @@ describe('apiClient request interceptor', () => {
     apiClient.defaults.adapter = original;
   });
 
-  it('propagates tenant headers when cookies exist', async () => {
+  it('propagates store headers when cookies exist', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'x-mw-role') return 'tenant';
-      if (key === 'x-mw-tenant-id') return '42';
+      if (key === 'x-mw-role') return 'store';
+      if (key === 'x-mw-store-id') return '42';
       return undefined;
     });
 

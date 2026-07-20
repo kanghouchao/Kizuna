@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { resolveTenant } from '../tenantResolver';
+import { resolveStore } from '../storeResolver';
 
 // テスト用の NextRequest モックを作成
 const createRequest = (hostname: string, cookies: Record<string, string> = {}) => {
@@ -16,7 +16,7 @@ const createRequest = (hostname: string, cookies: Record<string, string> = {}) =
   } as unknown as NextRequest;
 };
 
-describe('tenantResolver', () => {
+describe('storeResolver', () => {
   const originalFetch = global.fetch;
   const originalEnv = process.env;
 
@@ -31,85 +31,85 @@ describe('tenantResolver', () => {
     process.env = originalEnv;
   });
 
-  it('identifies central role for admin domains', async () => {
+  it('identifies platform role for admin domains', async () => {
     const req = createRequest('kizuna.test');
-    const result = await resolveTenant(req);
-    expect(result.role).toBe('central');
-    expect(result.tenantData).toBeUndefined();
+    const result = await resolveStore(req);
+    expect(result.role).toBe('platform');
+    expect(result.storeData).toBeUndefined();
   });
 
-  it('calls validation API for tenant domains', async () => {
+  it('calls validation API for store domains', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       json: () =>
         Promise.resolve({
           id: 't1',
-          name: 'Tenant 1',
+          name: 'Store 1',
           template_key: 'custom',
           domain: 'store.test',
         }),
     });
 
     const req = createRequest('store.test');
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('domain=store.test'));
-    expect(result.role).toBe('tenant');
-    expect(result.tenantData?.isValid).toBe(true);
-    expect(result.tenantData?.tenantId).toBe('t1');
-    expect(result.tenantData?.tenantName).toBe('Tenant 1');
-    expect(result.tenantData?.templateKey).toBe('custom');
+    expect(result.role).toBe('store');
+    expect(result.storeData?.isValid).toBe(true);
+    expect(result.storeData?.storeId).toBe('t1');
+    expect(result.storeData?.storeName).toBe('Store 1');
+    expect(result.storeData?.templateKey).toBe('custom');
   });
 
-  it('handles invalid tenant API response gracefully', async () => {
+  it('handles invalid store API response gracefully', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       json: () => Promise.resolve(null), // Empty response
     });
 
     const req = createRequest('unknown.test');
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
-    expect(result.role).toBe('tenant');
-    expect(result.tenantData?.isValid).toBe(false);
-    expect(result.tenantData?.templateKey).toBe('default');
+    expect(result.role).toBe('store');
+    expect(result.storeData?.isValid).toBe(false);
+    expect(result.storeData?.templateKey).toBe('default');
   });
 
   it('handles API errors gracefully', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
 
     const req = createRequest('error.test');
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
-    expect(result.role).toBe('tenant');
-    expect(result.tenantData?.isValid).toBe(false);
+    expect(result.role).toBe('store');
+    expect(result.storeData?.isValid).toBe(false);
   });
 
-  it('resolves tenant from cookies when domain matches', async () => {
+  it('resolves store from cookies when domain matches', async () => {
     const cookies = {
-      'x-mw-tenant-id': 'cookie-tenant-id',
-      'x-mw-tenant-name': 'Cookie Tenant',
-      'x-mw-tenant-template': 'cookie-template',
-      'x-mw-tenant-domain': 'store.test', // ドメインが一致
+      'x-mw-store-id': 'cookie-store-id',
+      'x-mw-store-name': 'Cookie Store',
+      'x-mw-store-template': 'cookie-template',
+      'x-mw-store-domain': 'store.test', // ドメインが一致
     };
     const req = createRequest('store.test', cookies);
 
     // Cookie のドメインが一致するため fetch は呼び出されないはず
     global.fetch = jest.fn();
 
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
     expect(global.fetch).not.toHaveBeenCalled();
-    expect(result.role).toBe('tenant');
-    expect(result.tenantData?.tenantId).toBe('cookie-tenant-id');
-    expect(result.tenantData?.tenantName).toBe('Cookie Tenant');
-    expect(result.tenantData?.templateKey).toBe('cookie-template');
+    expect(result.role).toBe('store');
+    expect(result.storeData?.storeId).toBe('cookie-store-id');
+    expect(result.storeData?.storeName).toBe('Cookie Store');
+    expect(result.storeData?.templateKey).toBe('cookie-template');
   });
 
   it('ignores cookies when domain does not match', async () => {
     const cookies = {
-      'x-mw-tenant-id': 'cookie-tenant-id',
-      'x-mw-tenant-name': 'Cookie Tenant',
-      'x-mw-tenant-template': 'cookie-template',
-      'x-mw-tenant-domain': 'other-store.test', // ドメインが不一致
+      'x-mw-store-id': 'cookie-store-id',
+      'x-mw-store-name': 'Cookie Store',
+      'x-mw-store-template': 'cookie-template',
+      'x-mw-store-domain': 'other-store.test', // ドメインが不一致
     };
     const req = createRequest('store.test', cookies);
 
@@ -117,44 +117,44 @@ describe('tenantResolver', () => {
     global.fetch = jest.fn().mockResolvedValue({
       json: () =>
         Promise.resolve({
-          id: 'api-tenant-id',
-          name: 'API Tenant',
+          id: 'api-store-id',
+          name: 'API Store',
           template_key: 'api-template',
         }),
     });
 
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('domain=store.test'));
-    expect(result.role).toBe('tenant');
-    expect(result.tenantData?.tenantId).toBe('api-tenant-id');
-    expect(result.tenantData?.tenantName).toBe('API Tenant');
+    expect(result.role).toBe('store');
+    expect(result.storeData?.storeId).toBe('api-store-id');
+    expect(result.storeData?.storeName).toBe('API Store');
   });
 
   it('falls back to API when domain cookie is missing', async () => {
     const cookies = {
-      'x-mw-tenant-id': 'cookie-tenant-id',
-      'x-mw-tenant-name': 'Cookie Tenant',
-      // x-mw-tenant-domain が存在しない
+      'x-mw-store-id': 'cookie-store-id',
+      'x-mw-store-name': 'Cookie Store',
+      // x-mw-store-domain が存在しない
     };
     const req = createRequest('store.test', cookies);
 
     global.fetch = jest.fn().mockResolvedValue({
       json: () =>
         Promise.resolve({
-          id: 'api-tenant-id',
-          name: 'API Tenant',
+          id: 'api-store-id',
+          name: 'API Store',
         }),
     });
 
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
     // ドメイン Cookie がないため fetch が呼び出されるはず
     expect(global.fetch).toHaveBeenCalled();
-    expect(result.tenantData?.tenantId).toBe('api-tenant-id');
+    expect(result.storeData?.storeId).toBe('api-store-id');
   });
 
-  it('fetches template_key from tenant config when central response lacks it', async () => {
+  it('fetches template_key from store config when central response lacks it', async () => {
     // 現実のバックエンド応答（TenantVO）は template_key を返さない
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('config/public')) {
@@ -166,7 +166,7 @@ describe('tenantResolver', () => {
         json: () =>
           Promise.resolve({
             id: 't1',
-            name: 'Tenant 1',
+            name: 'Store 1',
             domain: 'store.test',
             email: 'owner@store.test',
           }),
@@ -174,9 +174,9 @@ describe('tenantResolver', () => {
     });
 
     const req = createRequest('store.test');
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
-    expect(result.tenantData?.templateKey).toBe('modern');
+    expect(result.storeData?.templateKey).toBe('modern');
     // 追撃 fetch は X-Role: store + X-Store-ID ヘッダで行う
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('config/public'),
@@ -186,27 +186,27 @@ describe('tenantResolver', () => {
     );
   });
 
-  it('falls back to default when tenant config fetch fails', async () => {
+  it('falls back to default when store config fetch fails', async () => {
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('config/public')) {
         return Promise.reject(new Error('config down'));
       }
       return Promise.resolve({
-        json: () => Promise.resolve({ id: 't1', name: 'Tenant 1', domain: 'store.test' }),
+        json: () => Promise.resolve({ id: 't1', name: 'Store 1', domain: 'store.test' }),
       });
     });
 
     const req = createRequest('store.test');
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
-    expect(result.tenantData?.isValid).toBe(true);
-    expect(result.tenantData?.templateKey).toBe('default');
+    expect(result.storeData?.isValid).toBe(true);
+    expect(result.storeData?.templateKey).toBe('default');
   });
 
   it('does not short-circuit when template cookie is missing', async () => {
     const cookies = {
-      'x-mw-tenant-id': 'cookie-tenant-id',
-      'x-mw-tenant-domain': 'store.test', // ドメインは一致するが template cookie が無い
+      'x-mw-store-id': 'cookie-store-id',
+      'x-mw-store-domain': 'store.test', // ドメインは一致するが template cookie が無い
     };
     const req = createRequest('store.test', cookies);
 
@@ -218,14 +218,14 @@ describe('tenantResolver', () => {
       }
       return Promise.resolve({
         json: () =>
-          Promise.resolve({ id: 'api-tenant-id', name: 'API Tenant', domain: 'store.test' }),
+          Promise.resolve({ id: 'api-store-id', name: 'API Store', domain: 'store.test' }),
       });
     });
 
-    const result = await resolveTenant(req);
+    const result = await resolveStore(req);
 
     // 短絡せずバックエンド再解決に落ちる
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('domain=store.test'));
-    expect(result.tenantData?.tenantId).toBe('api-tenant-id');
+    expect(result.storeData?.storeId).toBe('api-store-id');
   });
 });

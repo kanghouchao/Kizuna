@@ -31,7 +31,7 @@ export default function PlatformLoginForm() {
       const me = await platformAuthApi.me();
       const destination = resolvePlatformDestination(me.console);
 
-      if (destination === 'central') {
+      if (destination === 'platform') {
         startPlatformSession(me.console, expires_at);
         router.push('/platform/dashboard/');
         return;
