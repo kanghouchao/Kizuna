@@ -30,8 +30,8 @@ describe('routeGuard', () => {
     jest.clearAllMocks();
   });
 
-  it('redirects to /platform/login when accessing /central without token', () => {
-    const req = createRequest('/central/dashboard', false);
+  it('redirects to /platform/login when accessing /platform without token', () => {
+    const req = createRequest('/platform/dashboard', false);
     const res = handleRouteProtection(req, 'central');
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
@@ -40,8 +40,8 @@ describe('routeGuard', () => {
     expect(res).not.toBeNull();
   });
 
-  it('allows access to /central with token', () => {
-    const req = createRequest('/central/dashboard', true);
+  it('allows access to /platform with token', () => {
+    const req = createRequest('/platform/dashboard', true);
     const res = handleRouteProtection(req, 'central');
 
     expect(res).toBeNull();

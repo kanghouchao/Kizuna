@@ -3,7 +3,7 @@
 import { Sidebar } from '@/widgets/sidebar';
 import { Header } from '@/widgets/header';
 
-export default function CentralLayout({ children }: { children: React.ReactNode }) {
+export default function PlatformLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar Component */}

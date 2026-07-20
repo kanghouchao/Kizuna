@@ -33,7 +33,7 @@ export default function PlatformLoginForm() {
 
       if (destination === 'central') {
         startPlatformSession(me.console, expires_at);
-        router.push('/central/dashboard/');
+        router.push('/platform/dashboard/');
         return;
       }
 

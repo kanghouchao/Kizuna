@@ -45,7 +45,7 @@ export default function AdminDashboard() {
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-700">ようこそ、adminさん</span>
               <button
-                onClick={() => router.push('/central/tenants')}
+                onClick={() => router.push('/platform/stores')}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
               >
                 店舗管理
@@ -209,7 +209,7 @@ export default function AdminDashboard() {
                 <p className="mt-1 max-w-2xl text-sm text-gray-500">直近で作成された5件</p>
               </div>
               <button
-                onClick={() => router.push('/central/tenants/create')}
+                onClick={() => router.push('/platform/stores/create')}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
               >
                 店舗追加
@@ -283,7 +283,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="mt-4">
                   <button
-                    onClick={() => router.push('/central/tenants/create')}
+                    onClick={() => router.push('/platform/stores/create')}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm font-medium"
                   >
                     今すぐ作成
@@ -317,7 +317,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="mt-4">
                   <button
-                    onClick={() => router.push('/central/tenants')}
+                    onClick={() => router.push('/platform/stores')}
                     className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md text-sm font-medium"
                   >
                     すべて表示

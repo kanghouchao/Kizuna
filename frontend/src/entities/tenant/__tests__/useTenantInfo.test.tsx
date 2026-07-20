@@ -25,8 +25,8 @@ describe('useTenantInfo', () => {
     (global as any).fetch?.mockClear?.();
   });
 
-  it('skips fetching on /central path', async () => {
-    setLocation('kizuna.test', '/central');
+  it('skips fetching on /platform path', async () => {
+    setLocation('kizuna.test', '/platform');
     (global as any).fetch = jest.fn();
     render(<TestComp />);
     await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
