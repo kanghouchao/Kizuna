@@ -1,0 +1,126 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0170-001-menu-route-vocabulary
+      author: kanghouchao
+      # #404 票D: 統一メニュー t_menus の path/label をフロントエンド新ルート語彙（/platform・/store）へ更新する。
+      # 歴史 changeset（v0.16.0 seed）は checksum 保護のため触れず、本 changeset の update のみで差し替える。
+      # update change type には自動 rollback が無いため、旧値へ戻す明示 rollback を付す。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        # --- path: /central/* → /platform/*（プラットフォームコンソール） ---
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /platform/dashboard }
+            where: id = 'platform-dashboard'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /platform/stores }
+            where: id = 'platform-stores'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /platform/staff }
+            where: id = 'platform-staff'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /platform/settings }
+            where: id = 'platform-config'
+        # --- path: /tenant/* → /store/*（店舗コンソール） ---
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /store/dashboard }
+            where: id = 'store-dashboard'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /store/orders }
+            where: id = 'store-orders'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /store/casts }
+            where: id = 'store-casts'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /store/shifts }
+            where: id = 'store-shifts'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /store/customers }
+            where: id = 'store-customers'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /store/settings/profile }
+            where: id = 'store-profile'
+        # --- label: 旧語彙 1 件（テナント一覧 → 店舗一覧） ---
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: label, value: 店舗一覧 }
+            where: id = 'platform-stores'
+      rollback:
+        # 旧値へ戻す（forward の逆順）。
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: label, value: テナント一覧 }
+            where: id = 'platform-stores'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /tenant/settings/profile }
+            where: id = 'store-profile'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /tenant/customers }
+            where: id = 'store-customers'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /tenant/shifts }
+            where: id = 'store-shifts'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /tenant/casts }
+            where: id = 'store-casts'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /tenant/orders }
+            where: id = 'store-orders'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /tenant/dashboard }
+            where: id = 'store-dashboard'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /central/settings }
+            where: id = 'platform-config'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /central/staff }
+            where: id = 'platform-staff'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /central/tenants }
+            where: id = 'platform-stores'
+        - update:
+            tableName: t_menus
+            columns:
+              - column: { name: path, value: /central/dashboard }
+            where: id = 'platform-dashboard'
