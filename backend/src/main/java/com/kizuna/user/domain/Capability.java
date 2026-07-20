@@ -14,20 +14,20 @@ import lombok.Getter;
 @Getter
 public enum Capability {
 
-  /** 店舗（組織）の閲覧・登録・更新・削除（CentralStoreController）。 */
-  STORE_MANAGE(Console.CENTRAL),
+  /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
+  STORE_MANAGE(Console.PLATFORM),
 
   /** 社内アカウント・権限の閲覧・付与・変更・停止と付与履歴の閲覧（PlatformStaffController / CapabilityBundleController）。 */
-  STAFF_MANAGE(Console.CENTRAL),
+  STAFF_MANAGE(Console.PLATFORM),
 
-  /** 共通設定の閲覧・更新（CentralConfigController）。 */
-  SYSTEM_CONFIG_MANAGE(Console.CENTRAL),
+  /** 共通設定の閲覧・更新（PlatformConfigController）。 */
+  SYSTEM_CONFIG_MANAGE(Console.PLATFORM),
 
   /** プラットフォームコンソールメニューの標識能力。 */
-  PLATFORM_MENU_VIEW(Console.CENTRAL),
+  PLATFORM_MENU_VIEW(Console.PLATFORM),
 
-  /** 中央共有領域への資産アップロード（登録・出力 — FileUploadController の central 保存経路）。 */
-  PLATFORM_ASSET_MANAGE(Console.CENTRAL),
+  /** プラットフォーム共有領域への資産アップロード（登録・出力 — FileUploadController の platform 保存経路）。 */
+  PLATFORM_ASSET_MANAGE(Console.PLATFORM),
 
   /** 授権店舗一覧の閲覧（PlatformStoreController）。 */
   STORE_VIEW(Console.SHARED),
@@ -64,11 +64,11 @@ public enum Capability {
 
   /** 能力が属するコンソール。ログイン後の着地先導出と店舗文脈ブリッジ（storeBridge claim）の判定に用いる。 */
   public enum Console {
-    /** 中央（HQ）コンソール専用。 */
-    CENTRAL,
+    /** プラットフォーム（HQ）コンソール専用。 */
+    PLATFORM,
     /** 店舗コンソール専用。保持者は店舗文脈（X-Store-ID）を確立できる。 */
     STORE,
-    /** 中央・店舗の両方から利用する跨店参照系。 */
+    /** プラットフォーム・店舗の両方から利用する跨店参照系。 */
     SHARED
   }
 

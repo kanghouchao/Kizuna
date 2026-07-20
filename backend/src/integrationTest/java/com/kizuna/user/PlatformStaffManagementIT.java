@@ -383,10 +383,10 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
     String token = platformToken(email, PASSWORD);
 
-    ResponseEntity<String> central =
+    ResponseEntity<String> platform =
         rest.exchange(
             "/platform/stores", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
-    assertThat(central.getStatusCode()).as("HQ管理者束で中央端点へ到達できること").isEqualTo(HttpStatus.OK);
+    assertThat(platform.getStatusCode()).as("HQ管理者束でプラットフォーム端点へ到達できること").isEqualTo(HttpStatus.OK);
 
     HttpHeaders storeHeaders = bearer(token);
     storeHeaders.add("X-Role", "store");

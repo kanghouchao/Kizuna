@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 統一（プラットフォーム）ログイン。既存の central/store 二軌のコードパスに触れないため AuthenticationManager を経由せず、findByEmail +
+ * 統一（プラットフォーム）ログイン。既存の platform/store 二軌のコードパスに触れないため AuthenticationManager を経由せず、findByEmail +
  * enabled 判定 + パスワード照合を自前で行う。判定順は DaoAuthenticationProvider に倣い enabled を先行させ、無効化ユーザーはパスワードの正誤に関わらず
  * {@link DisabledException} を投げる（無効化アカウントでのパスワード正誤オラクルを塞ぐ）。 メール不存在時は既知メール（誤パスワード）との応答時間差を無くすため、ダミーの
  * bcrypt 照合を 1 回行ってからパスワード不一致と同一メッセージの {@link BadCredentialsException} を投げる（列挙耐性: メッセージ均一 +
@@ -162,16 +162,16 @@ public class PlatformAuthService {
                     && capability != Capability.STORE_MENU_VIEW);
   }
 
-  /** ログイン後の着地先。CENTRAL 能力保持者は central 優先（兼務者のコンソール切替導線は別票）。 */
+  /** ログイン後の着地先。PLATFORM 能力保持者は platform 優先（兼務者のコンソール切替導線は別票）。 */
   private static String consoleOf(PlatformUser user, Set<Capability> capabilities) {
     if (user.getUserType() != UserType.STAFF) {
       return "none";
     }
-    boolean central =
+    boolean platform =
         capabilities.stream()
-            .anyMatch(capability -> capability.getConsole() == Capability.Console.CENTRAL);
-    if (central) {
-      return "central";
+            .anyMatch(capability -> capability.getConsole() == Capability.Console.PLATFORM);
+    if (platform) {
+      return "platform";
     }
     return hasStoreConsole(capabilities) ? "store" : "none";
   }

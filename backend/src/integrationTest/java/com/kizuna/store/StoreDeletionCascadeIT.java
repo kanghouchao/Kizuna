@@ -90,7 +90,7 @@ class StoreDeletionCascadeIT {
     // 前提: 削除前は授権行が 1 件存在する（空振りで緑にならないことを固定）。
     assertThat(countStoreGrants(storeId)).as("削除前は店舗授権行が存在すること").isEqualTo(1L);
 
-    // 実削除フロー: 中央 admin トークンで DELETE /platform/stores/{id}。
+    // 実削除フロー: プラットフォーム admin トークンで DELETE /platform/stores/{id}。
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin());
     ResponseEntity<Void> res =

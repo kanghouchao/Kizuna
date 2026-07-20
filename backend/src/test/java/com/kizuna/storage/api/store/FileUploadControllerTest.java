@@ -50,7 +50,7 @@ class FileUploadControllerTest {
     storeContext.clear();
   }
 
-  /** 指定した authority 群で認証済みリクエストを模擬する（central 保存可否は SecurityContext の authority で判定される）。 */
+  /** 指定した authority 群で認証済みリクエストを模擬する（platform 保存可否は SecurityContext の authority で判定される）。 */
   private void authenticateWithAuthorities(String... authorities) {
     PreAuthenticatedAuthenticationToken authentication =
         new PreAuthenticatedAuthenticationToken(
@@ -61,22 +61,22 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("PLATFORM_ASSET_MANAGE 能力のトークンは店舗文脈が無くても central 配下に保存すること")
-  void upload_storesUnderCentralForPlatformAssetManage() {
+  @DisplayName("PLATFORM_ASSET_MANAGE 能力のトークンは店舗文脈が無くても platform 配下に保存すること")
+  void upload_storesUnderPlatformForPlatformAssetManage() {
     authenticateWithAuthorities(Capability.PLATFORM_ASSET_MANAGE.authority());
-    when(fileStorageService.store("central", "public", file)).thenReturn("public/central/x.jpg");
+    when(fileStorageService.store("platform", "public", file)).thenReturn("public/platform/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);
 
     ResponseEntity<FileUploadResponse> res = controller.upload(file, "public");
 
     assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
-    verify(fileStorageService).store("central", "public", file);
-    assertThat(res.getBody().getUrl()).isEqualTo("/static/uploads/public/central/x.jpg");
+    verify(fileStorageService).store("platform", "public", file);
+    assertThat(res.getBody().getUrl()).isEqualTo("/static/uploads/public/platform/x.jpg");
   }
 
   @Test
-  @DisplayName("PLATFORM_ASSET_MANAGE の無いトークンは店舗文脈が無い場合、central に保存せず拒否すること")
+  @DisplayName("PLATFORM_ASSET_MANAGE の無いトークンは店舗文脈が無い場合、platform に保存せず拒否すること")
   void upload_rejectsWithoutPlatformAssetManageAndStoreContext() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
 

@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 平台（統一）店舗 API。授権店舗一覧と中央運営の店舗 CRUD を提供する（#324 統一ログイン / #415 二命名空間）。 */
+/** 平台（統一）店舗 API。授権店舗一覧とプラットフォーム運営の店舗 CRUD を提供する（#324 統一ログイン / #415 二命名空間）。 */
 @RestController
 @RequestMapping("/platform/stores")
 @RequiredArgsConstructor

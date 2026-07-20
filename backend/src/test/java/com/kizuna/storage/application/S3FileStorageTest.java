@@ -69,16 +69,16 @@ class S3FileStorageTest {
   }
 
   @Test
-  void store_uploadsCentralPrefix() throws IOException {
-    byte[] content = "central content".getBytes();
+  void store_uploadsPlatformPrefix() throws IOException {
+    byte[] content = "platform content".getBytes();
     when(multipartFile.getSize()).thenReturn((long) content.length);
     when(multipartFile.getContentType()).thenReturn("image/png");
     when(multipartFile.getOriginalFilename()).thenReturn("logo.png");
     when(multipartFile.getBytes()).thenReturn(content);
 
-    String result = storageService.store("central", "public", multipartFile);
+    String result = storageService.store("platform", "public", multipartFile);
 
-    assertThat(result).startsWith("public/central/");
+    assertThat(result).startsWith("public/platform/");
     assertThat(result).endsWith(".png");
 
     ArgumentCaptor<PutObjectRequest> requestCaptor =
