@@ -154,8 +154,8 @@ describe('storeResolver', () => {
     expect(result.storeData?.storeId).toBe('api-store-id');
   });
 
-  it('fetches template_key from store config when central response lacks it', async () => {
-    // 現実のバックエンド応答（TenantVO）は template_key を返さない
+  it('fetches template_key from store config when platform response lacks it', async () => {
+    // 現実のバックエンド応答（StoreVO）は template_key を返さない
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('config/public')) {
         return Promise.resolve({

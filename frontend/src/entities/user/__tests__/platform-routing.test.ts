@@ -1,8 +1,8 @@
 import { resolvePlatformDestination } from '@/entities/user';
 
 describe('resolvePlatformDestination', () => {
-  it('routes central console to platform', () => {
-    expect(resolvePlatformDestination('central')).toBe('platform');
+  it('routes platform console to platform', () => {
+    expect(resolvePlatformDestination('platform')).toBe('platform');
   });
   it('routes store console to store', () => {
     expect(resolvePlatformDestination('store')).toBe('store');

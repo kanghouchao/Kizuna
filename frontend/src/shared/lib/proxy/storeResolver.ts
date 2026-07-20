@@ -59,7 +59,7 @@ export async function resolveStore(request: NextRequest): Promise<{
       const storeName = String(data.name ?? '');
       const isValid = Boolean(storeId || storeName || data.domain);
 
-      // 中央応答（TenantVO）は template_key を返さないため、含まれていれば従来どおり採用し、
+      // プラットフォーム応答（StoreVO）は template_key を返さないため、含まれていれば従来どおり採用し、
       // 無ければ店舗側の /store/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
       let templateKey = 'default';
       if (data.template_key) {

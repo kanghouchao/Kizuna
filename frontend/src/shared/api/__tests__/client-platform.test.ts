@@ -64,10 +64,10 @@ describe('apiClient platform branch', () => {
     expect(headers['X-Store-ID']).toBeUndefined();
   });
 
-  it('skips the legacy x-mw branch entirely when a platform session is active (central console, no store)', async () => {
+  it('skips the legacy x-mw branch entirely when a platform session is active (platform console, no store)', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'platform-role') return 'central';
+      if (key === 'platform-role') return 'platform';
       if (key === 'x-mw-role') return 'store';
       if (key === 'x-mw-store-id') return '99';
       return undefined;
