@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 export default function CustomerEditPage() {
   const params = useParams();
   const id = params.id as string;
+  const storeId = params.storeId as string;
   const router = useRouter();
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -24,7 +25,7 @@ export default function CustomerEditPage() {
         setCustomer(data);
       } catch {
         toast.error('顧客情報の取得に失敗しました');
-        router.push('/store/customers');
+        router.push(`/store/${storeId}/customers`);
         return;
       } finally {
         setIsLoading(false);
@@ -38,14 +39,14 @@ export default function CustomerEditPage() {
       }
     };
     fetchData();
-  }, [id, router]);
+  }, [id, router, storeId]);
 
   const handleSubmit = async (data: CustomerFormData) => {
     try {
       setIsSubmitting(true);
       await customerApi.update(id, toCustomerRequest(data));
       toast.success('顧客情報を更新しました');
-      router.push('/store/customers');
+      router.push(`/store/${storeId}/customers`);
     } catch {
       toast.error('顧客情報の更新に失敗しました');
     } finally {

@@ -3,6 +3,10 @@ import CastListPage from '../ui/CastsPage';
 import { CastResponse, castApi } from '@/entities/cast';
 import { platformAuthApi, PlatformMeResponse } from '@/entities/user';
 
+jest.mock('next/navigation', () => ({
+  useParams: () => ({ storeId: '1' }),
+}));
+
 jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
@@ -139,7 +143,7 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
     await screen.findByText('花子');
 
     const link = await screen.findByRole('link', { name: 'カスタムフィールド管理' });
-    expect(link).toHaveAttribute('href', '/store/casts/fields');
+    expect(link).toHaveAttribute('href', '/store/1/casts/fields');
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力が無ければ定義管理ページへの入口リンクが表示されないこと', async () => {

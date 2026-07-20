@@ -2,12 +2,14 @@
 
 import { OrderForm, OrderFormData } from './OrderForm';
 import { toast } from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { OrderCreateRequest, orderApi } from '@/entities/order';
 
 export default function CreateOrderPage() {
   const router = useRouter();
+  const params = useParams();
+  const storeId = params.storeId as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (data: OrderFormData) => {
@@ -48,7 +50,7 @@ export default function CreateOrderPage() {
       await orderApi.create(request);
 
       toast.success('オーダーを登録しました');
-      router.push('/store/orders');
+      router.push(`/store/${storeId}/orders`);
     } catch (error) {
       console.error(error);
       toast.error('オーダーの登録に失敗しました');
