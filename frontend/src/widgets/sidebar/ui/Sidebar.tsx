@@ -25,7 +25,13 @@ import {
   KeyIcon,
 } from '@heroicons/react/24/outline';
 import { menuApi, MenuVO } from '@/entities/menu';
-import { getPlatformConsole, isStoreConsole } from '@/shared/lib';
+import {
+  getPlatformConsole,
+  getPlatformStoreId,
+  getStoreIdFromPath,
+  isStoreConsole,
+  setPlatformStore,
+} from '@/shared/lib';
 
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   HomeIcon,
@@ -48,12 +54,33 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   KeyIcon,
 };
 
+/**
+ * 店舗スコープの menu path（例 /store/orders）に現在の storeId を埋め込む（#413）。
+ * path 由来 id を最優先し、無ければ前回選択 cookie、それも無ければ店舗選択画面へ誘導する。
+ * 認可の根拠ではなく遷移先の解決のみ — 非授権店舗はバックエンドが fail-closed で拒否する。
+ */
+function resolveStoreHref(itemPath: string, pathStoreId: string | undefined): string {
+  if (!itemPath.startsWith('/store')) {
+    return itemPath;
+  }
+  const storeId = pathStoreId ?? getPlatformStoreId();
+  if (storeId) {
+    return itemPath.replace('/store', `/store/${storeId}`);
+  }
+  return `/store/select?next=${encodeURIComponent(itemPath)}`;
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const pathStoreId = getStoreIdFromPath(pathname);
   const [role, setRole] = useState<string>('platform');
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
+    // 直リンクで /store/{id}/... に来た場合も「前回選択」cookie を最新化する（#413）。
+    if (pathStoreId) {
+      setPlatformStore(pathStoreId);
+    }
     // 平台セッションがあれば優先する（コンソール値: platform / store — #324/#398）
     const platformConsole = getPlatformConsole();
     if (platformConsole) {
@@ -65,7 +92,7 @@ export function Sidebar() {
     if (mwRole) {
       setRole(mwRole);
     }
-  }, []);
+  }, [pathStoreId]);
 
   useEffect(() => {
     const fetchMenus = async () => {
@@ -124,11 +151,12 @@ export function Sidebar() {
               </h3>
               <ul className="space-y-1">
                 {section.items.map((item: any) => {
-                  const isActive = pathname === item.href;
+                  const href = resolveStoreHref(item.href, pathStoreId);
+                  const isActive = pathname === href;
                   return (
                     <li key={item.name}>
                       <Link
-                        href={item.href}
+                        href={href}
                         className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${
                           isActive
                             ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20'
