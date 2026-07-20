@@ -33,4 +33,4 @@
     もし メール "tanaka.hanako@kizuna.test" とパスワード "pass" でログインする
     ならば 店舗ダッシュボードへ遷移する
     もし サイドバーの "予約・案件管理" リンクをクリックする
-    ならば URL が "/store/orders" で終わる
+    ならば URL が "/orders" で終わる

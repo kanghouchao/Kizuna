@@ -18,11 +18,16 @@ const { Given, When, Then, After } = createBdd();
 // の _label 引数と同じ扱い）。
 let createdFieldKey = '';
 let createdFieldLabel = '';
-// キャストの編集画面遷移時、一覧行の編集リンク（/store/casts/{id}/edit）から id を取り出して
+// キャストの編集画面遷移時、一覧行の編集リンク（/store/{storeId}/casts/{id}/edit）から id を取り出して
 // 後続の公開詳細ページ遷移・After での削除に使う（作成ステップは cast-detail-404.steps.ts の
 // 既存 Given を再利用するため、その内部状態にはここから直接アクセスできない）。
 let currentCastId = '';
 let currentCastName = '';
+// ルート移設（#413）で店舗管理画面 URL に storeId が必須になった。ログイン着地先の
+// /store/{id}/dashboard から読み取り、以降の管理画面遷移で使う（seed id をハードコードしない）。
+// 公開詳細ページ（/casts/{id}）遷移後は URL に店舗文脈が残らないため、現在 URL からの都度解決ではなく
+// ログイン時に確定した値を保持する。
+let storeId = '';
 
 async function addFieldDefinition(page: Page, rawKey: string, rawLabel: string, isPublic: boolean) {
   const ts = Date.now();
@@ -50,8 +55,9 @@ Given('キャストカスタムフィールド管理画面を開く', async ({ p
   await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/dashboard\/?$/, { timeout: 15000 });
-  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
+  await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
+  storeId = new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/fields`);
   await expect(page.getByRole('button', { name: 'フィールドを追加', exact: true })).toBeVisible();
 });
 
@@ -79,12 +85,12 @@ When(
   '{string} の編集画面で {string} に {string} と入力して保存する',
   async ({ page }, castName: string, _fieldLabel: string, value: string) => {
     currentCastName = castName;
-    await page.goto(`${PLATFORM_URL}/store/casts`);
+    await page.goto(`${PLATFORM_URL}/store/${storeId}/casts`);
     const row = page.getByRole('row', { name: new RegExp(castName) });
     await expect(row).toBeVisible({ timeout: 15000 });
     const editLink = row.locator('a[href$="/edit"]');
     const href = await editLink.getAttribute('href');
-    currentCastId = href?.match(/\/store\/casts\/([^/]+)\/edit/)?.[1] ?? '';
+    currentCastId = href?.match(/\/store\/\d+\/casts\/([^/]+)\/edit/)?.[1] ?? '';
     await editLink.click();
 
     await expect(page.getByRole('heading', { name: 'キャスト編集', exact: true })).toBeVisible();
@@ -126,7 +132,7 @@ Then(
 );
 
 When('キャストカスタムフィールド管理画面で {string} を削除する', async ({ page }, _label: string) => {
-  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/fields`);
   const row = page.getByRole('row', { name: new RegExp(createdFieldLabel) });
   await expect(row).toBeVisible({ timeout: 15000 });
   page.once('dialog', dialog => dialog.accept());

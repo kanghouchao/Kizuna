@@ -16,6 +16,9 @@ let originalCustomTexts: Record<string, string> | null = null;
 // After が空オブジェクトで上書きして既存 custom_texts を消し飛ばすのを防ぐ。
 let snapshotCaptured = false;
 let testValue = '';
+// ルート移設（#413）で店舗管理画面 URL に storeId が必須になった。ログイン着地先の
+// /store/{id}/dashboard から読み取り、以降の管理画面遷移で使う（seed id をハードコードしない）。
+let storeId = '';
 
 Given('店舗 {string} の管理画面にログインしている', async ({ page }, _store: string) => {
   // 統一ログイン（/platform/login）は platform ドメイン（kizuna.test）で提供され、店長ロールの
@@ -25,7 +28,8 @@ Given('店舗 {string} の管理画面にログインしている', async ({ pag
   await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/dashboard\/?$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
+  storeId = new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
 });
 
 Given('店舗設定の現在値を退避する', async ({ request }) => {
@@ -38,7 +42,7 @@ Given('店舗設定の現在値を退避する', async ({ request }) => {
 When('店舗情報ページでアクセス補足を一意な検証値に変更して保存する', async ({ page }) => {
   testValue = `E2E設定保存-${Date.now()}`;
   // ログイン済みセッション（token cookie）は platform ドメインにあるため管理画面も PLATFORM_URL で開く。
-  await page.goto(`${PLATFORM_URL}/store/settings/profile`);
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/settings/profile`);
   await accessNoteTextarea(page).fill(testValue);
   await page.getByRole('button', { name: '設定を保存する', exact: true }).click();
 });
