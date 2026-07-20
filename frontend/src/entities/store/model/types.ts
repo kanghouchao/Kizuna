@@ -23,14 +23,6 @@ export interface UpdateStoreRequest {
   email: string;
 }
 
-// ダッシュボード統計データ
-export interface DashboardStats {
-  total_tenants: number;
-  total_domains: number;
-  monthly_tenants: number;
-  active_domains: number;
-}
-
 // 店舗統計データ
 export interface StoreStats {
   total: number;
