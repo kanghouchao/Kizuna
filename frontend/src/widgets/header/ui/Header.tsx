@@ -4,13 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
-import {
-  hasStoreConsoleCapability,
-  PlatformCapability,
-  platformAuthApi,
-  PlatformStore,
-  useAuth,
-} from '@/entities/user';
+import { useAuth, useAuthorizedStores } from '@/entities/user';
 import {
   getPlatformStoreId,
   getStoreIdFromPath,
@@ -26,27 +20,17 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [stores, setStores] = useState<PlatformStore[]>([]);
-  // 実運用の store-console 能力目録。/platform/stores/me は SHARED 能力でも非空を返すため、
-  // 店舗切替の表示可否は「授権店舗が1件以上」だけでなくこの能力ゲートでも判定する（#413 Fix4）。
-  const [capabilities, setCapabilities] = useState<PlatformCapability[]>([]);
+  // 到達資格のある授権店舗一覧。能力ゲート・STORE_VIEW 欠如時の store_ids フォールバックまで
+  // useAuthorizedStores 内で完結する（StoreSelectPage と共有・#413 Fix7）。
+  // null = 読み込み中、[] = 非表示（能力無し/0件）、非空 = 店舗切替を表示。
+  const stores = useAuthorizedStores();
   // cookie 由来の「前回選択した店舗」ヒント。document 依存で SSR-unsafe なため mount 時のみ読む。
   // store-scoped ページ外（platform 側）に居るときだけ表示に使う fallback 専用の役割（#413 Fix1）。
   const [lastUsedStoreId, setLastUsedStoreId] = useState<string | undefined>(undefined);
 
-  // 店舗切替は console 値に依らず「平台セッションかつ授権店舗が1件以上かつ実運用の store-console 能力保持」で
-  // 常設化する（#413）。能力ゲートが無いと純 platform ユーザー（STORE_VIEW のみ等）にも表示され 403 になる（Fix4）。
   useEffect(() => {
     if (isPlatformSession()) {
       setLastUsedStoreId(getPlatformStoreId());
-      platformAuthApi
-        .stores()
-        .then(setStores)
-        .catch(error => console.error('Failed to fetch stores', error));
-      platformAuthApi
-        .me()
-        .then(me => setCapabilities(me.capabilities))
-        .catch(error => console.error('Failed to fetch me', error));
     }
   }, []);
 
@@ -55,7 +39,7 @@ export function Header() {
   const pathStoreId = getStoreIdFromPath(pathname);
   const currentStoreId = pathStoreId ?? lastUsedStoreId;
 
-  const currentStoreName = stores.find(store => String(store.id) === currentStoreId)?.name;
+  const currentStoreName = stores?.find(store => String(store.id) === currentStoreId)?.name;
 
   // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す（#413 Fix2）。
   // storeId は他の分岐と同じく pathname 優先・cookie ヒント fallback の currentStoreId に揃える。
@@ -91,7 +75,7 @@ export function Header() {
 
         <div className="h-8 w-px bg-gray-200" />
 
-        {stores.length > 0 && hasStoreConsoleCapability(capabilities) && (
+        {stores && stores.length > 0 && (
           <Menu as="div" className="relative">
             <MenuButton
               disabled={stores.length === 0}
