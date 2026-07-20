@@ -7,7 +7,7 @@ import { menuApi } from '@/entities/menu';
 jest.mock('js-cookie');
 
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/tenant/dashboard',
+  usePathname: () => '/store/dashboard',
 }));
 
 jest.mock('@/entities/menu', () => ({

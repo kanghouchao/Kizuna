@@ -12,11 +12,11 @@ export function handleRouteProtection(request: NextRequest, role: 'central' | 't
   }
 
   // 2. Tenant Route Protection
-  // If accessing /tenant/* without a token, redirect to root (/)
+  // If accessing /store/* without a token, redirect to root (/)
   // This logic applies even if role is 'central' but accessing tenant routes (though rare)
   // But strictly, we mostly care about tenant role here.
-  if (path.startsWith('/tenant') && !hasToken) {
-    console.error('🔒 Unauthorized access to /tenant, redirecting to root');
+  if (path.startsWith('/store') && !hasToken) {
+    console.error('🔒 Unauthorized access to /store, redirecting to root');
     return NextResponse.redirect(new URL('/', request.url));
   }
 

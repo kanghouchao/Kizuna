@@ -74,7 +74,7 @@ export default function CustomersPage() {
           <p className="text-sm text-gray-500 mt-1">顧客情報の登録・編集ができます。</p>
         </div>
         <Link
-          href="/tenant/customers/create"
+          href="/store/customers/create"
           className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
         >
           <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
@@ -189,7 +189,7 @@ export default function CustomersPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                     <Link
-                      href={`/tenant/customers/${customer.id}/edit`}
+                      href={`/store/customers/${customer.id}/edit`}
                       className="text-gray-400 hover:text-amber-600 inline-block"
                     >
                       <PencilSquareIcon className="h-5 w-5" />

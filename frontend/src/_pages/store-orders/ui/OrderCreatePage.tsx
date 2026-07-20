@@ -48,7 +48,7 @@ export default function CreateOrderPage() {
       await orderApi.create(request);
 
       toast.success('オーダーを登録しました');
-      router.push('/tenant/orders');
+      router.push('/store/orders');
     } catch (error) {
       console.error(error);
       toast.error('オーダーの登録に失敗しました');

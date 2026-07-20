@@ -47,7 +47,7 @@ export default function PlatformLoginForm() {
         }
         startPlatformSession(me.console, expires_at);
         setPlatformStore(stores[0].id, expires_at);
-        router.push('/tenant/dashboard/');
+        router.push('/store/dashboard/');
         return;
       }
 

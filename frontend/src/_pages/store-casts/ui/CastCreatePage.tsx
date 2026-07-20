@@ -29,7 +29,7 @@ export default function CastCreatePage() {
       };
       await castApi.create(requestData);
       toast.success('キャストを登録しました');
-      router.push('/tenant/casts');
+      router.push('/store/casts');
     } catch {
       toast.error('キャストの登録に失敗しました');
     } finally {
