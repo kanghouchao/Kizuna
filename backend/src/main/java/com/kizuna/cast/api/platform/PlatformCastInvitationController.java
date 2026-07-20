@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 招待受諾の公開コントローラ。TenantIdInterceptor を通らない /platform 配下に置く。 */
+/** 招待受諾の公開コントローラ。StoreIdInterceptor を通らない /platform 配下に置く。 */
 @RestController
 @RequestMapping("/platform/cast-invitations")
 @RequiredArgsConstructor

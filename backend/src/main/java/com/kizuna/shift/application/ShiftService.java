@@ -5,8 +5,8 @@ import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
@@ -35,13 +35,13 @@ public class ShiftService {
 
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
   private final TenantRepository tenantRepository;
   private final CastService castService;
   private final CastRepository castRepository;
   private final AppProperties appProperties;
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public List<ShiftResponse> list(LocalDate from, LocalDate to) {
     return shiftRepository.findByWorkDateBetween(from, to).stream()
@@ -52,10 +52,10 @@ public class ShiftService {
   /**
    * 公開出勤表用に「本日（app.timezone）」の確定（CONFIRMED）シフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧 ({@code
    * /tenant/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
-   * 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は {@code @TenantScoped} によりセッション全体で有効なので
-   * t_casts 参照も現テナントに絞られる。
+   * 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は {@code @StoreScoped} によりセッション全体で有効なので t_casts
+   * 参照も現テナントに絞られる。
    */
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public List<PublicShiftResponse> listPublicToday() {
     LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
@@ -83,7 +83,7 @@ public class ShiftService {
         .toList();
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public ShiftResponse create(ShiftCreateRequest request) {
     if (request.getStartTime().equals(request.getEndTime())) {
@@ -98,14 +98,14 @@ public class ShiftService {
 
     shift.setStoreId(
         tenantRepository
-            .findById(tenantContext.getTenantId())
+            .findById(tenantContext.getStoreId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
             .getId());
 
     return shiftMapper.toResponse(shiftRepository.save(shift));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public ShiftResponse update(String id, ShiftUpdateRequest request) {
     Shift shift =
@@ -130,7 +130,7 @@ public class ShiftService {
     return shiftMapper.toResponse(shiftRepository.save(shift));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!shiftRepository.existsById(id)) {

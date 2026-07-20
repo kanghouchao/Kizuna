@@ -55,8 +55,8 @@ class ShiftCrossTenantIT extends CrossTenantTestSupport {
   }
 
   /**
-   * 他テナントの Cast をリポジトリ直挿しで用意する。 HTTP 経由の作成は tenant A の JWT + 他テナントの X-Store-ID が
-   * TenantIdInterceptor に 403 で弾かれるため、{@code @TenantScoped} を経由せず storeFilter が無効な
+   * 他テナントの Cast をリポジトリ直挿しで用意する。 HTTP 経由の作成は tenant A の JWT + 他テナントの X-Store-ID が StoreIdInterceptor
+   * に 403 で弾かれるため、{@code @StoreScoped} を経由せず storeFilter が無効な
    * リポジトリ直接呼び出しで他テナントのデータを書く（MenuCrossTenantIT と同型）。帰属先は実在する第二テナントの採番 id を使う。
    */
   private String createForeignCast(String name) {

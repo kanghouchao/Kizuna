@@ -5,9 +5,9 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.PlatformOrderCreateRequest;
 import com.kizuna.order.api.dto.PlatformOrderResponse;
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.shared.tenancy.StoreScope;
-import com.kizuna.shared.tenancy.StoreSetScoped;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreSetScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,7 +23,7 @@ public class PlatformOrderService {
 
   private final OrderRepository orderRepository;
   private final OrderService orderService;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
   private final OrderMapper orderMapper;
 
   /** 授権店舗集合での受注横断一覧。濾過は storeSetFilter（@StoreSetScoped）が機構的に行う。 */
@@ -33,7 +33,7 @@ public class PlatformOrderService {
     return orderRepository.findPlatformViews(pageable).map(orderMapper::toPlatformResponse);
   }
 
-  /** 明示的単店指定の受注作成。storeId の授権検証後、店側と同一機構（TenantContext+@TenantScoped）で実行する。 */
+  /** 明示的単店指定の受注作成。storeId の授権検証後、店側と同一機構（StoreContext+@StoreScoped）で実行する。 */
   public OrderResponse create(PlatformOrderCreateRequest request) {
     StoreScope scope =
         StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
@@ -41,10 +41,10 @@ public class PlatformOrderService {
       throw new AccessDeniedException("指定店舗はこのアカウントの授権店舗集合に含まれません");
     }
     try {
-      tenantContext.setTenantId(request.getStoreId());
+      tenantContext.setStoreId(request.getStoreId());
       return orderService.create(request);
     } finally {
-      // /platform は TenantIdInterceptor(afterCompletion clear)を通らないため、ここで必ず消す
+      // /platform は StoreIdInterceptor(afterCompletion clear)を通らないため、ここで必ず消す
       tenantContext.clear();
     }
   }

@@ -1,6 +1,6 @@
 package com.kizuna.tenant.application;
 
-import com.kizuna.shared.tenancy.StoreScope;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.tenant.api.dto.PlatformStoreResponse;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;

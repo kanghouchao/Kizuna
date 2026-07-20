@@ -1,4 +1,4 @@
-package com.kizuna.shared.tenancy;
+package com.kizuna.shared.storescope;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

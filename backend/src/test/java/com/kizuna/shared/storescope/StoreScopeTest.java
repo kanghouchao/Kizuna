@@ -1,4 +1,4 @@
-package com.kizuna.shared.tenancy;
+package com.kizuna.shared.storescope;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;

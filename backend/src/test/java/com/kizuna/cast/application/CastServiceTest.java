@@ -21,7 +21,7 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.util.List;
@@ -41,7 +41,7 @@ class CastServiceTest {
 
   @Mock private CastRepository castRepository;
   @Mock private CastMapper castMapper;
-  @Mock private TenantContext tenantContext;
+  @Mock private StoreContext tenantContext;
   @Mock private TenantRepository tenantRepository;
   @Mock private CastInvitationService castInvitationService;
   @Mock private CastFieldDefinitionRepository castFieldDefinitionRepository;
@@ -136,7 +136,7 @@ class CastServiceTest {
     tenant.setId(1L);
 
     when(castMapper.toEntity(req)).thenReturn(castEntity);
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
     when(castRepository.save(any()))
@@ -161,7 +161,7 @@ class CastServiceTest {
     req.setName("G1");
 
     when(castMapper.toEntity(req)).thenReturn(new Cast());
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> castService.create(req))

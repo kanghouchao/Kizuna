@@ -74,7 +74,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   /**
    * リクエストパスの属するドメインとトークンの issuer が一致するか検証する。 統一（プラットフォーム）認証への一本化後、業務ドメイン（/store・/platform）は いずれも
    * PlatformAuth 発行のトークンのみを受理する。ドメイン外のパス（/files 等）は制限しない。 店舗文脈の授権検証は
-   * TenantIdInterceptor（StoreScope）が担う。
+   * StoreIdInterceptor（StoreScope）が担う。
    */
   private boolean issuerMatchesDomain(String issuer, String path) {
     boolean restrictedDomain =

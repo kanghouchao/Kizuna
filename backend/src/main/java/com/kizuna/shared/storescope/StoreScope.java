@@ -1,4 +1,4 @@
-package com.kizuna.shared.tenancy;
+package com.kizuna.shared.storescope;
 
 import io.jsonwebtoken.Claims;
 import java.util.List;

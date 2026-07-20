@@ -24,7 +24,7 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
 import com.kizuna.user.domain.Capability;
@@ -58,7 +58,7 @@ class OrderServiceTest {
   @Mock PlatformUserRepository platformUserRepository;
   @Mock CapabilityBundleRepository capabilityBundleRepository;
   @Mock TenantRepository tenantRepository;
-  @Mock TenantContext tenantContext;
+  @Mock StoreContext tenantContext;
   @Mock OrderMapper orderMapper;
 
   @InjectMocks OrderService service;
@@ -156,7 +156,7 @@ class OrderServiceTest {
     Order entity = Order.builder().build();
     OrderResponse res = OrderResponse.builder().status("CREATED").build();
 
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(entity);
     when(customerRepository.existsById("c1")).thenReturn(true);
@@ -185,7 +185,7 @@ class OrderServiceTest {
 
     Customer newCustomer = Customer.builder().phoneNumber("09012345678").build();
 
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(customerRepository.findByPhoneNumberAndStoreId("09012345678", 1L))
@@ -213,7 +213,7 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
@@ -234,7 +234,7 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
@@ -254,7 +254,7 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
@@ -286,7 +286,7 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(tenantRepository.findById(TENANT_ID)).thenReturn(Optional.of(new Tenant()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
@@ -305,7 +305,7 @@ class OrderServiceTest {
   void updateModifiesAssociations() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
 
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
@@ -330,7 +330,7 @@ class OrderServiceTest {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(
             new OrderPatch(
@@ -354,7 +354,7 @@ class OrderServiceTest {
   @Test
   void updateAppliesLegalStatusTransition() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
@@ -377,7 +377,7 @@ class OrderServiceTest {
   @Test
   void updateRejectsIllegalStatusTransition() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
@@ -395,7 +395,7 @@ class OrderServiceTest {
   @Test
   void updateRejectsUnknownStatusValue() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("g2")).thenReturn(true);
@@ -412,7 +412,7 @@ class OrderServiceTest {
   @Test
   void updateThrowsWhenCastNotFound() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("none")).thenReturn(false);
@@ -428,7 +428,7 @@ class OrderServiceTest {
   @Test
   void updateRejectsReceptionistAuthorizedForDifferentStore() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     // 別店舗(store_id=2)専用スコープ: 現テナント(=1)を授権しない
@@ -449,7 +449,7 @@ class OrderServiceTest {
   @Test
   void updateRejectsCastRoleReceptionist() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     // 全店舗授権でも CAST 本人種別は受付担当者になれない

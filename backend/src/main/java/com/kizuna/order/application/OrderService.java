@@ -11,8 +11,8 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.tenant.domain.TenantRepository;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundleRepository;
@@ -34,10 +34,10 @@ public class OrderService {
   private final PlatformUserRepository platformUserRepository;
   private final CapabilityBundleRepository capabilityBundleRepository;
   private final TenantRepository tenantRepository;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
   private final OrderMapper orderMapper;
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public Page<OrderResponse> list(String customerId, Pageable pageable) {
     // 一覧は集約を経由せず JPQL join projection で取得（D3）。customerId は顧客詳細の注文履歴用
@@ -45,13 +45,13 @@ public class OrderService {
     return orderRepository.findAllViews(filter, pageable).map(orderMapper::toResponse);
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public OrderResponse get(String id) {
     return toResponse(id);
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public OrderResponse create(OrderCreateRequest request) {
     // MapStructを使用して基本的なフィールドをマッピング
@@ -60,7 +60,7 @@ public class OrderService {
     // テナントの設定
     order.setStoreId(
         tenantRepository
-            .findById(tenantContext.getTenantId())
+            .findById(tenantContext.getStoreId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
             .getId());
 
@@ -79,7 +79,7 @@ public class OrderService {
     return toResponse(saved.getId());
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public OrderResponse update(String id, OrderUpdateRequest request) {
     Order order =
@@ -125,7 +125,7 @@ public class OrderService {
   // 他店舗/CAST/MEMBER も通ってしまう。停止済み(enabled=false)の口座は束・授権を保持したままなので明示的に弾く。
   // userType 判定を先行させ、束を持たない CAST/MEMBER で束問い合わせ（空 in 句）へ進まないようにする。
   private void validateReceptionist(Long receptionistId) {
-    Long storeId = tenantContext.getTenantId();
+    Long storeId = tenantContext.getStoreId();
     platformUserRepository
         .findById(receptionistId)
         .filter(
@@ -138,7 +138,7 @@ public class OrderService {
         .orElseThrow(() -> new ServiceException("受付担当者が見つかりません: " + receptionistId));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!orderRepository.existsById(id)) {
@@ -157,14 +157,14 @@ public class OrderService {
       // 顧客の検索または作成
       Customer customer =
           customerRepository
-              .findByPhoneNumberAndStoreId(req.getPhoneNumber(), tenantContext.getTenantId())
+              .findByPhoneNumberAndStoreId(req.getPhoneNumber(), tenantContext.getStoreId())
               .orElseGet(
                   () -> {
                     Customer newCustomer = orderMapper.toCustomer(req);
                     // テナントを明示的に設定
                     newCustomer.setStoreId(
                         tenantRepository
-                            .findById(tenantContext.getTenantId())
+                            .findById(tenantContext.getStoreId())
                             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
                             .getId());
                     return customerRepository.save(newCustomer);

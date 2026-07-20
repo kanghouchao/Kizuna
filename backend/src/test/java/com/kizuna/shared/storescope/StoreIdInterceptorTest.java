@@ -1,4 +1,4 @@
-package com.kizuna.shared.tenancy;
+package com.kizuna.shared.storescope;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,15 +17,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.web.method.HandlerMethod;
 
-class TenantIdInterceptorTest {
+class StoreIdInterceptorTest {
 
-  private TenantContext tenantContext;
-  private TenantIdInterceptor interceptor;
+  private StoreContext storeContext;
+  private StoreIdInterceptor interceptor;
 
   @BeforeEach
   void setUp() {
-    tenantContext = new TenantContext();
-    interceptor = new TenantIdInterceptor(tenantContext);
+    storeContext = new StoreContext();
+    interceptor = new StoreIdInterceptor(storeContext);
   }
 
   @AfterEach
@@ -33,8 +33,8 @@ class TenantIdInterceptorTest {
     SecurityContextHolder.clearContext();
   }
 
-  /** 認証済みだが tenantId claim を持たない Claims（央端 / legacy）を模擬する。 */
-  private void authenticateWithoutTenantId() {
+  /** 認証済みだが storeId claim を持たない Claims（央端 / legacy）を模擬する。 */
+  private void authenticateWithoutStoreId() {
     Claims claims = Jwts.claims().issuer("CentralAuth").build();
     PreAuthenticatedAuthenticationToken authentication =
         new PreAuthenticatedAuthenticationToken(
@@ -43,9 +43,9 @@ class TenantIdInterceptorTest {
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
-  /** テスト用ハンドラ: {@link TenantOptional} の有無を切り替えて HandlerMethod を組み立てるための土台。 */
+  /** テスト用ハンドラ: {@link StoreOptional} の有無を切り替えて HandlerMethod を組み立てるための土台。 */
   static class Handlers {
-    @TenantOptional
+    @StoreOptional
     public void optional() {}
 
     public void required() {}
@@ -56,8 +56,8 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("X-Role が store かつ X-Store-ID が数値ならテナント文脈を設定すること")
-  void preHandle_setsTenantIdForTenantRole() {
+  @DisplayName("X-Role が store かつ X-Store-ID が数値なら店舗文脈を設定すること")
+  void preHandle_setsStoreIdForStoreRole() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
     request.addHeader("X-Store-ID", "42");
@@ -65,12 +65,12 @@ class TenantIdInterceptorTest {
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
     assertThat(result).isTrue();
-    assertThat(tenantContext.getTenantId()).isEqualTo(42L);
+    assertThat(storeContext.getStoreId()).isEqualTo(42L);
   }
 
   @Test
-  @DisplayName("X-Role が store でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
-  void preHandle_ignoresNonTenantRole() {
+  @DisplayName("X-Role が store でなければ店舗文脈を設定せず、@StoreOptional の無いハンドラは 403 で拒否すること")
+  void preHandle_ignoresNonStoreRole() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "central");
     request.addHeader("X-Store-ID", "42");
@@ -80,12 +80,12 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("X-Store-ID が数値でなければテナント文脈を設定せず、@TenantOptional の無いハンドラは 403 で拒否すること")
-  void preHandle_ignoresNonNumericTenantId() {
+  @DisplayName("X-Store-ID が数値でなければ店舗文脈を設定せず、@StoreOptional の無いハンドラは 403 で拒否すること")
+  void preHandle_ignoresNonNumericStoreId() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
     request.addHeader("X-Store-ID", "abc");
@@ -95,11 +95,11 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("認証はあるが details に Claims を持たない場合は従来通りヘッダのみでテナント文脈を設定すること")
+  @DisplayName("認証はあるが details に Claims を持たない場合は従来通りヘッダのみで店舗文脈を設定すること")
   void preHandle_fallsBackToHeaderWhenAuthenticationHasNoClaims() {
     SecurityContextHolder.getContext()
         .setAuthentication(
@@ -112,12 +112,12 @@ class TenantIdInterceptorTest {
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
     assertThat(result).isTrue();
-    assertThat(tenantContext.getTenantId()).isEqualTo(7L);
+    assertThat(storeContext.getStoreId()).isEqualTo(7L);
   }
 
   @Test
-  @DisplayName("テナント文脈を解決できなくても @TenantOptional 付きハンドラは素通りし、文脈を設定しないこと")
-  void preHandle_allowsTenantOptionalHandlerWhenContextUnresolved() throws Exception {
+  @DisplayName("店舗文脈を解決できなくても @StoreOptional 付きハンドラは素通りし、文脈を設定しないこと")
+  void preHandle_allowsStoreOptionalHandlerWhenContextUnresolved() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -125,11 +125,11 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isTrue();
     assertThat(response.getStatus()).isEqualTo(200);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("テナント文脈を解決できず @TenantOptional も無いハンドラは 403 で拒否すること")
+  @DisplayName("店舗文脈を解決できず @StoreOptional も無いハンドラは 403 で拒否すること")
   void preHandle_rejectsNonOptionalHandlerWhenContextUnresolved() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -138,7 +138,7 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
@@ -151,13 +151,13 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("認証済みだが tenantId claim が無いトークンが X-Role:store で別テナントを名乗ると 403 で拒否すること（#294）")
-  void preHandle_rejectsAuthenticatedTokenWithoutTenantIdClaimSpoofingHeader() {
-    authenticateWithoutTenantId();
+  @DisplayName("認証済みだが storeId claim が無いトークンが X-Role:store で別店舗を名乗ると 403 で拒否すること（#294）")
+  void preHandle_rejectsAuthenticatedTokenWithoutStoreIdClaimSpoofingHeader() {
+    authenticateWithoutStoreId();
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
     request.addHeader("X-Store-ID", "2");
@@ -167,12 +167,12 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
   @DisplayName("未認証で X-Store-ID が long 範囲を超える桁数なら 400 で拒否すること（#288）")
-  void preHandle_rejectsOverflowingTenantIdHeaderWith400() {
+  void preHandle_rejectsOverflowingStoreIdHeaderWith400() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
     request.addHeader("X-Store-ID", "99999999999999999999");
@@ -182,11 +182,11 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(400);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   /**
-   * 平台トークン（storeScopeType/storeIds claim を持ち tenantId claim は持たない）を店舗文脈確立可
+   * 平台トークン（storeScopeType/storeIds claim を持ち storeId claim は持たない）を店舗文脈確立可
    * （storeBridge=true）で模擬する。storeIds には List を渡す（ALL_STORES では無視される）。
    */
   private void authenticateWithPlatformScope(String scopeType, Object storeIds) {
@@ -194,7 +194,7 @@ class TenantIdInterceptorTest {
   }
 
   /**
-   * 平台トークンを storeBridge 指定で模擬する。storeBridge claim は TenantIdInterceptor の店舗文脈確立判定に使われる（STORE
+   * 平台トークンを storeBridge 指定で模擬する。storeBridge claim は StoreIdInterceptor の店舗文脈確立判定に使われる（STORE
    * コンソール能力の保持者のみ true — #398）。
    */
   private void authenticateWithPlatformScope(
@@ -213,7 +213,7 @@ class TenantIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("平台 SPECIFIC{1} が X-Store-ID:1 を名乗れば授権内としてテナント文脈を設定すること")
+  @DisplayName("平台 SPECIFIC{1} が X-Store-ID:1 を名乗れば授権内として店舗文脈を設定すること")
   void preHandle_platformSpecific_allowsAuthorizedStore() {
     authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -223,7 +223,7 @@ class TenantIdInterceptorTest {
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
     assertThat(result).isTrue();
-    assertThat(tenantContext.getTenantId()).isEqualTo(1L);
+    assertThat(storeContext.getStoreId()).isEqualTo(1L);
   }
 
   @Test
@@ -239,11 +239,11 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("平台 ALL_STORES は任意の X-Store-ID をテナント文脈に設定すること")
+  @DisplayName("平台 ALL_STORES は任意の X-Store-ID を店舗文脈に設定すること")
   void preHandle_platformAllStores_allowsAnyStore() {
     authenticateWithPlatformScope("ALL_STORES", List.of());
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -253,11 +253,11 @@ class TenantIdInterceptorTest {
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
     assertThat(result).isTrue();
-    assertThat(tenantContext.getTenantId()).isEqualTo(999L);
+    assertThat(storeContext.getStoreId()).isEqualTo(999L);
   }
 
   @Test
-  @DisplayName("平台トークンでもテナントヘッダが無ければ @TenantOptional 無しハンドラは 403 で拒否すること")
+  @DisplayName("平台トークンでも店舗ヘッダが無ければ @StoreOptional 無しハンドラは 403 で拒否すること")
   void preHandle_platformScope_noHeader_rejectsRequiredHandler() throws Exception {
     authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -267,12 +267,12 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("平台トークンでもテナントヘッダが無ければ @TenantOptional 付きハンドラは素通りし文脈を設定しないこと")
-  void preHandle_platformScope_noHeader_allowsTenantOptionalHandler() throws Exception {
+  @DisplayName("平台トークンでも店舗ヘッダが無ければ @StoreOptional 付きハンドラは素通りし文脈を設定しないこと")
+  void preHandle_platformScope_noHeader_allowsStoreOptionalHandler() throws Exception {
     authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -280,7 +280,7 @@ class TenantIdInterceptorTest {
     boolean result = interceptor.preHandle(request, response, handlerMethod("optional"));
 
     assertThat(result).isTrue();
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
@@ -295,7 +295,7 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
@@ -311,7 +311,7 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
@@ -329,11 +329,11 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("storeBridge=true の平台トークンは授権店舗の店舗ヘッダでテナント文脈を設定できること")
+  @DisplayName("storeBridge=true の平台トークンは授権店舗の店舗ヘッダで店舗文脈を設定できること")
   void preHandle_withStoreBridge_allowsAuthorizedStore() {
     authenticateWithPlatformScope(true, "SPECIFIC_STORES", List.of(1));
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -343,7 +343,7 @@ class TenantIdInterceptorTest {
     boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
 
     assertThat(result).isTrue();
-    assertThat(tenantContext.getTenantId()).isEqualTo(1L);
+    assertThat(storeContext.getStoreId()).isEqualTo(1L);
   }
 
   @Test
@@ -367,17 +367,17 @@ class TenantIdInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("afterCompletion でテナント文脈がクリアされること")
-  void afterCompletion_clearsTenantContext() {
-    tenantContext.setTenantId(42L);
+  @DisplayName("afterCompletion で店舗文脈がクリアされること")
+  void afterCompletion_clearsStoreContext() {
+    storeContext.setStoreId(42L);
 
     interceptor.afterCompletion(
         new MockHttpServletRequest(), new MockHttpServletResponse(), new Object(), null);
 
-    assertThat(tenantContext.isTenant()).isFalse();
+    assertThat(storeContext.hasStoreId()).isFalse();
   }
 }

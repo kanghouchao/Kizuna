@@ -8,7 +8,7 @@ import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shared.storescope.StoreScoped;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -47,7 +47,7 @@ public class CastInvitationService {
    * は受諾側の行ロック解放 （＝受諾トランザクションのコミット）を待って完了するため、その後に档案の紐づけを DB 再読込で再確認し、
    * 並行受諾が档案を紐づけていれば新規発行を中止する（連携済み档案に有効トークンが残る矛盾を塞ぐ）。
    */
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public CastInvitationResponse issue(String castId) {
     Cast cast =

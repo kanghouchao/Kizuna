@@ -25,7 +25,7 @@ import org.springframework.util.MultiValueMap;
  * 制約外のため平台トークンでも 認証が通る。中央領域（central prefix）への保存は HQ 管理者（role claim = HQ_ADMIN）のみに限定し、それ以外のロール・
  * テナント詐称ヘッダは fail-closed で 403 拒否する（#294 / #322 / #326）。
  *
- * <p>HQ トークンに {@code X-Role:store} + {@code X-Store-ID} を付けても、{@code TenantIdInterceptor} の
+ * <p>HQ トークンに {@code X-Role:store} + {@code X-Store-ID} を付けても、{@code StoreIdInterceptor} の
  * STORE_BRIDGE_ROLES が HQ_ADMIN を含まないため店舗文脈は確立できず 403 で拒否される（負向）。詐称ヘッダ無しの HQ アップロードは従来どおり central
  * 領域へ 200 で保存される（正向対照）。HQ 以外の平台トークン（店舗スタッフ）は詐称ヘッダ無しでも 中央保存を拒否される（follow-up: 低権限身分の中央共有領域書き込み封鎖）。
  *

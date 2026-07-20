@@ -14,7 +14,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.tenant.domain.Tenant;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.util.List;
@@ -35,7 +35,7 @@ class CustomerServiceTest {
 
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMapper customerMapper;
-  @Mock private TenantContext tenantContext;
+  @Mock private StoreContext tenantContext;
   @Mock private TenantRepository tenantRepository;
 
   @InjectMocks private CustomerService customerService;
@@ -111,7 +111,7 @@ class CustomerServiceTest {
     tenant.setId(1L);
 
     when(customerMapper.toEntity(req)).thenReturn(customerEntity);
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
     when(customerRepository.save(any()))
@@ -138,7 +138,7 @@ class CustomerServiceTest {
     req.setName("New");
 
     when(customerMapper.toEntity(req)).thenReturn(new Customer());
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> customerService.create(req))

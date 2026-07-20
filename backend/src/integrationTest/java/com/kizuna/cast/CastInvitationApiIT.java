@@ -184,7 +184,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   void secondPendingInvitationForSameCastIsRejected() {
     // 二重クリック等で issue() が並行した際に複数の有効トークンが発行される事態を、DB の
     // 部分ユニークインデックス uq_t_cast_invitations_pending_cast が塞ぐことを直接確認する。
-    // テストスレッドは @TenantScoped を経由しないためリポジトリ直挿で PENDING を2件試みる。
+    // テストスレッドは @StoreScoped を経由しないためリポジトリ直挿で PENDING を2件試みる。
     String castId = createCast(TENANT_A, managerToken, "PENDING一意テスト");
 
     CastInvitation first = pendingInvitation(castId, "cast-inv-it-pending-a-" + System.nanoTime());
@@ -215,7 +215,7 @@ class CastInvitationApiIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("他テナントの档案 ID を自店文脈から発行しても 400 で拒否され、他テナントのデータが不変であること")
   void crossTenantIssueIsRejectedAndForeignDataUnchanged() {
-    // リポジトリ直挿（テストスレッドは @TenantScoped を経由せず storeFilter が無効なので他テナントにも書ける）。
+    // リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他テナントにも書ける）。
     Cast foreignCast = Cast.builder().name("他テナント機密キャスト").build();
     foreignCast.setStoreId(foreignTenantId);
     String foreignCastId = castRepository.save(foreignCast).getId();

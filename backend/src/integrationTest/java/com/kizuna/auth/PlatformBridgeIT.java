@@ -33,7 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * 平台トークン過橋（#324 統一ログイン・案 A）の授権検証と実データ非漏洩を本物の PostgreSQL で固定する統合テスト。
  *
- * <p>平台トークンを /platform・/store で直接受理し、店舗文脈は TenantIdInterceptor が X-Store-ID を 授権店舗集合（StoreScope）で
+ * <p>平台トークンを /platform・/store で直接受理し、店舗文脈は StoreIdInterceptor が X-Store-ID を 授権店舗集合（StoreScope）で
  * fail-closed 検証する。断言は {@link com.kizuna.order.PlatformOrderScopeIT}
  * の強断言様式（応答生ボディに授権外店舗の実データが一切現れないこと）に倣う。シードユーザーは v0.5.0（田中花子=STORE_MANAGER{1,2} /
  * 山田次郎=STORE_STAFF{1} / HQ=ALL_STORES）。
@@ -86,7 +86,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         Set.of(TENANT_A));
   }
 
-  /** リポジトリ直挿（テストスレッドは @TenantScoped を経由せず storeFilter が無効なので他テナントにも書ける）。 */
+  /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他テナントにも書ける）。 */
   private void ensureMarkerOrder(long tenantId, String storeName, String remarks) {
     boolean exists =
         orderRepository.findAll().stream()
@@ -388,7 +388,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("CAST は授権スコープでも店舗ヘッダで /store 端点に過橋できず 403 になること（役割線）")
   void castCannotBridgeToStoreConsole() {
-    // CAST は ALL_STORES を持つが店舗ロールではないため、TenantIdInterceptor が店舗文脈確立の前に 403 で弾く。
+    // CAST は ALL_STORES を持つが店舗ロールではないため、StoreIdInterceptor が店舗文脈確立の前に 403 で弾く。
     // メニュー端点は /platform へ統一されたため、役割線は別の /store 端点（受注）で保全する。
     ResponseEntity<String> res =
         rest.exchange(
