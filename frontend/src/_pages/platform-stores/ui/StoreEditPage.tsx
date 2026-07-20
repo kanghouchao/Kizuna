@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/entities/user';
-import { Tenant, UpdateTenantRequest, centralTenantApi } from '@/entities/tenant';
+import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
 import toast from 'react-hot-toast';
 
 export default function EditTenantPage() {
@@ -12,13 +12,13 @@ export default function EditTenantPage() {
   const { logout } = useAuth();
 
   const [saving, setSaving] = useState(false);
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenant, setTenant] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState<UpdateTenantRequest>({
+  const [formData, setFormData] = useState<UpdateStoreRequest>({
     name: '',
     email: '',
   });
-  const [errors, setErrors] = useState<Partial<UpdateTenantRequest>>({});
+  const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
 
   const loadTenant = useCallback(
     async (tenantId: string) => {
@@ -28,8 +28,8 @@ export default function EditTenantPage() {
       }
       try {
         setLoading(true);
-        const res = await centralTenantApi.getById(tenantId);
-        const t = res as unknown as Tenant;
+        const res = await platformStoreApi.getById(tenantId);
+        const t = res as unknown as Store;
         setTenant(t);
         setFormData({
           name: t.name,
@@ -52,7 +52,7 @@ export default function EditTenantPage() {
   }, [id, loadTenant]);
 
   const validate = (): boolean => {
-    const next: Partial<UpdateTenantRequest> = {};
+    const next: Partial<UpdateStoreRequest> = {};
     if (!formData.name.trim()) next.name = '店舗名は必須です';
     if (!formData.email.trim()) next.email = 'メールアドレスは必須です';
     else if (!/^([^\s@])+@([^\s@])+\.[^\s@]+$/.test(formData.email))
@@ -67,7 +67,7 @@ export default function EditTenantPage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await centralTenantApi.update(tenant.id, formData);
+      await platformStoreApi.update(tenant.id, formData);
       toast.success('店舗情報を更新しました');
       router.push('/platform/stores');
     } catch (err: any) {

@@ -1,5 +1,5 @@
-// テナント
-export interface Tenant {
+// 店舗
+export interface Store {
   id: string;
   name: string;
   email: string;
@@ -10,15 +10,15 @@ export interface Tenant {
   updated_at?: string;
 }
 
-// テナント作成リクエスト
-export interface CreateTenantRequest {
+// 店舗作成リクエスト
+export interface CreateStoreRequest {
   name: string;
   domain: string;
   email: string;
 }
 
-// テナント更新リクエスト
-export interface UpdateTenantRequest {
+// 店舗更新リクエスト
+export interface UpdateStoreRequest {
   name: string;
   email: string;
 }
@@ -31,8 +31,8 @@ export interface DashboardStats {
   active_domains: number;
 }
 
-// テナント統計データ
-export interface TenantStats {
+// 店舗統計データ
+export interface StoreStats {
   total: number;
   active: number;
   inactive: number;

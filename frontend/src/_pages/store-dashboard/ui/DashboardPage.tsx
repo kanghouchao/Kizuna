@@ -1,6 +1,6 @@
 'use client';
 
-export default function TenantDashboard() {
+export default function StoreDashboard() {
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center">
       <div className="max-w-2xl w-full px-6 py-10 rounded-lg shadow-lg bg-gray-50">

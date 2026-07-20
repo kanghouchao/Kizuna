@@ -3,23 +3,23 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/entities/user';
 import { useRouter } from 'next/navigation';
-import { CreateTenantRequest, centralTenantApi } from '@/entities/tenant';
+import { CreateStoreRequest, platformStoreApi } from '@/entities/store';
 import toast from 'react-hot-toast';
 
 export default function CreateTenantPage() {
   const { logout } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<CreateTenantRequest>({
+  const [formData, setFormData] = useState<CreateStoreRequest>({
     name: '',
     domain: '',
     email: '',
   });
 
-  const [errors, setErrors] = useState<Partial<CreateTenantRequest>>({});
+  const [errors, setErrors] = useState<Partial<CreateStoreRequest>>({});
 
   const validateForm = (): boolean => {
-    const newErrors: Partial<CreateTenantRequest> = {};
+    const newErrors: Partial<CreateStoreRequest> = {};
 
     if (!formData.name.trim()) {
       newErrors.name = '店舗名は必須です';
@@ -59,7 +59,7 @@ export default function CreateTenantPage() {
     setIsSubmitting(true);
 
     try {
-      await centralTenantApi.create(formData);
+      await platformStoreApi.create(formData);
       toast.success('店舗を作成しました。店舗一覧に戻ります');
       router.push('/platform/stores');
     } catch (error: any) {
@@ -72,7 +72,7 @@ export default function CreateTenantPage() {
     }
   };
 
-  const handleInputChange = (field: keyof CreateTenantRequest, value: string) => {
+  const handleInputChange = (field: keyof CreateStoreRequest, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));

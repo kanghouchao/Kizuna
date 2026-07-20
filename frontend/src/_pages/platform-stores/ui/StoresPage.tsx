@@ -3,14 +3,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/entities/user';
 import { useRouter } from 'next/navigation';
-import { Tenant, centralTenantApi } from '@/entities/tenant';
+import { Store, platformStoreApi } from '@/entities/store';
 import { PaginatedResponse } from '@/shared/api';
 import toast from 'react-hot-toast';
 
 export default function StoresPage() {
   const { logout } = useAuth();
   const router = useRouter();
-  const [tenants, setTenants] = useState<PaginatedResponse<Tenant> | null>(null);
+  const [tenants, setTenants] = useState<PaginatedResponse<Store> | null>(null);
   const [loadingTenants, setLoadingTenants] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -18,7 +18,7 @@ export default function StoresPage() {
   const loadTenants = useCallback(async () => {
     setLoadingTenants(true);
     try {
-      const tenants = await centralTenantApi.getList({
+      const tenants = await platformStoreApi.getList({
         page: currentPage,
         per_page: 10,
         search: searchTerm || undefined,
@@ -48,7 +48,7 @@ export default function StoresPage() {
     }
 
     try {
-      await centralTenantApi.delete(id);
+      await platformStoreApi.delete(id);
       toast.success('店舗を削除しました');
       loadTenants();
     } catch (error) {

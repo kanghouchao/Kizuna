@@ -3,21 +3,21 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/entities/user';
 import { useRouter } from 'next/navigation';
-import { Tenant, TenantStats, centralTenantApi } from '@/entities/tenant';
+import { Store, StoreStats, platformStoreApi } from '@/entities/store';
 import toast from 'react-hot-toast';
 
 export default function AdminDashboard() {
   const { logout } = useAuth();
   const router = useRouter();
-  const [stats, setStats] = useState<TenantStats | null>(null);
-  const [recentTenants, setRecentTenants] = useState<Tenant[]>([]);
+  const [stats, setStats] = useState<StoreStats | null>(null);
+  const [recentTenants, setRecentTenants] = useState<Store[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
 
   const loadDashboardData = useCallback(async () => {
     try {
       const [statsResponse, tenantsResponse] = await Promise.all([
-        centralTenantApi.getStats(),
-        centralTenantApi.getList({ per_page: 5, page: 1 }),
+        platformStoreApi.getStats(),
+        platformStoreApi.getList({ per_page: 5, page: 1 }),
       ]);
 
       setStats(statsResponse);
