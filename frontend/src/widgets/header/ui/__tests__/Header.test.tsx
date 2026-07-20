@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Header } from '../Header';
 import { platformAuthApi } from '@/entities/user';
-import { isPlatformSession, getPlatformStoreId } from '@/shared/lib';
+import { isPlatformSession, getPlatformStoreId, isStoreDomain } from '@/shared/lib';
 
 // Headless UI の Menu は開閉時に ResizeObserver を使うが jsdom には無いため最小スタブを差す。
 class ResizeObserverStub {
@@ -34,6 +34,7 @@ jest.mock('@/shared/lib', () => ({
 const mockedStores = platformAuthApi.stores as jest.MockedFunction<typeof platformAuthApi.stores>;
 const mockedIsPlatformSession = isPlatformSession as jest.MockedFunction<typeof isPlatformSession>;
 const mockedGetStoreId = getPlatformStoreId as jest.MockedFunction<typeof getPlatformStoreId>;
+const mockedIsStoreDomain = isStoreDomain as jest.MockedFunction<typeof isStoreDomain>;
 
 async function openSwitchAndSelect(name: string) {
   fireEvent.click(await screen.findByRole('button', { name: '店舗A' }));
@@ -89,6 +90,19 @@ describe('Header 店舗切替の常設化（#413）', () => {
     await openSwitchAndSelect('店舗B');
 
     expect(mockPush).toHaveBeenCalledWith('/store/2/dashboard');
+  });
+
+  it('店舗別ドメイン経由ではアカウント設定リンクが pathname 由来の storeId を含む店舗ルートを指す（#413 Fix2）', async () => {
+    mockedIsStoreDomain.mockReturnValue(true);
+    mockPathname = '/store/2/dashboard';
+    mockedStores.mockResolvedValue([]);
+
+    render(<Header />);
+
+    expect(screen.getByRole('link', { name: 'アカウント設定' })).toHaveAttribute(
+      'href',
+      '/store/2/settings/account'
+    );
   });
 
   it('pathname が別店舗へ変化するとラベルが新しい pathname 由来の店舗名へ追随する（#413 Fix1）', async () => {
