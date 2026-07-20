@@ -105,6 +105,21 @@ describe('Header 店舗切替の常設化（#413）', () => {
     );
   });
 
+  it('店舗別ドメイン経由でも currentStoreId が未確定ならアカウント設定リンクは platform 側へ fallback する（#413 Fix3）', async () => {
+    mockedIsStoreDomain.mockReturnValue(true);
+    mockedGetStoreId.mockReturnValue(undefined);
+    mockPathname = '/store/select';
+    mockedStores.mockResolvedValue([]);
+
+    render(<Header />);
+
+    await waitFor(() => expect(mockedStores).toHaveBeenCalled());
+    expect(screen.getByRole('link', { name: 'アカウント設定' })).toHaveAttribute(
+      'href',
+      '/platform/settings/account'
+    );
+  });
+
   it('pathname が別店舗へ変化するとラベルが新しい pathname 由来の店舗名へ追随する（#413 Fix1）', async () => {
     mockedGetStoreId.mockReturnValue('2');
     mockPathname = '/store/2/dashboard';
