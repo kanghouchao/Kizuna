@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 
-export interface ResolvedTenantInfo {
+export interface ResolvedStoreInfo {
   domain: string;
   tenant_id: string;
   tenant_name: string;
 }
 
 // 统一通过中心端点 /api/tenants/{domain} 解析租户
-export function useTenantInfo() {
-  const [tenant, setTenant] = useState<ResolvedTenantInfo | null>(null);
+export function useStoreInfo() {
+  const [store, setStore] = useState<ResolvedStoreInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +19,7 @@ export function useTenantInfo() {
         setError(null);
         const path = window.location.pathname;
         if (path.startsWith('/platform')) {
-          setTenant(null);
+          setStore(null);
           return;
         }
         const hostname = window.location.hostname;
@@ -28,28 +28,28 @@ export function useTenantInfo() {
           headers: { Accept: 'application/json' },
         });
         if (res.status === 404) {
-          setTenant(null);
+          setStore(null);
           setError('租户不存在');
           return;
         }
         if (!res.ok) {
-          setTenant(null);
+          setStore(null);
           setError('获取租户失败');
           return;
         }
         const data = await res.json();
         if (data.success) {
-          setTenant({
+          setStore({
             domain: data.domain,
             tenant_id: data.tenant_id,
             tenant_name: data.tenant_name,
           });
         } else {
-          setTenant(null);
+          setStore(null);
           setError('租户数据无效');
         }
       } catch (e) {
-        setTenant(null);
+        setStore(null);
         setError('网络错误');
       } finally {
         setLoading(false);
@@ -58,5 +58,5 @@ export function useTenantInfo() {
     run();
   }, []);
 
-  return { tenant, loading, error };
+  return { store, loading, error };
 }

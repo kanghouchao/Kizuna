@@ -27,7 +27,7 @@ export interface CastCustomFieldView {
   value: string;
 }
 
-// 公開キャスト詳細レスポンス（GET /tenant/casts/public）。管理用 CastResponse と異なり
+// 公開キャスト詳細レスポンス（GET /store/casts/public）。管理用 CastResponse と異なり
 // invitation_status を持たず、custom_fields は公開・生存・値ありの定義のみを表示順に整形した配列。
 export interface CastPublicResponse {
   id: string;
