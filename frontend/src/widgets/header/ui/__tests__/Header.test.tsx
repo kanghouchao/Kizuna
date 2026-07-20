@@ -122,6 +122,19 @@ describe('Header 店舗切替の常設化（#413）', () => {
     expect(mockPush).toHaveBeenCalledWith('/store/2/dashboard');
   });
 
+  it('/platform ページで前回選択（cookie）と同じ店舗をクリックしても router.push が発火する（#413 Fix5-1）', async () => {
+    // pathStoreId 未確定（/platform 側）かつ cookie 前回選択が唯一の店舗と一致するケース。
+    // no-op 判定を currentStoreId（cookie fallback 込み）で行うと単一店舗ユーザーが詰む。
+    mockPathname = '/platform/dashboard';
+    mockedGetStoreId.mockReturnValue('1');
+    mockedStores.mockResolvedValue([{ id: 1, name: '店舗A' }]);
+
+    render(<Header />);
+    await openSwitchAndSelect('店舗A');
+
+    expect(mockPush).toHaveBeenCalledWith('/store/1/dashboard');
+  });
+
   it('店舗別ドメイン経由ではアカウント設定リンクが pathname 由来の storeId を含む店舗ルートを指す（#413 Fix2）', async () => {
     mockedIsStoreDomain.mockReturnValue(true);
     mockPathname = '/store/2/dashboard';

@@ -67,7 +67,10 @@ export function Header() {
       : '/platform/settings/account';
 
   const handleStoreSelect = (id: number) => {
-    if (String(id) !== currentStoreId) {
+    // no-op 判定は pathStoreId（URL が実際にその店舗 id を持つ場合）のみで行う。
+    // currentStoreId（cookie fallback 込み）で比較すると、/platform 側で前回選択 cookie と
+    // 同じ店舗をクリックした単一店舗ユーザーが遷移できなくなる（#413 Fix5-1）。
+    if (String(id) !== pathStoreId) {
       setPlatformStore(id);
       // console 由来の reload をやめ、現在地に storeId を差し替えて遷移する（#413）。
       // store-scoped ページ外に居れば /store/{id}/dashboard へ。
