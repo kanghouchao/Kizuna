@@ -92,9 +92,9 @@ Notes on coverage enforcement:
 ## Repo conventions and important paths
 
 - Frontend source: `frontend/src/` (Next.js + TypeScript)
-- Frontend middleware: `frontend/src/middleware.ts` — host/tenant resolution and cookies
+- Frontend middleware: `frontend/src/proxy.ts` — host/store resolution and cookies
 - Shared HTTP client (frontend): `frontend/src/lib/client.ts`
-- Frontend server components (tenant templates): `frontend/src/app/tenant/templates/`
+- Frontend server components (store templates): `frontend/src/_pages/store-site/templates/`
 - Backend Java: `backend/src/main/java/com/kizuna/`
 - Backend changelogs/migrations: `backend/src/main/resources/db/changelog/`
 - Makefile and Docker compose at repo root control local orchestration.
@@ -102,8 +102,8 @@ Notes on coverage enforcement:
 Architecture reminders:
 
 - Traefik routes `/api/*` to the backend and strips the prefix before it reaches Spring Boot.
-- Backend namespaces: `/central/*` (admin) and `/tenant/*` (tenant).
-- Tenant selection is host-based; middleware sets cookies consumed by server components (`x-mw-role`, `x-mw-tenant-id`, `x-mw-tenant-name`, `x-mw-tenant-template`). Server components should read these via `cookies()`.
+- Backend namespaces: `/platform/*` (admin) and `/store/*` (store).
+- Store selection is host-based; middleware sets cookies consumed by server components (`x-mw-role`, `x-mw-store-id`, `x-mw-store-name`, `x-mw-store-domain`, `x-mw-store-template`). Server components should read these via `cookies()`.
 
 ## PR workflow and review checklist
 

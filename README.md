@@ -1,4 +1,4 @@
-# Kizuna Platform — Multi-tenant CMS, CRM, & HRM (Spring Boot + Next.js)
+# Kizuna Platform — Platform CMS, CRM, & HRM for Multiple Stores (Spring Boot + Next.js)
 
 ![Spring Boot](https://img.shields.io/badge/SpringBoot-3.5+-green.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-14+-blue.svg)
@@ -8,14 +8,14 @@
 [![CodeQL](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml/badge.svg)](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/kanghouchao/Kizuna/security/dependabot)
 
-Kizuna Platform is a modern, multi-tenant system combining CMS, CRM, and HRM capabilities, built with a split architecture: Spring Boot backend and Next.js frontend, orchestrated with Docker compose.
+Kizuna Platform is a modern platform system for running multiple stores under a single group, combining CMS, CRM, and HRM capabilities, built with a split architecture: Spring Boot backend and Next.js frontend, orchestrated with Docker compose.
 
 ## Highlights
 
-- Multi-tenant by host name: one frontend, isolated tenant contexts
+- Multi-store by host name: one frontend, isolated store contexts
 - Split architecture: Spring Boot API + Next.js app
 - Comprehensive suite: CMS (Content), CRM (Customer Relationships), HRM (Human Resources)
-- Stateless JWT auth; admin (central) and tenant APIs split
+- Stateless JWT auth; platform and store APIs split
 - Responsive UI with Tailwind CSS
 - Container-first: easy local dev and ops via Make + Docker compose
 
@@ -51,26 +51,26 @@ Traefik routes all requests to the right service. The frontend and backend are f
 
 The application is strictly divided into two functional domains based on the user actor:
 
-1.  **Central Domain (`/central`)** - _The Platform Headquarters_
+1.  **Platform Domain (`/platform`)** - _The Platform Headquarters_
     - **User:** Platform Admin / System Owner.
-    - **Purpose:** Manage tenants (stores), system-wide settings, billing, and global analytics.
+    - **Purpose:** Manage stores, system-wide settings, billing, and global analytics.
     - **Access:** Only accessible via the Admin Domain (e.g., `admin.kizuna.com`).
 
-2.  **Tenant Domain (`/tenant`)** - _The Store Operations_
-    - **User:** Tenant Admin, Store Managers, Casts.
+2.  **Store Domain (`/store`)** - _The Store Operations_
+    - **User:** Store Managers, Store Staff, Casts.
     - **Purpose:** Day-to-day store operations (Orders, Cast management, Customer CRM).
-    - **Access:** Accessible via Tenant Domains (e.g., `store1.kizuna.com`).
+    - **Access:** Accessible via Store Domains (e.g., `store1.kizuna.com`).
     - **Sub-modules:**
-      - `/tenant/dashboard`: The secured back-office area (requires login).
-      - `/tenant/site` (Future): Public landing pages for customers.
+      - `/store/dashboard`: The secured back-office area (requires login).
+      - `/store/site` (Future): Public landing pages for customers.
 
-### Multi-tenant flow and cookies
+### Platform/store flow and cookies
 
-- Frontend middleware decides the role based on the host name and validates the tenant via backend
+- Frontend middleware decides the role based on the host name and resolves the store via backend
 - Middleware sets cookies for server components to read:
-  - `x-mw-role`: `central | tenant`
-  - `x-mw-tenant-template`: template key to load SSR tenant page
-  - `x-mw-tenant-id`, `x-mw-tenant-name`: tenant meta
+  - `x-mw-role`: `platform | store`
+  - `x-mw-store-template`: template key to load SSR store page
+  - `x-mw-store-id`, `x-mw-store-name`, `x-mw-store-domain`: store meta
 - In server components, read via `cookies()` (not raw `headers()`).
 
 ## Quick Start
@@ -103,7 +103,7 @@ cp infrastructure/.env.example infrastructure/development/.env
 task build up
 ```
 
-4. Map local domains (for admin/tenant switching)
+4. Map local domains (for admin/store switching)
 
 Add the following lines to `/etc/hosts` (example using the repo default):
 
@@ -113,14 +113,14 @@ Add the following lines to `/etc/hosts` (example using the repo default):
 
 5. Access
 
-- Central (admin UI): [kizuna.test](http://kizuna.test) (or your configured admin domain)
+- Platform (admin UI): [kizuna.test](http://kizuna.test) (or your configured admin domain)
 - Sample Tenant (store UI): [store1.kizuna.test](http://store1.kizuna.test)
 
 6. Default Credentials
 
 You can find the initial data setup in [05-initial-data.yaml](./backend/src/main/resources/db/changelog/releases/v0.1.0/central/05-initial-data.yaml).
 
-- **Central Admin:** `admin` / default password (see note below)
+- **Platform Admin:** `admin` / default password (see note below)
 - **Sample Tenant Admin:** `admin@store1.kizuna.com` / default password (see note below)
 
 Both accounts share the same default password `pass`
@@ -143,7 +143,7 @@ Both accounts share the same default password `pass`
 ### Observability quick reference
 
 - Backend Actuator exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`; the readiness probe includes database and Redis checks.
-- Backend responses include an `X-Request-ID` header. Logs render `req=<id>` and `tenant=<value>` from the same correlation ID to make tracing requests across services easier.
+- Backend responses include an `X-Request-ID` header. Logs render `req=<id>` and `store=<value>` from the same correlation ID to make tracing requests across services easier.
 
 ## Project Structure
 

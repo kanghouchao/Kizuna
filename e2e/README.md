@@ -36,7 +36,7 @@ task e2e
   one-shot 実行コンテナ
 
 ブラウザの `baseURL` は環境変数 `BASE_URL`（既定 `http://store1.kizuna.test`）で
-切り替えます。tenant / central の判別は Host ヘッダで frontend middleware が行うため、
+切り替えます。store / platform の判別は Host ヘッダで frontend middleware が行うため、
 gateway サービスに network alias `store1.kizuna.test` / `kizuna.test` を付与しています。
 
 ## シナリオの追加手順

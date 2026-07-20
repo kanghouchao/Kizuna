@@ -18,7 +18,7 @@ services:
       # 注: npm ci は毎回 node_modules を削除して作り直すため、これは取得の高速化ではない。
       - e2e-node-modules:/e2e/node_modules
     environment:
-      # gateway alias 経由で tenant ドメインへ到達する baseURL。
+      # gateway alias 経由で store ドメインへ到達する baseURL。
       BASE_URL: http://store1.kizuna.test
     command: sh -c "npm ci && npx bddgen && npx playwright test"
     networks:
