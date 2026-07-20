@@ -1,19 +1,19 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { getPublicTemplateKey, loginAsTenantAdmin, setTemplateKey } from './tenant-api';
+import { getPublicTemplateKey, loginAsStoreAdmin, setTemplateKey } from './store-api';
 import { BASE_URL } from '../base-url';
 
 const { Given, When, Then, After } = createBdd();
 
 Given('店舗 {string} の template_key が {string} である', async ({ request }, _store: string, templateKey: string) => {
   // 前回失敗の残留に依存しないよう前提を明示的に確定させる。
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   await setTemplateKey(request, token, templateKey);
   expect(await getPublicTemplateKey(request)).toBe(templateKey);
 });
 
 When('template_key を {string} に変更する', async ({ request }, templateKey: string) => {
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   await setTemplateKey(request, token, templateKey);
 });
 
@@ -37,6 +37,6 @@ Then('新しいブラウザコンテキストで公開サイトが {word} 模版
 // template_key を無条件で default へ復元する（テスト失敗・途中クラッシュでも実行）。
 // 復元 hook 自身が独立してログインし直すため、テスト側の状態に依存しない。
 After({ tags: '@template-switch' }, async ({ request }) => {
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   await setTemplateKey(request, token, 'default');
 });

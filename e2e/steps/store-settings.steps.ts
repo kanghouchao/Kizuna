@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { CENTRAL_URL } from '../base-url';
-import { ADMIN_EMAIL, ADMIN_PASSWORD, getStoreConfig, loginAsTenantAdmin, setCustomTexts } from './tenant-api';
+import { PLATFORM_URL } from '../base-url';
+import { ADMIN_EMAIL, ADMIN_PASSWORD, getStoreConfig, loginAsStoreAdmin, setCustomTexts } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -18,18 +18,18 @@ let snapshotCaptured = false;
 let testValue = '';
 
 Given('店舗 {string} の管理画面にログインしている', async ({ page }, _store: string) => {
-  // 統一ログイン（/platform/login）は central ドメイン（kizuna.test）で提供され、店長ロールの
-  // セッションも central ドメイン上のまま /tenant/* を操作する（#324、platform-login.steps.ts と同じ）。
-  // token cookie はオリジン別に分離されるため、以降の管理画面遷移も CENTRAL_URL を用いる。
-  await page.goto(`${CENTRAL_URL}/platform/login`);
+  // 統一ログイン（/platform/login）は platform ドメイン（kizuna.test）で提供され、店長ロールの
+  // セッションも platform ドメイン上のまま /store/* を操作する（#324、platform-login.steps.ts と同じ）。
+  // token cookie はオリジン別に分離されるため、以降の管理画面遷移も PLATFORM_URL を用いる。
+  await page.goto(`${PLATFORM_URL}/platform/login`);
   await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).toHaveURL(/\/tenant\/dashboard\/?$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/store\/dashboard\/?$/, { timeout: 15000 });
 });
 
 Given('店舗設定の現在値を退避する', async ({ request }) => {
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   const config = await getStoreConfig(request, token);
   originalCustomTexts = (config.custom_texts as Record<string, string> | undefined) ?? null;
   snapshotCaptured = true;
@@ -37,8 +37,8 @@ Given('店舗設定の現在値を退避する', async ({ request }) => {
 
 When('店舗情報ページでアクセス補足を一意な検証値に変更して保存する', async ({ page }) => {
   testValue = `E2E設定保存-${Date.now()}`;
-  // ログイン済みセッション（token cookie）は central ドメインにあるため管理画面も CENTRAL_URL で開く。
-  await page.goto(`${CENTRAL_URL}/tenant/settings/profile`);
+  // ログイン済みセッション（token cookie）は platform ドメインにあるため管理画面も PLATFORM_URL で開く。
+  await page.goto(`${PLATFORM_URL}/store/settings/profile`);
   await accessNoteTextarea(page).fill(testValue);
   await page.getByRole('button', { name: '設定を保存する', exact: true }).click();
 });
@@ -57,7 +57,7 @@ Then('再読込後もアクセス補足が同じ検証値のままである', as
 // PUT すると既存 custom_texts を消し飛ばすため。ベストエフォート。
 After({ tags: '@store-settings' }, async ({ request }) => {
   if (!snapshotCaptured) return;
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   await setCustomTexts(request, token, originalCustomTexts ?? {}).catch(() => {});
   originalCustomTexts = null;
   snapshotCaptured = false;
