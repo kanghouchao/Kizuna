@@ -20,8 +20,8 @@ import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
-import com.kizuna.tenant.domain.Tenant;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StoreRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -39,8 +39,8 @@ class ShiftServiceTest {
 
   @Mock private ShiftRepository shiftRepository;
   @Mock private ShiftMapper shiftMapper;
-  @Mock private StoreContext tenantContext;
-  @Mock private TenantRepository tenantRepository;
+  @Mock private StoreContext storeContext;
+  @Mock private StoreRepository storeRepository;
   @Mock private CastService castService;
   @Mock private CastRepository castRepository;
   @Mock private AppProperties appProperties;
@@ -73,17 +73,17 @@ class ShiftServiceTest {
   }
 
   @Test
-  void create_setsTenantIdAndSaves() {
+  void create_setsStoreIdAndSaves() {
     ShiftCreateRequest req = validCreateRequest();
 
     Shift entity = Shift.builder().castId("c1").status("TENTATIVE").build();
-    Tenant tenant = new Tenant();
-    tenant.setId(1L);
+    Store store = new Store();
+    store.setId(1L);
 
-    when(castService.existsForCurrentTenant("c1")).thenReturn(true);
+    when(castService.existsForCurrentStore("c1")).thenReturn(true);
     when(shiftMapper.toEntity(req)).thenReturn(entity);
-    when(tenantContext.getStoreId()).thenReturn(1L);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(storeContext.getStoreId()).thenReturn(1L);
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(store));
     when(shiftRepository.save(any()))
         .thenAnswer(
             i -> {
@@ -113,24 +113,24 @@ class ShiftServiceTest {
   }
 
   @Test
-  void create_throwsWhenTenantNotFound() {
+  void create_throwsWhenStoreNotFound() {
     ShiftCreateRequest req = validCreateRequest();
 
-    when(castService.existsForCurrentTenant("c1")).thenReturn(true);
+    when(castService.existsForCurrentStore("c1")).thenReturn(true);
     when(shiftMapper.toEntity(req)).thenReturn(Shift.builder().build());
-    when(tenantContext.getStoreId()).thenReturn(1L);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
+    when(storeContext.getStoreId()).thenReturn(1L);
+    when(storeRepository.findById(1L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftService.create(req))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("テナントが見つかりません");
+        .hasMessageContaining("店舗が見つかりません");
   }
 
   @Test
-  void create_rejectsWhenCastNotInTenant() {
+  void create_rejectsWhenCastNotInStore() {
     ShiftCreateRequest req = validCreateRequest();
 
-    when(castService.existsForCurrentTenant("c1")).thenReturn(false);
+    when(castService.existsForCurrentStore("c1")).thenReturn(false);
 
     assertThatThrownBy(() -> shiftService.create(req))
         .isInstanceOf(ServiceException.class)
@@ -168,11 +168,11 @@ class ShiftServiceTest {
   }
 
   @Test
-  void update_rejectsWhenCastNotInTenant() {
+  void update_rejectsWhenCastNotInStore() {
     Shift s = Shift.builder().castId("c1").build();
     s.setId("s1");
     when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
-    when(castService.existsForCurrentTenant("foreign")).thenReturn(false);
+    when(castService.existsForCurrentStore("foreign")).thenReturn(false);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setCastId("foreign");

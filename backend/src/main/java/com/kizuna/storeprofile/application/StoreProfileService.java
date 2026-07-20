@@ -17,28 +17,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class StoreProfileService {
 
   private final StoreProfileRepository storeProfileRepository;
-  private final StoreContext tenantContext;
+  private final StoreContext storeContext;
   private final StoreProfileMapper storeProfileMapper;
 
   @StoreScoped
   @Transactional(readOnly = true)
   public StoreProfileResponse get() {
-    Long tenantId = tenantContext.getStoreId();
+    Long storeId = storeContext.getStoreId();
     StoreProfile config =
         storeProfileRepository
-            .findByStoreId(tenantId)
-            .orElseThrow(() -> new ServiceException("テナント設定が見つかりません"));
+            .findByStoreId(storeId)
+            .orElseThrow(() -> new ServiceException("店舗設定が見つかりません"));
     return storeProfileMapper.toResponse(config);
   }
 
   @StoreScoped
   @Transactional
   public StoreProfileResponse update(StoreProfileUpdateRequest request) {
-    Long tenantId = tenantContext.getStoreId();
+    Long storeId = storeContext.getStoreId();
     StoreProfile config =
         storeProfileRepository
-            .findByStoreId(tenantId)
-            .orElseThrow(() -> new ServiceException("テナント設定が見つかりません"));
+            .findByStoreId(storeId)
+            .orElseThrow(() -> new ServiceException("店舗設定が見つかりません"));
     storeProfileMapper.updateEntityFromRequest(request, config);
     return storeProfileMapper.toResponse(storeProfileRepository.saveAndFlush(config));
   }

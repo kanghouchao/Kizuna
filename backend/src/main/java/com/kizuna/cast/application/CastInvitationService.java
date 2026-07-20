@@ -34,7 +34,7 @@ public class CastInvitationService {
   private final CastInvitationRepository castInvitationRepository;
 
   /**
-   * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 storeFilter により他テナントの档案は見えず
+   * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 storeFilter により他店舗の档案は見えず
    * ServiceException となる（越権はインターセプタが先に 403）。
    *
    * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE

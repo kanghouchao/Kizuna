@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileUploadController {
 
   private final FileStorageService fileStorageService;
-  private final StoreContext tenantContext;
+  private final StoreContext storeContext;
   private final AppProperties appProperties;
 
   @PostMapping("/upload")
@@ -47,15 +47,15 @@ public class FileUploadController {
   }
 
   /**
-   * 保存先プレフィクスを決める。テナント文脈があればそのテナント配下、無ければ中央領域（central）へ保存する。
+   * 保存先プレフィクスを決める。店舗文脈があればその店舗配下、無ければ中央領域（central）へ保存する。
    *
-   * <p>中央領域への保存は中央資産管理能力（{@code PERM_PLATFORM_ASSET_MANAGE}）の保持者のみ許可する。テナント文脈を解決できない 店舗系・キャスト等は
+   * <p>中央領域への保存は中央資産管理能力（{@code PERM_PLATFORM_ASSET_MANAGE}）の保持者のみ許可する。店舗文脈を解決できない 店舗系・キャスト等は
    * {@code @StoreOptional} の許可経路に乗るため、資産を中央共有領域へ誤って保存しないよう fail-closed で 403 拒否する（#287 / #322 /
    * #326 / #398）。
    */
   private String resolveStoragePrefix() {
-    if (tenantContext.hasStoreId()) {
-      return String.valueOf(tenantContext.getStoreId());
+    if (storeContext.hasStoreId()) {
+      return String.valueOf(storeContext.getStoreId());
     }
     if (!hasCentralAssetManage()) {
       throw new AccessDeniedException("中央領域へのアップロードは中央資産管理能力の保持者のみ許可されています");

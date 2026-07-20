@@ -14,10 +14,10 @@ _Others_
 * `c.k.s.config.RedisConfig`
 * `c.k.s.config.S3Config`
 * `c.k.s.exception.CommonExceptionHandler`
-* `c.k.s.tenancy.StoreSetFilterEnable`
-* `c.k.s.tenancy.TenantContext`
-* `c.k.s.tenancy.TenantFilterEnable`
-* `c.k.s.tenancy.TenantIdInterceptor`
+* `c.k.s.storescope.StoreSetFilterEnable`
+* `c.k.s.storescope.StoreContext`
+* `c.k.s.storescope.StoreFilterEnable`
+* `c.k.s.storescope.StoreIdInterceptor`
 * `c.k.s.web.RequestCorrelationFilter`
 |Properties
 |* `app.domain` -- `java.lang.String`

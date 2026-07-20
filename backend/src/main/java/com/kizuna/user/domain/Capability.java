@@ -14,7 +14,7 @@ import lombok.Getter;
 @Getter
 public enum Capability {
 
-  /** 店舗（組織）の閲覧・登録・更新・削除（CentralTenantController）。 */
+  /** 店舗（組織）の閲覧・登録・更新・削除（CentralStoreController）。 */
   STORE_MANAGE(Console.CENTRAL),
 
   /** 社内アカウント・権限の閲覧・付与・変更・停止と付与履歴の閲覧（PlatformStaffController / CapabilityBundleController）。 */

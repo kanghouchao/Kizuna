@@ -9,7 +9,7 @@ top to bottom direction
 !include <C4/C4_Component>
 
 Container_Boundary("Application.Application_boundary", "Application", $tags="") {
-  Component(Application.Application.Tenant, "Tenant", $techn="Module", $descr="", $tags="", $link="")
+  Component(Application.Application.Store, "Store", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Cast, "Cast", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Customer, "Customer", $techn="Module", $descr="", $tags="", $link="")
   Component(Application.Application.Order, "Order", $techn="Module", $descr="", $tags="", $link="")
@@ -19,16 +19,16 @@ Container_Boundary("Application.Application_boundary", "Application", $tags="") 
 
 Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Customer, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Customer, Application.Application.Tenant, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Customer, Application.Application.Store, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.Customer, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.User, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Order, Application.Application.Tenant, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Order, Application.Application.Store, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Cast, Application.Application.User, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Cast, Application.Application.Tenant, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Cast, Application.Application.Store, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Cast, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Tenant, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Store, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 @enduml

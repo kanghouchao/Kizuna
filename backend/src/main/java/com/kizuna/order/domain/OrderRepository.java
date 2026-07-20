@@ -48,7 +48,7 @@ public interface OrderRepository
   Optional<OrderView> findViewById(@Param("id") String id);
 
   // 平台横断一覧（#323 集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う（機構の実証）。
-  // 店舗（tenant）表示名の join は張らない。
+  // 店舗（store）表示名の join は張らない。
   String PLATFORM_VIEW_SELECT =
       """
       select o.id as id, o.storeId as storeId, o.storeName as storeName,

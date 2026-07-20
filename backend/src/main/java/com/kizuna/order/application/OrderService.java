@@ -13,7 +13,7 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -33,8 +33,8 @@ public class OrderService {
   private final CastRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
   private final CapabilityBundleRepository capabilityBundleRepository;
-  private final TenantRepository tenantRepository;
-  private final StoreContext tenantContext;
+  private final StoreRepository storeRepository;
+  private final StoreContext storeContext;
   private final OrderMapper orderMapper;
 
   @StoreScoped
@@ -57,11 +57,11 @@ public class OrderService {
     // MapStructを使用して基本的なフィールドをマッピング
     Order order = orderMapper.toEntity(request);
 
-    // テナントの設定
+    // 店舗の設定
     order.setStoreId(
-        tenantRepository
-            .findById(tenantContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+        storeRepository
+            .findById(storeContext.getStoreId())
+            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
             .getId());
 
     // 複雑な関連ロジックの処理（顧客のスマートリンク）
@@ -120,12 +120,12 @@ public class OrderService {
     }
   }
 
-  // 受付担当者は「有効(enabled)かつ受注管理能力（ORDER_MANAGE）を持つ STAFF」かつ「現テナント(店舗)を授権する
+  // 受付担当者は「有効(enabled)かつ受注管理能力（ORDER_MANAGE）を持つ STAFF」かつ「現店舗(店舗)を授権する
   // PlatformUser」でなければならない。t_users には store_id が無いため、単なる存在確認では
   // 他店舗/CAST/MEMBER も通ってしまう。停止済み(enabled=false)の口座は束・授権を保持したままなので明示的に弾く。
   // userType 判定を先行させ、束を持たない CAST/MEMBER で束問い合わせ（空 in 句）へ進まないようにする。
   private void validateReceptionist(Long receptionistId) {
-    Long storeId = tenantContext.getStoreId();
+    Long storeId = storeContext.getStoreId();
     platformUserRepository
         .findById(receptionistId)
         .filter(
@@ -157,15 +157,15 @@ public class OrderService {
       // 顧客の検索または作成
       Customer customer =
           customerRepository
-              .findByPhoneNumberAndStoreId(req.getPhoneNumber(), tenantContext.getStoreId())
+              .findByPhoneNumberAndStoreId(req.getPhoneNumber(), storeContext.getStoreId())
               .orElseGet(
                   () -> {
                     Customer newCustomer = orderMapper.toCustomer(req);
-                    // テナントを明示的に設定
+                    // 店舗を明示的に設定
                     newCustomer.setStoreId(
-                        tenantRepository
-                            .findById(tenantContext.getStoreId())
-                            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+                        storeRepository
+                            .findById(storeContext.getStoreId())
+                            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
                             .getId());
                     return customerRepository.save(newCustomer);
                   });

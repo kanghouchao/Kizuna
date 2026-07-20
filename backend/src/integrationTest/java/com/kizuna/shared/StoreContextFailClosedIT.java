@@ -14,34 +14,34 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 /**
- * 公開エンドポイントのテナント未解決時 fail-closed 化（#287）を本物の PostgreSQL/Redis で検証する統合テスト。
+ * 公開エンドポイントの店舗未解決時 fail-closed 化（#287）を本物の PostgreSQL/Redis で検証する統合テスト。
  *
- * <p>X-Store-ID ヘッダからテナント文脈を解決できないリクエストが、{@code @StoreOptional} の無いエンドポイント（casts/public）では 403
+ * <p>X-Store-ID ヘッダから店舗文脈を解決できないリクエストが、{@code @StoreOptional} の無いエンドポイント（casts/public）では 403
  * で拒否されることを固定する。
  *
- * <p><b>漏洩検証データに関する注記</b>: {@code t_casts.tenant_id} は {@code central_tenants(id)} への外部キーを持ち、シードには
- * tenant 1 しか存在しない（tenant 2 のデータは #285 の interceptor がクロステナントヘッダを拒否するため API 経由でも作れない）。 よって漏洩の的には
- * tenant A のアクティブなキャストを用いる。文脈を持たない匿名リクエストに対してそのデータが返らないことが、 fail-open（文脈未設定で全テナント行が返る）を閉じたことの実証になる。
+ * <p><b>漏洩検証データに関する注記</b>: {@code t_casts.store_id} は {@code t_stores(id)} への外部キーを持ち、シードには store 1
+ * しか存在しない（store 2 のデータは #285 の interceptor がクロス店舗ヘッダを拒否するため API 経由でも作れない）。 よって漏洩の的には store A
+ * のアクティブなキャストを用いる。文脈を持たない匿名リクエストに対してそのデータが返らないことが、 fail-open（文脈未設定で全店舗行が返る）を閉じたことの実証になる。
  */
-class StoreContextFailClosedIT extends CrossTenantTestSupport {
+class StoreContextFailClosedIT extends CrossStoreTestSupport {
 
   private static final String CASTS_PUBLIC = "/store/casts/public";
 
-  /** 認証・テナント文脈を一切持たない完全匿名ヘッダ。 */
+  /** 認証・店舗文脈を一切持たない完全匿名ヘッダ。 */
   private HttpHeaders anonymous() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     return headers;
   }
 
-  private void createActiveCastAs(long tenantId, String name) {
+  private void createActiveCastAs(long storeId, String name) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/casts",
-            new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId)),
+            new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(storeId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
-        .as("前提: tenant %d でのアクティブなキャスト作成が成功すること", tenantId)
+        .as("前提: store %d でのアクティブなキャスト作成が成功すること", storeId)
         .isTrue();
   }
 
@@ -49,15 +49,15 @@ class StoreContextFailClosedIT extends CrossTenantTestSupport {
   @DisplayName("完全匿名で GET /store/casts/public を叩くと 403 になり、既存キャストのデータが漏れないこと")
   void anonymousPublicCastsIsForbiddenAndLeaksNoData() {
     String castName = "漏洩検証キャスト_" + UUID.randomUUID();
-    createActiveCastAs(TENANT_A, castName);
+    createActiveCastAs(STORE_A, castName);
 
-    // 正向対照: 適切なテナント文脈（X-Role/X-Store-ID）があれば公開エンドポイントは 200 でデータを返す。
-    HttpHeaders tenantContextHeaders = new HttpHeaders();
-    tenantContextHeaders.set("X-Role", "store");
-    tenantContextHeaders.set("X-Store-ID", String.valueOf(TENANT_A));
+    // 正向対照: 適切な店舗文脈（X-Role/X-Store-ID）があれば公開エンドポイントは 200 でデータを返す。
+    HttpHeaders storeContextHeaders = new HttpHeaders();
+    storeContextHeaders.set("X-Role", "store");
+    storeContextHeaders.set("X-Store-ID", String.valueOf(STORE_A));
     ResponseEntity<String> withContext =
         rest.exchange(
-            CASTS_PUBLIC, HttpMethod.GET, new HttpEntity<>(tenantContextHeaders), String.class);
+            CASTS_PUBLIC, HttpMethod.GET, new HttpEntity<>(storeContextHeaders), String.class);
     assertThat(withContext.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(withContext.getBody()).contains(castName);
 
@@ -73,7 +73,7 @@ class StoreContextFailClosedIT extends CrossTenantTestSupport {
 
   @Test
   @DisplayName("匿名 + X-Store-ID が long 桁あふれの GET /store/casts/public は 500 でなく 400 になること（#288）")
-  void anonymousOverflowingTenantIdHeaderReturns400() {
+  void anonymousOverflowingStoreIdHeaderReturns400() {
     HttpHeaders headers = anonymous();
     headers.set("X-Role", "store");
     headers.set("X-Store-ID", "99999999999999999999");

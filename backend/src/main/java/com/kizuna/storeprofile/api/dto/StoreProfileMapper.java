@@ -15,8 +15,8 @@ public interface StoreProfileMapper {
   /**
    * StoreProfile エンティティを StoreProfileResponse DTO に変換する。
    *
-   * @param config テナント設定エンティティ
-   * @return テナント設定レスポンス DTO
+   * @param config 店舗設定エンティティ
+   * @return 店舗設定レスポンス DTO
    */
   StoreProfileResponse toResponse(StoreProfile config);
 
@@ -24,7 +24,7 @@ public interface StoreProfileMapper {
    * StoreProfileUpdateRequest の非 null フィールドを既存エンティティに反映する。
    *
    * @param request 更新リクエスト
-   * @param config 既存のテナント設定エンティティ
+   * @param config 既存の店舗設定エンティティ
    */
   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
   @Mapping(target = "id", ignore = true)

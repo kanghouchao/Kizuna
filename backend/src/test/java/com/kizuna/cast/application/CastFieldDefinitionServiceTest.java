@@ -30,7 +30,7 @@ class CastFieldDefinitionServiceTest {
 
   @Mock private CastFieldDefinitionRepository repository;
   @Mock private CastFieldDefinitionMapper mapper;
-  @Mock private StoreContext tenantContext;
+  @Mock private StoreContext storeContext;
 
   @InjectMocks private CastFieldDefinitionService service;
 
@@ -42,11 +42,11 @@ class CastFieldDefinitionServiceTest {
   }
 
   @Test
-  void create_autoNumbersFromZeroWhenEmptyAndSetsTenantId() {
+  void create_autoNumbersFromZeroWhenEmptyAndSetsStoreId() {
     when(repository.existsByKey("blood_type")).thenReturn(false);
     when(repository.count()).thenReturn(0L);
     when(repository.findMaxDisplayOrder()).thenReturn(null);
-    when(tenantContext.getStoreId()).thenReturn(7L);
+    when(storeContext.getStoreId()).thenReturn(7L);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
@@ -113,7 +113,7 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void create_convertsDbDuplicateKeyRaceTo400() {
-    // 事前チェックをすり抜けた並行 create が DB の (tenant_id, key) 一意制約に当たるレース。
+    // 事前チェックをすり抜けた並行 create が DB の (store_id, key) 一意制約に当たるレース。
     // save 時の DataIntegrityViolationException を、事前チェックと同一の 400 へ変換する。
     when(repository.existsByKey("blood_type")).thenReturn(false);
     when(repository.count()).thenReturn(0L);

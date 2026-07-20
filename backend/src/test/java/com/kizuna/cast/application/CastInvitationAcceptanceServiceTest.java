@@ -17,8 +17,8 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.tenant.domain.Tenant;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -41,13 +41,13 @@ class CastInvitationAcceptanceServiceTest {
   @Mock private CastInvitationRepository castInvitationRepository;
   @Mock private CastRepository castRepository;
   @Mock private PlatformUserRepository platformUserRepository;
-  @Mock private TenantRepository tenantRepository;
+  @Mock private StoreRepository storeRepository;
   @Mock private PasswordEncoder passwordEncoder;
 
   @InjectMocks private CastInvitationAcceptanceService service;
 
   private CastInvitation invitation(
-      String castId, long tenantId, CastInvitation.Status status, OffsetDateTime expiresAt) {
+      String castId, long storeId, CastInvitation.Status status, OffsetDateTime expiresAt) {
     CastInvitation invitation =
         CastInvitation.builder()
             .castId(castId)
@@ -55,7 +55,7 @@ class CastInvitationAcceptanceServiceTest {
             .status(status)
             .expiresAt(expiresAt)
             .build();
-    invitation.setStoreId(tenantId);
+    invitation.setStoreId(storeId);
     return invitation;
   }
 
@@ -104,9 +104,9 @@ class CastInvitationAcceptanceServiceTest {
     return request;
   }
 
-  private void stubTenant(long tenantId, String name) {
-    Tenant tenant = new Tenant(name, "tenant-" + tenantId, null);
-    when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+  private void stubStore(long storeId, String name) {
+    Store store = new Store(name, "store-" + storeId, null);
+    when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
   }
 
   @Test
@@ -117,7 +117,7 @@ class CastInvitationAcceptanceServiceTest {
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1))));
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
-    stubTenant(1L, "店舗A");
+    stubStore(1L, "店舗A");
 
     CastInvitationDetailResponse response = service.view("tok");
 
@@ -134,7 +134,7 @@ class CastInvitationAcceptanceServiceTest {
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
-    stubTenant(1L, "店舗A");
+    stubStore(1L, "店舗A");
 
     assertThat(service.view("tok").status()).isEqualTo("EXPIRED");
   }
@@ -147,7 +147,7 @@ class CastInvitationAcceptanceServiceTest {
                 invitation(
                     "c1", 1L, CastInvitation.Status.ACCEPTED, OffsetDateTime.now().plusHours(1))));
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
-    stubTenant(1L, "店舗A");
+    stubStore(1L, "店舗A");
 
     assertThat(service.view("tok").status()).isEqualTo("USED");
   }
@@ -171,7 +171,7 @@ class CastInvitationAcceptanceServiceTest {
               saved.setId(42L);
               return saved;
             });
-    stubTenant(1L, "店舗A");
+    stubStore(1L, "店舗A");
 
     CastAcceptanceResponse response =
         service.acceptAsNewUser("tok", acceptRequest("New@Example.com"));
@@ -254,7 +254,7 @@ class CastInvitationAcceptanceServiceTest {
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
-    stubTenant(2L, "店舗B");
+    stubStore(2L, "店舗B");
 
     CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com");
 
@@ -282,7 +282,7 @@ class CastInvitationAcceptanceServiceTest {
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
-    stubTenant(2L, "店舗B");
+    stubStore(2L, "店舗B");
 
     CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com");
 

@@ -33,9 +33,9 @@ include::module-notification.adoc[]
 plantuml::module-storage.puml[,,format=svg]
 include::module-storage.adoc[]
 
-== Tenant
-plantuml::module-tenant.puml[,,format=svg]
-include::module-tenant.adoc[]
+== Store
+plantuml::module-store.puml[,,format=svg]
+include::module-store.adoc[]
 
 == Cast
 plantuml::module-cast.puml[,,format=svg]

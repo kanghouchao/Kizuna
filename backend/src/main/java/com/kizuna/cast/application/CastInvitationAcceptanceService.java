@@ -9,8 +9,8 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.tenant.domain.Tenant;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 招待受諾ユースケース（公開照会・新規登録受諾・既存アカウント受諾）。
  *
- * <p>token はテナント横断で一意なため {@code @StoreScoped} は付けない（グローバル検索）。 受諾は身分作成・档案紐づけ・招待状態遷移を単一トランザクションで確定する。
+ * <p>token は店舗横断で一意なため {@code @StoreScoped} は付けない（グローバル検索）。 受諾は身分作成・档案紐づけ・招待状態遷移を単一トランザクションで確定する。
  */
 @Service
 @RequiredArgsConstructor
@@ -42,7 +42,7 @@ public class CastInvitationAcceptanceService {
   private final CastInvitationRepository castInvitationRepository;
   private final CastRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
-  private final TenantRepository tenantRepository;
+  private final StoreRepository storeRepository;
   private final PasswordEncoder passwordEncoder;
 
   /** 招待を照会する。受諾可否のビュー状態（VALID/EXPIRED/USED）と店舗名・档案名を返す。 */
@@ -153,8 +153,8 @@ public class CastInvitationAcceptanceService {
     return castRepository.findById(castId).orElseThrow(() -> new ServiceException("キャストが見つかりません"));
   }
 
-  private String storeName(Long tenantId) {
-    return tenantRepository.findById(tenantId).map(Tenant::getName).orElse(null);
+  private String storeName(Long storeId) {
+    return storeRepository.findById(storeId).map(Store::getName).orElse(null);
   }
 
   private String viewStatus(CastInvitation invitation) {

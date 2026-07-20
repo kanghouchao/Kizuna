@@ -41,19 +41,19 @@ class PlatformOrderServiceTest {
   @Mock OrderService orderService;
   @Mock OrderMapper orderMapper;
 
-  // create は実物の StoreContext を注入し、OrderService.create 呼び出し時点の tenantId を捕捉して検証する。
-  private final StoreContext tenantContext = new StoreContext();
+  // create は実物の StoreContext を注入し、OrderService.create 呼び出し時点の storeId を捕捉して検証する。
+  private final StoreContext storeContext = new StoreContext();
   private PlatformOrderService service;
 
   @BeforeEach
   void setUp() {
-    service = new PlatformOrderService(orderRepository, orderService, tenantContext, orderMapper);
+    service = new PlatformOrderService(orderRepository, orderService, storeContext, orderMapper);
   }
 
   @AfterEach
   void clearContext() {
     SecurityContextHolder.clearContext();
-    tenantContext.clear();
+    storeContext.clear();
   }
 
   private void authenticate(String scopeType, Object storeIds) {
@@ -95,7 +95,7 @@ class PlatformOrderServiceTest {
         .isInstanceOf(AccessDeniedException.class);
 
     verify(orderService, never()).create(any());
-    assertThat(tenantContext.getStoreId()).isNull();
+    assertThat(storeContext.getStoreId()).isNull();
   }
 
   @Test
@@ -106,7 +106,7 @@ class PlatformOrderServiceTest {
         .isInstanceOf(AccessDeniedException.class);
 
     verify(orderService, never()).create(any());
-    assertThat(tenantContext.getStoreId()).isNull();
+    assertThat(storeContext.getStoreId()).isNull();
   }
 
   @Test
@@ -115,21 +115,21 @@ class PlatformOrderServiceTest {
     PlatformOrderCreateRequest req = requestForStore(1L);
     OrderResponse res = OrderResponse.builder().id("o1").build();
 
-    AtomicReference<Long> tenantAtCall = new AtomicReference<>();
+    AtomicReference<Long> storeAtCall = new AtomicReference<>();
     when(orderService.create(req))
         .thenAnswer(
             inv -> {
-              tenantAtCall.set(tenantContext.getStoreId());
+              storeAtCall.set(storeContext.getStoreId());
               return res;
             });
 
     OrderResponse result = service.create(req);
 
     assertThat(result).isSameAs(res);
-    assertThat(tenantAtCall.get())
+    assertThat(storeAtCall.get())
         .as("OrderService.create 呼び出し時点で StoreContext が storeId")
         .isEqualTo(1L);
-    assertThat(tenantContext.getStoreId()).as("復帰後は finally で clear 済み").isNull();
+    assertThat(storeContext.getStoreId()).as("復帰後は finally で clear 済み").isNull();
   }
 
   @Test
@@ -138,18 +138,18 @@ class PlatformOrderServiceTest {
     PlatformOrderCreateRequest req = requestForStore(999L);
     OrderResponse res = OrderResponse.builder().id("o1").build();
 
-    AtomicReference<Long> tenantAtCall = new AtomicReference<>();
+    AtomicReference<Long> storeAtCall = new AtomicReference<>();
     when(orderService.create(req))
         .thenAnswer(
             inv -> {
-              tenantAtCall.set(tenantContext.getStoreId());
+              storeAtCall.set(storeContext.getStoreId());
               return res;
             });
 
     service.create(req);
 
-    assertThat(tenantAtCall.get()).isEqualTo(999L);
-    assertThat(tenantContext.getStoreId()).isNull();
+    assertThat(storeAtCall.get()).isEqualTo(999L);
+    assertThat(storeContext.getStoreId()).isNull();
   }
 
   @Test
@@ -160,6 +160,6 @@ class PlatformOrderServiceTest {
     when(orderService.create(req)).thenThrow(new ServiceException("boom"));
 
     assertThatThrownBy(() -> service.create(req)).isInstanceOf(ServiceException.class);
-    assertThat(tenantContext.getStoreId()).as("例外時も finally で clear される").isNull();
+    assertThat(storeContext.getStoreId()).as("例外時も finally で clear される").isNull();
   }
 }
