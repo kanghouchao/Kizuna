@@ -1,7 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StoreSelectPage from '../StoreSelectPage';
 import { platformAuthApi } from '@/entities/user';
-import type { PlatformCapability, PlatformMeResponse } from '@/entities/user';
+import type {
+  PlatformCapability,
+  PlatformMeResponse,
+  PlatformStoreScopeType,
+} from '@/entities/user';
 
 const mockReplace = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -18,14 +22,18 @@ jest.mock('@/entities/user', () => ({
 const mockedStores = platformAuthApi.stores as jest.MockedFunction<typeof platformAuthApi.stores>;
 const mockedMe = platformAuthApi.me as jest.MockedFunction<typeof platformAuthApi.me>;
 
-const meResponse = (capabilities: PlatformCapability[]): PlatformMeResponse => ({
+const meResponse = (
+  capabilities: PlatformCapability[],
+  store_scope_type: PlatformStoreScopeType = 'ALL_STORES',
+  store_ids: number[] = []
+): PlatformMeResponse => ({
   email: 'staff@example.com',
   display_name: 'スタッフ',
   user_type: 'STAFF',
   capabilities,
   console: 'platform',
-  store_scope_type: 'ALL_STORES',
-  store_ids: [],
+  store_scope_type,
+  store_ids,
 });
 
 describe('StoreSelectPage（店舗未選択時の懒惰トリガー選択画面 #413）', () => {
@@ -77,6 +85,48 @@ describe('StoreSelectPage（店舗未選択時の懒惰トリガー選択画面 
     fireEvent.click(storeB);
 
     expect(mockReplace).toHaveBeenCalledWith('/store/2/orders');
+  });
+
+  it('STORE_VIEW を持たない実運用店舗能力保持者は、stores() が 403 でも SPECIFIC_STORES の store_ids で単一店舗を自動選択する（#413 Fix6-1）', async () => {
+    // GET /platform/stores/me は SHARED 能力 STORE_VIEW でのみ守られるため、STORE_PROFILE_MANAGE のみの
+    // 実運用店舗能力保持者は 403 になる。/platform/me は isAuthenticated() のみで常に到達可能なので、
+    // SPECIFIC_STORES の store_ids を店舗 id のフォールバック源にする。
+    window.history.pushState({}, '', '/store/select?next=%2Fstore%2Forders');
+    mockedMe.mockResolvedValue(meResponse(['STORE_PROFILE_MANAGE'], 'SPECIFIC_STORES', [7]));
+    mockedStores.mockRejectedValue(new Error('403'));
+
+    render(<StoreSelectPage />);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/7/orders'));
+  });
+
+  it('STORE_VIEW を持たない実運用店舗能力保持者は、stores() が 403 でも SPECIFIC_STORES の store_ids を「店舗 #id」で一覧表示する（#413 Fix6-1）', async () => {
+    window.history.pushState({}, '', '/store/select?next=%2Fstore%2Forders');
+    mockedMe.mockResolvedValue(meResponse(['STORE_PROFILE_MANAGE'], 'SPECIFIC_STORES', [7, 9]));
+    mockedStores.mockRejectedValue(new Error('403'));
+
+    render(<StoreSelectPage />);
+
+    const store9 = await screen.findByRole('button', { name: '店舗 #9' });
+    expect(screen.getByRole('button', { name: '店舗 #7' })).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    fireEvent.click(store9);
+
+    expect(mockReplace).toHaveBeenCalledWith('/store/9/orders');
+  });
+
+  it('ALL_STORES かつ STORE_VIEW 欠如の実運用店舗能力保持者は、store_ids が空のためフォールバックできず「アクセス可能な店舗がありません」を表示する（既知の残存ギャップ・退行なし #413 Fix6-1）', async () => {
+    // ALL_STORES 時は /platform/me の store_ids が空（バリデーション制約）のためフォールバック源が無い。
+    // 既存の 0 件時挙動と同じ表示に留める（B-lite の無改修方針の範囲外。真の解決は別途裁定）。
+    window.history.pushState({}, '', '/store/select?next=%2Fstore%2Forders');
+    mockedMe.mockResolvedValue(meResponse(['STORE_PROFILE_MANAGE'], 'ALL_STORES', []));
+    mockedStores.mockRejectedValue(new Error('403'));
+
+    render(<StoreSelectPage />);
+
+    expect(await screen.findByText('アクセス可能な店舗がありません')).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('実運用の store-console 能力が無い（SHARED 能力のみ）ユーザーは、stores() が非空でも遷移せず「アクセス可能な店舗がありません」を表示する（#413 Fix5-3）', async () => {
