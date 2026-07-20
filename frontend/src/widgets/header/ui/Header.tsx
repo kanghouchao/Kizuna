@@ -19,7 +19,6 @@ export function Header() {
   const { logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const accountHref = isStoreDomain() ? '/store/settings/account' : '/platform/settings/account';
 
   const [stores, setStores] = useState<PlatformStore[]>([]);
   // cookie 由来の「前回選択した店舗」ヒント。document 依存で SSR-unsafe なため mount 時のみ読む。
@@ -44,6 +43,12 @@ export function Header() {
   const currentStoreId = pathStoreId ?? lastUsedStoreId;
 
   const currentStoreName = stores.find(store => String(store.id) === currentStoreId)?.name;
+
+  // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す（#413 Fix2）。
+  // storeId は他の分岐と同じく pathname 優先・cookie ヒント fallback の currentStoreId に揃える。
+  const accountHref = isStoreDomain()
+    ? `/store/${currentStoreId}/settings/account`
+    : '/platform/settings/account';
 
   const handleStoreSelect = (id: number) => {
     if (String(id) !== currentStoreId) {
