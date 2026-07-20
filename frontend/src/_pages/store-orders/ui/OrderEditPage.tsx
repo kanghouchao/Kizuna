@@ -8,6 +8,7 @@ import { useState } from 'react';
 export default function EditOrderPage() {
   const router = useRouter();
   const params = useParams();
+  const storeId = params.storeId as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Mock initial data - in real app, fetch by id
@@ -25,7 +26,7 @@ export default function EditOrderPage() {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       toast.success('オーダーを更新しました');
-      router.push('/store/orders');
+      router.push(`/store/${storeId}/orders`);
     } catch (error) {
       toast.error('オーダーの更新に失敗しました');
     } finally {

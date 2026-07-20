@@ -19,6 +19,7 @@ jest.mock('@/entities/cast', () => ({
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useParams: () => ({ storeId: '1' }),
 }));
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;

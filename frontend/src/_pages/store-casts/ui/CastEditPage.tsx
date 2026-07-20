@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 export default function CastEditPage() {
   const params = useParams();
   const id = params.id as string;
+  const storeId = params.storeId as string;
   const router = useRouter();
   const [cast, setCast] = useState<CastResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,13 +23,13 @@ export default function CastEditPage() {
         setCast(data);
       } catch {
         toast.error('キャスト情報の取得に失敗しました');
-        router.push('/store/casts');
+        router.push(`/store/${storeId}/casts`);
       } finally {
         setIsLoading(false);
       }
     };
     fetchCast();
-  }, [id, router]);
+  }, [id, router, storeId]);
 
   const handleSubmit = async (data: CastFormData) => {
     try {
@@ -48,7 +49,7 @@ export default function CastEditPage() {
       };
       await castApi.update(id, requestData);
       toast.success('キャスト情報を更新しました');
-      router.push('/store/casts');
+      router.push(`/store/${storeId}/casts`);
     } catch {
       toast.error('キャスト情報の更新に失敗しました');
     } finally {

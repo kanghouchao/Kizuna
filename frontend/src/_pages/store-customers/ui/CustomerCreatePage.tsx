@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { customerApi } from '@/entities/customer';
 import { toast } from 'react-hot-toast';
@@ -9,6 +9,8 @@ import { toast } from 'react-hot-toast';
 /** 新規顧客登録ページ */
 export default function CustomerCreatePage() {
   const router = useRouter();
+  const params = useParams();
+  const storeId = params.storeId as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (data: CustomerFormData) => {
@@ -16,7 +18,7 @@ export default function CustomerCreatePage() {
       setIsSubmitting(true);
       await customerApi.create(toCustomerRequest(data));
       toast.success('顧客を登録しました');
-      router.push('/store/customers');
+      router.push(`/store/${storeId}/customers`);
     } catch {
       toast.error('顧客の登録に失敗しました');
     } finally {

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useParams } from 'next/navigation';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -18,6 +19,8 @@ import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */
 export default function CastListPage() {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ。裁定6の後継 #398）
@@ -93,7 +96,7 @@ export default function CastListPage() {
           {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定（裁定6と同型）。 */}
           {canManageFieldDefs && (
             <Link
-              href="/store/casts/fields"
+              href={`/store/${storeId}/casts/fields`}
               className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <Cog6ToothIcon className="-ml-1 mr-2 h-5 w-5" />
@@ -101,7 +104,7 @@ export default function CastListPage() {
             </Link>
           )}
           <Link
-            href="/store/casts/create"
+            href={`/store/${storeId}/casts/create`}
             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
             <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
@@ -229,7 +232,7 @@ export default function CastListPage() {
                         />
                       )}
                       <Link
-                        href={`/store/casts/${cast.id}/edit`}
+                        href={`/store/${storeId}/casts/${cast.id}/edit`}
                         className="text-gray-400 hover:text-amber-600 inline-block"
                       >
                         <PencilSquareIcon className="h-5 w-5" />

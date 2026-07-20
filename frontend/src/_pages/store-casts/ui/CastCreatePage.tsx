@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
 import { CastCreateRequest, castApi } from '@/entities/cast';
 import { toast } from 'react-hot-toast';
@@ -9,6 +9,8 @@ import { toast } from 'react-hot-toast';
 /** 新規キャスト登録ページ */
 export default function CastCreatePage() {
   const router = useRouter();
+  const params = useParams();
+  const storeId = params.storeId as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /** フォーム送信処理 */
@@ -29,7 +31,7 @@ export default function CastCreatePage() {
       };
       await castApi.create(requestData);
       toast.success('キャストを登録しました');
-      router.push('/store/casts');
+      router.push(`/store/${storeId}/casts`);
     } catch {
       toast.error('キャストの登録に失敗しました');
     } finally {

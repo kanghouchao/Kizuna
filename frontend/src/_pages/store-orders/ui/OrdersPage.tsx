@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { PlusIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { Order, orderApi } from '@/entities/order';
 import { useManagedList } from '@/shared/lib';
 
 export default function OrderListPage() {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const { items: orders, isLoading } = useManagedList<Order>(
     () => orderApi.list({ size: 100, sort: 'createdAt,desc' }).then(page => page.content),
     'オーダーの取得に失敗しました'
@@ -19,7 +22,7 @@ export default function OrderListPage() {
           <p className="text-sm text-gray-500 mt-1">当日の注文状況を確認・管理できます。</p>
         </div>
         <Link
-          href="/store/orders/create"
+          href={`/store/${storeId}/orders/create`}
           className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
         >
           <PlusIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
@@ -88,7 +91,7 @@ export default function OrderListPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                     <Link
-                      href={`/store/orders/${order.id}/edit`}
+                      href={`/store/${storeId}/orders/${order.id}/edit`}
                       className="text-gray-400 hover:text-amber-600 inline-block"
                     >
                       <PencilSquareIcon className="h-5 w-5" />
