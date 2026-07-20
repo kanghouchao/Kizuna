@@ -53,7 +53,8 @@ export default async function Home() {
       redirect('/platform/dashboard/');
     }
     if (destination === 'store') {
-      redirect('/store/dashboard/');
+      const storeId = cookieStore.get('platform-store-id')?.value;
+      redirect(storeId ? `/store/${storeId}/dashboard/` : '/store/select');
     }
   }
 
