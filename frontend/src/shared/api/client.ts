@@ -5,6 +5,7 @@ import {
   getPlatformConsole,
   getStoreIdFromPath,
   redirectToLogin,
+  setPlatformStore,
 } from '@/shared/lib';
 
 const apiClient = axios.create({
@@ -63,6 +64,13 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   response => {
+    // 成功応答が X-Store-ID を伴う＝バックエンドが StoreIdInterceptor の fail-closed 検証
+    //（storeBridge + scope.authorizes）を通過して受理した証拠。このときだけ「前回選択」cookie を更新し、
+    // 未検証の URL 由来 id で cookie を汚染しない（Sidebar の無条件 mount 書き込みを置き換える — #413 Fix6-3）。
+    const storeId = (response.config?.headers as any)?.['X-Store-ID'];
+    if (storeId) {
+      setPlatformStore(storeId);
+    }
     return response;
   },
   error => {
