@@ -12,11 +12,11 @@ frontend/src/
 │                 #   Exception: the root route `/` (app/page.tsx) dispatches templates dynamically based on
 │                 #   the cookie-resolved tenant, so it cannot be a thin shell.
 ├── _app/         # App initialization such as providers (named _app because `app` collides with Next's reserved name)
-├── _pages/       # Page slices, named with a scope prefix: central-* / store-* plus login, register, store-site
+├── _pages/       # Page slices, named with a scope prefix: platform-* / store-* plus login, register, store-site
 ├── widgets/      # Composite UI such as sidebar, header
-├── features/     # Slices per user action: auth-login, tenant-register, ...
+├── features/     # Slices per user action: platform-login, staff-management, ...
 ├── entities/     # Mirror of the backend domain modules:
-│                 #   tenant, user, menu, cast, customer, order, store-profile, system-config, shift
+│                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift
 │                 #   each slice = model (types) / api (requests) / index (public API)
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (generic components)
 ```
