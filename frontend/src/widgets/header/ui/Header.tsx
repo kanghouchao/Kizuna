@@ -9,14 +9,14 @@ import {
   getPlatformStoreId,
   isPlatformSession,
   isStoreConsole,
-  isTenantDomain,
+  isStoreDomain,
   setPlatformStore,
 } from '@/shared/lib';
 import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export function Header() {
   const { logout } = useAuth();
-  const accountHref = isTenantDomain() ? '/store/settings/account' : '/platform/settings/account';
+  const accountHref = isStoreDomain() ? '/store/settings/account' : '/platform/settings/account';
 
   const [showStoreSwitch, setShowStoreSwitch] = useState(false);
   const [stores, setStores] = useState<PlatformStore[]>([]);
@@ -82,7 +82,7 @@ export function Header() {
         <div className="flex items-center space-x-4">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-semibold text-gray-900">管理者</p>
-            <p className="text-xs text-gray-500">Central Admin</p>
+            <p className="text-xs text-gray-500">Platform Admin</p>
           </div>
           <div className="relative group">
             {' '}

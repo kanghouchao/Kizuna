@@ -15,7 +15,7 @@ interface ModernCastDetailPageProps {
 /** キャスト詳細ページ（modern 模版）。 */
 export default async function ModernCastDetailPage({ castId }: ModernCastDetailPageProps) {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const [cast, siteConfig] = await Promise.all([
     storefrontService.fetchCast(castId),
     storefrontService.fetchSiteConfig(),

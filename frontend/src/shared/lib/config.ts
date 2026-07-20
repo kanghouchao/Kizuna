@@ -1,8 +1,8 @@
-export function getCentralDomain(): string {
-  return process.env.NEXT_PUBLIC_CENTRAL_DOMAIN || 'kizuna.test';
+export function getPlatformDomain(): string {
+  return process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'kizuna.test';
 }
 
-export function isTenantDomain(): boolean {
+export function isStoreDomain(): boolean {
   if (typeof window === 'undefined') return false;
-  return window.location.hostname !== getCentralDomain();
+  return window.location.hostname !== getPlatformDomain();
 }

@@ -23,7 +23,7 @@ import './theme.css';
  */
 export default async function DefaultTemplate() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
 
   // テナントIDは service 内部で解決されるため、引数不要
   const { casts, siteConfig } = await storefrontService.getPageData();

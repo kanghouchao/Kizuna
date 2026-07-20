@@ -11,8 +11,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  if (role === 'tenant') {
-    const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  if (role === 'store') {
+    const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
     return {
       title: tenantName,
       description: `${tenantName}の公式サイトです。キャスト情報やキャンペーン情報をご覧いただけます。`,
@@ -49,7 +49,7 @@ export default async function Home() {
       redirect('/platform/login');
     }
     const destination = resolvePlatformDestination(platformConsole as PlatformConsole);
-    if (destination === 'central') {
+    if (destination === 'platform') {
       redirect('/platform/dashboard/');
     }
     if (destination === 'store') {
@@ -57,15 +57,15 @@ export default async function Home() {
     }
   }
 
-  // Central ドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
-  if (role === 'central') {
+  // Platform ドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
+  if (role === 'platform') {
     const token = cookieStore.get('token')?.value;
     redirect(token ? '/platform/dashboard/' : '/platform/login');
   }
 
-  // Tenant ドメイン（店舗フロント側）の場合、模版を表示
-  if (role === 'tenant') {
-    const templateKey = cookieStore.get('x-mw-tenant-template')?.value || 'default';
+  // Store ドメイン（店舗フロント側）の場合、模版を表示
+  if (role === 'store') {
+    const templateKey = cookieStore.get('x-mw-store-template')?.value || 'default';
 
     // 読み込み失敗時は helper 内で default にフォールバックするため、ここでは 404 にしない
     const TemplateComponent = await loadTemplatePage(templateKey);

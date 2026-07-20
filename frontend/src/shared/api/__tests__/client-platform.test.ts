@@ -68,8 +68,8 @@ describe('apiClient platform branch', () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
       if (key === 'platform-role') return 'central';
-      if (key === 'x-mw-role') return 'tenant';
-      if (key === 'x-mw-tenant-id') return '99';
+      if (key === 'x-mw-role') return 'store';
+      if (key === 'x-mw-store-id') return '99';
       return undefined;
     });
     const headers = await requestTo('/store/me');
@@ -80,8 +80,8 @@ describe('apiClient platform branch', () => {
   it('falls back to the legacy x-mw branch when no platform session is active', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'x-mw-role') return 'tenant';
-      if (key === 'x-mw-tenant-id') return '7';
+      if (key === 'x-mw-role') return 'store';
+      if (key === 'x-mw-store-id') return '7';
       return undefined;
     });
     const headers = await requestTo('/store/me');

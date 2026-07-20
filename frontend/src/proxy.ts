@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { resolveTenant } from './shared/lib/proxy/tenantResolver';
+import { resolveStore } from './shared/lib/proxy/storeResolver';
 import { handleRouteProtection } from './shared/lib/proxy/routeGuard';
 
 export const config = {
@@ -8,8 +8,8 @@ export const config = {
 };
 
 export async function proxy(request: NextRequest) {
-  // 1. Identify Role & Tenant
-  const { role, tenantData } = await resolveTenant(request);
+  // 1. Identify Role & Store
+  const { role, storeData } = await resolveStore(request);
 
   // 2. Route Protection (Security Guard)
   const redirectResponse = handleRouteProtection(request, role);
@@ -30,8 +30,8 @@ export async function proxy(request: NextRequest) {
   // Set Role Cookie
   response.cookies.set('x-mw-role', role, cookieOptions);
 
-  // Set Tenant Cookies (if applicable)
-  if (role === 'tenant' && tenantData?.isValid) {
+  // Set Store Cookies (if applicable)
+  if (role === 'store' && storeData?.isValid) {
     // ドメインを保存して、後続リクエストで検証に使用
     const hostname = (
       request.headers.get('x-forwarded-host') ||
@@ -42,19 +42,19 @@ export async function proxy(request: NextRequest) {
       .trim()
       .split(':')[0]
       .toLowerCase();
-    response.cookies.set('x-mw-tenant-domain', hostname, cookieOptions);
+    response.cookies.set('x-mw-store-domain', hostname, cookieOptions);
     // template cookie のみ maxAge 60 秒（ISR revalidate 60 秒と揃える）。
     // session cookie のままだと一度立った模版が既存訪問者に永久固定され、
     // 模版変更が伝播しない。短命化して最大 ~2 分で全訪問者へ反映させる。
-    response.cookies.set('x-mw-tenant-template', tenantData.templateKey, {
+    response.cookies.set('x-mw-store-template', storeData.templateKey, {
       ...cookieOptions,
       maxAge: 60,
     });
-    if (tenantData.tenantId) {
-      response.cookies.set('x-mw-tenant-id', tenantData.tenantId, cookieOptions);
+    if (storeData.storeId) {
+      response.cookies.set('x-mw-store-id', storeData.storeId, cookieOptions);
     }
-    if (tenantData.tenantName) {
-      response.cookies.set('x-mw-tenant-name', tenantData.tenantName, cookieOptions);
+    if (storeData.storeName) {
+      response.cookies.set('x-mw-store-name', storeData.storeName, cookieOptions);
     }
   }
 

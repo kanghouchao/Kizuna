@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
  *
  * 機能:
  * - バックエンドAPIのベースURLの自動解決
- * - テナントコンテキスト (X-Store-ID) の自動注入
+ * - 店舗コンテキスト (X-Store-ID) の自動注入
  * - 共通のエラーハンドリング
  */
 export const serverClient = {
@@ -46,19 +46,19 @@ export const serverClient = {
 
   /**
    * 必要なヘッダーを構築します
-   * CookieからテナントIDを自動的に取得して注入します
+   * Cookieから店舗IDを自動的に取得して注入します
    */
   async getHeaders(customHeaders?: HeadersInit): Promise<HeadersInit> {
     const cookieStore = await cookies();
-    const tenantId = cookieStore.get('x-mw-tenant-id')?.value;
+    const storeId = cookieStore.get('x-mw-store-id')?.value;
 
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Role': 'store', // ストアフロントからのアクセスは常に store ロール
     };
 
-    if (tenantId) {
-      defaultHeaders['X-Store-ID'] = tenantId;
+    if (storeId) {
+      defaultHeaders['X-Store-ID'] = storeId;
     }
 
     return {

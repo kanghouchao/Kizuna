@@ -44,16 +44,14 @@ apiClient.interceptors.request.use(
           (config.headers as any)['X-Store-ID'] = storeId;
         }
       } else {
-        // Attach role and tenant context from middleware cookies
+        // Attach role and store context from middleware cookies
         const role = Cookies.get('x-mw-role');
         if (role) {
-          // 内部 role 語彙('tenant')は票 D で改名予定のため、wire 値('store')への変換をこの注入点で行う。
-          const wireRole = role.toLowerCase() === 'tenant' ? 'store' : role;
-          (config.headers as any)['X-Role'] = wireRole;
-          if (role.toLowerCase() === 'tenant') {
-            const tenantId = Cookies.get('x-mw-tenant-id');
-            if (tenantId) {
-              (config.headers as any)['X-Store-ID'] = tenantId;
+          (config.headers as any)['X-Role'] = role;
+          if (role === 'store') {
+            const storeId = Cookies.get('x-mw-store-id');
+            if (storeId) {
+              (config.headers as any)['X-Store-ID'] = storeId;
             }
           }
         }

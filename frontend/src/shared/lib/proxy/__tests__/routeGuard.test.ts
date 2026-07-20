@@ -32,7 +32,7 @@ describe('routeGuard', () => {
 
   it('redirects to /platform/login when accessing /platform without token', () => {
     const req = createRequest('/platform/dashboard', false);
-    const res = handleRouteProtection(req, 'central');
+    const res = handleRouteProtection(req, 'platform');
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/platform/login' })
@@ -42,14 +42,14 @@ describe('routeGuard', () => {
 
   it('allows access to /platform with token', () => {
     const req = createRequest('/platform/dashboard', true);
-    const res = handleRouteProtection(req, 'central');
+    const res = handleRouteProtection(req, 'platform');
 
     expect(res).toBeNull();
   });
 
   it('redirects to / when accessing /store without token', () => {
     const req = createRequest('/store/orders', false);
-    const res = handleRouteProtection(req, 'tenant');
+    const res = handleRouteProtection(req, 'store');
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/' }));
     expect(res).not.toBeNull();
@@ -57,14 +57,14 @@ describe('routeGuard', () => {
 
   it('allows access to /store with token', () => {
     const req = createRequest('/store/orders', true);
-    const res = handleRouteProtection(req, 'tenant');
+    const res = handleRouteProtection(req, 'store');
 
     expect(res).toBeNull();
   });
 
   it('ignores other routes', () => {
     const req = createRequest('/public/page', false);
-    const res = handleRouteProtection(req, 'tenant'); // Role doesn't strictly matter for non-protected routes in current implementation
+    const res = handleRouteProtection(req, 'store'); // Role doesn't strictly matter for non-protected routes in current implementation
 
     expect(res).toBeNull();
   });

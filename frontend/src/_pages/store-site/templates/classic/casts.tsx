@@ -10,7 +10,7 @@ import './theme.css';
 /** キャスト一覧ページ（classic 模版）。 */
 export default async function ClassicCastsPage() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-tenant-name')?.value || 'Store';
+  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const { casts, siteConfig } = await storefrontService.getPageData();
 
   return (
