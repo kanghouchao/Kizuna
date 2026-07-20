@@ -2,29 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { platformAuthApi, PlatformStore, useAuth } from '@/entities/user';
 import {
-  getPlatformConsole,
   getPlatformStoreId,
   isPlatformSession,
-  isStoreConsole,
   isStoreDomain,
+  replaceStoreIdInPath,
   setPlatformStore,
 } from '@/shared/lib';
 import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export function Header() {
   const { logout } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const accountHref = isStoreDomain() ? '/store/settings/account' : '/platform/settings/account';
 
-  const [showStoreSwitch, setShowStoreSwitch] = useState(false);
   const [stores, setStores] = useState<PlatformStore[]>([]);
   const [currentStoreId, setCurrentStoreId] = useState<string | undefined>(undefined);
 
+  // 店舗切替は console 値に依らず「平台セッションかつ授権店舗が1件以上」で常設化する（#413）。
+  // 授権店舗が空なら dropdown は非表示のままなので、増える負荷は stores() 1回のみ。
   useEffect(() => {
-    if (isPlatformSession() && isStoreConsole(getPlatformConsole())) {
-      setShowStoreSwitch(true);
+    if (isPlatformSession()) {
       setCurrentStoreId(getPlatformStoreId());
       platformAuthApi
         .stores()
@@ -38,7 +40,9 @@ export function Header() {
   const handleStoreSelect = (id: number) => {
     if (String(id) !== currentStoreId) {
       setPlatformStore(id);
-      window.location.reload();
+      // console 由来の reload をやめ、現在地に storeId を差し替えて遷移する（#413）。
+      // store-scoped ページ外に居れば /store/{id}/dashboard へ。
+      router.push(replaceStoreIdInPath(pathname, id));
     }
   };
 
@@ -55,7 +59,7 @@ export function Header() {
 
         <div className="h-8 w-px bg-gray-200" />
 
-        {showStoreSwitch && (
+        {stores.length > 0 && (
           <Menu as="div" className="relative">
             <MenuButton
               disabled={stores.length === 0}
