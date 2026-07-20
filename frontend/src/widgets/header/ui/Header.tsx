@@ -46,9 +46,12 @@ export function Header() {
 
   // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す（#413 Fix2）。
   // storeId は他の分岐と同じく pathname 優先・cookie ヒント fallback の currentStoreId に揃える。
-  const accountHref = isStoreDomain()
-    ? `/store/${currentStoreId}/settings/account`
-    : '/platform/settings/account';
+  // currentStoreId が未確定（pathname 由来 id も cookie ヒントも無い）場合は
+  // "/store/undefined/..." を組まず platform 側へ fallback する（#413 Fix3）。
+  const accountHref =
+    isStoreDomain() && currentStoreId
+      ? `/store/${currentStoreId}/settings/account`
+      : '/platform/settings/account';
 
   const handleStoreSelect = (id: number) => {
     if (String(id) !== currentStoreId) {
