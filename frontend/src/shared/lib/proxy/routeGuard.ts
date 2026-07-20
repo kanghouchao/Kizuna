@@ -4,9 +4,15 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   const path = request.nextUrl.pathname;
   const hasToken = request.cookies.has('token');
 
+  // 公開 platform ルート（ログインフォーム・招待受諾 — セッション不要）は守衛の対象外。
+  // これを除外しないと /platform/login への redirect 自身が /platform 前綴に再マッチし、
+  // 無限リダイレクト（ERR_TOO_MANY_REDIRECTS）に陥る。
+  const isPublicPlatformRoute =
+    path.startsWith('/platform/login') || path.startsWith('/platform/invite');
+
   // 1. Platform Route Protection
-  // If accessing /platform/* without a token, redirect to /platform/login
-  if (path.startsWith('/platform') && !hasToken) {
+  // If accessing a protected /platform/* route without a token, redirect to /platform/login
+  if (path.startsWith('/platform') && !isPublicPlatformRoute && !hasToken) {
     console.error('🔒 Unauthorized access to /platform, redirecting to login');
     return NextResponse.redirect(new URL('/platform/login', request.url));
   }
