@@ -1,8 +1,8 @@
 package com.kizuna.storeprofile.application;
 
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
@@ -17,13 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class StoreProfileService {
 
   private final StoreProfileRepository storeProfileRepository;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
   private final StoreProfileMapper storeProfileMapper;
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public StoreProfileResponse get() {
-    Long tenantId = tenantContext.getTenantId();
+    Long tenantId = tenantContext.getStoreId();
     StoreProfile config =
         storeProfileRepository
             .findByStoreId(tenantId)
@@ -31,10 +31,10 @@ public class StoreProfileService {
     return storeProfileMapper.toResponse(config);
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public StoreProfileResponse update(StoreProfileUpdateRequest request) {
-    Long tenantId = tenantContext.getTenantId();
+    Long tenantId = tenantContext.getStoreId();
     StoreProfile config =
         storeProfileRepository
             .findByStoreId(tenantId)

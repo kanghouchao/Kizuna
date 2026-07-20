@@ -7,8 +7,8 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScoped;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,15 +30,15 @@ public class CastFieldDefinitionService {
 
   private final CastFieldDefinitionRepository repository;
   private final CastFieldDefinitionMapper mapper;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public List<CastFieldDefinitionResponse> list() {
     return repository.findAllByOrderByDisplayOrderAsc().stream().map(mapper::toResponse).toList();
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public CastFieldDefinitionResponse create(CastFieldDefinitionCreateRequest request) {
     if (repository.existsByKey(request.getKey())) {
@@ -56,7 +56,7 @@ public class CastFieldDefinitionService {
             .displayOrder(nextOrder)
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
-    definition.setStoreId(tenantContext.getTenantId());
+    definition.setStoreId(tenantContext.getStoreId());
     try {
       return mapper.toResponse(repository.saveAndFlush(definition));
     } catch (DataIntegrityViolationException ex) {
@@ -66,7 +66,7 @@ public class CastFieldDefinitionService {
     }
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public CastFieldDefinitionResponse update(String id, CastFieldDefinitionUpdateRequest request) {
     CastFieldDefinition definition =
@@ -77,7 +77,7 @@ public class CastFieldDefinitionService {
     return mapper.toResponse(repository.save(definition));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!repository.existsById(id)) {

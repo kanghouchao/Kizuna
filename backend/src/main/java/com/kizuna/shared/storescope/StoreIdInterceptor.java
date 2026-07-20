@@ -1,4 +1,4 @@
-package com.kizuna.shared.tenancy;
+package com.kizuna.shared.storescope;
 
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,13 +17,13 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Log4j2
 @Component
 @AllArgsConstructor
-public class TenantIdInterceptor implements HandlerInterceptor {
+public class StoreIdInterceptor implements HandlerInterceptor {
 
-  private final TenantContext tenantContext;
+  private final StoreContext storeContext;
 
   private static final String HEADER_ROLE = "X-Role";
-  private static final String HEADER_TENANT_ID = "X-Store-ID";
-  private static final String HEADER_ROLE_TENANT = "store";
+  private static final String HEADER_STORE_ID = "X-Store-ID";
+  private static final String HEADER_ROLE_STORE = "store";
 
   /**
    * 平台トークンで店舗文脈（X-Store-ID）を確立できるかを示す claim 名。値はログイン時に STORE コンソール能力の保持から導出される（#398 —
@@ -39,13 +39,13 @@ public class TenantIdInterceptor implements HandlerInterceptor {
     Claims claims = authenticatedClaims();
     StoreScope scope =
         StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
-    boolean claimsTenantHeaderPresent =
-        HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
-            && StringUtils.isNotBlank(request.getHeader(HEADER_TENANT_ID));
+    boolean claimsStoreHeaderPresent =
+        HEADER_ROLE_STORE.equals(request.getHeader(HEADER_ROLE))
+            && StringUtils.isNotBlank(request.getHeader(HEADER_STORE_ID));
     if (scope != null) {
       // 平台トークン（#324 過橋）: X-Role: store + 数値 X-Store-ID を要求し、授権店舗集合で検証する（fail-closed）。
-      if (HEADER_ROLE_TENANT.equals(request.getHeader(HEADER_ROLE))
-          && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
+      if (HEADER_ROLE_STORE.equals(request.getHeader(HEADER_ROLE))
+          && StringUtils.isNumeric(request.getHeader(HEADER_STORE_ID))) {
         // 店舗文脈を名乗れるのは STORE コンソール能力の保持者（storeBridge claim）のみ。CAST/MEMBER/HQ が
         // 店舗ヘッダを名乗るのは詐称として 403 で拒否する（#294 と同型）。授権スコープ検証より前に弾き、
         // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立の漏れを塞ぐ。
@@ -53,7 +53,7 @@ public class TenantIdInterceptor implements HandlerInterceptor {
           response.setStatus(HttpServletResponse.SC_FORBIDDEN);
           return false;
         }
-        Long headerValue = tryParseTenantId(request.getHeader(HEADER_TENANT_ID));
+        Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
         if (headerValue == null) {
           // 全桁数字だが long 範囲外（#288 と同型）。
           response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -63,35 +63,35 @@ public class TenantIdInterceptor implements HandlerInterceptor {
           response.setStatus(HttpServletResponse.SC_FORBIDDEN);
           return false;
         }
-        this.tenantContext.setTenantId(headerValue);
+        this.storeContext.setStoreId(headerValue);
         return true;
       }
-      // ヘッダ不備（X-Role 欠落・非数値含む）は店舗文脈なし → 末尾の @TenantOptional 判定へ落とす。
+      // ヘッダ不備（X-Role 欠落・非数値含む）は店舗文脈なし → 末尾の @StoreOptional 判定へ落とす。
     } else if (claims != null) {
-      // 認証済みだが tenantId claim を持たない（央端 CentralAuth 発行、または tenantId 無しの legacy）。
-      // ヘッダでテナントを名乗る主張は詐称として 403 で拒否する（#294）。詐称ヘッダが無ければ下の
-      // @TenantOptional 判定に委ね、央端の正当な素通り（例: /files/upload の central 保存）を保つ。
-      if (claimsTenantHeaderPresent) {
+      // 認証済みだが storeId claim を持たない（央端 CentralAuth 発行、または storeId 無しの legacy）。
+      // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する（#294）。詐称ヘッダが無ければ下の
+      // @StoreOptional 判定に委ね、央端の正当な素通り（例: /files/upload の central 保存）を保つ。
+      if (claimsStoreHeaderPresent) {
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         return false;
       }
-    } else if (claimsTenantHeaderPresent
-        && StringUtils.isNumeric(request.getHeader(HEADER_TENANT_ID))) {
-      // 未認証（ログイン前・公開ページ）だけがヘッダのみでテナントを名乗れる。
-      Long headerValue = tryParseTenantId(request.getHeader(HEADER_TENANT_ID));
+    } else if (claimsStoreHeaderPresent
+        && StringUtils.isNumeric(request.getHeader(HEADER_STORE_ID))) {
+      // 未認証（ログイン前・公開ページ）だけがヘッダのみで店舗を名乗れる。
+      Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
       if (headerValue == null) {
         // 全桁数字だが long 範囲外（#288）。
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         return false;
       }
-      this.tenantContext.setTenantId(headerValue);
+      this.storeContext.setStoreId(headerValue);
       return true;
     }
-    // JWT claim・ヘッダのいずれからもテナント文脈を解決できなかった。文脈が無いまま素通りさせると
-    // tenantFilter が有効化されず @TenantScoped クエリが全テナントの行を返す（fail-open）ため、
-    // @TenantOptional を明示したエンドポイントに限り許可し、それ以外は 403 で拒否する（fail-closed）。
+    // JWT claim・ヘッダのいずれからも店舗文脈を解決できなかった。文脈が無いまま素通りさせると
+    // storeFilter が有効化されず @StoreScoped クエリが全店舗の行を返す（fail-open）ため、
+    // @StoreOptional を明示したエンドポイントに限り許可し、それ以外は 403 で拒否する（fail-closed）。
     if (handler instanceof HandlerMethod handlerMethod
-        && handlerMethod.hasMethodAnnotation(TenantOptional.class)) {
+        && handlerMethod.hasMethodAnnotation(StoreOptional.class)) {
       return true;
     }
     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -111,7 +111,7 @@ public class TenantIdInterceptor implements HandlerInterceptor {
   }
 
   /** 全桁数字の文字列を long に変換する。long 範囲を超える場合は null（呼び出し側が 400 を返す）。 */
-  private static Long tryParseTenantId(String numericValue) {
+  private static Long tryParseStoreId(String numericValue) {
     try {
       return Long.parseLong(numericValue);
     } catch (NumberFormatException e) {
@@ -125,6 +125,6 @@ public class TenantIdInterceptor implements HandlerInterceptor {
       @NonNull HttpServletResponse response,
       @NonNull Object handler,
       @Nullable Exception ex) {
-    tenantContext.clear();
+    storeContext.clear();
   }
 }

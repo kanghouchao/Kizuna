@@ -1,4 +1,4 @@
-package com.kizuna.shared.tenancy;
+package com.kizuna.shared.storescope;
 
 import jakarta.persistence.EntityManager;
 import lombok.AllArgsConstructor;
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>認証済み平台トークンの授権店舗集合を {@link StoreScope} で解決し、SPECIFIC_STORES の場合のみ storeSetFilter（{@code
  * store_id in (:storeIds)}）を有効化する。ALL_STORES はフィルタ無効＝全店可視。授権集合を解決できない呼び出しは fail-closed に {@link
- * AccessDeniedException} で拒否する。{@link TenantFilterEnable} と同型の {@code @Order} 指定（トランザクション advisor
+ * AccessDeniedException} で拒否する。{@link StoreFilterEnable} と同型の {@code @Order} 指定（トランザクション advisor
  * との相対順序）を逐字踏襲する。
  */
 @Aspect
@@ -26,7 +26,7 @@ public class StoreSetFilterEnable {
 
   private final EntityManager entityManager;
 
-  @Around(value = "@annotation(com.kizuna.shared.tenancy.StoreSetScoped)")
+  @Around(value = "@annotation(com.kizuna.shared.storescope.StoreSetScoped)")
   public Object enableStoreSetFilter(ProceedingJoinPoint pjp) throws Throwable {
     StoreScope scope =
         StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());

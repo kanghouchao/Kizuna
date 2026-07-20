@@ -17,13 +17,13 @@ import org.springframework.context.annotation.ClassPathScanningCandidateComponen
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 
 /**
- * テナント行レベル分離の不変量を機械検証する（#208, PR-B）。
+ * 店舗行レベル分離の不変量を機械検証する（#208, PR-B）。
  *
- * <p>store_id 列を持つ @Entity は、継承経路（StoreScopedEntity）に関わらず、サービス層の {@code @TenantScoped}（{@code
- * TenantFilterEnable}）が有効化する Hibernate フィルタ {@code storeFilter} の対象でなければならない。 {@code @Filter}
- * が無いエンティティはフィルタが有効でも全テナントの行を返してしまう（#216 の「@Filter を忘れる」事故と同型）。
+ * <p>store_id 列を持つ @Entity は、継承経路（StoreScopedEntity）に関わらず、サービス層の {@code @StoreScoped}（{@code
+ * StoreFilterEnable}）が有効化する Hibernate フィルタ {@code storeFilter} の対象でなければならない。 {@code @Filter}
+ * が無いエンティティはフィルタが有効でも全店舗の行を返してしまう（#216 の「@Filter を忘れる」事故と同型）。
  */
-class TenantIsolationTests {
+class StoreIsolationTests {
 
   private static final String EXPECTED_CONDITION = "store_id = :storeId";
 
@@ -66,7 +66,7 @@ class TenantIsolationTests {
 
   @Test
   @DisplayName("storeFilter は主キー直接ロード（EntityManager#find 経由の findById 等）にも適用されること")
-  void tenantFilterAppliesToLoadByKey() {
+  void storeFilterAppliesToLoadByKey() {
     // @FilterDef は Hibernate 6 で repeatable のため、storeFilter の定義を名前で取り出す
     // （storeSetFilter 等が並置されていても getAnnotation は container を返し null になるため）。
     FilterDef storeFilterDef = null;
@@ -83,7 +83,7 @@ class TenantIsolationTests {
     assertThat(storeFilterDef.applyToLoadByKey())
         .as(
             "applyToLoadByKey=false だと Session#find（Spring Data JPA の findById 実装経路）に"
-                + " filter が効かず、他テナントの ID を直接指定した読み取りが素通りする")
+                + " filter が効かず、他店舗の ID を直接指定した読み取りが素通りする")
         .isTrue();
   }
 

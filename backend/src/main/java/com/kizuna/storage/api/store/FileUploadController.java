@@ -1,8 +1,8 @@
 package com.kizuna.storage.api.store;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.shared.tenancy.TenantOptional;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreOptional;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.user.domain.Capability;
@@ -24,12 +24,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileUploadController {
 
   private final FileStorageService fileStorageService;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
   private final AppProperties appProperties;
 
   @PostMapping("/upload")
   @PreAuthorize("isAuthenticated()")
-  @TenantOptional
+  @StoreOptional
   public ResponseEntity<FileUploadResponse> upload(
       @RequestParam("file") MultipartFile file,
       @RequestParam(value = "bucket", defaultValue = "public") String bucket) {
@@ -50,12 +50,12 @@ public class FileUploadController {
    * 保存先プレフィクスを決める。テナント文脈があればそのテナント配下、無ければ中央領域（central）へ保存する。
    *
    * <p>中央領域への保存は中央資産管理能力（{@code PERM_PLATFORM_ASSET_MANAGE}）の保持者のみ許可する。テナント文脈を解決できない 店舗系・キャスト等は
-   * {@code @TenantOptional} の許可経路に乗るため、資産を中央共有領域へ誤って保存しないよう fail-closed で 403 拒否する（#287 / #322 /
+   * {@code @StoreOptional} の許可経路に乗るため、資産を中央共有領域へ誤って保存しないよう fail-closed で 403 拒否する（#287 / #322 /
    * #326 / #398）。
    */
   private String resolveStoragePrefix() {
-    if (tenantContext.isTenant()) {
-      return String.valueOf(tenantContext.getTenantId());
+    if (tenantContext.hasStoreId()) {
+      return String.valueOf(tenantContext.getStoreId());
     }
     if (!hasCentralAssetManage()) {
       throw new AccessDeniedException("中央領域へのアップロードは中央資産管理能力の保持者のみ許可されています");

@@ -11,7 +11,7 @@ import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
@@ -39,7 +39,7 @@ class ShiftServiceTest {
 
   @Mock private ShiftRepository shiftRepository;
   @Mock private ShiftMapper shiftMapper;
-  @Mock private TenantContext tenantContext;
+  @Mock private StoreContext tenantContext;
   @Mock private TenantRepository tenantRepository;
   @Mock private CastService castService;
   @Mock private CastRepository castRepository;
@@ -82,7 +82,7 @@ class ShiftServiceTest {
 
     when(castService.existsForCurrentTenant("c1")).thenReturn(true);
     when(shiftMapper.toEntity(req)).thenReturn(entity);
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     when(shiftRepository.save(any()))
         .thenAnswer(
@@ -118,7 +118,7 @@ class ShiftServiceTest {
 
     when(castService.existsForCurrentTenant("c1")).thenReturn(true);
     when(shiftMapper.toEntity(req)).thenReturn(Shift.builder().build());
-    when(tenantContext.getTenantId()).thenReturn(1L);
+    when(tenantContext.getStoreId()).thenReturn(1L);
     when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftService.create(req))

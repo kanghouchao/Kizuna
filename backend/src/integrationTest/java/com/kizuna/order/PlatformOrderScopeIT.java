@@ -92,7 +92,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
     ensurePlatformUser(CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
   }
 
-  /** リポジトリ直挿（テストスレッドは @TenantScoped を経由せず storeFilter が無効なので他テナントにも書ける）。 */
+  /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他テナントにも書ける）。 */
   private void ensureMarkerOrder(long tenantId, String storeName, String remarks) {
     boolean exists =
         orderRepository.findAll().stream()

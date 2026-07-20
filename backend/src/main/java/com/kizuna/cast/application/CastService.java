@@ -12,8 +12,8 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.tenant.domain.TenantRepository;
 import java.util.List;
 import java.util.Map;
@@ -34,12 +34,12 @@ public class CastService {
 
   private final CastRepository castRepository;
   private final CastMapper castMapper;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
   private final TenantRepository tenantRepository;
   private final CastInvitationService castInvitationService;
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public Page<CastResponse> list(String search, Pageable pageable) {
     Page<Cast> page =
@@ -51,7 +51,7 @@ public class CastService {
     return page.map(cast -> castMapper.toResponse(cast, statuses.get(cast.getId())));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public CastResponse get(String id) {
     Cast cast =
@@ -64,27 +64,27 @@ public class CastService {
    * 指定 id のキャストが現在テナントに属するか判定する（他モジュールからの帰属チェック用ポート）。 storeFilter が効くため、他テナントのキャストは存在しないものとして false
    * を返す。
    */
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public boolean existsForCurrentTenant(String id) {
     return castRepository.findById(id).isPresent();
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public CastResponse create(CastCreateRequest request) {
     Cast cast = castMapper.toEntity(request);
 
     cast.setStoreId(
         tenantRepository
-            .findById(tenantContext.getTenantId())
+            .findById(tenantContext.getStoreId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
             .getId());
 
     return castMapper.toResponse(castRepository.save(cast));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public CastResponse update(String id, CastUpdateRequest request) {
     Cast cast =
@@ -117,7 +117,7 @@ public class CastService {
     }
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!castRepository.existsById(id)) {
@@ -126,7 +126,7 @@ public class CastService {
     castRepository.deleteById(id);
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public List<CastPublicResponse> listActive() {
     List<CastFieldDefinition> publicDefinitions =

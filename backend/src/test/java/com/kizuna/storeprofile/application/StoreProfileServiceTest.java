@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
@@ -32,7 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class StoreProfileServiceTest {
 
   @Mock private StoreProfileRepository storeProfileRepository;
-  @Mock private TenantContext tenantContext;
+  @Mock private StoreContext tenantContext;
   @Mock private StoreProfileMapper storeProfileMapper;
   @InjectMocks private StoreProfileService tenantConfigService;
 
@@ -40,7 +40,7 @@ class StoreProfileServiceTest {
 
   @BeforeEach
   void setUp() {
-    when(tenantContext.getTenantId()).thenReturn(TENANT_ID);
+    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
   }
 
   @Test

@@ -1,6 +1,6 @@
 package com.kizuna.shared.web;
 
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,7 +16,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Assigns a correlation identifier to every request and ensures tenant context data exits cleanly.
+ * Assigns a correlation identifier to every request and ensures store context data exits cleanly.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -24,10 +24,10 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
 
   private static final String REQUEST_ID_HEADER = "X-Request-ID";
 
-  private final TenantContext tenantContext;
+  private final StoreContext storeContext;
 
-  public RequestCorrelationFilter(TenantContext tenantContext) {
-    this.tenantContext = tenantContext;
+  public RequestCorrelationFilter(StoreContext storeContext) {
+    this.storeContext = storeContext;
   }
 
   @Override
@@ -47,8 +47,8 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
       filterChain.doFilter(request, response);
     } finally {
       ThreadContext.remove("requestId");
-      ThreadContext.remove("tenantId");
-      tenantContext.clear();
+      ThreadContext.remove("storeId");
+      storeContext.clear();
     }
   }
 }

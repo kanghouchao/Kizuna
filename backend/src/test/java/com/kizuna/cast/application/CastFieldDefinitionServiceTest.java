@@ -15,7 +15,7 @@ import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionPatch;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +30,7 @@ class CastFieldDefinitionServiceTest {
 
   @Mock private CastFieldDefinitionRepository repository;
   @Mock private CastFieldDefinitionMapper mapper;
-  @Mock private TenantContext tenantContext;
+  @Mock private StoreContext tenantContext;
 
   @InjectMocks private CastFieldDefinitionService service;
 
@@ -46,7 +46,7 @@ class CastFieldDefinitionServiceTest {
     when(repository.existsByKey("blood_type")).thenReturn(false);
     when(repository.count()).thenReturn(0L);
     when(repository.findMaxDisplayOrder()).thenReturn(null);
-    when(tenantContext.getTenantId()).thenReturn(7L);
+    when(tenantContext.getStoreId()).thenReturn(7L);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 

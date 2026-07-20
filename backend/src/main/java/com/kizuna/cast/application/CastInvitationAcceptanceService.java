@@ -29,8 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 招待受諾ユースケース（公開照会・新規登録受諾・既存アカウント受諾）。
  *
- * <p>token はテナント横断で一意なため {@code @TenantScoped} は付けない（グローバル検索）。
- * 受諾は身分作成・档案紐づけ・招待状態遷移を単一トランザクションで確定する。
+ * <p>token はテナント横断で一意なため {@code @StoreScoped} は付けない（グローバル検索）。 受諾は身分作成・档案紐づけ・招待状態遷移を単一トランザクションで確定する。
  */
 @Service
 @RequiredArgsConstructor

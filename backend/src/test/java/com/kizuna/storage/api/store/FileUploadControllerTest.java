@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.user.domain.Capability;
@@ -33,12 +33,12 @@ class FileUploadControllerTest {
   @Mock private FileStorageService fileStorageService;
   @Mock private MultipartFile file;
 
-  private TenantContext tenantContext;
+  private StoreContext tenantContext;
   private FileUploadController controller;
 
   @BeforeEach
   void setUp() {
-    tenantContext = new TenantContext();
+    tenantContext = new StoreContext();
     AppProperties appProperties = new AppProperties();
     appProperties.setUpload(new AppProperties.Upload());
     controller = new FileUploadController(fileStorageService, tenantContext, appProperties);
@@ -77,7 +77,7 @@ class FileUploadControllerTest {
 
   @Test
   @DisplayName("PLATFORM_ASSET_MANAGE の無いトークンはテナント文脈が無い場合、central に保存せず拒否すること")
-  void upload_rejectsWithoutPlatformAssetManageAndTenantContext() {
+  void upload_rejectsWithoutPlatformAssetManageAndStoreContext() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
 
     assertThatThrownBy(() -> controller.upload(file, "public"))
@@ -89,7 +89,7 @@ class FileUploadControllerTest {
   @Test
   @DisplayName("テナント文脈が解決済みならそのテナント配下に保存すること")
   void upload_storesUnderTenantPrefixWhenContextResolved() {
-    tenantContext.setTenantId(5L);
+    tenantContext.setStoreId(5L);
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
     when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");

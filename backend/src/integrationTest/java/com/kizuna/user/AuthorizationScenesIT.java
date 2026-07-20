@@ -157,7 +157,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
             "/platform/stores/me", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
     assertThat(stores.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-    // 授権店舗の店舗ヘッダを名乗っても storeBridge を持たないため 403（TenantIdInterceptor fail-closed）。
+    // 授権店舗の店舗ヘッダを名乗っても storeBridge を持たないため 403（StoreIdInterceptor fail-closed）。
     ResponseEntity<String> orders =
         rest.exchange(
             "/store/orders",

@@ -16,7 +16,7 @@ import com.kizuna.order.api.dto.PlatformOrderResponse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.PlatformOrderView;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
+import com.kizuna.shared.storescope.StoreContext;
 import io.jsonwebtoken.Claims;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,8 +41,8 @@ class PlatformOrderServiceTest {
   @Mock OrderService orderService;
   @Mock OrderMapper orderMapper;
 
-  // create は実物の TenantContext を注入し、OrderService.create 呼び出し時点の tenantId を捕捉して検証する。
-  private final TenantContext tenantContext = new TenantContext();
+  // create は実物の StoreContext を注入し、OrderService.create 呼び出し時点の tenantId を捕捉して検証する。
+  private final StoreContext tenantContext = new StoreContext();
   private PlatformOrderService service;
 
   @BeforeEach
@@ -95,7 +95,7 @@ class PlatformOrderServiceTest {
         .isInstanceOf(AccessDeniedException.class);
 
     verify(orderService, never()).create(any());
-    assertThat(tenantContext.getTenantId()).isNull();
+    assertThat(tenantContext.getStoreId()).isNull();
   }
 
   @Test
@@ -106,11 +106,11 @@ class PlatformOrderServiceTest {
         .isInstanceOf(AccessDeniedException.class);
 
     verify(orderService, never()).create(any());
-    assertThat(tenantContext.getTenantId()).isNull();
+    assertThat(tenantContext.getStoreId()).isNull();
   }
 
   @Test
-  void createSetsTenantContextForAuthorizedStoreAndClearsAfter() {
+  void createSetsStoreContextForAuthorizedStoreAndClearsAfter() {
     authenticate("SPECIFIC_STORES", List.of(1));
     PlatformOrderCreateRequest req = requestForStore(1L);
     OrderResponse res = OrderResponse.builder().id("o1").build();
@@ -119,7 +119,7 @@ class PlatformOrderServiceTest {
     when(orderService.create(req))
         .thenAnswer(
             inv -> {
-              tenantAtCall.set(tenantContext.getTenantId());
+              tenantAtCall.set(tenantContext.getStoreId());
               return res;
             });
 
@@ -127,9 +127,9 @@ class PlatformOrderServiceTest {
 
     assertThat(result).isSameAs(res);
     assertThat(tenantAtCall.get())
-        .as("OrderService.create 呼び出し時点で TenantContext が storeId")
+        .as("OrderService.create 呼び出し時点で StoreContext が storeId")
         .isEqualTo(1L);
-    assertThat(tenantContext.getTenantId()).as("復帰後は finally で clear 済み").isNull();
+    assertThat(tenantContext.getStoreId()).as("復帰後は finally で clear 済み").isNull();
   }
 
   @Test
@@ -142,24 +142,24 @@ class PlatformOrderServiceTest {
     when(orderService.create(req))
         .thenAnswer(
             inv -> {
-              tenantAtCall.set(tenantContext.getTenantId());
+              tenantAtCall.set(tenantContext.getStoreId());
               return res;
             });
 
     service.create(req);
 
     assertThat(tenantAtCall.get()).isEqualTo(999L);
-    assertThat(tenantContext.getTenantId()).isNull();
+    assertThat(tenantContext.getStoreId()).isNull();
   }
 
   @Test
-  void createClearsTenantContextEvenWhenOrderServiceThrows() {
+  void createClearsStoreContextEvenWhenOrderServiceThrows() {
     authenticate("SPECIFIC_STORES", List.of(1));
     PlatformOrderCreateRequest req = requestForStore(1L);
 
     when(orderService.create(req)).thenThrow(new ServiceException("boom"));
 
     assertThatThrownBy(() -> service.create(req)).isInstanceOf(ServiceException.class);
-    assertThat(tenantContext.getTenantId()).as("例外時も finally で clear される").isNull();
+    assertThat(tenantContext.getStoreId()).as("例外時も finally で clear される").isNull();
   }
 }

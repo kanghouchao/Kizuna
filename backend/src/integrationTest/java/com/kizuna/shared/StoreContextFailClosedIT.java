@@ -16,14 +16,14 @@ import org.springframework.http.ResponseEntity;
 /**
  * 公開エンドポイントのテナント未解決時 fail-closed 化（#287）を本物の PostgreSQL/Redis で検証する統合テスト。
  *
- * <p>X-Store-ID ヘッダからテナント文脈を解決できないリクエストが、{@code @TenantOptional} の無いエンドポイント（casts/public）では 403
+ * <p>X-Store-ID ヘッダからテナント文脈を解決できないリクエストが、{@code @StoreOptional} の無いエンドポイント（casts/public）では 403
  * で拒否されることを固定する。
  *
  * <p><b>漏洩検証データに関する注記</b>: {@code t_casts.tenant_id} は {@code central_tenants(id)} への外部キーを持ち、シードには
  * tenant 1 しか存在しない（tenant 2 のデータは #285 の interceptor がクロステナントヘッダを拒否するため API 経由でも作れない）。 よって漏洩の的には
  * tenant A のアクティブなキャストを用いる。文脈を持たない匿名リクエストに対してそのデータが返らないことが、 fail-open（文脈未設定で全テナント行が返る）を閉じたことの実証になる。
  */
-class TenantContextFailClosedIT extends CrossTenantTestSupport {
+class StoreContextFailClosedIT extends CrossTenantTestSupport {
 
   private static final String CASTS_PUBLIC = "/store/casts/public";
 

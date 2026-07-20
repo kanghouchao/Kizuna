@@ -7,8 +7,8 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.tenancy.TenantContext;
-import com.kizuna.shared.tenancy.TenantScoped;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.tenant.domain.TenantRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -26,10 +26,10 @@ public class CustomerService {
 
   private final CustomerRepository customerRepository;
   private final CustomerMapper customerMapper;
-  private final TenantContext tenantContext;
+  private final StoreContext tenantContext;
   private final TenantRepository tenantRepository;
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public Page<CustomerResponse> list(
       String search, String rank, String classification, Pageable pageable) {
@@ -68,7 +68,7 @@ public class CustomerService {
     return (value == null || value.isBlank()) ? null : value;
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional(readOnly = true)
   public CustomerResponse get(String id) {
     return customerRepository
@@ -77,21 +77,21 @@ public class CustomerService {
         .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public CustomerResponse create(CustomerCreateRequest request) {
     Customer customer = customerMapper.toEntity(request);
 
     customer.setStoreId(
         tenantRepository
-            .findById(tenantContext.getTenantId())
+            .findById(tenantContext.getStoreId())
             .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
             .getId());
 
     return customerMapper.toResponse(customerRepository.save(customer));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public CustomerResponse update(String id, CustomerUpdateRequest request) {
     Customer customer =
@@ -104,7 +104,7 @@ public class CustomerService {
     return customerMapper.toResponse(customerRepository.save(customer));
   }
 
-  @TenantScoped
+  @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!customerRepository.existsById(id)) {
