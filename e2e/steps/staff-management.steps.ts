@@ -1,10 +1,10 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { CENTRAL_URL } from '../base-url';
+import { PLATFORM_URL } from '../base-url';
 
 const { When, Then } = createBdd();
 
-const STAFF_URL = `${CENTRAL_URL}/central/staff`;
+const STAFF_URL = `${PLATFORM_URL}/platform/staff`;
 
 // 作成する氏名はシナリオごとに一意化する（過去 run の残骸との重複＝strict モード違反を避ける。
 // platform-login.steps.ts の createCast 手法に倣う、前提事実 25）。

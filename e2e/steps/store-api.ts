@@ -15,7 +15,7 @@ export const ADMIN_PASSWORD = 'pass';
  * ログインし JWT を返す。返却トークンは TENANT_HEADERS（X-Role/X-Store-ID）と併用することで
  * /store/** に店舗文脈を確立できる（STORE_BRIDGE_ROLES ブリッジ）。/platform/login は CSRF 免除。
  */
-export async function loginAsTenantAdmin(request: APIRequestContext): Promise<string> {
+export async function loginAsStoreAdmin(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/platform/login', {
     data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });

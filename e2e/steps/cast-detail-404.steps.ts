@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { createCast, deleteCast, loginAsTenantAdmin } from './tenant-api';
+import { createCast, deleteCast, loginAsStoreAdmin } from './store-api';
 
 const { Given, Then, After } = createBdd();
 
@@ -11,7 +11,7 @@ let createdCastId = '';
 let createdCastName = '';
 
 Given('店舗 {string} にキャスト {string} を作成する', async ({ request }, _store: string, name: string) => {
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   createdCastId = await createCast(request, token, name);
   createdCastName = name;
 });
@@ -37,7 +37,7 @@ Then('店舗に属さないキャスト ID の詳細ページは 404 になる',
 // 播種した cast を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。
 // 復元 hook 自身が独立してログインし直すため、テスト側の状態に依存しない。ベストエフォート。
 After({ tags: '@cast-detail-404' }, async ({ request }) => {
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   await deleteCast(request, token, createdCastId).catch(() => {});
   createdCastId = '';
   createdCastName = '';

@@ -1,14 +1,14 @@
 import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { CENTRAL_URL } from '../base-url';
+import { PLATFORM_URL } from '../base-url';
 import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   TENANT_HEADERS,
   deleteCast,
   deleteCastFieldDefinition,
-  loginAsTenantAdmin,
-} from './tenant-api';
+  loginAsStoreAdmin,
+} from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -18,7 +18,7 @@ const { Given, When, Then, After } = createBdd();
 // の _label 引数と同じ扱い）。
 let createdFieldKey = '';
 let createdFieldLabel = '';
-// キャストの編集画面遷移時、一覧行の編集リンク（/tenant/casts/{id}/edit）から id を取り出して
+// キャストの編集画面遷移時、一覧行の編集リンク（/store/casts/{id}/edit）から id を取り出して
 // 後続の公開詳細ページ遷移・After での削除に使う（作成ステップは cast-detail-404.steps.ts の
 // 既存 Given を再利用するため、その内部状態にはここから直接アクセスできない）。
 let currentCastId = '';
@@ -44,14 +44,14 @@ async function addFieldDefinition(page: Page, rawKey: string, rawLabel: string, 
 }
 
 Given('キャストカスタムフィールド管理画面を開く', async ({ page }) => {
-  // 統一ログイン（/platform/login）は central ドメインで提供され、店長ロールのセッションも
-  // central ドメイン上のまま /tenant/* を操作する（store-settings.steps.ts と同じ）。
-  await page.goto(`${CENTRAL_URL}/platform/login`);
+  // 統一ログイン（/platform/login）は platform ドメインで提供され、店長ロールのセッションも
+  // platform ドメイン上のまま /store/* を操作する（store-settings.steps.ts と同じ）。
+  await page.goto(`${PLATFORM_URL}/platform/login`);
   await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).toHaveURL(/\/tenant\/dashboard\/?$/, { timeout: 15000 });
-  await page.goto(`${CENTRAL_URL}/tenant/casts/fields`);
+  await expect(page).toHaveURL(/\/store\/dashboard\/?$/, { timeout: 15000 });
+  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
   await expect(page.getByRole('button', { name: 'フィールドを追加', exact: true })).toBeVisible();
 });
 
@@ -79,12 +79,12 @@ When(
   '{string} の編集画面で {string} に {string} と入力して保存する',
   async ({ page }, castName: string, _fieldLabel: string, value: string) => {
     currentCastName = castName;
-    await page.goto(`${CENTRAL_URL}/tenant/casts`);
+    await page.goto(`${PLATFORM_URL}/store/casts`);
     const row = page.getByRole('row', { name: new RegExp(castName) });
     await expect(row).toBeVisible({ timeout: 15000 });
     const editLink = row.locator('a[href$="/edit"]');
     const href = await editLink.getAttribute('href');
-    currentCastId = href?.match(/\/tenant\/casts\/([^/]+)\/edit/)?.[1] ?? '';
+    currentCastId = href?.match(/\/store\/casts\/([^/]+)\/edit/)?.[1] ?? '';
     await editLink.click();
 
     await expect(page.getByRole('heading', { name: 'キャスト編集', exact: true })).toBeVisible();
@@ -126,7 +126,7 @@ Then(
 );
 
 When('キャストカスタムフィールド管理画面で {string} を削除する', async ({ page }, _label: string) => {
-  await page.goto(`${CENTRAL_URL}/tenant/casts/fields`);
+  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
   const row = page.getByRole('row', { name: new RegExp(createdFieldLabel) });
   await expect(row).toBeVisible({ timeout: 15000 });
   page.once('dialog', dialog => dialog.accept());
@@ -142,7 +142,7 @@ Then('フィールド一覧から {string} が消える', async ({ page }, _labe
 // フィールド定義は UI 経由で作成するため id を直接持たず、key で一覧を照会して特定する。
 // シナリオ2は本文中で UI から既に削除済みのため、その場合は該当なしで何もしない（ベストエフォート）。
 After({ tags: '@cast-custom-fields' }, async ({ request }) => {
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   if (currentCastId) {
     await deleteCast(request, token, currentCastId).catch(() => {});
   }

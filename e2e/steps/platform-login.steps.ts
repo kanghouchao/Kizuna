@@ -1,15 +1,15 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { CENTRAL_URL } from '../base-url';
-import { createCast, deleteCast, loginAsTenantAdmin } from './tenant-api';
+import { PLATFORM_URL } from '../base-url';
+import { createCast, deleteCast, loginAsStoreAdmin } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
-// 統一ログインは central ドメイン（kizuna.test）で提供され、店舗ロールのセッションも
-// 平台 cookie + X-Store-ID 注入で central ドメイン上のまま /tenant/* を操作する（#324 D8/D9）。
-// cookie はオリジン別に分離されるため、ログイン後の遷移先も含め常に CENTRAL_URL を用いる。
-const PLATFORM_LOGIN_URL = `${CENTRAL_URL}/platform/login`;
-const CASTS_URL = `${CENTRAL_URL}/tenant/casts`;
+// 統一ログインは platform ドメイン（kizuna.test）で提供され、店舗ロールのセッションも
+// 平台 cookie + X-Store-ID 注入で platform ドメイン上のまま /store/* を操作する（#324 D8/D9）。
+// cookie はオリジン別に分離されるため、ログイン後の遷移先も含め常に PLATFORM_URL を用いる。
+const PLATFORM_LOGIN_URL = `${PLATFORM_URL}/platform/login`;
+const CASTS_URL = `${PLATFORM_URL}/store/casts`;
 
 // Header の店舗切替ドロップダウンは Headless UI Menu（唯一の aria-haspopup 要素）。
 // アカウントメニューは group-hover の素の要素で aria-haspopup を持たないため一意に特定できる。
@@ -40,7 +40,7 @@ Given('統一ログイン画面を開く', async ({ page }) => {
 Given('店舗1に一意なキャスト {string} を API で登録する', async ({ request }, baseName: string) => {
   // 一意名で作成し、失敗した過去 run の残骸との重複（strict モード違反）を避ける（前提事実 25）。
   createdCastName = `${baseName}-${Date.now()}`;
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   createdCastId = await createCast(request, token, createdCastName);
 });
 
@@ -54,11 +54,11 @@ When(
 );
 
 Then('中央ダッシュボードへ遷移する', async ({ page }) => {
-  await expect(page).toHaveURL(/\/central\/dashboard\/?$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 15000 });
 });
 
 Then('店舗ダッシュボードへ遷移する', async ({ page }) => {
-  await expect(page).toHaveURL(/\/tenant\/dashboard\/?$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/store\/dashboard\/?$/, { timeout: 15000 });
 });
 
 Then(
@@ -109,7 +109,7 @@ Then('キャスト一覧に {string} が表示されない', async ({ page }, _l
 // 復元 hook 自身が独立してログインし直すため、テスト側の状態に依存しない。ベストエフォート。
 After({ tags: '@platform-login-store-switch' }, async ({ request }) => {
   if (!createdCastId) return;
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   await deleteCast(request, token, createdCastId).catch(() => {});
   createdCastId = '';
   createdCastName = '';

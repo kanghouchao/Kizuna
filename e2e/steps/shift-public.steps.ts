@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { createCast, createShift, deleteCast, deleteShift, loginAsTenantAdmin } from './tenant-api';
+import { createCast, createShift, deleteCast, deleteShift, loginAsStoreAdmin } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -18,7 +18,7 @@ let createdCastIds: string[] = [];
 Given(
   '店舗 {string} に出勤表検証用のシフトデータを準備する',
   async ({ request }, _store: string) => {
-    const token = await loginAsTenantAdmin(request);
+    const token = await loginAsStoreAdmin(request);
     const today = todayInTokyo();
     const yesterday = yesterdayInTokyo();
 
@@ -79,7 +79,7 @@ Then('出勤表にキャスト {string} が表示されない', async ({ page },
 // 播種データを無条件で片付ける（テスト失敗・途中クラッシュでも実行）。
 // 復元 hook 自身が独立してログインし直すため、テスト側の状態に依存しない。ベストエフォート。
 After(async ({ request }) => {
-  const token = await loginAsTenantAdmin(request);
+  const token = await loginAsStoreAdmin(request);
   for (const id of createdShiftIds) {
     await deleteShift(request, token, id).catch(() => {});
   }
