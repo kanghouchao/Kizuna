@@ -19,9 +19,9 @@ class CapabilityTest {
   }
 
   @Test
-  @DisplayName("CENTRAL コンソールの能力は中央管理系の 5 個")
-  void centralCapabilities() {
-    assertThat(byConsole(Capability.Console.CENTRAL))
+  @DisplayName("PLATFORM コンソールの能力はプラットフォーム管理系の 5 個")
+  void platformCapabilities() {
+    assertThat(byConsole(Capability.Console.PLATFORM))
         .containsExactlyInAnyOrder(
             Capability.STORE_MANAGE,
             Capability.STAFF_MANAGE,

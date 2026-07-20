@@ -33,12 +33,12 @@ class StoreIdInterceptorTest {
     SecurityContextHolder.clearContext();
   }
 
-  /** 認証済みだが storeId claim を持たない Claims（央端 / legacy）を模擬する。 */
+  /** 認証済みだが storeId claim を持たない Claims（プラットフォーム / legacy）を模擬する。 */
   private void authenticateWithoutStoreId() {
-    Claims claims = Jwts.claims().issuer("CentralAuth").build();
+    Claims claims = Jwts.claims().issuer("PlatformAuth").build();
     PreAuthenticatedAuthenticationToken authentication =
         new PreAuthenticatedAuthenticationToken(
-            "user", "token", List.of(new SimpleGrantedAuthority("CENTRAL_USER")));
+            "user", "token", List.of(new SimpleGrantedAuthority("PLATFORM_USER")));
     authentication.setDetails(claims);
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
@@ -72,7 +72,7 @@ class StoreIdInterceptorTest {
   @DisplayName("X-Role が store でなければ店舗文脈を設定せず、@StoreOptional の無いハンドラは 403 で拒否すること")
   void preHandle_ignoresNonStoreRole() {
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "central");
+    request.addHeader("X-Role", "platform");
     request.addHeader("X-Store-ID", "42");
     MockHttpServletResponse response = new MockHttpServletResponse();
 

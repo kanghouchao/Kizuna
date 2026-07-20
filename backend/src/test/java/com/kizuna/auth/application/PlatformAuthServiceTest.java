@@ -318,7 +318,7 @@ class PlatformAuthServiceTest {
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
-    assertThat(res.get().console()).isEqualTo("central");
+    assertThat(res.get().console()).isEqualTo("platform");
     assertThat(res.get().capabilities()).contains("STORE_MANAGE", "STAFF_MANAGE");
   }
 

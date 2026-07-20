@@ -212,10 +212,10 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
             String.class);
     assertThat(casts.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-    // 中央端点にも到達できない（CENTRAL 能力なし）。
-    ResponseEntity<String> central =
+    // プラットフォーム端点にも到達できない（PLATFORM 能力なし）。
+    ResponseEntity<String> platform =
         rest.exchange(
             "/platform/stores", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
-    assertThat(central.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(platform.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 }

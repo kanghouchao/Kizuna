@@ -294,7 +294,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
 
   @Test
   @DisplayName("HQ は /platform/stores へ過橋でき、店長は STORE_MANAGE なしのため 403 になること")
-  void hqBridgesToCentralButManagerDoesNot() {
+  void hqBridgesToPlatformButManagerDoesNot() {
     ResponseEntity<String> hq =
         rest.exchange(
             "/platform/stores",
@@ -403,13 +403,13 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("統合前の旧メニュー端点 GET /central/menus/me・/store/menus/me は 404 になること")
   void oldMenuEndpointsAreGone() {
-    ResponseEntity<String> central =
+    ResponseEntity<String> legacyMenu =
         rest.exchange(
             "/central/menus/me",
             HttpMethod.GET,
             new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
             String.class);
-    assertThat(central.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(legacyMenu.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     ResponseEntity<String> store =
         rest.exchange(

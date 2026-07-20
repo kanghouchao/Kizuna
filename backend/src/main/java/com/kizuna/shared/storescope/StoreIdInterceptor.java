@@ -68,9 +68,9 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       }
       // ヘッダ不備（X-Role 欠落・非数値含む）は店舗文脈なし → 末尾の @StoreOptional 判定へ落とす。
     } else if (claims != null) {
-      // 認証済みだが storeId claim を持たない（央端 CentralAuth 発行、または storeId 無しの legacy）。
+      // 認証済みだが storeId claim を持たない（プラットフォーム PlatformAuth 発行、または storeId 無しの legacy）。
       // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する（#294）。詐称ヘッダが無ければ下の
-      // @StoreOptional 判定に委ね、央端の正当な素通り（例: /files/upload の central 保存）を保つ。
+      // @StoreOptional 判定に委ね、プラットフォームの正当な素通り（例: /files/upload の platform 保存）を保つ。
       if (claimsStoreHeaderPresent) {
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         return false;
