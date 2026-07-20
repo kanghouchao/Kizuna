@@ -23,7 +23,7 @@ import './theme.css';
  */
 export default async function DefaultTemplate() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
 
   // テナントIDは service 内部で解決されるため、引数不要
   const { casts, siteConfig } = await storefrontService.getPageData();
@@ -34,13 +34,13 @@ export default async function DefaultTemplate() {
       style={{ background: 'var(--storefront-bg)' }}
     >
       {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
-      <AgeGate storeName={tenantName} />
+      <AgeGate storeName={storeName} />
 
-      <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
+      <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
 
       <main className="grow">
         <Banner
-          tenantName={tenantName}
+          storeName={storeName}
           bannerUrl={siteConfig.banner_url}
           description={siteConfig.description}
         />
@@ -68,7 +68,7 @@ export default async function DefaultTemplate() {
       </main>
 
       <Footer
-        tenantName={tenantName}
+        storeName={storeName}
         snsLinks={siteConfig.sns_links}
         partnerLinks={siteConfig.partner_links}
       />

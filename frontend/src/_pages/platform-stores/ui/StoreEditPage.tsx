@@ -6,13 +6,13 @@ import { useAuth } from '@/entities/user';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
 import toast from 'react-hot-toast';
 
-export default function EditTenantPage() {
+export default function EditStorePage() {
   const id = useParams<{ id: string }>()?.id;
   const router = useRouter();
   const { logout } = useAuth();
 
   const [saving, setSaving] = useState(false);
-  const [tenant, setTenant] = useState<Store | null>(null);
+  const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<UpdateStoreRequest>({
     name: '',
@@ -20,23 +20,23 @@ export default function EditTenantPage() {
   });
   const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
 
-  const loadTenant = useCallback(
-    async (tenantId: string) => {
+  const loadStore = useCallback(
+    async (storeId: string) => {
       if (!id) {
         toast.error('店舗情報の取得できませんでした');
         return;
       }
       try {
         setLoading(true);
-        const res = await platformStoreApi.getById(tenantId);
+        const res = await platformStoreApi.getById(storeId);
         const t = res as unknown as Store;
-        setTenant(t);
+        setStore(t);
         setFormData({
           name: t.name,
           email: t.email,
         });
       } catch (e) {
-        console.error('Error loading tenant:', e);
+        console.error('Error loading store:', e);
         toast.error('店舗情報の取得に失敗しました');
       } finally {
         setLoading(false);
@@ -47,9 +47,9 @@ export default function EditTenantPage() {
 
   useEffect(() => {
     if (id) {
-      loadTenant(id);
+      loadStore(id);
     }
-  }, [id, loadTenant]);
+  }, [id, loadStore]);
 
   const validate = (): boolean => {
     const next: Partial<UpdateStoreRequest> = {};
@@ -63,11 +63,11 @@ export default function EditTenantPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenant) return;
+    if (!store) return;
     if (!validate()) return;
     setSaving(true);
     try {
-      await platformStoreApi.update(tenant.id, formData);
+      await platformStoreApi.update(store.id, formData);
       toast.success('店舗情報を更新しました');
       router.push('/platform/stores');
     } catch (err: any) {
@@ -158,12 +158,12 @@ export default function EditTenantPage() {
                 </div>
 
                 {/* ドメイン（読み取り専用） */}
-                {tenant && (
+                {store && (
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">関連ドメイン</h4>
-                    {tenant.domains && tenant.domains.length > 0 ? (
+                    {store.domains && store.domains.length > 0 ? (
                       <ul className="list-disc ml-6 text-sm text-gray-700">
-                        {tenant.domains.map(d => (
+                        {store.domains.map(d => (
                           <li key={d} className="break-all">
                             {d}
                           </li>

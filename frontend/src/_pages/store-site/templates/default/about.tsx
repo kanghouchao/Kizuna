@@ -10,7 +10,7 @@ import './theme.css';
 /** 店舗情報・アクセスページ（default 模版）。 */
 export default async function DefaultAboutPage() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const siteConfig = await storefrontService.fetchSiteConfig();
 
   return (
@@ -18,8 +18,8 @@ export default async function DefaultAboutPage() {
       className="storefront-default min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
-      <AgeGate storeName={tenantName} />
-      <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
+      <AgeGate storeName={storeName} />
+      <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
       <main className="grow">
         <PageHero title="店舗情報・アクセス" />
         <StoreInfoSection
@@ -28,7 +28,7 @@ export default async function DefaultAboutPage() {
         />
       </main>
       <Footer
-        tenantName={tenantName}
+        storeName={storeName}
         snsLinks={siteConfig.sns_links}
         partnerLinks={siteConfig.partner_links}
       />

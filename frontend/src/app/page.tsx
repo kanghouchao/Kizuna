@@ -12,13 +12,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const role = cookieStore.get('x-mw-role')?.value;
 
   if (role === 'store') {
-    const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+    const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
     return {
-      title: tenantName,
-      description: `${tenantName}の公式サイトです。キャスト情報やキャンペーン情報をご覧いただけます。`,
+      title: storeName,
+      description: `${storeName}の公式サイトです。キャスト情報やキャンペーン情報をご覧いただけます。`,
       openGraph: {
-        title: tenantName,
-        description: `${tenantName}の公式サイトです。`,
+        title: storeName,
+        description: `${storeName}の公式サイトです。`,
         type: 'website',
       },
     };

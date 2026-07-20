@@ -1,5 +1,5 @@
 interface BannerProps {
-  tenantName: string;
+  storeName: string;
   bannerUrl?: string;
   description?: string;
 }
@@ -17,7 +17,7 @@ function sanitizeBannerUrl(url: string | undefined): string | undefined {
   return undefined;
 }
 
-export default function Banner({ tenantName, bannerUrl, description }: BannerProps) {
+export default function Banner({ storeName, bannerUrl, description }: BannerProps) {
   const safeBannerUrl = sanitizeBannerUrl(bannerUrl);
 
   return (
@@ -66,7 +66,7 @@ export default function Banner({ tenantName, bannerUrl, description }: BannerPro
           className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-light tracking-[0.12em] sm:tracking-[0.15em] text-[var(--storefront-fg)] mb-3 md:mb-4"
           style={{ fontFamily: 'var(--storefront-font-display)' }}
         >
-          {tenantName}
+          {storeName}
         </h1>
 
         {/* ゴールド区切り */}

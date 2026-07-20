@@ -11,11 +11,11 @@ export async function storeSiteMetadata(pageTitle?: string): Promise<Metadata> {
     return { title: 'Kizuna Platform' };
   }
 
-  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
-  const title = pageTitle ? `${pageTitle}｜${tenantName}` : tenantName;
+  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+  const title = pageTitle ? `${pageTitle}｜${storeName}` : storeName;
   const description = pageTitle
-    ? `${tenantName}の${pageTitle}ページです。`
-    : `${tenantName}の公式サイトです。キャスト情報やキャンペーン情報をご覧いただけます。`;
+    ? `${storeName}の${pageTitle}ページです。`
+    : `${storeName}の公式サイトです。キャスト情報やキャンペーン情報をご覧いただけます。`;
 
   return {
     title,

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { CreateStoreRequest, platformStoreApi } from '@/entities/store';
 import toast from 'react-hot-toast';
 
-export default function CreateTenantPage() {
+export default function CreateStorePage() {
   const { logout } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
