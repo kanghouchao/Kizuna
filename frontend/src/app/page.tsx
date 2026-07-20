@@ -40,7 +40,7 @@ export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  // 平台セッションがあれば、コンソール値に応じて自動遷移する（#324/#398 — cookie 値は central/store）
+  // 平台セッションがあれば、コンソール値に応じて自動遷移する（#324/#398 — cookie 値は platform/store）
   const platformConsole = cookieStore.get('platform-role')?.value;
   if (platformConsole) {
     const platformToken = cookieStore.get('token')?.value;

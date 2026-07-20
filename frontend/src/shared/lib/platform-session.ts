@@ -1,7 +1,7 @@
 import Cookies from 'js-cookie';
 
 // cookie 名は互換のため platform-role のまま。#398 以降、値は固定ロール名ではなく
-// コンソール値（central / store — /me の console、サーバ側が能力目録から導出）を保存する。
+// コンソール値（platform / store — /me の console、サーバ側が能力目録から導出）を保存する。
 const PLATFORM_ROLE_COOKIE = 'platform-role';
 const PLATFORM_STORE_ID_COOKIE = 'platform-store-id';
 

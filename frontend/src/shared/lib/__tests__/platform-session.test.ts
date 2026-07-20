@@ -15,8 +15,8 @@ describe('platform-session', () => {
   });
 
   it('startPlatformSession sets the platform-role cookie, readable via getPlatformConsole', () => {
-    startPlatformSession('central');
-    expect(getPlatformConsole()).toBe('central');
+    startPlatformSession('platform');
+    expect(getPlatformConsole()).toBe('platform');
   });
 
   it('setPlatformStore sets the platform-store-id cookie, readable via getPlatformStoreId', () => {
@@ -31,7 +31,7 @@ describe('platform-session', () => {
   });
 
   it('clearPlatformSession removes both cookies', () => {
-    startPlatformSession('central');
+    startPlatformSession('platform');
     setPlatformStore(1);
     clearPlatformSession();
     expect(getPlatformConsole()).toBeUndefined();
@@ -40,7 +40,7 @@ describe('platform-session', () => {
 
   it('isStoreConsole is true only for the store console value', () => {
     expect(isStoreConsole('store')).toBe(true);
-    expect(isStoreConsole('central')).toBe(false);
+    expect(isStoreConsole('platform')).toBe(false);
     expect(isStoreConsole('none')).toBe(false);
     // 旧形式（ロール名）の cookie が残っていても店舗文脈を確立しない（fail-closed）。
     expect(isStoreConsole('STORE_MANAGER')).toBe(false);
@@ -51,9 +51,9 @@ describe('platform-session', () => {
     const setSpy = jest.spyOn(Cookies, 'set');
     const expiresAt = Date.now() + 60_000;
 
-    startPlatformSession('central', expiresAt);
+    startPlatformSession('platform', expiresAt);
 
-    expect(setSpy).toHaveBeenCalledWith('platform-role', 'central', {
+    expect(setSpy).toHaveBeenCalledWith('platform-role', 'platform', {
       expires: new Date(expiresAt),
     });
     setSpy.mockRestore();

@@ -33,7 +33,7 @@ export type PlatformCapability =
   | 'STORE_MENU_VIEW';
 
 // ログイン後の着地先（サーバ側が能力目録から導出する — /me の console）
-export type PlatformConsole = 'central' | 'store' | 'none';
+export type PlatformConsole = 'platform' | 'store' | 'none';
 
 // 平台ユーザーの店舗作用域種別
 export type PlatformStoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';

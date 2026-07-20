@@ -54,7 +54,7 @@ export function Sidebar() {
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
-    // 平台セッションがあれば優先する（コンソール値: central / store — #324/#398）
+    // 平台セッションがあれば優先する（コンソール値: platform / store — #324/#398）
     const platformConsole = getPlatformConsole();
     if (platformConsole) {
       setRole(isStoreConsole(platformConsole) ? 'store' : 'platform');

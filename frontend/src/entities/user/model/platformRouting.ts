@@ -8,7 +8,7 @@ export type PlatformDestination = 'platform' | 'store' | 'unsupported';
  */
 export function resolvePlatformDestination(platformConsole: PlatformConsole): PlatformDestination {
   switch (platformConsole) {
-    case 'central':
+    case 'platform':
       return 'platform';
     case 'store':
       return 'store';

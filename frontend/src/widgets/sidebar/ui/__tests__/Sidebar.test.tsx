@@ -31,9 +31,9 @@ describe('Sidebar', () => {
     expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
   });
 
-  it('central コンソール cookie でも同一 menuApi が呼ばれる', async () => {
+  it('platform コンソール cookie でも同一 menuApi が呼ばれる', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'platform-role') return 'central';
+      if (key === 'platform-role') return 'platform';
       return undefined;
     });
 

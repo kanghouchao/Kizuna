@@ -5,7 +5,7 @@ import {
   CastInvitationDetailResponse,
 } from '../model/types';
 
-/** 招待受諾の公開 API（/platform/cast-invitations 配下、TenantIdInterceptor を通らない）。 */
+/** 招待受諾の公開 API（/platform/cast-invitations 配下、StoreIdInterceptor を通らない）。 */
 export const castInvitationAcceptanceApi = {
   /** 招待を照会する */
   view: async (token: string): Promise<CastInvitationDetailResponse> => {
