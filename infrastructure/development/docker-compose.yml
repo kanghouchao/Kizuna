@@ -134,7 +134,7 @@ services:
       - "./traefik/:/etc/traefik/:ro"
     networks:
       network:
-        # E2E（issue #247）が Host ヘッダで tenant/central を解決できるよう、
+        # E2E（issue #247）が Host ヘッダで store/platform を解決できるよう、
         # gateway に跨プロジェクトで解決可能な network alias を付与する。
         aliases:
           - store1.kizuna.test

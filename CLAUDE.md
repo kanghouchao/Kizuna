@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A multi-tenant CMS/CRM/HRM system for running the operations of multiple stores under a single group.
+A platform CMS/CRM/HRM system for running the operations of multiple stores under a single group.
 
 - Backend: Java 21, Spring Boot 3.5+, JUnit 5, Jacoco, Lombok, MapStruct
 - Frontend: TypeScript 5.9, React 19, Next.js 16+, Jest, ESLint, Prettier
@@ -13,10 +13,10 @@ Java is pinned to 21 by `backend/.java-version` (jenv, effective under `backend/
 
 ## Domain Glossary
 
-- **Central** = group HQ scope; **Store** = per-shop tenant scope. Store-side vocabulary uses the Store prefix (StoreUser, StoreProfile).
+- **Central** is retired as a structural concept — it survives only as the former name of the platform-management capability group (`Capability.Console.PLATFORM`). Behavior follows role (capability bundle); data follows store (`StoreScope`). Accounts are unified as **PlatformUser**; store-side vocabulary uses the Store prefix (e.g. StoreProfile).
 - The customer-visit aggregate is **Order** — never Reservation or Booking.
 - **CentralMenu and StoreMenu were unified into a single platform Menu aggregate** (decided 2026-07-18, #404 decision 2).
-- **StoreProfile** = store-facing display settings; **SystemConfig** = central-side system settings. Do not mix.
+- **StoreProfile** = store-facing display settings; **SystemConfig** = platform-level system settings, managed by SYSTEM_CONFIG_MANAGE capability holders. Do not mix.
 
 ## Language Policy
 
