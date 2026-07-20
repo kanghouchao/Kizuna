@@ -16,7 +16,7 @@ export default function CustomerCreatePage() {
       setIsSubmitting(true);
       await customerApi.create(toCustomerRequest(data));
       toast.success('顧客を登録しました');
-      router.push('/tenant/customers');
+      router.push('/store/customers');
     } catch {
       toast.error('顧客の登録に失敗しました');
     } finally {

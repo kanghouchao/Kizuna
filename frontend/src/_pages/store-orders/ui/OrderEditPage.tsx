@@ -25,7 +25,7 @@ export default function EditOrderPage() {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       toast.success('オーダーを更新しました');
-      router.push('/tenant/orders');
+      router.push('/store/orders');
     } catch (error) {
       toast.error('オーダーの更新に失敗しました');
     } finally {

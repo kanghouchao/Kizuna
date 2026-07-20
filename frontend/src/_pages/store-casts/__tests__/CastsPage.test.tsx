@@ -132,14 +132,14 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
     mockedCastApi.list.mockResolvedValue(toPage([cast]));
   });
 
-  it('CAST_FIELD_DEF_MANAGE 能力があれば定義管理ページ(/tenant/casts/fields)への入口リンクが表示されること', async () => {
+  it('CAST_FIELD_DEF_MANAGE 能力があれば定義管理ページ(/store/casts/fields)への入口リンクが表示されること', async () => {
     mockedMe.mockResolvedValue(meWith(['CAST_MANAGE', 'CAST_FIELD_DEF_MANAGE']));
 
     render(<CastListPage />);
     await screen.findByText('花子');
 
     const link = await screen.findByRole('link', { name: 'カスタムフィールド管理' });
-    expect(link).toHaveAttribute('href', '/tenant/casts/fields');
+    expect(link).toHaveAttribute('href', '/store/casts/fields');
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力が無ければ定義管理ページへの入口リンクが表示されないこと', async () => {

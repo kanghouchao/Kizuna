@@ -24,7 +24,7 @@ export default function CustomerEditPage() {
         setCustomer(data);
       } catch {
         toast.error('顧客情報の取得に失敗しました');
-        router.push('/tenant/customers');
+        router.push('/store/customers');
         return;
       } finally {
         setIsLoading(false);
@@ -45,7 +45,7 @@ export default function CustomerEditPage() {
       setIsSubmitting(true);
       await customerApi.update(id, toCustomerRequest(data));
       toast.success('顧客情報を更新しました');
-      router.push('/tenant/customers');
+      router.push('/store/customers');
     } catch {
       toast.error('顧客情報の更新に失敗しました');
     } finally {

@@ -47,16 +47,16 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
-  it('redirects to / when accessing /tenant without token', () => {
-    const req = createRequest('/tenant/orders', false);
+  it('redirects to / when accessing /store without token', () => {
+    const req = createRequest('/store/orders', false);
     const res = handleRouteProtection(req, 'tenant');
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/' }));
     expect(res).not.toBeNull();
   });
 
-  it('allows access to /tenant with token', () => {
-    const req = createRequest('/tenant/orders', true);
+  it('allows access to /store with token', () => {
+    const req = createRequest('/store/orders', true);
     const res = handleRouteProtection(req, 'tenant');
 
     expect(res).toBeNull();

@@ -22,7 +22,7 @@ export default function CastEditPage() {
         setCast(data);
       } catch {
         toast.error('キャスト情報の取得に失敗しました');
-        router.push('/tenant/casts');
+        router.push('/store/casts');
       } finally {
         setIsLoading(false);
       }
@@ -48,7 +48,7 @@ export default function CastEditPage() {
       };
       await castApi.update(id, requestData);
       toast.success('キャスト情報を更新しました');
-      router.push('/tenant/casts');
+      router.push('/store/casts');
     } catch {
       toast.error('キャスト情報の更新に失敗しました');
     } finally {

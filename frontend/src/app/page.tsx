@@ -45,7 +45,7 @@ export default async function Home() {
   if (platformConsole) {
     const platformToken = cookieStore.get('token')?.value;
     if (!platformToken) {
-      // token 失効後も platform-role cookie が残っていると /tenant・/platform のガードと無限リダイレクトになるため、先に検出する
+      // token 失効後も platform-role cookie が残っていると /store・/platform のガードと無限リダイレクトになるため、先に検出する
       redirect('/platform/login');
     }
     const destination = resolvePlatformDestination(platformConsole as PlatformConsole);
@@ -53,7 +53,7 @@ export default async function Home() {
       redirect('/platform/dashboard/');
     }
     if (destination === 'store') {
-      redirect('/tenant/dashboard/');
+      redirect('/store/dashboard/');
     }
   }
 
