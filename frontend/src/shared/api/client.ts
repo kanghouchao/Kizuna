@@ -3,8 +3,7 @@ import Cookies from 'js-cookie';
 import {
   clearPlatformSession,
   getPlatformConsole,
-  getPlatformStoreId,
-  isStoreConsole,
+  getStoreIdFromPath,
   redirectToLogin,
 } from '@/shared/lib';
 
@@ -33,13 +32,9 @@ apiClient.interceptors.request.use(
     try {
       const platformConsole = getPlatformConsole();
       if (platformConsole) {
-        const storeId = getPlatformStoreId();
+        const storeId = getStoreIdFromPath(window.location.pathname);
         const url = config.url || '';
-        if (
-          isStoreConsole(platformConsole) &&
-          storeId &&
-          (url.startsWith('/store') || url.startsWith('/files'))
-        ) {
+        if (storeId && (url.startsWith('/store') || url.startsWith('/files'))) {
           (config.headers as any)['X-Role'] = 'store';
           (config.headers as any)['X-Store-ID'] = storeId;
         }
