@@ -47,7 +47,7 @@ export default function PlatformLoginForm() {
         }
         startPlatformSession(me.console, expires_at);
         setPlatformStore(stores[0].id, expires_at);
-        router.push('/store/dashboard/');
+        router.push(`/store/${stores[0].id}/dashboard/`);
         return;
       }
 
