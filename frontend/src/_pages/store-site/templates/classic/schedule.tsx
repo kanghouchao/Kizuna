@@ -10,7 +10,7 @@ import './theme.css';
 /** 出勤表ページ（classic 模版）。 */
 export default async function ClassicSchedulePage() {
   const cookieStore = await cookies();
-  const tenantName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
   const [siteConfig, shifts] = await Promise.all([
     storefrontService.fetchSiteConfig(),
     storefrontService.fetchShifts(),
@@ -21,14 +21,14 @@ export default async function ClassicSchedulePage() {
       className="storefront-classic min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
-      <AgeGate storeName={tenantName} />
-      <Header tenantName={tenantName} logoUrl={siteConfig.logo_url} />
+      <AgeGate storeName={storeName} />
+      <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
       <main className="grow">
         <PageHero title="出勤表" />
         <ScheduleSection shifts={shifts} />
       </main>
       <Footer
-        tenantName={tenantName}
+        storeName={storeName}
         snsLinks={siteConfig.sns_links}
         partnerLinks={siteConfig.partner_links}
       />

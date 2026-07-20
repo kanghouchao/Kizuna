@@ -4,7 +4,7 @@ import { PLATFORM_URL } from '../base-url';
 import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
-  TENANT_HEADERS,
+  STORE_HEADERS,
   deleteCast,
   deleteCastFieldDefinition,
   loginAsStoreAdmin,
@@ -148,7 +148,7 @@ After({ tags: '@cast-custom-fields' }, async ({ request }) => {
   }
   if (createdFieldKey) {
     const res = await request.get('/api/store/casts/fields', {
-      headers: { ...TENANT_HEADERS, Authorization: `Bearer ${token}` },
+      headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     });
     if (res.ok()) {
       const definitions = (await res.json()) as { id: string; key: string }[];

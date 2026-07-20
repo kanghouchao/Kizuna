@@ -1,12 +1,12 @@
 import { PartnerLink, SnsLink } from '@/entities/store-profile';
 
 interface FooterProps {
-  tenantName: string;
+  storeName: string;
   partnerLinks?: PartnerLink[];
   snsLinks?: SnsLink[];
 }
 
-export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterProps) {
+export default function Footer({ storeName, partnerLinks, snsLinks }: FooterProps) {
   const partners = partnerLinks || [];
   const sns = snsLinks || [];
   const year = new Date().getFullYear();
@@ -31,7 +31,7 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
               className="text-lg md:text-xl font-light tracking-[0.25em] text-[var(--storefront-accent)] mb-4 md:mb-5"
               style={{ fontFamily: 'var(--storefront-font-display)' }}
             >
-              {tenantName}
+              {storeName}
             </h3>
             <div className="w-8 h-px bg-[color-mix(in_srgb,var(--storefront-accent)_30%,transparent)] mb-4 md:mb-5" />
             <p
@@ -108,7 +108,7 @@ export default function Footer({ tenantName, partnerLinks, snsLinks }: FooterPro
                 ◆
               </span>
               <p className="text-[color-mix(in_srgb,var(--storefront-fg)_20%,transparent)] text-[10px] tracking-wider">
-                © {year} {tenantName}. All rights reserved.
+                © {year} {storeName}. All rights reserved.
               </p>
             </div>
             <p className="text-[color-mix(in_srgb,var(--storefront-fg)_10%,transparent)] text-[9px] tracking-widest">

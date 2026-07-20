@@ -9,7 +9,7 @@ import {
 } from '@/entities/store-profile';
 import { StoreProfileForm } from './StoreProfileForm';
 
-export default function TenantConfigPage() {
+export default function StoreProfilePage() {
   const [config, setConfig] = useState<StoreProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);

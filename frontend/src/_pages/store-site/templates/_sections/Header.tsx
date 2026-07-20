@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 interface HeaderProps {
-  tenantName: string;
+  storeName: string;
   logoUrl?: string;
 }
 
@@ -17,7 +17,7 @@ const navLinks = [
   { href: '/about', label: '店舗情報' },
 ];
 
-export default function Header({ tenantName, logoUrl }: HeaderProps) {
+export default function Header({ storeName, logoUrl }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
@@ -39,7 +39,7 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
               {logoUrl ? (
                 <Image
                   src={logoUrl}
-                  alt={tenantName}
+                  alt={storeName}
                   width={120}
                   height={32}
                   className="h-7 md:h-8 w-auto"
@@ -49,7 +49,7 @@ export default function Header({ tenantName, logoUrl }: HeaderProps) {
                   className="text-base md:text-lg tracking-[0.25em] md:tracking-[0.3em] text-[var(--storefront-accent)]"
                   style={{ fontFamily: 'var(--storefront-font-display)' }}
                 >
-                  {tenantName}
+                  {storeName}
                 </span>
               )}
             </Link>

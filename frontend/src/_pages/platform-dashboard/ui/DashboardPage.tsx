@@ -10,18 +10,18 @@ export default function AdminDashboard() {
   const { logout } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<StoreStats | null>(null);
-  const [recentTenants, setRecentTenants] = useState<Store[]>([]);
+  const [recentStores, setRecentStores] = useState<Store[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [statsResponse, tenantsResponse] = await Promise.all([
+      const [statsResponse, storesResponse] = await Promise.all([
         platformStoreApi.getStats(),
         platformStoreApi.getList({ per_page: 5, page: 1 }),
       ]);
 
       setStats(statsResponse);
-      setRecentTenants(tenantsResponse.data);
+      setRecentStores(storesResponse.data);
     } catch (error) {
       toast.error('データの読み込みに失敗しました');
     } finally {
@@ -216,37 +216,37 @@ export default function AdminDashboard() {
               </button>
             </div>
             <ul className="divide-y divide-gray-200">
-              {recentTenants.length === 0 ? (
+              {recentStores.length === 0 ? (
                 <li className="px-4 py-4 text-center text-gray-500">店舗データがありません</li>
               ) : (
-                recentTenants.map(tenant => (
-                  <li key={tenant.id} className="px-4 py-4 hover:bg-gray-50">
+                recentStores.map(store => (
+                  <li key={store.id} className="px-4 py-4 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <div className="shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
                             <span className="text-sm font-medium text-indigo-600">
-                              {tenant.name.charAt(0).toUpperCase()}
+                              {store.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
-                          <div className="text-sm text-gray-500">{tenant.domain}</div>
+                          <div className="text-sm font-medium text-gray-900">{store.name}</div>
+                          <div className="text-sm text-gray-500">{store.domain}</div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            tenant.is_active
+                            store.is_active
                               ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {tenant.is_active ? '有効' : '無効'}
+                          {store.is_active ? '有効' : '無効'}
                         </span>
                         <span className="text-sm text-gray-500">
-                          {new Date(tenant.created_at).toLocaleDateString('ja-JP')}
+                          {new Date(store.created_at).toLocaleDateString('ja-JP')}
                         </span>
                       </div>
                     </div>

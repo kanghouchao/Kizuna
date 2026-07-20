@@ -55,8 +55,8 @@ export async function resolveStore(request: NextRequest): Promise<{
     const data = await res.json().catch(() => null);
 
     if (data && typeof data === 'object') {
-      const storeId = String(data.tenant_id ?? data.id ?? '');
-      const storeName = String(data.tenant_name ?? data.name ?? '');
+      const storeId = String(data.id ?? '');
+      const storeName = String(data.name ?? '');
       const isValid = Boolean(storeId || storeName || data.domain);
 
       // 中央応答（TenantVO）は template_key を返さないため、含まれていれば従来どおり採用し、
