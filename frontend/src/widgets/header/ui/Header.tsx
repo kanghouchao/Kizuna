@@ -16,7 +16,7 @@ import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/rea
 
 export function Header() {
   const { logout } = useAuth();
-  const accountHref = isTenantDomain() ? '/tenant/settings/account' : '/central/settings/account';
+  const accountHref = isTenantDomain() ? '/tenant/settings/account' : '/platform/settings/account';
 
   const [showStoreSwitch, setShowStoreSwitch] = useState(false);
   const [stores, setStores] = useState<PlatformStore[]>([]);

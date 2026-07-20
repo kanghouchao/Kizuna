@@ -96,7 +96,7 @@ export function Sidebar() {
             items: [
               {
                 name: 'ダッシュボード',
-                href: isStore ? '/tenant/dashboard' : '/central/dashboard',
+                href: isStore ? '/tenant/dashboard' : '/platform/dashboard',
                 icon: HomeIcon,
               },
             ],

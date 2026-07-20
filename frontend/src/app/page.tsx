@@ -45,12 +45,12 @@ export default async function Home() {
   if (platformConsole) {
     const platformToken = cookieStore.get('token')?.value;
     if (!platformToken) {
-      // token 失効後も platform-role cookie が残っていると /tenant・/central のガードと無限リダイレクトになるため、先に検出する
+      // token 失効後も platform-role cookie が残っていると /tenant・/platform のガードと無限リダイレクトになるため、先に検出する
       redirect('/platform/login');
     }
     const destination = resolvePlatformDestination(platformConsole as PlatformConsole);
     if (destination === 'central') {
-      redirect('/central/dashboard/');
+      redirect('/platform/dashboard/');
     }
     if (destination === 'store') {
       redirect('/tenant/dashboard/');
@@ -60,7 +60,7 @@ export default async function Home() {
   // Central ドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
   if (role === 'central') {
     const token = cookieStore.get('token')?.value;
-    redirect(token ? '/central/dashboard/' : '/platform/login');
+    redirect(token ? '/platform/dashboard/' : '/platform/login');
   }
 
   // Tenant ドメイン（店舗フロント側）の場合、模版を表示

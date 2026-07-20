@@ -18,7 +18,7 @@ export function useTenantInfo() {
         setLoading(true);
         setError(null);
         const path = window.location.pathname;
-        if (path.startsWith('/central')) {
+        if (path.startsWith('/platform')) {
           setTenant(null);
           return;
         }

@@ -69,7 +69,7 @@ export default function EditTenantPage() {
     try {
       await centralTenantApi.update(tenant.id, formData);
       toast.success('店舗情報を更新しました');
-      router.push('/central/tenants');
+      router.push('/platform/stores');
     } catch (err: any) {
       if (err.response?.data?.errors) setErrors(err.response.data.errors);
       toast.error('更新に失敗しました。入力内容をご確認ください');
@@ -86,7 +86,7 @@ export default function EditTenantPage() {
           <div className="flex justify-between h-16">
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => router.push('/central/tenants')}
+                onClick={() => router.push('/platform/stores')}
                 className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
               >
                 ← 店舗一覧に戻る
@@ -179,7 +179,7 @@ export default function EditTenantPage() {
                 <div className="flex justify-end space-x-3">
                   <button
                     type="button"
-                    onClick={() => router.push('/central/tenants')}
+                    onClick={() => router.push('/platform/stores')}
                     className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     キャンセル
