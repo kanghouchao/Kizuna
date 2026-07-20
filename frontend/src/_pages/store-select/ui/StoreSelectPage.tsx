@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BuildingStorefrontIcon } from '@heroicons/react/24/outline';
-import { platformAuthApi, PlatformStore } from '@/entities/user';
+import { hasStoreConsoleCapability, platformAuthApi, PlatformStore } from '@/entities/user';
 import { replaceStoreIdInPath, setPlatformStore } from '@/shared/lib';
 
 /** クエリ next（店舗スコープの遷移先テンプレート）を読む。無ければダッシュボード。 */
@@ -27,14 +27,16 @@ export default function StoreSelectPage() {
   };
 
   useEffect(() => {
-    platformAuthApi
-      .stores()
-      .then(list => {
-        if (list.length === 1) {
-          goTo(list[0].id);
+    Promise.all([platformAuthApi.stores(), platformAuthApi.me()])
+      .then(([list, me]) => {
+        // 実運用の store-console 能力が無いユーザーは stores() が非空でも到達資格が無く、
+        // 自動遷移/選択の末に StoreIdInterceptor で 403 になる。能力無しは空一覧扱い（#413 Fix5-3）。
+        const authorized = hasStoreConsoleCapability(me.capabilities) ? list : [];
+        if (authorized.length === 1) {
+          goTo(authorized[0].id);
           return;
         }
-        setStores(list);
+        setStores(authorized);
       })
       .catch(error => {
         console.error('Failed to fetch stores', error);
