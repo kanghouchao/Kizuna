@@ -20,7 +20,7 @@ import org.springframework.http.ResponseEntity;
 /**
  * /platform 命名空間へ統合した店舗 API（#415 収束C）の権限マトリクス・literal/{id} 共存・旧パス消滅を 本物の PostgreSQL で固定する統合テスト。
  *
- * <p>受入基準 3（stores/me・CRUD・stats・lookup の権限）、4（literal セグメントが {id} に吸われない）、 1（旧 /central・/store
+ * <p>受入基準 3（stores/me・CRUD・stats・lookup の権限）、4（literal セグメントが {id} に吸われない）、 1（旧 /central・/tenant
  * パスの消滅）を対象とする。シードは v0.4.0/v0.5.0（admin=HQ ALL_STORES / 田中花子=店長 SPECIFIC{1,2} /
  * store1.kizuna.test=id 1）。
  */
@@ -155,12 +155,12 @@ class PlatformStoreApiIT {
   }
 
   @Test
-  @DisplayName("旧 /central/stores と旧 /store/orders は 404 で消滅していること（受入基準1）")
+  @DisplayName("旧 /central/tenants と旧 /tenant/orders は 404 で消滅していること（受入基準1）")
   void legacyPathsAreGone() {
     String hq = platformToken(HQ_EMAIL);
 
-    assertThat(get("/central/stores", hq).getStatusCode())
-        .as("中央名前空間の旧店舗一覧は消滅していること")
+    assertThat(get("/central/tenants", hq).getStatusCode())
+        .as("中央名前空間の旧テナント一覧は消滅していること")
         .isEqualTo(HttpStatus.NOT_FOUND);
 
     HttpHeaders storeContext = bearer(hq);
@@ -168,9 +168,9 @@ class PlatformStoreApiIT {
     storeContext.set("X-Store-ID", "1");
     ResponseEntity<String> orders =
         rest.exchange(
-            "/store/orders", HttpMethod.GET, new HttpEntity<>(storeContext), String.class);
+            "/tenant/orders", HttpMethod.GET, new HttpEntity<>(storeContext), String.class);
     assertThat(orders.getStatusCode())
-        .as("店舗文脈ヘッダを付けても旧 /store 名前空間は消滅していること")
+        .as("店舗文脈ヘッダを付けても旧 /tenant 名前空間は消滅していること")
         .isEqualTo(HttpStatus.NOT_FOUND);
   }
 }

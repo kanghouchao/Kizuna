@@ -401,7 +401,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("統合前の旧メニュー端点 GET /central/menus/me・/store/menus/me は 404 になること")
+  @DisplayName("統合前の旧メニュー端点 GET /central/menus/me・/tenant/menus/me は 404 になること")
   void oldMenuEndpointsAreGone() {
     ResponseEntity<String> legacyMenu =
         rest.exchange(
@@ -411,13 +411,13 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
             String.class);
     assertThat(legacyMenu.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
-    ResponseEntity<String> store =
+    ResponseEntity<String> legacyStoreMenu =
         rest.exchange(
-            "/store/menus/me",
+            "/tenant/menus/me",
             HttpMethod.GET,
             new HttpEntity<>(bridgeHeaders(platformToken(MANAGER_EMAIL), STORE_A)),
             String.class);
-    assertThat(store.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(legacyStoreMenu.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test
