@@ -324,7 +324,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     // HQ管理者束は中央 5 能力 + SHARED 2 のみで STORE_MENU_VIEW を持たないため、店舗グループは fail-closed で剔除される。
-    assertThat(res.getBody()).as("中央操作項目が可視であること").contains("テナント一覧", "スタッフ管理", "システム設定");
+    assertThat(res.getBody()).as("中央操作項目が可視であること").contains("店舗一覧", "スタッフ管理", "システム設定");
     assertThat(res.getBody())
         .as("店舗コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
         .doesNotContain("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報", "業務管理", "HRM", "CRM");
@@ -347,7 +347,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         .contains("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
     assertThat(res.getBody())
         .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
-        .doesNotContain("テナント一覧", "スタッフ管理", "システム設定");
+        .doesNotContain("店舗一覧", "スタッフ管理", "システム設定");
   }
 
   @Test
@@ -367,7 +367,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         .contains("ダッシュボード", "予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
     assertThat(res.getBody())
         .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
-        .doesNotContain("テナント一覧", "スタッフ管理", "システム設定");
+        .doesNotContain("店舗一覧", "スタッフ管理", "システム設定");
   }
 
   @Test
