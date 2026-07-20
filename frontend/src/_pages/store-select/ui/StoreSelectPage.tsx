@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { BuildingStorefrontIcon } from '@heroicons/react/24/outline';
-import { hasStoreConsoleCapability, platformAuthApi, PlatformStore } from '@/entities/user';
+import { useAuthorizedStores } from '@/entities/user';
 import { replaceStoreIdInPath, setPlatformStore } from '@/shared/lib';
 
 /** クエリ next（店舗スコープの遷移先テンプレート）を読む。無ければダッシュボード。 */
@@ -14,12 +14,14 @@ function resolveNext(): string {
 /**
  * 店舗未選択のまま店舗スコープ機能へ入ろうとした時の懒惰トリガー選択画面（#413）。
  * 授権店舗が1件なら選択UIを出さず自動選択して遷移し、複数件なら一覧から選ばせる。
+ * 授権店舗の解決（能力ゲート・STORE_VIEW 欠如時の store_ids フォールバック）は Header と共有の
+ * useAuthorizedStores に委ねる（#413 Fix7）。
  * 選択値は「前回選択」のUXヒントであり、認可はバックエンドの fail-closed 検証に委ねる。
  */
 export default function StoreSelectPage() {
   const router = useRouter();
-  // null = 取得前（読み込み中 / 1件時の自動遷移中）、[] = 0件、複数 = 選択待ち
-  const [stores, setStores] = useState<PlatformStore[] | null>(null);
+  // null = 読み込み中（1件時の自動遷移中も含む）、[] = 0件、複数 = 選択待ち。
+  const stores = useAuthorizedStores();
 
   const goTo = (id: number) => {
     setPlatformStore(id);
@@ -27,49 +29,16 @@ export default function StoreSelectPage() {
   };
 
   useEffect(() => {
-    // stores() は SHARED 能力 STORE_VIEW でのみ守られる。STORE_VIEW を持たない実運用店舗能力保持者
-    //（例: STORE_PROFILE_MANAGE のみ）は 403 になるため、stores() の失敗と me() の成否を allSettled で
-    // 独立に扱う。me() は isAuthenticated() のみで守られ常に到達可能（#413 Fix6-1）。
-    Promise.allSettled([platformAuthApi.stores(), platformAuthApi.me()]).then(
-      ([storesResult, meResult]) => {
-        if (meResult.status !== 'fulfilled') {
-          // me() 失敗はセッション異常（401 は apiClient が再ログインへ誘導）。ここでは空一覧扱い。
-          console.error('Failed to fetch me', meResult.reason);
-          setStores([]);
-          return;
-        }
-        const me = meResult.value;
-        // 実運用の store-console 能力が無いユーザーは stores() が非空でも到達資格が無く、
-        // 自動遷移/選択の末に StoreIdInterceptor で 403 になる。能力無しは空一覧扱い（#413 Fix5-3）。
-        if (!hasStoreConsoleCapability(me.capabilities)) {
-          setStores([]);
-          return;
-        }
-        // stores() が成功すれば店名付き一覧を使う。403 で失敗した場合は /platform/me の store_ids を
-        // フォールバック源にする（SPECIFIC_STORES 時のみ非空。店名は取れないため「店舗 #id」で表示）。
-        // 既知の残存ギャップ: store_scope_type === 'ALL_STORES' かつ STORE_VIEW 欠如の組合せは、
-        // /platform/me の store_ids が空（PlatformUser のバリデーション制約 — ALL_STORES は個別店舗を持たない）
-        // のためフォールバックできず「アクセス可能な店舗がありません」表示のままとなる（0 件時挙動と同じ・退行なし）。
-        // 真の解決にはバックエンドの能力モデル調整（STORE_VIEW を他の Console.STORE 能力へ暗黙付与する等）が要り、
-        // B-lite の「バックエンド無改修」方針の範囲外のため別途裁定が必要（#413 Fix6-1 決定ログ）。
-        const authorized: PlatformStore[] =
-          storesResult.status === 'fulfilled'
-            ? storesResult.value
-            : me.store_scope_type === 'SPECIFIC_STORES'
-              ? me.store_ids.map(id => ({ id, name: `店舗 #${id}` }))
-              : [];
-        if (authorized.length === 1) {
-          goTo(authorized[0].id);
-          return;
-        }
-        setStores(authorized);
-      }
-    );
-    // router は安定参照。goTo は resolveNext を都度読むため依存不要。
+    // 授権店舗が1件なら選択UIを出さず自動選択して遷移する。
+    if (stores?.length === 1) {
+      goTo(stores[0].id);
+    }
+    // goTo は resolveNext を都度読むため依存不要。router は安定参照。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [stores]);
 
-  if (stores === null) {
+  // 読み込み中、または1件時の自動遷移中は選択UIを出さずローディング表示のみとする。
+  if (stores === null || stores.length === 1) {
     return (
       <div className="mx-auto max-w-md">
         <p className="text-sm text-gray-500">読み込み中...</p>
