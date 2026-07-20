@@ -71,11 +71,32 @@ describe('routeGuard', () => {
     expect(res).not.toBeNull();
   });
 
-  it('allows access to /store with token', () => {
-    const req = createRequest('/store/orders', true);
+  it('allows access to an id-scoped /store route with token', () => {
+    const req = createRequest('/store/5/orders', true);
     const res = handleRouteProtection(req, 'store');
 
     expect(res).toBeNull();
+  });
+
+  it('allows access to /store/select with token (no legacy redirect)', () => {
+    const req = createRequest('/store/select', true);
+    const res = handleRouteProtection(req, 'store');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
+  it('redirects a legacy id-less /store path (with token) to /store/select preserving next', () => {
+    const req = createRequest('/store/orders', true);
+    const res = handleRouteProtection(req, 'store');
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pathname: '/store/select',
+        search: '?next=%2Fstore%2Forders',
+      })
+    );
+    expect(res).not.toBeNull();
   });
 
   it('ignores other routes', () => {
