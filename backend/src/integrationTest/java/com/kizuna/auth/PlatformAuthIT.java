@@ -25,7 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * 統一（プラットフォーム）認証境界の統合テスト（#322）。本物の PostgreSQL/Redis に対して検証する。
  *
- * <p>様式は {@link com.kizuna.menu.MenuCrossTenantIT}（リポジトリ直挿 + 実データ断言）に倣う。 匿名ログインの CSRF 免除、シード資格情報での
+ * <p>様式は {@link com.kizuna.menu.MenuCrossStoreIT}（リポジトリ直挿 + 実データ断言）に倣う。 匿名ログインの CSRF 免除、シード資格情報での
  * me 応答、および平台トークンの店舗端点への過橋拒否を HTTP 境界で固定する。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -135,9 +135,8 @@ class PlatformAuthIT {
   }
 
   @Test
-  @DisplayName(
-      "platform トークンでテナントヘッダなしの tenant 系 GET は 403（過橋 #324: 拒否主体は interceptor fail-closed）")
-  void platformTokenRejectedOnTenantEndpoint() {
+  @DisplayName("platform トークンで店舗ヘッダなしの store 系 GET は 403（過橋 #324: 拒否主体は interceptor fail-closed）")
+  void platformTokenRejectedOnStoreEndpoint() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformToken(SEED_EMAIL, SEED_PASSWORD));
 

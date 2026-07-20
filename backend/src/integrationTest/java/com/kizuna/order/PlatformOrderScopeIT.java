@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.shared.CrossTenantTestSupport;
-import com.kizuna.tenant.domain.Tenant;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -36,10 +36,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  *
  * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外店舗の実データ（店舗名・カナリア文字列）が 一切現れないこと（AC2）で行う。読みは storeSetFilter が
  * session 層で機構的に濾過し、書きは明示的単店 storeId の 授権検証（{@code PlatformOrderService.create}）が担う。先例は {@link
- * com.kizuna.menu.MenuCrossTenantIT}（リポジトリ直挿 + 実データ断言）と {@link
+ * com.kizuna.menu.MenuCrossStoreIT}（リポジトリ直挿 + 実データ断言）と {@link
  * com.kizuna.auth.PlatformAuthIT}（平台トークン取得 + planted-user）。
  */
-class PlatformOrderScopeIT extends CrossTenantTestSupport {
+class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
@@ -49,7 +49,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   private static final String SPECIFIC_EMAIL = "scope-manager@kizuna.test";
   private static final String CAST_EMAIL = "scope-cast@kizuna.test";
 
-  private static final String TENANT_B_DOMAIN = "platform-scope-it.kizuna.test";
+  private static final String STORE_B_DOMAIN = "platform-scope-it.kizuna.test";
 
   private static final String MARKER_A_STORE_NAME = "店舗A受注マーカー";
   private static final String MARKER_A_REMARKS = "SCOPE_MARKER_A";
@@ -63,43 +63,42 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   private static final long SEED_RECEPTIONIST_ID = 3L;
 
   @Autowired private OrderRepository orderRepository;
-  @Autowired private TenantRepository tenantRepository;
+  @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CapabilityBundleRepository capabilityBundleRepository;
 
-  /** 保存後に採番された第二テナントの実 id。 */
-  private long tenantBId;
+  /** 保存後に採番された第二店舗の実 id。 */
+  private long storeBId;
 
   @BeforeEach
   void prepareScopeFixture() {
-    Tenant tenantB =
-        tenantRepository
-            .findByDomain(TENANT_B_DOMAIN)
-            .orElseGet(
-                () -> tenantRepository.save(new Tenant("集合作用域IT第二テナント", TENANT_B_DOMAIN, null)));
-    tenantBId = tenantB.getId();
+    Store storeB =
+        storeRepository
+            .findByDomain(STORE_B_DOMAIN)
+            .orElseGet(() -> storeRepository.save(new Store("集合作用域IT第二店舗", STORE_B_DOMAIN, null)));
+    storeBId = storeB.getId();
 
-    ensureMarkerOrder(TENANT_A, MARKER_A_STORE_NAME, MARKER_A_REMARKS);
-    ensureMarkerOrder(tenantBId, CANARY_B_STORE_NAME, CANARY_B_REMARKS);
+    ensureMarkerOrder(STORE_A, MARKER_A_STORE_NAME, MARKER_A_REMARKS);
+    ensureMarkerOrder(storeBId, CANARY_B_STORE_NAME, CANARY_B_REMARKS);
 
     ensurePlatformUser(
         SPECIFIC_EMAIL,
         UserType.STAFF,
         bundleIdsOf("店長"),
         StoreScopeType.SPECIFIC_STORES,
-        Set.of(TENANT_A));
+        Set.of(STORE_A));
     ensurePlatformUser(CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
   }
 
-  /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他テナントにも書ける）。 */
-  private void ensureMarkerOrder(long tenantId, String storeName, String remarks) {
+  /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
+  private void ensureMarkerOrder(long storeId, String storeName, String remarks) {
     boolean exists =
         orderRepository.findAll().stream()
             .anyMatch(
                 o ->
                     o.getStoreId() != null
-                        && tenantId == o.getStoreId()
+                        && storeId == o.getStoreId()
                         && storeName.equals(o.getStoreName()));
     if (exists) {
       return;
@@ -111,7 +110,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
             .businessDate(MARKER_DATE)
             .status(OrderStatus.CREATED)
             .build();
-    order.setStoreId(tenantId);
+    order.setStoreId(storeId);
     orderRepository.save(order);
   }
 
@@ -176,20 +175,20 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
     return headers;
   }
 
-  private long orderCountForTenant(long tenantId) {
+  private long orderCountForStore(long storeId) {
     return orderRepository.findAll().stream()
-        .filter(o -> o.getStoreId() != null && tenantId == o.getStoreId())
+        .filter(o -> o.getStoreId() != null && storeId == o.getStoreId())
         .count();
   }
 
-  private String createCastAs(long tenantId, String name) {
+  private String createCastAs(long storeId, String name) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/casts",
-            new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId)),
+            new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(storeId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
-        .as("前提: tenant %d でのキャスト作成が成功すること", tenantId)
+        .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
     return created.getBody().path("id").asText();
   }
@@ -209,7 +208,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
     assertThat(content).isNotEmpty();
     content.forEach(
         node ->
-            assertThat(node.path("store_id").asLong()).as("授権外の店舗が一覧に現れないこと").isEqualTo(TENANT_A));
+            assertThat(node.path("store_id").asLong()).as("授権外の店舗が一覧に現れないこと").isEqualTo(STORE_A));
 
     boolean hasMarker = false;
     for (JsonNode node : content) {
@@ -259,7 +258,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
         });
 
     assertThat(storeNames).contains(MARKER_A_STORE_NAME, CANARY_B_STORE_NAME);
-    assertThat(storeIds).contains(TENANT_A, tenantBId);
+    assertThat(storeIds).contains(STORE_A, storeBId);
   }
 
   @Test
@@ -280,15 +279,15 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
   }
 
   @Test
-  @DisplayName("授権集合外 store_id の書きは 403 かつ tenant B に永続化されないこと(AC3 後半)")
+  @DisplayName("授権集合外 store_id の書きは 403 かつ store B に永続化されないこと(AC3 後半)")
   void writeToOutOfSetStoreIsRejected() {
-    long before = orderCountForTenant(tenantBId);
+    long before = orderCountForStore(storeBId);
 
     String body =
         String.format(
             "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
                 + " \"cast_id\": \"dummy-cast\"}",
-            tenantBId, SEED_RECEPTIONIST_ID, LocalDate.now());
+            storeBId, SEED_RECEPTIONIST_ID, LocalDate.now());
 
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
@@ -297,21 +296,19 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-    assertThat(orderCountForTenant(tenantBId))
-        .as("拒否された書きが tenant B に永続化されていないこと")
-        .isEqualTo(before);
+    assertThat(orderCountForStore(storeBId)).as("拒否された書きが store B に永続化されていないこと").isEqualTo(before);
   }
 
   @Test
   @DisplayName("授権店舗への書きはその店舗に受注を作成すること(正向対照: 負向 403 がバリデーション起因でない証明)")
   void writeToAuthorizedStoreCreatesOrderInThatStore() {
-    String castId = createCastAs(TENANT_A, "集合作用域IT用キャスト");
+    String castId = createCastAs(STORE_A, "集合作用域IT用キャスト");
 
     String body =
         String.format(
             "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
                 + " \"cast_id\": \"%s\"}",
-            TENANT_A, SEED_RECEPTIONIST_ID, LocalDate.now(), castId);
+            STORE_A, SEED_RECEPTIONIST_ID, LocalDate.now(), castId);
 
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
@@ -324,7 +321,7 @@ class PlatformOrderScopeIT extends CrossTenantTestSupport {
     assertThat(newId).isNotBlank();
 
     Order created = orderRepository.findById(newId).orElseThrow();
-    assertThat(created.getStoreId()).as("授権店舗(tenant 1)に永続化されていること").isEqualTo(TENANT_A);
+    assertThat(created.getStoreId()).as("授権店舗(store 1)に永続化されていること").isEqualTo(STORE_A);
   }
 
   @Test

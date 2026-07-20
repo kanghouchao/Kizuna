@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.CrossTenantTestSupport;
+import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundle;
 import com.kizuna.user.domain.CapabilityBundleRepository;
@@ -29,16 +29,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * actors-and-access.md「必ず確認するアクセス場面（8 場面）」の受け入れ IT（#382 / #398）。
  *
- * <p>場面の分担: 場面 1（他店舗の閲覧・更新不可）は {@link com.kizuna.menu.MenuCrossTenantIT} / {@link
- * com.kizuna.order.OrderCrossTenantIT} 等、場面 2（複数店舗の切替・集約）は {@link com.kizuna.auth.PlatformBridgeIT}
+ * <p>場面の分担: 場面 1（他店舗の閲覧・更新不可）は {@link com.kizuna.menu.MenuCrossStoreIT} / {@link
+ * com.kizuna.order.OrderCrossStoreIT} 等、場面 2（複数店舗の切替・集約）は {@link com.kizuna.auth.PlatformBridgeIT}
  * / {@link com.kizuna.order.PlatformOrderScopeIT}、場面 3（精算範囲次元の表現）は {@link
  * PlatformStaffManagementIT#settlementScopeDimensionIsExpressible} が既に固定しているため本クラスでは重複させない。 場面
  * 7（サービス ID）は #395、場面 8（緊急管理）は #382 要件 4 の後続票の検証点。
  *
  * <p>本クラスは場面 4・5（CAST/MEMBER 本人種別の隔離）と場面 6（公開/内部の分離 +「束はデータ」の証明）を扱う。 強断言様式（リポジトリ直挿カナリア + 生ボディ
- * doesNotContain）は {@link com.kizuna.menu.MenuCrossTenantIT} に由来する。
+ * doesNotContain）は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
  */
-class AuthorizationScenesIT extends CrossTenantTestSupport {
+class AuthorizationScenesIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
@@ -60,9 +60,9 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
   @BeforeEach
   void prepareSceneFixture() {
     ensureUser(
-        CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.SPECIFIC_STORES, Set.of(TENANT_A));
+        CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.SPECIFIC_STORES, Set.of(STORE_A));
     ensureUser(
-        MEMBER_EMAIL, UserType.MEMBER, Set.of(), StoreScopeType.SPECIFIC_STORES, Set.of(TENANT_A));
+        MEMBER_EMAIL, UserType.MEMBER, Set.of(), StoreScopeType.SPECIFIC_STORES, Set.of(STORE_A));
 
     // 場面 6: 種子に無い束を DB データとして現場作成し、STORE_PROFILE_MANAGE のみを持つスタッフへ授与する。
     CapabilityBundle profileOnly =
@@ -80,14 +80,14 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
         UserType.STAFF,
         Set.of(profileOnly.getId()),
         StoreScopeType.SPECIFIC_STORES,
-        Set.of(TENANT_A));
+        Set.of(STORE_A));
 
     // 内部キャスト情報のカナリア（リポジトリ直挿 — テストスレッドは storeFilter を経由しない）。
     boolean canaryExists =
         castRepository.findAll().stream().anyMatch(c -> CAST_CANARY_NAME.equals(c.getName()));
     if (!canaryExists) {
       Cast cast = Cast.builder().name(CAST_CANARY_NAME).status("在籍").build();
-      cast.setStoreId(TENANT_A);
+      cast.setStoreId(STORE_A);
       castRepository.save(cast);
     }
   }
@@ -162,7 +162,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
         rest.exchange(
             "/store/orders",
             HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(token, TENANT_A)),
+            new HttpEntity<>(storeHeaders(token, STORE_A)),
             String.class);
     assertThat(orders.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
@@ -181,7 +181,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
         rest.exchange(
             "/store/orders",
             HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(token, TENANT_A)),
+            new HttpEntity<>(storeHeaders(token, STORE_A)),
             String.class);
     assertThat(orders.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
@@ -196,7 +196,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
         rest.exchange(
             "/store/config",
             HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(token, TENANT_A)),
+            new HttpEntity<>(storeHeaders(token, STORE_A)),
             String.class);
     assertThat(profile.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(profile.getBody())
@@ -208,7 +208,7 @@ class AuthorizationScenesIT extends CrossTenantTestSupport {
         rest.exchange(
             "/store/casts",
             HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(token, TENANT_A)),
+            new HttpEntity<>(storeHeaders(token, STORE_A)),
             String.class);
     assertThat(casts.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 

@@ -32,25 +32,25 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class StoreProfileServiceTest {
 
   @Mock private StoreProfileRepository storeProfileRepository;
-  @Mock private StoreContext tenantContext;
+  @Mock private StoreContext storeContext;
   @Mock private StoreProfileMapper storeProfileMapper;
-  @InjectMocks private StoreProfileService tenantConfigService;
+  @InjectMocks private StoreProfileService storeProfileService;
 
-  private static final Long TENANT_ID = 1L;
+  private static final Long STORE_ID = 1L;
 
   @BeforeEach
   void setUp() {
-    when(tenantContext.getStoreId()).thenReturn(TENANT_ID);
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
   }
 
   @Test
   void get_returnsExistingConfig() {
     StoreProfile config = createTestConfig();
     StoreProfileResponse expected = createTestResponse();
-    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = tenantConfigService.get();
+    StoreProfileResponse response = storeProfileService.get();
 
     assertThat(response.getId()).isEqualTo(1L);
     assertThat(response.getTemplateKey()).isEqualTo("default");
@@ -59,17 +59,17 @@ class StoreProfileServiceTest {
 
   @Test
   void get_throwsExceptionIfNotExists() {
-    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.empty());
+    when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> tenantConfigService.get())
+    assertThatThrownBy(() -> storeProfileService.get())
         .isInstanceOf(ServiceException.class)
-        .hasMessage("テナント設定が見つかりません");
+        .hasMessage("店舗設定が見つかりません");
   }
 
   @Test
   void update_modifiesFields() {
     StoreProfile config = createTestConfig();
-    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
@@ -92,7 +92,7 @@ class StoreProfileServiceTest {
     expected.setDescription("Updated description");
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = tenantConfigService.update(request);
+    StoreProfileResponse response = storeProfileService.update(request);
 
     assertThat(response.getLogoUrl()).isEqualTo("https://example.com/new-logo.png");
     assertThat(response.getDescription()).isEqualTo("Updated description");
@@ -102,7 +102,7 @@ class StoreProfileServiceTest {
   @Test
   void update_modifiesSnsLinks() {
     StoreProfile config = createTestConfig();
-    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
@@ -114,7 +114,7 @@ class StoreProfileServiceTest {
     expected.setSnsLinks(newSnsLinks);
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = tenantConfigService.update(request);
+    StoreProfileResponse response = storeProfileService.update(request);
 
     assertThat(response.getSnsLinks()).hasSize(1);
     assertThat(response.getSnsLinks().get(0).getPlatform()).isEqualTo("twitter");
@@ -124,7 +124,7 @@ class StoreProfileServiceTest {
   @Test
   void update_modifiesPartnerLinks() {
     StoreProfile config = createTestConfig();
-    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.of(config));
+    when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
@@ -136,7 +136,7 @@ class StoreProfileServiceTest {
     expected.setPartnerLinks(newPartnerLinks);
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = tenantConfigService.update(request);
+    StoreProfileResponse response = storeProfileService.update(request);
 
     assertThat(response.getPartnerLinks()).hasSize(1);
     assertThat(response.getPartnerLinks().get(0).getName()).isEqualTo("Partner1");
@@ -145,13 +145,13 @@ class StoreProfileServiceTest {
 
   @Test
   void update_throwsExceptionIfNotExists() {
-    when(storeProfileRepository.findByStoreId(TENANT_ID)).thenReturn(Optional.empty());
+    when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.empty());
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
 
-    assertThatThrownBy(() -> tenantConfigService.update(request))
+    assertThatThrownBy(() -> storeProfileService.update(request))
         .isInstanceOf(ServiceException.class)
-        .hasMessage("テナント設定が見つかりません");
+        .hasMessage("店舗設定が見つかりません");
   }
 
   private StoreProfile createTestConfig() {

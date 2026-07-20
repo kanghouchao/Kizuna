@@ -9,7 +9,7 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.StoreRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,8 +26,8 @@ public class CustomerService {
 
   private final CustomerRepository customerRepository;
   private final CustomerMapper customerMapper;
-  private final StoreContext tenantContext;
-  private final TenantRepository tenantRepository;
+  private final StoreContext storeContext;
+  private final StoreRepository storeRepository;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -83,9 +83,9 @@ public class CustomerService {
     Customer customer = customerMapper.toEntity(request);
 
     customer.setStoreId(
-        tenantRepository
-            .findById(tenantContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+        storeRepository
+            .findById(storeContext.getStoreId())
+            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
             .getId());
 
     return customerMapper.toResponse(customerRepository.save(customer));

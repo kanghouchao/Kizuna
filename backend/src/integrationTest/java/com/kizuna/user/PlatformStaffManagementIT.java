@@ -3,9 +3,9 @@ package com.kizuna.user;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.kizuna.shared.CrossTenantTestSupport;
-import com.kizuna.tenant.domain.Tenant;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -28,10 +28,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * スタッフ・権限管理（#325 / #398 能力束モデル）の HTTP 境界統合テスト。STAFF_MANAGE
  * 能力限定の授権書き込み（付与・変更・停止・履歴）と、付与した店舗集合が本人の次回ログインのデータ範囲に反映されること、 授権外店舗の実データが応答生ボディに一切現れないこと（強断言）を本物の
  * PostgreSQL で固定する。ヘルパは {@link com.kizuna.order.PlatformOrderScopeIT} の {@code
- * ensurePlatformUser}/{@code platformToken} 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossTenantIT}
+ * ensurePlatformUser}/{@code platformToken} 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT}
  * に由来する。
  */
-class PlatformStaffManagementIT extends CrossTenantTestSupport {
+class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
@@ -52,7 +52,7 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
   private static final String CASE3_EMAIL = "staff-it-editable@kizuna.test";
   private static final String DUP_EMAIL = "staff-it-dup@kizuna.test";
 
-  @Autowired private TenantRepository tenantRepository;
+  @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CapabilityBundleRepository capabilityBundleRepository;
@@ -62,18 +62,18 @@ class PlatformStaffManagementIT extends CrossTenantTestSupport {
 
   @BeforeEach
   void prepareStaffFixture() {
-    storeAId = ensureTenant(STORE_A_DOMAIN, STORE_A_NAME);
-    storeBId = ensureTenant(STORE_B_DOMAIN, STORE_B_NAME);
+    storeAId = ensureStore(STORE_A_DOMAIN, STORE_A_NAME);
+    storeBId = ensureStore(STORE_B_DOMAIN, STORE_B_NAME);
     ensurePlatformUser(
         NON_HQ_EMAIL, UserType.STAFF, bundleIdsOf("店長"), StoreScopeType.ALL_STORES, Set.of());
     ensurePlatformUser(
         CAST_CANARY_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
   }
 
-  private long ensureTenant(String domain, String name) {
-    return tenantRepository
+  private long ensureStore(String domain, String name) {
+    return storeRepository
         .findByDomain(domain)
-        .orElseGet(() -> tenantRepository.save(new Tenant(name, domain, null)))
+        .orElseGet(() -> storeRepository.save(new Store(name, domain, null)))
         .getId();
   }
 

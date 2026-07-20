@@ -7,8 +7,8 @@ import com.kizuna.cast.application.CastInvitationAcceptanceService;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.CrossTenantTestSupport;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -37,7 +37,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  *
  * <p>身分作成・档案紐づけ・招待状態遷移が単一トランザクションで確定すること、無効 token では副作用が出ないことを DB 断言で固定する。
  */
-class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
+class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
 
   private static final String MANAGER_EMAIL = "tanaka.hanako@kizuna.test";
   private static final String PASSWORD = "pass";
@@ -45,7 +45,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
 
   @Autowired private CastRepository castRepository;
   @Autowired private CastInvitationRepository castInvitationRepository;
-  @Autowired private TenantRepository tenantRepository;
+  @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CastInvitationAcceptanceService acceptanceService;
@@ -60,8 +60,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("新規登録受諾で CAST 身分が作成され、档案に紐づき、招待が ACCEPTED になること")
   void newUserAcceptanceLinksIdentityAndMarksAccepted() {
-    String castId = createCast(TENANT_A, "受諾新規テスト");
-    String token = issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "受諾新規テスト");
+    String token = issue(castId, STORE_A);
     String email = "cast-new-it-" + System.nanoTime() + "@kizuna.test";
 
     ResponseEntity<JsonNode> res = acceptNewUser(token, email, "password1234", "新人花子");
@@ -70,7 +70,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
     PlatformUser user = platformUserRepository.findByEmail(email).orElseThrow();
     assertThat(user.getUserType()).isEqualTo(UserType.CAST);
     assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(user.getStoreIds()).contains(TENANT_A);
+    assertThat(user.getStoreIds()).contains(STORE_A);
     assertThat(castRepository.findById(castId).orElseThrow().getPlatformUserId())
         .isEqualTo(user.getId());
     assertThat(castInvitationRepository.findByToken(token).orElseThrow().getStatus())
@@ -80,7 +80,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("期限切れ token の受諾は 4xx で拒否され、PlatformUser 数が不変であること")
   void expiredTokenAcceptanceIsRejectedWithoutSideEffects() {
-    String castId = createCast(TENANT_A, "期限切れ受諾テスト");
+    String castId = createCast(STORE_A, "期限切れ受諾テスト");
     String token =
         directInsertInvitation(
             castId, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1));
@@ -97,8 +97,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("受諾済み token は再受諾できないこと（4xx）")
   void acceptedTokenCannotBeReaccepted() {
-    String castId = createCast(TENANT_A, "再受諾不可テスト");
-    String token = issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "再受諾不可テスト");
+    String token = issue(castId, STORE_A);
     acceptNewUser(
         token, "cast-first-it-" + System.nanoTime() + "@kizuna.test", "password1234", "花子");
 
@@ -112,9 +112,9 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("再発行で失効した旧 token は受諾できないこと（4xx）")
   void invalidatedTokenIsRejected() {
-    String castId = createCast(TENANT_A, "失効token受諾不可テスト");
-    String staleToken = issue(castId, TENANT_A);
-    issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "失効token受諾不可テスト");
+    String staleToken = issue(castId, STORE_A);
+    issue(castId, STORE_A);
 
     ResponseEntity<JsonNode> res =
         acceptNewUser(
@@ -129,8 +129,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("既に登録済みのメールでの新規登録受諾は 4xx で拒否されること")
   void duplicateEmailRegistrationIsRejected() {
-    String castId = createCast(TENANT_A, "重複メール受諾テスト");
-    String token = issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "重複メール受諾テスト");
+    String token = issue(castId, STORE_A);
 
     // 既存のシードユーザー（田中花子）の email で新規登録を試みる。
     ResponseEntity<JsonNode> res = acceptNewUser(token, MANAGER_EMAIL, "password1234", "花子");
@@ -141,8 +141,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("短すぎるパスワードでの新規登録受諾は 400 で拒否され、副作用がないこと")
   void tooShortPasswordRegistrationIsRejected() {
-    String castId = createCast(TENANT_A, "短パスワード受諾テスト");
-    String token = issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "短パスワード受諾テスト");
+    String token = issue(castId, STORE_A);
     String email = "cast-shortpw-it-" + System.nanoTime() + "@kizuna.test";
 
     ResponseEntity<JsonNode> res = acceptNewUser(token, email, "a", "花子");
@@ -154,8 +154,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("列長(150)を超える表示名での新規登録受諾は 400 で拒否され、副作用がないこと")
   void tooLongDisplayNameRegistrationIsRejected() {
-    String castId = createCast(TENANT_A, "長すぎ表示名受諾テスト");
-    String token = issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "長すぎ表示名受諾テスト");
+    String token = issue(castId, STORE_A);
     String email = "cast-longname-it-" + System.nanoTime() + "@kizuna.test";
     // platform_users.display_name は VARCHAR(150)。151 文字は列長超過で、@Size が無いと生の DB エラー(500)になる。
     String displayName = "あ".repeat(151);
@@ -172,8 +172,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
     PlatformUser castUser = ensureExistingCastUser();
     String castBearer = platformToken(EXISTING_CAST_EMAIL, PASSWORD);
     // 田中は店舗{1,2}授権。既存 CAST は店舗{1}所属なので、店舗2の招待で店舗を追加する。
-    String castId = createCast(TENANT_B, "既存受諾店舗2テスト");
-    String token = issue(castId, TENANT_B);
+    String castId = createCast(STORE_B, "既存受諾店舗2テスト");
+    String token = issue(castId, STORE_B);
 
     ResponseEntity<JsonNode> res =
         rest.exchange(
@@ -184,7 +184,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
 
     assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
     PlatformUser reloaded = platformUserRepository.findByEmail(EXISTING_CAST_EMAIL).orElseThrow();
-    assertThat(reloaded.getStoreIds()).contains(TENANT_A, TENANT_B);
+    assertThat(reloaded.getStoreIds()).contains(STORE_A, STORE_B);
     assertThat(castRepository.findById(castId).orElseThrow().getPlatformUserId())
         .isEqualTo(castUser.getId());
     assertThat(castInvitationRepository.findByToken(token).orElseThrow().getStatus())
@@ -204,7 +204,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
             .enabled(true)
             .userType(UserType.CAST)
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(TENANT_A))
+            .storeIds(Set.of(STORE_A))
             .build());
 
     ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -214,16 +214,16 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
       // 「最後書き勝ちで店舗2が消える」取りこぼしを確実に顕在化させる。
       for (int i = 0; i < 8; i++) {
         // 反復ごとに新しい档案と招待を用意する（招待は使い捨て、档案は二重紐づけ防御があるため）。
-        String castA = createCast(TENANT_A, "並行受諾A" + i);
-        String castB = createCast(TENANT_B, "並行受諾B" + i);
+        String castA = createCast(STORE_A, "並行受諾A" + i);
+        String castB = createCast(STORE_B, "並行受諾B" + i);
         String tokenA =
             directInsertInvitation(
-                castA, TENANT_A, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+                castA, STORE_A, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
         String tokenB =
             directInsertInvitation(
-                castB, TENANT_B, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+                castB, STORE_B, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
         // 前反復の追加をリセットし、店舗{1} からやり直す。
-        resetStores(email, Set.of(TENANT_A));
+        resetStores(email, Set.of(STORE_A));
 
         CyclicBarrier barrier = new CyclicBarrier(2);
         Future<?> f1 = pool.submit(acceptTask(barrier, tokenA, email));
@@ -234,7 +234,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
         PlatformUser reloaded = platformUserRepository.findByEmail(email).orElseThrow();
         assertThat(reloaded.getStoreIds())
             .as("反復 %d: 並行受諾後に両店舗が保持されること", i)
-            .contains(TENANT_A, TENANT_B);
+            .contains(STORE_A, STORE_B);
       }
     } finally {
       pool.shutdownNow();
@@ -244,8 +244,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("CAST 以外のアカウントでの既存受諾は 403 で拒否されること")
   void existingAcceptanceWithNonCastRoleIsForbidden() {
-    String castId = createCast(TENANT_A, "既存受諾非CASTテスト");
-    String token = issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "既存受諾非CASTテスト");
+    String token = issue(castId, STORE_A);
 
     // token（基底クラスの yamada = STAFF（店舗スタッフ束））で既存受諾 → @PreAuthorize ROLE_CAST で 403
     ResponseEntity<String> res =
@@ -261,8 +261,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @Test
   @DisplayName("未認証の既存受諾は 401/403 で拒否されること")
   void existingAcceptanceUnauthenticatedIsRejected() {
-    String castId = createCast(TENANT_A, "既存受諾未認証テスト");
-    String token = issue(castId, TENANT_A);
+    String castId = createCast(STORE_A, "既存受諾未認証テスト");
+    String token = issue(castId, STORE_A);
 
     ResponseEntity<String> res =
         rest.exchange(
@@ -278,24 +278,24 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
   @DisplayName("照会は VALID/EXPIRED/USED の 3 状態と店舗名・档案名を返すこと")
   void viewReturnsValidExpiredUsedStates() {
     // VALID
-    String validCast = createCast(TENANT_A, "照会VALIDテスト");
-    String validToken = issue(validCast, TENANT_A);
+    String validCast = createCast(STORE_A, "照会VALIDテスト");
+    String validToken = issue(validCast, STORE_A);
     ResponseEntity<JsonNode> valid = viewInvitation(validToken);
     assertThat(valid.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(valid.getBody().path("status").asText()).isEqualTo("VALID");
     assertThat(valid.getBody().path("cast_name").asText()).isEqualTo("照会VALIDテスト");
     assertThat(valid.getBody().path("store_name").asText())
-        .isEqualTo(tenantRepository.findById(TENANT_A).orElseThrow().getName());
+        .isEqualTo(storeRepository.findById(STORE_A).orElseThrow().getName());
 
     // EXPIRED
-    String expiredCast = createCast(TENANT_A, "照会EXPIREDテスト");
+    String expiredCast = createCast(STORE_A, "照会EXPIREDテスト");
     String expiredToken =
         directInsertInvitation(
             expiredCast, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1));
     assertThat(viewInvitation(expiredToken).getBody().path("status").asText()).isEqualTo("EXPIRED");
 
     // USED
-    String usedCast = createCast(TENANT_A, "照会USEDテスト");
+    String usedCast = createCast(STORE_A, "照会USEDテスト");
     String usedToken =
         directInsertInvitation(
             usedCast, CastInvitation.Status.INVALIDATED, OffsetDateTime.now().plusHours(1));
@@ -315,27 +315,27 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
                         .enabled(true)
                         .userType(UserType.CAST)
                         .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                        .storeIds(Set.of(TENANT_A))
+                        .storeIds(Set.of(STORE_A))
                         .build()));
   }
 
-  private String createCast(long tenantId, String name) {
+  private String createCast(long storeId, String name) {
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/store/casts",
-            new HttpEntity<>("{\"name\": \"" + name + "\"}", tenantHeaders(tenantId, managerToken)),
+            new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(storeId, managerToken)),
             JsonNode.class);
     assertThat(res.getStatusCode().is2xxSuccessful())
-        .as("前提: tenant %d でのキャスト作成が成功すること", tenantId)
+        .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
     return res.getBody().path("id").asText();
   }
 
-  private String issue(String castId, long tenantId) {
+  private String issue(String castId, long storeId) {
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/store/casts/" + castId + "/invitation",
-            new HttpEntity<>(tenantHeaders(tenantId, managerToken)),
+            new HttpEntity<>(storeHeaders(storeId, managerToken)),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 招待発行が成功すること").isEqualTo(HttpStatus.CREATED);
     return res.getBody().path("token").asText();
@@ -343,11 +343,11 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
 
   private String directInsertInvitation(
       String castId, CastInvitation.Status status, OffsetDateTime expiresAt) {
-    return directInsertInvitation(castId, TENANT_A, status, expiresAt);
+    return directInsertInvitation(castId, STORE_A, status, expiresAt);
   }
 
   private String directInsertInvitation(
-      String castId, long tenantId, CastInvitation.Status status, OffsetDateTime expiresAt) {
+      String castId, long storeId, CastInvitation.Status status, OffsetDateTime expiresAt) {
     String token = "cast-inv-it-" + System.nanoTime();
     CastInvitation invitation =
         CastInvitation.builder()
@@ -356,7 +356,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
             .status(status)
             .expiresAt(expiresAt)
             .build();
-    invitation.setStoreId(tenantId);
+    invitation.setStoreId(storeId);
     castInvitationRepository.save(invitation);
     return token;
   }
@@ -412,11 +412,11 @@ class PlatformCastInvitationAcceptanceIT extends CrossTenantTestSupport {
     return t;
   }
 
-  private HttpHeaders tenantHeaders(long tenantId, String bearerToken) {
+  private HttpHeaders storeHeaders(long storeId, String bearerToken) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.set("X-Role", "store");
-    headers.set("X-Store-ID", String.valueOf(tenantId));
+    headers.set("X-Store-ID", String.valueOf(storeId));
     headers.setBearerAuth(bearerToken);
     return headers;
   }

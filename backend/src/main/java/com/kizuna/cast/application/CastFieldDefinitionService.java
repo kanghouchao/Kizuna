@@ -25,12 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastFieldDefinitionService {
 
-  /** テナントあたりの定義件数上限。 */
+  /** 店舗あたりの定義件数上限。 */
   static final int MAX_DEFINITIONS = 20;
 
   private final CastFieldDefinitionRepository repository;
   private final CastFieldDefinitionMapper mapper;
-  private final StoreContext tenantContext;
+  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -56,7 +56,7 @@ public class CastFieldDefinitionService {
             .displayOrder(nextOrder)
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
-    definition.setStoreId(tenantContext.getStoreId());
+    definition.setStoreId(storeContext.getStoreId());
     try {
       return mapper.toResponse(repository.saveAndFlush(definition));
     } catch (DataIntegrityViolationException ex) {

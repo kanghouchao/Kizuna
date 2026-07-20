@@ -14,7 +14,7 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,8 +34,8 @@ public class CastService {
 
   private final CastRepository castRepository;
   private final CastMapper castMapper;
-  private final StoreContext tenantContext;
-  private final TenantRepository tenantRepository;
+  private final StoreContext storeContext;
+  private final StoreRepository storeRepository;
   private final CastInvitationService castInvitationService;
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
 
@@ -61,12 +61,12 @@ public class CastService {
   }
 
   /**
-   * 指定 id のキャストが現在テナントに属するか判定する（他モジュールからの帰属チェック用ポート）。 storeFilter が効くため、他テナントのキャストは存在しないものとして false
+   * 指定 id のキャストが現在店舗に属するか判定する（他モジュールからの帰属チェック用ポート）。 storeFilter が効くため、他店舗のキャストは存在しないものとして false
    * を返す。
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public boolean existsForCurrentTenant(String id) {
+  public boolean existsForCurrentStore(String id) {
     return castRepository.findById(id).isPresent();
   }
 
@@ -76,9 +76,9 @@ public class CastService {
     Cast cast = castMapper.toEntity(request);
 
     cast.setStoreId(
-        tenantRepository
-            .findById(tenantContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+        storeRepository
+            .findById(storeContext.getStoreId())
+            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
             .getId());
 
     return castMapper.toResponse(castRepository.save(cast));

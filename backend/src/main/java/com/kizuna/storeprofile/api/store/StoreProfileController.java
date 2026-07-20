@@ -19,24 +19,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class StoreProfileController {
 
-  private final StoreProfileService tenantConfigService;
+  private final StoreProfileService storeProfileService;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
   public ResponseEntity<StoreProfileResponse> get() {
-    return ResponseEntity.ok(tenantConfigService.get());
+    return ResponseEntity.ok(storeProfileService.get());
   }
 
   @PutMapping
   @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
   public ResponseEntity<StoreProfileResponse> update(
       @Valid @RequestBody StoreProfileUpdateRequest request) {
-    return ResponseEntity.ok(tenantConfigService.update(request));
+    return ResponseEntity.ok(storeProfileService.update(request));
   }
 
   @GetMapping("/public")
   @PermitAll
   public ResponseEntity<StoreProfileResponse> getPublic() {
-    return ResponseEntity.ok(tenantConfigService.get());
+    return ResponseEntity.ok(storeProfileService.get());
   }
 }

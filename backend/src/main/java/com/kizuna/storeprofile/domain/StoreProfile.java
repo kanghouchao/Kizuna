@@ -118,9 +118,9 @@ public class StoreProfile {
   }
 
   /**
-   * テナント用のデフォルト設定を生成する。
+   * 店舗用のデフォルト設定を生成する。
    *
-   * @param storeId 対象テナントの ID
+   * @param storeId 対象店舗の ID
    * @return デフォルト値が設定された StoreProfile インスタンス
    */
   public static StoreProfile createDefault(Long storeId) {

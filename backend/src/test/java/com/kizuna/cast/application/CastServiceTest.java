@@ -22,8 +22,8 @@ import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.tenant.domain.Tenant;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,8 +41,8 @@ class CastServiceTest {
 
   @Mock private CastRepository castRepository;
   @Mock private CastMapper castMapper;
-  @Mock private StoreContext tenantContext;
-  @Mock private TenantRepository tenantRepository;
+  @Mock private StoreContext storeContext;
+  @Mock private StoreRepository storeRepository;
   @Mock private CastInvitationService castInvitationService;
   @Mock private CastFieldDefinitionRepository castFieldDefinitionRepository;
 
@@ -132,12 +132,12 @@ class CastServiceTest {
 
     Cast castEntity = Cast.builder().name("G1").build();
 
-    Tenant tenant = new Tenant();
-    tenant.setId(1L);
+    Store store = new Store();
+    store.setId(1L);
 
     when(castMapper.toEntity(req)).thenReturn(castEntity);
-    when(tenantContext.getStoreId()).thenReturn(1L);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(storeContext.getStoreId()).thenReturn(1L);
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(store));
 
     when(castRepository.save(any()))
         .thenAnswer(
@@ -156,17 +156,17 @@ class CastServiceTest {
   }
 
   @Test
-  void create_throwsWhenTenantNotFound() {
+  void create_throwsWhenStoreNotFound() {
     CastCreateRequest req = new CastCreateRequest();
     req.setName("G1");
 
     when(castMapper.toEntity(req)).thenReturn(new Cast());
-    when(tenantContext.getStoreId()).thenReturn(1L);
-    when(tenantRepository.findById(1L)).thenReturn(Optional.empty());
+    when(storeContext.getStoreId()).thenReturn(1L);
+    when(storeRepository.findById(1L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> castService.create(req))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("テナントが見つかりません");
+        .hasMessageContaining("店舗が見つかりません");
   }
 
   @Test

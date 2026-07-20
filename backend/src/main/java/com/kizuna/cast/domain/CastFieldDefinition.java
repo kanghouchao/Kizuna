@@ -13,8 +13,8 @@ import org.hibernate.annotations.Filter;
 /**
  * キャストのカスタムフィールド定義（店舗別動的属性のスキーマ）。
  *
- * <p>key はプログラム識別子でテナント内一意・不変（コンストラクタ/ビルダーでのみ設定、setter も apply も持たない）。 label/displayOrder/isPublic
- * のみ {@link CastFieldDefinitionPatch} で部分更新できる。
+ * <p>key はプログラム識別子で店舗内一意・不変（コンストラクタ/ビルダーでのみ設定、setter も apply も持たない）。 label/displayOrder/isPublic のみ
+ * {@link CastFieldDefinitionPatch} で部分更新できる。
  */
 @Entity
 @Table(name = "t_cast_field_definitions")

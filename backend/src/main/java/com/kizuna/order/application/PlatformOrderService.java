@@ -23,7 +23,7 @@ public class PlatformOrderService {
 
   private final OrderRepository orderRepository;
   private final OrderService orderService;
-  private final StoreContext tenantContext;
+  private final StoreContext storeContext;
   private final OrderMapper orderMapper;
 
   /** 授権店舗集合での受注横断一覧。濾過は storeSetFilter（@StoreSetScoped）が機構的に行う。 */
@@ -41,11 +41,11 @@ public class PlatformOrderService {
       throw new AccessDeniedException("指定店舗はこのアカウントの授権店舗集合に含まれません");
     }
     try {
-      tenantContext.setStoreId(request.getStoreId());
+      storeContext.setStoreId(request.getStoreId());
       return orderService.create(request);
     } finally {
       // /platform は StoreIdInterceptor(afterCompletion clear)を通らないため、ここで必ず消す
-      tenantContext.clear();
+      storeContext.clear();
     }
   }
 }

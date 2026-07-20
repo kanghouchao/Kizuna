@@ -8,7 +8,7 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.shared.CrossTenantTestSupport;
+import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -38,7 +38,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * の強断言様式（応答生ボディに授権外店舗の実データが一切現れないこと）に倣う。シードユーザーは v0.5.0（田中花子=STORE_MANAGER{1,2} /
  * 山田次郎=STORE_STAFF{1} / HQ=ALL_STORES）。
  */
-class PlatformBridgeIT extends CrossTenantTestSupport {
+class PlatformBridgeIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
@@ -73,9 +73,9 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
 
   @BeforeEach
   void prepareBridgeFixture() {
-    // store1 に正向マーカー、store2（v0.5.0 シードの実在店舗 = TENANT_B）にカナリアを直挿する。
-    ensureMarkerOrder(TENANT_A, MARKER_S1_STORE_NAME, MARKER_S1_REMARKS);
-    ensureMarkerOrder(TENANT_B, CANARY_S2_STORE_NAME, CANARY_S2_REMARKS);
+    // store1 に正向マーカー、store2（v0.5.0 シードの実在店舗 = STORE_B）にカナリアを直挿する。
+    ensureMarkerOrder(STORE_A, MARKER_S1_STORE_NAME, MARKER_S1_REMARKS);
+    ensureMarkerOrder(STORE_B, CANARY_S2_STORE_NAME, CANARY_S2_REMARKS);
 
     ensurePlatformUser(CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
     ensurePlatformUser(
@@ -83,17 +83,17 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         UserType.STAFF,
         bundleIdsOf("店舗スタッフ"),
         StoreScopeType.SPECIFIC_STORES,
-        Set.of(TENANT_A));
+        Set.of(STORE_A));
   }
 
-  /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他テナントにも書ける）。 */
-  private void ensureMarkerOrder(long tenantId, String storeName, String remarks) {
+  /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
+  private void ensureMarkerOrder(long storeId, String storeName, String remarks) {
     boolean exists =
         orderRepository.findAll().stream()
             .anyMatch(
                 o ->
                     o.getStoreId() != null
-                        && tenantId == o.getStoreId()
+                        && storeId == o.getStoreId()
                         && remarks.equals(o.getRemarks()));
     if (exists) {
       return;
@@ -105,7 +105,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
             .businessDate(MARKER_DATE)
             .status(OrderStatus.CREATED)
             .build();
-    order.setStoreId(tenantId);
+    order.setStoreId(storeId);
     orderRepository.save(order);
   }
 
@@ -167,27 +167,27 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   }
 
   /** 平台トークン + 店舗文脈ヘッダ（X-Role: store / X-Store-ID）。過橋の正規リクエスト形。 */
-  private static HttpHeaders bridgeHeaders(String token, long tenantId) {
+  private static HttpHeaders bridgeHeaders(String token, long storeId) {
     HttpHeaders headers = bearer(token);
     headers.set("X-Role", "store");
-    headers.set("X-Store-ID", String.valueOf(tenantId));
+    headers.set("X-Store-ID", String.valueOf(storeId));
     return headers;
   }
 
-  private static HttpHeaders bridgeJsonHeaders(String token, long tenantId) {
-    HttpHeaders headers = bridgeHeaders(token, tenantId);
+  private static HttpHeaders bridgeJsonHeaders(String token, long storeId) {
+    HttpHeaders headers = bridgeHeaders(token, storeId);
     headers.setContentType(MediaType.APPLICATION_JSON);
     return headers;
   }
 
-  private ResponseEntity<String> getTenantOrdersRaw(HttpHeaders headers) {
+  private ResponseEntity<String> getStoreOrdersRaw(HttpHeaders headers) {
     return rest.exchange(
         "/store/orders?size=500", HttpMethod.GET, new HttpEntity<>(headers), String.class);
   }
 
-  private long castCountForTenant(long tenantId) {
+  private long castCountForStore(long storeId) {
     return castRepository.findAll().stream()
-        .filter(c -> c.getStoreId() != null && tenantId == c.getStoreId())
+        .filter(c -> c.getStoreId() != null && storeId == c.getStoreId())
         .count();
   }
 
@@ -205,7 +205,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   void managerReadsBothAuthorizedStoresViaBridge() {
     String token = platformToken(MANAGER_EMAIL);
 
-    ResponseEntity<String> store1 = getTenantOrdersRaw(bridgeHeaders(token, TENANT_A));
+    ResponseEntity<String> store1 = getStoreOrdersRaw(bridgeHeaders(token, STORE_A));
     assertThat(store1.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(store1.getBody())
         .as("店舗1の一覧は店舗1マーカーを含み、店舗2カナリアを一切含まないこと")
@@ -213,7 +213,7 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         .doesNotContain(CANARY_S2_REMARKS)
         .doesNotContain(CANARY_S2_STORE_NAME);
 
-    ResponseEntity<String> store2 = getTenantOrdersRaw(bridgeHeaders(token, TENANT_B));
+    ResponseEntity<String> store2 = getStoreOrdersRaw(bridgeHeaders(token, STORE_B));
     assertThat(store2.getStatusCode()).as("授権内の正側: 店舗2も読めること").isEqualTo(HttpStatus.OK);
     assertThat(store2.getBody()).contains(CANARY_S2_REMARKS);
   }
@@ -223,21 +223,21 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
   void staffCannotReachUnauthorizedStore() {
     String token = platformToken(STAFF_EMAIL);
 
-    ResponseEntity<String> read = getTenantOrdersRaw(bridgeHeaders(token, TENANT_B));
+    ResponseEntity<String> read = getStoreOrdersRaw(bridgeHeaders(token, STORE_B));
     assertThat(read.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(read.getBody() == null ? "" : read.getBody())
         .as("拒否応答に店舗2の実データが一切現れないこと")
         .doesNotContain(CANARY_S2_REMARKS)
         .doesNotContain(CANARY_S2_STORE_NAME);
 
-    long before = castCountForTenant(TENANT_B);
+    long before = castCountForStore(STORE_B);
     ResponseEntity<String> write =
         rest.postForEntity(
             "/store/casts",
-            new HttpEntity<>("{\"name\": \"過橋IT不正書込キャスト\"}", bridgeJsonHeaders(token, TENANT_B)),
+            new HttpEntity<>("{\"name\": \"過橋IT不正書込キャスト\"}", bridgeJsonHeaders(token, STORE_B)),
             String.class);
     assertThat(write.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-    assertThat(castCountForTenant(TENANT_B)).as("拒否された書きが店舗2に永続化されていないこと").isEqualTo(before);
+    assertThat(castCountForStore(STORE_B)).as("拒否された書きが店舗2に永続化されていないこと").isEqualTo(before);
   }
 
   @Test
@@ -394,14 +394,14 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
         rest.exchange(
             "/store/orders",
             HttpMethod.GET,
-            new HttpEntity<>(bridgeHeaders(platformToken(CAST_EMAIL), TENANT_A)),
+            new HttpEntity<>(bridgeHeaders(platformToken(CAST_EMAIL), STORE_A)),
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
-  @DisplayName("統合前の旧メニュー端点 GET /central/menus/me・/tenant/menus/me は 404 になること")
+  @DisplayName("統合前の旧メニュー端点 GET /central/menus/me・/store/menus/me は 404 になること")
   void oldMenuEndpointsAreGone() {
     ResponseEntity<String> central =
         rest.exchange(
@@ -413,9 +413,9 @@ class PlatformBridgeIT extends CrossTenantTestSupport {
 
     ResponseEntity<String> store =
         rest.exchange(
-            "/tenant/menus/me",
+            "/store/menus/me",
             HttpMethod.GET,
-            new HttpEntity<>(bridgeHeaders(platformToken(MANAGER_EMAIL), TENANT_A)),
+            new HttpEntity<>(bridgeHeaders(platformToken(MANAGER_EMAIL), STORE_A)),
             String.class);
     assertThat(store.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }

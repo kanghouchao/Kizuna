@@ -7,7 +7,7 @@
 
 * `c.k.s.domain.StoreProfileRepository`
 |Bean references
-|* `c.k.s.tenancy.TenantContext` (in Shared)
+|* `c.k.s.storescope.StoreContext` (in Shared)
 |Aggregate roots
 |* `c.k.s.domain.StoreProfile`
 |===

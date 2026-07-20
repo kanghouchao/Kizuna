@@ -4,7 +4,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-/** カスタムフィールド定義のリポジトリ。storeFilter 前提のためテナント条件は書かない（CastRepository と同流儀）。 */
+/** カスタムフィールド定義のリポジトリ。storeFilter 前提のため店舗条件は書かない（CastRepository と同流儀）。 */
 public interface CastFieldDefinitionRepository extends JpaRepository<CastFieldDefinition, String> {
 
   boolean existsByKey(String key);

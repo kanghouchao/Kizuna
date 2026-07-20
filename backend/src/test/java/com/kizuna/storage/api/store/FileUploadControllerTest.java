@@ -33,21 +33,21 @@ class FileUploadControllerTest {
   @Mock private FileStorageService fileStorageService;
   @Mock private MultipartFile file;
 
-  private StoreContext tenantContext;
+  private StoreContext storeContext;
   private FileUploadController controller;
 
   @BeforeEach
   void setUp() {
-    tenantContext = new StoreContext();
+    storeContext = new StoreContext();
     AppProperties appProperties = new AppProperties();
     appProperties.setUpload(new AppProperties.Upload());
-    controller = new FileUploadController(fileStorageService, tenantContext, appProperties);
+    controller = new FileUploadController(fileStorageService, storeContext, appProperties);
   }
 
   @AfterEach
   void tearDown() {
     SecurityContextHolder.clearContext();
-    tenantContext.clear();
+    storeContext.clear();
   }
 
   /** 指定した authority 群で認証済みリクエストを模擬する（central 保存可否は SecurityContext の authority で判定される）。 */
@@ -61,7 +61,7 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("PLATFORM_ASSET_MANAGE 能力のトークンはテナント文脈が無くても central 配下に保存すること")
+  @DisplayName("PLATFORM_ASSET_MANAGE 能力のトークンは店舗文脈が無くても central 配下に保存すること")
   void upload_storesUnderCentralForPlatformAssetManage() {
     authenticateWithAuthorities(Capability.PLATFORM_ASSET_MANAGE.authority());
     when(fileStorageService.store("central", "public", file)).thenReturn("public/central/x.jpg");
@@ -76,7 +76,7 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("PLATFORM_ASSET_MANAGE の無いトークンはテナント文脈が無い場合、central に保存せず拒否すること")
+  @DisplayName("PLATFORM_ASSET_MANAGE の無いトークンは店舗文脈が無い場合、central に保存せず拒否すること")
   void upload_rejectsWithoutPlatformAssetManageAndStoreContext() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
 
@@ -87,9 +87,9 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("テナント文脈が解決済みならそのテナント配下に保存すること")
-  void upload_storesUnderTenantPrefixWhenContextResolved() {
-    tenantContext.setStoreId(5L);
+  @DisplayName("店舗文脈が解決済みならその店舗配下に保存すること")
+  void upload_storesUnderStorePrefixWhenContextResolved() {
+    storeContext.setStoreId(5L);
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
     when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");

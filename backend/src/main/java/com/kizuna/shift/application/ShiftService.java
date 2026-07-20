@@ -14,7 +14,7 @@ import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
-import com.kizuna.tenant.domain.TenantRepository;
+import com.kizuna.store.domain.StoreRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -35,8 +35,8 @@ public class ShiftService {
 
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
-  private final StoreContext tenantContext;
-  private final TenantRepository tenantRepository;
+  private final StoreContext storeContext;
+  private final StoreRepository storeRepository;
   private final CastService castService;
   private final CastRepository castRepository;
   private final AppProperties appProperties;
@@ -51,9 +51,9 @@ public class ShiftService {
 
   /**
    * 公開出勤表用に「本日（app.timezone）」の確定（CONFIRMED）シフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧 ({@code
-   * /tenant/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
+   * /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
    * 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は {@code @StoreScoped} によりセッション全体で有効なので t_casts
-   * 参照も現テナントに絞られる。
+   * 参照も現店舗に絞られる。
    */
   @StoreScoped
   @Transactional(readOnly = true)
@@ -90,16 +90,16 @@ public class ShiftService {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
     validateStatus(request.getStatus());
-    if (!castService.existsForCurrentTenant(request.getCastId())) {
+    if (!castService.existsForCurrentStore(request.getCastId())) {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
 
     Shift shift = shiftMapper.toEntity(request);
 
     shift.setStoreId(
-        tenantRepository
-            .findById(tenantContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("テナントが見つかりません"))
+        storeRepository
+            .findById(storeContext.getStoreId())
+            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
             .getId());
 
     return shiftMapper.toResponse(shiftRepository.save(shift));
@@ -112,7 +112,7 @@ public class ShiftService {
         shiftRepository.findById(id).orElseThrow(() -> new ServiceException("シフトが見つかりません: " + id));
 
     validateStatus(request.getStatus());
-    if (request.getCastId() != null && !castService.existsForCurrentTenant(request.getCastId())) {
+    if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
 
