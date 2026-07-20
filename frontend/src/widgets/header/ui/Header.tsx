@@ -7,6 +7,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { platformAuthApi, PlatformStore, useAuth } from '@/entities/user';
 import {
   getPlatformStoreId,
+  getStoreIdFromPath,
   isPlatformSession,
   isStoreDomain,
   replaceStoreIdInPath,
@@ -21,19 +22,26 @@ export function Header() {
   const accountHref = isStoreDomain() ? '/store/settings/account' : '/platform/settings/account';
 
   const [stores, setStores] = useState<PlatformStore[]>([]);
-  const [currentStoreId, setCurrentStoreId] = useState<string | undefined>(undefined);
+  // cookie 由来の「前回選択した店舗」ヒント。document 依存で SSR-unsafe なため mount 時のみ読む。
+  // store-scoped ページ外（platform 側）に居るときだけ表示に使う fallback 専用の役割（#413 Fix1）。
+  const [lastUsedStoreId, setLastUsedStoreId] = useState<string | undefined>(undefined);
 
   // 店舗切替は console 値に依らず「平台セッションかつ授権店舗が1件以上」で常設化する（#413）。
   // 授権店舗が空なら dropdown は非表示のままなので、増える負荷は stores() 1回のみ。
   useEffect(() => {
     if (isPlatformSession()) {
-      setCurrentStoreId(getPlatformStoreId());
+      setLastUsedStoreId(getPlatformStoreId());
       platformAuthApi
         .stores()
         .then(setStores)
         .catch(error => console.error('Failed to fetch stores', error));
     }
   }, []);
+
+  // 表示する店舗は pathname 由来の storeId を最優先し、無ければ cookie ヒントに fallback する（#413 Fix1）。
+  // usePathname() は hydration-safe なため毎レンダー再計算でき、店舗切替後の pathname 変化にラベルが追随する。
+  const pathStoreId = getStoreIdFromPath(pathname);
+  const currentStoreId = pathStoreId ?? lastUsedStoreId;
 
   const currentStoreName = stores.find(store => String(store.id) === currentStoreId)?.name;
 

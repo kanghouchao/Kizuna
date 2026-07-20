@@ -90,4 +90,26 @@ describe('Header 店舗切替の常設化（#413）', () => {
 
     expect(mockPush).toHaveBeenCalledWith('/store/2/dashboard');
   });
+
+  it('pathname が別店舗へ変化するとラベルが新しい pathname 由来の店舗名へ追随する（#413 Fix1）', async () => {
+    mockedGetStoreId.mockReturnValue('2');
+    mockPathname = '/store/2/dashboard';
+    mockedStores.mockResolvedValue([
+      { id: 1, name: '店舗A' },
+      { id: 2, name: '店舗B' },
+    ]);
+
+    const { rerender } = render(<Header />);
+
+    // 初期表示は pathname 由来の store 2（店舗B）。
+    expect(await screen.findByRole('button', { name: '店舗B' })).toBeInTheDocument();
+
+    // 店舗切替で URL が /store/1/... へ遷移した状態を再現する。
+    mockPathname = '/store/1/dashboard';
+    rerender(<Header />);
+
+    // ラベルは古い店舗名のまま残らず、新しい pathname 由来の store 1（店舗A）へ更新される。
+    expect(await screen.findByRole('button', { name: '店舗A' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '店舗B' })).not.toBeInTheDocument();
+  });
 });
