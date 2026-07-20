@@ -30,7 +30,6 @@ import {
   getPlatformStoreId,
   getStoreIdFromPath,
   isStoreConsole,
-  setPlatformStore,
 } from '@/shared/lib';
 
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
@@ -77,10 +76,8 @@ export function Sidebar() {
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
-    // 直リンクで /store/{id}/... に来た場合も「前回選択」cookie を最新化する（#413）。
-    if (pathStoreId) {
-      setPlatformStore(pathStoreId);
-    }
+    // 「前回選択」cookie の更新は apiClient の応答インターセプタ（X-Store-ID 受理時のみ）に委ね、
+    // 未検証の URL 由来 id をここで書き込まない（非授権 id の手打ちで cookie を汚染しない — #413 Fix6-3）。
     // 平台セッションがあれば優先する（コンソール値: platform / store — #324/#398）
     const platformConsole = getPlatformConsole();
     if (platformConsole) {
@@ -92,7 +89,7 @@ export function Sidebar() {
     if (mwRole) {
       setRole(mwRole);
     }
-  }, [pathStoreId]);
+  }, []);
 
   useEffect(() => {
     const fetchMenus = async () => {
