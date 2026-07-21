@@ -48,16 +48,10 @@ tasks:
         fi
 
   lint-repo:
-    desc: リポジトリ横断の Lint（GitHub Actions workflows / .claude 設定）
+    desc: リポジトリ横断の Lint（GitHub Actions workflows）
     cmds:
       - echo "🧹 Workflows lint (actionlint)..."
       - docker run --rm -v "$(pwd):/repo" -w /repo rhysd/actionlint:1.7.12
-      - echo "🧹 .claude/agents の skills 参照検証..."
-      - .claude/scripts/validate-agent-skills.sh
-      - echo "🧹 pre-pr-gate hook 回帰テスト..."
-      - .claude/hooks/tests/pre-pr-gate.test.sh
-      - echo "🧹 check-pr.sh 回帰テスト..."
-      - .claude/skills/create-pr/check-pr.test.sh
 
   test:
     desc: すべてのサービスのテストを実行（frontend + backend unit + integration、後方互換）

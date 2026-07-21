@@ -39,7 +39,7 @@ jobs:
           fetch-depth: 2
 
       # docs-only 判定: コード領域に触れない PR では重いゲートを省略する。
-      # 境界は .claude/skills/create-pr/check-pr.sh のコード領域判定と同一に保つこと。
+      # 境界（コード領域判定）は本 workflow 内で完結させる（frontend/backend 両 job で同一に保つこと）。
       # エリア連動スキップ（backend のみの diff で本 job を省く等）はしない —
       # frontend/backend 両 job とも同じ全域境界を見る（#346 スコープ外）。
       # diff が取れない場合は fail-closed（フルゲート実行）。
@@ -105,7 +105,7 @@ jobs:
           fetch-depth: 2
 
       # docs-only 判定: コード領域に触れない PR では重いゲートを省略する。
-      # 境界は .claude/skills/create-pr/check-pr.sh のコード領域判定と同一に保つこと。
+      # 境界（コード領域判定）は本 workflow 内で完結させる（frontend/backend 両 job で同一に保つこと）。
       # エリア連動スキップ（frontend のみの diff で本 job を省く等）はしない —
       # frontend/backend 両 job とも同じ全域境界を見る（#346 スコープ外）。
       # diff が取れない場合は fail-closed（フルゲート実行）。
