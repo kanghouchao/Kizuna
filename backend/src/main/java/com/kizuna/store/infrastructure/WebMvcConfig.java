@@ -1,8 +1,8 @@
 package com.kizuna.store.infrastructure;
 
 import com.kizuna.shared.storescope.StoreIdInterceptor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
