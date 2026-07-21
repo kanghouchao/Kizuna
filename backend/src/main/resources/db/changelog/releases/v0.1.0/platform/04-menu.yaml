@@ -1,0 +1,76 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-004-menu-schema
+      author: kanghouchao
+      # Menu は単一のプラットフォーム集約（店舗次元を持たない）。可視性は permission に
+      # 置いた Capability 名で決まり、プラットフォーム／店舗コンソールの出し分けもここで行う。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_menus
+            remarks: プラットフォーム統合メニュー（プラットフォーム／店舗コンソール共通の単一 Menu 集約）
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_menus
+              - column:
+                  name: parent_id
+                  type: VARCHAR(64)
+                  remarks: 親メニュー（NULL = グループ根。階層は 2 段まで）
+              - column:
+                  name: label
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                  remarks: 表示ラベル
+              - column:
+                  name: path
+                  type: VARCHAR(255)
+                  remarks: 遷移先パス（グループ根は NULL）
+              - column:
+                  name: icon
+                  type: VARCHAR(50)
+                  remarks: アイコン名（heroicons）
+              - column:
+                  name: permission
+                  type: VARCHAR(100)
+                  remarks: 可視化に必要な能力（Capability 名）
+              - column:
+                  name: sort_order
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 表示順
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_menus_parent
+            baseTableName: t_menus
+            baseColumnNames: parent_id
+            referencedTableName: t_menus
+            referencedColumnNames: id
+            onDelete: CASCADE

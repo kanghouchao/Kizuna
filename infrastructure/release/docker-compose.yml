@@ -1,21 +1,29 @@
 # docker-compose.yml
 name: kizuna
 
+# 環境変数の受け渡し方針:
+# - backend / frontend は env_file を使わず、消費する変数を environment で明示列挙する
+#   （何を読むかがファイル上で確定し、shell 環境からの上書きも効く）。
+# - 「コンテナ構成上 application.yml の既定値では必ず誤りになる項目」（ホスト名・ポート・
+#   資格情報・エンドポイント・Liquibase コンテキスト）だけ ${VAR:-既定} を書く。
+# - それ以外のチューニング項目は裸名で列挙する。.env にあれば渡り、無ければコンテナ内で
+#   未定義のままになり application.yml の既定値が生きる（既定値の二重管理を避ける）。
+
 services:
   # Database: PostgreSQL
   database:
     image: postgres:18-alpine
     container_name: database
     environment:
-      POSTGRES_DB: ${DB_NAME:-kizuna}
-      POSTGRES_USER: ${DB_USERNAME:-kizuna}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-kizuna}
+      POSTGRES_USER: ${POSTGRES_USER:-kizuna}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     volumes:
       - db-data:/var/lib/postgresql
     networks:
       - network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-kizuna} -d ${DB_NAME:-kizuna}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kizuna} -d ${POSTGRES_DB:-kizuna}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,8 +51,68 @@ services:
     container_name: backend
     networks:
       - network
-    env_file:
-      - .env
+    environment:
+      # --- コンテナ構成で決まる項目（既定値必須） ---
+      - POSTGRES_HOST=${POSTGRES_HOST:-database}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-kizuna}
+      - POSTGRES_USER=${POSTGRES_USER:-kizuna}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_HOST=${REDIS_HOST:-cache}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-password}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://storage:9000}
+      - MINIO_BUCKET=${MINIO_BUCKET:-uploads}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-changeme}
+      # 本番はデモデータを投入しない
+      - LIQUIBASE_CONTEXTS=${LIQUIBASE_CONTEXTS:-production}
+      # 公開サイトは HTTPS
+      - APP_SCHEME=${APP_SCHEME:-https}
+      # --- 以下は裸名。.env にあれば渡り、無ければ application.yml の既定値が効く ---
+      - SPRING_PROFILE
+      - SERVER_PORT
+      - APP_NAME
+      - APP_DOMAIN
+      - APP_TIMEZONE
+      - APP_JWT_SECRET
+      - APP_JWT_EXPIRATION_MS
+      - APP_UPLOAD_URL_PREFIX
+      - APP_UPLOAD_MAX_FILE_SIZE
+      - INITIAL_ADMIN_PASSWORD_HASH
+      - DEMO_USER_PASSWORD_HASH
+      - POSTGRES_SSLMODE
+      - POSTGRES_SSL
+      - HIKARI_MINIMUM_IDLE
+      - HIKARI_MAXIMUM_POOL_SIZE
+      - HIKARI_IDLE_TIMEOUT
+      - HIKARI_MAX_LIFETIME
+      - HIKARI_CONNECTION_TIMEOUT
+      - HIKARI_LEAK_DETECTION_THRESHOLD
+      - HIKARI_VALIDATION_TIMEOUT
+      - HIKARI_INITIALIZATION_FAIL_TIMEOUT
+      - REDIS_DATABASE
+      - REDIS_SSL
+      - REDIS_TIMEOUT
+      - REDIS_CLIENT_TYPE
+      - LETTUCE_POOL_MAX_ACTIVE
+      - LETTUCE_POOL_MAX_IDLE
+      - LETTUCE_POOL_MIN_IDLE
+      - LETTUCE_POOL_MAX_WAIT
+      - SPRING_CACHE_TTL_MS
+      - SPRING_CACHE_NULL_VALUES
+      - SPRING_CACHE_USE_KEY_PREFIX
+      - SPRING_CACHE_KEY_PREFIX
+      - SPRING_JPA_SHOW_SQL
+      - SPRING_JPA_OPEN_IN_VIEW
+      - SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL
+      # Spring Mail は DB のシステム設定（t_system_configs の smtp_*）が未設定のときのフォールバック先
+      - SPRING_MAIL_HOST
+      - SPRING_MAIL_PORT
+      - SPRING_MAIL_USERNAME
+      - SPRING_MAIL_PASSWORD
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
     depends_on:
       database:
         condition: service_healthy
@@ -75,21 +143,36 @@ services:
     container_name: storage
     command: server /data --console-address ":9001"
     environment:
+      # backend もこの同じ変数を S3 の access/secret key として参照する（設定元を一本化する）
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme}
+      # 管理コンソールを Traefik 配下の /minio で提供するため、MinIO 自身へ公開 URL を教える。
+      # これを設定すると MinIO はコンソールをこのサブパス上で配信するため stripPrefix は不要。
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-${APP_SCHEME:-https}://${APP_DOMAIN:-kizuna.jp}/minio}
     volumes:
       - storage-data:/data
     networks:
       - network
     labels:
       - "traefik.enable=true"
+      # /static: オブジェクト配信（S3 API ポート）。複数サービスを定義するため router に service を明示する。
       - "traefik.http.routers.storage.rule=PathPrefix(`/static`)"
       - "traefik.http.routers.storage.entrypoints=websecure"
       - "traefik.http.routers.storage.tls.certresolver=letsencrypt"
       - "traefik.http.routers.storage.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"
       - "traefik.http.routers.storage.middlewares=storage-strip@docker"
+      - "traefik.http.routers.storage.service=storage"
       - "traefik.http.services.storage.loadbalancer.server.port=9000"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
+      # /minio: 管理コンソール（コンソールポート）。MINIO_BROWSER_REDIRECT_URL と対で機能する。
+      # 注意: root 資格情報でログインする管理画面をインターネットに露出させている。
+      # 認証・アクセス制限は別途検討すること。
+      - "traefik.http.routers.storage-console.rule=PathPrefix(`/minio`)"
+      - "traefik.http.routers.storage-console.entrypoints=websecure"
+      - "traefik.http.routers.storage-console.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.storage-console.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"
+      - "traefik.http.routers.storage-console.service=storage-console"
+      - "traefik.http.services.storage-console.loadbalancer.server.port=9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -103,14 +186,20 @@ services:
     container_name: frontend
     networks:
       - network
-    env_file:
-      - .env
+    environment:
+      # --- コンテナ構成で決まる項目（既定値必須） ---
+      - STORE_LOOKUP_API_URL=${STORE_LOOKUP_API_URL:-http://backend:8080/platform/stores/lookup}
+      - STORE_CONFIG_API_URL=${STORE_CONFIG_API_URL:-http://backend:8080/store/config/public}
+      # --- 以下は裸名 ---
+      - NODE_ENV
+      - APP_DOMAIN
+      - NEXT_PUBLIC_PLATFORM_DOMAIN
     depends_on:
       backend:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`) && !PathPrefix(`/minio`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"

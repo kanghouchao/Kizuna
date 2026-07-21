@@ -1,7 +1,0 @@
-databaseChangeLog:
-  - include:
-      file: tenant/01-cast-invitation.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: tenant/02-cast-invitation-pending-unique.yaml
-      relativeToChangelogFile: true

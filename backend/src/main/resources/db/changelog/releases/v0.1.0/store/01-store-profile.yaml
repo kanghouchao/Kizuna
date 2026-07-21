@@ -1,0 +1,112 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-001-store-profile-schema
+      author: kanghouchao
+      # StoreProfile = 店舗公開サイトの表示設定。プラットフォーム級の SystemConfig とは別物。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_store_profiles
+            remarks: 店舗公開サイトの表示設定（店舗ごとに 1 行）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_store_profiles
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_store_profiles_store_id
+              - column:
+                  name: template_key
+                  type: VARCHAR(50)
+                  defaultValue: "default"
+                  remarks: 適用テンプレート
+              - column:
+                  name: logo_url
+                  type: VARCHAR(500)
+                  remarks: ロゴ画像 URL
+              - column:
+                  name: banner_url
+                  type: VARCHAR(500)
+                  remarks: バナー画像 URL
+              - column:
+                  name: mv_url
+                  type: VARCHAR(500)
+                  remarks: メインビジュアル URL
+              - column:
+                  name: mv_type
+                  type: VARCHAR(20)
+                  defaultValue: "image"
+                  remarks: メインビジュアル種別（image/video）
+              - column:
+                  name: description
+                  type: TEXT
+                  remarks: 店舗紹介文
+              - column:
+                  name: catch_copy
+                  type: TEXT
+                  remarks: キャッチコピー
+              - column:
+                  name: address
+                  type: VARCHAR(500)
+                  remarks: 住所
+              - column:
+                  name: phone
+                  type: VARCHAR(50)
+                  remarks: 電話番号
+              - column:
+                  name: business_hours
+                  type: VARCHAR(500)
+                  remarks: 営業時間（自由テキスト）
+              - column:
+                  name: pricing_description
+                  type: TEXT
+                  remarks: 料金説明文（料金ページの本文）
+              - column:
+                  name: sns_links
+                  type: JSONB
+                  remarks: SNS リンク一覧 (JSON Array)
+              - column:
+                  name: partner_links
+                  type: JSONB
+                  remarks: 提携先リンク一覧 (JSON Array)
+              - column:
+                  name: custom_texts
+                  type: JSONB
+                  remarks: テンプレート別テキストスロット（key→text。テンプレート切替時も他テンプレートの key を保持）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_store_profiles_store
+            baseTableName: t_store_profiles
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE

@@ -1,43 +1,53 @@
+# v0.1.0 = 単一ベースライン。設計変更の積み重ねで散った 17 リリース分の changeset を、
+# 終態のテーブル定義そのものへ統合したもの（作っては消す表・改名 ALTER・列の後付けを一掃）。
+# 構成は「platform（プラットフォーム全体で単一のデータ）」「store（店舗スコープのデータ）」
+# 「seed（初期データ）」の 3 層。FK の依存順にそのまま並べてある。
 databaseChangeLog:
   - include:
-      file: central/01-auth-schema.yaml
+      file: platform/01-store.yaml
       relativeToChangelogFile: true
   - include:
-      file: central/02-tenants-schema.yaml
+      file: platform/02-user.yaml
       relativeToChangelogFile: true
   - include:
-      file: central/03-menus-schema.yaml
+      file: platform/03-authorization.yaml
       relativeToChangelogFile: true
   - include:
-      file: central/04-config-schema.yaml
+      file: platform/04-menu.yaml
       relativeToChangelogFile: true
   - include:
-      file: central/05-initial-data.yaml
+      file: platform/05-system-config.yaml
       relativeToChangelogFile: true
   - include:
-      file: central/06-config-extend.yaml
+      file: platform/06-event-publication.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/01-core-schema.yaml
+      file: store/01-store-profile.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/02-resources-schema.yaml
+      file: store/02-cast.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/03-crm-schema.yaml
+      file: store/03-customer.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/04-hrm-schema.yaml
+      file: store/04-order.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/05-orders-schema.yaml
+      file: store/05-shift.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/06-menus-schema.yaml
+      file: seed/01-capability-bundles.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/07-site-config-schema.yaml
+      file: seed/02-menus.yaml
       relativeToChangelogFile: true
   - include:
-      file: tenant/08-initial-data.yaml
+      file: seed/03-system-configs.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: seed/04-platform-admin.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: seed/05-demo.yaml
       relativeToChangelogFile: true

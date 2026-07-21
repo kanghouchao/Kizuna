@@ -1,4 +1,0 @@
-databaseChangeLog:
-  - include:
-      file: tenant/01-receptionist-platform-user.yaml
-      relativeToChangelogFile: true

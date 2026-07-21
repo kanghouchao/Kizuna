@@ -1,0 +1,75 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-005-system-config-schema
+      author: kanghouchao
+      # SystemConfig = プラットフォーム級のシステム設定（SMTP・メンテナンスモード等）。
+      # 店舗向けの表示設定は StoreProfile 側であり、両者を混ぜない。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_system_configs
+            remarks: システム全体の設定（SMTP, メンテナンスモード等）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_system_configs
+              - column:
+                  name: config_key
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_system_configs_key
+                  remarks: 設定キー
+              - column:
+                  name: config_value
+                  type: TEXT
+                  remarks: 設定値（空文字＝未設定として環境変数フォールバック）
+              - column:
+                  name: category
+                  type: VARCHAR(50)
+                  remarks: 設定のカテゴリ（SMTP, SYSTEM, SECURITY等）
+              - column:
+                  name: description
+                  type: VARCHAR(500)
+                  remarks: 設定の説明
+              - column:
+                  name: value_type
+                  type: VARCHAR(20)
+                  defaultValue: STRING
+                  constraints:
+                    nullable: false
+                  remarks: 設定値の型（STRING, NUMBER, BOOLEAN）
+              - column:
+                  name: secret
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+                  remarks: 秘匿設定（レスポンスで値をマスクする）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン

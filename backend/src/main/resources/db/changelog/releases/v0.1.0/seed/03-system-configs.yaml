@@ -1,0 +1,54 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-v0100-003-system-configs
+      author: kanghouchao
+      # SMTP は「未設定（空文字）＝環境変数フォールバック」が既定。値を入れると DB 側が優先される。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "maintenance_mode" }
+              - column: { name: config_value, value: "false" }
+              - column: { name: category, value: "SYSTEM" }
+              - column: { name: description, value: "システムメンテナンスモード" }
+              - column: { name: value_type, value: "BOOLEAN" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "smtp_host" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "SMTPサーバーホスト" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "smtp_port" }
+              - column: { name: config_value, value: "25" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "SMTPサーバーポート" }
+              - column: { name: value_type, value: "NUMBER" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "smtp_username" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "SMTP認証ユーザー名" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "smtp_password" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "SMTP認証パスワード" }
+              - column: { name: secret, valueBoolean: true }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "smtp_from" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "SMTP" }
+              - column: { name: description, value: "メール送信元アドレス" }

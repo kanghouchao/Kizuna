@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-v0100-004-platform-admin
+      author: kanghouchao
+      # 初期ログイン用の HQ 管理者。これが無いと誰もログインできず店舗もユーザーも作れないため、
+      # demo コンテキストではなくベースラインに置く。ALL_STORES 授権のため t_user_stores 行は持たない。
+      # パスワードハッシュは changelog パラメータ initialAdminPasswordHash から与える
+      # （spring.liquibase.parameters 経由。既定は開発・E2E 用の平文 pass のハッシュ）。
+      # 本番は INITIAL_ADMIN_PASSWORD_HASH に自前の bcrypt ハッシュを設定すること。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - insert:
+            tableName: t_users
+            columns:
+              - column: { name: email, value: admin@kizuna.test }
+              - column: { name: password, value: "${initialAdminPasswordHash}" }
+              - column: { name: display_name, value: "HQ管理者" }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: user_type, value: STAFF }
+              - column: { name: store_scope_type, value: ALL_STORES }
+        - insert:
+            tableName: t_user_bundles
+            columns:
+              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'admin@kizuna.test')" }
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
