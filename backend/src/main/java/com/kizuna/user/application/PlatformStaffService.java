@@ -1,7 +1,5 @@
 package com.kizuna.user.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.CapabilityBundleResponse;
 import com.kizuna.user.api.dto.GrantHistoryEntryResponse;
@@ -34,6 +32,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * スタッフ（能力束×店舗集合×精算範囲）管理ユースケース。対象は本人種別 STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う人員のため 一覧にも作成にも混ぜない（#325
@@ -201,7 +201,7 @@ public class PlatformStaffService {
   private String toJson(Map<String, Object> snapshot) {
     try {
       return objectMapper.writeValueAsString(snapshot);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       // 文字列・数値・真偽のみの Map で直列化が失敗することは無い（失敗はプログラミングエラー）。
       throw new IllegalStateException("付与履歴快照の直列化に失敗しました", e);
     }

@@ -2,7 +2,6 @@ package com.kizuna.customer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.shared.CrossStoreTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,6 +9,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Customer のクロス店舗分離を本物の PostgreSQL で検証する統合テスト。
@@ -30,7 +30,7 @@ class CustomerCrossStoreIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d での顧客作成が成功すること", storeId)
         .isTrue();
-    String id = created.getBody().path("id").asText();
+    String id = created.getBody().path("id").asString();
     assertThat(id).isNotBlank();
     return id;
   }
@@ -48,7 +48,7 @@ class CustomerCrossStoreIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     assertThat(got.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(got.getBody().path("id").asText()).isEqualTo(id);
+    assertThat(got.getBody().path("id").asString()).isEqualTo(id);
   }
 
   @Test

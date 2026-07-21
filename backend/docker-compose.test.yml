@@ -46,7 +46,7 @@ services:
       retries: 10
 
   integration-test:
-    image: gradle:9.2.1-jdk21-ubi-minimal
+    image: gradle:9.6.1-jdk25-ubi10
     user: root # bind mount への build/ 書き込みのため（rules/backend.md の Spotless Docker 実行と同じ流儀）
     working_dir: /app
     volumes:

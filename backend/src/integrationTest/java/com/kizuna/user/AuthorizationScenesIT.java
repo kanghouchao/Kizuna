@@ -2,7 +2,6 @@ package com.kizuna.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
@@ -25,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import tools.jackson.databind.JsonNode;
 
 /**
  * actors-and-access.md「必ず確認するアクセス場面（8 場面）」の受け入れ IT（#382 / #398）。
@@ -126,7 +126,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
                 headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 平台ログインが成功すること").isEqualTo(HttpStatus.OK);
-    return res.getBody().path("token").asText();
+    return res.getBody().path("token").asString();
   }
 
   private static HttpHeaders bearer(String token) {

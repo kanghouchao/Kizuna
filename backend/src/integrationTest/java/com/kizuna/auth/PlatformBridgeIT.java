@@ -2,8 +2,6 @@ package com.kizuna.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
@@ -29,6 +27,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 平台トークン過橋（#324 統一ログイン・案 A）の授権検証と実データ非漏洩を本物の PostgreSQL で固定する統合テスト。
@@ -149,7 +149,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   private String platformToken(String email) {
     ResponseEntity<JsonNode> res = platformLogin(email, PASSWORD);
     assertThat(res.getStatusCode()).as("前提: %s の平台ログインが成功すること", email).isEqualTo(HttpStatus.OK);
-    String t = res.getBody().path("token").asText();
+    String t = res.getBody().path("token").asString();
     assertThat(t).isNotBlank();
     return t;
   }
@@ -197,7 +197,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> res = platformLogin("TANAKA.Hanako@KIZUNA.test", PASSWORD);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody().path("token").asText()).isNotBlank();
+    assertThat(res.getBody().path("token").asString()).isNotBlank();
   }
 
   @Test

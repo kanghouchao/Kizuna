@@ -2,7 +2,6 @@ package com.kizuna.cast;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.shared.CrossStoreTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,6 +9,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Cast のクロス店舗分離を本物の PostgreSQL で検証する統合テスト（issue #226）。
@@ -28,7 +28,7 @@ class CastCrossStoreIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
-    String id = created.getBody().path("id").asText();
+    String id = created.getBody().path("id").asString();
     assertThat(id).isNotBlank();
     return id;
   }
@@ -87,6 +87,6 @@ class CastCrossStoreIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(after.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(after.getBody().path("name").asText()).isEqualTo("統合テストキャスト（更新前）");
+    assertThat(after.getBody().path("name").asString()).isEqualTo("統合テストキャスト（更新前）");
   }
 }

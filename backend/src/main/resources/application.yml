@@ -24,6 +24,18 @@ spring:
   jpa:
     show-sql: ${SPRING_JPA_SHOW_SQL:true}
     open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
+  # Jackson 3（Spring Boot 4 の既定）の JsonMapper をカスタマイズする。旧 JacksonConfig の
+  # Jackson2ObjectMapperBuilderCustomizer をプロパティへ移設したもの。java.time は Jackson 3 が自動登録するため
+  # JavaTimeModule の明示登録は不要。
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+    # Jackson 3 では日付関連のフラグは SerializationFeature から DateTimeFeature へ移動したため datatype.datetime 配下で指定する。
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
   cache:
     type: redis
     redis:

@@ -2,20 +2,21 @@ package com.kizuna.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * /platform 命名空間へ統合した店舗 API（#415 収束C）の権限マトリクス・literal/{id} 共存・旧パス消滅を 本物の PostgreSQL で固定する統合テスト。
@@ -25,6 +26,7 @@ import org.springframework.http.ResponseEntity;
  * store1.kizuna.test=id 1）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 class PlatformStoreApiIT {
 
   /** v0.4.0 シードの HQ 管理者（ALL_STORES・PERM_STORE_MANAGE 保持）。 */
@@ -51,7 +53,7 @@ class PlatformStoreApiIT {
                 headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: %s の平台ログインが成功すること", email).isEqualTo(HttpStatus.OK);
-    String token = res.getBody().path("token").asText();
+    String token = res.getBody().path("token").asString();
     assertThat(token).isNotBlank();
     return token;
   }
@@ -83,7 +85,7 @@ class PlatformStoreApiIT {
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody().path("domain").asText()).isEqualTo(STORE1_DOMAIN);
+    assertThat(res.getBody().path("domain").asString()).isEqualTo(STORE1_DOMAIN);
   }
 
   @Test
@@ -132,8 +134,8 @@ class PlatformStoreApiIT {
         rest.exchange(
             "/platform/stores/1", HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
     assertThat(byId.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(byId.getBody().path("id").asText()).isEqualTo("1");
-    assertThat(byId.getBody().path("domain").asText()).isEqualTo(STORE1_DOMAIN);
+    assertThat(byId.getBody().path("id").asString()).isEqualTo("1");
+    assertThat(byId.getBody().path("domain").asString()).isEqualTo(STORE1_DOMAIN);
 
     // literal は {id} より優先されるため、それぞれ専用ハンドラに解決され 200 になる
     // （{id} に吸われれば getById("stats"/"me") が 404 になり区別できる）。

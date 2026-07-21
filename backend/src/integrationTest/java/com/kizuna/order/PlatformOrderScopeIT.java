@@ -2,7 +2,6 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
@@ -30,6 +29,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 集合作用域（#323）の実データ非漏洩を本物の PostgreSQL で強断言する統合テスト。
@@ -151,7 +151,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
                 jsonHeaders()),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 平台ログインが成功すること").isEqualTo(HttpStatus.OK);
-    String t = res.getBody().path("token").asText();
+    String t = res.getBody().path("token").asString();
     assertThat(t).isNotBlank();
     return t;
   }
@@ -190,7 +190,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
-    return created.getBody().path("id").asText();
+    return created.getBody().path("id").asString();
   }
 
   @Test
@@ -212,7 +212,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
     boolean hasMarker = false;
     for (JsonNode node : content) {
-      if (MARKER_A_STORE_NAME.equals(node.path("store_name").asText())) {
+      if (MARKER_A_STORE_NAME.equals(node.path("store_name").asString())) {
         hasMarker = true;
         break;
       }
@@ -253,7 +253,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
     Set<Long> storeIds = new HashSet<>();
     content.forEach(
         node -> {
-          storeNames.add(node.path("store_name").asText());
+          storeNames.add(node.path("store_name").asString());
           storeIds.add(node.path("store_id").asLong());
         });
 
@@ -317,7 +317,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    String newId = res.getBody().path("id").asText();
+    String newId = res.getBody().path("id").asString();
     assertThat(newId).isNotBlank();
 
     Order created = orderRepository.findById(newId).orElseThrow();

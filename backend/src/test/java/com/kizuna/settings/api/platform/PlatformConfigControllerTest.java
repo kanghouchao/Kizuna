@@ -13,15 +13,14 @@ import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.config.JacksonConfig;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -30,11 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PlatformConfigController.class)
-@Import({
-  PlatformConfigControllerTest.MethodSecurityConfig.class,
-  JacksonConfig.class,
-  StoreContext.class
-})
+@Import({PlatformConfigControllerTest.MethodSecurityConfig.class, StoreContext.class})
 class PlatformConfigControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */

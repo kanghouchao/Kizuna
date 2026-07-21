@@ -2,7 +2,6 @@ package com.kizuna.cast;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
@@ -19,6 +18,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * カスタムフィールド定義・値のクロス店舗分離を本物の PostgreSQL で検証する統合テスト（issue #277）。
@@ -53,7 +53,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
             new HttpEntity<>("{\"email\": \"" + email + "\", \"password\": \"pass\"}", headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: %s でのログインが成功する", email).isEqualTo(HttpStatus.OK);
-    return res.getBody().path("token").asText();
+    return res.getBody().path("token").asString();
   }
 
   private HttpHeaders managerHeaders(long storeId) {
@@ -84,7 +84,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
             "前提: store %d で定義作成が成功する (status=%s body=%s)",
             storeId, res.getStatusCode(), res.getBody())
         .isTrue();
-    String id = res.getBody().path("id").asText();
+    String id = res.getBody().path("id").asString();
     assertThat(id).isNotBlank();
     return id;
   }

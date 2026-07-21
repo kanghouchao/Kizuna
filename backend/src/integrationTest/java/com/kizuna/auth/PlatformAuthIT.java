@@ -2,7 +2,6 @@ package com.kizuna.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -12,8 +11,9 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 統一（プラットフォーム）認証境界の統合テスト（#322）。本物の PostgreSQL/Redis に対して検証する。
@@ -29,6 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * me 応答、および平台トークンの店舗端点への過橋拒否を HTTP 境界で固定する。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 class PlatformAuthIT {
 
   private static final String SEED_EMAIL = "admin@kizuna.test";
@@ -61,7 +63,7 @@ class PlatformAuthIT {
   private String platformToken(String email, String password) {
     ResponseEntity<JsonNode> res = platformLogin(email, password);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    String token = res.getBody().path("token").asText();
+    String token = res.getBody().path("token").asString();
     assertThat(token).isNotBlank();
     return token;
   }
@@ -78,7 +80,7 @@ class PlatformAuthIT {
     ResponseEntity<JsonNode> res = platformLogin(SEED_EMAIL, SEED_PASSWORD);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody().path("token").asText()).isNotBlank();
+    assertThat(res.getBody().path("token").asString()).isNotBlank();
   }
 
   @Test
@@ -96,12 +98,12 @@ class PlatformAuthIT {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     JsonNode body = res.getBody();
-    assertThat(body.path("email").asText()).isEqualTo(SEED_EMAIL);
-    assertThat(body.path("display_name").asText()).isEqualTo(SEED_DISPLAY_NAME);
-    assertThat(body.path("user_type").asText()).isEqualTo("STAFF");
-    assertThat(body.path("console").asText()).isEqualTo("platform");
+    assertThat(body.path("email").asString()).isEqualTo(SEED_EMAIL);
+    assertThat(body.path("display_name").asString()).isEqualTo(SEED_DISPLAY_NAME);
+    assertThat(body.path("user_type").asString()).isEqualTo("STAFF");
+    assertThat(body.path("console").asString()).isEqualTo("platform");
     assertThat(body.path("capabilities").toString()).contains("STAFF_MANAGE");
-    assertThat(body.path("store_scope_type").asText()).isEqualTo("ALL_STORES");
+    assertThat(body.path("store_scope_type").asString()).isEqualTo("ALL_STORES");
     assertThat(body.path("store_ids")).isEmpty();
   }
 
@@ -128,7 +130,7 @@ class PlatformAuthIT {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     JsonNode body = res.getBody();
-    assertThat(body.path("store_scope_type").asText()).isEqualTo("SPECIFIC_STORES");
+    assertThat(body.path("store_scope_type").asString()).isEqualTo("SPECIFIC_STORES");
     assertThat(body.path("store_ids").isArray()).isTrue();
     assertThat(body.path("store_ids").size()).isEqualTo(1);
     assertThat(body.path("store_ids").get(0).asLong()).isEqualTo(1L);

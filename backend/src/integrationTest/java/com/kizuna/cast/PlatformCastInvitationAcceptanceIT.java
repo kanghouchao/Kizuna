@@ -2,7 +2,6 @@ package com.kizuna.cast;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.cast.application.CastInvitationAcceptanceService;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
@@ -31,6 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 招待受諾 API（公開照会・新規登録受諾・既存アカウント受諾）を本物の PostgreSQL で検証する統合テスト（#327）。
@@ -282,9 +282,9 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     String validToken = issue(validCast, STORE_A);
     ResponseEntity<JsonNode> valid = viewInvitation(validToken);
     assertThat(valid.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(valid.getBody().path("status").asText()).isEqualTo("VALID");
-    assertThat(valid.getBody().path("cast_name").asText()).isEqualTo("照会VALIDテスト");
-    assertThat(valid.getBody().path("store_name").asText())
+    assertThat(valid.getBody().path("status").asString()).isEqualTo("VALID");
+    assertThat(valid.getBody().path("cast_name").asString()).isEqualTo("照会VALIDテスト");
+    assertThat(valid.getBody().path("store_name").asString())
         .isEqualTo(storeRepository.findById(STORE_A).orElseThrow().getName());
 
     // EXPIRED
@@ -292,14 +292,15 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     String expiredToken =
         directInsertInvitation(
             expiredCast, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1));
-    assertThat(viewInvitation(expiredToken).getBody().path("status").asText()).isEqualTo("EXPIRED");
+    assertThat(viewInvitation(expiredToken).getBody().path("status").asString())
+        .isEqualTo("EXPIRED");
 
     // USED
     String usedCast = createCast(STORE_A, "照会USEDテスト");
     String usedToken =
         directInsertInvitation(
             usedCast, CastInvitation.Status.INVALIDATED, OffsetDateTime.now().plusHours(1));
-    assertThat(viewInvitation(usedToken).getBody().path("status").asText()).isEqualTo("USED");
+    assertThat(viewInvitation(usedToken).getBody().path("status").asString()).isEqualTo("USED");
   }
 
   private PlatformUser ensureExistingCastUser() {
@@ -328,7 +329,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     assertThat(res.getStatusCode().is2xxSuccessful())
         .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
-    return res.getBody().path("id").asText();
+    return res.getBody().path("id").asString();
   }
 
   private String issue(String castId, long storeId) {
@@ -338,7 +339,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(storeId, managerToken)),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 招待発行が成功すること").isEqualTo(HttpStatus.CREATED);
-    return res.getBody().path("token").asText();
+    return res.getBody().path("token").asString();
   }
 
   private String directInsertInvitation(
@@ -407,7 +408,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
                 jsonHeaders()),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 平台ログインが成功すること").isEqualTo(HttpStatus.OK);
-    String t = res.getBody().path("token").asText();
+    String t = res.getBody().path("token").asString();
     assertThat(t).isNotBlank();
     return t;
   }

@@ -2,7 +2,6 @@ package com.kizuna.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.CapabilityBundleRepository;
@@ -15,8 +14,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -25,6 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 店舗削除が platform_user_stores（プラットフォームユーザーの店舗授権集合）まで ON DELETE CASCADE で従うことを 本物の PostgreSQL
@@ -38,6 +39,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * のためシード store 1 は決して削除せず、第二店舗を直挿して検証する。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 class StoreDeletionCascadeIT {
 
   @Autowired private TestRestTemplate rest;
@@ -56,7 +58,7 @@ class StoreDeletionCascadeIT {
             new HttpEntity<>("{\"email\": \"admin@kizuna.test\", \"password\": \"pass\"}", headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: HQ 管理者での平台ログインが成功すること").isEqualTo(HttpStatus.OK);
-    String token = res.getBody().path("token").asText();
+    String token = res.getBody().path("token").asString();
     assertThat(token).isNotBlank();
     return token;
   }
