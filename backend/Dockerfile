@@ -1,5 +1,5 @@
 # 1. Download and cache dependencies
-FROM gradle:9.2.1-jdk21-ubi-minimal AS dependencies
+FROM gradle:9.6.1-jdk25-ubi10 AS dependencies
 WORKDIR /app
 COPY build.gradle settings.gradle ./
 COPY gradlew gradlew
@@ -30,7 +30,7 @@ RUN --mount=type=cache,id=gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=
     ./gradlew build --no-daemon --info -x test
 
 # 4. Create runtime image
-FROM eclipse-temurin:21-jre-alpine-3.22
+FROM eclipse-temurin:25-jre-alpine-3.23
 WORKDIR /app
 
 ARG APP_JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseContainerSupport"

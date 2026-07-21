@@ -3,7 +3,6 @@ package com.kizuna.cast;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
@@ -26,6 +25,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 招待発行 API と一覧の招待状態を本物の PostgreSQL で検証する統合テスト（#327）。
@@ -67,8 +67,8 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> res = issueInvitation(castId, STORE_A, managerToken);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    assertThat(res.getBody().path("token").asText()).isNotBlank();
-    OffsetDateTime expiresAt = OffsetDateTime.parse(res.getBody().path("expires_at").asText());
+    assertThat(res.getBody().path("token").asString()).isNotBlank();
+    OffsetDateTime expiresAt = OffsetDateTime.parse(res.getBody().path("expires_at").asString());
     OffsetDateTime now = OffsetDateTime.now();
     assertThat(expiresAt).isAfter(now.plus(Duration.ofHours(71)));
     assertThat(expiresAt).isBefore(now.plus(Duration.ofHours(73)));
@@ -135,9 +135,9 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
     String castId = createCast(STORE_A, managerToken, "再発行テスト");
 
     String firstToken =
-        issueInvitation(castId, STORE_A, managerToken).getBody().path("token").asText();
+        issueInvitation(castId, STORE_A, managerToken).getBody().path("token").asString();
     String secondToken =
-        issueInvitation(castId, STORE_A, managerToken).getBody().path("token").asText();
+        issueInvitation(castId, STORE_A, managerToken).getBody().path("token").asString();
 
     assertThat(firstToken).isNotBlank().isNotEqualTo(secondToken);
     assertThat(castInvitationRepository.findByToken(firstToken).orElseThrow().getStatus())
@@ -275,8 +275,8 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
 
   private String statusOf(JsonNode page, String castId) {
     for (JsonNode node : page.path("content")) {
-      if (castId.equals(node.path("id").asText())) {
-        return node.path("invitation_status").asText();
+      if (castId.equals(node.path("id").asString())) {
+        return node.path("invitation_status").asString();
       }
     }
     throw new AssertionError("一覧に档案 " + castId + " が見つかりません");
@@ -291,7 +291,7 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
     assertThat(res.getStatusCode().is2xxSuccessful())
         .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
-    return res.getBody().path("id").asText();
+    return res.getBody().path("id").asString();
   }
 
   private ResponseEntity<JsonNode> issueInvitation(
@@ -313,7 +313,7 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
                 headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 平台ログインが成功すること").isEqualTo(HttpStatus.OK);
-    String t = res.getBody().path("token").asText();
+    String t = res.getBody().path("token").asString();
     assertThat(t).isNotBlank();
     return t;
   }

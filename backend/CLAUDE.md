@@ -1,7 +1,7 @@
 # Backend (Java) Conventions
 
-- **Java version**: 21
-- **Framework**: Spring Boot 3.5+, Spring Modulith, Spring Data JPA, Spring Security, Liquibase
+- **Java version**: 25
+- **Framework**: Spring Boot 4.1+, Spring Modulith, Spring Data JPA, Spring Security, Liquibase
 - **Testing**: JUnit 5, Jacoco (LINE ≥ 70%)
 - **Code generation**: Lombok, MapStruct
 - **Database**: PostgreSQL 18+, Redis 8+
@@ -41,7 +41,7 @@ Each module follows the DDD four layers:
 - **Naming**: classes, methods, and variables are CamelCase. DB columns (snake_case) are mapped by JPA; API JSON keys (snake_case) are mapped by Jackson.
 - **Store-side vocabulary uses the Store prefix**: StoreVO, StoreProfile
 - **Imports**: no inline FQCN usage, no wildcard imports (`*`); one explicit import per class.
-- **Formatting**: Spotless + Google Java Format. JDK 21 is pinned by `backend/.java-version` (jenv) and `backend/gradle/gradle-daemon-jvm.properties` (daemon JVM), so `./gradlew spotlessApply` runs locally as-is. Fallback only if the active JDK is not 21: `docker run --rm -u root -v "$PWD":/app -w /app gradle:9.2.1-jdk21-ubi-minimal gradle spotlessApply --no-daemon`.
+- **Formatting**: Spotless + Google Java Format (google-java-format 1.35.0, JDK 25 対応). JDK 25 is pinned by `backend/.java-version` (jenv) and `backend/gradle/gradle-daemon-jvm.properties` (daemon JVM), so `./gradlew spotlessApply` runs locally as-is. Fallback only if the active JDK is not 25: `docker run --rm -u root -v "$PWD":/app -w /app gradle:9.6.1-jdk25-ubi10 gradle spotlessApply --no-daemon`.
 - **Coverage**: the only Jacoco exclusions are `**/api/dto/**` (DTOs + MapStruct-generated code) and `**/shared/config/**` (pure configuration). **The domain layer must always be covered.**
 - **DB migrations**: Liquibase (YAML under `db/changelog/releases/<version>/platform|store/` from v0.14.0 onward; historical releases ≤ v0.13.0 keep `central|tenant/`). Changesets are baked into the backend image at build time — after adding one, `task up` alone (without `task build service=backend` first) will not apply it to the dev volume.
 - **Config values**: read from `AppProperties` (shared/config). No hardcoding.

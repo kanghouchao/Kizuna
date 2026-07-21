@@ -2,7 +2,6 @@ package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
@@ -22,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Shift のクロス店舗分離を本物の PostgreSQL で検証する統合テスト（issue #278）。
@@ -73,7 +73,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
-    String id = created.getBody().path("id").asText();
+    String id = created.getBody().path("id").asString();
     assertThat(id).isNotBlank();
     return id;
   }
@@ -116,7 +116,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode())
         .as("前提: store %d でのシフト作成が成功すること", storeId)
         .isEqualTo(HttpStatus.CREATED);
-    return created.getBody().path("id").asText();
+    return created.getBody().path("id").asString();
   }
 
   private JsonNode findInRange(long storeId, String range, String shiftId) {
@@ -128,7 +128,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     for (JsonNode node : res.getBody()) {
-      if (shiftId.equals(node.path("id").asText())) {
+      if (shiftId.equals(node.path("id").asString())) {
         return node;
       }
     }
@@ -144,7 +144,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     for (JsonNode node : res.getBody()) {
-      if (shiftId.equals(node.path("id").asText())) {
+      if (shiftId.equals(node.path("id").asString())) {
         return true;
       }
     }
@@ -163,10 +163,10 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
                 shiftBody(castId, "2026-07-08", "18:00:00", "23:00:00"), storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    assertThat(created.getBody().path("status").asText())
+    assertThat(created.getBody().path("status").asString())
         .as("既定ステータスは TENTATIVE")
         .isEqualTo("TENTATIVE");
-    String shiftId = created.getBody().path("id").asText();
+    String shiftId = created.getBody().path("id").asString();
     assertThat(shiftId).isNotBlank();
 
     // 区間 GET（日=from==to）に作成分が返る
@@ -184,7 +184,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
                 shiftBody(castId, "2026-07-10", "19:00:00", "23:00:00"), storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    String shiftId = created.getBody().path("id").asText();
+    String shiftId = created.getBody().path("id").asString();
 
     // 読取隔離: store A の JWT に X-Store-ID: B を詐称した区間 GET は 403 で拒否され、store A のシフトに到達できない
     ResponseEntity<JsonNode> foreignRange =
@@ -203,7 +203,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
             new HttpEntity<>("{\"status\": \"CONFIRMED\"}", storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(ownUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(ownUpdate.getBody().path("status").asText()).isEqualTo("CONFIRMED");
+    assertThat(ownUpdate.getBody().path("status").asString()).isEqualTo("CONFIRMED");
 
     // 負向: store B は更新できない（越権はインターセプタが拒否 → 403）
     ResponseEntity<JsonNode> tampered =
@@ -233,13 +233,13 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
     assertThat(after.getStatusCode()).isEqualTo(HttpStatus.OK);
     JsonNode found = null;
     for (JsonNode node : after.getBody()) {
-      if (shiftId.equals(node.path("id").asText())) {
+      if (shiftId.equals(node.path("id").asString())) {
         found = node;
         break;
       }
     }
     assertThat(found).as("store B の操作後も store A のシフトは残っていること").isNotNull();
-    assertThat(found.path("status").asText()).isEqualTo("CONFIRMED");
+    assertThat(found.path("status").asString()).isEqualTo("CONFIRMED");
   }
 
   @Test
@@ -267,7 +267,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
     assertThat(range.getStatusCode()).isEqualTo(HttpStatus.OK);
     boolean containsForeignCast = false;
     for (JsonNode node : range.getBody()) {
-      if (foreignCastId.equals(node.path("cast_id").asText())) {
+      if (foreignCastId.equals(node.path("cast_id").asString())) {
         containsForeignCast = true;
         break;
       }
@@ -293,7 +293,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
     // データ不変: cast_id は自店のキャストのまま
     JsonNode found = findInRange(STORE_A, "from=2026-07-13&to=2026-07-13", shiftId);
     assertThat(found).isNotNull();
-    assertThat(found.path("cast_id").asText()).isEqualTo(ownCastId);
+    assertThat(found.path("cast_id").asString()).isEqualTo(ownCastId);
   }
 
   // ---- 公開出勤表 GET /store/shifts/public（issue #279）----
@@ -327,7 +327,9 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode())
         .as("前提: store %d でのシフト播種（%s）が成功すること", storeId, status)
         .isEqualTo(HttpStatus.CREATED);
-    assertThat(created.getBody().path("status").asText()).as("前提: 播種したシフトのステータス").isEqualTo(status);
+    assertThat(created.getBody().path("status").asString())
+        .as("前提: 播種したシフトのステータス")
+        .isEqualTo(status);
   }
 
   /** 第二店舗の ACTIVE な Cast をリポジトリ直挿しで用意する（公開エンドポイントは ACTIVE のみ結合するため）。 */
@@ -354,7 +356,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
 
   private int indexOfCastName(JsonNode body, String castName) {
     for (int i = 0; i < body.size(); i++) {
-      if (castName.equals(body.get(i).path("cast_name").asText())) {
+      if (castName.equals(body.get(i).path("cast_name").asString())) {
         return i;
       }
     }
@@ -363,7 +365,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
 
   private JsonNode nodeByCastName(JsonNode body, String castName) {
     for (JsonNode node : body) {
-      if (castName.equals(node.path("cast_name").asText())) {
+      if (castName.equals(node.path("cast_name").asString())) {
         return node;
       }
     }
@@ -410,13 +412,13 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
 
     // cast_id / start_time / end_time が播種値と一致する。
     JsonNode earlyNode = nodeByCastName(body, earlyName);
-    assertThat(earlyNode.path("cast_id").asText()).isEqualTo(earlyCastId);
-    assertThat(earlyNode.path("start_time").asText()).isEqualTo("18:00:00");
-    assertThat(earlyNode.path("end_time").asText()).isEqualTo("20:00:00");
+    assertThat(earlyNode.path("cast_id").asString()).isEqualTo(earlyCastId);
+    assertThat(earlyNode.path("start_time").asString()).isEqualTo("18:00:00");
+    assertThat(earlyNode.path("end_time").asString()).isEqualTo("20:00:00");
     JsonNode lateNode = nodeByCastName(body, lateName);
-    assertThat(lateNode.path("cast_id").asText()).isEqualTo(lateCastId);
-    assertThat(lateNode.path("start_time").asText()).isEqualTo("21:00:00");
-    assertThat(lateNode.path("end_time").asText()).isEqualTo("23:00:00");
+    assertThat(lateNode.path("cast_id").asString()).isEqualTo(lateCastId);
+    assertThat(lateNode.path("start_time").asString()).isEqualTo("21:00:00");
+    assertThat(lateNode.path("end_time").asString()).isEqualTo("23:00:00");
 
     // TENTATIVE・前日・翌日は公開されない（キャスト名で不在を確認）。
     assertThat(indexOfCastName(body, tentativeName)).as("TENTATIVE は非公開").isEqualTo(-1);

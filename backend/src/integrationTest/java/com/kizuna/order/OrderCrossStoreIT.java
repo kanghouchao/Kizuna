@@ -2,7 +2,6 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +10,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Order のクロス店舗分離を本物の PostgreSQL で検証する統合テスト（issue #226）。
@@ -32,7 +32,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d でのキャスト作成が成功すること", storeId)
         .isTrue();
-    return created.getBody().path("id").asText();
+    return created.getBody().path("id").asString();
   }
 
   private String orderBody(String castId, String remarks) {
@@ -56,7 +56,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d での受注作成が成功すること", storeId)
         .isTrue();
-    String id = created.getBody().path("id").asText();
+    String id = created.getBody().path("id").asString();
     assertThat(id).isNotBlank();
     return id;
   }

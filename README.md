@@ -25,8 +25,8 @@ Below are the actual frameworks and key dependency versions used in this reposit
 
 | Area                             | Technology                              | Version / Notes                                           |
 | -------------------------------- | --------------------------------------- | --------------------------------------------------------- |
-| Backend framework                | Spring Boot                             | 3.5.6 (see `backend/build.gradle`)                        |
-| Backend language                 | Java                                    | 21 (sourceCompatibility in `backend/build.gradle`)        |
+| Backend framework                | Spring Boot                             | 4.1.0 (see `backend/build.gradle`)                        |
+| Backend language                 | Java                                    | 25 (sourceCompatibility in `backend/build.gradle`)        |
 | Web / Security                   | Spring Web, Spring Security             | `spring-boot-starter-web`, `spring-boot-starter-security` |
 | JWT library                      | JJWT                                    | 0.13.0 (`io.jsonwebtoken`)                                |
 | Data / DB                        | Spring Data JPA, PostgreSQL driver      | `org.postgresql:postgresql` (runtime)                     |

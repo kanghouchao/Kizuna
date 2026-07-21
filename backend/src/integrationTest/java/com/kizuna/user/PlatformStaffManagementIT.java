@@ -2,7 +2,6 @@ package com.kizuna.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -23,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import tools.jackson.databind.JsonNode;
 
 /**
  * スタッフ・権限管理（#325 / #398 能力束モデル）の HTTP 境界統合テスト。STAFF_MANAGE
@@ -114,7 +114,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 jsonHeaders()),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 平台ログインが成功すること").isEqualTo(HttpStatus.OK);
-    String t = res.getBody().path("token").asText();
+    String t = res.getBody().path("token").asString();
     assertThat(t).isNotBlank();
     return t;
   }
@@ -478,7 +478,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff", new HttpEntity<>(body, bearerJson(hq)), JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
     long staffId = created.getBody().path("id").asLong();
-    assertThat(created.getBody().path("settlement_scope_type").asText())
+    assertThat(created.getBody().path("settlement_scope_type").asString())
         .isEqualTo("SPECIFIC_STORES");
     assertThat(created.getBody().path("settlement_store_ids").get(0).asLong()).isEqualTo(storeAId);
 
@@ -520,7 +520,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff", HttpMethod.GET, new HttpEntity<>(bearer(token)), JsonNode.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     for (JsonNode node : res.getBody()) {
-      if (email.equals(node.path("email").asText())) {
+      if (email.equals(node.path("email").asString())) {
         return node;
       }
     }

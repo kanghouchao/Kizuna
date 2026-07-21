@@ -2,12 +2,12 @@ package com.kizuna.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 平台トークンによる {@code /files/upload} のプラットフォーム保存判定を本物の PostgreSQL/Redis/MinIO で固定する統合テスト。
@@ -33,6 +34,7 @@ import org.springframework.util.MultiValueMap;
  * <p>プラットフォームログイン前提を廃し、v0.4.0/v0.5.0 の平台シードでログインする。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 class FileUploadCrossStoreIT {
 
   /** v0.4.0 シードの HQ 管理者（ALL_STORES）。プラットフォーム保存を許可される唯一のロール。 */
@@ -53,7 +55,7 @@ class FileUploadCrossStoreIT {
                 String.format("{\"email\": \"%s\", \"password\": \"pass\"}", email), headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: %s の平台ログインが成功すること", email).isEqualTo(HttpStatus.OK);
-    String token = res.getBody().path("token").asText();
+    String token = res.getBody().path("token").asString();
     assertThat(token).isNotBlank();
     return token;
   }
@@ -110,6 +112,6 @@ class FileUploadCrossStoreIT {
         rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody().path("url").asText()).contains("/platform/");
+    assertThat(res.getBody().path("url").asString()).contains("/platform/");
   }
 }

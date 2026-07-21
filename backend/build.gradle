@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.16'
+    id 'org.springframework.boot' version '4.1.0'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'java'
     id 'jacoco'
@@ -18,14 +18,14 @@ def jacocoCoverageExcludes = [
 ]
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 dependencyManagement {
     imports {
-        mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.16"
-        mavenBom "org.springframework.modulith:spring-modulith-bom:1.4.12"
+        mavenBom "org.springframework.boot:spring-boot-dependencies:4.1.0"
+        mavenBom "org.springframework.modulith:spring-modulith-bom:2.1.0"
         mavenBom "software.amazon.awssdk:bom:2.47.4"
     }
 }
@@ -58,8 +58,14 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     runtimeOnly 'io.lettuce:lettuce-core'
+    // Spring Boot 4 でキャッシュの CacheAutoConfiguration は単体 autoconfigure から spring-boot-cache へ分離された。
+    // @EnableCaching + spring.cache.type=redis で RedisCacheManager を生成するために明示的に必要。
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.liquibase:liquibase-core'
-    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.15.4'
+    // Spring Boot 4 で LiquibaseAutoConfiguration は単体 autoconfigure から spring-boot-liquibase へ分離された。
+    // これが無いと liquibase-core があってもマイグレーションが一切実行されない（schema 未生成のまま起動する）。
+    implementation 'org.springframework.boot:spring-boot-liquibase'
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.15.4'
     implementation 'org.mapstruct:mapstruct:1.6.3'
     implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
     // S3 互換オブジェクトストレージ（MinIO）連携。s3 モジュールは HTTP クライアント実装を test スコープでしか
@@ -67,8 +73,15 @@ dependencies {
     implementation 'software.amazon.awssdk:s3'
     implementation 'software.amazon.awssdk:url-connection-client'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Spring Boot 4 でスライステスト系アノテーションは技術別モジュールへ分離された。@WebMvcTest はこの成果物にある。
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
+    // Spring Boot 4 で TestRestTemplate は spring-boot-resttestclient へ分離された（統合テストの HTTP クライアント。
+    // integrationTest は testImplementation を extendsFrom するため testImplementation で宣言する）。
+    // TestRestTemplateTestAutoConfiguration は spring-boot-restclient の RestTemplateBuilder に依存するため後者も必要。
+    testImplementation 'org.springframework.boot:spring-boot-resttestclient'
+    testImplementation 'org.springframework.boot:spring-boot-restclient'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
@@ -89,7 +102,7 @@ test {
 spotless {
     java {
         target 'src/**/*.java'
-        googleJavaFormat('1.22.0')
+        googleJavaFormat('1.35.0')
     }
 }
 

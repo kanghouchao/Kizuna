@@ -2,16 +2,17 @@ package com.kizuna.shared;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 /**
  * クロス店舗統合テストの共通土台。
@@ -21,6 +22,7 @@ import org.springframework.http.ResponseEntity;
  * CustomerCrossStoreIT から抽出（3 クラス目の重複解消）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
 public abstract class CrossStoreTestSupport {
 
   protected static final long STORE_A = 1L;
@@ -41,7 +43,7 @@ public abstract class CrossStoreTestSupport {
                 "{\"email\": \"yamada.jiro@kizuna.test\", \"password\": \"pass\"}", headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: シードユーザーでのログインが成功すること").isEqualTo(HttpStatus.OK);
-    token = res.getBody().path("token").asText();
+    token = res.getBody().path("token").asString();
     assertThat(token).isNotBlank();
   }
 
