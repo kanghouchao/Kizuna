@@ -4,12 +4,12 @@
 
 A platform CMS/CRM/HRM system for running the operations of multiple stores under a single group.
 
-- Backend: Java 21, Spring Boot 3.5+, JUnit 5, Jacoco, Lombok, MapStruct
+- Backend: Java 25, Spring Boot 4.1+, JUnit 5, Jacoco, Lombok, MapStruct
 - Frontend: TypeScript 5.9, React 19, Next.js 16+, Jest, ESLint, Prettier
 - Database: PostgreSQL 18+, Redis 8+, Docker volumes for persistence
 - Traefik 3+ for reverse proxy and routing
 
-Java is pinned to 21 by `backend/.java-version` (jenv, effective under `backend/`) and `backend/gradle/gradle-daemon-jvm.properties` (Gradle daemon). Builds, tests, and Spotless must run on JDK 21.
+Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/`) and `backend/gradle/gradle-daemon-jvm.properties` (Gradle daemon). Builds, tests, and Spotless must run on JDK 25.
 
 ## Domain Glossary
 
