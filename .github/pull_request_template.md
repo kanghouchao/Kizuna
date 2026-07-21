@@ -18,7 +18,7 @@ Closes #
 - [ ] `task test` exit 0
 - [ ] `task build` exit 0
 - [ ] `task e2e` exit 0（実行シナリオ: ）
-- [ ] ローカル code-review 実施（effort: / 指摘: 件 / 未修正: 件）
+- [ ] ローカルで code-review 実施済み
 
 ### 視覚確認（UI 変更時）
 
