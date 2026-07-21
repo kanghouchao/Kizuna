@@ -1,6 +1,6 @@
 package com.kizuna.auth.infrastructure;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
@@ -32,7 +32,7 @@ public class TokenBlacklistService {
       long exp = jwtUtil.getClaims(token).getExpiration().getTime();
       long ttl = Math.max(0, exp - System.currentTimeMillis());
       if (ttl > 0) {
-        redisTemplate.opsForValue().set(KEY_PREFIX + token, "1", ttl, TimeUnit.MILLISECONDS);
+        redisTemplate.opsForValue().set(KEY_PREFIX + token, "1", Duration.ofMillis(ttl));
       }
     } catch (Exception e) {
       // トークンが無効または期限切れ — ブラックリスト不要
