@@ -153,9 +153,9 @@ services:
       # backend もこの同じ変数を S3 の access/secret key として参照する（設定元を一本化する）
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER を .env に設定してください}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD を .env に設定してください}
-      # 管理コンソールを Traefik 配下の /minio で提供するため、MinIO 自身へ公開 URL を教える。
-      # これを設定すると MinIO はコンソールをこのサブパス上で配信するため stripPrefix は不要。
-      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-${APP_SCHEME:-https}://${APP_DOMAIN:-kizuna.jp}/minio}
+      # 管理コンソール（9001）は release では Traefik に載せない。root 資格情報だけが
+      # 防壁の管理画面を公開ホスト名へ晒すことになるため（development のみ /minio で提供する）。
+      # 遠隔管理が必要になったら、アクセス制御を設計した上で改めて公開すること。
     volumes:
       - storage-data:/data
     networks:
@@ -171,15 +171,7 @@ services:
       - "traefik.http.routers.storage.service=storage"
       - "traefik.http.services.storage.loadbalancer.server.port=9000"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
-      # /minio: 管理コンソール（コンソールポート）。MINIO_BROWSER_REDIRECT_URL と対で機能する。
-      # 注意: root 資格情報でログインする管理画面をインターネットに露出させている。
-      # 認証・アクセス制限は別途検討すること。
-      - "traefik.http.routers.storage-console.rule=PathPrefix(`/minio`)"
-      - "traefik.http.routers.storage-console.entrypoints=websecure"
-      - "traefik.http.routers.storage-console.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.storage-console.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"
-      - "traefik.http.routers.storage-console.service=storage-console"
-      - "traefik.http.services.storage-console.loadbalancer.server.port=9001"
+      # 管理コンソール（9001）の router は意図的に置かない（上記コメント参照）。
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -206,7 +198,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`) && !PathPrefix(`/minio`)"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"
