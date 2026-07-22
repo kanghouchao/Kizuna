@@ -161,7 +161,10 @@ public class PlatformStaffService {
                 user.resume();
               }
               // 失効の即時反映は「本リクエストが停止/再開を明示的に要求したか」で判定する（現在状態との差分ではない）。
-              // Redis 書き込みが失敗して 500 になった後、同一リクエストの再送だけで復旧できるようにするための冪等化。
+              // AFTER_COMMIT の Redis 書き込みが失敗して 500 になっても、最新 version を取り直して同じ停止要求を
+              // 再送すれば失効が書き直されるようにするための冪等化（差分語義だと再送時には既に enabled=false の
+              // ためイベントが発行されず、resume→stop 以外に復旧手段が無くなる）。version は #400 の楽観ロックで
+              // commit 済みの更新ぶん進んでいるため、再送には GET の取り直しが要る点に注意。
               if (Boolean.FALSE.equals(req.getEnabled())) {
                 eventPublisher.publishEvent(new PlatformUserStopped(user.getEmail()));
               }

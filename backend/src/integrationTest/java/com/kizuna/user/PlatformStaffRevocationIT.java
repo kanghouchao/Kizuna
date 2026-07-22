@@ -2,7 +2,6 @@ package com.kizuna.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -16,6 +15,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -32,8 +34,13 @@ import tools.jackson.databind.JsonNode;
  * <p>スタイルは {@link com.kizuna.auth.PlatformBridgeIT} に倣い、対象ユーザーは repository 直挿の専用テストユーザーのみを使う
  * （種子ユーザー、特に {@code CrossStoreTestSupport} が全面依存する yamada.jiro@kizuna.test を停止すると後続 IT が連鎖破綻するため）。
  * 実行主体は種子の HQ 管理者 admin@kizuna.test（PERM_STAFF_MANAGE 保持）を使う。
+ *
+ * <p>{@code CrossStoreTestSupport} は継承しない。本 IT は店舗文脈（X-Store-ID）を一切使わず、同基底の {@code @BeforeEach}
+ * による種子ユーザーログインも不要なため（上記のとおり種子ユーザーには触れない方針）。
  */
-class PlatformStaffRevocationIT extends CrossStoreTestSupport {
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureTestRestTemplate
+class PlatformStaffRevocationIT {
 
   private static final String TEST_PASSWORD = "pass";
 
@@ -48,6 +55,7 @@ class PlatformStaffRevocationIT extends CrossStoreTestSupport {
 
   private static final String USER_BLACKLIST_KEY_PREFIX = "blacklist:users:";
 
+  @Autowired private TestRestTemplate rest;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private CapabilityBundleRepository capabilityBundleRepository;
   @Autowired private PasswordEncoder passwordEncoder;
@@ -272,7 +280,7 @@ class PlatformStaffRevocationIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("停止時に書き込まれるユーザー単位ブラックリストの TTL が JWT 有効期間(app.jwt.expiration)以下であること")
+  @DisplayName("停止時に書き込まれるユーザー単位ブラックリストの TTL が JWT 有効期間(app.jwt.expiration)と一致すること")
   void blacklistKeyTtlMatchesJwtExpiration() {
     PlatformUser target = ensureEnabledTestUser(TTL_EMAIL, "店舗スタッフ");
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
@@ -282,8 +290,11 @@ class PlatformStaffRevocationIT extends CrossStoreTestSupport {
 
     Long ttlMillis =
         redisTemplate.getExpire(USER_BLACKLIST_KEY_PREFIX + TTL_EMAIL, TimeUnit.MILLISECONDS);
+    // 下界も固定する: 上界だけだと TTL を 1 秒に誤設定しても緑のままで、AC「JWT 有効期間と一致」を
+    // 守れない。実 Redis の TTL は書き込み直後から減るため、テスト実行ぶんの余裕を引いた値を下界に採る。
+    long expiration = appProperties.getJwtExpiration();
     assertThat(ttlMillis).isNotNull();
-    assertThat(ttlMillis).isPositive();
-    assertThat(ttlMillis).isLessThanOrEqualTo(appProperties.getJwtExpiration());
+    assertThat(ttlMillis).isLessThanOrEqualTo(expiration);
+    assertThat(ttlMillis).isGreaterThan(expiration - 60_000);
   }
 }

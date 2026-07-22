@@ -15,10 +15,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 認証セッション（発行済み JWT が表す認証状態）の失効。 ログアウトとパスワード変更が共用する唯一の失効経路 — 資格情報を変えるユースケースは必ずここを通すこと（controller
  * で個別に組み立てない）。
  *
- * <p>スタッフ停止・再開によるユーザー単位の一括失効もここへ集約する（#403）。user.application は {@link PlatformUserStopped}/{@link
- * PlatformUserResumed} イベントを発行するだけで {@code TokenBlacklistService} を直接知らない — user.application が
- * auth.infrastructure を直接注入すると、既存の auth→user 依存と合わせて user↔auth の モジュール環になってしまう（{@code
- * ModularityTests} が red になる）ため、イベント経由で依存の向きを auth→user のまま保つ。
+ * <p>スタッフ停止・再開によるユーザー単位の一括失効もここへ集約する（#403）。イベント経由にしている理由は {@link PlatformUserStopped}
+ * を参照（モジュール環の回避）。
+ *
+ * <p>backend/CLAUDE.md の既定はモジュール間イベントを {@code @ApplicationModuleListener}（= 非同期 + イベント発行レジストリ）で
+ * 受けることだが、本用途だけは同期の {@code @TransactionalEventListener} を用いる（#403 裁定）。停止は解雇・懲戒等の即時性が要る 安全制御であり、(1)
+ * 非同期だと管理者が 200 を受け取った時点でまだ失効が書かれていない窓が残る、(2) 非同期リスナーの例外は ログに落ちるだけで操作者に見えない、の 2
+ * 点が許容できないため。レジストリ自体は同期リスナーでも介在する（発行の記録は残る）。
  */
 @Service
 @RequiredArgsConstructor
@@ -31,8 +34,8 @@ public class AuthSessionService {
    *
    * <p>{@code AFTER_COMMIT} で実行する理由: commit 前に Redis へ書いてしまうと「Redis 書き込みは成功したが commit は失敗した」場合に
    * ブラックリストの残渣が残り、実際には enabled=true のまま（＝罪のない）ユーザーが最長 JWT 有効期間ぶん（既定 1 時間）ログイン不能になる （再ログインで得た新しい
-   * token も email 単位の鍵で同様に弾かれてしまう）。AFTER_COMMIT なら最悪でも「停止は成功したが失効の反映が ≤1
-   * 時間遅れる」だけで済み、しかも同一の停止リクエストを再送するだけで復旧できる。
+   * token も email 単位の鍵で同様に弾かれてしまう）。AFTER_COMMIT なら最悪でも「停止は成功したが失効の反映が ≤1 時間遅れる」だけで済み、最新 version
+   * を取り直して同じ停止要求を再送すれば復旧できる（発行条件が結果語義であるため — {@code PlatformStaffService.update} 参照）。
    */
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void onPlatformUserStopped(PlatformUserStopped event) {

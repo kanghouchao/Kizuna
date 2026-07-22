@@ -668,7 +668,7 @@ class PlatformStaffServiceTest {
         .isInstanceOf(SelfStopNotAllowedException.class)
         .hasMessage("自分自身を停止することはできません");
 
-    assertThat(existing.getEnabled()).as("守卫は reassignGrants 前で発火し授権も変更されないこと").isTrue();
+    assertThat(existing.getEnabled()).as("ガードは reassignGrants 前で発火し授権も変更されないこと").isTrue();
     verify(repository, never()).saveAndFlush(any());
     verifyNoInteractions(grantHistoryRepository);
     verifyNoInteractions(eventPublisher);
