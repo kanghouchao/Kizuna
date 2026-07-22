@@ -130,6 +130,7 @@ public class PlatformAuthService {
         user.getUserType().name(),
         capabilities.stream().map(Enum::name).sorted().toList(),
         consoleOf(user, capabilities),
+        hasStoreConsole(capabilities),
         user.getStoreScopeType().name(),
         user.getStoreIds().stream().sorted().toList());
   }
