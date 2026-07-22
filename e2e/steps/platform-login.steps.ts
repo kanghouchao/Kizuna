@@ -71,6 +71,17 @@ Then('店舗ダッシュボードへ遷移する', async ({ page }) => {
   await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
 });
 
+Then('店舗選択画面が表示される', async ({ page }) => {
+  // ログイン後の店舗コンソール着地は /store/select 一本化（#428）。複数店舗ユーザーはここで選ぶ。
+  await expect(page).toHaveURL(/\/store\/select(\?|$)/, { timeout: 15000 });
+  await expect(page.getByRole('heading', { name: '店舗を選択', exact: true })).toBeVisible();
+});
+
+When('店舗選択画面で {string} を選ぶ', async ({ page }, storeName: string) => {
+  // 店舗選択画面の選択肢は素の button（Header の店舗切替 Menu とは別要素）。
+  await page.getByRole('button', { name: storeName, exact: true }).click();
+});
+
 Then(
   '店舗切替に {string} と {string} が表示される',
   async ({ page }, first: string, second: string) => {
