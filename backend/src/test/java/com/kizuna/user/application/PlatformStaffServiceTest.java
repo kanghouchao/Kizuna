@@ -24,6 +24,9 @@ import com.kizuna.user.domain.GrantHistoryRepository;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.PlatformUserResumed;
+import com.kizuna.user.domain.PlatformUserStopped;
+import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
@@ -38,6 +41,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -56,6 +60,8 @@ class PlatformStaffServiceTest {
   @Mock private GrantHistoryRepository grantHistoryRepository;
 
   @Mock private PasswordEncoder encoder;
+
+  @Mock private ApplicationEventPublisher eventPublisher;
 
   @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -590,5 +596,81 @@ class PlatformStaffServiceTest {
 
     assertThat(service.grantHistory(404L)).isEmpty();
     assertThat(service.grantHistory(8L)).isEmpty();
+  }
+
+  @Test
+  void update_disabling_publishesPlatformUserStoppedEvent() {
+    // 既に停止済みの対象へ enabled=false を再送しても発行する（結果語義の冪等性 — Redis 書込み失敗後の再送復旧のため）。
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    existing.stop();
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE)))
+        .thenReturn(List.of(bundle(HQ_BUNDLE, "HQ管理者")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
+    PlatformStaffUpdateRequest req =
+        updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    req.setEnabled(false);
+
+    service.update(3L, req, ACTOR);
+
+    verify(eventPublisher).publishEvent(new PlatformUserStopped("target@kizuna.test"));
+  }
+
+  @Test
+  void update_enabling_publishesPlatformUserResumedEvent() {
+    // 既に enabled=true の対象へ enabled=true を再送しても発行する（結果語義の冪等性）。
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE)))
+        .thenReturn(List.of(bundle(HQ_BUNDLE, "HQ管理者")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
+    PlatformStaffUpdateRequest req =
+        updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    req.setEnabled(true);
+
+    service.update(3L, req, ACTOR);
+
+    verify(eventPublisher).publishEvent(new PlatformUserResumed("target@kizuna.test"));
+  }
+
+  @Test
+  void update_enabledNull_publishesNoEvents() {
+    PlatformUser existing =
+        staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
+        .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
+
+    service.update(
+        3L,
+        updateRequest(Set.of(MANAGER_BUNDLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+        ACTOR);
+
+    verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  void update_selfStop_throwsSelfStopNotAllowedExceptionWithoutSavingOrPublishing() {
+    // 実行主体（JWT subject = actorEmail）が対象自身のメールと一致する場合、自己停止として拒否する。
+    PlatformUser existing =
+        staff(3L, ACTOR, Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE)))
+        .thenReturn(List.of(bundle(HQ_BUNDLE, "HQ管理者")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    PlatformStaffUpdateRequest req =
+        updateRequest(Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
+    req.setEnabled(false);
+
+    assertThatThrownBy(() -> service.update(3L, req, ACTOR))
+        .isInstanceOf(SelfStopNotAllowedException.class)
+        .hasMessage("自分自身を停止することはできません");
+
+    assertThat(existing.getEnabled()).as("守卫は reassignGrants 前で発火し授権も変更されないこと").isTrue();
+    verify(repository, never()).saveAndFlush(any());
+    verifyNoInteractions(grantHistoryRepository);
+    verifyNoInteractions(eventPublisher);
   }
 }

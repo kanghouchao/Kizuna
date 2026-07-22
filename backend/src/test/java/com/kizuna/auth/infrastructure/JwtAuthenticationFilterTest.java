@@ -92,4 +92,12 @@ class JwtAuthenticationFilterTest {
     when(tokenBlacklistService.isBlacklisted("token")).thenReturn(true);
     assertThat(authenticated("/platform/configs", "PlatformAuth")).isFalse();
   }
+
+  @Test
+  @DisplayName("ユーザー単位ブラックリスト登録済み（停止済みユーザー）のトークンは認証されないこと（#403）")
+  void userBlacklistedToken() throws Exception {
+    when(tokenBlacklistService.isBlacklisted("token")).thenReturn(false);
+    when(tokenBlacklistService.isUserBlacklisted("user")).thenReturn(true);
+    assertThat(authenticated("/platform/configs", "PlatformAuth")).isFalse();
+  }
 }

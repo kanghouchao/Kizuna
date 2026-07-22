@@ -15,6 +15,9 @@ import com.kizuna.user.domain.GrantHistoryRepository;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.PlatformUserResumed;
+import com.kizuna.user.domain.PlatformUserStopped;
+import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.UserType;
 import java.util.Comparator;
@@ -27,6 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -52,6 +56,7 @@ public class PlatformStaffService {
   private final GrantHistoryRepository grantHistoryRepository;
   private final PasswordEncoder passwordEncoder;
   private final ObjectMapper objectMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
   public List<PlatformStaffResponse> list() {
@@ -136,6 +141,10 @@ public class PlatformStaffService {
               if (!user.getVersion().equals(req.getVersion())) {
                 throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
               }
+              // 自分自身を停止すると自らのセッションも即時失効し、以後の操作ができなくなる（サポート経路がない自己ロックアウト）ため拒否する。
+              if (Boolean.FALSE.equals(req.getEnabled()) && user.getEmail().equals(actorEmail)) {
+                throw new SelfStopNotAllowedException("自分自身を停止することはできません");
+              }
               user.reassignGrants(
                   req.getBundleIds(),
                   req.getStoreScopeType(),
@@ -150,6 +159,14 @@ public class PlatformStaffService {
               }
               if (resumed) {
                 user.resume();
+              }
+              // 失効の即時反映は「本リクエストが停止/再開を明示的に要求したか」で判定する（現在状態との差分ではない）。
+              // Redis 書き込みが失敗して 500 になった後、同一リクエストの再送だけで復旧できるようにするための冪等化。
+              if (Boolean.FALSE.equals(req.getEnabled())) {
+                eventPublisher.publishEvent(new PlatformUserStopped(user.getEmail()));
+              }
+              if (Boolean.TRUE.equals(req.getEnabled())) {
+                eventPublisher.publishEvent(new PlatformUserResumed(user.getEmail()));
               }
               PlatformUser saved = save(user);
               recordHistory(saved, GrantAction.CHANGE, actorEmail, bundleNames);

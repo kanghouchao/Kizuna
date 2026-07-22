@@ -39,7 +39,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       Claims claims = parseClaims(token);
       if (claims != null
           && issuerMatchesDomain(claims.getIssuer(), request.getRequestURI())
-          && !tokenBlacklistService.isBlacklisted(token)) {
+          && !tokenBlacklistService.isBlacklisted(token)
+          && !tokenBlacklistService.isUserBlacklisted(claims.getSubject())) {
         if (new Date().before(claims.getExpiration())) {
           String username = claims.getSubject();
           List<?> authorities = claims.get("authorities", List.class);
