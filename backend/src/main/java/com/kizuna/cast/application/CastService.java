@@ -12,9 +12,7 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,8 +32,6 @@ public class CastService {
 
   private final CastRepository castRepository;
   private final CastMapper castMapper;
-  private final StoreContext storeContext;
-  private final StoreRepository storeRepository;
   private final CastInvitationService castInvitationService;
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
 
@@ -73,14 +69,8 @@ public class CastService {
   @StoreScoped
   @Transactional
   public CastResponse create(CastCreateRequest request) {
+    // store_id は StoreScopeStampListener が @PrePersist で採番する
     Cast cast = castMapper.toEntity(request);
-
-    cast.setStoreId(
-        storeRepository
-            .findById(storeContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
-            .getId());
-
     return castMapper.toResponse(castRepository.save(cast));
   }
 

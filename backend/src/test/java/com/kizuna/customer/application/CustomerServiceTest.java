@@ -14,9 +14,6 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.store.domain.Store;
-import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -35,8 +32,6 @@ class CustomerServiceTest {
 
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMapper customerMapper;
-  @Mock private StoreContext storeContext;
-  @Mock private StoreRepository storeRepository;
 
   @InjectMocks private CustomerService customerService;
 
@@ -107,12 +102,7 @@ class CustomerServiceTest {
 
     Customer customerEntity = Customer.builder().name("New").build();
 
-    Store store = new Store();
-    store.setId(1L);
-
     when(customerMapper.toEntity(req)).thenReturn(customerEntity);
-    when(storeContext.getStoreId()).thenReturn(1L);
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(store));
 
     when(customerRepository.save(any()))
         .thenAnswer(
@@ -130,20 +120,6 @@ class CustomerServiceTest {
     CustomerResponse res = customerService.create(req);
     assertThat(res.getId()).isEqualTo("new_id");
     assertThat(res.getName()).isEqualTo("New");
-  }
-
-  @Test
-  void create_throwsWhenStoreNotFound() {
-    CustomerCreateRequest req = new CustomerCreateRequest();
-    req.setName("New");
-
-    when(customerMapper.toEntity(req)).thenReturn(new Customer());
-    when(storeContext.getStoreId()).thenReturn(1L);
-    when(storeRepository.findById(1L)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> customerService.create(req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("店舗が見つかりません");
   }
 
   @Test

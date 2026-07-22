@@ -25,8 +25,6 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.store.domain.Store;
-import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -57,7 +55,6 @@ class OrderServiceTest {
   @Mock CastRepository castRepository;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock CapabilityBundleRepository capabilityBundleRepository;
-  @Mock StoreRepository storeRepository;
   @Mock StoreContext storeContext;
   @Mock OrderMapper orderMapper;
 
@@ -157,7 +154,6 @@ class OrderServiceTest {
     OrderResponse res = OrderResponse.builder().status("CREATED").build();
 
     when(storeContext.getStoreId()).thenReturn(1L);
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(new Store()));
     when(orderMapper.toEntity(req)).thenReturn(entity);
     when(customerRepository.existsById("c1")).thenReturn(true);
     when(castRepository.existsById("g1")).thenReturn(true);
@@ -186,7 +182,6 @@ class OrderServiceTest {
     Customer newCustomer = Customer.builder().phoneNumber("09012345678").build();
 
     when(storeContext.getStoreId()).thenReturn(1L);
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(new Store()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(customerRepository.findByPhoneNumberAndStoreId("09012345678", 1L))
         .thenReturn(Optional.empty());
@@ -214,7 +209,6 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(new Store()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
@@ -235,7 +229,6 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(new Store()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
@@ -255,7 +248,6 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(new Store()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
     // 店舗を授権していても、束が ORDER_MANAGE を含まない STAFF（HQ 系束のみ等）は受付担当者になれない。
@@ -287,7 +279,6 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(new Store()));
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
     // 停止(enabled=false)された STAFF は束・店舗授権を保持したままだが、受付担当者にはなれない（PR#399 codex 指摘）。

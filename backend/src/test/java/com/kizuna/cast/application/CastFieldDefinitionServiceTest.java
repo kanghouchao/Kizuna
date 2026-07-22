@@ -15,7 +15,6 @@ import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionPatch;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +29,6 @@ class CastFieldDefinitionServiceTest {
 
   @Mock private CastFieldDefinitionRepository repository;
   @Mock private CastFieldDefinitionMapper mapper;
-  @Mock private StoreContext storeContext;
 
   @InjectMocks private CastFieldDefinitionService service;
 
@@ -42,11 +40,10 @@ class CastFieldDefinitionServiceTest {
   }
 
   @Test
-  void create_autoNumbersFromZeroWhenEmptyAndSetsStoreId() {
+  void create_autoNumbersFromZeroWhenEmpty() {
     when(repository.existsByKey("blood_type")).thenReturn(false);
     when(repository.count()).thenReturn(0L);
     when(repository.findMaxDisplayOrder()).thenReturn(null);
-    when(storeContext.getStoreId()).thenReturn(7L);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
@@ -55,7 +52,6 @@ class CastFieldDefinitionServiceTest {
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
     verify(repository).saveAndFlush(captor.capture());
     assertThat(captor.getValue().getDisplayOrder()).isEqualTo(0);
-    assertThat(captor.getValue().getStoreId()).isEqualTo(7L);
   }
 
   @Test

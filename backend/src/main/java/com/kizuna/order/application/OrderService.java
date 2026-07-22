@@ -13,7 +13,6 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -33,7 +32,6 @@ public class OrderService {
   private final CastRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
   private final CapabilityBundleRepository capabilityBundleRepository;
-  private final StoreRepository storeRepository;
   private final StoreContext storeContext;
   private final OrderMapper orderMapper;
 
@@ -54,15 +52,8 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderResponse create(OrderCreateRequest request) {
-    // MapStructを使用して基本的なフィールドをマッピング
+    // MapStructを使用して基本的なフィールドをマッピング（store_id は StoreScopeStampListener が @PrePersist で採番）
     Order order = orderMapper.toEntity(request);
-
-    // 店舗の設定
-    order.setStoreId(
-        storeRepository
-            .findById(storeContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
-            .getId());
 
     // 複雑な関連ロジックの処理（顧客のスマートリンク）
     handleCustomerLinking(request, order);
@@ -160,13 +151,8 @@ public class OrderService {
               .findByPhoneNumberAndStoreId(req.getPhoneNumber(), storeContext.getStoreId())
               .orElseGet(
                   () -> {
+                    // store_id は StoreScopeStampListener が @PrePersist で採番する
                     Customer newCustomer = orderMapper.toCustomer(req);
-                    // 店舗を明示的に設定
-                    newCustomer.setStoreId(
-                        storeRepository
-                            .findById(storeContext.getStoreId())
-                            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
-                            .getId());
                     return customerRepository.save(newCustomer);
                   });
       order.linkCustomer(customer.getId());
