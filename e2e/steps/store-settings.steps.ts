@@ -28,6 +28,8 @@ Given('店舗 {string} の管理画面にログインしている', async ({ pag
   await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
+  // 2 店舗授権の店長はログイン後 /store/select に着地するため、店舗を選択して業務画面へ入る（#428）。
+  await page.getByRole('button', { name: 'Sample Tenant', exact: true }).click();
   await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
   storeId = new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
 });
