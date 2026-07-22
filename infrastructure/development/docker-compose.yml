@@ -130,11 +130,12 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme}
-      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost}/minio}
     volumes:
       - storage-data:/data
     networks:
       - network
+    ports:
+      - "9001:9001"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.storage.rule=PathPrefix(`/static`)"
@@ -143,14 +144,6 @@ services:
       - "traefik.http.routers.storage.service=storage"
       - "traefik.http.services.storage.loadbalancer.server.port=9000"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
-      - "traefik.http.routers.storage-console.rule=PathPrefix(`/minio`)"
-      - "traefik.http.routers.storage-console.entrypoints=web"
-      - "traefik.http.routers.storage-console.middlewares=storage-console-slash@docker,storage-console-strip@docker"
-      - "traefik.http.routers.storage-console.service=storage-console"
-      - "traefik.http.services.storage-console.loadbalancer.server.port=9001"
-      - "traefik.http.middlewares.storage-console-slash.redirectRegex.regex=^(https?://[^/]+)/minio$$"
-      - "traefik.http.middlewares.storage-console-slash.redirectRegex.replacement=$${1}/minio/"
-      - "traefik.http.middlewares.storage-console-strip.stripPrefix.prefixes=/minio"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -175,7 +168,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`) && !PathPrefix(`/minio`)"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     healthcheck:

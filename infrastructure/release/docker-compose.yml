@@ -1,18 +1,6 @@
 # docker-compose.yml
 name: kizuna
 
-# 環境変数の受け渡し方針:
-# - backend / frontend は env_file を使わず、消費する変数を environment で明示列挙する
-#   （何を読むかがファイル上で確定し、shell 環境からの上書きも効く）。
-# - 「コンテナ構成上 application.yml の既定値では必ず誤りになる項目」（ホスト名・ポート・
-#   資格情報・エンドポイント・Liquibase コンテキスト）だけ ${VAR:-既定} を書く。
-# - それ以外のチューニング項目は裸名で列挙する。.env にあれば渡り、無ければコンテナ内で
-#   未定義のままになり application.yml の既定値が生きる（既定値の二重管理を避ける）。
-# - 本番の資格情報は ${VAR:?メッセージ} で必須化する（fail-loud）。既定値へ黙って落ちると
-#   「開発用パスワードのまま本番が起動する」「旧 DB_* のままの .env で認証だけが失敗する」
-#   といった事故になるため、未設定なら compose の時点で理由付きで停止させる。
-#   development 側は #311 の「陳腐化した .env でも起動できる」要件を優先し既定値のままにする。
-
 services:
   # Database: PostgreSQL
   database:
@@ -56,7 +44,6 @@ services:
     networks:
       - network
     environment:
-      # --- コンテナ構成で決まる項目（既定値必須） ---
       - POSTGRES_HOST=${POSTGRES_HOST:-database}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_DB=${POSTGRES_DB:-kizuna}
@@ -69,16 +56,10 @@ services:
       - MINIO_BUCKET=${MINIO_BUCKET:-uploads}
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:?MINIO_ROOT_USER を .env に設定してください（旧 UPLOAD_S3_ACCESS_KEY から改名）}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD を .env に設定してください（旧 UPLOAD_S3_SECRET_KEY から改名）}
-      # 本番はデモデータを投入しない
       - LIQUIBASE_CONTEXTS=${LIQUIBASE_CONTEXTS:-production}
-      # 公開サイトは HTTPS
       - APP_SCHEME=${APP_SCHEME:-https}
-      # JWT 署名鍵と初期管理者ハッシュは既定値へ落とすと事故になるため必須化する。
-      # 前者は application.yml に既定が無く起動時に失敗するが、compose の時点で理由付きで止める。
-      # 後者を落とすと開発用の既定ハッシュ（平文 pass）のまま本番の HQ 管理者が播種される。
       - APP_JWT_SECRET=${APP_JWT_SECRET:?APP_JWT_SECRET を .env に設定してください（HMAC-SHA256 のため 256bit 以上）}
       - INITIAL_ADMIN_PASSWORD_HASH=${INITIAL_ADMIN_PASSWORD_HASH:?INITIAL_ADMIN_PASSWORD_HASH を .env に設定してください（未設定だと開発用の既定パスワードで管理者が作成されます）}
-      # --- 以下は裸名。.env にあれば渡り、無ければ application.yml の既定値が効く ---
       - SPRING_PROFILE
       - SERVER_PORT
       - APP_NAME
@@ -113,7 +94,6 @@ services:
       - SPRING_JPA_SHOW_SQL
       - SPRING_JPA_OPEN_IN_VIEW
       - SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL
-      # Spring Mail は DB のシステム設定（t_system_configs の smtp_*）が未設定のときのフォールバック先
       - SPRING_MAIL_HOST
       - SPRING_MAIL_PORT
       - SPRING_MAIL_USERNAME
@@ -150,19 +130,16 @@ services:
     container_name: storage
     command: server /data --console-address ":9001"
     environment:
-      # backend もこの同じ変数を S3 の access/secret key として参照する（設定元を一本化する）
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER を .env に設定してください}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD を .env に設定してください}
-      # 管理コンソール（9001）は release では Traefik に載せない。root 資格情報だけが
-      # 防壁の管理画面を公開ホスト名へ晒すことになるため（development のみ /minio で提供する）。
-      # 遠隔管理が必要になったら、アクセス制御を設計した上で改めて公開すること。
     volumes:
       - storage-data:/data
     networks:
       - network
+    ports:
+      - "9001:9001"
     labels:
       - "traefik.enable=true"
-      # /static: オブジェクト配信（S3 API ポート）。複数サービスを定義するため router に service を明示する。
       - "traefik.http.routers.storage.rule=PathPrefix(`/static`)"
       - "traefik.http.routers.storage.entrypoints=websecure"
       - "traefik.http.routers.storage.tls.certresolver=letsencrypt"
@@ -171,7 +148,6 @@ services:
       - "traefik.http.routers.storage.service=storage"
       - "traefik.http.services.storage.loadbalancer.server.port=9000"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
-      # 管理コンソール（9001）の router は意図的に置かない（上記コメント参照）。
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -186,10 +162,8 @@ services:
     networks:
       - network
     environment:
-      # --- コンテナ構成で決まる項目（既定値必須） ---
       - STORE_LOOKUP_API_URL=${STORE_LOOKUP_API_URL:-http://backend:8080/platform/stores/lookup}
       - STORE_CONFIG_API_URL=${STORE_CONFIG_API_URL:-http://backend:8080/store/config/public}
-      # --- 以下は裸名 ---
       - NODE_ENV
       - APP_DOMAIN
       - NEXT_PUBLIC_PLATFORM_DOMAIN
