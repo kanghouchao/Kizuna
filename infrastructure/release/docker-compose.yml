@@ -8,6 +8,10 @@ name: kizuna
 #   資格情報・エンドポイント・Liquibase コンテキスト）だけ ${VAR:-既定} を書く。
 # - それ以外のチューニング項目は裸名で列挙する。.env にあれば渡り、無ければコンテナ内で
 #   未定義のままになり application.yml の既定値が生きる（既定値の二重管理を避ける）。
+# - 本番の資格情報は ${VAR:?メッセージ} で必須化する（fail-loud）。既定値へ黙って落ちると
+#   「開発用パスワードのまま本番が起動する」「旧 DB_* のままの .env で認証だけが失敗する」
+#   といった事故になるため、未設定なら compose の時点で理由付きで停止させる。
+#   development 側は #311 の「陳腐化した .env でも起動できる」要件を優先し既定値のままにする。
 
 services:
   # Database: PostgreSQL
@@ -16,14 +20,14 @@ services:
     container_name: database
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-kizuna}
-      POSTGRES_USER: ${POSTGRES_USER:-kizuna}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER を .env に設定してください（旧 DB_USERNAME から改名。既存ボリュームがある場合は初回起動時と同じ値にすること）}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD を .env に設定してください（旧 DB_PASSWORD から改名。既存ボリュームがある場合は初回起動時と同じ値にすること）}
     volumes:
       - db-data:/var/lib/postgresql
     networks:
       - network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kizuna} -d ${POSTGRES_DB:-kizuna}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-kizuna}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,9 +36,9 @@ services:
   cache:
     image: redis:8.8.0-alpine3.23
     container_name: redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD を .env に設定してください}
     environment:
-      REDISCLI_AUTH: ${REDIS_PASSWORD:-password}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD を .env に設定してください}
     volumes:
       - redis-data:/data
     networks:
@@ -56,30 +60,33 @@ services:
       - POSTGRES_HOST=${POSTGRES_HOST:-database}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_DB=${POSTGRES_DB:-kizuna}
-      - POSTGRES_USER=${POSTGRES_USER:-kizuna}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER を .env に設定してください（旧 DB_USERNAME から改名）}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD を .env に設定してください（旧 DB_PASSWORD から改名）}
       - REDIS_HOST=${REDIS_HOST:-cache}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-password}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD を .env に設定してください}
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://storage:9000}
       - MINIO_BUCKET=${MINIO_BUCKET:-uploads}
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-changeme}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:?MINIO_ROOT_USER を .env に設定してください（旧 UPLOAD_S3_ACCESS_KEY から改名）}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD を .env に設定してください（旧 UPLOAD_S3_SECRET_KEY から改名）}
       # 本番はデモデータを投入しない
       - LIQUIBASE_CONTEXTS=${LIQUIBASE_CONTEXTS:-production}
       # 公開サイトは HTTPS
       - APP_SCHEME=${APP_SCHEME:-https}
+      # JWT 署名鍵と初期管理者ハッシュは既定値へ落とすと事故になるため必須化する。
+      # 前者は application.yml に既定が無く起動時に失敗するが、compose の時点で理由付きで止める。
+      # 後者を落とすと開発用の既定ハッシュ（平文 pass）のまま本番の HQ 管理者が播種される。
+      - APP_JWT_SECRET=${APP_JWT_SECRET:?APP_JWT_SECRET を .env に設定してください（HMAC-SHA256 のため 256bit 以上）}
+      - INITIAL_ADMIN_PASSWORD_HASH=${INITIAL_ADMIN_PASSWORD_HASH:?INITIAL_ADMIN_PASSWORD_HASH を .env に設定してください（未設定だと開発用の既定パスワードで管理者が作成されます）}
       # --- 以下は裸名。.env にあれば渡り、無ければ application.yml の既定値が効く ---
       - SPRING_PROFILE
       - SERVER_PORT
       - APP_NAME
       - APP_DOMAIN
       - APP_TIMEZONE
-      - APP_JWT_SECRET
       - APP_JWT_EXPIRATION_MS
       - APP_UPLOAD_URL_PREFIX
       - APP_UPLOAD_MAX_FILE_SIZE
-      - INITIAL_ADMIN_PASSWORD_HASH
       - DEMO_USER_PASSWORD_HASH
       - POSTGRES_SSLMODE
       - POSTGRES_SSL
@@ -144,8 +151,8 @@ services:
     command: server /data --console-address ":9001"
     environment:
       # backend もこの同じ変数を S3 の access/secret key として参照する（設定元を一本化する）
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER を .env に設定してください}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD を .env に設定してください}
       # 管理コンソールを Traefik 配下の /minio で提供するため、MinIO 自身へ公開 URL を教える。
       # これを設定すると MinIO はコンソールをこのサブパス上で配信するため stripPrefix は不要。
       MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-${APP_SCHEME:-https}://${APP_DOMAIN:-kizuna.jp}/minio}
