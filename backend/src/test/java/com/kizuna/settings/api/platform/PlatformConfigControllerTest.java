@@ -15,7 +15,7 @@ import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.shared.storescope.StoreExistenceCheck;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,8 +48,8 @@ class PlatformConfigControllerTest {
   @MockitoBean private TokenBlacklistService tokenBlacklistService;
 
   // StoreExistenceInterceptor（HandlerInterceptor）の依存。@WebMvcTest は HandlerInterceptor を
-  // 取り込むため、MaintenanceModeInterceptor の SystemConfigService と同様にモックを用意する。
-  @MockitoBean private StoreRepository storeRepository;
+  // 取り込むため、MaintenanceModeInterceptor の SystemConfigService と同様にポートのモックを用意する。
+  @MockitoBean private StoreExistenceCheck storeExistenceCheck;
 
   @Test
   @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限があれば設定一覧を取得できること")
