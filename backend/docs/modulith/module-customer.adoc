@@ -6,9 +6,6 @@
 |_Repositories_
 
 * `c.k.c.domain.CustomerRepository`
-|Bean references
-|* `c.k.s.storescope.StoreContext` (in Shared)
-* `c.k.s.domain.StoreRepository` (in Store)
 |Aggregate roots
 |* `c.k.c.domain.Customer`
 |===

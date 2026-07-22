@@ -1,22 +1,33 @@
 @startuml
-set separator none
-title Auth
+title <size:24>Auth</size>
 
+set separator none
 top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
 
 !include <C4/C4>
 !include <C4/C4_Context>
 !include <C4/C4_Component>
 
-Container_Boundary("Application.Application_boundary", "Application", $tags="") {
-  Component(Application.Application.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
-  Component(Application.Application.User, "User", $techn="Module", $descr="", $tags="", $link="")
-  Component(Application.Application.Auth, "Auth", $techn="Module", $descr="", $tags="", $link="")
+System_Boundary("Application_boundary", "Application", $tags="") {
+  Container_Boundary("Application.Application_boundary", "Application", $tags="") {
+    Component(Application.Application.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
+    Component(Application.Application.User, "User", $techn="Module", $descr="", $tags="", $link="")
+    Component(Application.Application.Auth, "Auth", $techn="Module", $descr="", $tags="", $link="")
+  }
+
 }
 
+Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Auth, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Auth, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
+hide stereotypes
 @enduml

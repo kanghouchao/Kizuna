@@ -9,6 +9,8 @@
 |Bean references
 |* `c.k.s.domain.StoreProfileRepository` (in Storeprofile)
 * `c.k.s.application.SystemConfigService` (in Settings)
+* `c.k.s.storescope.StoreContext` (in Shared)
+* `c.k.s.storescope.StoreExistenceCheck` (in Shared)
 * `c.k.s.storescope.StoreIdInterceptor` (in Shared)
 |Aggregate roots
 |* `c.k.s.domain.Store`
