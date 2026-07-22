@@ -42,6 +42,7 @@ function meWith(capabilities: PlatformMeResponse['capabilities']): PlatformMeRes
     user_type: 'STAFF',
     capabilities,
     console: 'store',
+    store_bridge: true,
     store_scope_type: 'SPECIFIC_STORES',
     store_ids: [1],
   };
