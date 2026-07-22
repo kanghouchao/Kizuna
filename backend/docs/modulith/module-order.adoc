@@ -7,6 +7,6 @@
 * `c.k.c.domain.CastRepository` (in Cast)
 * `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.u.domain.CapabilityBundleRepository` (in User)
-* `c.k.s.domain.StoreRepository` (in Store)
 * `c.k.s.storescope.StoreContext` (in Shared)
+* `c.k.s.storescope.StoreScopeExecutor` (in Shared)
 |===

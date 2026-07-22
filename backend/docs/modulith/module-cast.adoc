@@ -16,8 +16,7 @@ _Repositories_
 * `c.k.c.domain.CastInvitationRepository`
 * `c.k.c.domain.CastRepository`
 |Bean references
-|* `c.k.s.storescope.StoreContext` (in Shared)
-* `c.k.u.domain.PlatformUserRepository` (in User)
+|* `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.s.domain.StoreRepository` (in Store)
 |Aggregate roots
 |* `c.k.c.domain.Cast`
