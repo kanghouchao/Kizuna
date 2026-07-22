@@ -10,8 +10,8 @@ import java.util.List;
  * none）で、能力目録から導出する — フロントエンドに能力→コンソールの対応表を複製させない。
  *
  * <p>{@code storeBridge} は店舗文脈（X-Store-ID）を確立できるか。JWT の {@code storeBridge} claim を設定するのと同一の私有
- * {@code PlatformAuthService.hasStoreConsole()} から導出する（PlatformAuthService.java:89,155）— {@code
- * console} と同一原則で、フロントエンドに能力→コンソールの対応表を複製させない。
+ * {@code PlatformAuthService.hasStoreConsole()} から導出する — {@code console}
+ * と同一原則で、フロントエンドに能力→コンソールの対応表を複製させない。
  */
 public record PlatformMeResponse(
     String email,

@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import { ADMIN_EMAIL, ADMIN_PASSWORD, getStoreConfig, loginAsStoreAdmin, setCustomTexts } from './store-api';
+import { getStoreConfig, loginAsStoreAdmin, loginViaUiAndEnterStore, setCustomTexts } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -24,14 +24,7 @@ Given('店舗 {string} の管理画面にログインしている', async ({ pag
   // 統一ログイン（/platform/login）は platform ドメイン（kizuna.test）で提供され、店長ロールの
   // セッションも platform ドメイン上のまま /store/* を操作する（#324、platform-login.steps.ts と同じ）。
   // token cookie はオリジン別に分離されるため、以降の管理画面遷移も PLATFORM_URL を用いる。
-  await page.goto(`${PLATFORM_URL}/platform/login`);
-  await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
-  await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
-  await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  // 2 店舗授権の店長はログイン後 /store/select に着地するため、店舗を選択して業務画面へ入る（#428）。
-  await page.getByRole('button', { name: 'Sample Tenant', exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
-  storeId = new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
+  storeId = await loginViaUiAndEnterStore(page);
 });
 
 Given('店舗設定の現在値を退避する', async ({ request }) => {

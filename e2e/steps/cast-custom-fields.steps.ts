@@ -2,12 +2,11 @@ import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
 import {
-  ADMIN_EMAIL,
-  ADMIN_PASSWORD,
   STORE_HEADERS,
   deleteCast,
   deleteCastFieldDefinition,
   loginAsStoreAdmin,
+  loginViaUiAndEnterStore,
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
@@ -51,14 +50,7 @@ async function addFieldDefinition(page: Page, rawKey: string, rawLabel: string, 
 Given('キャストカスタムフィールド管理画面を開く', async ({ page }) => {
   // 統一ログイン（/platform/login）は platform ドメインで提供され、店長ロールのセッションも
   // platform ドメイン上のまま /store/* を操作する（store-settings.steps.ts と同じ）。
-  await page.goto(`${PLATFORM_URL}/platform/login`);
-  await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
-  await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
-  await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  // 2 店舗授権の店長はログイン後 /store/select に着地するため、店舗を選択して業務画面へ入る（#428）。
-  await page.getByRole('button', { name: 'Sample Tenant', exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
-  storeId = new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
+  storeId = await loginViaUiAndEnterStore(page);
   await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/fields`);
   await expect(page.getByRole('button', { name: 'フィールドを追加', exact: true })).toBeVisible();
 });

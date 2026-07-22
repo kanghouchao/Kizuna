@@ -354,6 +354,36 @@ class PlatformAuthServiceTest {
   }
 
   @Test
+  void me_hybridStaffWithPlatformAndStoreCapabilities_returnsPlatformConsoleAndStoreBridgeTrue() {
+    // 混成束（PLATFORM 能力と実運用 STORE 能力の併持）: 着地は platform 優先のまま store_bridge=true（#428 AC1）。
+    PlatformUser staff =
+        PlatformUser.builder()
+            .email("hybrid@kizuna.test")
+            .password("stored-hash")
+            .displayName("兼務者")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(STORE_BUNDLE_ID))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("hybrid@kizuna.test")).thenReturn(Optional.of(staff));
+    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
+        .thenReturn(
+            List.of(
+                CapabilityBundle.builder()
+                    .name("兼務束")
+                    .capabilities(Set.of(Capability.STORE_MANAGE, Capability.ORDER_MANAGE))
+                    .build()));
+
+    Optional<PlatformMeResponse> res = authService.me("hybrid@kizuna.test");
+
+    assertThat(res).isPresent();
+    assertThat(res.get().console()).isEqualTo("platform");
+    assertThat(res.get().storeBridge()).isTrue();
+  }
+
+  @Test
   void me_staffWithOnlySharedCapabilities_returnsStoreBridgeFalse() {
     PlatformUser staff =
         PlatformUser.builder()

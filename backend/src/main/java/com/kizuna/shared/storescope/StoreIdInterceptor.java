@@ -27,9 +27,10 @@ public class StoreIdInterceptor implements HandlerInterceptor {
 
   /**
    * 平台トークンで店舗文脈（X-Store-ID）を確立できるかを示す claim 名。値はログイン時に STORE コンソール能力の保持から導出される（#398 —
-   * PlatformAuthService）。 shared 層は user モジュールへ依存しないため能力目録を参照せず、導出済みの boolean claim だけを消費する。
+   * PlatformAuthService）。 shared 層は user モジュールへ依存しないため能力目録を参照せず、導出済みの boolean claim だけを消費する。 {@link
+   * StoreBridgeGuard} と共有するためパッケージ可視とする（#428）。
    */
-  private static final String CLAIM_STORE_BRIDGE = "storeBridge";
+  static final String CLAIM_STORE_BRIDGE = "storeBridge";
 
   @Override
   public boolean preHandle(
