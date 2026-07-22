@@ -25,17 +25,20 @@ import org.junit.jupiter.api.Test;
  * Capability} enum とのコンパイル期関連が一切ない。typo は「到達不能な権限（誰も持たない authority = 全員 403）」を静默に生み、機能 IT
  * が偶然踏まない限り検出されない。{@link StoreIsolationTests}（#216 由来）と同型の fitness test でこの欠陥類を閉じる。
  *
- * <p>検査は字面 → enum の写像のみで、SpEL の書き方には一切干渉しない（{@code hasRole} 等の形状は授権設計の判断であり、機械検査の対象外）。 Javadoc
- * 内の例示字面も同じ規則で検査されるが、実在する能力名であれば通過するため実害はない。
+ * <p>検査は字面 → enum の写像のみで、SpEL の書き方には一切干渉しない（{@code hasRole} 等の形状は授権設計の判断であり、機械検査の対象外）。
+ *
+ * <p>対象は SpEL の文字列リテラル（単引用符）である。Spring が比較するのは引用符の内側**全体**であるため、部分一致ではなくリテラル全体を照合する （{@code
+ * 'PERM_ORDER_MANAGE '} のように前後にごみが付いた字面も、Capability には写像できない到達不能な権限として検出する）。 Java の二重引用符で書かれた
+ * authority（現状 main に存在しない）は対象外で、導入時はこのテストの拡張を要する。
  */
 class CapabilityLiteralTests {
 
   /**
-   * 権限 authority の字面。接頭辞の知識は {@link Authorities} の唯一の継ぎ目から取る。後続 1 文字以上を要求するため、接頭辞そのものの定義 （{@code
-   * "PERM_"}）には一致しない。
+   * 権限 authority を含む SpEL 文字列リテラル。捕獲群はリテラル全体で、接頭辞の知識は {@link Authorities} の唯一の継ぎ目から取る。 改行を跨ぐ
+   * 組み合わせは別々のリテラルの誤結合であるため除外する。
    */
   private static final Pattern PERMISSION_LITERAL =
-      Pattern.compile(Pattern.quote(Authorities.permission("")) + "[A-Z0-9_]+");
+      Pattern.compile("'([^'\\n]*" + Pattern.quote(Authorities.permission("")) + "[^'\\n]*)'");
 
   @Test
   @DisplayName("src/main/java 中の全 PERM_ 字面が Capability 成員へ写像できること")
@@ -59,8 +62,8 @@ class CapabilityLiteralTests {
       Matcher matcher = PERMISSION_LITERAL.matcher(Files.readString(file));
       while (matcher.find()) {
         literals++;
-        if (!known.contains(matcher.group())) {
-          offenders.add(root.relativize(file) + ": " + matcher.group());
+        if (!known.contains(matcher.group(1))) {
+          offenders.add(root.relativize(file) + ": '" + matcher.group(1) + "'");
         }
       }
     }
