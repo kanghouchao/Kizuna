@@ -12,6 +12,8 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,8 +48,20 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   private static final String MEMBER_EMAIL = "scenes-it-member@kizuna.test";
   private static final String PROFILE_ONLY_EMAIL = "scenes-it-profile-only@kizuna.test";
 
+  /** STORE_VIEW 無しの店舗コンソール資格（ALL_STORES）を検証するユーザー（#428）。 */
+  private static final String STORE_CONSOLE_ALL_EMAIL = "scenes-it-storeconsole-all@kizuna.test";
+
+  /** STORE_VIEW も店舗コンソール資格も持たない STAFF（403 を検証 — #428）。 */
+  private static final String PLATFORM_ONLY_EMAIL = "scenes-it-platform-only@kizuna.test";
+
   /** 種子に無い束（DB データとして追加 — 発版不要の証明）。 */
   private static final String PROFILE_ONLY_BUNDLE = "公開プロフィール担当IT";
+
+  /** STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ — storeBridge=true / #428）。 */
+  private static final String STORE_CONSOLE_ONLY_BUNDLE = "受注担当IT";
+
+  /** PLATFORM 能力のみで STORE_VIEW も店舗コンソール能力も持たない束（#428）。 */
+  private static final String PLATFORM_ONLY_BUNDLE = "プラットフォームメニュー標識のみIT";
 
   /** 内部キャスト情報のカナリア。公開プロフィール応答へ混入しないことを強断言する。 */
   private static final String CAST_CANARY_NAME = "場面IT_内部キャスト機密カナリア";
@@ -81,6 +95,42 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
         Set.of(profileOnly.getId()),
         StoreScopeType.SPECIFIC_STORES,
         Set.of(STORE_A));
+
+    // #428: STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ）を ALL_STORES スタッフへ授与する。
+    CapabilityBundle storeConsoleOnly =
+        capabilityBundleRepository
+            .findByName(STORE_CONSOLE_ONLY_BUNDLE)
+            .orElseGet(
+                () ->
+                    capabilityBundleRepository.save(
+                        CapabilityBundle.builder()
+                            .name(STORE_CONSOLE_ONLY_BUNDLE)
+                            .capabilities(Set.of(Capability.ORDER_MANAGE))
+                            .build()));
+    ensureUser(
+        STORE_CONSOLE_ALL_EMAIL,
+        UserType.STAFF,
+        Set.of(storeConsoleOnly.getId()),
+        StoreScopeType.ALL_STORES,
+        Set.of());
+
+    // #428: STORE_VIEW も店舗コンソール能力も持たない PLATFORM 標識のみの束（403 を検証）。
+    CapabilityBundle platformOnly =
+        capabilityBundleRepository
+            .findByName(PLATFORM_ONLY_BUNDLE)
+            .orElseGet(
+                () ->
+                    capabilityBundleRepository.save(
+                        CapabilityBundle.builder()
+                            .name(PLATFORM_ONLY_BUNDLE)
+                            .capabilities(Set.of(Capability.PLATFORM_MENU_VIEW))
+                            .build()));
+    ensureUser(
+        PLATFORM_ONLY_EMAIL,
+        UserType.STAFF,
+        Set.of(platformOnly.getId()),
+        StoreScopeType.ALL_STORES,
+        Set.of());
 
     // 内部キャスト情報のカナリア（リポジトリ直挿 — テストスレッドは storeFilter を経由しない）。
     boolean canaryExists =
@@ -217,5 +267,62 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
         rest.exchange(
             "/platform/stores", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
     assertThat(platform.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName(
+      "#428: STORE_VIEW 無しの店舗コンソール資格保持者(SPECIFIC_STORES)は /platform/stores/me で自授権店舗のみを実名で取得できること")
+  void scene428_storeBridgeSpecificStoresCanListOwnAuthorizedStores() {
+    // PROFILE_ONLY は STORE_PROFILE_MANAGE(Console.STORE) のみで STORE_VIEW を持たない → storeBridge=true。
+    ResponseEntity<JsonNode> stores =
+        rest.exchange(
+            "/platform/stores/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(PROFILE_ONLY_EMAIL))),
+            JsonNode.class);
+
+    assertThat(stores.getStatusCode())
+        .as("STORE_VIEW 無しでも storeBridge 経由で 200")
+        .isEqualTo(HttpStatus.OK);
+    JsonNode body = stores.getBody();
+    // 応答は本人の授権店舗集合 {STORE_A} のみで、実名（Sample Tenant）を返す。
+    assertThat(body.size()).isEqualTo(1);
+    assertThat(body.path(0).path("id").asLong()).isEqualTo(STORE_A);
+    assertThat(body.path(0).path("name").asString()).isEqualTo("Sample Tenant");
+  }
+
+  @Test
+  @DisplayName("#428: STORE_VIEW 無しの店舗コンソール資格保持者(ALL_STORES)は /platform/stores/me で全店舗を実名で取得できること")
+  void scene428_storeBridgeAllStoresCanListAllStores() {
+    ResponseEntity<JsonNode> stores =
+        rest.exchange(
+            "/platform/stores/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(STORE_CONSOLE_ALL_EMAIL))),
+            JsonNode.class);
+
+    assertThat(stores.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // ALL_STORES は全店舗を返す（他 IT の店舗作成で総数は変動しうるため demo 2 店舗の実名 contains で判定）。
+    Map<Long, String> byId = new HashMap<>();
+    stores
+        .getBody()
+        .forEach(node -> byId.put(node.path("id").asLong(), node.path("name").asString()));
+    assertThat(byId)
+        .containsEntry(STORE_A, "Sample Tenant")
+        .containsEntry(STORE_B, "Sample Tenant 2");
+  }
+
+  @Test
+  @DisplayName("#428: STORE_VIEW も店舗コンソール資格も持たない STAFF は /platform/stores/me で 403 になること")
+  void scene428_staffWithoutStoreViewNorStoreConsoleIsForbidden() {
+    // PLATFORM_MENU_VIEW のみ（authority は発行されるが PERM_STORE_VIEW でも storeBridge でもない）→ fail-closed。
+    ResponseEntity<String> stores =
+        rest.exchange(
+            "/platform/stores/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(PLATFORM_ONLY_EMAIL))),
+            String.class);
+
+    assertThat(stores.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 }
