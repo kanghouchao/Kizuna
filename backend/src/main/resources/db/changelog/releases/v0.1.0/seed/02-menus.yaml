@@ -1,0 +1,161 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-v0100-002-menus
+      author: kanghouchao
+      # 統合メニューの正典 17 行（2 階層厳守・全ノード permission 非 null）。
+      # 親→子の順で挿入し自己参照 FK（fk_t_menus_parent）を満たす。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        # --- プラットフォームコンソール ---
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-main }
+              - column: { name: label, value: メイン }
+              - column: { name: permission, value: PLATFORM_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 10 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-dashboard }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: ダッシュボード }
+              - column: { name: path, value: /platform/dashboard }
+              - column: { name: icon, value: HomeIcon }
+              - column: { name: permission, value: PLATFORM_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-stores }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: 店舗一覧 }
+              - column: { name: path, value: /platform/stores }
+              - column: { name: icon, value: BuildingOfficeIcon }
+              - column: { name: permission, value: STORE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-staff }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: スタッフ管理 }
+              - column: { name: path, value: /platform/staff }
+              - column: { name: icon, value: UsersIcon }
+              - column: { name: permission, value: STAFF_MANAGE }
+              - column: { name: sort_order, valueNumeric: 3 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-settings }
+              - column: { name: label, value: 設定 }
+              - column: { name: permission, value: PLATFORM_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 20 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-config }
+              - column: { name: parent_id, value: platform-settings }
+              - column: { name: label, value: システム設定 }
+              - column: { name: path, value: /platform/settings }
+              - column: { name: icon, value: CogIcon }
+              - column: { name: permission, value: SYSTEM_CONFIG_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }
+        # --- 店舗コンソール ---
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-main }
+              - column: { name: label, value: メイン }
+              - column: { name: permission, value: STORE_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 110 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-dashboard }
+              - column: { name: parent_id, value: store-main }
+              - column: { name: label, value: ダッシュボード }
+              - column: { name: path, value: /store/dashboard }
+              - column: { name: icon, value: HomeIcon }
+              - column: { name: permission, value: STORE_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-ops }
+              - column: { name: label, value: 業務管理 }
+              - column: { name: permission, value: STORE_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 120 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-orders }
+              - column: { name: parent_id, value: store-ops }
+              - column: { name: label, value: 予約・案件管理 }
+              - column: { name: path, value: /store/orders }
+              - column: { name: icon, value: ClipboardDocumentListIcon }
+              - column: { name: permission, value: ORDER_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-hrm }
+              - column: { name: label, value: HRM }
+              - column: { name: permission, value: STORE_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 130 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-casts }
+              - column: { name: parent_id, value: store-hrm }
+              - column: { name: label, value: キャスト管理 }
+              - column: { name: path, value: /store/casts }
+              - column: { name: icon, value: FaceSmileIcon }
+              - column: { name: permission, value: CAST_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-shifts }
+              - column: { name: parent_id, value: store-hrm }
+              - column: { name: label, value: 出勤管理 }
+              - column: { name: path, value: /store/shifts }
+              - column: { name: icon, value: ClockIcon }
+              - column: { name: permission, value: SHIFT_MANAGE }
+              - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-crm }
+              - column: { name: label, value: CRM }
+              - column: { name: permission, value: STORE_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 140 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-customers }
+              - column: { name: parent_id, value: store-crm }
+              - column: { name: label, value: 顧客一覧 }
+              - column: { name: path, value: /store/customers }
+              - column: { name: icon, value: UserGroupIcon }
+              - column: { name: permission, value: CUSTOMER_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-settings }
+              - column: { name: label, value: 設定 }
+              - column: { name: permission, value: STORE_MENU_VIEW }
+              - column: { name: sort_order, valueNumeric: 150 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-profile }
+              - column: { name: parent_id, value: store-settings }
+              - column: { name: label, value: 店舗情報 }
+              - column: { name: path, value: /store/settings/profile }
+              - column: { name: icon, value: BuildingStorefrontIcon }
+              - column: { name: permission, value: STORE_PROFILE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }

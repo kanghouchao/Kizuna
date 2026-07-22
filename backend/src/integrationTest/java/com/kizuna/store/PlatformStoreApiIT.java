@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,22 +23,22 @@ import tools.jackson.databind.JsonNode;
  * /platform 命名空間へ統合した店舗 API（#415 収束C）の権限マトリクス・literal/{id} 共存・旧パス消滅を 本物の PostgreSQL で固定する統合テスト。
  *
  * <p>受入基準 3（stores/me・CRUD・stats・lookup の権限）、4（literal セグメントが {id} に吸われない）、 1（旧 /central・/tenant
- * パスの消滅）を対象とする。シードは v0.4.0/v0.5.0（admin=HQ ALL_STORES / 田中花子=店長 SPECIFIC{1,2} /
- * store1.kizuna.test=id 1）。
+ * パスの消滅）を対象とする。シードは v0.1.0（admin=HQ ALL_STORES はベースライン / 田中花子=店長 SPECIFIC{1,2} と
+ * store1.kizuna.test=id 1 は demo コンテキスト）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 class PlatformStoreApiIT {
 
-  /** v0.4.0 シードの HQ 管理者（ALL_STORES・PERM_STORE_MANAGE 保持）。 */
+  /** ベースラインシードの HQ 管理者（ALL_STORES・PERM_STORE_MANAGE 保持）。 */
   private static final String HQ_EMAIL = "admin@kizuna.test";
 
-  /** v0.5.0 シードの店長（SPECIFIC_STORES {1,2}・STORE_VIEW 保持 / STORE_MANAGE 非保持）。 */
+  /** demo シードの店長（SPECIFIC_STORES {1,2}・STORE_VIEW 保持 / STORE_MANAGE 非保持）。 */
   private static final String MANAGER_EMAIL = "tanaka.hanako@kizuna.test";
 
   private static final String PASSWORD = "pass";
 
-  /** v0.4.0 シードの店舗1のドメイン（id=1）。 */
+  /** demo シードの店舗1のドメイン（id=1）。 */
   private static final String STORE1_DOMAIN = "store1.kizuna.test";
 
   @Autowired private TestRestTemplate rest;
@@ -72,6 +73,27 @@ class PlatformStoreApiIT {
     List<Long> ids = new ArrayList<>();
     array.forEach(node -> ids.add(node.path("id").asLong()));
     return ids;
+  }
+
+  @Test
+  @DisplayName("POST /platform/stores は HQ 管理者で 204 になること")
+  void hqAdminCanCreateStore() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(platformToken(HQ_EMAIL));
+    // domain には一意制約（uq_t_stores_domain）があるため、
+    // 同一 DB へ手動で再実行しても衝突しないよう実行ごとに一意化する
+    String body =
+        String.format(
+            "{\"name\": \"店舗作成テスト\","
+                + " \"domain\": \"store-create-it-%s.kizuna.test\","
+                + " \"email\": \"store-create-it@kizuna.test\"}",
+            UUID.randomUUID());
+
+    ResponseEntity<Void> res =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
   }
 
   @Test

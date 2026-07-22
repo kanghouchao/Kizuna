@@ -1,7 +1,0 @@
-databaseChangeLog:
-  - include:
-      file: central/01-drop-legacy-auth-tables.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: tenant/01-drop-legacy-auth-tables.yaml
-      relativeToChangelogFile: true

@@ -12,7 +12,7 @@ services:
     environment:
       POSTGRES_DB: kizuna
       POSTGRES_USER: kizuna
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kizuna -d kizuna"]
       interval: 5s
@@ -53,21 +53,24 @@ services:
       - .:/app
       - gradle-it-cache:/root/.gradle
     environment:
-      DB_HOST: database
-      DB_PORT: "5432"
-      DB_NAME: kizuna
-      DB_USERNAME: kizuna
-      DB_PASSWORD: password
+      POSTGRES_HOST: database
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: kizuna
+      POSTGRES_USER: kizuna
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       REDIS_HOST: cache
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
+      # 統合テストはデモデータ（店舗 1/2 と店長・スタッフ）に依存するため demo を明示する。
+      # application.yml の既定は production＝デモデータ無しなので、ここを外すと全 IT が落ちる。
+      LIQUIBASE_CONTEXTS: demo
       # HMAC-SHA256 の要件（RFC 7518）で 256bit 以上必要（JwtUtil は raw bytes 解釈）
       APP_JWT_SECRET: integration-test-secret-0123456789abcdef
-      # S3（MinIO）接続。access/secret は storage の root アカウントと同じ値を参照して一致させる
-      UPLOAD_S3_ENDPOINT: http://storage:9000
-      UPLOAD_S3_BUCKET: uploads
-      UPLOAD_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      UPLOAD_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      # S3（MinIO）接続。root アカウントは storage サービスと同じ変数を参照して一致させる
+      MINIO_ENDPOINT: http://storage:9000
+      MINIO_BUCKET: uploads
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
     depends_on:
       database:
         condition: service_healthy

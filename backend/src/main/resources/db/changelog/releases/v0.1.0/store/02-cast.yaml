@@ -1,0 +1,271 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-002-cast-schema
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_casts
+            remarks: キャスト情報テーブル
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_casts
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: platform_user_id
+                  type: BIGINT
+                  remarks: 紐づくプラットフォームユーザー ID（t_users 参照。未招待なら NULL）
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                  remarks: キャスト名
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+                  defaultValue: ACTIVE
+                  remarks: ステータス
+              - column:
+                  name: photo_url
+                  type: VARCHAR(500)
+                  remarks: 写真URL
+              - column:
+                  name: introduction
+                  type: TEXT
+                  remarks: 自己紹介
+              - column:
+                  name: age
+                  type: INTEGER
+                  remarks: 年齢
+              - column:
+                  name: height
+                  type: INTEGER
+                  remarks: 身長(cm)
+              - column:
+                  name: bust
+                  type: INTEGER
+                  remarks: バスト(cm)
+              - column:
+                  name: waist
+                  type: INTEGER
+                  remarks: ウエスト(cm)
+              - column:
+                  name: hip
+                  type: INTEGER
+                  remarks: ヒップ(cm)
+              - column:
+                  name: custom_fields
+                  type: JSONB
+                  remarks: カスタムフィールド値（key→value。未設定は NULL でアプリ側は空マップ扱い）
+              - column:
+                  name: display_order
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: 表示順
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_casts_store
+            baseTableName: t_casts
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_casts_platform_user
+            baseTableName: t_casts
+            baseColumnNames: platform_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - createTable:
+            tableName: t_cast_field_definitions
+            remarks: キャストのカスタムフィールド定義テーブル（店舗別動的属性）
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_cast_field_definitions
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: key
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                  remarks: プログラム識別子（不変・店舗内一意）
+              - column:
+                  name: label
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                  remarks: 表示ラベル
+              - column:
+                  name: display_order
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 表示順（サーバ側自動採番）
+              - column:
+                  name: is_public
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+                  remarks: 公開詳細ページに表示するか
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_field_definitions_store
+            baseTableName: t_cast_field_definitions
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: t_cast_field_definitions
+            columnNames: store_id,key
+            constraintName: uq_t_cast_field_definitions_store_key
+        - createTable:
+            tableName: t_cast_invitations
+            remarks: キャスト招待テーブル
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_cast_invitations
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cast_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 招待対象のキャスト ID
+              - column:
+                  name: token
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_cast_invitations_token
+                  remarks: 招待リンクのトークン
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 物理状態(PENDING/ACCEPTED/INVALIDATED)
+              - column:
+                  name: expires_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 有効期限
+              - column:
+                  name: accepted_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 受諾日時
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_invitations_store
+            baseTableName: t_cast_invitations
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_invitations_cast
+            baseTableName: t_cast_invitations
+            baseColumnNames: cast_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              -- キャストあたり有効(PENDING)な招待は最大 1 件に制限する部分ユニークインデックス。
+              -- token 一意制約だけでは異なるトークンの二重 PENDING を防げず、issue() が並行すると
+              -- 複数の有効トークンが発行されうるため、DB レベルで直列化する。
+              CREATE UNIQUE INDEX uq_t_cast_invitations_pending_cast
+              ON t_cast_invitations (cast_id)
+              WHERE status = 'PENDING';

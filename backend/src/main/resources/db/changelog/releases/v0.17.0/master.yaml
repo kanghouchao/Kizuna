@@ -1,4 +1,0 @@
-databaseChangeLog:
-  - include:
-      file: platform/01-menu-route-vocabulary.yaml
-      relativeToChangelogFile: true

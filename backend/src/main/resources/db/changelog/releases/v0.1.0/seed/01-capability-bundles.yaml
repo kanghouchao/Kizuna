@@ -1,0 +1,163 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-v0100-001-capability-bundles
+      author: kanghouchao
+      # 既定の能力束 3 件。束はデータであり固定ロール一覧ではないため、id は採番に委ね
+      # items は自然キー（name）の部分問い合わせで解決する。運用側で束を追加・改廃できる。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - insert:
+            tableName: t_capability_bundles
+            columns:
+              - column: { name: name, value: "HQ管理者" }
+        - insert:
+            tableName: t_capability_bundles
+            columns:
+              - column: { name: name, value: "店長" }
+        - insert:
+            tableName: t_capability_bundles
+            columns:
+              - column: { name: name, value: "店舗スタッフ" }
+
+        # HQ管理者: プラットフォーム 5 能力 + 跨店参照 2 能力
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: capability, value: STORE_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: capability, value: STAFF_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: capability, value: SYSTEM_CONFIG_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: capability, value: PLATFORM_MENU_VIEW }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: capability, value: PLATFORM_ASSET_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: capability, value: STORE_VIEW }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: capability, value: ORDER_SET_MANAGE }
+
+        # 店長: 跨店参照 2 能力 + 店舗 9 能力（店舗側の全能力）
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: STORE_VIEW }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: ORDER_SET_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: ORDER_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: CUSTOMER_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: SHIFT_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: CAST_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: CAST_INVITE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: CAST_FIELD_DEF_VIEW }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: CAST_FIELD_DEF_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: STORE_PROFILE_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: capability, value: STORE_MENU_VIEW }
+
+        # 店舗スタッフ: 店長 − CAST_INVITE − CAST_FIELD_DEF_MANAGE（店長専用境界の保存）
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: STORE_VIEW }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: ORDER_SET_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: ORDER_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: CUSTOMER_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: SHIFT_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: CAST_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: CAST_FIELD_DEF_VIEW }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: STORE_PROFILE_MANAGE }
+        - insert:
+            tableName: t_capability_bundle_items
+            columns:
+              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: capability, value: STORE_MENU_VIEW }

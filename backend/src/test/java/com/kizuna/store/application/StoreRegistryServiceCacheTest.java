@@ -35,7 +35,7 @@ class StoreRegistryServiceCacheTest {
     @Bean
     CacheManager cacheManager() {
       ConcurrentMapCacheManager manager = new ConcurrentMapCacheManager();
-      // 本番設定（REDIS_CACHE_NULL_VALUES:false）と同じ null 拒否契約
+      // 本番設定（SPRING_CACHE_NULL_VALUES:false）と同じ null 拒否契約
       manager.setAllowNullValues(false);
       return manager;
     }

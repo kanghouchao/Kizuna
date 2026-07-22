@@ -24,6 +24,7 @@ public interface CastMapper {
 
   @Mapping(target = "status", defaultValue = "ACTIVE")
   @Mapping(target = "platformUserId", ignore = true)
+  @Mapping(target = "customFields", ignore = true)
   Cast toEntity(CastCreateRequest request);
 
   /** 更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */

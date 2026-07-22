@@ -1,7 +1,0 @@
-databaseChangeLog:
-  - include:
-      file: tenant/01-shift-schema.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: tenant/02-shift-menu-seed.yaml
-      relativeToChangelogFile: true

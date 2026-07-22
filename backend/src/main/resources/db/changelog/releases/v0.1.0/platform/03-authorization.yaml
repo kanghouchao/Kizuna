@@ -1,0 +1,176 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-003-authorization-schema
+      author: kanghouchao
+      # 授権モデル「能力束 × 担当店舗集合 ×（必要時）精算範囲」の基座。
+      # 能力目録はコード定義（Capability enum）、束は DB データとして管理し固定ロール一覧を作らない。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_capability_bundles
+            remarks: 能力束（ロール=能力束の名前。束はデータとして追加でき発版を要しない）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_capability_bundles
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_capability_bundles_name
+                  remarks: 束の表示名（自然キー）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - createTable:
+            tableName: t_capability_bundle_items
+            remarks: 束が含む能力（Capability enum 名）
+            columns:
+              - column:
+                  name: bundle_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: capability
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: t_capability_bundle_items
+            columnNames: bundle_id,capability
+            constraintName: pk_t_capability_bundle_items
+        - addForeignKeyConstraint:
+            constraintName: fk_t_capability_bundle_items_bundle
+            baseTableName: t_capability_bundle_items
+            baseColumnNames: bundle_id
+            referencedTableName: t_capability_bundles
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - createTable:
+            tableName: t_user_bundles
+            remarks: ユーザーへの能力束授与（STAFF は 1 束以上。兼務=複数束）
+            columns:
+              - column:
+                  name: platform_user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: bundle_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: t_user_bundles
+            columnNames: platform_user_id,bundle_id
+            constraintName: pk_t_user_bundles
+        - addForeignKeyConstraint:
+            constraintName: fk_t_user_bundles_user
+            baseTableName: t_user_bundles
+            baseColumnNames: platform_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            # 授与中の束の削除は授権を黙って失わせるため RESTRICT で拒否する（fail-loud）。
+            constraintName: fk_t_user_bundles_bundle
+            baseTableName: t_user_bundles
+            baseColumnNames: bundle_id
+            referencedTableName: t_capability_bundles
+            referencedColumnNames: id
+            onDelete: RESTRICT
+        - createTable:
+            tableName: t_grant_history
+            remarks: 授権の付与・変更・停止・再開の追記専用履歴（停止後も実行主体の記録を保持する）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_grant_history
+              - column:
+                  name: platform_user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 授権を変更された対象ユーザー
+              - column:
+                  name: actor_email
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                  remarks: 変更を実行した主体のメールアドレス
+              - column:
+                  name: action
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 操作種別（付与・変更・停止・再開）
+              - column:
+                  name: detail
+                  type: TEXT
+                  constraints:
+                    nullable: false
+                  remarks: 変更内容の詳細
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            # 履歴の対象ユーザー行が消えると実行主体の記録が失われるため RESTRICT（履歴保全、fail-loud）。
+            constraintName: fk_t_grant_history_user
+            baseTableName: t_grant_history
+            baseColumnNames: platform_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: RESTRICT
+        - createIndex:
+            indexName: idx_t_grant_history_user
+            tableName: t_grant_history
+            columns:
+              - column:
+                  name: platform_user_id

@@ -1,7 +1,0 @@
-databaseChangeLog:
-  - include:
-      file: central/01-store2-and-demo-users.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: tenant/01-store2-menus-config.yaml
-      relativeToChangelogFile: true

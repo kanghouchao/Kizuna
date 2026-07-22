@@ -1,0 +1,56 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-001-store-schema
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_stores
+            remarks: 店舗（組織）の登録情報。店舗スコープの全データが参照する起点
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_stores
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+                  remarks: 店舗名
+              - column:
+                  name: domain
+                  type: VARCHAR(128)
+                  constraints:
+                    unique: true
+                    uniqueConstraintName: uq_t_stores_domain
+                  remarks: 公開サイトのホスト名（店舗文脈の解決キー）
+              - column:
+                  name: email
+                  type: VARCHAR(128)
+                  remarks: 代表連絡先メールアドレス
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
