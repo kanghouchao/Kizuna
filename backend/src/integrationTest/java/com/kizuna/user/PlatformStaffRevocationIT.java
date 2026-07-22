@@ -52,6 +52,7 @@ class PlatformStaffRevocationIT {
   private static final String ROLLBACK_EMAIL = "revocation-rollback@kizuna.test";
   private static final String IDEMPOTENT_EMAIL = "revocation-idempotent@kizuna.test";
   private static final String TTL_EMAIL = "revocation-ttl@kizuna.test";
+  private static final String NOOP_EMAIL = "revocation-noop@kizuna.test";
 
   private static final String USER_BLACKLIST_KEY_PREFIX = "blacklist:users:";
 
@@ -67,7 +68,13 @@ class PlatformStaffRevocationIT {
   void cleanupRedis() {
     for (String email :
         List.of(
-            ADMIN_EMAIL, STOP_EMAIL, RESUME_EMAIL, ROLLBACK_EMAIL, IDEMPOTENT_EMAIL, TTL_EMAIL)) {
+            ADMIN_EMAIL,
+            STOP_EMAIL,
+            RESUME_EMAIL,
+            ROLLBACK_EMAIL,
+            IDEMPOTENT_EMAIL,
+            TTL_EMAIL,
+            NOOP_EMAIL)) {
       redisTemplate.delete(USER_BLACKLIST_KEY_PREFIX + email);
     }
   }
@@ -277,6 +284,29 @@ class PlatformStaffRevocationIT {
         .as("既に停止済みの対象への再送も 200 で受理されること(結果語義の冪等性)")
         .isEqualTo(HttpStatus.OK);
     assertThat(redisTemplate.hasKey(key)).as("再送によりユーザー単位ブラックリストが再書込されること").isEqualTo(true);
+  }
+
+  @Test
+  @DisplayName("内容が同一の更新でも version が増えること（陳腐な更新がコミットできない前提の実証 — PR #435 codex 指摘）")
+  void noOpUpdateStillBumpsVersion() {
+    PlatformUser target = ensureEnabledTestUser(NOOP_EMAIL, "店舗スタッフ");
+    String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
+
+    // 1 回目: enabled も束も店舗集合も現状と同一の payload を送る（実質 no-op）。
+    ResponseEntity<JsonNode> first = putEnabled(admin, target.getId(), true, target.getVersion());
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+    long afterFirst = first.getBody().path("version").asLong();
+
+    // no-op でも version が進む = version 述語つき UPDATE が発行されている。これが成り立つ限り、
+    // 停止を知らずに読んだ陳腐なスナップショットからの更新は、停止が先にコミットした時点で
+    // 楽観ロック違反となりコミットできない（＝失効とブラックリストの食い違いが構造的に起きない）。
+    assertThat(afterFirst).as("内容同一でも version は増える").isEqualTo(target.getVersion() + 1);
+
+    // 進んだ version により、古い version を持つ要求は 409 で弾かれる。
+    ResponseEntity<JsonNode> stale = putEnabled(admin, target.getId(), true, target.getVersion());
+    assertThat(stale.getStatusCode())
+        .as("陳腐な version の要求は 409 で弾かれること")
+        .isEqualTo(HttpStatus.CONFLICT);
   }
 
   @Test

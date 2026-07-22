@@ -8,6 +8,8 @@ import com.kizuna.user.domain.PlatformUserStopped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -41,6 +43,7 @@ public class AuthSessionService {
    * を取り直して同じ停止要求を再送すれば復旧できる（発行条件が結果語義であるため — {@code PlatformStaffService.update} 参照）。
    */
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void onPlatformUserStopped(PlatformUserStopped event) {
     if (!isEnabledNow(event.email())) {
       tokenBlacklistService.blacklistUser(event.email());
@@ -49,6 +52,7 @@ public class AuthSessionService {
 
   /** スタッフ再開イベントを受けてユーザー単位ブラックリストを解除する。AFTER_COMMIT である理由は {@link #onPlatformUserStopped} と同じ。 */
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void onPlatformUserResumed(PlatformUserResumed event) {
     if (isEnabledNow(event.email())) {
       tokenBlacklistService.clearUser(event.email());
@@ -56,10 +60,15 @@ public class AuthSessionService {
   }
 
   /**
-   * コミット済みの enabled を読み直す。イベントの発行条件は「そのリクエストが停止/再開を明示的に要求したか」（結果語義）であり、 発行時点の {@code PlatformUser}
-   * は要求元が読んだ時点のスナップショットでしかない。並行する停止と再開が競合した場合、 その断片的なスナップショットを信じて Redis を書き換えると、コミット済みの enabled
-   * とブラックリストが食い違い得る （例: 停止が先に確定したのに、それを知らない再開要求の後処理が鍵を消してしまい、停止済みユーザーの旧 JWT が復活する）。 AFTER_COMMIT
-   * で確定した状態を正本として照合することで、その食い違いを構造的に排除する。
+   * コミット済みの enabled を読み直し、その結果に従って Redis を更新する（イベントのスナップショットには従わない）。
+   *
+   * <p>塞いでいるのは停止と再開が並行したときの<b>コールバック実行順の逆転</b>である。停止 → 再開の順にコミットしても、 先行する停止の afterCommit
+   * が後続の再開のコミットより後ろへずれ込むと、確定状態は enabled=true なのに停止側の後処理が 鍵を書いてしまい、有効なユーザーが TTL
+   * 満了まで締め出される。逆順なら停止済みユーザーが解封される（こちらは安全側の欠陥）。 各コールバックが確定状態を読み直せば、どちらの順で走っても最終状態へ収束する。
+   *
+   * <p>{@code REQUIRES_NEW} が必須である点に注意。afterCommit の時点では commit 済みトランザクションの EntityManager がまだ
+   * スレッドに束縛されており、そのまま問い合わせると Hibernate は永続化コンテキストで管理中の（＝この要求が読んだ時点の） インスタンスを返し、行の最新値を捨ててしまう。新しい
+   * persistence context で読むことで確定済みの行を観測する（PR #435 codex P2 指摘）。
    *
    * <p>ユーザー不在は「停止相当」（false）として扱う — 判断がつかない場合は失効側へ倒す。
    */
