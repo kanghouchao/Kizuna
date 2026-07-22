@@ -11,4 +11,11 @@ export {
   setPlatformStore,
   startPlatformSession,
 } from './platform-session';
-export { getStoreIdFromPath, replaceStoreIdInPath } from './store-route';
+export {
+  getStoreIdFromPath,
+  isLegacyStorePath,
+  replaceStoreIdInPath,
+  resolveStoreHref,
+  storePath,
+  storeSelectPath,
+} from './store-route';
