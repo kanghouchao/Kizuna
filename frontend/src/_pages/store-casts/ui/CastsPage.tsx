@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import { useManagedList } from '@/shared/lib';
+import { storePath, useManagedList } from '@/shared/lib';
 import { toast } from 'react-hot-toast';
 
 /** キャスト一覧ページ */
@@ -96,7 +96,7 @@ export default function CastListPage() {
           {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定（裁定6と同型）。 */}
           {canManageFieldDefs && (
             <Link
-              href={`/store/${storeId}/casts/fields`}
+              href={storePath(storeId, '/casts/fields')}
               className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <Cog6ToothIcon className="-ml-1 mr-2 h-5 w-5" />
@@ -104,7 +104,7 @@ export default function CastListPage() {
             </Link>
           )}
           <Link
-            href={`/store/${storeId}/casts/create`}
+            href={storePath(storeId, '/casts/create')}
             className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
             <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
@@ -232,7 +232,7 @@ export default function CastListPage() {
                         />
                       )}
                       <Link
-                        href={`/store/${storeId}/casts/${cast.id}/edit`}
+                        href={storePath(storeId, `/casts/${cast.id}/edit`)}
                         className="text-gray-400 hover:text-amber-600 inline-block"
                       >
                         <PencilSquareIcon className="h-5 w-5" />

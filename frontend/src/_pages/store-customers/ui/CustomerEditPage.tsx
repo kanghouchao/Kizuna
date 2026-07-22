@@ -6,6 +6,7 @@ import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerFor
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { Order, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
+import { storePath } from '@/shared/lib';
 
 /** 顧客編集ページ（プロフィール編集 + 注文履歴） */
 export default function CustomerEditPage() {
@@ -25,7 +26,7 @@ export default function CustomerEditPage() {
         setCustomer(data);
       } catch {
         toast.error('顧客情報の取得に失敗しました');
-        router.push(`/store/${storeId}/customers`);
+        router.push(storePath(storeId, '/customers'));
         return;
       } finally {
         setIsLoading(false);
@@ -46,7 +47,7 @@ export default function CustomerEditPage() {
       setIsSubmitting(true);
       await customerApi.update(id, toCustomerRequest(data));
       toast.success('顧客情報を更新しました');
-      router.push(`/store/${storeId}/customers`);
+      router.push(storePath(storeId, '/customers'));
     } catch {
       toast.error('顧客情報の更新に失敗しました');
     } finally {

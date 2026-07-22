@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { OrderCreateRequest, orderApi } from '@/entities/order';
+import { storePath } from '@/shared/lib';
 
 export default function CreateOrderPage() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function CreateOrderPage() {
       await orderApi.create(request);
 
       toast.success('オーダーを登録しました');
-      router.push(`/store/${storeId}/orders`);
+      router.push(storePath(storeId, '/orders'));
     } catch (error) {
       console.error(error);
       toast.error('オーダーの登録に失敗しました');

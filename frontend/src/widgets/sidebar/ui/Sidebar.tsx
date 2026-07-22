@@ -30,6 +30,7 @@ import {
   getPlatformStoreId,
   getStoreIdFromPath,
   isStoreConsole,
+  resolveStoreHref,
 } from '@/shared/lib';
 
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
@@ -53,25 +54,11 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   KeyIcon,
 };
 
-/**
- * 店舗スコープの menu path（例 /store/orders）に現在の storeId を埋め込む（#413）。
- * path 由来 id を最優先し、無ければ前回選択 cookie、それも無ければ店舗選択画面へ誘導する。
- * 認可の根拠ではなく遷移先の解決のみ — 非授権店舗はバックエンドが fail-closed で拒否する。
- */
-function resolveStoreHref(itemPath: string, pathStoreId: string | undefined): string {
-  if (!itemPath.startsWith('/store')) {
-    return itemPath;
-  }
-  const storeId = pathStoreId ?? getPlatformStoreId();
-  if (storeId) {
-    return itemPath.replace('/store', `/store/${storeId}`);
-  }
-  return `/store/select?next=${encodeURIComponent(itemPath)}`;
-}
-
 export function Sidebar() {
   const pathname = usePathname();
-  const pathStoreId = getStoreIdFromPath(pathname);
+  // 店舗リンクへ埋め込む storeId は path 由来 id を最優先し、無ければ前回選択 cookie に fallback する。
+  // path 組立は store-route（店舗パス知識の唯一 module）の resolveStoreHref に委ねる（#428）。
+  const storeId = getStoreIdFromPath(pathname) ?? getPlatformStoreId();
   const [role, setRole] = useState<string>('platform');
   const [navigation, setNavigation] = useState<any[]>([]);
 
@@ -148,7 +135,7 @@ export function Sidebar() {
               </h3>
               <ul className="space-y-1">
                 {section.items.map((item: any) => {
-                  const href = resolveStoreHref(item.href, pathStoreId);
+                  const href = resolveStoreHref(item.href, storeId);
                   const isActive = pathname === href;
                   return (
                     <li key={item.name}>

@@ -4,6 +4,7 @@ import { OrderForm, OrderFormData } from './OrderForm';
 import { toast } from 'react-hot-toast';
 import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
+import { storePath } from '@/shared/lib';
 
 export default function EditOrderPage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function EditOrderPage() {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       toast.success('オーダーを更新しました');
-      router.push(`/store/${storeId}/orders`);
+      router.push(storePath(storeId, '/orders'));
     } catch (error) {
       toast.error('オーダーの更新に失敗しました');
     } finally {

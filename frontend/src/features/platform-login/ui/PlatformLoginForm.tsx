@@ -8,8 +8,8 @@ import { platformAuthApi, PlatformLoginRequest, resolvePlatformDestination } fro
 import {
   clearPlatformSession,
   getApiErrorMessage,
-  setPlatformStore,
   startPlatformSession,
+  storeSelectPath,
 } from '@/shared/lib';
 
 /** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する（#324）。 */
@@ -38,16 +38,11 @@ export default function PlatformLoginForm() {
       }
 
       if (destination === 'store') {
-        const stores = await platformAuthApi.stores();
-        if (stores.length === 0) {
-          Cookies.remove('token');
-          clearPlatformSession();
-          toast.error('利用可能な店舗がありません。管理者にお問い合わせください');
-          return;
-        }
+        // 着地方針（1店舗=自動転送 / N店舗=選択画面 / 0店舗=案内表示）は StoreSelectPage 一箇所に集約する（#428）。
+        // ログインフォームは無条件に選択画面へ渡し、stores[0] 無条件遷移（複数店舗ユーザーが選択画面へ
+        // 到達できない矛盾）を解消する。
         startPlatformSession(me.console, expires_at);
-        setPlatformStore(stores[0].id, expires_at);
-        router.push(`/store/${stores[0].id}/dashboard/`);
+        router.push(storeSelectPath());
         return;
       }
 

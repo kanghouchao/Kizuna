@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
 import { CastCreateRequest, castApi } from '@/entities/cast';
 import { toast } from 'react-hot-toast';
+import { storePath } from '@/shared/lib';
 
 /** 新規キャスト登録ページ */
 export default function CastCreatePage() {
@@ -31,7 +32,7 @@ export default function CastCreatePage() {
       };
       await castApi.create(requestData);
       toast.success('キャストを登録しました');
-      router.push(`/store/${storeId}/casts`);
+      router.push(storePath(storeId, '/casts'));
     } catch {
       toast.error('キャストの登録に失敗しました');
     } finally {
