@@ -1,0 +1,43 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0200-001-event-publication-v2-schema
+      author: kanghouchao
+      # event_publication は spring-modulith-starter-jdbc のイベント発行レジストリ（v0.1.0
+      # platform/06-event-publication.yaml 参照）。あの changeset は当時 pin されていた
+      # spring-modulith 1.4.12 の公式 PostgreSQL スキーマ（completion_date までの 6 列）を
+      # そのまま写したものだったが、#426 で BOM を 2.1.0 へ上げた際にスキーマの互換確認が
+      # 漏れていた。2.1.0 は既定で JdbcEventPublicationRepositoryV2 を使い、そちらは
+      # status / completion_attempts / last_resubmission_date の 3 列を要求する
+      # （spring-modulith-events-jdbc-2.1.0.jar 内 schemas/v2/schema-postgresql.sql）。
+      # この版ずれは #403 まで顕在化しなかった（当リポジトリで ApplicationEventPublisher
+      # 経由の発行が実際に発生したのが #403 が初めてだったため）。本 changeset は不足分の
+      # 3 列だけを補う差分で、v0.1.0 側は変更しない（適用済み changeset の checksum を
+      # 壊さないため）。
+      #
+      # 索引は v0.1.0 で作成済みの 2 本（event_publication_serialized_event_hash_idx /
+      # event_publication_by_completion_date_idx）で v2 スキーマの索引要件を満たしており、
+      # 追加索引は不要。spring.modulith.events.completion-mode は既定の update（archive
+      # ではない）ため event_publication_archive 表も不要。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: event_publication
+            columns:
+              - column:
+                  name: status
+                  type: TEXT
+              - column:
+                  name: completion_attempts
+                  type: INT
+              - column:
+                  name: last_resubmission_date
+                  type: TIMESTAMP WITH TIME ZONE
+      rollback:
+        - sql:
+            sql: ALTER TABLE event_publication DROP COLUMN status
+        - sql:
+            sql: ALTER TABLE event_publication DROP COLUMN completion_attempts
+        - sql:
+            sql: ALTER TABLE event_publication DROP COLUMN last_resubmission_date

@@ -1,6 +1,10 @@
 # v0.2.0 = v0.1.0 ベースライン適用後の増分。#429 で StoreProfile を StoreScopedEntity へ
-# 帰隊させるための PK 型移行を含む。構成は v0.1.0 と同じ platform / store / seed の 3 層。
+# 帰隊させるための PK 型移行と、#403 で顕在化した event_publication の v2 スキーマ差分
+# 補完を含む。構成は v0.1.0 と同じ platform / store / seed の 3 層。
 databaseChangeLog:
+  - include:
+      file: platform/01-event-publication-v2-schema.yaml
+      relativeToChangelogFile: true
   - include:
       file: store/01-store-profile-id-to-snowflake.yaml
       relativeToChangelogFile: true
