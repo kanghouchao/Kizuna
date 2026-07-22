@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { toast } from 'react-hot-toast';
+import { storePath } from '@/shared/lib';
 
 /** 顧客一覧ページ */
 export default function CustomersPage() {
@@ -77,7 +78,7 @@ export default function CustomersPage() {
           <p className="text-sm text-gray-500 mt-1">顧客情報の登録・編集ができます。</p>
         </div>
         <Link
-          href={`/store/${storeId}/customers/create`}
+          href={storePath(storeId, '/customers/create')}
           className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
         >
           <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
@@ -192,7 +193,7 @@ export default function CustomersPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                     <Link
-                      href={`/store/${storeId}/customers/${customer.id}/edit`}
+                      href={storePath(storeId, `/customers/${customer.id}/edit`)}
                       className="text-gray-400 hover:text-amber-600 inline-block"
                     >
                       <PencilSquareIcon className="h-5 w-5" />

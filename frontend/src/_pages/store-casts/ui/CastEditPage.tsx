@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
 import { CastResponse, CastUpdateRequest, castApi } from '@/entities/cast';
 import { toast } from 'react-hot-toast';
+import { storePath } from '@/shared/lib';
 
 /** キャスト編集ページ */
 export default function CastEditPage() {
@@ -23,7 +24,7 @@ export default function CastEditPage() {
         setCast(data);
       } catch {
         toast.error('キャスト情報の取得に失敗しました');
-        router.push(`/store/${storeId}/casts`);
+        router.push(storePath(storeId, '/casts'));
       } finally {
         setIsLoading(false);
       }
@@ -49,7 +50,7 @@ export default function CastEditPage() {
       };
       await castApi.update(id, requestData);
       toast.success('キャスト情報を更新しました');
-      router.push(`/store/${storeId}/casts`);
+      router.push(storePath(storeId, '/casts'));
     } catch {
       toast.error('キャスト情報の更新に失敗しました');
     } finally {
