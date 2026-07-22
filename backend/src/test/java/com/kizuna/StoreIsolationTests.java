@@ -65,6 +65,34 @@ class StoreIsolationTests {
   }
 
   @Test
+  @DisplayName("store_id 列を持つ全 @Entity が StoreScopedEntity を継承していること（豁免なし）")
+  void allStoreScopedEntitiesExtendBaseClass() throws Exception {
+    ClassPathScanningCandidateComponentProvider scanner =
+        new ClassPathScanningCandidateComponentProvider(false);
+    scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
+
+    List<String> offenders = new ArrayList<>();
+    List<String> scanned = new ArrayList<>();
+    for (var candidate : scanner.findCandidateComponents("com.kizuna")) {
+      Class<?> entity = Class.forName(candidate.getBeanClassName());
+      if (!hasStoreIdColumn(entity)) {
+        continue;
+      }
+      scanned.add(entity.getSimpleName());
+      // 基類継承を強制することで、@PrePersist の store_id 採番（StoreScopeStampListener）と
+      // storeFilter/@FilterDef の共通土台が全 store-scoped 集約へ機構的に効く。豁免リストは持たない。
+      if (!StoreScopedEntity.class.isAssignableFrom(entity)) {
+        offenders.add(entity.getName());
+      }
+    }
+
+    assertThat(scanned).isNotEmpty();
+    assertThat(offenders)
+        .as("store_id 列を持つが StoreScopedEntity を継承していない @Entity（採番・行レベル分離の共通土台から外れる）")
+        .isEmpty();
+  }
+
+  @Test
   @DisplayName("storeFilter は主キー直接ロード（EntityManager#find 経由の findById 等）にも適用されること")
   void storeFilterAppliesToLoadByKey() {
     // @FilterDef は Hibernate 6 で repeatable のため、storeFilter の定義を名前で取り出す
