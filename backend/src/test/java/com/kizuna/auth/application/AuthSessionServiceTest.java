@@ -1,7 +1,10 @@
 package com.kizuna.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,14 +18,16 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -35,7 +40,21 @@ class AuthSessionServiceTest {
 
   @Mock private PlatformUserRepository platformUserRepository;
 
-  @InjectMocks private AuthSessionService service;
+  @Mock private PlatformTransactionManager transactionManager;
+
+  private AuthSessionService service;
+
+  @BeforeEach
+  void setUp() {
+    // TransactionTemplate は実物を使う（コールバックを実際に走らせる）。確定済みの行を独立
+    // トランザクションで読む設計のため、ここを模擬すると読み直しの有無を検証できなくなる。
+    // lenient: invalidate 系のテストは確定状態の読み直しを通らないため、この stub は使われない。
+    lenient()
+        .when(transactionManager.getTransaction(any()))
+        .thenReturn(mock(TransactionStatus.class));
+    service =
+        new AuthSessionService(tokenBlacklistService, platformUserRepository, transactionManager);
+  }
 
   /** コミット済みの enabled を返すユーザーを仕込む。 */
   private void committedUser(boolean enabled) {
