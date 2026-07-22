@@ -4,8 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.PlatformUserResumed;
+import com.kizuna.user.domain.PlatformUserStopped;
+import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
+import java.util.Optional;
+import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,9 +29,28 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ExtendWith(MockitoExtension.class)
 class AuthSessionServiceTest {
 
+  private static final String EMAIL = "target@kizuna.test";
+
   @Mock private TokenBlacklistService tokenBlacklistService;
 
+  @Mock private PlatformUserRepository platformUserRepository;
+
   @InjectMocks private AuthSessionService service;
+
+  /** コミット済みの enabled を返すユーザーを仕込む。 */
+  private void committedUser(boolean enabled) {
+    PlatformUser user =
+        PlatformUser.builder()
+            .email(EMAIL)
+            .password("x")
+            .displayName("対象")
+            .enabled(enabled)
+            .userType(UserType.CAST)
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeIds(Set.of())
+            .build();
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+  }
 
   @Test
   void invalidate_blacklistsTokenAndClearsContext() {
@@ -69,5 +98,57 @@ class AuthSessionServiceTest {
     }
 
     verify(tokenBlacklistService, never()).blacklist(anyString());
+  }
+
+  @Test
+  @DisplayName("停止イベント: コミット済みが停止済みならユーザー単位ブラックリストへ登録する")
+  void onStopped_whenCommittedStateIsStopped_blacklists() {
+    committedUser(false);
+
+    service.onPlatformUserStopped(new PlatformUserStopped(EMAIL));
+
+    verify(tokenBlacklistService).blacklistUser(EMAIL);
+  }
+
+  @Test
+  @DisplayName("停止イベント: コミット済みが有効なら登録しない（並行再開に負けた停止要求が無関係なユーザーを締め出さない）")
+  void onStopped_whenCommittedStateIsEnabled_doesNotBlacklist() {
+    committedUser(true);
+
+    service.onPlatformUserStopped(new PlatformUserStopped(EMAIL));
+
+    verify(tokenBlacklistService, never()).blacklistUser(anyString());
+  }
+
+  @Test
+  @DisplayName("再開イベント: コミット済みが有効ならユーザー単位ブラックリストを解除する")
+  void onResumed_whenCommittedStateIsEnabled_clears() {
+    committedUser(true);
+
+    service.onPlatformUserResumed(new PlatformUserResumed(EMAIL));
+
+    verify(tokenBlacklistService).clearUser(EMAIL);
+  }
+
+  @Test
+  @DisplayName("再開イベント: コミット済みが停止済みなら解除しない（停止済みユーザーの旧 JWT を復活させない — PR #435 codex 指摘）")
+  void onResumed_whenCommittedStateIsStopped_doesNotClear() {
+    committedUser(false);
+
+    service.onPlatformUserResumed(new PlatformUserResumed(EMAIL));
+
+    verify(tokenBlacklistService, never()).clearUser(anyString());
+  }
+
+  @Test
+  @DisplayName("対象ユーザーが不在なら停止側へ倒す（登録はするが解除はしない）")
+  void missingUser_failsClosed() {
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+
+    service.onPlatformUserStopped(new PlatformUserStopped(EMAIL));
+    service.onPlatformUserResumed(new PlatformUserResumed(EMAIL));
+
+    verify(tokenBlacklistService).blacklistUser(EMAIL);
+    verify(tokenBlacklistService, never()).clearUser(anyString());
   }
 }

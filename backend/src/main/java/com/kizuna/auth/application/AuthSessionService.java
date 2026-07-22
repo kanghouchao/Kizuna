@@ -1,6 +1,8 @@
 package com.kizuna.auth.application;
 
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.PlatformUserResumed;
 import com.kizuna.user.domain.PlatformUserStopped;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class AuthSessionService {
 
   private final TokenBlacklistService tokenBlacklistService;
+  private final PlatformUserRepository platformUserRepository;
 
   /**
    * スタッフ停止イベントを受けてユーザー単位ブラックリストへ登録する。
@@ -39,13 +42,29 @@ public class AuthSessionService {
    */
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void onPlatformUserStopped(PlatformUserStopped event) {
-    tokenBlacklistService.blacklistUser(event.email());
+    if (!isEnabledNow(event.email())) {
+      tokenBlacklistService.blacklistUser(event.email());
+    }
   }
 
   /** スタッフ再開イベントを受けてユーザー単位ブラックリストを解除する。AFTER_COMMIT である理由は {@link #onPlatformUserStopped} と同じ。 */
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void onPlatformUserResumed(PlatformUserResumed event) {
-    tokenBlacklistService.clearUser(event.email());
+    if (isEnabledNow(event.email())) {
+      tokenBlacklistService.clearUser(event.email());
+    }
+  }
+
+  /**
+   * コミット済みの enabled を読み直す。イベントの発行条件は「そのリクエストが停止/再開を明示的に要求したか」（結果語義）であり、 発行時点の {@code PlatformUser}
+   * は要求元が読んだ時点のスナップショットでしかない。並行する停止と再開が競合した場合、 その断片的なスナップショットを信じて Redis を書き換えると、コミット済みの enabled
+   * とブラックリストが食い違い得る （例: 停止が先に確定したのに、それを知らない再開要求の後処理が鍵を消してしまい、停止済みユーザーの旧 JWT が復活する）。 AFTER_COMMIT
+   * で確定した状態を正本として照合することで、その食い違いを構造的に排除する。
+   *
+   * <p>ユーザー不在は「停止相当」（false）として扱う — 判断がつかない場合は失効側へ倒す。
+   */
+  private boolean isEnabledNow(String email) {
+    return platformUserRepository.findByEmail(email).map(PlatformUser::getEnabled).orElse(false);
   }
 
   /**
