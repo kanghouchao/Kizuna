@@ -5,7 +5,6 @@ import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
@@ -14,7 +13,6 @@ import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
-import com.kizuna.store.domain.StoreRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -35,8 +33,6 @@ public class ShiftService {
 
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
-  private final StoreContext storeContext;
-  private final StoreRepository storeRepository;
   private final CastService castService;
   private final CastRepository castRepository;
   private final AppProperties appProperties;
@@ -94,14 +90,8 @@ public class ShiftService {
       throw new ServiceException("キャストが見つかりません: " + request.getCastId());
     }
 
+    // store_id は StoreScopeStampListener が @PrePersist で採番する
     Shift shift = shiftMapper.toEntity(request);
-
-    shift.setStoreId(
-        storeRepository
-            .findById(storeContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
-            .getId());
-
     return shiftMapper.toResponse(shiftRepository.save(shift));
   }
 

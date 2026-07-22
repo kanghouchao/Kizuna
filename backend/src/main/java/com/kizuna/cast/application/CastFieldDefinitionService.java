@@ -7,7 +7,6 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +29,6 @@ public class CastFieldDefinitionService {
 
   private final CastFieldDefinitionRepository repository;
   private final CastFieldDefinitionMapper mapper;
-  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -49,6 +47,7 @@ public class CastFieldDefinitionService {
     }
     Integer max = repository.findMaxDisplayOrder();
     int nextOrder = max == null ? 0 : max + 1;
+    // store_id は StoreScopeStampListener が @PrePersist で採番する
     CastFieldDefinition definition =
         CastFieldDefinition.builder()
             .key(request.getKey())
@@ -56,7 +55,6 @@ public class CastFieldDefinitionService {
             .displayOrder(nextOrder)
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
-    definition.setStoreId(storeContext.getStoreId());
     try {
       return mapper.toResponse(repository.saveAndFlush(definition));
     } catch (DataIntegrityViolationException ex) {

@@ -7,9 +7,7 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.store.domain.StoreRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,8 +24,6 @@ public class CustomerService {
 
   private final CustomerRepository customerRepository;
   private final CustomerMapper customerMapper;
-  private final StoreContext storeContext;
-  private final StoreRepository storeRepository;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -80,14 +76,8 @@ public class CustomerService {
   @StoreScoped
   @Transactional
   public CustomerResponse create(CustomerCreateRequest request) {
+    // store_id は StoreScopeStampListener が @PrePersist で採番する
     Customer customer = customerMapper.toEntity(request);
-
-    customer.setStoreId(
-        storeRepository
-            .findById(storeContext.getStoreId())
-            .orElseThrow(() -> new ServiceException("店舗が見つかりません"))
-            .getId());
-
     return customerMapper.toResponse(customerRepository.save(customer));
   }
 

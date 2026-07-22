@@ -1,6 +1,7 @@
 package com.kizuna.shared.persistence;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
@@ -17,6 +18,7 @@ import org.hibernate.annotations.ParamDef;
 
 /** 店舗スコープのエンティティ基盤。store_id は ID 参照（D3）で保持し、storeFilter で行レベル分離する。 */
 @MappedSuperclass
+@EntityListeners(StoreScopeStampListener.class)
 @Getter
 @Setter
 @NoArgsConstructor

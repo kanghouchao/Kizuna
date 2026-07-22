@@ -21,9 +21,6 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.store.domain.Store;
-import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,8 +38,6 @@ class CastServiceTest {
 
   @Mock private CastRepository castRepository;
   @Mock private CastMapper castMapper;
-  @Mock private StoreContext storeContext;
-  @Mock private StoreRepository storeRepository;
   @Mock private CastInvitationService castInvitationService;
   @Mock private CastFieldDefinitionRepository castFieldDefinitionRepository;
 
@@ -132,12 +127,7 @@ class CastServiceTest {
 
     Cast castEntity = Cast.builder().name("G1").build();
 
-    Store store = new Store();
-    store.setId(1L);
-
     when(castMapper.toEntity(req)).thenReturn(castEntity);
-    when(storeContext.getStoreId()).thenReturn(1L);
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(store));
 
     when(castRepository.save(any()))
         .thenAnswer(
@@ -153,20 +143,6 @@ class CastServiceTest {
 
     CastResponse res = castService.create(req);
     assertThat(res.getId()).isEqualTo("g_new");
-  }
-
-  @Test
-  void create_throwsWhenStoreNotFound() {
-    CastCreateRequest req = new CastCreateRequest();
-    req.setName("G1");
-
-    when(castMapper.toEntity(req)).thenReturn(new Cast());
-    when(storeContext.getStoreId()).thenReturn(1L);
-    when(storeRepository.findById(1L)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> castService.create(req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("店舗が見つかりません");
   }
 
   @Test
