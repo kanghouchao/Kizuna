@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { BuildingStorefrontIcon } from '@heroicons/react/24/outline';
-import { useAuthorizedStores } from '@/entities/user';
+import { useStoreContext } from '@/entities/user';
 import { replaceStoreIdInPath, setPlatformStore } from '@/shared/lib';
 
 /** クエリ next（店舗スコープの遷移先テンプレート）を読む。無ければダッシュボード。 */
@@ -14,14 +14,14 @@ function resolveNext(): string {
 /**
  * 店舗未選択のまま店舗スコープ機能へ入ろうとした時の懒惰トリガー選択画面（#413）。
  * 授権店舗が1件なら選択UIを出さず自動選択して遷移し、複数件なら一覧から選ばせる。
- * 授権店舗の解決（能力ゲート・STORE_VIEW 欠如時の store_ids フォールバック）は Header と共有の
- * useAuthorizedStores に委ねる（#413 Fix7）。
+ * 授権店舗の解決（me()+stores() の呼出し）は Header と共有の店舗コンテキスト（両コンソール
+ * layout に搭載）に委ねる（#428・旧 useAuthorizedStores / #413 Fix7）。
  * 選択値は「前回選択」のUXヒントであり、認可はバックエンドの fail-closed 検証に委ねる。
  */
 export default function StoreSelectPage() {
   const router = useRouter();
   // null = 読み込み中（1件時の自動遷移中も含む）、[] = 0件、複数 = 選択待ち。
-  const stores = useAuthorizedStores();
+  const { stores } = useStoreContext();
 
   const goTo = (id: number) => {
     setPlatformStore(id);

@@ -1,66 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
-import { useAuth, useAuthorizedStores } from '@/entities/user';
-import {
-  getPlatformStoreId,
-  getStoreIdFromPath,
-  isPlatformSession,
-  isStoreDomain,
-  replaceStoreIdInPath,
-  setPlatformStore,
-} from '@/shared/lib';
+import { useAuth, useStoreContext } from '@/entities/user';
+import { isStoreDomain, storePath } from '@/shared/lib';
 import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export function Header() {
   const { logout } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
 
-  // 到達資格のある授権店舗一覧。能力ゲート・STORE_VIEW 欠如時の store_ids フォールバックまで
-  // useAuthorizedStores 内で完結する（StoreSelectPage と共有・#413 Fix7）。
-  // null = 読み込み中、[] = 非表示（能力無し/0件）、非空 = 店舗切替を表示。
-  const stores = useAuthorizedStores();
-  // cookie 由来の「前回選択した店舗」ヒント。document 依存で SSR-unsafe なため mount 時のみ読む。
-  // store-scoped ページ外（platform 側）に居るときだけ表示に使う fallback 専用の役割（#413 Fix1）。
-  const [lastUsedStoreId, setLastUsedStoreId] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    if (isPlatformSession()) {
-      setLastUsedStoreId(getPlatformStoreId());
-    }
-  }, []);
-
-  // 表示する店舗は pathname 由来の storeId を最優先し、無ければ cookie ヒントに fallback する（#413 Fix1）。
-  // usePathname() は hydration-safe なため毎レンダー再計算でき、店舗切替後の pathname 変化にラベルが追随する。
-  const pathStoreId = getStoreIdFromPath(pathname);
-  const currentStoreId = pathStoreId ?? lastUsedStoreId;
+  // 現在店舗・授権店舗・切替は店舗コンテキスト（両コンソール layout に搭載）が一手に担う（#428）。
+  // stores: null = 読み込み中、[] = 非表示（資格無し/0件）、非空 = 店舗切替を表示。
+  const { stores, currentStoreId, switchStore } = useStoreContext();
 
   const currentStoreName = stores?.find(store => String(store.id) === currentStoreId)?.name;
 
   // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す（#413 Fix2）。
-  // storeId は他の分岐と同じく pathname 優先・cookie ヒント fallback の currentStoreId に揃える。
   // currentStoreId が未確定（pathname 由来 id も cookie ヒントも無い）場合は
   // "/store/undefined/..." を組まず platform 側へ fallback する（#413 Fix3）。
   const accountHref =
     isStoreDomain() && currentStoreId
-      ? `/store/${currentStoreId}/settings/account`
+      ? storePath(currentStoreId, '/settings/account')
       : '/platform/settings/account';
-
-  const handleStoreSelect = (id: number) => {
-    // no-op 判定は pathStoreId（URL が実際にその店舗 id を持つ場合）のみで行う。
-    // currentStoreId（cookie fallback 込み）で比較すると、/platform 側で前回選択 cookie と
-    // 同じ店舗をクリックした単一店舗ユーザーが遷移できなくなる（#413 Fix5-1）。
-    if (String(id) !== pathStoreId) {
-      setPlatformStore(id);
-      // console 由来の reload をやめ、現在地に storeId を差し替えて遷移する（#413）。
-      // store-scoped ページ外に居れば /store/{id}/dashboard へ。
-      router.push(replaceStoreIdInPath(pathname, id));
-    }
-  };
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-20">
@@ -88,7 +49,7 @@ export function Header() {
               {stores.map(store => (
                 <MenuItem key={store.id}>
                   <button
-                    onClick={() => handleStoreSelect(store.id)}
+                    onClick={() => switchStore(store.id)}
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
                   >
                     {store.name}

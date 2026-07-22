@@ -51,6 +51,8 @@ export interface PlatformMeResponse {
   user_type: PlatformUserType;
   capabilities: PlatformCapability[];
   console: PlatformConsole;
+  // 店舗文脈（X-Store-ID）を確立できるか。JWT storeBridge claim と同源でサーバ側が能力目録から導出する。
+  store_bridge: boolean;
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
 }
