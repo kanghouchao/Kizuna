@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
+import com.kizuna.shared.exception.ServiceException;
 import io.jsonwebtoken.Claims;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,7 +26,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class StoreScopeExecutorTest {
 
   private final StoreContext storeContext = new StoreContext();
-  private final StoreScopeExecutor executor = new StoreScopeExecutor(storeContext);
+
+  /** 店舗存在性ポートの返値をテストごとに切り替える（既定は実在）。 */
+  private boolean storeExists = true;
+
+  private final StoreScopeExecutor executor =
+      new StoreScopeExecutor(storeContext, storeId -> storeExists);
 
   @AfterEach
   void clearContext() {
@@ -78,6 +84,27 @@ class StoreScopeExecutorTest {
 
     assertThat(ran).isFalse();
     assertThat(storeContext.getStoreId()).isNull();
+  }
+
+  @Test
+  void rejectsNonexistentStoreWith400AndNeverSetsContext() {
+    authenticate("ALL_STORES", null);
+    storeExists = false;
+    AtomicBoolean ran = new AtomicBoolean(false);
+
+    assertThatThrownBy(
+            () ->
+                executor.runInStore(
+                    999L,
+                    () -> {
+                      ran.set(true);
+                      return "x";
+                    }))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("店舗が見つかりません");
+
+    assertThat(ran).as("action は実行されないこと").isFalse();
+    assertThat(storeContext.getStoreId()).as("存在しない店舗では文脈を設定しないこと").isNull();
   }
 
   @Test

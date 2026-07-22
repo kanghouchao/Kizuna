@@ -300,6 +300,30 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("ALL_STORES でも実在しない store_id の書きは 400(500 でない — #398 裁定/StoreScopeExecutor の存在性保証)")
+  void writeToNonexistentStoreIsRejectedWith400NotServerError() {
+    long nonexistentStoreId = 999_999_999L;
+    assertThat(storeRepository.existsById(nonexistentStoreId))
+        .as("前提: 対象 storeId が実在しないこと")
+        .isFalse();
+
+    // ALL_STORES(seed HQ admin)は授権集合検査を通過するため、実在性検査が 400 の保証点となる。
+    String body =
+        String.format(
+            "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
+                + " \"cast_id\": \"dummy-cast\"}",
+            nonexistentStoreId, SEED_RECEPTIONIST_ID, LocalDate.now());
+
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/orders",
+            new HttpEntity<>(body, bearerJson(platformToken(SEED_EMAIL, PASSWORD))),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
   @DisplayName("授権店舗への書きはその店舗に受注を作成すること(正向対照: 負向 403 がバリデーション起因でない証明)")
   void writeToAuthorizedStoreCreatesOrderInThatStore() {
     String castId = createCastAs(STORE_A, "集合作用域IT用キャスト");
