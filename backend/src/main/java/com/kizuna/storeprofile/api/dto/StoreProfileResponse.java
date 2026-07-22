@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class StoreProfileResponse {
-  private Long id;
+  private String id;
   private String templateKey;
   private String logoUrl;
   private String bannerUrl;

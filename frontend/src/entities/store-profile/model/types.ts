@@ -14,7 +14,7 @@ export interface PartnerLink {
 
 // 店舗サイト設定レスポンス
 export interface StoreProfileResponse {
-  id: number;
+  id: string;
   template_key: string;
   logo_url?: string;
   banner_url?: string;
