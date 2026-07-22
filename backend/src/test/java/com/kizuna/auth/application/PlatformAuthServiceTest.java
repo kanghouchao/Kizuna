@@ -320,6 +320,66 @@ class PlatformAuthServiceTest {
     assertThat(res.get().userType()).isEqualTo("STAFF");
     assertThat(res.get().console()).isEqualTo("platform");
     assertThat(res.get().capabilities()).contains("STORE_MANAGE", "STAFF_MANAGE");
+    // HQ 束は PLATFORM 能力 + SHARED（STORE_VIEW / ORDER_SET_MANAGE）のみで、STORE コンソール能力を持たないため false。
+    assertThat(res.get().storeBridge()).isFalse();
+  }
+
+  @Test
+  void me_staffWithStoreConsoleCapability_returnsStoreBridgeTrue() {
+    PlatformUser staff =
+        PlatformUser.builder()
+            .email("manager@kizuna.test")
+            .password("stored-hash")
+            .displayName("店長")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(STORE_BUNDLE_ID))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("manager@kizuna.test")).thenReturn(Optional.of(staff));
+    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
+        .thenReturn(
+            List.of(
+                CapabilityBundle.builder()
+                    .name("店長")
+                    .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_VIEW))
+                    .build()));
+
+    Optional<PlatformMeResponse> res = authService.me("manager@kizuna.test");
+
+    assertThat(res).isPresent();
+    // 実運用の STORE コンソール能力（ORDER_MANAGE）保持者は JWT storeBridge claim と同源で true を返す。
+    assertThat(res.get().storeBridge()).isTrue();
+  }
+
+  @Test
+  void me_staffWithOnlySharedCapabilities_returnsStoreBridgeFalse() {
+    PlatformUser staff =
+        PlatformUser.builder()
+            .email("shared@kizuna.test")
+            .password("stored-hash")
+            .displayName("跨店参照のみ")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(STORE_BUNDLE_ID))
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeIds(Set.of())
+            .build();
+    when(userRepository.findByEmail("shared@kizuna.test")).thenReturn(Optional.of(staff));
+    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
+        .thenReturn(
+            List.of(
+                CapabilityBundle.builder()
+                    .name("跨店参照のみ")
+                    .capabilities(Set.of(Capability.STORE_VIEW, Capability.ORDER_SET_MANAGE))
+                    .build()));
+
+    Optional<PlatformMeResponse> res = authService.me("shared@kizuna.test");
+
+    assertThat(res).isPresent();
+    // SHARED 能力（跨店参照）は STORE コンソール能力ではないため店舗文脈を確立できない → false。
+    assertThat(res.get().storeBridge()).isFalse();
   }
 
   @Test
@@ -372,6 +432,8 @@ class PlatformAuthServiceTest {
     // 標識のみの束は店舗コンソールに着地しない（fail-closed — PR #411 codex 指摘）。
     assertThat(res.get().console()).isEqualTo("none");
     assertThat(res.get().capabilities()).containsExactly("STORE_MENU_VIEW");
+    // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できないため false。
+    assertThat(res.get().storeBridge()).isFalse();
   }
 
   @Test
