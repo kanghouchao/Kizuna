@@ -109,6 +109,10 @@ class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
         rest.exchange("/store/casts", HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody())
+        .as("CommonExceptionHandler と同じ error キー・メッセージの JSON ボディを返すこと")
+        .contains("\"error\"")
+        .contains("店舗が見つかりません");
   }
 
   @Test
@@ -124,5 +128,6 @@ class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
             "/store/casts/public", HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody()).contains("\"error\"").contains("店舗が見つかりません");
   }
 }
