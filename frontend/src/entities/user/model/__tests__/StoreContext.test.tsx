@@ -1,8 +1,8 @@
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import { StoreContextProvider, useStoreContext } from '../StoreContext';
-import { platformAuthApi } from '@/entities/user/api/platform';
+import { platformAuthApi } from '../../api/platform';
 import { isPlatformSession, getPlatformStoreId, setPlatformStore } from '@/shared/lib';
-import type { PlatformMeResponse, PlatformStoreScopeType } from '@/entities/user';
+import type { PlatformMeResponse, PlatformStoreScopeType } from '../types';
 
 let mockPathname = '/platform/dashboard';
 const mockPush = jest.fn();
@@ -11,7 +11,7 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-jest.mock('@/entities/user/api/platform', () => ({
+jest.mock('../../api/platform', () => ({
   platformAuthApi: { me: jest.fn(), stores: jest.fn() },
 }));
 

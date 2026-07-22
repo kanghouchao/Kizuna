@@ -20,6 +20,6 @@ public class StoreBridgeGuard {
     if (authentication == null || !(authentication.getDetails() instanceof Claims claims)) {
       return false;
     }
-    return Boolean.TRUE.equals(claims.get("storeBridge", Boolean.class));
+    return Boolean.TRUE.equals(claims.get(StoreIdInterceptor.CLAIM_STORE_BRIDGE, Boolean.class));
   }
 }

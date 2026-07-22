@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isLegacyStorePath } from '../store-route';
+import { isLegacyStorePath, storeSelectPath } from '../store-route';
 
 export function handleRouteProtection(request: NextRequest, role: 'platform' | 'store') {
   const path = request.nextUrl.pathname;
@@ -35,9 +35,7 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // hasToken を明示条件にする（トークン無しはルートへ戻す既存挙動を維持する）。
   // レガシー判定の正規表現は store-route（店舗パス知識の唯一 module）へ集約済み。
   if (hasToken && isLegacyStorePath(path)) {
-    const selectUrl = new URL('/store/select', request.url);
-    selectUrl.searchParams.set('next', path);
-    return NextResponse.redirect(selectUrl);
+    return NextResponse.redirect(new URL(storeSelectPath(path), request.url));
   }
 
   return null; // No redirection needed

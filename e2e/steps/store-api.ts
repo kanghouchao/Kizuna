@@ -1,4 +1,5 @@
-import type { APIRequestContext } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
+import { PLATFORM_URL } from '../base-url';
 
 // store1 は seed 済み（store_id=1）。store API は Host に加えて
 // X-Role / X-Store-ID ヘッダで店舗文脈を確定する。
@@ -24,6 +25,22 @@ export async function loginAsStoreAdmin(request: APIRequestContext): Promise<str
   }
   const body = await res.json();
   return body.token as string;
+}
+
+/**
+ * 統一ログイン UI から店長（ADMIN_EMAIL・2 店舗授権）で入り、店舗選択画面で Sample Tenant を選んで
+ * 業務画面へ入る共通手順（#428 でログイン着地が /store/select に一本化された）。
+ * ダッシュボード URL から storeId を読み取って返す（seed id をハードコードしない — #413）。
+ */
+export async function loginViaUiAndEnterStore(page: Page): Promise<string> {
+  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.getByLabel('メールアドレス', { exact: true }).fill(ADMIN_EMAIL);
+  await page.getByLabel('パスワード', { exact: true }).fill(ADMIN_PASSWORD);
+  await page.getByRole('button', { name: 'ログイン', exact: true }).click();
+  // 2 店舗授権の店長はログイン後 /store/select に着地するため、店舗を選択して業務画面へ入る。
+  await page.getByRole('button', { name: 'Sample Tenant', exact: true }).click();
+  await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
+  return new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
 }
 
 /**
