@@ -52,7 +52,7 @@ class StoreProfileServiceTest {
 
     StoreProfileResponse response = storeProfileService.get();
 
-    assertThat(response.getId()).isEqualTo(1L);
+    assertThat(response.getId()).isEqualTo("1");
     assertThat(response.getTemplateKey()).isEqualTo("default");
     assertThat(response.getLogoUrl()).isEqualTo("https://example.com/logo.png");
   }
@@ -156,7 +156,7 @@ class StoreProfileServiceTest {
 
   private StoreProfile createTestConfig() {
     StoreProfile config = new StoreProfile();
-    config.setId(1L);
+    config.setId("1");
     config.setTemplateKey("default");
     config.setLogoUrl("https://example.com/logo.png");
     config.setMvType("image");
@@ -169,7 +169,7 @@ class StoreProfileServiceTest {
 
   private StoreProfileResponse createTestResponse() {
     return StoreProfileResponse.builder()
-        .id(1L)
+        .id("1")
         .templateKey("default")
         .logoUrl("https://example.com/logo.png")
         .mvType("image")

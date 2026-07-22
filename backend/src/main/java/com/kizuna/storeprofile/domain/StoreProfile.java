@@ -1,21 +1,14 @@
 package com.kizuna.storeprofile.domain;
 
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -34,14 +27,7 @@ import org.hibernate.annotations.Type;
 @Builder
 @ToString
 @Filter(name = "storeFilter", condition = "store_id = :storeId")
-public class StoreProfile {
-
-  @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
-
-  @Column(name = "store_id", nullable = false, unique = true, updatable = false)
-  private Long storeId;
+public class StoreProfile extends StoreScopedEntity {
 
   @Column(name = "template_key", length = 50)
   @Builder.Default
@@ -93,43 +79,23 @@ public class StoreProfile {
   @Builder.Default
   private List<PartnerLink> partnerLinks = new ArrayList<>();
 
-  @Column(name = "created_at", nullable = false)
-  private OffsetDateTime createdAt;
-
-  @Column(name = "updated_at", nullable = false)
-  private OffsetDateTime updatedAt;
-
-  /** 楽観ロック用バージョン（全実体共通 — #400）。 */
-  @Setter(AccessLevel.NONE) // 新規 public setter 禁止規約: バージョンは JPA が管理し外部から設定させない（#400）
-  @Version
-  @Column(nullable = false)
-  private Long version;
-
-  @PrePersist
-  protected void onCreate() {
-    var now = OffsetDateTime.now();
-    this.createdAt = now;
-    this.updatedAt = now;
-  }
-
-  @PreUpdate
-  protected void onUpdate() {
-    this.updatedAt = OffsetDateTime.now();
-  }
-
   /**
    * 店舗用のデフォルト設定を生成する。
+   *
+   * <p>店舗登録（平台側・StoreContext なし）から呼ばれるため store_id を明示設定する。 StoreScopeStampListener はこの設定済み値を尊重する。
    *
    * @param storeId 対象店舗の ID
    * @return デフォルト値が設定された StoreProfile インスタンス
    */
   public static StoreProfile createDefault(Long storeId) {
-    return StoreProfile.builder()
-        .storeId(storeId)
-        .templateKey("default")
-        .mvType("image")
-        .snsLinks(new ArrayList<>())
-        .partnerLinks(new ArrayList<>())
-        .build();
+    StoreProfile profile =
+        StoreProfile.builder()
+            .templateKey("default")
+            .mvType("image")
+            .snsLinks(new ArrayList<>())
+            .partnerLinks(new ArrayList<>())
+            .build();
+    profile.setStoreId(storeId);
+    return profile;
   }
 }

@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0200-001-store-profile-id-to-snowflake
+      author: kanghouchao
+      # StoreProfile を StoreScopedEntity へ帰隊させる（#429）。t_store_profiles.id を
+      # BIGINT autoincrement から他の store-scoped 表（t_orders.id 等）と同型の
+      # VARCHAR(64)（Snowflake）へ移行する。既存の数値 id はテキスト表現（"1"・"2" 等）へ
+      # 変換される（許容）。unique(store_id) と FK は store_id 列のため無変更。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        # 1) autoincrement を解除（GENERATED ... AS IDENTITY 版）。IDENTITY でなければ IF EXISTS で no-op。
+        - sql:
+            sql: ALTER TABLE t_store_profiles ALTER COLUMN id DROP IDENTITY IF EXISTS
+        # 2) sequence 由来の default（SERIAL 版）を解除。default が無ければ no-op。
+        #    1) で IDENTITY は解除済みのため identity 列への DROP DEFAULT エラーにはならない。
+        - sql:
+            sql: ALTER TABLE t_store_profiles ALTER COLUMN id DROP DEFAULT
+        # 3) 型を VARCHAR(64) へ変換（既存 id は id::text で移送）。PK pk_t_store_profiles は維持される。
+        - sql:
+            sql: "ALTER TABLE t_store_profiles ALTER COLUMN id TYPE VARCHAR(64) USING id::text"
+      rollback:
+        - sql:
+            sql: "ALTER TABLE t_store_profiles ALTER COLUMN id TYPE BIGINT USING id::bigint"
