@@ -1,7 +1,7 @@
 package com.kizuna.shared.storescope;
 
-import io.jsonwebtoken.Claims;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,11 +15,12 @@ import org.springframework.stereotype.Component;
 @Component("storeBridge")
 public class StoreBridgeGuard {
 
-  /** 認証済みリクエストが storeBridge claim を持つか。未認証・claim 欠落・details 非 Claims はいずれも false。 */
+  /** 認証済みリクエストが storeBridge claim を持つか。未認証・claim 欠落・非 JwtAuthenticationToken はいずれも false。 */
   public boolean check(Authentication authentication) {
-    if (authentication == null || !(authentication.getDetails() instanceof Claims claims)) {
+    Jwt jwt = AuthenticatedJwt.from(authentication);
+    if (jwt == null) {
       return false;
     }
-    return Boolean.TRUE.equals(claims.get(StoreIdInterceptor.CLAIM_STORE_BRIDGE, Boolean.class));
+    return Boolean.TRUE.equals(jwt.getClaimAsBoolean(StoreIdInterceptor.CLAIM_STORE_BRIDGE));
   }
 }

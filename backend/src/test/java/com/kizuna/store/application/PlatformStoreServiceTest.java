@@ -3,8 +3,6 @@ package com.kizuna.store.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,7 +10,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.store.api.dto.PlatformStoreResponse;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
-import io.jsonwebtoken.Claims;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -22,8 +19,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @ExtendWith(MockitoExtension.class)
 class PlatformStoreServiceTest {
@@ -43,12 +41,16 @@ class PlatformStoreServiceTest {
   }
 
   private void authenticate(String scopeType, Object storeIds) {
-    Claims claims = mock(Claims.class);
-    lenient().when(claims.get("storeScopeType", String.class)).thenReturn(scopeType);
-    lenient().when(claims.get("storeIds")).thenReturn(storeIds);
-    Authentication auth = mock(Authentication.class);
-    lenient().when(auth.getDetails()).thenReturn(claims);
-    SecurityContextHolder.getContext().setAuthentication(auth);
+    Jwt.Builder builder =
+        Jwt.withTokenValue("token")
+            .header("alg", "HS256")
+            .subject("user@example.com")
+            .claim("storeScopeType", scopeType);
+    if (storeIds != null) {
+      builder.claim("storeIds", storeIds);
+    }
+    SecurityContextHolder.getContext()
+        .setAuthentication(new JwtAuthenticationToken(builder.build()));
   }
 
   private Store store(long id, String name) {
@@ -73,7 +75,7 @@ class PlatformStoreServiceTest {
 
   @Test
   void specificStoresScope_delegatesToFindAllById() {
-    authenticate("SPECIFIC_STORES", List.of(1));
+    authenticate("SPECIFIC_STORES", List.of(1L));
     when(storeRepository.findAllById(Set.of(1L))).thenReturn(List.of(store(1L, "A店")));
 
     List<PlatformStoreResponse> result = service.listAuthorizedStores();

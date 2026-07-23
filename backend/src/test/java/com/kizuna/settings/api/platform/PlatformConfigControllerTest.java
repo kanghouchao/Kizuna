@@ -8,8 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.auth.infrastructure.JwtUtil;
-import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
@@ -41,11 +39,6 @@ class PlatformConfigControllerTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private SystemConfigService systemConfigService;
-
-  // JwtAuthenticationFilter の依存（Authorization ヘッダーなしでは素通しのため動作に影響しない）
-  @MockitoBean private JwtUtil jwtUtil;
-
-  @MockitoBean private TokenBlacklistService tokenBlacklistService;
 
   // StoreExistenceInterceptor（HandlerInterceptor）の依存。@WebMvcTest は HandlerInterceptor を
   // 取り込むため、MaintenanceModeInterceptor の SystemConfigService と同様にポートのモックを用意する。

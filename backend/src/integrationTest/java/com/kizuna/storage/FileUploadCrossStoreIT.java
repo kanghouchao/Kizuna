@@ -22,9 +22,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * 平台トークンによる {@code /files/upload} のプラットフォーム保存判定を本物の PostgreSQL/Redis/MinIO で固定する統合テスト。
  *
- * <p>{@code /files/**} は {@code JwtAuthenticationFilter.issuerMatchesDomain} の issuer
- * 制約外のため平台トークンでも 認証が通る。プラットフォーム領域（platform prefix）への保存は HQ 管理者（role claim =
- * HQ_ADMIN）のみに限定し、それ以外のロール・ 店舗詐称ヘッダは fail-closed で 403 拒否する。
+ * <p>{@code /files/**} も含め全リクエストが単一 issuer（PlatformAuth）の decoder 検証を通るため、平台トークンで
+ * 認証が通る。プラットフォーム領域（platform prefix）への保存は HQ 管理者（role claim = HQ_ADMIN）のみに限定し、それ以外のロール・ 店舗詐称ヘッダは
+ * fail-closed で 403 拒否する。
  *
  * <p>HQ トークンに {@code X-Role:store} + {@code X-Store-ID} を付けても、{@code StoreIdInterceptor} の
  * STORE_BRIDGE_ROLES が HQ_ADMIN を含まないため店舗文脈は確立できず 403 で拒否される（負向）。詐称ヘッダ無しの HQ アップロードは platform 領域へ

@@ -2,13 +2,10 @@ package com.kizuna.shared.storescope;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.jsonwebtoken.Claims;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Set;
@@ -23,8 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @ExtendWith(MockitoExtension.class)
 class StoreSetFilterEnableTest {
@@ -46,10 +44,12 @@ class StoreSetFilterEnableTest {
     SecurityContextHolder.clearContext();
   }
 
-  private void authenticateWith(Claims claims) {
-    Authentication auth = mock(Authentication.class);
-    lenient().when(auth.getDetails()).thenReturn(claims);
-    SecurityContextHolder.getContext().setAuthentication(auth);
+  private Jwt.Builder jwtBuilder() {
+    return Jwt.withTokenValue("token").header("alg", "HS256").subject("user@example.com");
+  }
+
+  private void authenticateWith(Jwt jwt) {
+    SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
   }
 
   @Test
@@ -65,9 +65,7 @@ class StoreSetFilterEnableTest {
   @Test
   @DisplayName("ALL_STORES はフィルタを有効化せず処理だけ続行すること")
   void allStoresSkipsFilterAndProceeds() throws Throwable {
-    Claims claims = mock(Claims.class);
-    when(claims.get("storeScopeType", String.class)).thenReturn("ALL_STORES");
-    authenticateWith(claims);
+    authenticateWith(jwtBuilder().claim("storeScopeType", "ALL_STORES").build());
     when(pjp.proceed()).thenReturn("result");
 
     Object result = aspect.enableStoreSetFilter(pjp);
@@ -80,10 +78,11 @@ class StoreSetFilterEnableTest {
   @Test
   @DisplayName("SPECIFIC_STORES は storeSetFilter を授権集合で有効化してから処理を続行すること")
   void specificStoresEnablesFilterWithStoreIds() throws Throwable {
-    Claims claims = mock(Claims.class);
-    when(claims.get("storeScopeType", String.class)).thenReturn("SPECIFIC_STORES");
-    when(claims.get("storeIds")).thenReturn(List.of(1, 2));
-    authenticateWith(claims);
+    authenticateWith(
+        jwtBuilder()
+            .claim("storeScopeType", "SPECIFIC_STORES")
+            .claim("storeIds", List.of(1L, 2L))
+            .build());
     when(entityManager.unwrap(Session.class)).thenReturn(session);
     when(session.enableFilter("storeSetFilter")).thenReturn(filter);
     when(pjp.proceed()).thenReturn("result");

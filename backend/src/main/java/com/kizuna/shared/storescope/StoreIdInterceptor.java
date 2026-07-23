@@ -1,6 +1,5 @@
 package com.kizuna.shared.storescope;
 
-import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
@@ -10,6 +9,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -37,7 +37,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       @NonNull HttpServletRequest request,
       @NonNull HttpServletResponse response,
       @NonNull Object handler) {
-    Claims claims = authenticatedClaims();
+    Jwt claims = authenticatedClaims();
     StoreScope scope =
         StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
     boolean claimsStoreHeaderPresent =
@@ -50,7 +50,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
         // 店舗文脈を名乗れるのは STORE コンソール能力の保持者（storeBridge claim）のみ。CAST/MEMBER/HQ が
         // 店舗ヘッダを名乗るのは詐称として 403 で拒否する。授権スコープ検証より前に弾き、
         // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立の漏れを塞ぐ。
-        if (!Boolean.TRUE.equals(claims.get(CLAIM_STORE_BRIDGE, Boolean.class))) {
+        if (!Boolean.TRUE.equals(claims.getClaimAsBoolean(CLAIM_STORE_BRIDGE))) {
           response.setStatus(HttpServletResponse.SC_FORBIDDEN);
           return false;
         }
@@ -100,15 +100,12 @@ public class StoreIdInterceptor implements HandlerInterceptor {
   }
 
   /**
-   * 認証済みリクエストの JWT Claims（JwtAuthenticationFilter が details に載せたもの）を返す。 未認証、または details に {@link
-   * Claims} を持たない（匿名認証やログイン前など）場合は null。
+   * 認証済みリクエストの JWT claim 集合（resource-server が構築したもの）を返す。 未認証、または非
+   * JwtAuthenticationToken（匿名認証やログイン前など）の場合は null。
    */
-  private Claims authenticatedClaims() {
+  private Jwt authenticatedClaims() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication != null && authentication.getDetails() instanceof Claims claims) {
-      return claims;
-    }
-    return null;
+    return AuthenticatedJwt.from(authentication);
   }
 
   /** 全桁数字の文字列を long に変換する。long 範囲を超える場合は null（呼び出し側が 400 を返す）。 */

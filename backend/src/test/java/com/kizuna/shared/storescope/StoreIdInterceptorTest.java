@@ -2,8 +2,6 @@ package com.kizuna.shared.storescope;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +12,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.method.HandlerMethod;
 
 class StoreIdInterceptorTest {
@@ -33,13 +32,15 @@ class StoreIdInterceptorTest {
     SecurityContextHolder.clearContext();
   }
 
-  /** 認証済みだが storeId claim を持たない Claims（プラットフォーム / legacy）を模擬する。 */
+  private Jwt.Builder jwtBuilder() {
+    return Jwt.withTokenValue("token").header("alg", "HS256").subject("platform-user");
+  }
+
+  /** 認証済みだが storeId claim を持たない Jwt（プラットフォーム / legacy）を模擬する。 */
   private void authenticateWithoutStoreId() {
-    Claims claims = Jwts.claims().issuer("PlatformAuth").build();
-    PreAuthenticatedAuthenticationToken authentication =
-        new PreAuthenticatedAuthenticationToken(
-            "user", "token", List.of(new SimpleGrantedAuthority("PLATFORM_USER")));
-    authentication.setDetails(claims);
+    Jwt jwt = jwtBuilder().issuer("PlatformAuth").build();
+    JwtAuthenticationToken authentication =
+        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("PLATFORM_USER")));
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
@@ -99,8 +100,8 @@ class StoreIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("認証はあるが details に Claims を持たない場合はヘッダのみで店舗文脈を設定すること")
-  void preHandle_fallsBackToHeaderWhenAuthenticationHasNoClaims() {
+  @DisplayName("認証はあるが非 JwtAuthenticationToken（例: 匿名認証）の場合はヘッダのみで店舗文脈を設定すること")
+  void preHandle_fallsBackToHeaderWhenAuthenticationIsNotJwt() {
     SecurityContextHolder.getContext()
         .setAuthentication(
             new AnonymousAuthenticationToken(
@@ -199,23 +200,21 @@ class StoreIdInterceptorTest {
    */
   private void authenticateWithPlatformScope(
       boolean storeBridge, String scopeType, Object storeIds) {
-    Claims claims =
-        Jwts.claims()
-            .add("storeBridge", storeBridge)
-            .add("storeScopeType", scopeType)
-            .add("storeIds", storeIds)
+    Jwt jwt =
+        jwtBuilder()
+            .claim("storeBridge", storeBridge)
+            .claim("storeScopeType", scopeType)
+            .claim("storeIds", storeIds)
             .build();
-    PreAuthenticatedAuthenticationToken authentication =
-        new PreAuthenticatedAuthenticationToken(
-            "platform-user", "token", List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
-    authentication.setDetails(claims);
+    JwtAuthenticationToken authentication =
+        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
   @Test
   @DisplayName("平台 SPECIFIC{1} が X-Store-ID:1 を名乗れば授権内として店舗文脈を設定すること")
   void preHandle_platformSpecific_allowsAuthorizedStore() {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
     request.addHeader("X-Store-ID", "1");
@@ -229,7 +228,7 @@ class StoreIdInterceptorTest {
   @Test
   @DisplayName("平台 SPECIFIC{1} が非授権店舗 X-Store-ID:2 を名乗ると 403 で拒否し文脈を設定しないこと")
   void preHandle_platformSpecific_rejectsUnauthorizedStore() {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
     request.addHeader("X-Store-ID", "2");
@@ -259,7 +258,7 @@ class StoreIdInterceptorTest {
   @Test
   @DisplayName("平台トークンでも店舗ヘッダが無ければ @StoreOptional 無しハンドラは 403 で拒否すること")
   void preHandle_platformScope_noHeader_rejectsRequiredHandler() throws Exception {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -273,7 +272,7 @@ class StoreIdInterceptorTest {
   @Test
   @DisplayName("平台トークンでも店舗ヘッダが無ければ @StoreOptional 付きハンドラは素通りし文脈を設定しないこと")
   void preHandle_platformScope_noHeader_allowsStoreOptionalHandler() throws Exception {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -286,7 +285,7 @@ class StoreIdInterceptorTest {
   @Test
   @DisplayName("平台トークンで X-Role が欠落し X-Store-ID のみなら店舗文脈は成立せず 403 で拒否すること")
   void preHandle_platformScope_missingRoleHeader_rejects() {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1));
+    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -335,7 +334,7 @@ class StoreIdInterceptorTest {
   @Test
   @DisplayName("storeBridge=true の平台トークンは授権店舗の店舗ヘッダで店舗文脈を設定できること")
   void preHandle_withStoreBridge_allowsAuthorizedStore() {
-    authenticateWithPlatformScope(true, "SPECIFIC_STORES", List.of(1));
+    authenticateWithPlatformScope(true, "SPECIFIC_STORES", List.of(1L));
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
     request.addHeader("X-Store-ID", "1");
@@ -351,12 +350,10 @@ class StoreIdInterceptorTest {
   void preHandle_missingStoreBridgeClaim_rejects() {
     // 部署前に発行された旧トークンは storeBridge claim を持たない。欠落は false と同様に扱い、
     // 再ログインを促す（授権変更は次回ログイン反映の既定と同じ受け入れ面）。
-    Claims claims =
-        Jwts.claims().add("storeScopeType", "ALL_STORES").add("storeIds", List.of()).build();
-    PreAuthenticatedAuthenticationToken authentication =
-        new PreAuthenticatedAuthenticationToken(
-            "platform-user", "token", List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
-    authentication.setDetails(claims);
+    Jwt jwt =
+        jwtBuilder().claim("storeScopeType", "ALL_STORES").claim("storeIds", List.of()).build();
+    JwtAuthenticationToken authentication =
+        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
     SecurityContextHolder.getContext().setAuthentication(authentication);
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");

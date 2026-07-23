@@ -2,11 +2,8 @@ package com.kizuna.shared.storescope;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 
 import com.kizuna.shared.exception.ServiceException;
-import io.jsonwebtoken.Claims;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -15,8 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 /**
  * {@link StoreScopeExecutor} の授権検査・文脈 set→action→clear ライフサイクル（例外時の clear 含む）を実 {@link
@@ -40,12 +38,16 @@ class StoreScopeExecutorTest {
   }
 
   private void authenticate(String scopeType, Object storeIds) {
-    Claims claims = mock(Claims.class);
-    lenient().when(claims.get("storeScopeType", String.class)).thenReturn(scopeType);
-    lenient().when(claims.get("storeIds")).thenReturn(storeIds);
-    Authentication auth = mock(Authentication.class);
-    lenient().when(auth.getDetails()).thenReturn(claims);
-    SecurityContextHolder.getContext().setAuthentication(auth);
+    Jwt.Builder builder =
+        Jwt.withTokenValue("token")
+            .header("alg", "HS256")
+            .subject("user@example.com")
+            .claim("storeScopeType", scopeType);
+    if (storeIds != null) {
+      builder.claim("storeIds", storeIds);
+    }
+    SecurityContextHolder.getContext()
+        .setAuthentication(new JwtAuthenticationToken(builder.build()));
   }
 
   @Test
@@ -69,7 +71,7 @@ class StoreScopeExecutorTest {
 
   @Test
   void rejectsOutOfSetStore() {
-    authenticate("SPECIFIC_STORES", List.of(1));
+    authenticate("SPECIFIC_STORES", List.of(1L));
     AtomicBoolean ran = new AtomicBoolean(false);
 
     assertThatThrownBy(
@@ -109,7 +111,7 @@ class StoreScopeExecutorTest {
 
   @Test
   void runsActionUnderStoreScopeAndClearsAfter() {
-    authenticate("SPECIFIC_STORES", List.of(1));
+    authenticate("SPECIFIC_STORES", List.of(1L));
     AtomicReference<Long> storeAtCall = new AtomicReference<>();
 
     String result =
@@ -143,7 +145,7 @@ class StoreScopeExecutorTest {
 
   @Test
   void clearsContextEvenWhenActionThrows() {
-    authenticate("SPECIFIC_STORES", List.of(1));
+    authenticate("SPECIFIC_STORES", List.of(1L));
 
     assertThatThrownBy(
             () ->
