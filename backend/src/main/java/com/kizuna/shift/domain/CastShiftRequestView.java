@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 /**
  * 本人（キャスト）ポータル出勤希望履歴の読み側 projection。
  *
- * <p>店舗名を内联する。CAST は店舗一覧 API（store_bridge=false 見込み）に依存できないため、店名表示に必要な最小限を ここで解決する。
+ * <p>店舗名を埋め込む。CAST は店舗コンソール資格を持たず店舗一覧 API に依存できないため、店名表示に必要な最小限を ここで解決する。
  */
 public interface CastShiftRequestView {
 

@@ -62,7 +62,7 @@ export interface ShiftRequestResponse {
   created_at: string;
 }
 
-// 本人（キャスト）の出勤希望履歴の1件（GET /platform/me/shift-requests）。店舗名を内联する。
+// 本人（キャスト）の出勤希望履歴の1件（GET /platform/me/shift-requests）。店舗名を埋め込む。
 export interface CastShiftRequestItem {
   id: string;
   work_date: string;

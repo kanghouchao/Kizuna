@@ -14,6 +14,7 @@ _Others_
 * `c.k.s.config.S3Config`
 * `c.k.s.exception.CommonExceptionHandler`
 * `c.k.s.persistence.StoreScopeStampListener`
+* `c.k.s.storescope.StoreBridgeGuard`
 * `c.k.s.storescope.StoreContext`
 * `c.k.s.storescope.StoreFilterEnable`
 * `c.k.s.storescope.StoreIdInterceptor`

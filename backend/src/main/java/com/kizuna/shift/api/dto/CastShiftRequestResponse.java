@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** 本人（キャスト）ポータル出勤希望履歴の1件。店舗名を内联する。JSON キーは snake_case 設定に従う。 */
+/** 本人（キャスト）ポータル出勤希望履歴の1件。店舗名を埋め込む。JSON キーは snake_case 設定に従う。 */
 @Data
 @Builder
 @NoArgsConstructor
