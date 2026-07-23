@@ -73,7 +73,7 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 
 - **Stat card**: white card; label (`text-gray-600` 14px) → figure (`text-gray-900` 30px bold) → trend row (green-600 delta + gray-500 comparison); colored icon chip top-right (`rounded-[10px] p-3`, 24px white icon).
 - **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-blue-50 text-blue-600` with a 2px blue-600 edge bar. Inactive: gray-600 text, hover `bg-gray-50`. Groups collapse with chevron.
-- **Status pill**: fully rounded, 12px text, `bg-green-100 text-green-800` (確定) / `bg-yellow-100 text-yellow-800` (保留); add hues per new status semantics, always `*-100` bg + `*-800` text.
+- **Status pill**: fully rounded, 12px text, `bg-green-100 text-green-800` (確定) / `bg-yellow-100 text-yellow-800` (保留) / `bg-red-100 text-red-800` (却下); add hues per new status semantics, always `*-100` bg + `*-800` text.
 - **Progress bar**: track `bg-gray-200 h-2 rounded-full`, fill `bg-blue-600`.
 - **Ranking row**: 32px circular rank chip (`bg-blue-50 text-blue-600`), name + area line (12px icon + gray-500), right-aligned amount (bold) over count (gray-500).
 - **Selectable preview card**: `<label>` wrapping an `sr-only` radio; `rounded-[10px] border p-3 cursor-pointer`. Unselected `border-gray-200 hover:bg-gray-50`; selected `border-blue-600 ring-2 ring-blue-600 bg-blue-50`. Body = thumbnail image (`w-full rounded border border-gray-200`) → name (`text-sm font-medium`, selected `text-blue-600`) → description (`text-xs text-gray-500`); keyboard focus via `has-[:focus-visible]:ring-blue-500`.
