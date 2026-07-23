@@ -1,9 +1,14 @@
 import { apiClient } from '@/shared/api';
 import {
   CastScheduleItem,
+  CastShiftRequestItem,
+  CastStoreItem,
   ShiftCreateRequest,
+  ShiftRequestCreateRequest,
+  ShiftRequestResponse,
   ShiftResponse,
   ShiftUpdateRequest,
+  StoreShiftRequestItem,
 } from '../model/types';
 
 export const shiftApi = {
@@ -30,5 +35,35 @@ export const shiftApi = {
   /** シフトを削除する */
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/store/shifts/${id}`);
+  },
+  /** 出勤希望を提出する（本人・cast）。 */
+  submitShiftRequest: async (data: ShiftRequestCreateRequest): Promise<ShiftRequestResponse> => {
+    const response = await apiClient.post('/platform/me/shift-requests', data);
+    return response.data;
+  },
+  /** 本人（キャスト）の出勤希望履歴を取得する（全所属店横断・全量・新しい順）。 */
+  myShiftRequests: async (): Promise<CastShiftRequestItem[]> => {
+    const response = await apiClient.get('/platform/me/shift-requests');
+    return response.data;
+  },
+  /** 本人（キャスト）の所属店舗一覧を取得する（提出フォームの店舗セレクタ用）。 */
+  myStores: async (): Promise<CastStoreItem[]> => {
+    const response = await apiClient.get('/platform/me/stores');
+    return response.data;
+  },
+  /** 店舗側 inbox の出勤希望一覧を取得する（status 省略で全件）。 */
+  listShiftRequests: async (params?: { status?: string }): Promise<StoreShiftRequestItem[]> => {
+    const response = await apiClient.get('/store/shift-requests', { params });
+    return response.data;
+  },
+  /** 出勤希望を承認する（確定シフトが新規作成される）。 */
+  approveShiftRequest: async (id: string): Promise<StoreShiftRequestItem> => {
+    const response = await apiClient.post(`/store/shift-requests/${id}/approval`);
+    return response.data;
+  },
+  /** 出勤希望を辞退する。 */
+  declineShiftRequest: async (id: string): Promise<StoreShiftRequestItem> => {
+    const response = await apiClient.post(`/store/shift-requests/${id}/decline`);
+    return response.data;
   },
 };
