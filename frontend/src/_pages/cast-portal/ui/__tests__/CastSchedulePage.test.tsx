@@ -38,6 +38,15 @@ describe('CastSchedulePage', () => {
     expect(await screen.findByText('今週の確定シフトはありません')).toBeInTheDocument();
   });
 
+  it('取得に失敗した場合はエラー文言を表示し、空状態文言とは区別する', async () => {
+    mockedMySchedule.mockRejectedValue(new Error('network error'));
+
+    render(<CastSchedulePage />);
+
+    expect(await screen.findByText('スケジュールの取得に失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('今週の確定シフトはありません')).not.toBeInTheDocument();
+  });
+
   it('日付ごとにグルーピングし、店舗チップと時間帯を表示する', async () => {
     mockedMySchedule.mockResolvedValue([
       {
