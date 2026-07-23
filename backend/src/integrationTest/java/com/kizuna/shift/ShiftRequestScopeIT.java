@@ -248,7 +248,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("非所属店舗への提出は拒否され、テーブルに行が増えないこと(AC1 + canary)")
+  @DisplayName("非所属店舗への提出は拒否され、テーブルに行が増えないこと")
   void submitToNonAffiliatedStore_isRejectedAndCreatesNoRow() {
     long before = shiftRequestRepository.count();
 
@@ -328,7 +328,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("承認で APPROVED に遷移し、確定シフトが本人スケジュールと公開出勤表の双方に反映されること(AC3)")
+  @DisplayName("承認で APPROVED に遷移し、確定シフトが本人スケジュールと公開出勤表の双方に反映されること")
   void approve_transitionsToApprovedAndCreatesConfirmedShiftReflectedEverywhere() {
     ResponseEntity<JsonNode> created =
         submit(castToken, submitBody(STORE_A, today(), "18:00:00", "20:00:00", "承認反映確認"));
@@ -381,7 +381,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("却下で DECLINED に遷移し、シフトが作成されないこと(AC4)")
+  @DisplayName("却下で DECLINED に遷移し、シフトが作成されないこと")
   void decline_transitionsToDeclinedWithoutCreatingShift() {
     ResponseEntity<JsonNode> created =
         submit(castToken, submitBody(STORE_A, tomorrow(), "10:00:00", "12:00:00", "却下確認"));
@@ -395,6 +395,60 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     ShiftRequest reloaded = shiftRequestRepository.findById(id).orElseThrow();
     assertThat(reloaded.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
     assertThat(shiftRepository.count()).as("却下ではシフトが作成されないこと").isEqualTo(shiftCountBefore);
+  }
+
+  @Test
+  @DisplayName("店 B の正規店舗文脈からは店 A の出勤希望を承認・却下できないこと(跨店処理遮断、正向対照つき)")
+  void legitimateStoreBContext_cannotActOnStoreARequest() {
+    // 店 A・店 B 双方に授権された店長（PERM_SHIFT_MANAGE 保持）でログインし、権限線ではなく
+    // 店舗線だけが遮断要因であることを正向対照で分離する。
+    String managerToken = platformToken("tanaka.hanako@kizuna.test", PASSWORD);
+
+    ResponseEntity<JsonNode> controlCreated =
+        submit(castToken, submitBody(STORE_A, tomorrow(), "16:00:00", "18:00:00", "跨店正向対照"));
+    String controlId = controlCreated.getBody().path("id").asString();
+    ResponseEntity<JsonNode> controlApproved =
+        rest.exchange(
+            "/store/shift-requests/" + controlId + "/approval",
+            HttpMethod.POST,
+            new HttpEntity<>(managerHeaders(managerToken, STORE_A)),
+            JsonNode.class);
+    assertThat(controlApproved.getStatusCode())
+        .as("正向対照: 店 A 文脈なら承認できること")
+        .isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<JsonNode> created =
+        submit(castToken, submitBody(STORE_A, tomorrow(), "21:00:00", "23:00:00", "跨店処理遮断確認"));
+    String id = created.getBody().path("id").asString();
+    long shiftCountBefore = shiftRepository.count();
+
+    ResponseEntity<JsonNode> crossApprove =
+        rest.exchange(
+            "/store/shift-requests/" + id + "/approval",
+            HttpMethod.POST,
+            new HttpEntity<>(managerHeaders(managerToken, STORE_B)),
+            JsonNode.class);
+    ResponseEntity<JsonNode> crossDecline =
+        rest.exchange(
+            "/store/shift-requests/" + id + "/decline",
+            HttpMethod.POST,
+            new HttpEntity<>(managerHeaders(managerToken, STORE_B)),
+            JsonNode.class);
+
+    assertThat(crossApprove.getStatusCode().is4xxClientError()).as("店 B 文脈からの承認は拒否されること").isTrue();
+    assertThat(crossDecline.getStatusCode().is4xxClientError()).as("店 B 文脈からの却下は拒否されること").isTrue();
+    ShiftRequest reloaded = shiftRequestRepository.findById(id).orElseThrow();
+    assertThat(reloaded.getStatus()).as("跨店の処理試行で状態が変わらないこと").isEqualTo(ShiftRequestStatus.PENDING);
+    assertThat(shiftRepository.count()).as("跨店の承認試行でシフトが作成されないこと").isEqualTo(shiftCountBefore);
+  }
+
+  private HttpHeaders managerHeaders(String token, long storeId) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", String.valueOf(storeId));
+    headers.setBearerAuth(token);
+    return headers;
   }
 
   @Test
