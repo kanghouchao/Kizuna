@@ -27,3 +27,13 @@ export interface ShiftUpdateRequest {
   end_time?: string;
   status?: string;
 }
+
+// 本人（キャスト）ポータル週間スケジュールの1件（GET /platform/me/schedule）。店舗名を内联する。
+export interface CastScheduleItem {
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  store_id: number;
+  store_name: string;
+}

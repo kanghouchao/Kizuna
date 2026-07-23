@@ -36,4 +36,10 @@ describe('shiftApi', () => {
   it('delete は /store/shifts/:id を DELETE する', async () => {
     await expect(shiftApi.delete('s1')).resolves.toBeUndefined();
   });
+  it('mySchedule は /platform/me/schedule を GET する', async () => {
+    expect(await shiftApi.mySchedule({ from: '2026-07-19', to: '2026-07-25' })).toEqual({
+      ok: true,
+      url: '/platform/me/schedule',
+    });
+  });
 });
