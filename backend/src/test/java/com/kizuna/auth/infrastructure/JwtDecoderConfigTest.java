@@ -2,6 +2,7 @@ package com.kizuna.auth.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -38,12 +39,8 @@ class JwtDecoderConfigTest {
     appProperties.setJwt(jwt);
 
     tokenBlacklistService = mock(TokenBlacklistService.class);
-    lenient()
-        .when(tokenBlacklistService.isBlacklisted(org.mockito.ArgumentMatchers.anyString()))
-        .thenReturn(false);
-    lenient()
-        .when(tokenBlacklistService.isUserBlacklisted(org.mockito.ArgumentMatchers.anyString()))
-        .thenReturn(false);
+    lenient().when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(false);
+    lenient().when(tokenBlacklistService.isUserBlacklisted(anyString())).thenReturn(false);
 
     decoder =
         new JwtDecoderConfig()
@@ -91,8 +88,7 @@ class JwtDecoderConfigTest {
   @Test
   @DisplayName("トークン単位ブラックリスト登録済みの token は拒否されること")
   void rejectsBlacklistedToken() {
-    when(tokenBlacklistService.isBlacklisted(org.mockito.ArgumentMatchers.anyString()))
-        .thenReturn(true);
+    when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(true);
     String token = issueToken(JwtUtil.ISSUER_PLATFORM, 3_600_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
