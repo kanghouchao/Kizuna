@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
-/** JWT ブラックリストの読み書き（Redis、残存有効期間ぶんだけ保持）。書き込みはセッション失効、判定は認証フィルタから使う。 */
+/** JWT ブラックリストの読み書き（Redis、TTL は JWT 有効期間ぶん）。書き込みはセッション失効、判定は認証フィルタから使う。 */
 @Component
 @RequiredArgsConstructor
 public class TokenBlacklistService {

@@ -35,7 +35,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 平台トークン過橋（#324 統一ログイン・案 A）の授権検証と実データ非漏洩を本物の PostgreSQL で固定する統合テスト。
+ * 平台トークン過橋（案 A）の授権検証と実データ非漏洩を本物の PostgreSQL で固定する統合テスト。
  *
  * <p>平台トークンを /platform・/store で直接受理し、店舗文脈は StoreIdInterceptor が X-Store-ID を 授権店舗集合（StoreScope）で
  * fail-closed 検証する。断言は {@link com.kizuna.order.PlatformOrderScopeIT}

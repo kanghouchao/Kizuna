@@ -2,9 +2,7 @@ package com.kizuna.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.auth.infrastructure.JwtEncoderConfig;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
-import com.kizuna.shared.config.AppProperties;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -60,7 +58,7 @@ class PlatformAuthIT {
   @Autowired private CapabilityBundleRepository capabilityBundleRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
-  @Autowired private AppProperties appProperties;
+  @Autowired private JwtEncoder jwtEncoder;
 
   private static HttpHeaders jsonHeaders() {
     HttpHeaders headers = new HttpHeaders();
@@ -76,7 +74,6 @@ class PlatformAuthIT {
    * を保ったまま「現在時刻からは既に期限切れ」の token を組み立てる。
    */
   private String staleExpiredToken() {
-    JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
     Instant now = Instant.now();
     Instant issuedAt = now.minusSeconds(10);
     JwtClaimsSet claimsSet =
@@ -88,7 +85,7 @@ class PlatformAuthIT {
             .claim("authorities", List.of("PERM_TEST"))
             .build();
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-    return encoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
+    return jwtEncoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
   }
 
   private ResponseEntity<JsonNode> platformLogin(String email, String password) {
