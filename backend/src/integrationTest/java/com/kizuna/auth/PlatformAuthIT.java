@@ -2,11 +2,15 @@ package com.kizuna.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,11 +54,25 @@ class PlatformAuthIT {
   @Autowired private CapabilityBundleRepository capabilityBundleRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private AppProperties appProperties;
 
   private static HttpHeaders jsonHeaders() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     return headers;
+  }
+
+  /** 実サーバーと同じ secret で署名した、既に期限切れの token（陳腐化した前回セッションの模擬）。 */
+  private String staleExpiredToken() {
+    AppProperties expiredProperties = new AppProperties();
+    AppProperties.Jwt jwt = new AppProperties.Jwt();
+    jwt.setSecret(appProperties.getJwtSecret());
+    jwt.setExpiration(-1_000L);
+    expiredProperties.setJwt(jwt);
+    return new JwtUtil(expiredProperties)
+        .generateToken(
+            SEED_EMAIL, JwtUtil.ISSUER_PLATFORM, Map.of("authorities", List.of("PERM_TEST")))
+        .token();
   }
 
   private ResponseEntity<JsonNode> platformLogin(String email, String password) {
@@ -84,6 +102,27 @@ class PlatformAuthIT {
   @DisplayName("匿名 POST /platform/login がシード資格情報で 200 + 非空トークンを返す（CSRF 免除 + シード投入の同時証明）")
   void anonymousLoginWithSeedCredentialsSucceeds() {
     ResponseEntity<JsonNode> res = platformLogin(SEED_EMAIL, SEED_PASSWORD);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(res.getBody().path("token").asString()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName(
+      "陳腐化した(期限切れの) Bearer を付けたまま POST /platform/login しても 200 + 新規トークンを返すこと"
+          + "（前端は token cookie があれば login にも Bearer を付けるため、坏 token でログイン自体が塞がれてはならない）")
+  void loginWithStaleExpiredBearerHeaderStillSucceeds() {
+    HttpHeaders headers = jsonHeaders();
+    headers.setBearerAuth(staleExpiredToken());
+
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/login",
+            new HttpEntity<>(
+                String.format(
+                    "{\"email\": \"%s\", \"password\": \"%s\"}", SEED_EMAIL, SEED_PASSWORD),
+                headers),
+            JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody().path("token").asString()).isNotBlank();

@@ -29,6 +29,7 @@ public class SecurityConfig {
   private final JwtDecoder jwtDecoder;
   private final PlatformJwtAuthenticationConverter jwtAuthenticationConverter;
   private final PlatformAuthenticationEntryPoint authenticationEntryPoint;
+  private final PlatformBearerTokenResolver bearerTokenResolver;
 
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/platform/login"),
@@ -57,7 +58,10 @@ public class SecurityConfig {
                         jwt ->
                             jwt.decoder(jwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter))
-                    .authenticationEntryPoint(authenticationEntryPoint))
+                    .authenticationEntryPoint(authenticationEntryPoint)
+                    // PlatformBearerTokenResolver: 公開端点では壊れた Bearer を無視して匿名継続させる
+                    // （decoder より前段の全リクエスト共通処理のため、@PreAuthorize/@PermitAll の区別を待てない）。
+                    .bearerTokenResolver(bearerTokenResolver))
         .formLogin(AbstractHttpConfigurer::disable);
     return http.build();
   }
