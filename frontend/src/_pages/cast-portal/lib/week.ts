@@ -8,6 +8,12 @@ export function toDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** 'yyyy-MM-dd' をローカルタイムの Date（時刻は 00:00）として構築する。UTC 解釈による曜日ズレを避けるため、日付文字列から曜日を導出する箇所は必ずこれを経由する。 */
+export function parseDateStr(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 /** base を含む週の日曜日（週の開始日、時刻は 00:00）を返す。 */
 export function weekStart(base: Date): Date {
   const start = new Date(base.getFullYear(), base.getMonth(), base.getDate());
