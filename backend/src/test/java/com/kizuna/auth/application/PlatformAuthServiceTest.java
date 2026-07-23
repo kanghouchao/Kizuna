@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundle;
@@ -30,8 +31,9 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,10 +47,20 @@ class PlatformAuthServiceTest {
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private JwtUtil jwtUtil;
   @Mock private AuthSessionService authSessionService;
+  @Mock private AuthenticationManager authenticationManager;
+  @Mock private Authentication authentication;
 
   @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
 
   @InjectMocks private PlatformAuthService authService;
+
+  /** authenticationManager.authenticate が指定ユーザーを principal に持つ成功済み Authentication を返すよう配線する。 */
+  private void stubSuccessfulAuthentication(String email, String password, PlatformUser user) {
+    when(authenticationManager.authenticate(
+            UsernamePasswordAuthenticationToken.unauthenticated(email, password)))
+        .thenReturn(authentication);
+    when(authentication.getPrincipal()).thenReturn(new PlatformUserDetails(user));
+  }
 
   private PlatformUser hqAdmin() {
     return PlatformUser.builder()
@@ -80,8 +92,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void login_staff_issuesSortedPermAuthoritiesWithoutRoleClaim() {
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
-    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
     when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
         .thenReturn(List.of(hqBundle()));
     Token mockToken = new Token("platform_token", 12345L);
@@ -128,8 +139,7 @@ class PlatformAuthServiceTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
-    when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(staff));
-    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
     when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
         .thenReturn(
             List.of(
@@ -167,8 +177,7 @@ class PlatformAuthServiceTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
-    when(userRepository.findByEmail("menu@kizuna.test")).thenReturn(Optional.of(staff));
-    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    stubSuccessfulAuthentication("menu@kizuna.test", "pass", staff);
     when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
         .thenReturn(
             List.of(
@@ -201,8 +210,7 @@ class PlatformAuthServiceTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
-    when(userRepository.findByEmail("manager@kizuna.test")).thenReturn(Optional.of(staff));
-    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    stubSuccessfulAuthentication("manager@kizuna.test", "pass", staff);
     when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
         .thenReturn(
             List.of(
@@ -235,8 +243,7 @@ class PlatformAuthServiceTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
-    when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
-    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    stubSuccessfulAuthentication("cast@kizuna.test", "pass", cast);
     when(jwtUtil.generateToken(eq("cast@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
         .thenReturn(new Token("t", 1L));
 
@@ -254,8 +261,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void login_mixedCaseEmail_resolvesToLowercaseUser() {
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
-    when(passwordEncoder.matches("pass", "stored-hash")).thenReturn(true);
+    stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
     when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
         .thenReturn(List.of(hqBundle()));
     when(jwtUtil.generateToken(eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
@@ -264,48 +270,11 @@ class PlatformAuthServiceTest {
     Token res = authService.login("ADMIN@Kizuna.TEST", "pass");
 
     assertThat(res.token()).isEqualTo("platform_token");
-    // 照合は小文字正規化後の email で行う（保存済みシードは全て小文字）。
-    verify(userRepository).findByEmail("admin@kizuna.test");
-  }
-
-  @Test
-  void login_emailNotFound_throwsBadCredentials() {
-    when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> authService.login("missing@kizuna.test", "pass"))
-        .isInstanceOf(BadCredentialsException.class)
-        .hasMessage("メールアドレスまたはパスワードが正しくありません");
-
-    // 列挙耐性: メール不存在でもダミー bcrypt 照合を 1 回行い、既知メール（誤パスワード）との応答時間差を作らない。
-    verify(passwordEncoder).matches(eq("pass"), any());
-  }
-
-  @Test
-  void login_wrongPassword_throwsBadCredentials() {
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
-    when(passwordEncoder.matches("wrong", "stored-hash")).thenReturn(false);
-
-    assertThatThrownBy(() -> authService.login("admin@kizuna.test", "wrong"))
-        .isInstanceOf(BadCredentialsException.class)
-        .hasMessage("メールアドレスまたはパスワードが正しくありません");
-  }
-
-  @Test
-  void login_disabledUser_correctPassword_throwsDisabled() {
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(disabledUser()));
-
-    // enabled 判定がパスワード照合より先行するため、正しいパスワードでも DisabledException になる。
-    assertThatThrownBy(() -> authService.login("admin@kizuna.test", "pass"))
-        .isInstanceOf(DisabledException.class);
-  }
-
-  @Test
-  void login_disabledUser_wrongPassword_throwsDisabled() {
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(disabledUser()));
-
-    // 誤パスワードでも enabled 判定が先行するため DisabledException（無効化アカウントでのパスワード正誤オラクルを塞ぐ）。
-    assertThatThrownBy(() -> authService.login("admin@kizuna.test", "wrong"))
-        .isInstanceOf(DisabledException.class);
+    // 照合は小文字正規化後の email を AuthenticationManager へ渡す（保存済みシードは全て小文字）。
+    ArgumentCaptor<UsernamePasswordAuthenticationToken> tokenCaptor =
+        ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
+    verify(authenticationManager).authenticate(tokenCaptor.capture());
+    assertThat(tokenCaptor.getValue().getPrincipal()).isEqualTo("admin@kizuna.test");
   }
 
   @Test
@@ -518,18 +487,5 @@ class PlatformAuthServiceTest {
     assertThat(user.getPassword()).isEqualTo("new-encoded-hash");
     verify(userRepository).save(user);
     verify(authSessionService).invalidate("Bearer tok");
-  }
-
-  private PlatformUser disabledUser() {
-    return PlatformUser.builder()
-        .email("admin@kizuna.test")
-        .password("stored-hash")
-        .displayName("HQ管理者")
-        .enabled(false)
-        .userType(UserType.STAFF)
-        .bundleIds(Set.of(HQ_BUNDLE_ID))
-        .storeScopeType(StoreScopeType.ALL_STORES)
-        .storeIds(Set.of())
-        .build();
   }
 }
