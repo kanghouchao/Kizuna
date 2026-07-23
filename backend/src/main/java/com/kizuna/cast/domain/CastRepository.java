@@ -23,4 +23,13 @@ public interface CastRepository
    */
   @Query("select c.platformUserId from Cast c where c.id = :id")
   Optional<Long> findPlatformUserIdById(@Param("id") String id);
+
+  /**
+   * 指定 platform_user_id に紐づく cast 行 id を跨店で返す（本人自限の基点）。
+   *
+   * <p>storeFilter を経由しない集約クエリのため常に全店横断で解決する。呼び出し側は認証済み本人の platform_user_id
+   * のみを渡すため、リクエストパラメータ経由での注入点はない。
+   */
+  @Query("select c.id from Cast c where c.platformUserId = :platformUserId")
+  List<String> findIdsByPlatformUserId(@Param("platformUserId") Long platformUserId);
 }
