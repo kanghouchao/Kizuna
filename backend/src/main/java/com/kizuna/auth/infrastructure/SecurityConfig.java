@@ -1,5 +1,6 @@
 package com.kizuna.auth.infrastructure;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +23,7 @@ import org.springframework.util.StringUtils;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(jsr250Enabled = true)
+@RequiredArgsConstructor
 public class SecurityConfig {
 
   private final JwtDecoder jwtDecoder;
@@ -38,15 +40,6 @@ public class SecurityConfig {
       return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");
     }
   };
-
-  public SecurityConfig(
-      JwtDecoder jwtDecoder,
-      PlatformJwtAuthenticationConverter jwtAuthenticationConverter,
-      PlatformAuthenticationEntryPoint authenticationEntryPoint) {
-    this.jwtDecoder = jwtDecoder;
-    this.jwtAuthenticationConverter = jwtAuthenticationConverter;
-    this.authenticationEntryPoint = authenticationEntryPoint;
-  }
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
