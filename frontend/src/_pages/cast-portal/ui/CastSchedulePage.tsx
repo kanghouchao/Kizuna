@@ -25,10 +25,12 @@ function formatDateLabel(dateStr: string): string {
 export function CastSchedulePage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => weekStart(new Date()));
   const [items, setItems] = useState<CastScheduleItem[] | null>(null);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setItems(null);
+    setHasError(false);
     const dates = weekDates(currentWeekStart);
     shiftApi
       .mySchedule({ from: toDateStr(dates[0]), to: toDateStr(dates[6]) })
@@ -36,7 +38,7 @@ export function CastSchedulePage() {
         if (!cancelled) setItems(res);
       })
       .catch(() => {
-        if (!cancelled) setItems([]);
+        if (!cancelled) setHasError(true);
       });
     return () => {
       cancelled = true;
@@ -75,7 +77,9 @@ export function CastSchedulePage() {
         </button>
       </div>
 
-      {items === null ? (
+      {hasError ? (
+        <p className="text-sm text-red-600">スケジュールの取得に失敗しました</p>
+      ) : items === null ? (
         <p className="text-sm text-gray-500">読み込み中...</p>
       ) : groups.length === 0 ? (
         <p className="text-sm text-gray-500">今週の確定シフトはありません</p>
