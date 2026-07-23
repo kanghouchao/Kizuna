@@ -3,14 +3,21 @@
 import { useEffect, useState } from 'react';
 import { CastScheduleItem, shiftApi } from '@/entities/shift';
 import { groupByWorkDate } from '../lib/groupSchedule';
-import { formatEndTime, formatTime, toDateStr, weekDates, weekStart } from '../lib/week';
+import {
+  formatEndTime,
+  formatTime,
+  parseDateStr,
+  toDateStr,
+  weekDates,
+  weekStart,
+} from '../lib/week';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** 'yyyy-MM-dd' → '7/20（月）' 表示。 */
 function formatDateLabel(dateStr: string): string {
   const [, m, d] = dateStr.split('-');
-  const weekday = WEEKDAY_LABELS[new Date(dateStr).getDay()];
+  const weekday = WEEKDAY_LABELS[parseDateStr(dateStr).getDay()];
   return `${Number(m)}/${Number(d)}（${weekday}）`;
 }
 
