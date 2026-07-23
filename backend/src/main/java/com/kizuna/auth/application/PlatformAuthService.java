@@ -2,7 +2,7 @@ package com.kizuna.auth.application;
 
 import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
-import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.Capability;
@@ -43,7 +43,7 @@ public class PlatformAuthService {
   private final PlatformUserRepository userRepository;
   private final CapabilityBundleRepository capabilityBundleRepository;
   private final PasswordEncoder passwordEncoder;
-  private final JwtUtil jwtUtil;
+  private final PlatformJwtIssuer jwtIssuer;
   private final AuthSessionService authSessionService;
   private final AuthenticationManager authenticationManager;
 
@@ -66,7 +66,7 @@ public class PlatformAuthService {
     claims.put("storeBridge", hasStoreConsole(capabilities));
     claims.put("storeScopeType", user.getStoreScopeType().name());
     claims.put("storeIds", new ArrayList<>(user.getStoreIds()));
-    return jwtUtil.generateToken(user.getEmail(), JwtUtil.ISSUER_PLATFORM, claims);
+    return jwtIssuer.issue(user.getEmail(), claims);
   }
 
   /** me 応答を返す（GET /platform/me）。ユーザー不在は空を返し、HTTP 表現は呼び出し側が決める。 */

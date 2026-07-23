@@ -3,6 +3,7 @@ package com.kizuna.auth.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,8 +22,6 @@ class TokenBlacklistServiceTest {
 
   @Mock private RedisTemplate<String, Object> redisTemplate;
 
-  @Mock private JwtUtil jwtUtil;
-
   @Mock private AppProperties appProperties;
 
   @InjectMocks private TokenBlacklistService service;
@@ -38,6 +37,42 @@ class TokenBlacklistServiceTest {
 
     verify(valueOperations)
         .set(eq("blacklist:users:stopped@kizuna.test"), eq("1"), eq(Duration.ofMillis(3_600_000L)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void blacklist_writesTokenKeyWithJwtExpirationTtl() {
+    ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(appProperties.getJwtExpiration()).thenReturn(3_600_000L);
+
+    service.blacklist("Bearer xxx");
+
+    verify(valueOperations)
+        .set(eq("blacklist:tokens:xxx"), eq("1"), eq(Duration.ofMillis(3_600_000L)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void blacklist_rawToken_stripsNoBearerPrefixAndWritesAsIs() {
+    ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(appProperties.getJwtExpiration()).thenReturn(3_600_000L);
+
+    service.blacklist("raw-token-without-bearer-prefix");
+
+    verify(valueOperations)
+        .set(
+            eq("blacklist:tokens:raw-token-without-bearer-prefix"),
+            eq("1"),
+            eq(Duration.ofMillis(3_600_000L)));
+  }
+
+  @Test
+  void blacklist_nullInput_writesNothing() {
+    service.blacklist(null);
+
+    verify(redisTemplate, never()).opsForValue();
   }
 
   @Test

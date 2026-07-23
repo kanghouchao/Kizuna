@@ -2,27 +2,24 @@ package com.kizuna.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.JwtEncoderConfig;
+import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -485,20 +482,14 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
 
   /** decoder の署名検証で拒否させるため、実サーバーの JWT secret とは異なる鍵で署名する。 */
   private String issueTokenWithWrongSignature() {
-    SecretKey wrongKey =
-        Keys.hmacShaKeyFor(
-            "wrong-signature-secret-wrong-signature-secret!!".getBytes(StandardCharsets.UTF_8));
-    Date now = new Date();
-    return Jwts.builder()
-        .claims()
-        .issuer(JwtUtil.ISSUER_PLATFORM)
-        .subject(MANAGER_EMAIL)
-        .issuedAt(now)
-        .expiration(new Date(now.getTime() + 3_600_000L))
-        .add(Map.of("authorities", List.of("PERM_TEST")))
-        .and()
-        .signWith(wrongKey)
-        .compact();
+    AppProperties wrongProperties = new AppProperties();
+    AppProperties.Jwt jwt = new AppProperties.Jwt();
+    jwt.setSecret("wrong-signature-secret-wrong-signature-secret!!");
+    jwt.setExpiration(3_600_000L);
+    wrongProperties.setJwt(jwt);
+    PlatformJwtIssuer wrongIssuer =
+        new PlatformJwtIssuer(new JwtEncoderConfig().jwtEncoder(wrongProperties), wrongProperties);
+    return wrongIssuer.issue(MANAGER_EMAIL, Map.of("authorities", List.of("PERM_TEST"))).token();
   }
 
   private static String errorMessageOf(String body) {

@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
-import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.Capability;
@@ -45,7 +45,7 @@ class PlatformAuthServiceTest {
   @Mock private PlatformUserRepository userRepository;
   @Mock private CapabilityBundleRepository capabilityBundleRepository;
   @Mock private PasswordEncoder passwordEncoder;
-  @Mock private JwtUtil jwtUtil;
+  @Mock private PlatformJwtIssuer jwtIssuer;
   @Mock private AuthSessionService authSessionService;
   @Mock private AuthenticationManager authenticationManager;
   @Mock private Authentication authentication;
@@ -96,15 +96,12 @@ class PlatformAuthServiceTest {
     when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
         .thenReturn(List.of(hqBundle()));
     Token mockToken = new Token("platform_token", 12345L);
-    when(jwtUtil.generateToken(eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
-        .thenReturn(mockToken);
+    when(jwtIssuer.issue(eq("admin@kizuna.test"), any())).thenReturn(mockToken);
 
     Token res = authService.login("admin@kizuna.test", "pass");
 
     assertThat(res.token()).isEqualTo("platform_token");
-    verify(jwtUtil)
-        .generateToken(
-            eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    verify(jwtIssuer).issue(eq("admin@kizuna.test"), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
@@ -147,14 +144,11 @@ class PlatformAuthServiceTest {
                     .name("店舗スタッフ")
                     .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_VIEW))
                     .build()));
-    when(jwtUtil.generateToken(eq("staff@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
-        .thenReturn(new Token("t", 1L));
+    when(jwtIssuer.issue(eq("staff@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("staff@kizuna.test", "pass");
 
-    verify(jwtUtil)
-        .generateToken(
-            eq("staff@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    verify(jwtIssuer).issue(eq("staff@kizuna.test"), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
@@ -185,13 +179,11 @@ class PlatformAuthServiceTest {
                     .name("店舗メニュー標識のみ")
                     .capabilities(Set.of(Capability.STORE_MENU_VIEW))
                     .build()));
-    when(jwtUtil.generateToken(eq("menu@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
-        .thenReturn(new Token("t", 1L));
+    when(jwtIssuer.issue(eq("menu@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("menu@kizuna.test", "pass");
 
-    verify(jwtUtil)
-        .generateToken(eq("menu@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    verify(jwtIssuer).issue(eq("menu@kizuna.test"), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
     // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できない。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
@@ -218,14 +210,11 @@ class PlatformAuthServiceTest {
                     .name("店長")
                     .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_MENU_VIEW))
                     .build()));
-    when(jwtUtil.generateToken(eq("manager@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
-        .thenReturn(new Token("t", 1L));
+    when(jwtIssuer.issue(eq("manager@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("manager@kizuna.test", "pass");
 
-    verify(jwtUtil)
-        .generateToken(
-            eq("manager@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    verify(jwtIssuer).issue(eq("manager@kizuna.test"), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
     // 実運用の STORE 能力（ORDER_MANAGE）を保持するため、標識との併存でも店舗文脈を確立できる。
     assertThat(claims.get("storeBridge")).isEqualTo(true);
@@ -244,13 +233,11 @@ class PlatformAuthServiceTest {
             .storeIds(Set.of(1L))
             .build();
     stubSuccessfulAuthentication("cast@kizuna.test", "pass", cast);
-    when(jwtUtil.generateToken(eq("cast@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
-        .thenReturn(new Token("t", 1L));
+    when(jwtIssuer.issue(eq("cast@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("cast@kizuna.test", "pass");
 
-    verify(jwtUtil)
-        .generateToken(eq("cast@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
+    verify(jwtIssuer).issue(eq("cast@kizuna.test"), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
@@ -264,7 +251,7 @@ class PlatformAuthServiceTest {
     stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
     when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
         .thenReturn(List.of(hqBundle()));
-    when(jwtUtil.generateToken(eq("admin@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), any()))
+    when(jwtIssuer.issue(eq("admin@kizuna.test"), any()))
         .thenReturn(new Token("platform_token", 12345L));
 
     Token res = authService.login("ADMIN@Kizuna.TEST", "pass");
