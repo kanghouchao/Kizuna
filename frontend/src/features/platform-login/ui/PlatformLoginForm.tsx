@@ -46,7 +46,15 @@ export default function PlatformLoginForm() {
         return;
       }
 
-      // console='none'（CAST/MEMBER・能力なし）のポータルは未提供
+      // destination='unsupported'（console='none' — CAST または MEMBER）。両者は console だけでは
+      // 区別できないため、既に取得済みの user_type で分岐する（#328）。
+      if (me.user_type === 'CAST') {
+        startPlatformSession('cast', expires_at);
+        router.push('/cast/schedule/');
+        return;
+      }
+
+      // MEMBER 等: ポータル未提供
       Cookies.remove('token');
       clearPlatformSession();
       toast.error('この利用者種別のポータルは準備中です');

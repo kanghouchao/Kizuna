@@ -99,6 +99,24 @@ describe('routeGuard', () => {
     expect(res).not.toBeNull();
   });
 
+  it('redirects to /platform/login when accessing /cast without token', () => {
+    const req = createRequest('/cast/schedule', false);
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/platform/login' })
+    );
+    expect(res).not.toBeNull();
+  });
+
+  it('allows access to /cast with token', () => {
+    const req = createRequest('/cast/schedule', true);
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
   it('ignores other routes', () => {
     const req = createRequest('/public/page', false);
     const res = handleRouteProtection(req, 'store'); // Role doesn't strictly matter for non-protected routes in current implementation
