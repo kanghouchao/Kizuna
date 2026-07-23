@@ -275,6 +275,38 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName(
+      "陳腐な Bearer を付けたまま招待照会・新規登録受諾を叩いても匿名で通ること"
+          + "（招待 inline flow の呼び出し元は既存 token cookie を持ちうるため、坏 token に塞がれてはならない）")
+  void viewAndAcceptWithBrokenBearerStillSucceedAnonymously() {
+    String castId = createCast(STORE_A, "陳腐Bearer受諾テスト");
+    String token = issue(castId, STORE_A);
+    String email = "cast-broken-bearer-it-" + System.nanoTime() + "@kizuna.test";
+
+    ResponseEntity<JsonNode> view =
+        rest.exchange(
+            "/platform/cast-invitations/" + token,
+            HttpMethod.GET,
+            new HttpEntity<>(jsonHeadersWithBrokenBearer()),
+            JsonNode.class);
+    assertThat(view.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(view.getBody().path("status").asString()).isEqualTo("VALID");
+
+    String body =
+        String.format(
+            "{\"email\": \"%s\", \"password\": \"password1234\", \"display_name\": \"陳腐Bearer花子\"}",
+            email);
+    ResponseEntity<JsonNode> accept =
+        rest.postForEntity(
+            "/platform/cast-invitations/" + token + "/acceptance",
+            new HttpEntity<>(body, jsonHeadersWithBrokenBearer()),
+            JsonNode.class);
+
+    assertThat(accept.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(platformUserRepository.findByEmail(email)).isPresent();
+  }
+
+  @Test
   @DisplayName("照会は VALID/EXPIRED/USED の 3 状態と店舗名・档案名を返すこと")
   void viewReturnsValidExpiredUsedStates() {
     // VALID
@@ -425,6 +457,13 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   private static HttpHeaders jsonHeaders() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    return headers;
+  }
+
+  /** 前端が付けうる陳腐な token cookie を模した、解読不能な Authorization ヘッダ。 */
+  private static HttpHeaders jsonHeadersWithBrokenBearer() {
+    HttpHeaders headers = jsonHeaders();
+    headers.setBearerAuth("stale-or-broken-token-value");
     return headers;
   }
 

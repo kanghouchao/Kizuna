@@ -111,6 +111,25 @@ class PlatformStoreApiIT {
   }
 
   @Test
+  @DisplayName(
+      "GET /platform/stores/lookup は陳腐な Bearer が付いていても 200 を返すこと"
+          + "（PlatformBearerTokenResolver が公開端点で坏 token を無視する）")
+  void lookupByDomainIgnoresBrokenBearer() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.AUTHORIZATION, "Bearer stale-or-broken-token-value");
+
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/stores/lookup?domain=" + STORE1_DOMAIN,
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(res.getBody().path("domain").asString()).isEqualTo(STORE1_DOMAIN);
+  }
+
+  @Test
   @DisplayName("GET /platform/stores/lookup は domain 未指定なら未認証でも 400 になること（params 分岐廃止・独立子路径化の確認）")
   void lookupWithoutDomainIsBadRequest() {
     // /lookup は独立子路径のため、必須 @RequestParam の欠落として CommonExceptionHandler が 400 へ映射する。
