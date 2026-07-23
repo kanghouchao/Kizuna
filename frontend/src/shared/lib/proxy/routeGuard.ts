@@ -27,6 +27,14 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
     return NextResponse.redirect(new URL('/', request.url));
   }
 
+  // 2.5. Cast Portal Route Protection
+  // /cast/** はキャストポータル専用の認証済み領域。専用ログイン画面は無く /platform/login が
+  // 入口のため、未トークンは /platform（他の保護 prefix と別系統）へ差し戻す。
+  if (path.startsWith('/cast') && !hasToken) {
+    console.error('🔒 Unauthorized access to /cast, redirecting to login');
+    return NextResponse.redirect(new URL('/platform/login', request.url));
+  }
+
   // 3. Legacy id-less store URL handling
   // id 無しの店舗 URL（例 /store/orders、ブックマーク・共有リンクに残りうる）は
   // /store/[storeId]/... にも /store/select にもマッチせず 404 になる。
