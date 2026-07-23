@@ -47,7 +47,7 @@ export default function PlatformLoginForm() {
       }
 
       // destination='unsupported'（console='none' — CAST または MEMBER）。両者は console だけでは
-      // 区別できないため、既に取得済みの user_type で分岐する（#328）。
+      // 区別できないため、既に取得済みの user_type で分岐する。
       if (me.user_type === 'CAST') {
         startPlatformSession('cast', expires_at);
         router.push('/cast/schedule/');

@@ -30,10 +30,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 本人（キャスト）ポータル週間スケジュールの cast_id 単層自限を本物の PostgreSQL で強断言する統合テスト（issue #328）。
+ * 本人（キャスト）ポータル週間スケジュールの cast_id 単層自限を本物の PostgreSQL で強断言する統合テスト。
  *
- * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外の実データ（別キャストの確定シフト・非所属店舗の確定シフト・TENTATIVE）が 一切現れないこと（AC story
- * 8）で行う。読みは cast_id 単層自限のみで濾過し、{@code storeSetFilter}/{@code storeFilter} は経由しない。先例は {@link
+ * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外の実データ（別キャストの確定シフト・非所属店舗の確定シフト・TENTATIVE）が 一切現れないことを強断言する。読みは
+ * cast_id 単層自限のみで濾過し、{@code storeSetFilter}/{@code storeFilter} は経由しない。先例は {@link
  * com.kizuna.order.PlatformOrderScopeIT}（リポジトリ直挿 + 実データ断言）と {@link ShiftCrossStoreIT}（単店隔離）。
  */
 class PlatformScheduleScopeIT extends CrossStoreTestSupport {

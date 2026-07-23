@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { platformAuthApi, useAuth } from '@/entities/user';
 
-/** アカウントタブ。表示名とログアウトのみの最小画面（#328）。 */
+/** アカウントタブ。表示名とログアウトのみの最小画面。 */
 export function CastAccountPage() {
   const { logout } = useAuth();
   const [displayName, setDisplayName] = useState<string | null>(null);
