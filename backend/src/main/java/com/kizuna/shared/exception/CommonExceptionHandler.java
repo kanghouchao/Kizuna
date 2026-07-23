@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -19,12 +21,23 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @ControllerAdvice
 public class CommonExceptionHandler {
 
+  /** 例外の内部 message をワイヤ契約へ漏らさないよう、型ごとに固定文言へ写像する。 */
   @ExceptionHandler(AuthenticationException.class)
   public ResponseEntity<Map<String, Object>> handle(AuthenticationException ex) {
     log.error(ex.getMessage());
     Map<String, Object> body = new HashMap<>();
-    body.put("error", ex.getMessage());
+    body.put("error", authErrorMessage(ex));
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+  }
+
+  private String authErrorMessage(AuthenticationException ex) {
+    if (ex instanceof DisabledException) {
+      return "アカウントが無効化されています";
+    }
+    if (ex instanceof BadCredentialsException) {
+      return "メールアドレスまたはパスワードが正しくありません";
+    }
+    return "認証に失敗しました";
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
