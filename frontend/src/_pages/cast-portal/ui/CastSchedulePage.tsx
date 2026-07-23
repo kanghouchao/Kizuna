@@ -14,7 +14,7 @@ function formatDateLabel(dateStr: string): string {
   return `${Number(m)}/${Number(d)}（${weekday}）`;
 }
 
-/** 全所属店の確定シフトを週集約で表示する（#328・cast_id 単層自限）。日曜起点の週ナビ付き。 */
+/** 全所属店の確定シフトを週集約で表示する（cast_id 単層自限）。日曜起点の週ナビ付き。 */
 export function CastSchedulePage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => weekStart(new Date()));
   const [items, setItems] = useState<CastScheduleItem[] | null>(null);
