@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0300-002-cast-platform-user-index
+      author: kanghouchao
+      # 本人ポータルの週間スケジュール取得は毎リクエスト platform_user_id での跨店逆引き
+      # （findIdsByPlatformUserId）を伴うが t_casts.platform_user_id に索引が無くフルスキャンになる。
+      # 大半の cast は未招待で platform_user_id が NULL のため、対象を NOT NULL に絞った部分索引にする。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              CREATE INDEX idx_t_casts_platform_user ON t_casts (platform_user_id)
+              WHERE platform_user_id IS NOT NULL
+      rollback:
+        - sql:
+            sql: DROP INDEX idx_t_casts_platform_user

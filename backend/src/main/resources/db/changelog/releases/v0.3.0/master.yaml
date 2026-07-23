@@ -4,3 +4,6 @@ databaseChangeLog:
   - include:
       file: store/01-shift-cast-schedule-index.yaml
       relativeToChangelogFile: true
+  - include:
+      file: store/02-cast-platform-user-index.yaml
+      relativeToChangelogFile: true
