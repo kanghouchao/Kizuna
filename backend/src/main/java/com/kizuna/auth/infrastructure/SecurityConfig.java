@@ -12,8 +12,8 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -24,7 +24,9 @@ import org.springframework.util.StringUtils;
 @EnableMethodSecurity(jsr250Enabled = true)
 public class SecurityConfig {
 
-  private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final JwtDecoder jwtDecoder;
+  private final PlatformJwtAuthenticationConverter jwtAuthenticationConverter;
+  private final PlatformAuthenticationEntryPoint authenticationEntryPoint;
 
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/platform/login"),
@@ -37,8 +39,13 @@ public class SecurityConfig {
     }
   };
 
-  public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
-    this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+  public SecurityConfig(
+      JwtDecoder jwtDecoder,
+      PlatformJwtAuthenticationConverter jwtAuthenticationConverter,
+      PlatformAuthenticationEntryPoint authenticationEntryPoint) {
+    this.jwtDecoder = jwtDecoder;
+    this.jwtAuthenticationConverter = jwtAuthenticationConverter;
+    this.authenticationEntryPoint = authenticationEntryPoint;
   }
 
   @Bean
@@ -49,7 +56,15 @@ public class SecurityConfig {
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        // 公開端点が保護対象パスの内側に混在するため securityMatcher で受限域を絞らず、全域を単一チェーンで扱う。
+        .oauth2ResourceServer(
+            oauth2 ->
+                oauth2
+                    .jwt(
+                        jwt ->
+                            jwt.decoder(jwtDecoder)
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter))
+                    .authenticationEntryPoint(authenticationEntryPoint))
         .formLogin(AbstractHttpConfigurer::disable);
     return http.build();
   }

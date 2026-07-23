@@ -171,7 +171,7 @@ class PlatformStaffRevocationIT {
   }
 
   @Test
-  @DisplayName("停止したユーザーの停止前に取得した JWT は GET /platform/me が 403 になること(ユーザー単位ブラックリスト即時反映)")
+  @DisplayName("停止したユーザーの停止前に取得した JWT は GET /platform/me が 401 になること(ユーザー単位ブラックリスト即時反映)")
   void stoppingUserRevokesPreviouslyIssuedToken() {
     PlatformUser target = ensureEnabledTestUser(STOP_EMAIL, "店舗スタッフ");
     String targetToken = platformToken(STOP_EMAIL, TEST_PASSWORD);
@@ -182,11 +182,11 @@ class PlatformStaffRevocationIT {
     ResponseEntity<JsonNode> stop = putEnabled(admin, target.getId(), false, target.getVersion());
     assertThat(stop.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-    // ブラックリスト済みトークンは JwtAuthenticationFilter が未認証として扱い、GET /platform/me の
-    // @PreAuthorize("isAuthenticated()") が 403 で拒否する(PlatformBridgeIT のログアウト検証と同じ規約)。
+    // ブラックリスト済みトークンは decoder の TokenBlacklistValidator が拒否し、resource-server の
+    // AuthenticationEntryPoint が 401 で応答する(PlatformBridgeIT のログアウト検証と同じ規約)。
     assertThat(meWith(targetToken).getStatusCode())
         .as("停止前に発行された JWT はユーザー単位ブラックリストで即時に拒否されること")
-        .isEqualTo(HttpStatus.FORBIDDEN);
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
   @Test
@@ -200,7 +200,7 @@ class PlatformStaffRevocationIT {
     assertThat(stop.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(meWith(targetToken).getStatusCode())
         .as("前提: 停止直後は拒否されること")
-        .isEqualTo(HttpStatus.FORBIDDEN);
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
 
     long stoppedVersion = stop.getBody().path("version").asLong();
     ResponseEntity<JsonNode> resume = putEnabled(admin, target.getId(), true, stoppedVersion);

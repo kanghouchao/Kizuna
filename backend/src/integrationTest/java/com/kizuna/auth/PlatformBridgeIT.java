@@ -449,11 +449,11 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
             "/platform/logout", HttpMethod.POST, new HttpEntity<>(bearer(token)), Void.class);
     assertThat(logout.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
-    // ブラックリスト済みトークンは JwtAuthenticationFilter が未認証として扱い、本システムの既定では
-    // 403 で拒否される（issuer 相互拒否と同じ経路 — PlatformAuthIT の 403 期待と同一規約）。
+    // ブラックリスト済みトークンは decoder の TokenBlacklistValidator が拒否し、resource-server の
+    // AuthenticationEntryPoint が 401 で応答する。
     ResponseEntity<String> me =
         rest.exchange(
             "/platform/me", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
-    assertThat(me.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(me.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 }
