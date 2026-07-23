@@ -58,6 +58,27 @@ class CastScheduleServiceTest {
   }
 
   @Test
+  void myWeek_throwsWhenToIsBeforeFrom() {
+    assertThatThrownBy(() -> service.myWeek(EMAIL, TO, FROM))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("取得範囲が不正です");
+
+    verifyNoInteractions(platformUserRepository, castRepository, shiftRepository, shiftMapper);
+  }
+
+  @Test
+  void myWeek_throwsWhenSpanExceedsMaxDays() {
+    LocalDate from = LocalDate.of(2026, 7, 1);
+    LocalDate to = from.plusDays(32);
+
+    assertThatThrownBy(() -> service.myWeek(EMAIL, from, to))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("取得範囲が不正です");
+
+    verifyNoInteractions(platformUserRepository, castRepository, shiftRepository, shiftMapper);
+  }
+
+  @Test
   void myWeek_returnsEmptyWhenNoCastLinked() {
     PlatformUser user = userWithId(42L);
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));

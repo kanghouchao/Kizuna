@@ -7,6 +7,7 @@ import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastScheduleService {
 
+  private static final int MAX_SPAN_DAYS = 31;
+
   private final PlatformUserRepository platformUserRepository;
   private final CastRepository castRepository;
   private final ShiftRepository shiftRepository;
@@ -29,6 +32,9 @@ public class CastScheduleService {
 
   @Transactional(readOnly = true)
   public List<CastScheduleResponse> myWeek(String email, LocalDate from, LocalDate to) {
+    if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > MAX_SPAN_DAYS) {
+      throw new ServiceException("取得範囲が不正です");
+    }
     Long userId =
         platformUserRepository
             .findByEmail(email)
