@@ -12,8 +12,8 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
   List<ShiftRequest> findAllByOrderByCreatedAtAsc();
 
   /**
-   * 本人（cast_id 集合、跨店）の出勤希望履歴を店名内联で返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか
-   * 存在しないため、cast_id 自限がそのまま店舗自限として機能する（storeFilter は経由しない）。
+   * 本人（cast_id 集合、跨店）の出勤希望履歴を店名内联で返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか 存在しないため、cast_id
+   * 自限がそのまま店舗自限として機能する（storeFilter は経由しない）。
    */
   @Query(
       """
