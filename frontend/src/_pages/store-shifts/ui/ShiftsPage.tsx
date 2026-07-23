@@ -1,7 +1,7 @@
 'use client';
 
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react';
-import { CalendarDaysIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, ClockIcon, InboxIcon } from '@heroicons/react/24/outline';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastResponse, castApi } from '@/entities/cast';
@@ -9,12 +9,13 @@ import { ShiftResponse, shiftApi } from '@/entities/shift';
 import { monthRange, toDateStr } from '../lib/datetime';
 import { ShiftCalendar } from './ShiftCalendar';
 import { ShiftFormModal } from './ShiftFormModal';
+import { ShiftRequestInbox } from './ShiftRequestInbox';
 import { ShiftTimeline } from './ShiftTimeline';
 
 const CALENDAR_TAB = 0;
 const TIMELINE_TAB = 1;
 
-/** 出勤管理ページ。カレンダー俯瞰と日別タイムラインをタブで切り替える。 */
+/** 出勤管理ページ。カレンダー俯瞰・日別タイムライン・出勤希望 inbox をタブで切り替える。 */
 export default function ShiftsPage() {
   const [tab, setTab] = useState(CALENDAR_TAB);
   const [month, setMonth] = useState(() => {
@@ -119,6 +120,12 @@ export default function ShiftsPage() {
               タイムライン
             </span>
           </Tab>
+          <Tab className={({ selected }) => tabClass(selected)}>
+            <span className="inline-flex items-center gap-1.5">
+              <InboxIcon className="h-4 w-4" />
+              出勤希望
+            </span>
+          </Tab>
         </TabList>
         <TabPanels className="mt-6">
           <TabPanel>
@@ -139,6 +146,9 @@ export default function ShiftsPage() {
               onAddShift={openAdd}
               onEditShift={openEdit}
             />
+          </TabPanel>
+          <TabPanel>
+            <ShiftRequestInbox casts={casts} onApproved={reloadShifts} />
           </TabPanel>
         </TabPanels>
       </TabGroup>
