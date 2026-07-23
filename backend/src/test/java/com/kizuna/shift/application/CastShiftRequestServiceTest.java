@@ -105,7 +105,7 @@ class CastShiftRequestServiceTest {
     PlatformUser user = userWithId(42L);
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
-    when(castRepository.findIdByPlatformUserIdAndStoreId(42L, 1L)).thenReturn(Optional.empty());
+    when(castRepository.findIdsByPlatformUserIdAndStoreId(42L, 1L)).thenReturn(List.of());
 
     assertThatThrownBy(() -> service.submit(EMAIL, req))
         .isInstanceOf(ServiceException.class)
@@ -120,8 +120,7 @@ class CastShiftRequestServiceTest {
     PlatformUser user = userWithId(42L);
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
-    when(castRepository.findIdByPlatformUserIdAndStoreId(42L, 1L))
-        .thenReturn(Optional.of("cast-1"));
+    when(castRepository.findIdsByPlatformUserIdAndStoreId(42L, 1L)).thenReturn(List.of("cast-1"));
     when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
     ShiftRequestResponse resp = ShiftRequestResponse.builder().id("sr1").build();
     when(shiftRequestMapper.toResponse(any())).thenReturn(resp);
@@ -137,6 +136,26 @@ class CastShiftRequestServiceTest {
     assertThat(saved.getWorkDate()).isEqualTo(req.getWorkDate());
     assertThat(saved.getStartTime()).isEqualTo(req.getStartTime());
     assertThat(saved.getEndTime()).isEqualTo(req.getEndTime());
+  }
+
+  @Test
+  void submit_picksOldestCastRowWhenMultipleProfilesInSameStore() {
+    ShiftRequestCreateRequest req = validRequest();
+    PlatformUser user = userWithId(42L);
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    // 同一店舗に本人の档案が複数並存する場合、先頭（最古の档案）が決定的に選ばれる。
+    when(castRepository.findIdsByPlatformUserIdAndStoreId(42L, 1L))
+        .thenReturn(List.of("cast-old", "cast-new"));
+    when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+    when(shiftRequestMapper.toResponse(any()))
+        .thenReturn(ShiftRequestResponse.builder().id("sr1").build());
+
+    service.submit(EMAIL, req);
+
+    ArgumentCaptor<ShiftRequest> captor = ArgumentCaptor.forClass(ShiftRequest.class);
+    verify(shiftRequestRepository).save(captor.capture());
+    assertThat(captor.getValue().getCastId()).isEqualTo("cast-old");
   }
 
   @Test
