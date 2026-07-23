@@ -30,7 +30,8 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 2.5. Cast Portal Route Protection
   // /cast/** はキャストポータル専用の認証済み領域。専用ログイン画面は無く /platform/login が
   // 入口のため、未トークンはそちらへ差し戻す（/store の既定遷移先である「/」とは別系統）。
-  if (path.startsWith('/cast') && !hasToken) {
+  // 公開ストアフロントの /casts・/casts/:id を巻き込まないため厳密一致＋/cast/ 配下に限定する。
+  if ((path === '/cast' || path.startsWith('/cast/')) && !hasToken) {
     console.error('🔒 Unauthorized access to /cast, redirecting to login');
     return NextResponse.redirect(new URL('/platform/login', request.url));
   }

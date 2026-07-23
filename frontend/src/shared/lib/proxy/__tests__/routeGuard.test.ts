@@ -117,6 +117,22 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
+  it('does not redirect the public /casts route without token', () => {
+    const req = createRequest('/casts', false);
+    const res = handleRouteProtection(req, 'store');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
+  it('does not redirect the public /casts/:id route without token', () => {
+    const req = createRequest('/casts/abc', false);
+    const res = handleRouteProtection(req, 'store');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
   it('ignores other routes', () => {
     const req = createRequest('/public/page', false);
     const res = handleRouteProtection(req, 'store'); // Role doesn't strictly matter for non-protected routes in current implementation
