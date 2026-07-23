@@ -1,0 +1,106 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0300-003-shift-request-schema
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_shift_requests
+            remarks: 出勤希望（キャストが所属店舗へ提出する勤務希望）テーブル
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_shift_requests
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cast_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 提出者（対象店舗における本人の cast 行）
+              - column:
+                  name: work_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+                  remarks: 希望する勤務日
+              - column:
+                  name: start_time
+                  type: TIME
+                  constraints:
+                    nullable: false
+                  remarks: 希望する開始時刻
+              - column:
+                  name: end_time
+                  type: TIME
+                  constraints:
+                    nullable: false
+                  remarks: 希望する終了時刻（start_time 以下なら翌日にまたがる勤務）
+              - column:
+                  name: note
+                  type: VARCHAR(500)
+                  remarks: 備考（任意）
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  defaultValue: PENDING
+                  constraints:
+                    nullable: false
+                  remarks: ステータス（PENDING=受付済み/APPROVED=確定済み/DECLINED=却下）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_shift_requests_store
+            baseTableName: t_shift_requests
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_shift_requests_cast
+            baseTableName: t_shift_requests
+            baseColumnNames: cast_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - createIndex:
+            indexName: idx_t_shift_requests_store_status
+            tableName: t_shift_requests
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_t_shift_requests_cast
+            tableName: t_shift_requests
+            columns:
+              - column:
+                  name: cast_id

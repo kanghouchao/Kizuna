@@ -7,3 +7,6 @@ databaseChangeLog:
   - include:
       file: store/02-cast-platform-user-index.yaml
       relativeToChangelogFile: true
+  - include:
+      file: store/03-shift-request.yaml
+      relativeToChangelogFile: true
