@@ -40,6 +40,12 @@ class PlatformAuthIT {
   private static final String SPECIFIC_EMAIL = "manager@kizuna.test";
   private static final String SPECIFIC_PASSWORD = "pass";
 
+  private static final String DISABLED_EMAIL = "disabled@kizuna.test";
+  private static final String DISABLED_PASSWORD = "pass";
+
+  private static final String INVALID_CREDENTIALS_MESSAGE = "メールアドレスまたはパスワードが正しくありません";
+  private static final String DISABLED_ACCOUNT_MESSAGE = "アカウントが無効化されています";
+
   @Autowired private TestRestTemplate rest;
   @Autowired private CapabilityBundleRepository capabilityBundleRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -84,11 +90,46 @@ class PlatformAuthIT {
   }
 
   @Test
-  @DisplayName("誤パスワードは 401（403 でないこと = CSRF 免除の回帰ガード）")
+  @DisplayName("誤パスワードは 401（403 でないこと = CSRF 免除の回帰ガード）+ 標準スタックの資格情報文言を返す")
   void wrongPasswordReturns401NotForbidden() {
     ResponseEntity<JsonNode> res = platformLogin(SEED_EMAIL, "wrong-password");
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(res.getBody().path("error").asString()).isEqualTo(INVALID_CREDENTIALS_MESSAGE);
+  }
+
+  @Test
+  @DisplayName("不存在メールは誤パスワードと同一の 401 文言を返す（AuthenticationManager の列挙耐性が実 DB で担保される）")
+  void missingEmailReturnsSameMessageAsWrongPassword() {
+    ResponseEntity<JsonNode> res = platformLogin("missing@kizuna.test", "whatever-password");
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(res.getBody().path("error").asString()).isEqualTo(INVALID_CREDENTIALS_MESSAGE);
+  }
+
+  @Test
+  @DisplayName("無効化アカウントは正パスワードでも 401 + 無効化文言を返す（enabled 判定がパスワード照合に先行する）")
+  void disabledAccountWithCorrectPasswordReturns401DisabledMessage() {
+    platformUserRepository
+        .findByEmail(DISABLED_EMAIL)
+        .orElseGet(
+            () ->
+                platformUserRepository.save(
+                    PlatformUser.builder()
+                        .email(DISABLED_EMAIL)
+                        .password(passwordEncoder.encode(DISABLED_PASSWORD))
+                        .displayName("無効化済み")
+                        .enabled(false)
+                        .userType(UserType.STAFF)
+                        .bundleIds(managerBundleIds())
+                        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                        .storeIds(Set.of(1L))
+                        .build()));
+
+    ResponseEntity<JsonNode> res = platformLogin(DISABLED_EMAIL, DISABLED_PASSWORD);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(res.getBody().path("error").asString()).isEqualTo(DISABLED_ACCOUNT_MESSAGE);
   }
 
   @Test

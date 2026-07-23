@@ -3,6 +3,7 @@ package com.kizuna.auth.application;
 import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundleRepository;
@@ -18,67 +19,43 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 統一（プラットフォーム）ログイン。既存の platform/store 二軌のコードパスに触れないため AuthenticationManager を経由せず、findByEmail +
- * enabled 判定 + パスワード照合を自前で行う。判定順は DaoAuthenticationProvider に倣い enabled を先行させ、無効化ユーザーはパスワードの正誤に関わらず
- * {@link DisabledException} を投げる（無効化アカウントでのパスワード正誤オラクルを塞ぐ）。 メール不存在時は既知メール（誤パスワード）との応答時間差を無くすため、ダミーの
- * bcrypt 照合を 1 回行ってからパスワード不一致と同一メッセージの {@link BadCredentialsException} を投げる（列挙耐性: メッセージ均一 +
- * タイミング均一。 DaoAuthenticationProvider.mitigateAgainstTimingAttack と同趣旨）。いずれの例外も {@code
- * AuthenticationException} 系のため 401 で応答される。
+ * 統一（プラットフォーム）ログイン。認証判定は AuthenticationManager（DaoAuthenticationProvider + 自作
+ * UserDetailsService）に委譲する。メール不存在・パスワード不一致は BadCredentialsException、無効化アカウントはパスワードの正誤に関わらず
+ * DisabledException が投げられる（enabled 判定がパスワード照合に先行するため、無効化アカウントでのパスワード正誤オラクルを塞ぐ）。列挙耐性・タイミング均一化も
+ * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
  * <p>authorities の発行（#382 / #398）: STAFF は保持束の能力並集を {@code PERM_} 形式で発行し、CAST / MEMBER は本人種別標識
  * {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話失効なし — #325 既定）。
  */
 @Service
+@RequiredArgsConstructor
 public class PlatformAuthService {
-
-  private static final String INVALID_CREDENTIALS_MESSAGE = "メールアドレスまたはパスワードが正しくありません";
 
   private final PlatformUserRepository userRepository;
   private final CapabilityBundleRepository capabilityBundleRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtUtil jwtUtil;
   private final AuthSessionService authSessionService;
-
-  /** メール不存在時のタイミング均一化に用いるダミー bcrypt ハッシュ（秘密値ではない固定文字列を構築時に符号化）。 */
-  private final String userNotFoundEncodedPassword;
-
-  public PlatformAuthService(
-      PlatformUserRepository userRepository,
-      CapabilityBundleRepository capabilityBundleRepository,
-      PasswordEncoder passwordEncoder,
-      JwtUtil jwtUtil,
-      AuthSessionService authSessionService) {
-    this.userRepository = userRepository;
-    this.capabilityBundleRepository = capabilityBundleRepository;
-    this.passwordEncoder = passwordEncoder;
-    this.jwtUtil = jwtUtil;
-    this.authSessionService = authSessionService;
-    this.userNotFoundEncodedPassword = passwordEncoder.encode("userNotFoundPassword");
-  }
+  private final AuthenticationManager authenticationManager;
 
   @Transactional(readOnly = true)
   public Token login(String email, String password) {
     // 平台側 email は小文字で保存されるため（保存済みシードは全て小文字）、照合前に正規化する。
     String normalizedEmail = email.toLowerCase(Locale.ROOT);
-    PlatformUser user = userRepository.findByEmail(normalizedEmail).orElse(null);
-    if (user == null) {
-      // メール不存在でも既知メール（誤パスワード）と同等の時間を要するようダミー照合を実行する。
-      passwordEncoder.matches(password, userNotFoundEncodedPassword);
-      throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
-    }
-    if (!user.getEnabled()) {
-      throw new DisabledException("アカウントが無効化されています");
-    }
-    if (!passwordEncoder.matches(password, user.getPassword())) {
-      throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
-    }
+    Authentication authentication =
+        authenticationManager.authenticate(
+            UsernamePasswordAuthenticationToken.unauthenticated(normalizedEmail, password));
+    // principal は認証成功時に自作 UserDetails が保持する PlatformUser（二次クエリを避ける）。
+    PlatformUser user = ((PlatformUserDetails) authentication.getPrincipal()).getPlatformUser();
 
     Set<Capability> capabilities = capabilitiesOf(user);
     Map<String, Object> claims = new HashMap<>();
