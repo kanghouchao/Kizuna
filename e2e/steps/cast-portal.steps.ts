@@ -19,8 +19,8 @@ const todayInTokyo = () =>
 
 const CAST_PASSWORD = 'pass12345';
 
-// 播種した実体の id / 認証情報。CAST PlatformUser には削除 API が無いためタイムスタンプ邮箱で
-// 隔離し残留を許容する（cast_id/shift_id/shift_request_id は明示削除 + FK CASCADE で片付ける）。
+// 播種した実体の id / 認証情報。CAST PlatformUser には削除 API が無いためタイムスタンプ付き
+// メールアドレスで隔離し残留を許容する（cast_id/shift_id/shift_request_id は明示削除 + FK CASCADE で片付ける）。
 let createdCastId = '';
 let createdCastEmail = '';
 let createdShiftId = '';
@@ -95,6 +95,9 @@ When(
   '店舗 {string}・開始 {string}・終了 {string}・備考 {string} で出勤希望を提出する',
   async ({ page }, storeName: string, startTime: string, endTime: string, note: string) => {
     await page.getByLabel('店舗').selectOption({ label: storeName });
+    // 勤務日は本日を明示指定する。フォーム既定の明日だと週末実行時に翌週へ落ち、
+    // 承認後のスケジュール断言（当週ビュー）が曜日依存で失敗するため。
+    await page.getByLabel('日付').fill(todayInTokyo());
     await page.getByLabel('開始').fill(startTime);
     await page.getByLabel('終了').fill(endTime);
     await page.getByLabel('備考').fill(note);
@@ -126,7 +129,7 @@ When('店舗管理者が API で出勤希望を承認する', async ({ request }
 });
 
 // 播種した実体を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。CAST PlatformUser には
-// 削除 API が無いため残留を許容する（タイムスタンプ邮箱で以後の run と隔離済み）。
+// 削除 API が無いため残留を許容する（タイムスタンプ付きメールアドレスで以後の run と隔離済み）。
 // t_shift_requests は cast_id の FK CASCADE により cast 削除で自動的に片付く。
 After(async ({ request }) => {
   const adminToken = await loginAsStoreAdmin(request);
