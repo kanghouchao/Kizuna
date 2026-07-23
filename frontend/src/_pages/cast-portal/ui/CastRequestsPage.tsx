@@ -34,7 +34,12 @@ const STATUS_PILL_CLASS: Record<CastShiftRequestItem['status'], string> = {
 const inputClass =
   'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
-/** 明日の 'yyyy-MM-dd' を返す（提出フォームの初期日付・過去日拒否の下限に使う）。 */
+/** 本日の 'yyyy-MM-dd' を返す（過去日拒否の下限。当日の出勤希望は許容する）。 */
+function todayStr(): string {
+  return toDateStr(new Date());
+}
+
+/** 明日の 'yyyy-MM-dd' を返す（提出フォームの初期日付に使う）。 */
 function tomorrowStr(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -141,7 +146,7 @@ export function CastRequestsPage() {
             type="date"
             {...register('work_date', {
               required: true,
-              validate: v => v >= tomorrowStr() || '本日以降の日付を指定してください',
+              validate: v => v >= todayStr() || '本日以降の日付を指定してください',
             })}
             className={inputClass}
           />

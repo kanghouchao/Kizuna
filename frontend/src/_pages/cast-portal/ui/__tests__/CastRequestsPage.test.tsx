@@ -47,6 +47,22 @@ describe('CastRequestsPage', () => {
     expect(mockedSubmit).not.toHaveBeenCalled();
   });
 
+  it('本日の日付は許容され提出されること', async () => {
+    mockedSubmit.mockResolvedValue({ id: 'sr1', status: 'PENDING' });
+    render(<CastRequestsPage />);
+    await screen.findByRole('option', { name: '店舗A' });
+
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+    fireEvent.change(screen.getByLabelText('日付'), { target: { value: today } });
+    fireEvent.click(screen.getByRole('button', { name: '提出する' }));
+
+    await waitFor(() => expect(mockedSubmit).toHaveBeenCalledTimes(1));
+    expect(mockedSubmit.mock.calls[0][0]).toMatchObject({ work_date: today });
+  });
+
   it('備考が501文字だと検証エラーを表示し、提出しないこと', async () => {
     render(<CastRequestsPage />);
     await screen.findByRole('option', { name: '店舗A' });
