@@ -15,15 +15,12 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 /**
- * 地基テスト（本票の前提条件）。
- *
- * <p>発行側 {@link JwtUtil} は jjwt の {@code signWith(key)} 単参呼び出しで、鍵長から HS256/384/512 を自動選択する（256bit
+ * 発行側 {@link JwtUtil} は jjwt の {@code signWith(key)} 単参呼び出しで、鍵長から HS256/384/512 を自動選択する（256bit
  * 未満は不可、256〜383bit=HS256、384〜511bit=HS384、512bit 以上=HS512）。decoder を単一アルゴリズムへ固定すると、運用中の {@code
- * APP_JWT_SECRET} の長さ次第で現網発行済みトークンが全滅しうる。
+ * APP_JWT_SECRET} の長さ次第で現網発行済みトークンが全滅しうるため、decoder は HS 系列を横断受理する必要がある。
  *
- * <p>{@link MultiHmacJwtDecoderFactory} が構築する decoder は HS256/384/512 のいずれで署名された トークンも同一 HMAC
- * 鍵で受理できることを、secret 長 32/40/48/64byte のマトリクス（HS256 境界・HS384 ちょうど・HS512
- * のすべてを踏む）で固定する。ここが割れる場合、実装を先へ進めてはならない。
+ * <p>{@link MultiHmacJwtDecoderFactory} が構築する decoder が HS256/384/512 のいずれで署名された トークンも同一 HMAC
+ * 鍵で受理できるという相互運用性を、secret 長 32/40/48/64byte のマトリクス（HS256 境界・HS384 ちょうど・HS512 のすべてを踏む）で固定する。
  */
 class MultiHmacJwtDecoderInteropTest {
 
