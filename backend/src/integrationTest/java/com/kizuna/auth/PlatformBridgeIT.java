@@ -2,6 +2,7 @@ package com.kizuna.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.auth.infrastructure.JwtUtil;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
@@ -12,10 +13,16 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +48,9 @@ import tools.jackson.databind.ObjectMapper;
 class PlatformBridgeIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
+
+  /** {@link com.kizuna.shared.exception.CommonExceptionHandler} の汎用 401 文言と一致する固定値。 */
+  private static final String UNAUTHENTICATED_MESSAGE = "認証に失敗しました";
 
   /** v0.4.0 シードの HQ 管理者（ALL_STORES）。 */
   private static final String HQ_EMAIL = "admin@kizuna.test";
@@ -455,5 +465,43 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
         rest.exchange(
             "/platform/me", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
     assertThat(me.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(errorMessageOf(me.getBody()))
+        .as("PlatformAuthenticationEntryPoint の固定文言が CommonExceptionHandler の汎用文言と一致すること")
+        .isEqualTo(UNAUTHENTICATED_MESSAGE);
+  }
+
+  @Test
+  @DisplayName("誤った鍵で署名された Bearer token は 401 + 認証エントリポイントの固定文言を返すこと（decoder 検証失敗の実データ固定）")
+  void invalidSignatureBearerTokenReturns401WithEntryPointMessage() {
+    String forgedToken = issueTokenWithWrongSignature();
+
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/platform/me", HttpMethod.GET, new HttpEntity<>(bearer(forgedToken)), String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(errorMessageOf(res.getBody())).isEqualTo(UNAUTHENTICATED_MESSAGE);
+  }
+
+  /** decoder の署名検証で拒否させるため、実サーバーの JWT secret とは異なる鍵で署名する。 */
+  private String issueTokenWithWrongSignature() {
+    SecretKey wrongKey =
+        Keys.hmacShaKeyFor(
+            "wrong-signature-secret-wrong-signature-secret!!".getBytes(StandardCharsets.UTF_8));
+    Date now = new Date();
+    return Jwts.builder()
+        .claims()
+        .issuer(JwtUtil.ISSUER_PLATFORM)
+        .subject(MANAGER_EMAIL)
+        .issuedAt(now)
+        .expiration(new Date(now.getTime() + 3_600_000L))
+        .add(Map.of("authorities", List.of("PERM_TEST")))
+        .and()
+        .signWith(wrongKey)
+        .compact();
+  }
+
+  private static String errorMessageOf(String body) {
+    return new ObjectMapper().readTree(body).path("error").asString();
   }
 }

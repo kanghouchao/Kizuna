@@ -27,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 停止済みスタッフの既発行 JWT を Redis ユーザー単位ブラックリストで即時失効させることを本物の PostgreSQL + Redis で固定する統合テスト。
@@ -55,6 +56,9 @@ class PlatformStaffRevocationIT {
   private static final String NOOP_EMAIL = "revocation-noop@kizuna.test";
 
   private static final String USER_BLACKLIST_KEY_PREFIX = "blacklist:users:";
+
+  /** {@link com.kizuna.shared.exception.CommonExceptionHandler} の汎用 401 文言と一致する固定値。 */
+  private static final String UNAUTHENTICATED_MESSAGE = "認証に失敗しました";
 
   @Autowired private TestRestTemplate rest;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -159,6 +163,10 @@ class PlatformStaffRevocationIT {
         "/platform/me", HttpMethod.GET, new HttpEntity<>(bearer(token)), String.class);
   }
 
+  private static String errorMessageOf(String body) {
+    return new ObjectMapper().readTree(body).path("error").asString();
+  }
+
   private ResponseEntity<JsonNode> putEnabled(
       String actorToken, long targetId, boolean enabled, long version) {
     return rest.exchange(
@@ -184,9 +192,11 @@ class PlatformStaffRevocationIT {
 
     // ブラックリスト済みトークンは decoder の TokenBlacklistValidator が拒否し、resource-server の
     // AuthenticationEntryPoint が 401 で応答する(PlatformBridgeIT のログアウト検証と同じ規約)。
-    assertThat(meWith(targetToken).getStatusCode())
+    ResponseEntity<String> stopped = meWith(targetToken);
+    assertThat(stopped.getStatusCode())
         .as("停止前に発行された JWT はユーザー単位ブラックリストで即時に拒否されること")
         .isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(errorMessageOf(stopped.getBody())).isEqualTo(UNAUTHENTICATED_MESSAGE);
   }
 
   @Test
