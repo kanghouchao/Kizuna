@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0300-001-shift-cast-schedule-index
+      author: kanghouchao
+      # 本人ポータルの週間スケジュール読み（findConfirmedSchedule）は cast_id 集合＋work_date 範囲で
+      # 絞り込み store_id を条件に含めないため、既存の idx_t_shifts_store_work_date（store_id, work_date）
+      # では絞り込みに使えずフルスキャンになる。専用の複合索引を追加する。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createIndex:
+            indexName: idx_t_shifts_cast_work_date
+            tableName: t_shifts
+            columns:
+              - column:
+                  name: cast_id
+              - column:
+                  name: work_date
+      rollback:
+        - dropIndex:
+            indexName: idx_t_shifts_cast_work_date
+            tableName: t_shifts

@@ -1,0 +1,6 @@
+# v0.3.0 = キャストポータル（本人向けスケジュール閲覧）向けの索引補完。
+# 構成は v0.1.0 / v0.2.0 と同じ platform / store / seed の 3 層のうち store のみ。
+databaseChangeLog:
+  - include:
+      file: store/01-shift-cast-schedule-index.yaml
+      relativeToChangelogFile: true
