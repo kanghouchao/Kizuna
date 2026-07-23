@@ -50,8 +50,7 @@ public class FileUploadController {
    * 保存先プレフィクスを決める。店舗文脈があればその店舗配下、無ければプラットフォーム共有領域（platform）へ保存する。
    *
    * <p>プラットフォーム共有領域への保存はプラットフォーム資産管理能力（{@code PERM_PLATFORM_ASSET_MANAGE}）の保持者のみ許可する。店舗文脈を解決できない
-   * 店舗系・キャスト等は {@code @StoreOptional} の許可経路に乗るため、資産をプラットフォーム共有領域へ誤って保存しないよう fail-closed で 403
-   * 拒否する（#287 / #322 / #326 / #398）。
+   * 店舗系・キャスト等は {@code @StoreOptional} の許可経路に乗るため、資産をプラットフォーム共有領域へ誤って保存しないよう fail-closed で 403 拒否する。
    */
   private String resolveStoragePrefix() {
     if (storeContext.hasStoreId()) {

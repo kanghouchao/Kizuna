@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 平台 principal（授権店舗集合）の店舗一覧ユースケース（#324 統一ログイン）。 StoreScope を解決できない場合は fail-closed に {@link
+ * 平台 principal（授権店舗集合）の店舗一覧ユースケース（統一ログイン）。 StoreScope を解決できない場合は fail-closed に {@link
  * AccessDeniedException} を投げる。
  */
 @Service

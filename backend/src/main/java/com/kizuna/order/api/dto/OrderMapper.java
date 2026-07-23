@@ -17,7 +17,7 @@ public interface OrderMapper {
   /** 読み側 projection をレスポンスDTOに変換します。 */
   OrderResponse toResponse(OrderView view);
 
-  /** 平台横断一覧の projection をレスポンスDTOに変換します（#323 集合作用域）。 */
+  /** 平台横断一覧の projection をレスポンスDTOに変換します（集合作用域）。 */
   PlatformOrderResponse toPlatformResponse(PlatformOrderView view);
 
   // ==================== CreateRequest -> Entity ====================

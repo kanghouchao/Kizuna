@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 平台（統一）受注 API。授権店舗集合での横断一覧を提供する（#323 集合作用域）。 */
+/** 平台（統一）受注 API。授権店舗集合での横断一覧を提供する（集合作用域）。 */
 @RestController
 @RequestMapping("/platform/orders")
 @RequiredArgsConstructor

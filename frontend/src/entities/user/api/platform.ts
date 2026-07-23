@@ -14,7 +14,7 @@ export const platformAuthApi = {
     options?: { skipAuthRedirect?: boolean }
   ): Promise<LoginResponse> => {
     // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
-    // skipAuthRedirect でグローバルな 401 ハンドリング（token 除去/リダイレクト）から除外する（#327 codex指摘）
+    // skipAuthRedirect でグローバルな 401 ハンドリング（token 除去/リダイレクト）から除外する
     const response = await apiClient.post('/platform/login', credentials, {
       skipAuthRedirect: options?.skipAuthRedirect,
     } as any);

@@ -33,7 +33,7 @@ public class PlatformStaffUpdateRequest {
   /** 停止・再開。null は現状維持。false=停止（行は残り、過去の実行主体記録を保持）、true=再開。 */
   private Boolean enabled;
 
-  /** 楽観ロック用バージョン（応答の version をそのまま往復する。不一致は 409 — #400）。 */
+  /** 楽観ロック用バージョン（応答の version をそのまま往復する。不一致は 409）。 */
   @NotNull(message = "version is required")
   private Long version;
 }

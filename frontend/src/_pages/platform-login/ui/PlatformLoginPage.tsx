@@ -5,7 +5,7 @@ import { AuthLayout } from '@/shared/ui';
  * 統一ログインページ（サーバーコンポーネント）
  *
  * HQ 管理者・店長・スタッフを問わず単一の入口として機能し、ログイン成功後は
- * ロールに応じて自動的に適切なコンソールへ遷移する（#324）。
+ * ロールに応じて自動的に適切なコンソールへ遷移する。
  */
 export default function PlatformLoginPage() {
   return (

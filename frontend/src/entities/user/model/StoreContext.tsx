@@ -13,9 +13,9 @@ import { platformAuthApi } from '../api/platform';
 import { PlatformStore } from './types';
 
 /**
- * 店舗コンテキスト（現在店舗・授権店舗・切替・ログイン後着地の授権店舗解決）を一手に担う deep module（#428）。
+ * 店舗コンテキスト（現在店舗・授権店舗・切替・ログイン後着地の授権店舗解決）を一手に担う deep module。
  * 両コンソール layout に1つだけ搭載し、Header / StoreSelectPage が共有状態を消費する。
- * me()+stores() は provider で1回のみ呼ばれる（消費者ごとの重複取得を無くす — #413 の分散を収編）。
+ * me()+stores() は provider で1回のみ呼ばれる（消費者ごとの重複取得を無くす）。
  */
 interface StoreContextValue {
   /** null = 読み込み中、[] = 到達資格のある店舗なし、非空 = 授権店舗一覧。 */
@@ -46,7 +46,7 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
   const [stores, setStores] = useState<PlatformStore[] | null>(null);
   const [storeBridge, setStoreBridge] = useState<boolean | null>(null);
   // cookie 由来の「前回選択した店舗」ヒント。document 依存で SSR-unsafe なため mount 時のみ読む。
-  // store-scoped ページ外（platform 側）に居るときだけ表示に使う fallback 専用の役割（#413 Fix1）。
+  // store-scoped ページ外（platform 側）に居るときだけ表示に使う fallback 専用の役割。
   const [lastUsedStoreId, setLastUsedStoreId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -59,7 +59,6 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
     // まず me()（GET /platform/me・isAuthenticated() のみで守られ常に到達可能）で店舗コンソール資格を確認する。
     // store_bridge=false（SHARED/標識のみ/PLATFORM のみ）は stores() を呼ばず空一覧扱い。
     // store_bridge=true のみ stores()（緩和後の GET /platform/stores/me）で店名付き一覧を取得する。
-    // #413 の fallback 梯子（店舗 #id プレースホルダ・ALL_STORES 既知欠口）はバックエンド守衛緩和で不要になり撤去した。
     platformAuthApi.me().then(
       async me => {
         setStoreBridge(me.store_bridge);
@@ -84,7 +83,7 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
     // mount 時に一度だけ解決する純データ取得。
   }, []);
 
-  // 表示する店舗は pathname 由来の storeId を最優先し、無ければ cookie ヒントに fallback する（#413 Fix1）。
+  // 表示する店舗は pathname 由来の storeId を最優先し、無ければ cookie ヒントに fallback する。
   // usePathname() は hydration-safe なため毎レンダー再計算でき、店舗切替後の pathname 変化にラベルが追随する。
   const pathStoreId = getStoreIdFromPath(pathname);
   const currentStoreId = pathStoreId ?? lastUsedStoreId;
@@ -92,10 +91,10 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
   const switchStore = (id: number) => {
     // no-op 判定は pathStoreId（URL が実際にその店舗 id を持つ場合）のみで行う。
     // currentStoreId（cookie fallback 込み）で比較すると、/platform 側で前回選択 cookie と
-    // 同じ店舗をクリックした単一店舗ユーザーが遷移できなくなる（#413 Fix5-1）。
+    // 同じ店舗をクリックした単一店舗ユーザーが遷移できなくなる。
     if (String(id) !== pathStoreId) {
       setPlatformStore(id);
-      // console 由来の reload をやめ、現在地に storeId を差し替えて遷移する（#413）。
+      // 現在地に storeId を差し替えて遷移する（フルリロードはしない）。
       // store-scoped ページ外に居れば /store/{id}/dashboard へ。
       router.push(replaceStoreIdInPath(pathname, id));
     }

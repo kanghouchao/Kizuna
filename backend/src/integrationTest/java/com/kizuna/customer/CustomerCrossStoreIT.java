@@ -14,10 +14,10 @@ import tools.jackson.databind.JsonNode;
 /**
  * Customer のクロス店舗分離を本物の PostgreSQL で検証する統合テスト。
  *
- * <p>commit 5b39c06（storeFilter の applyToLoadByKey=true 補完）の回帰テスト。 store A が作成した Customer を store B
- * が GET /store/customers/{id}（findById 経由） で読めないことを固定する。PR-B の手動 curl 検証の自動化（issue #225）。
+ * <p>store A が作成した Customer を store B が GET /store/customers/{id}（findById 経由） で読めないことを固定する
+ * （applyToLoadByKey=true 回帰）。
  *
- * <p>認証・店舗ヘッダ組立は {@link CrossStoreTestSupport} に共通化（issue #226 で 3 クラス目の重複を抽出）。
+ * <p>認証・店舗ヘッダ組立は {@link CrossStoreTestSupport} に共通化する。
  */
 class CustomerCrossStoreIT extends CrossStoreTestSupport {
 
@@ -64,7 +64,7 @@ class CustomerCrossStoreIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     // 越権はインターセプタが JWT と X-Store-ID の不一致を拒否 → 403。
-    // 重要なのは 200 でデータが漏れないこと（5b39c06 修正前は 200 で漏洩していた）
+    // 重要なのは 200 でデータが漏れないこと
     assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 }

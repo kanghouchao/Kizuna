@@ -9,7 +9,7 @@ interface StoreSetPickerProps {
   onChange: (next: { storeScopeType: PlatformStoreScopeType; storeIds: number[] }) => void;
 }
 
-/** 「全店舗」ラジオ+個別店舗チェックボックスの2択で店舗集合を編集する共通部品（#325）。 */
+/** 「全店舗」ラジオ+個別店舗チェックボックスの2択で店舗集合を編集する共通部品。 */
 export function StoreSetPicker({ storeScopeType, storeIds, onChange }: StoreSetPickerProps) {
   const { items: stores, isLoading } = useManagedList<PlatformStore>(
     () => platformAuthApi.stores(),

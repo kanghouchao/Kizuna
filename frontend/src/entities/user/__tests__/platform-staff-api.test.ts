@@ -35,7 +35,7 @@ describe('platformStaffApi', () => {
       version: 7,
     });
     expect(res).toEqual({ ok: true, url: '/platform/staff/1' });
-    // 楽観ロックの往復契約: 更新ボディに version が含まれること（#400）
+    // 楽観ロックの往復契約: 更新ボディに version が含まれること
     expect(apiClient.put).toHaveBeenCalledWith(
       '/platform/staff/1',
       expect.objectContaining({ version: 7 })

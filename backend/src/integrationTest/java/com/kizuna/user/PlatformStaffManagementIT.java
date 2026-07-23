@@ -25,7 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * スタッフ・権限管理（#325 / #398 能力束モデル）の HTTP 境界統合テスト。STAFF_MANAGE
+ * スタッフ・権限管理（能力束モデル）の HTTP 境界統合テスト。STAFF_MANAGE
  * 能力限定の授権書き込み（付与・変更・停止・履歴）と、付与した店舗集合が本人の次回ログインのデータ範囲に反映されること、 授権外店舗の実データが応答生ボディに一切現れないこと（強断言）を本物の
  * PostgreSQL で固定する。ヘルパは {@link com.kizuna.order.PlatformOrderScopeIT} の {@code
  * ensurePlatformUser}/{@code platformToken} 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT}
@@ -398,7 +398,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("停止(enabled=false)後はログイン不可だが一覧に残り、付与履歴に実行主体つきで STOP が記録されること(#382 停止後の記録保全)")
+  @DisplayName("停止(enabled=false)後はログイン不可だが一覧に残り、付与履歴に実行主体つきで STOP が記録されること(停止後の記録保全)")
   void stoppedStaffCannotLoginButRecordsRemain() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stopped@kizuna.test";
@@ -462,7 +462,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("精算範囲(SPECIFIC)つきで付与でき、回読と付与履歴快照に精算次元が現れること(#382 要件5=次元の表現)")
+  @DisplayName("精算範囲(SPECIFIC)つきで付与でき、回読と付与履歴快照に精算次元が現れること(次元の表現)")
   void settlementScopeDimensionIsExpressible() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-settlement@kizuna.test";
@@ -528,7 +528,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("同一 version の二連 PUT は 2 発目が 409 になり、授権・enabled が巻き戻らず付与履歴も増えないこと(#400 AC1)")
+  @DisplayName("同一 version の二連 PUT は 2 発目が 409 になり、授権・enabled が巻き戻らず付与履歴も増えないこと(AC1)")
   void staleUpdateWithSameVersionIsRejectedWithoutRollback() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stale@kizuna.test";
@@ -593,7 +593,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("陳腐 version による停止解除は 409 で拒否され、停止済みアカウントが静黙復活しないこと(#400 AC2)")
+  @DisplayName("陳腐 version による停止解除は 409 で拒否され、停止済みアカウントが静黙復活しないこと(AC2)")
   void staleResumeIsRejectedAndUserStaysStopped() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stale-resume@kizuna.test";

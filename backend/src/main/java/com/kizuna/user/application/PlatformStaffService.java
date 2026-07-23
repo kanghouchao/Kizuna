@@ -40,10 +40,9 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * スタッフ（能力束×店舗集合×精算範囲）管理ユースケース。対象は本人種別 STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う人員のため 一覧にも作成にも混ぜない（#325
- * / #398）。
+ * スタッフ（能力束×店舗集合×精算範囲）管理ユースケース。対象は本人種別 STAFF のみで、CAST/MEMBER は専用フローが扱う人員のため 一覧にも作成にも混ぜない。
  *
- * <p>付与・変更・停止・再開は追記専用の付与履歴（{@link GrantHistory}）へ実行主体つきで記録する（#382 — 停止後の実行主体記録の保持）。
+ * <p>付与・変更・停止・再開は追記専用の付与履歴（{@link GrantHistory}）へ実行主体つきで記録する（停止後も実行主体の記録を保持する）。
  */
 @Service
 @RequiredArgsConstructor
@@ -137,7 +136,7 @@ public class PlatformStaffService {
         .map(
             user -> {
               // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
-              // ため、応答で往復させた version を明示比対して 409 で拒否する（#400）。
+              // ため、応答で往復させた version を明示比対して 409 で拒否する。
               if (!user.getVersion().equals(req.getVersion())) {
                 throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
               }
@@ -163,7 +162,7 @@ public class PlatformStaffService {
               // 失効の即時反映は「本リクエストが停止/再開を明示的に要求したか」で判定する（現在状態との差分ではない）。
               // AFTER_COMMIT の Redis 書き込みが失敗して 500 になっても、最新 version を取り直して同じ停止要求を
               // 再送すれば失効が書き直されるようにするための冪等化（差分語義だと再送時には既に enabled=false の
-              // ためイベントが発行されず、resume→stop 以外に復旧手段が無くなる）。version は #400 の楽観ロックで
+              // ためイベントが発行されず、resume→stop 以外に復旧手段が無くなる）。version は楽観ロックで
               // commit 済みの更新ぶん進んでいるため、再送には GET の取り直しが要る点に注意。
               if (Boolean.FALSE.equals(req.getEnabled())) {
                 eventPublisher.publishEvent(new PlatformUserStopped(user.getEmail()));

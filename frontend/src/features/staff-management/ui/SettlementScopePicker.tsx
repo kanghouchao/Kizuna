@@ -10,7 +10,7 @@ interface SettlementScopePickerProps {
 }
 
 /**
- * 精算範囲の編集（なし / 全店舗 / 指定店舗の 3 択 — #382 要件 5「次元が表現できること」）。
+ * 精算範囲の編集（なし / 全店舗 / 指定店舗の 3 択 — 次元が表現できること）。
  * 経理系能力を持たない通常スタッフは「なし」のままでよい。
  */
 export function SettlementScopePicker({

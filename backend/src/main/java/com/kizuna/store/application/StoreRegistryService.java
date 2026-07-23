@@ -61,7 +61,7 @@ public class StoreRegistryService {
 
   @Transactional(readOnly = true)
   // Optional は unwrap されるため未登録ドメインは null。cache-null-values=false の Redis に
-  // null を書くと IllegalArgumentException → 500 になるのでキャッシュ対象外にする（#207）
+  // null を書くと IllegalArgumentException → 500 になるのでキャッシュ対象外にする
   @Cacheable(value = "storeByDomain", key = "#domain", unless = "#result == null")
   public Optional<StoreVO> getByDomain(String domain) {
     log.debug("店舗をデータベースから検索 domain: {}", domain);

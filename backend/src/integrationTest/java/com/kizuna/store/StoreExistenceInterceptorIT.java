@@ -26,7 +26,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 店舗存在性検証（{@link com.kizuna.store.infrastructure.StoreExistenceInterceptor}）の受け入れ IT（#429 / #398）。
+ * 店舗存在性検証（{@link com.kizuna.store.infrastructure.StoreExistenceInterceptor}）の受け入れ IT。
  *
  * <p>陳旧化した JWT 授権集合や公開サイトの不正ヘッダで実在しない storeId が文脈に載った場合、500 や空 200 でなく 400 を返すことを固定する。 授権側は種子 HQ
  * admin に storeBridge が無いため、ALL_STORES + STORE コンソール能力（CAST_MANAGE）を持つ束を現場作成して用いる（{@link

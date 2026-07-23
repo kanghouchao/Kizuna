@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 能力束一覧 API（スタッフ授与 UI の選択肢データ源 — #398）。STAFF_MANAGE 能力限定。 */
+/** 能力束一覧 API（スタッフ授与 UI の選択肢データ源）。STAFF_MANAGE 能力限定。 */
 @RestController
 @RequestMapping("/platform/capability-bundles")
 @RequiredArgsConstructor

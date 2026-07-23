@@ -10,7 +10,7 @@ export interface LoginResponse {
   expires_at: number;
 }
 
-// 本人種別（バックエンド user/domain/UserType.java と対応。#398 で固定ロールは廃止）
+// 本人種別（バックエンド user/domain/UserType.java と対応）
 export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
 
 // 能力（バックエンド user/domain/Capability.java と対応）
@@ -92,7 +92,7 @@ export interface PlatformStaffResponse {
   store_ids: number[];
   settlement_scope_type: PlatformStoreScopeType | null;
   settlement_store_ids: number[];
-  // 楽観ロック用バージョン（更新リクエストへそのまま往復する — #400）
+  // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
 }
 
@@ -116,7 +116,7 @@ export interface PlatformStaffUpdateRequest {
   settlement_scope_type?: PlatformStoreScopeType | null;
   settlement_store_ids?: number[];
   enabled?: boolean;
-  // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409 — #400）
+  // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;
 }
 

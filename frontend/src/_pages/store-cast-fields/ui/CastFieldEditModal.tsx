@@ -29,7 +29,7 @@ interface CastFieldEditFormValues {
 const inputClass =
   'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
-/** カスタムフィールド定義の編集モーダル(label・表示順・公開設定のみ、key は不変のため編集不可、#277)。 */
+/** カスタムフィールド定義の編集モーダル(label・表示順・公開設定のみ、key は不変のため編集不可)。 */
 export function CastFieldEditModal({
   open,
   onClose,

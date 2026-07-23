@@ -5,7 +5,7 @@ import com.kizuna.store.domain.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** {@link StoreExistenceCheck} の store モジュール実装。StoreRepository の存在確認へ委譲する（#429）。 */
+/** {@link StoreExistenceCheck} の store モジュール実装。StoreRepository の存在確認へ委譲する。 */
 @Component
 @RequiredArgsConstructor
 class StoreRepositoryExistenceCheck implements StoreExistenceCheck {

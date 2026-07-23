@@ -16,7 +16,7 @@ import {
 } from '@/features/staff-management';
 import { useManagedList } from '@/shared/lib';
 
-/** スタッフ一覧ページ。一覧内モーダル=新規作成、ドロワー=編集（#325 D6）。 */
+/** スタッフ一覧ページ。一覧内モーダル=新規作成、ドロワー=編集。 */
 export default function StaffPage() {
   const {
     items: staff,
@@ -32,7 +32,7 @@ export default function StaffPage() {
   );
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は id で保持し、staff オブジェクトは現在の一覧から導出する。
-  // これにより refetch がそのままドロワー内容の最新化になる（409 リフレッシュ — #400）。
+  // これにより refetch がそのままドロワー内容の最新化になる（409 リフレッシュ）。
   const [editingId, setEditingId] = useState<number | null>(null);
   const editingStaff = staff.find(member => member.id === editingId) ?? null;
 

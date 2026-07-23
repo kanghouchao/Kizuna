@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 平台スタッフ（能力束×店舗集合×精算範囲）管理 API。全操作 STAFF_MANAGE 能力限定（#325 / #398）。 */
+/** 平台スタッフ（能力束×店舗集合×精算範囲）管理 API。全操作 STAFF_MANAGE 能力限定。 */
 @RestController
 @RequestMapping("/platform/staff")
 @RequiredArgsConstructor

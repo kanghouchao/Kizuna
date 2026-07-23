@@ -32,7 +32,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 集合作用域（#323）の実データ非漏洩を本物の PostgreSQL で強断言する統合テスト。
+ * 集合作用域の実データ非漏洩を本物の PostgreSQL で強断言する統合テスト。
  *
  * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外店舗の実データ（店舗名・カナリア文字列）が 一切現れないこと（AC2）で行う。読みは storeSetFilter が
  * session 層で機構的に濾過し、書きは明示的単店 storeId の 授権検証（{@code PlatformOrderService.create}）が担う。先例は {@link
@@ -300,7 +300,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("ALL_STORES でも実在しない store_id の書きは 400(500 でない — #398 裁定/StoreScopeExecutor の存在性保証)")
+  @DisplayName("ALL_STORES でも実在しない store_id の書きは 400(500 でない — StoreScopeExecutor の存在性保証)")
   void writeToNonexistentStoreIsRejectedWith400NotServerError() {
     long nonexistentStoreId = 999_999_999L;
     assertThat(storeRepository.existsById(nonexistentStoreId))

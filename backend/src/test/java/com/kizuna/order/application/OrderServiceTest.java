@@ -281,7 +281,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
-    // 停止(enabled=false)された STAFF は束・店舗授権を保持したままだが、受付担当者にはなれない（PR#399 codex 指摘）。
+    // 停止(enabled=false)された STAFF は束・店舗授権を保持したままだが、受付担当者にはなれない。
     PlatformUser stopped = authorizedReceptionist();
     stopped.stop();
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(stopped));

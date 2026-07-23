@@ -56,7 +56,7 @@ class S3FileStorageTest {
 
     String result = storageService.store("1", "public", multipartFile);
 
-    // 返り値（object key）は従来のローカル実装と同じ bucket/prefix/UUID.ext 形式を維持する
+    // 返り値（object key）は bucket/prefix/UUID.ext 形式になる
     assertThat(result).startsWith("public/1/");
     assertThat(result).endsWith(".jpg");
 

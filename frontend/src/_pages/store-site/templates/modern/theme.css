@@ -1,4 +1,4 @@
-/* modern 模版のテーマトークン（issue #223 Phase 3、藍黒×薔薇紅×Noto Sans JP）。
+/* modern 模版のテーマトークン（藍黒×薔薇紅×Noto Sans JP）。
    値は承認済みパレット A から外推。模版差はこのトークンと排布のみ（frontend/DESIGN.md）。
    注: --storefront-subtle は計画のパレット比較表に modern 値の記載が無かったため、
    default の bg→neutral 関係（極薄の近背景トーン）に合わせて外推した値。 */

@@ -14,13 +14,13 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 公開エンドポイントの店舗未解決時 fail-closed 化（#287）を本物の PostgreSQL/Redis で検証する統合テスト。
+ * 公開エンドポイントの店舗未解決時 fail-closed 化を本物の PostgreSQL/Redis で検証する統合テスト。
  *
  * <p>X-Store-ID ヘッダから店舗文脈を解決できないリクエストが、{@code @StoreOptional} の無いエンドポイント（casts/public）では 403
  * で拒否されることを固定する。
  *
  * <p><b>漏洩検証データに関する注記</b>: {@code t_casts.store_id} は {@code t_stores(id)} への外部キーを持ち、シードには store 1
- * しか存在しない（store 2 のデータは #285 の interceptor がクロス店舗ヘッダを拒否するため API 経由でも作れない）。 よって漏洩の的には store A
+ * しか存在しない（store 2 のデータは interceptor がクロス店舗ヘッダを拒否するため API 経由でも作れない）。 よって漏洩の的には store A
  * のアクティブなキャストを用いる。文脈を持たない匿名リクエストに対してそのデータが返らないことが、 fail-open（文脈未設定で全店舗行が返る）を閉じたことの実証になる。
  */
 class StoreContextFailClosedIT extends CrossStoreTestSupport {
@@ -72,7 +72,7 @@ class StoreContextFailClosedIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("匿名 + X-Store-ID が long 桁あふれの GET /store/casts/public は 500 でなく 400 になること（#288）")
+  @DisplayName("匿名 + X-Store-ID が long 桁あふれの GET /store/casts/public は 500 でなく 400 になること")
   void anonymousOverflowingStoreIdHeaderReturns400() {
     HttpHeaders headers = anonymous();
     headers.set("X-Role", "store");

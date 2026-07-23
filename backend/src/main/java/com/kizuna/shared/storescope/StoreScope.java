@@ -7,8 +7,8 @@ import java.util.stream.Collectors;
 import org.springframework.security.core.Authentication;
 
 /**
- * 認証済み平台トークンの授権店舗集合（#323 集合作用域）。JWT の storeScopeType / storeIds claim から解決する。 解決できない場合は null
- * を返し、呼び出し側が fail-closed に拒否する。
+ * 認証済み平台トークンの授権店舗集合（集合作用域）。JWT の storeScopeType / storeIds claim から解決する。 解決できない場合は null を返し、呼び出し側が
+ * fail-closed に拒否する。
  */
 public record StoreScope(boolean allStores, Set<Long> storeIds) {
 

@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** 平台横断受注一覧のレスポンスDTO（#323）。JSON キーはグローバルの snake_case 設定に従う。 */
+/** 平台横断受注一覧のレスポンスDTO。JSON キーはグローバルの snake_case 設定に従う。 */
 @Data
 @Builder
 @NoArgsConstructor

@@ -1,4 +1,4 @@
-// バックエンド API の JSON キーに一致（Jackson グローバル SNAKE_CASE、#214）
+// バックエンド API の JSON キーに一致（Jackson グローバル SNAKE_CASE）
 export interface Order {
   id: string;
   store_name: string;

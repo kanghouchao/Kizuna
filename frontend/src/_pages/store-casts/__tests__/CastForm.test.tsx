@@ -29,7 +29,7 @@ const definition = (key: string, label: string): CastFieldDefinitionResponse => 
   updated_at: '2026-07-01T00:00:00Z',
 });
 
-describe('カスタムフィールドの初期値は自身が所有するキーのみ採用する（#277）', () => {
+describe('カスタムフィールドの初期値は自身が所有するキーのみ採用する', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

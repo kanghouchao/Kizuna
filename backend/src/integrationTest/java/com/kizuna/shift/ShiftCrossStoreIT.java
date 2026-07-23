@@ -24,7 +24,7 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Shift のクロス店舗分離を本物の PostgreSQL で検証する統合テスト（issue #278）。
+ * Shift のクロス店舗分離を本物の PostgreSQL で検証する統合テスト。
  *
  * <p>CastCrossStoreIT をミラー。store A のシフトを store B が 区間 GET で閲覧・PUT・DELETE できないことを固定し、 作成時の既定ステータス
  * TENTATIVE と区間 GET ラウンドトリップも合わせて検証する。 シフト API は GET /{id} を持たない（区間 GET のみ）ため、読取隔離は「区間 GET
@@ -296,7 +296,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
     assertThat(found.path("cast_id").asString()).isEqualTo(ownCastId);
   }
 
-  // ---- 公開出勤表 GET /store/shifts/public（issue #279）----
+  // ---- 公開出勤表 GET /store/shifts/public ----
 
   /** 店舗文脈のみ（未認証: X-Role + X-Store-ID、Authorization なし）の公開エンドポイント用ヘッダ。 */
   private HttpHeaders publicHeaders(long storeId) {

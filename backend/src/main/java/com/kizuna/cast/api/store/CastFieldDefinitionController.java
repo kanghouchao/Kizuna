@@ -28,7 +28,7 @@ public class CastFieldDefinitionController {
 
   // 一覧(読み取り)は値入力担当（CAST_MANAGE 保持者）がキャスト編集フォームで活きた定義を描画するために必要なので
   // 閲覧能力（CAST_FIELD_DEF_VIEW）で許可する。定義そのものの作成・更新・削除は構造変更のため
-  // 管理能力（CAST_FIELD_DEF_MANAGE — 既定束では店長のみ）限定を維持する（#277 / #398）。
+  // 管理能力（CAST_FIELD_DEF_MANAGE — 既定束では店長のみ）限定を維持する。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_VIEW')")
   public ResponseEntity<List<CastFieldDefinitionResponse>> list() {

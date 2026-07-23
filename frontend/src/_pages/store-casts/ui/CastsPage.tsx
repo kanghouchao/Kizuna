@@ -23,7 +23,7 @@ export default function CastListPage() {
   const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
-  // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ。裁定6の後継 #398）
+  // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）
   const [canInvite, setCanInvite] = useState(false);
   const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
   useEffect(() => {
@@ -93,7 +93,7 @@ export default function CastListPage() {
           <p className="text-sm text-gray-500 mt-1">キャスト情報の登録・編集ができます。</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定（裁定6と同型）。 */}
+          {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定。 */}
           {canManageFieldDefs && (
             <Link
               href={storePath(storeId, '/casts/fields')}

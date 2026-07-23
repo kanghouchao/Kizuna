@@ -94,7 +94,7 @@ class PlatformStaffServiceTest {
             .storeIds(storeIds)
             .build();
     user.setId(id);
-    // 永続化済みエンティティを模す（DB の version 列は 0 で初期化される — #400）。
+    // 永続化済みエンティティを模す（DB の version 列は 0 で初期化される）。
     ReflectionTestUtils.setField(user, "version", 0L);
     return user;
   }
@@ -136,7 +136,7 @@ class PlatformStaffServiceTest {
     req.setBundleIds(bundleIds);
     req.setStoreScopeType(scopeType);
     req.setStoreIds(storeIds);
-    // staff() ヘルパの現行 version と一致させる（版の往復 — #400）。
+    // staff() ヘルパの現行 version と一致させる（版の往復）。
     req.setVersion(0L);
     return req;
   }
@@ -204,7 +204,7 @@ class PlatformStaffServiceTest {
     assertThat(res.bundles())
         .containsExactly(new PlatformStaffResponse.BundleRef(MANAGER_BUNDLE, "店長"));
     assertThat(res.enabled()).isTrue();
-    assertThat(res.version()).as("作成応答も version を持つこと(#400)").isZero();
+    assertThat(res.version()).as("作成応答も version を持つこと").isZero();
   }
 
   @Test
@@ -330,7 +330,7 @@ class PlatformStaffServiceTest {
     when(capabilityBundleRepository.findAllById(Set.of(MANAGER_BUNDLE)))
         .thenReturn(List.of(bundle(MANAGER_BUNDLE, "店長")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    // saveAndFlush は flush 時に version を増加させる（実挙動の模倣 — #400）。
+    // saveAndFlush は flush 時に version を増加させる（実挙動の模倣）。
     when(repository.saveAndFlush(existing))
         .thenAnswer(
             i -> {
@@ -351,12 +351,12 @@ class PlatformStaffServiceTest {
     assertThat(res.get().id()).isEqualTo(3L);
     assertThat(res.get().bundles())
         .containsExactly(new PlatformStaffResponse.BundleRef(MANAGER_BUNDLE, "店長"));
-    assertThat(res.get().version()).as("応答は保存後の増加した version を返すこと(#400)").isEqualTo(1L);
+    assertThat(res.get().version()).as("応答は保存後の増加した version を返すこと").isEqualTo(1L);
   }
 
   @Test
   void update_staleVersion_throwsConflictWithoutSavingOrRecordingHistory() {
-    // 陳腐化した編集フォームの提出（version 不一致）は reassign 前に 409 系例外で拒否する（#400）。
+    // 陳腐化した編集フォームの提出（version 不一致）は reassign 前に 409 系例外で拒否する。
     PlatformUser existing =
         staff(3L, "target@kizuna.test", Set.of(HQ_BUNDLE), StoreScopeType.ALL_STORES, Set.of());
     ReflectionTestUtils.setField(existing, "version", 5L);

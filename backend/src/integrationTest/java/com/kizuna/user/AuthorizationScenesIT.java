@@ -29,13 +29,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * actors-and-access.md「必ず確認するアクセス場面（8 場面）」の受け入れ IT（#382 / #398）。
+ * actors-and-access.md「必ず確認するアクセス場面（8 場面）」の受け入れ IT。
  *
  * <p>場面の分担: 場面 1（他店舗の閲覧・更新不可）は {@link com.kizuna.menu.MenuCrossStoreIT} / {@link
  * com.kizuna.order.OrderCrossStoreIT} 等、場面 2（複数店舗の切替・集約）は {@link com.kizuna.auth.PlatformBridgeIT}
  * / {@link com.kizuna.order.PlatformOrderScopeIT}、場面 3（精算範囲次元の表現）は {@link
- * PlatformStaffManagementIT#settlementScopeDimensionIsExpressible} が既に固定しているため本クラスでは重複させない。 場面
- * 7（サービス ID）は #395、場面 8（緊急管理）は #382 要件 4 の後続票の検証点。
+ * PlatformStaffManagementIT#settlementScopeDimensionIsExpressible} が既に固定しているため本クラスでは重複させない。
  *
  * <p>本クラスは場面 4・5（CAST/MEMBER 本人種別の隔離）と場面 6（公開/内部の分離 +「束はデータ」の証明）を扱う。 強断言様式（リポジトリ直挿カナリア + 生ボディ
  * doesNotContain）は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
@@ -48,19 +47,19 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   private static final String MEMBER_EMAIL = "scenes-it-member@kizuna.test";
   private static final String PROFILE_ONLY_EMAIL = "scenes-it-profile-only@kizuna.test";
 
-  /** STORE_VIEW 無しの店舗コンソール資格（ALL_STORES）を検証するユーザー（#428）。 */
+  /** STORE_VIEW 無しの店舗コンソール資格（ALL_STORES）を検証するユーザー。 */
   private static final String STORE_CONSOLE_ALL_EMAIL = "scenes-it-storeconsole-all@kizuna.test";
 
-  /** STORE_VIEW も店舗コンソール資格も持たない STAFF（403 を検証 — #428）。 */
+  /** STORE_VIEW も店舗コンソール資格も持たない STAFF（403 を検証）。 */
   private static final String PLATFORM_ONLY_EMAIL = "scenes-it-platform-only@kizuna.test";
 
   /** 種子に無い束（DB データとして追加 — 発版不要の証明）。 */
   private static final String PROFILE_ONLY_BUNDLE = "公開プロフィール担当IT";
 
-  /** STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ — storeBridge=true / #428）。 */
+  /** STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ — storeBridge=true）。 */
   private static final String STORE_CONSOLE_ONLY_BUNDLE = "受注担当IT";
 
-  /** PLATFORM 能力のみで STORE_VIEW も店舗コンソール能力も持たない束（#428）。 */
+  /** PLATFORM 能力のみで STORE_VIEW も店舗コンソール能力も持たない束。 */
   private static final String PLATFORM_ONLY_BUNDLE = "プラットフォームメニュー標識のみIT";
 
   /** 内部キャスト情報のカナリア。公開プロフィール応答へ混入しないことを強断言する。 */
@@ -96,7 +95,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
         StoreScopeType.SPECIFIC_STORES,
         Set.of(STORE_A));
 
-    // #428: STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ）を ALL_STORES スタッフへ授与する。
+    // STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ）を ALL_STORES スタッフへ授与する。
     CapabilityBundle storeConsoleOnly =
         capabilityBundleRepository
             .findByName(STORE_CONSOLE_ONLY_BUNDLE)
@@ -114,7 +113,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
         StoreScopeType.ALL_STORES,
         Set.of());
 
-    // #428: STORE_VIEW も店舗コンソール能力も持たない PLATFORM 標識のみの束（403 を検証）。
+    // STORE_VIEW も店舗コンソール能力も持たない PLATFORM 標識のみの束（403 を検証）。
     CapabilityBundle platformOnly =
         capabilityBundleRepository
             .findByName(PLATFORM_ONLY_BUNDLE)
@@ -271,7 +270,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
 
   @Test
   @DisplayName(
-      "#428: STORE_VIEW 無しの店舗コンソール資格保持者(SPECIFIC_STORES)は /platform/stores/me で自授権店舗のみを実名で取得できること")
+      "STORE_VIEW 無しの店舗コンソール資格保持者(SPECIFIC_STORES)は /platform/stores/me で自授権店舗のみを実名で取得できること")
   void scene428_storeBridgeSpecificStoresCanListOwnAuthorizedStores() {
     // PROFILE_ONLY は STORE_PROFILE_MANAGE(Console.STORE) のみで STORE_VIEW を持たない → storeBridge=true。
     ResponseEntity<JsonNode> stores =
@@ -292,7 +291,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("#428: STORE_VIEW 無しの店舗コンソール資格保持者(ALL_STORES)は /platform/stores/me で全店舗を実名で取得できること")
+  @DisplayName("STORE_VIEW 無しの店舗コンソール資格保持者(ALL_STORES)は /platform/stores/me で全店舗を実名で取得できること")
   void scene428_storeBridgeAllStoresCanListAllStores() {
     ResponseEntity<JsonNode> stores =
         rest.exchange(
@@ -313,7 +312,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("#428: STORE_VIEW も店舗コンソール資格も持たない STAFF は /platform/stores/me で 403 になること")
+  @DisplayName("STORE_VIEW も店舗コンソール資格も持たない STAFF は /platform/stores/me で 403 になること")
   void scene428_staffWithoutStoreViewNorStoreConsoleIsForbidden() {
     // PLATFORM_MENU_VIEW のみ（authority は発行されるが PERM_STORE_VIEW でも storeBridge でもない）→ fail-closed。
     ResponseEntity<String> stores =

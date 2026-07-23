@@ -60,7 +60,7 @@ describe('Sidebar', () => {
     expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
   });
 
-  it('path 由来 storeId を店舗リンクに埋め込み、平台リンクは無加工にする（#413）', async () => {
+  it('path 由来 storeId を店舗リンクに埋め込み、平台リンクは無加工にする', async () => {
     mockPathname = '/store/2/dashboard';
     (Cookies.get as jest.Mock).mockImplementation((key: string) =>
       key === 'platform-role' ? 'platform' : undefined
@@ -79,7 +79,7 @@ describe('Sidebar', () => {
     );
   });
 
-  it('path に storeId が無くても前回選択 cookie から店舗リンクを解決する（#413）', async () => {
+  it('path に storeId が無くても前回選択 cookie から店舗リンクを解決する', async () => {
     mockPathname = '/store/select';
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'platform-role') return 'platform';
@@ -96,7 +96,7 @@ describe('Sidebar', () => {
     );
   });
 
-  it('path にも cookie にも storeId が無ければ店舗選択画面へ誘導する（#413）', async () => {
+  it('path にも cookie にも storeId が無ければ店舗選択画面へ誘導する', async () => {
     mockPathname = '/store/select';
     (Cookies.get as jest.Mock).mockImplementation((key: string) =>
       key === 'platform-role' ? 'platform' : undefined

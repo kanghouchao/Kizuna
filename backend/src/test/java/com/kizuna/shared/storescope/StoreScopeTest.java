@@ -11,7 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.Authentication;
 
-/** {@link StoreScope} の claim 解決と授権判定の単体テスト（#323 集合作用域）。 */
+/** {@link StoreScope} の claim 解決と授権判定の単体テスト（集合作用域）。 */
 class StoreScopeTest {
 
   private Authentication authWith(Claims claims) {

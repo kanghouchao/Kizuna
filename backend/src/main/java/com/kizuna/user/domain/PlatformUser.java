@@ -18,10 +18,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * プラットフォーム共通ユーザー集約。email でログインし、授権は「能力束 × 担当店舗集合 ×（必要時）精算範囲」で表す（#382 / #398）。
+ * プラットフォーム共通ユーザー集約。email でログインし、授権は「能力束 × 担当店舗集合 ×（必要時）精算範囲」で表す。
  *
- * <p>本人種別（{@link UserType}）が STAFF のユーザーだけが能力束を持ち、CAST / MEMBER は能力モデルに入らない（#320 既定）。束は跨集約 ID 参照
- * （{@link CapabilityBundle}）。停止は {@link #stop()}（enabled=false）であり、行を削除しないことで過去の実行主体の記録を保持する。
+ * <p>本人種別（{@link UserType}）が STAFF のユーザーだけが能力束を持ち、CAST / MEMBER は能力モデルに入らない（既定）。束は跨集約 ID 参照 （{@link
+ * CapabilityBundle}）。停止は {@link #stop()}（enabled=false）であり、行を削除しないことで過去の実行主体の記録を保持する。
  *
  * <p>不変条件（構築時と再割当時に検証、違反は 400 系ドメイン例外）:
  *
@@ -138,7 +138,7 @@ public class PlatformUser extends BaseEntity {
     this.storeIds = new HashSet<>(stores);
   }
 
-  /** 停止する（enabled=false）。行は削除せず、過去の実行主体の記録を保持する（#382 — 停止後の記録保全）。 */
+  /** 停止する（enabled=false）。行は削除せず、過去の実行主体の記録を保持する。 */
   public void stop() {
     this.enabled = false;
   }

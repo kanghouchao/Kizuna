@@ -29,11 +29,9 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 店舗削除が platform_user_stores（プラットフォームユーザーの店舗授権集合）まで ON DELETE CASCADE で従うことを 本物の PostgreSQL
- * で検証する統合テスト（#322）。
+ * で検証する統合テスト。
  *
- * <p>店舗削除は既存の全店舗参照 FK が CASCADE で従う確立済みセマンティクスであり、店舗授権行も店舗と共に消えるのが整合的。 修正前は
- * platform_user_stores→t_stores の FK が既定の NO ACTION だったため、SPECIFIC_STORES ユーザーが 授権している店舗を削除すると FK
- * 違反で店舗削除自体が失敗していた（本 IT はその退行のガード）。
+ * <p>店舗削除は既存の全店舗参照 FK が CASCADE で従う確立済みセマンティクスであり、店舗授権行も店舗と共に消えるのが整合的。
  *
  * <p>様式は {@link SeedSequenceAlignmentIT}（HQ 管理者の平台ログイン + JdbcTemplate による実 DB 断言）に倣う。使い捨て tmpfs DB
  * のためシード store 1 は決して削除せず、第二店舗を直挿して検証する。
@@ -102,7 +100,7 @@ class StoreDeletionCascadeIT {
             new HttpEntity<>(headers),
             Void.class);
 
-    // FK が ON DELETE CASCADE でなければ店舗削除は FK 違反で失敗する（本修正前の退行）。
+    // FK が ON DELETE CASCADE でなければ店舗削除は FK 違反で失敗する。
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     // 店舗授権行は店舗と共に消える。
     assertThat(countStoreGrants(storeId)).as("削除後は店舗授権行が CASCADE 消去されること").isZero();

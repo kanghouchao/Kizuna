@@ -12,7 +12,7 @@ import {
   storeSelectPath,
 } from '@/shared/lib';
 
-/** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する（#324）。 */
+/** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する。 */
 export default function PlatformLoginForm() {
   const router = useRouter();
   const {
@@ -25,7 +25,7 @@ export default function PlatformLoginForm() {
     Cookies.remove('token');
     try {
       const { token, expires_at } = await platformAuthApi.login(data);
-      // epoch millis を Date に変換する（旧 LoginForm の expires: expires_at は日数解釈の既知バグ）
+      // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
       Cookies.set('token', token, { expires: new Date(expires_at) });
 
       const me = await platformAuthApi.me();
@@ -38,7 +38,7 @@ export default function PlatformLoginForm() {
       }
 
       if (destination === 'store') {
-        // 着地方針（1店舗=自動転送 / N店舗=選択画面 / 0店舗=案内表示）は StoreSelectPage 一箇所に集約する（#428）。
+        // 着地方針（1店舗=自動転送 / N店舗=選択画面 / 0店舗=案内表示）は StoreSelectPage 一箇所に集約する。
         // ログインフォームは無条件に選択画面へ渡し、stores[0] 無条件遷移（複数店舗ユーザーが選択画面へ
         // 到達できない矛盾）を解消する。
         startPlatformSession(me.console, expires_at);

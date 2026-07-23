@@ -20,7 +20,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-/** プラットフォーム統合メニュー木の 1 ノード（#404 決定2 / #409 で Central/Store を単一集約へ統合）。 */
+/** プラットフォーム統合メニュー木の 1 ノード（Central/Store の別なく単一集約として扱う）。 */
 @Getter
 @Setter
 @Entity
@@ -58,8 +58,8 @@ public class Menu {
   @Column(name = "updated_at")
   private LocalDateTime updatedAt;
 
-  /** 楽観ロック用バージョン（全実体共通 — #400）。 */
-  @Setter(AccessLevel.NONE) // 新規 public setter 禁止規約: バージョンは JPA が管理し外部から設定させない（#400）
+  /** 楽観ロック用バージョン（全実体共通）。 */
+  @Setter(AccessLevel.NONE) // 新規 public setter 禁止規約: バージョンは JPA が管理し外部から設定させない
   @Version
   @Column(nullable = false)
   private Long version;

@@ -57,15 +57,15 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
 export function Sidebar() {
   const pathname = usePathname();
   // 店舗リンクへ埋め込む storeId は path 由来 id を最優先し、無ければ前回選択 cookie に fallback する。
-  // path 組立は store-route（店舗パス知識の唯一 module）の resolveStoreHref に委ねる（#428）。
+  // path 組立は store-route（店舗パス知識の唯一 module）の resolveStoreHref に委ねる。
   const storeId = getStoreIdFromPath(pathname) ?? getPlatformStoreId();
   const [role, setRole] = useState<string>('platform');
   const [navigation, setNavigation] = useState<any[]>([]);
 
   useEffect(() => {
     // 「前回選択」cookie の更新は apiClient の応答インターセプタ（X-Store-ID 受理時のみ）に委ね、
-    // 未検証の URL 由来 id をここで書き込まない（非授権 id の手打ちで cookie を汚染しない — #413 Fix6-3）。
-    // 平台セッションがあれば優先する（コンソール値: platform / store — #324/#398）
+    // 未検証の URL 由来 id をここで書き込まない（非授権 id の手打ちで cookie を汚染しない）。
+    // 平台セッションがあれば優先する（コンソール値: platform / store）
     const platformConsole = getPlatformConsole();
     if (platformConsole) {
       setRole(isStoreConsole(platformConsole) ? 'store' : 'platform');
