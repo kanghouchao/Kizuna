@@ -2,15 +2,16 @@ package com.kizuna.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.auth.infrastructure.JwtUtil;
+import com.kizuna.auth.infrastructure.JwtEncoderConfig;
+import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -62,17 +68,27 @@ class PlatformAuthIT {
     return headers;
   }
 
-  /** 実サーバーと同じ secret で署名した、既に期限切れの token（陳腐化した前回セッションの模擬）。 */
+  /**
+   * 実サーバーと同じ secret で署名した、既に期限切れの token（陳腐化した前回セッションの模擬）。
+   *
+   * <p>{@link PlatformJwtIssuer#issue} は issuedAt に常に現在時刻を使うため、期限切れ token（exp が iat より前）は
+   * 表現できない（{@code Jwt} が構築時に exp > iat を要求する）。ここでは iat 自体も過去へ置くことで、 exp > iat
+   * を保ったまま「現在時刻からは既に期限切れ」の token を組み立てる。
+   */
   private String staleExpiredToken() {
-    AppProperties expiredProperties = new AppProperties();
-    AppProperties.Jwt jwt = new AppProperties.Jwt();
-    jwt.setSecret(appProperties.getJwtSecret());
-    jwt.setExpiration(-1_000L);
-    expiredProperties.setJwt(jwt);
-    return new JwtUtil(expiredProperties)
-        .generateToken(
-            SEED_EMAIL, JwtUtil.ISSUER_PLATFORM, Map.of("authorities", List.of("PERM_TEST")))
-        .token();
+    JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
+    Instant now = Instant.now();
+    Instant issuedAt = now.minusSeconds(10);
+    JwtClaimsSet claimsSet =
+        JwtClaimsSet.builder()
+            .issuer(PlatformJwtIssuer.ISSUER_PLATFORM)
+            .subject(SEED_EMAIL)
+            .issuedAt(issuedAt)
+            .expiresAt(now.minusMillis(1_000L))
+            .claim("authorities", List.of("PERM_TEST"))
+            .build();
+    JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+    return encoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
   }
 
   private ResponseEntity<JsonNode> platformLogin(String email, String password) {
