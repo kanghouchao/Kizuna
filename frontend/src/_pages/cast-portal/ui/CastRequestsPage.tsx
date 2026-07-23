@@ -47,7 +47,13 @@ function tomorrowStr(): string {
 }
 
 function defaultValues(storeId: string): RequestFormValues {
-  return { store_id: storeId, work_date: tomorrowStr(), start_time: '18:00', end_time: '23:00', note: '' };
+  return {
+    store_id: storeId,
+    work_date: tomorrowStr(),
+    start_time: '18:00',
+    end_time: '23:00',
+    note: '',
+  };
 }
 
 /** 出勤希望の提出フォームと提出履歴。所属店を跨いで全量・新しい順に表示する。 */
@@ -138,7 +144,10 @@ export function CastRequestsPage() {
           </select>
         </div>
         <div>
-          <label htmlFor="request-work-date" className="mb-1 block text-sm font-medium text-gray-700">
+          <label
+            htmlFor="request-work-date"
+            className="mb-1 block text-sm font-medium text-gray-700"
+          >
             日付
           </label>
           <input
