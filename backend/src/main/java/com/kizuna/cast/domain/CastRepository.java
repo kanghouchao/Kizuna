@@ -34,24 +34,30 @@ public interface CastRepository
   List<String> findIdsByPlatformUserId(@Param("platformUserId") Long platformUserId);
 
   /**
-   * 指定 platform_user_id が指定店舗に本人 cast 行を持つかを逆引きする（出勤希望提出の所属判定の基点）。
+   * 指定 platform_user_id が指定店舗に持つ本人 cast 行 id を古い順で返す（出勤希望提出の所属判定の基点）。
+   *
+   * <p>同一店舗に本人の档案が複数並存し得る（既存アカウントが同店の招待を複数受諾できる）ため、 単一結果を仮定せずリストで返し、呼び出し側が先頭（最古の档案）を決定的に選ぶ。
    *
    * <p>cast.status（ACTIVE 等）は見ない — 停止統制はアカウント層の責務であり、cast.status を下游の可否判定に使わない。 storeFilter
    * を経由しない集約クエリのため、呼び出し側は認証済み本人の platform_user_id のみを渡す。
    */
   @Query(
-      "select c.id from Cast c where c.platformUserId = :platformUserId and c.storeId = :storeId")
-  Optional<String> findIdByPlatformUserIdAndStoreId(
+      """
+      select c.id from Cast c
+      where c.platformUserId = :platformUserId and c.storeId = :storeId
+      order by c.id asc
+      """)
+  List<String> findIdsByPlatformUserIdAndStoreId(
       @Param("platformUserId") Long platformUserId, @Param("storeId") Long storeId);
 
   /**
    * 指定 platform_user_id の所属店舗一覧（id・店名）を跨店で返す（出勤希望提出フォームの店舗セレクタ用）。
    *
-   * <p>storeFilter を経由しない集約クエリのため常に全店横断で解決する。
+   * <p>同一店舗に本人の档案が複数並存し得るため distinct で店舗単位に畳む。 storeFilter を経由しない集約クエリのため常に全店横断で解決する。
    */
   @Query(
       """
-      select c.storeId as storeId, st.name as storeName
+      select distinct c.storeId as storeId, st.name as storeName
       from Cast c join com.kizuna.store.domain.Store st on st.id = c.storeId
       where c.platformUserId = :platformUserId
       order by st.name asc

@@ -57,13 +57,14 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Autowired private PasswordEncoder passwordEncoder;
 
   private long storeForeignId;
+  private Long castUserId;
   private String myCastId;
   private String castToken;
 
   @BeforeEach
   void prepareFixture() {
     storeForeignId = ensureStore(STORE_FOREIGN_DOMAIN, "出勤希望IT非所属店舗");
-    Long castUserId =
+    castUserId =
         ensurePlatformUser(CAST_EMAIL, UserType.CAST, StoreScopeType.ALL_STORES, Set.of()).getId();
     myCastId = ensureCast(STORE_A, "出勤希望IT本人", castUserId);
     castToken = platformToken(CAST_EMAIL, PASSWORD);
@@ -71,11 +72,11 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
   /**
    * 本人の cast 行を find-or-create する。@BeforeEach は各テストメソッドの前に走るため、単純作成だと 同一 (platformUserId, storeId)
-   * の行がテストメソッド数だけ複製され、所属判定クエリの一意性を壊す。
+   * の行がテストメソッド数だけ複製される。既存行があれば最古の行を使う。
    */
   private String ensureCast(long storeId, String name, Long platformUserId) {
-    return castRepository
-        .findIdByPlatformUserIdAndStoreId(platformUserId, storeId)
+    return castRepository.findIdsByPlatformUserIdAndStoreId(platformUserId, storeId).stream()
+        .findFirst()
         .orElseGet(() -> createCast(storeId, name, platformUserId));
   }
 
@@ -464,6 +465,33 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> declineAfterApprove = decline(STORE_A, id);
     assertThat(declineAfterApprove.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  @DisplayName("同一店舗に本人の档案が複数並存しても提出でき、店舗セレクタ一覧は店舗単位に畳まれること")
+  void duplicateProfilesInSameStore_doNotBreakSubmitNorStoreList() {
+    // 既存アカウントが同店の招待を複数受諾した状態を再現する（受諾フローに同店唯一性の守衛は無い）。
+    createCast(STORE_A, "出勤希望IT本人第二档案", castUserId);
+
+    ResponseEntity<JsonNode> created =
+        submit(castToken, submitBody(STORE_A, tomorrow(), "11:00:00", "13:00:00", "複数档案でも提出できる"));
+    assertThat(created.getStatusCode()).as("複数档案並存でも提出が 500 にならないこと").isEqualTo(HttpStatus.CREATED);
+    assertThat(created.getBody().path("status").asString()).isEqualTo("PENDING");
+
+    ResponseEntity<JsonNode> stores =
+        rest.exchange(
+            "/platform/me/stores",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(castToken)),
+            JsonNode.class);
+    assertThat(stores.getStatusCode()).isEqualTo(HttpStatus.OK);
+    int storeACount = 0;
+    for (JsonNode node : stores.getBody()) {
+      if (node.path("store_id").asLong() == STORE_A) {
+        storeACount++;
+      }
+    }
+    assertThat(storeACount).as("同一店舗はセレクタ一覧で 1 件に畳まれること").isEqualTo(1);
   }
 
   @Test

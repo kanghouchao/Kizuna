@@ -45,9 +45,10 @@ public class CastShiftRequestService {
     }
 
     Long userId = resolveUserId(email);
+    // 同一店舗に本人の档案が複数並存し得るため、最古の档案 id を決定的に選ぶ（リポジトリが古い順で返す）。
     String castId =
-        castRepository
-            .findIdByPlatformUserIdAndStoreId(userId, request.getStoreId())
+        castRepository.findIdsByPlatformUserIdAndStoreId(userId, request.getStoreId()).stream()
+            .findFirst()
             .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
 
     ShiftRequest entity =
