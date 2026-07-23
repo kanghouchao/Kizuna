@@ -33,8 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
  * DisabledException が投げられる（enabled 判定がパスワード照合に先行するため、無効化アカウントでのパスワード正誤オラクルを塞ぐ）。列挙耐性・タイミング均一化も
  * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
- * <p>authorities の発行（#382 / #398）: STAFF は保持束の能力並集を {@code PERM_} 形式で発行し、CAST / MEMBER は本人種別標識
- * {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話失効なし — #325 既定）。
+ * <p>authorities の発行: STAFF は保持束の能力並集を {@code PERM_} 形式で発行し、CAST / MEMBER は本人種別標識 {@code ROLE_CAST}
+ * / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
  */
 @Service
 @RequiredArgsConstructor
@@ -112,7 +112,7 @@ public class PlatformAuthService {
         user.getStoreIds().stream().sorted().toList());
   }
 
-  /** 保持束の能力並集。STAFF 以外は能力を持たない（本人種別 — #320 既定）。 */
+  /** 保持束の能力並集。STAFF 以外は能力を持たない（本人種別の既定）。 */
   private Set<Capability> capabilitiesOf(PlatformUser user) {
     if (user.getUserType() != UserType.STAFF) {
       return Set.of();
@@ -131,7 +131,7 @@ public class PlatformAuthService {
   }
 
   private static boolean hasStoreConsole(Set<Capability> capabilities) {
-    // 標識能力はコンソール入場・店舗文脈確立の資格にしない（PR #411 codex 指摘）。STORE_MENU_VIEW 単独では
+    // 標識能力はコンソール入場・店舗文脈確立の資格にしない。STORE_MENU_VIEW 単独では
     // storeBridge も店舗コンソール着地も許さず、実運用の STORE 能力（STORE_MENU_VIEW 以外）を要求する。
     return capabilities.stream()
         .anyMatch(
