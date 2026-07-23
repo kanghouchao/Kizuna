@@ -193,7 +193,7 @@ class PlatformAuthServiceTest {
     verify(jwtUtil)
         .generateToken(eq("menu@kizuna.test"), eq(JwtUtil.ISSUER_PLATFORM), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
-    // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できない（PR #411 codex 指摘）。
+    // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できない。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
   }
 
@@ -324,7 +324,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void me_hybridStaffWithPlatformAndStoreCapabilities_returnsPlatformConsoleAndStoreBridgeTrue() {
-    // 混成束（PLATFORM 能力と実運用 STORE 能力の併持）: 着地は platform 優先のまま store_bridge=true（#428 AC1）。
+    // 混成束（PLATFORM 能力と実運用 STORE 能力の併持）: 着地は platform 優先のまま store_bridge=true。
     PlatformUser staff =
         PlatformUser.builder()
             .email("hybrid@kizuna.test")
@@ -428,7 +428,7 @@ class PlatformAuthServiceTest {
     Optional<PlatformMeResponse> res = authService.me("menu@kizuna.test");
 
     assertThat(res).isPresent();
-    // 標識のみの束は店舗コンソールに着地しない（fail-closed — PR #411 codex 指摘）。
+    // 標識のみの束は店舗コンソールに着地しない（fail-closed）。
     assertThat(res.get().console()).isEqualTo("none");
     assertThat(res.get().capabilities()).containsExactly("STORE_MENU_VIEW");
     // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できないため false。
