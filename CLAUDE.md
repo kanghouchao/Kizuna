@@ -24,6 +24,10 @@ Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/
 - **Human-facing docs** (`docs/**`, `README.md`), **code comments**, **GitHub issues/PRs**, and **commit messages**: **Japanese**.
 - Code identifiers, module names, and shell commands stay verbatim regardless of the surrounding language.
 
+## Comment Policy
+
+Comments justify the code **as it is now**: invariants, security rationale, non-obvious decisions. Never narrate history — what the code replaced, how it evolved, or which discussion decided it. That record belongs to git log and issues, so comments carry **no issue/PR numbers**; traceability goes through git blame → commit message → issue. Applies to backend and frontend alike.
+
 ## Build, Test & Verify
 
 The system is built and tested with Docker Compose; all commands are driven through the `task` tool so local runs match CI/CD. Recommended workflow:
