@@ -8,6 +8,7 @@
 * `c.k.c.application.CastFieldDefinitionService`
 * `c.k.c.application.CastInvitationAcceptanceService`
 * `c.k.c.application.CastInvitationService`
+* `c.k.c.application.CastSelfService`
 * `c.k.c.application.CastService`
 
 _Repositories_

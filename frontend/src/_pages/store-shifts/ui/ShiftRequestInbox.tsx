@@ -11,7 +11,7 @@ interface ShiftRequestInboxProps {
   onApproved: () => void;
 }
 
-/** 出勤希望 inbox。受付済み(PENDING)のみを表示する — 処理済みの回看は cast 側履歴の責務。 */
+/** 出勤希望 inbox。受付済み(PENDING)のみを表示する — 処理済みの閲覧は cast 側履歴の責務。 */
 export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps) {
   const [requests, setRequests] = useState<StoreShiftRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
