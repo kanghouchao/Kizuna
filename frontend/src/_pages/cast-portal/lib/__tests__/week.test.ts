@@ -4,7 +4,13 @@ describe('week', () => {
   describe('parseDateStr', () => {
     const originalTZ = process.env.TZ;
     afterEach(() => {
-      process.env.TZ = originalTZ;
+      // 未設定だった場合に文字列 'undefined' を代入すると無効な TZ（UTC フォールバック）となり
+      // 同一 Jest worker の後続テストファイルを汚染するため、未設定へは delete で戻す。
+      if (originalTZ === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = originalTZ;
+      }
     });
 
     it('yyyy-MM-dd をローカルタイムの Date として構築する', () => {
