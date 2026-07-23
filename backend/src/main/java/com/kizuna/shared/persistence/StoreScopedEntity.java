@@ -16,7 +16,7 @@ import lombok.ToString;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 
-/** 店舗スコープのエンティティ基盤。store_id は ID 参照（D3）で保持し、storeFilter で行レベル分離する。 */
+/** 店舗スコープのエンティティ基盤。store_id は ID 参照で保持し、storeFilter で行レベル分離する。 */
 @MappedSuperclass
 @EntityListeners(StoreScopeStampListener.class)
 @Getter
