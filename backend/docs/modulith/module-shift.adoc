@@ -3,7 +3,8 @@
 |Base package
 |`com.kizuna.shift`
 |Bean references
-|* `c.k.c.application.CastService` (in Cast)
+|* `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.c.domain.CastRepository` (in Cast)
+* `c.k.c.application.CastService` (in Cast)
 * `c.k.s.config.AppProperties` (in Shared)
 |===
