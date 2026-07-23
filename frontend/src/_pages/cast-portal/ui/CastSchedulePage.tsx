@@ -96,7 +96,7 @@ export function CastSchedulePage() {
               <ul className="space-y-2">
                 {group.items.map(item => (
                   <li
-                    key={`${item.store_id}-${item.start_time}`}
+                    key={`${item.store_id}-${item.start_time}-${item.end_time}`}
                     className="flex items-center justify-between text-sm text-gray-600"
                   >
                     <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-600">
