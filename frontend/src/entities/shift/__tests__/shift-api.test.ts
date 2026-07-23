@@ -42,4 +42,41 @@ describe('shiftApi', () => {
       url: '/platform/me/schedule',
     });
   });
+  it('submitShiftRequest は /platform/me/shift-requests を POST する', async () => {
+    expect(
+      await shiftApi.submitShiftRequest({
+        store_id: 1,
+        work_date: '2026-07-24',
+        start_time: '18:00:00',
+        end_time: '23:00:00',
+      })
+    ).toEqual({ ok: true, url: '/platform/me/shift-requests' });
+  });
+  it('myShiftRequests は /platform/me/shift-requests を GET する', async () => {
+    expect(await shiftApi.myShiftRequests()).toEqual({
+      ok: true,
+      url: '/platform/me/shift-requests',
+    });
+  });
+  it('myStores は /platform/me/stores を GET する', async () => {
+    expect(await shiftApi.myStores()).toEqual({ ok: true, url: '/platform/me/stores' });
+  });
+  it('listShiftRequests は /store/shift-requests を GET する', async () => {
+    expect(await shiftApi.listShiftRequests({ status: 'PENDING' })).toEqual({
+      ok: true,
+      url: '/store/shift-requests',
+    });
+  });
+  it('approveShiftRequest は /store/shift-requests/:id/approval を POST する', async () => {
+    expect(await shiftApi.approveShiftRequest('sr1')).toEqual({
+      ok: true,
+      url: '/store/shift-requests/sr1/approval',
+    });
+  });
+  it('declineShiftRequest は /store/shift-requests/:id/decline を POST する', async () => {
+    expect(await shiftApi.declineShiftRequest('sr1')).toEqual({
+      ok: true,
+      url: '/store/shift-requests/sr1/decline',
+    });
+  });
 });
