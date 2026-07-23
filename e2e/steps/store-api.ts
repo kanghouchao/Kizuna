@@ -224,3 +224,53 @@ export async function deleteShift(
     throw new Error(`delete shift failed: ${res.status()} ${await res.text()}`);
   }
 }
+
+/** キャスト招待を発行し token を返す（POST /api/store/casts/{id}/invitation, hasAuthority('PERM_CAST_INVITE')）。 */
+export async function issueCastInvitation(
+  request: APIRequestContext,
+  token: string,
+  castId: string
+): Promise<string> {
+  const res = await request.post(`/api/store/casts/${castId}/invitation`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`issue cast invitation failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.token as string;
+}
+
+/**
+ * キャスト招待を新規登録で受諾し、CAST 用の平台身分を作成する
+ * （POST /api/platform/cast-invitations/{token}/acceptance, PermitAll）。
+ * X-Role/X-Store-ID は不要（/platform 配下は StoreIdInterceptor を通らない）。
+ */
+export async function acceptCastInvitation(
+  request: APIRequestContext,
+  invitationToken: string,
+  email: string,
+  password: string,
+  displayName: string
+): Promise<void> {
+  const res = await request.post(`/api/platform/cast-invitations/${invitationToken}/acceptance`, {
+    data: { email, password, display_name: displayName },
+  });
+  if (!res.ok()) {
+    throw new Error(`accept cast invitation failed: ${res.status()} ${await res.text()}`);
+  }
+}
+
+/** 出勤希望を承認する（POST /api/store/shift-requests/{id}/approval, hasAuthority('PERM_SHIFT_MANAGE')）。 */
+export async function approveShiftRequest(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  const res = await request.post(`/api/store/shift-requests/${id}/approval`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`approve shift request failed: ${res.status()} ${await res.text()}`);
+  }
+}
