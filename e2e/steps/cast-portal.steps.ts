@@ -70,8 +70,14 @@ Then('キャストポータルのスケジュール画面へ遷移する', async
 Then(
   'スケジュールに {string} と時間帯 {string} が表示される',
   async ({ page }, storeName: string, timeRange: string) => {
-    await expect(page.getByText(storeName, { exact: true })).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText(timeRange)).toBeVisible();
+    // Next.js のルータキャッシュが直前の画面（希望提出タブ）を非表示のまま DOM に残すため、
+    // ページ全域の getByText だと非表示要素にも一致し strict mode 違反になる。
+    // getByRole は非表示要素を対象外にするため、可視の該当 listitem に絞り込む。
+    const item = page
+      .getByRole('listitem')
+      .filter({ hasText: storeName })
+      .filter({ hasText: timeRange });
+    await expect(item).toBeVisible({ timeout: 15000 });
   }
 );
 
