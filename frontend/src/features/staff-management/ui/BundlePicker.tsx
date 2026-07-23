@@ -10,7 +10,7 @@ interface BundlePickerProps {
 }
 
 /**
- * 権限束のチェックボックス複数選択（束はデータ — 選択肢は GET /platform/capability-bundles から取得。#398）。
+ * 権限束のチェックボックス複数選択（束はデータ — 選択肢は GET /platform/capability-bundles から取得）。
  * 一覧の取得は親（モーダル/ドロワー）が行い、要約表示と選択肢で同じデータを共有する。
  */
 export function BundlePicker({ bundles, isLoading, bundleIds, onChange }: BundlePickerProps) {

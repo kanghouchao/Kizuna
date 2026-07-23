@@ -47,7 +47,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <StoreContextProvider>{children}</StoreContextProvider>
 );
 
-describe('StoreContextProvider（店舗コンテキストの deep module #428）', () => {
+describe('StoreContextProvider（店舗コンテキストの deep module）', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPathname = '/platform/dashboard';
@@ -185,7 +185,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module #428）
       expect(mockPush).toHaveBeenCalledWith('/store/2/dashboard');
     });
 
-    it('前回選択 cookie と同じ店舗でも pathStoreId 未確定なら push が発火する（#413 Fix5-1）', async () => {
+    it('前回選択 cookie と同じ店舗でも pathStoreId 未確定なら push が発火する', async () => {
       // no-op 判定は pathStoreId のみで行う。currentStoreId（cookie fallback 込み）で比較すると
       // /platform 側で前回選択と同じ店舗をクリックした単一店舗ユーザーが遷移できなくなる。
       mockPathname = '/platform/dashboard';

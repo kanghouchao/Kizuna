@@ -91,7 +91,7 @@ class CastInvitationServiceTest {
   @Test
   void issue_invalidatesPendingViaConditionalUpdateBeforeReissuing() {
     // 旧 PENDING の失効は管理エンティティの invalidate() ではなく条件付き一括 UPDATE で行い、
-    // それが新規 PENDING の INSERT より前に実行されることを確認する（受諾との直列化・#327）。
+    // それが新規 PENDING の INSERT より前に実行されることを確認する（受諾との直列化）。
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -119,7 +119,7 @@ class CastInvitationServiceTest {
   @Test
   void issue_abortsWhenCastGetsLinkedConcurrentlyBeforeReissuing() {
     // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が档案を紐づけた状況を模す。
-    // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する（#327）。
+    // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する。
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castRepository.findPlatformUserIdById("c1")).thenReturn(Optional.of(77L));
 

@@ -57,7 +57,7 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
       extension = originalFilename.substring(originalFilename.lastIndexOf("."));
     }
 
-    // UUIDでファイル名を生成。object key は従来のローカル実装と同じ bucket/prefix/UUID.ext 形式を維持する
+    // UUIDでファイル名を生成。object key は bucket/prefix/UUID.ext 形式とする
     // （実 S3 bucket は固定値、リクエストの bucket 値は key の一部として扱う）
     String filename = UUID.randomUUID() + extension;
     String key = bucket + "/" + prefix + "/" + filename;

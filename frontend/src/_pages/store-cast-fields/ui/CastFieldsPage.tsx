@@ -8,7 +8,7 @@ import { toast } from 'react-hot-toast';
 import { CastFieldCreateModal } from './CastFieldCreateModal';
 import { CastFieldEditModal } from './CastFieldEditModal';
 
-/** キャストのカスタムフィールド定義管理ページ(#277)。 */
+/** キャストのカスタムフィールド定義管理ページ。 */
 export default function CastFieldsPage() {
   const {
     items: definitions,

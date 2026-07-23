@@ -1,6 +1,6 @@
 package com.kizuna.user.domain;
 
-/** 付与履歴の操作種別（#382 / #398 — 付与・変更・停止・再開）。 */
+/** 付与履歴の操作種別（付与・変更・停止・再開）。 */
 public enum GrantAction {
   /** 新規付与（スタッフ作成時）。 */
   GRANT,

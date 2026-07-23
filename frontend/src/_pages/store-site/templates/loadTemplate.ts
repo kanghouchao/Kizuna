@@ -30,7 +30,7 @@ function importPage(
  * templateKey とページ名に対応する模版ページを動的に読み込む共有 helper。
  *
  * 未実装の templateKey（例: 過去に保存された modern / classic）でも公開サイトを
- * 404 にせず default 模版の同名ページへフォールバックする（issue #223）。
+ * 404 にせず default 模版の同名ページへフォールバックする。
  */
 export async function loadTemplatePage(
   templateKey: string,

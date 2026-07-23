@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 /**
- * getByDomain のキャッシュ挙動（#207）。本番は Redis で cache-null-values=false のため、null（未登録ドメイン）を キャッシュに書こうとすると
+ * getByDomain のキャッシュ挙動。本番は Redis で cache-null-values=false のため、null（未登録ドメイン）を キャッシュに書こうとすると
  * IllegalArgumentException → 500 になる。同じ null 拒否設定の ConcurrentMapCacheManager でプロキシ経由の挙動を再現する。
  */
 @SpringJUnitConfig(StoreRegistryServiceCacheTest.Config.class)

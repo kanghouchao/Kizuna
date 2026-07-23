@@ -61,7 +61,7 @@ describe('apiClient 401/403 interceptor', () => {
     expect(redirectMock).toHaveBeenCalled();
   });
 
-  it('does not clear token or redirect on 401 when the request config sets skipAuthRedirect (#327 codex指摘: 招待受諾のインラインログインはグローバル401処理をバイパスする必要がある)', async () => {
+  it('does not clear token or redirect on 401 when the request config sets skipAuthRedirect (招待受諾のインラインログインはグローバル401処理をバイパスする必要がある)', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
     await withRejectingAdapter(401, () =>
@@ -72,7 +72,7 @@ describe('apiClient 401/403 interceptor', () => {
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it('clears session and redirects on 403 when the platform-role cookie holds a legacy role value (#398: 旧トークンのデッドロック回避)', async () => {
+  it('clears session and redirects on 403 when the platform-role cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
     platformConsoleValue = 'STORE_MANAGER';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 

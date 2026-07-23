@@ -20,7 +20,7 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * /platform 命名空間へ統合した店舗 API（#415 収束C）の権限マトリクス・literal/{id} 共存・旧パス消滅を 本物の PostgreSQL で固定する統合テスト。
+ * /platform 命名空間へ統合した店舗 API の権限マトリクス・literal/{id} 共存・旧パス消滅を 本物の PostgreSQL で固定する統合テスト。
  *
  * <p>受入基準 3（stores/me・CRUD・stats・lookup の権限）、4（literal セグメントが {id} に吸われない）、 1（旧 /central・/tenant
  * パスの消滅）を対象とする。シードは v0.1.0（admin=HQ ALL_STORES はベースライン / 田中花子=店長 SPECIFIC{1,2} と
@@ -113,8 +113,7 @@ class PlatformStoreApiIT {
   @Test
   @DisplayName("GET /platform/stores/lookup は domain 未指定なら未認証でも 400 になること（params 分岐廃止・独立子路径化の確認）")
   void lookupWithoutDomainIsBadRequest() {
-    // params="domain" 分岐時は /lookup が getById("lookup") に吸われ未認証 403 になっていた。
-    // 独立子路径化後は必須 @RequestParam の欠落として CommonExceptionHandler が 400 へ映射する。
+    // /lookup は独立子路径のため、必須 @RequestParam の欠落として CommonExceptionHandler が 400 へ映射する。
     ResponseEntity<String> res =
         rest.exchange("/platform/stores/lookup", HttpMethod.GET, HttpEntity.EMPTY, String.class);
 

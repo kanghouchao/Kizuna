@@ -66,7 +66,7 @@ apiClient.interceptors.response.use(
   response => {
     // 成功応答が X-Store-ID を伴う＝バックエンドが StoreIdInterceptor の fail-closed 検証
     //（storeBridge + scope.authorizes）を通過して受理した証拠。このときだけ「前回選択」cookie を更新し、
-    // 未検証の URL 由来 id で cookie を汚染しない（Sidebar の無条件 mount 書き込みを置き換える — #413 Fix6-3）。
+    // 未検証の URL 由来 id で cookie を汚染しない。
     const storeId = (response.config?.headers as any)?.['X-Store-ID'];
     if (storeId) {
       setPlatformStore(storeId);
@@ -76,7 +76,7 @@ apiClient.interceptors.response.use(
   error => {
     if (error.response?.status === 401) {
       // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
-      // config.skipAuthRedirect でグローバルな token 除去/リダイレクトから除外する（#327 codex指摘）
+      // config.skipAuthRedirect でグローバルな token 除去/リダイレクトから除外する
       if ((error.config as any)?.skipAuthRedirect) {
         return Promise.reject(error);
       }
@@ -86,7 +86,7 @@ apiClient.interceptors.response.use(
       }
     }
     if (error.response?.status === 403) {
-      // 旧形式（ロール名）の platform-role cookie を持つ有効期限内トークンは #398 の能力化で
+      // 旧形式（ロール名）の platform-role cookie を持つ有効期限内トークンは能力ベースの認可で
       // 全端点 403 になるが 401 経路に乗らず、再ログイン導線が無いままデッドロックする。
       // cookie 値がコンソール値（platform/store）でない場合に限りセッションを破棄して再ログインへ促す
       //（新形式のセッションで正当に 403 を受けた場合は何もしない）。

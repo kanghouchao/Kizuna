@@ -10,7 +10,7 @@ jest.mock('next/navigation', () => ({
 
 // 授権店舗の解決（me()+stores()）は店舗コンテキストの責務で、その全ケースは StoreContext.test.tsx で
 // 検証する。ここでは context 出力（stores）に対する StoreSelectPage 自身の分岐
-//（読み込み中 / 0件 / 1件自動遷移 / 複数件選択）を検証する（#428）。
+//（読み込み中 / 0件 / 1件自動遷移 / 複数件選択）を検証する。
 jest.mock('@/entities/user', () => ({
   useStoreContext: jest.fn(),
 }));
@@ -25,7 +25,7 @@ const withStores = (stores: PlatformStore[] | null) =>
     switchStore: jest.fn(),
   });
 
-describe('StoreSelectPage（店舗未選択時の懒惰トリガー選択画面 #413）', () => {
+describe('StoreSelectPage（店舗未選択時の懒惰トリガー選択画面）', () => {
   const originalHref = window.location.href;
 
   beforeEach(() => {

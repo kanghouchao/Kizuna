@@ -30,7 +30,7 @@ interface StaffCreateFormValues {
 const inputClass =
   'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
-/** スタッフの新規作成モーダル（メール・初期パスワード・氏名・権限束・担当店舗・任意の精算範囲、#325 D6 / #398）。 */
+/** スタッフの新規作成モーダル（メール・初期パスワード・氏名・権限束・担当店舗・任意の精算範囲）。 */
 export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalProps) {
   const {
     register,

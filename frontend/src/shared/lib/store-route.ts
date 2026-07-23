@@ -2,7 +2,7 @@ const STORE_ID_PATTERN = /^\/store\/(\d+)(?:\/|$)/;
 // /store/select（およびその配下）は storeId を含まない静的ルート。
 const STORE_SELECT_PATTERN = /^\/store\/select(?:\/|$)/;
 // storeId 移設（/store/... → /store/[storeId]/...）以前の id 無し店舗パス（例 /store/orders）。
-// /store/select 自体と数値id配下（/store/5/...）は対象外（#413 Fix6-2 の正規表現をここへ集約）。
+// /store/select 自体と数値id配下（/store/5/...）は対象外。
 const LEGACY_STORE_PATH_PATTERN = /^\/store\/(?!select\b)(?!\d+(\/|$))/;
 
 export function getStoreIdFromPath(pathname: string): string | undefined {
@@ -14,7 +14,7 @@ export function replaceStoreIdInPath(pathname: string, newStoreId: number | stri
     return pathname.replace(STORE_ID_PATTERN, `/store/${newStoreId}/`);
   }
   // /store/select は sub-path 保存だと実在しない /store/{id}/select を生むため除外し、
-  // dashboard へフォールバックする（#413 Fix5-2）。
+  // dashboard へフォールバックする。
   if (pathname.startsWith('/store') && !STORE_SELECT_PATTERN.test(pathname)) {
     return `/store/${newStoreId}${pathname.slice(6)}`;
   }
@@ -32,7 +32,7 @@ export function storeSelectPath(next?: string): string {
 }
 
 /**
- * 店舗スコープの menu path（例 /store/orders）に storeId を埋め込む（Sidebar 由来 — #413）。
+ * 店舗スコープの menu path（例 /store/orders）に storeId を埋め込む（Sidebar 由来）。
  * /store 以外のパスは無加工で通し、storeId 確定時は /store の直後へ挿入する。
  * storeId 未確定時は店舗選択ルート（next 保存）へ誘導する。認可の根拠ではなく遷移先の解決のみ
  * — 非授権店舗はバックエンドが fail-closed で拒否する。

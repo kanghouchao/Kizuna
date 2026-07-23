@@ -24,11 +24,11 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>{@code /files/**} は {@code JwtAuthenticationFilter.issuerMatchesDomain} の issuer
  * 制約外のため平台トークンでも 認証が通る。プラットフォーム領域（platform prefix）への保存は HQ 管理者（role claim =
- * HQ_ADMIN）のみに限定し、それ以外のロール・ 店舗詐称ヘッダは fail-closed で 403 拒否する（#294 / #322 / #326）。
+ * HQ_ADMIN）のみに限定し、それ以外のロール・ 店舗詐称ヘッダは fail-closed で 403 拒否する。
  *
  * <p>HQ トークンに {@code X-Role:store} + {@code X-Store-ID} を付けても、{@code StoreIdInterceptor} の
- * STORE_BRIDGE_ROLES が HQ_ADMIN を含まないため店舗文脈は確立できず 403 で拒否される（負向）。詐称ヘッダ無しの HQ アップロードは従来どおり platform
- * 領域へ 200 で保存される（正向対照）。HQ 以外の平台トークン（店舗スタッフ）は詐称ヘッダ無しでも プラットフォーム保存を拒否される（follow-up:
+ * STORE_BRIDGE_ROLES が HQ_ADMIN を含まないため店舗文脈は確立できず 403 で拒否される（負向）。詐称ヘッダ無しの HQ アップロードは platform 領域へ
+ * 200 で保存される（正向対照）。HQ 以外の平台トークン（店舗スタッフ）は詐称ヘッダ無しでも プラットフォーム保存を拒否される（follow-up:
  * 低権限身分のプラットフォーム共有領域書き込み封鎖）。
  *
  * <p>プラットフォームログイン前提を廃し、v0.4.0/v0.5.0 の平台シードでログインする。

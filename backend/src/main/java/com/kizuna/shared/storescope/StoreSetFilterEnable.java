@@ -11,7 +11,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 /**
- * {@code @StoreSetScoped} が付いたメソッドで Hibernate の storeSetFilter を有効化する Aspect（#323 集合作用域）。
+ * {@code @StoreSetScoped} が付いたメソッドで Hibernate の storeSetFilter を有効化する Aspect（集合作用域）。
  *
  * <p>認証済み平台トークンの授権店舗集合を {@link StoreScope} で解決し、SPECIFIC_STORES の場合のみ storeSetFilter（{@code
  * store_id in (:storeIds)}）を有効化する。ALL_STORES はフィルタ無効＝全店可視。授権集合を解決できない呼び出しは fail-closed に {@link

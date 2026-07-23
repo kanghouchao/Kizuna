@@ -35,7 +35,7 @@ const GRANT_ACTION_LABELS: Record<string, string> = {
   RESUME: '再開',
 };
 
-/** スタッフの授権編集ドロワー（権限束・店舗集合・精算範囲・停止/再開と付与履歴。「この設定の結果」要約付き、#325 D6 / #398）。 */
+/** スタッフの授権編集ドロワー（権限束・店舗集合・精算範囲・停止/再開と付与履歴。「この設定の結果」要約付き）。 */
 export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDrawerProps) {
   const [bundleIds, setBundleIds] = useState<number[]>([]);
   const [storeScopeType, setStoreScopeType] = useState<PlatformStoreScopeType>('ALL_STORES');
@@ -91,7 +91,7 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
         settlement_scope_type: settlementScopeType,
         settlement_store_ids: settlementStoreIds,
         enabled,
-        // 楽観ロック用バージョン（応答の version をそのまま往復する — #400）
+        // 楽観ロック用バージョン（応答の version をそのまま往復する）
         version: staff.version,
       });
       toast.success('権限を更新しました');
@@ -103,7 +103,7 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
           ? (error as { response?: { status?: number } }).response?.status
           : undefined;
       if (status === 409) {
-        // 楽観ロック競合（#400 裁定3）: 固定文言の toast を出し、一覧を再取得してドロワーの内容を
+        // 楽観ロック競合: 固定文言の toast を出し、一覧を再取得してドロワーの内容を
         // 最新値へ自動リフレッシュする（staff prop の更新で useEffect が再初期化。ローカル編集は破棄、ドロワーは開いたまま）。
         toast.error('他の管理者が更新しました。最新の内容を確認してください');
         onUpdated();

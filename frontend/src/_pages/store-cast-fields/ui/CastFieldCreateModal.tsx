@@ -23,7 +23,7 @@ interface CastFieldCreateFormValues {
 const inputClass =
   'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
-/** カスタムフィールド定義の新規作成モーダル(key・label・公開設定、#277)。 */
+/** カスタムフィールド定義の新規作成モーダル(key・label・公開設定)。 */
 export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCreateModalProps) {
   const {
     register,
@@ -73,7 +73,7 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
                   required: true,
                   // バックエンドの @Pattern と同期。constructor・prototype は
                   // react-hook-form の register 内部予約名で、定義化するとキャスト
-                  // 編集フォームの描画をクラッシュさせるため作成時に拒否する(#277)。
+                  // 編集フォームの描画をクラッシュさせるため作成時に拒否する。
                   pattern: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
                 })}
                 className={inputClass}

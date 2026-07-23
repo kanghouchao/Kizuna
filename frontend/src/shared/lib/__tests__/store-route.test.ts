@@ -51,7 +51,7 @@ describe('store-route', () => {
       expect(replaceStoreIdInPath('/platform/dashboard', 456)).toBe('/store/456/dashboard');
     });
 
-    it('/store/selectは店舗sub-pathではなくstoreId付きdashboardへフォールバックする（#413 Fix5-2）', () => {
+    it('/store/selectは店舗sub-pathではなくstoreId付きdashboardへフォールバックする', () => {
       // /store/select は storeId を含まない静的ルート。sub-path 保存だと実在しない
       // /store/456/select を生むため dashboard へ振り分ける。
       expect(replaceStoreIdInPath('/store/select', 456)).toBe('/store/456/dashboard');

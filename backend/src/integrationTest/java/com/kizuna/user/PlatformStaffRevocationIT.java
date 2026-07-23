@@ -29,7 +29,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 停止済みスタッフの既発行 JWT を Redis ユーザー単位ブラックリストで即時失効させること（#403）を本物の PostgreSQL + Redis で固定する統合テスト。
+ * 停止済みスタッフの既発行 JWT を Redis ユーザー単位ブラックリストで即時失効させることを本物の PostgreSQL + Redis で固定する統合テスト。
  *
  * <p>スタイルは {@link com.kizuna.auth.PlatformBridgeIT} に倣い、対象ユーザーは repository 直挿の専用テストユーザーのみを使う
  * （種子ユーザー、特に {@code CrossStoreTestSupport} が全面依存する yamada.jiro@kizuna.test を停止すると後続 IT が連鎖破綻するため）。
@@ -287,7 +287,7 @@ class PlatformStaffRevocationIT {
   }
 
   @Test
-  @DisplayName("内容が同一の更新でも version が増えること（陳腐な更新がコミットできない前提の実証 — PR #435 codex 指摘）")
+  @DisplayName("内容が同一の更新でも version が増えること（陳腐な更新がコミットできない前提の実証）")
   void noOpUpdateStillBumpsVersion() {
     PlatformUser target = ensureEnabledTestUser(NOOP_EMAIL, "店舗スタッフ");
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);

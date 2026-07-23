@@ -39,12 +39,12 @@ public class CastInvitationService {
    *
    * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
    * status = 'PENDING'}）が DB レベルで保証する。 これにより店長の二重クリック等で issue() が並行しても、複数の有効トークンが同時に発行される事態を塞ぐ
-   * （token 一意制約だけでは異なるトークンの二重 PENDING を防げないため — #327）。
+   * （token 一意制約だけでは異なるトークンの二重 PENDING を防げないため）。
    *
-   * <p>並行する受諾（{@link CastInvitationAcceptanceService}）との競合は次の 2 段で直列化する（#327 codex 指摘）。 ①旧 PENDING
-   * の失効を、管理エンティティの {@code invalidate()} ではなく条件付き一括 UPDATE（{@code WHERE status =
-   * PENDING}）で行う。これにより受諾が先に ACCEPTED へ遷移させた行は対象外となり、受諾確定済みの招待を INVALIDATED へ巻き戻さない。 ②失効 UPDATE
-   * は受諾側の行ロック解放 （＝受諾トランザクションのコミット）を待って完了するため、その後に档案の紐づけを DB 再読込で再確認し、
+   * <p>並行する受諾（{@link CastInvitationAcceptanceService}）との競合は次の 2 段で直列化する。 ①旧 PENDING の失効を、管理エンティティの
+   * {@code invalidate()} ではなく条件付き一括 UPDATE（{@code WHERE status = PENDING}）で行う。これにより受諾が先に ACCEPTED
+   * へ遷移させた行は対象外となり、受諾確定済みの招待を INVALIDATED へ巻き戻さない。 ②失効 UPDATE は受諾側の行ロック解放
+   * （＝受諾トランザクションのコミット）を待って完了するため、その後に档案の紐づけを DB 再読込で再確認し、
    * 並行受諾が档案を紐づけていれば新規発行を中止する（連携済み档案に有効トークンが残る矛盾を塞ぐ）。
    */
   @StoreScoped

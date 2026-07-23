@@ -9,15 +9,15 @@ import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/rea
 export function Header() {
   const { logout } = useAuth();
 
-  // 現在店舗・授権店舗・切替は店舗コンテキスト（両コンソール layout に搭載）が一手に担う（#428）。
+  // 現在店舗・授権店舗・切替は店舗コンテキスト（両コンソール layout に搭載）が一手に担う。
   // stores: null = 読み込み中、[] = 非表示（資格無し/0件）、非空 = 店舗切替を表示。
   const { stores, currentStoreId, switchStore } = useStoreContext();
 
   const currentStoreName = stores?.find(store => String(store.id) === currentStoreId)?.name;
 
-  // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す（#413 Fix2）。
+  // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す。
   // currentStoreId が未確定（pathname 由来 id も cookie ヒントも無い）場合は
-  // "/store/undefined/..." を組まず platform 側へ fallback する（#413 Fix3）。
+  // "/store/undefined/..." を組まず platform 側へ fallback する。
   const accountHref =
     isStoreDomain() && currentStoreId
       ? storePath(currentStoreId, '/settings/account')

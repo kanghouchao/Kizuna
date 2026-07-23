@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * StoreProfile の String-PK 化（#429 D）後の {@code /store/config} 永続化経路を固定する IT。
+ * StoreProfile の String-PK 化後の {@code /store/config} 永続化経路を固定する IT。
  *
  * <p>変換済みシード行（旧 BIGINT id が VARCHAR へ移送された t_store_profiles）に対し、String PK ロード・@Version 楽観ロック・基類
  * （StoreScopedEntity）のタイムスタンプが GET→PUT→GET の roundtrip で機能することを確認する。主体は種子の yamada.jiro （束「店舗スタッフ」=

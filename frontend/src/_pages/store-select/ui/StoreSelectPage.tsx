@@ -12,10 +12,10 @@ function resolveNext(): string {
 }
 
 /**
- * 店舗未選択のまま店舗スコープ機能へ入ろうとした時の懒惰トリガー選択画面（#413）。
+ * 店舗未選択のまま店舗スコープ機能へ入ろうとした時の懒惰トリガー選択画面。
  * 授権店舗が1件なら選択UIを出さず自動選択して遷移し、複数件なら一覧から選ばせる。
  * 授権店舗の解決（me()+stores() の呼出し）は Header と共有の店舗コンテキスト（両コンソール
- * layout に搭載）に委ねる（#428・旧 useAuthorizedStores / #413 Fix7）。
+ * layout に搭載）に委ねる。
  * 選択値は「前回選択」のUXヒントであり、認可はバックエンドの fail-closed 検証に委ねる。
  */
 export default function StoreSelectPage() {

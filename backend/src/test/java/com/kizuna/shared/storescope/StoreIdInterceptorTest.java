@@ -99,7 +99,7 @@ class StoreIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("認証はあるが details に Claims を持たない場合は従来通りヘッダのみで店舗文脈を設定すること")
+  @DisplayName("認証はあるが details に Claims を持たない場合はヘッダのみで店舗文脈を設定すること")
   void preHandle_fallsBackToHeaderWhenAuthenticationHasNoClaims() {
     SecurityContextHolder.getContext()
         .setAuthentication(
@@ -155,7 +155,7 @@ class StoreIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("認証済みだが storeId claim が無いトークンが X-Role:store で別店舗を名乗ると 403 で拒否すること（#294）")
+  @DisplayName("認証済みだが storeId claim が無いトークンが X-Role:store で別店舗を名乗ると 403 で拒否すること")
   void preHandle_rejectsAuthenticatedTokenWithoutStoreIdClaimSpoofingHeader() {
     authenticateWithoutStoreId();
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -171,7 +171,7 @@ class StoreIdInterceptorTest {
   }
 
   @Test
-  @DisplayName("未認証で X-Store-ID が long 範囲を超える桁数なら 400 で拒否すること（#288）")
+  @DisplayName("未認証で X-Store-ID が long 範囲を超える桁数なら 400 で拒否すること")
   void preHandle_rejectsOverflowingStoreIdHeaderWith400() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");
@@ -195,7 +195,7 @@ class StoreIdInterceptorTest {
 
   /**
    * 平台トークンを storeBridge 指定で模擬する。storeBridge claim は StoreIdInterceptor の店舗文脈確立判定に使われる（STORE
-   * コンソール能力の保持者のみ true — #398）。
+   * コンソール能力の保持者のみ true）。
    */
   private void authenticateWithPlatformScope(
       boolean storeBridge, String scopeType, Object storeIds) {

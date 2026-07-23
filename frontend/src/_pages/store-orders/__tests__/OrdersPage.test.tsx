@@ -24,7 +24,7 @@ jest.mock('next/navigation', () => ({
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 
-describe('店側オーダー画面と API JSON（snake_case）の整合（#214）', () => {
+describe('店側オーダー画面と API JSON（snake_case）の整合', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

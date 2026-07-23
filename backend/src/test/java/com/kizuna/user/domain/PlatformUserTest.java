@@ -124,7 +124,7 @@ class PlatformUserTest {
   }
 
   @Test
-  @DisplayName("精算範囲 SPECIFIC_STORES は精算店舗集合とともに構築できる（次元の表現 — #382 要件 5）")
+  @DisplayName("精算範囲 SPECIFIC_STORES は精算店舗集合とともに構築できる（次元の表現）")
   void settlementSpecificBuilds() {
     PlatformUser user =
         staffBuilder()

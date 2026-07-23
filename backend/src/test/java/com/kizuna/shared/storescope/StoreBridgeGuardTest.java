@@ -9,7 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.Authentication;
 
-/** {@link StoreBridgeGuard} の storeBridge claim 判定（fail-closed）の単体テスト（#428）。 */
+/** {@link StoreBridgeGuard} の storeBridge claim 判定（fail-closed）の単体テスト。 */
 class StoreBridgeGuardTest {
 
   private final StoreBridgeGuard guard = new StoreBridgeGuard();

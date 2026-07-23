@@ -28,7 +28,7 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 招待発行 API と一覧の招待状態を本物の PostgreSQL で検証する統合テスト（#327）。
+ * 招待発行 API と一覧の招待状態を本物の PostgreSQL で検証する統合テスト。
  *
  * <p>発行は STORE_MANAGER 限定（{@code @PreAuthorize}）で、店舗授権と越権はインターセプタが担う。 クロス店舗分離は {@link
  * com.kizuna.menu.MenuCrossStoreIT} 流にリポジトリ直挿 + 実データ断言で固定する。
@@ -153,7 +153,7 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
   @DisplayName("受諾確定済み(ACCEPTED)の招待がある档案で再発行しても、ACCEPTED 行が INVALIDATED に巻き戻らないこと")
   void reissueDoesNotRollBackAcceptedInvitation() {
     // 並行受諾が先に確定した状況を DB 状態で模す。再発行の失効は条件付き一括 UPDATE（WHERE status =
-    // PENDING）で行うため、ACCEPTED の招待は失効の対象外となり INVALIDATED へ巻き戻らない（#327 codex 指摘）。
+    // PENDING）で行うため、ACCEPTED の招待は失効の対象外となり INVALIDATED へ巻き戻らない。
     // 档案は未紐づけのまま（受諾の紐づけ確定前の窓）なので、再発行自体は新 PENDING の発行として成功する。
     String castId = createCast(STORE_A, managerToken, "受諾済み巻き戻し防止テスト");
     CastInvitation accepted =

@@ -1,6 +1,6 @@
 import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
 
-/** 担当店舗の表示文字列（「全店舗」または店舗名をカンマ区切り、#325 D6）。 */
+/** 担当店舗の表示文字列（「全店舗」または店舗名をカンマ区切り）。 */
 export function storeSetLabel(
   storeScopeType: PlatformStoreScopeType,
   storeIds: number[],

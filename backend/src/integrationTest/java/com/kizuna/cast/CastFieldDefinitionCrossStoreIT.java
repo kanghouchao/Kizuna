@@ -21,10 +21,10 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * カスタムフィールド定義・値のクロス店舗分離を本物の PostgreSQL で検証する統合テスト（issue #277）。
+ * カスタムフィールド定義・値のクロス店舗分離を本物の PostgreSQL で検証する統合テスト。
  *
  * <p>新規テーブル {@code t_cast_field_definitions} と {@code t_casts.custom_fields} に storeFilter が実際に効くこと
- * （#227 の applyToLoadByKey 型の穴が無いこと）を、リポジトリ直挿し＋実データ非混入の強アサーションで固定する
+ * （applyToLoadByKey 型の穴が無いこと）を、リポジトリ直挿し＋実データ非混入の強アサーションで固定する
  * （弱い「所有者不一致」ではなく他店舗の値・ラベルが本文に一切現れないことを断言）。
  *
  * <p>定義 CRUD は {@code ROLE_STORE_MANAGER} 限定のため、店舗{1,2} 授権の店長シードユーザー tanaka.hanako を使う。 tanaka
@@ -209,8 +209,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
   @DisplayName("STORE_STAFF は定義一覧を取得できるが、定義の作成・更新・削除は 403 で拒否されること")
   void staffCanListDefinitionsButCannotMutateThem() {
     // 基底クラスの yamada.jiro（STORE_STAFF・店舗1授権、token）で自店舗(=1)を操作する。
-    // 値入力には活きた定義の読み取りが必要なため一覧(GET)は STAFF にも許可する
-    // （#277 裁定「値の入力自体は既存 PUT /store/casts/{id} のまま MANAGER+STAFF」）。
+    // 値入力には活きた定義の読み取りが必要なため一覧(GET)は STAFF にも許可する。
     // 一方、定義そのものの CRUD は構造変更のため ROLE_STORE_MANAGER 限定を維持する。
 
     ResponseEntity<String> list =

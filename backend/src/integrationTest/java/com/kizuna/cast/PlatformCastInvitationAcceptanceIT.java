@@ -33,7 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 招待受諾 API（公開照会・新規登録受諾・既存アカウント受諾）を本物の PostgreSQL で検証する統合テスト（#327）。
+ * 招待受諾 API（公開照会・新規登録受諾・既存アカウント受諾）を本物の PostgreSQL で検証する統合テスト。
  *
  * <p>身分作成・档案紐づけ・招待状態遷移が単一トランザクションで確定すること、無効 token では副作用が出ないことを DB 断言で固定する。
  */

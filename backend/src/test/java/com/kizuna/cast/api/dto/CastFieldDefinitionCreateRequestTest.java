@@ -51,7 +51,7 @@ class CastFieldDefinitionCreateRequestTest {
   @Test
   void reservedKeyConstructor_violatesPattern() {
     // 'constructor' は react-hook-form の register 内部予約名で、
-    // 定義として作成されるとキャスト編集フォームの描画をクラッシュさせる（#277）。
+    // 定義として作成されるとキャスト編集フォームの描画をクラッシュさせる。
     assertThat(validator.validate(request("constructor", "血液型"))).isNotEmpty();
   }
 
@@ -62,7 +62,7 @@ class CastFieldDefinitionCreateRequestTest {
 
   @Test
   void keyContainingReservedWordButNotEqual_passes() {
-    // 予約語そのものだけを禁止し、部分一致する別キーは従来どおり許可する。
+    // 予約語そのものだけを禁止し、部分一致する別キーは許可する。
     assertThat(validator.validate(request("constructors", "血液型"))).isEmpty();
     assertThat(validator.validate(request("my_constructor", "血液型"))).isEmpty();
   }

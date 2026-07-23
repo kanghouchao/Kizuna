@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 
 /**
- * 公開站各ページの SEO metadata を店名から生成する（issue #223 Phase 2）。
+ * 公開站各ページの SEO metadata を店名から生成する。
  * store ドメイン以外では素の title を返す（ページ本体は notFound になる）。
  */
 export async function storeSiteMetadata(pageTitle?: string): Promise<Metadata> {

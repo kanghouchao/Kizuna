@@ -41,7 +41,7 @@ public class CommonExceptionHandler {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
   }
 
-  /** 必須クエリ／リクエストパラメータの欠落を、既定の 500 でなくクライアント誤りとして 400 へ映射する（#415）。 */
+  /** 必須クエリ／リクエストパラメータの欠落を、既定の 500 でなくクライアント誤りとして 400 へ映射する。 */
   @ExceptionHandler(MissingServletRequestParameterException.class)
   public ResponseEntity<Map<String, Object>> handle(MissingServletRequestParameterException ex) {
     log.warn(ex.getMessage());
@@ -74,7 +74,7 @@ public class CommonExceptionHandler {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
   }
 
-  /** JPA @Version の楽観ロック競合（並行トランザクションの敗者）を 500 でなく 409 へ映射する（#400）。 */
+  /** JPA @Version の楽観ロック競合（並行トランザクションの敗者）を 500 でなく 409 へ映射する。 */
   @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
   public ResponseEntity<Map<String, Object>> handle(ObjectOptimisticLockingFailureException ex) {
     log.warn(ex.getMessage());

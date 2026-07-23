@@ -13,10 +13,9 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Order のクロス店舗分離を本物の PostgreSQL で検証する統合テスト（issue #226）。
+ * Order のクロス店舗分離を本物の PostgreSQL で検証する統合テスト。
  *
- * <p>PR-B の手動 curl 検証の自動化。store A の Order を store B が ID 指定で 読取・更新できないことを固定する（5b39c06
- * applyToLoadByKey 修正の対象経路）。
+ * <p>store A の Order を store B が ID 指定で 読取・更新できないことを固定する（applyToLoadByKey 修正の対象経路）。
  */
 class OrderCrossStoreIT extends CrossStoreTestSupport {
 

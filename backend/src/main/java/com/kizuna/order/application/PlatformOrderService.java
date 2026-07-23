@@ -13,7 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 平台 principal（授権店舗集合）での受注横断ユースケース（#323 集合作用域）。 */
+/** 平台 principal（授権店舗集合）での受注横断ユースケース（集合作用域）。 */
 @Service
 @RequiredArgsConstructor
 public class PlatformOrderService {

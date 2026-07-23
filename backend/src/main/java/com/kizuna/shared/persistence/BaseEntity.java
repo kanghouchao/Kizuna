@@ -30,8 +30,8 @@ public abstract class BaseEntity {
   @Column(name = "updated_at", nullable = false)
   private OffsetDateTime updatedAt;
 
-  /** 楽観ロック用バージョン（全実体共通 — #400）。 */
-  @Setter(AccessLevel.NONE) // 新規 public setter 禁止規約: バージョンは JPA が管理し外部から設定させない（#400）
+  /** 楽観ロック用バージョン（全実体共通）。 */
+  @Setter(AccessLevel.NONE) // 新規 public setter 禁止規約: バージョンは JPA が管理し外部から設定させない
   @Version
   @Column(nullable = false)
   private Long version;

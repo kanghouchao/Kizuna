@@ -18,8 +18,7 @@ import tools.jackson.databind.JsonNode;
  * クロス店舗統合テストの共通土台。
  *
  * <p>シードユーザー yamada.jiro@kizuna.test/pass（STORE_STAFF・授権店舗 = 店舗1）で平台ログインして JWT を保持し、 認証 = JWT /
- * 店舗文脈 = X-Store-ID ヘッダという本番構造どおりのリクエストヘッダを組み立てる （Bearer ヘッダ付きリクエストは CSRF 免除）。issue #225 の
- * CustomerCrossStoreIT から抽出（3 クラス目の重複解消）。
+ * 店舗文脈 = X-Store-ID ヘッダという本番構造どおりのリクエストヘッダを組み立てる （Bearer ヘッダ付きリクエストは CSRF 免除）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate

@@ -2,13 +2,13 @@ package com.kizuna.shared.persistence;
 
 import com.kizuna.shared.storescope.StoreContext;
 import jakarta.persistence.PrePersist;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * store-scoped エンティティの永続化直前に store_id を機構的に採番する JPA エンティティリスナ（#429）。
+ * store-scoped エンティティの永続化直前に store_id を機構的に採番する JPA エンティティリスナ。
  *
- * <p>従来は各サービスの create が「店舗解決 + setStoreId」の四行様板を同型複製していた。 本リスナへ集約し、@StoreScoped の付け忘れを fail-loud
- * で顕在化させる（従来は静默 fail-open）。
+ * <p>@StoreScoped の付け忘れを fail-loud で顕在化させる。
  *
  * <ul>
  *   <li>store_id が既に設定済み → 尊重して素通り（CastInvitation の cast 由来 copy、IT の他店舗カナリア直挿を壊さない）。
@@ -21,13 +21,10 @@ import org.springframework.stereotype.Component;
  * Spring bean として解決され StoreContext が注入される。
  */
 @Component
+@RequiredArgsConstructor
 public class StoreScopeStampListener {
 
   private final StoreContext storeContext;
-
-  public StoreScopeStampListener(StoreContext storeContext) {
-    this.storeContext = storeContext;
-  }
 
   @PrePersist
   public void stampStoreId(StoreScopedEntity entity) {

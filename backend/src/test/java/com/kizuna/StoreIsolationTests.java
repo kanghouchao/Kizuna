@@ -17,11 +17,11 @@ import org.springframework.context.annotation.ClassPathScanningCandidateComponen
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 
 /**
- * 店舗行レベル分離の不変量を機械検証する（#208, PR-B）。
+ * 店舗行レベル分離の不変量を機械検証する。
  *
  * <p>store_id 列を持つ @Entity は、継承経路（StoreScopedEntity）に関わらず、サービス層の {@code @StoreScoped}（{@code
  * StoreFilterEnable}）が有効化する Hibernate フィルタ {@code storeFilter} の対象でなければならない。 {@code @Filter}
- * が無いエンティティはフィルタが有効でも全店舗の行を返してしまう（#216 の「@Filter を忘れる」事故と同型）。
+ * が無いエンティティはフィルタが有効でも全店舗の行を返してしまう。
  */
 class StoreIsolationTests {
 

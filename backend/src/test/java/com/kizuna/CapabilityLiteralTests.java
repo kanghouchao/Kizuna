@@ -19,11 +19,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 権限 authority 字面（{@code PERM_…}）と {@link Capability} enum の整合を機械検証する（#430）。
+ * 権限 authority 字面（{@code PERM_…}）と {@link Capability} enum の整合を機械検証する。
  *
  * <p>{@code @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")} の字面は多数の Controller に手書きされており、{@code
  * Capability} enum とのコンパイル期関連が一切ない。typo は「到達不能な権限（誰も持たない authority = 全員 403）」を静默に生み、機能 IT
- * が偶然踏まない限り検出されない。{@link StoreIsolationTests}（#216 由来）と同型の fitness test でこの欠陥類を閉じる。
+ * が偶然踏まない限り検出されない。{@link StoreIsolationTests} と同型の fitness test でこの欠陥類を閉じる。
  *
  * <p>検査は字面 → enum の写像のみで、SpEL の書き方には一切干渉しない（{@code hasRole} 等の形状は授権設計の判断であり、機械検査の対象外）。
  *

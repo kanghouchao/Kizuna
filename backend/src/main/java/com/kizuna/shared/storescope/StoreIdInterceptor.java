@@ -26,9 +26,9 @@ public class StoreIdInterceptor implements HandlerInterceptor {
   private static final String HEADER_ROLE_STORE = "store";
 
   /**
-   * 平台トークンで店舗文脈（X-Store-ID）を確立できるかを示す claim 名。値はログイン時に STORE コンソール能力の保持から導出される（#398 —
-   * PlatformAuthService）。 shared 層は user モジュールへ依存しないため能力目録を参照せず、導出済みの boolean claim だけを消費する。 {@link
-   * StoreBridgeGuard} と共有するためパッケージ可視とする（#428）。
+   * 平台トークンで店舗文脈（X-Store-ID）を確立できるかを示す claim 名。値はログイン時に STORE
+   * コンソール能力の保持から導出される（PlatformAuthService）。 shared 層は user モジュールへ依存しないため能力目録を参照せず、導出済みの boolean
+   * claim だけを消費する。 {@link StoreBridgeGuard} と共有するためパッケージ可視とする。
    */
   static final String CLAIM_STORE_BRIDGE = "storeBridge";
 
@@ -44,11 +44,11 @@ public class StoreIdInterceptor implements HandlerInterceptor {
         HEADER_ROLE_STORE.equals(request.getHeader(HEADER_ROLE))
             && StringUtils.isNotBlank(request.getHeader(HEADER_STORE_ID));
     if (scope != null) {
-      // 平台トークン（#324 過橋）: X-Role: store + 数値 X-Store-ID を要求し、授権店舗集合で検証する（fail-closed）。
+      // 平台トークンの橋渡し: X-Role: store + 数値 X-Store-ID を要求し、授権店舗集合で検証する（fail-closed）。
       if (HEADER_ROLE_STORE.equals(request.getHeader(HEADER_ROLE))
           && StringUtils.isNumeric(request.getHeader(HEADER_STORE_ID))) {
         // 店舗文脈を名乗れるのは STORE コンソール能力の保持者（storeBridge claim）のみ。CAST/MEMBER/HQ が
-        // 店舗ヘッダを名乗るのは詐称として 403 で拒否する（#294 と同型）。授権スコープ検証より前に弾き、
+        // 店舗ヘッダを名乗るのは詐称として 403 で拒否する。授権スコープ検証より前に弾き、
         // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立の漏れを塞ぐ。
         if (!Boolean.TRUE.equals(claims.get(CLAIM_STORE_BRIDGE, Boolean.class))) {
           response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -56,7 +56,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
         }
         Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
         if (headerValue == null) {
-          // 全桁数字だが long 範囲外（#288 と同型）。
+          // 全桁数字だが long 範囲外。
           response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
           return false;
         }
@@ -70,7 +70,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       // ヘッダ不備（X-Role 欠落・非数値含む）は店舗文脈なし → 末尾の @StoreOptional 判定へ落とす。
     } else if (claims != null) {
       // 認証済みだが storeId claim を持たない（プラットフォーム PlatformAuth 発行、または storeId 無しの legacy）。
-      // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する（#294）。詐称ヘッダが無ければ下の
+      // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する。詐称ヘッダが無ければ下の
       // @StoreOptional 判定に委ね、プラットフォームの正当な素通り（例: /files/upload の platform 保存）を保つ。
       if (claimsStoreHeaderPresent) {
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -81,7 +81,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       // 未認証（ログイン前・公開ページ）だけがヘッダのみで店舗を名乗れる。
       Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
       if (headerValue == null) {
-        // 全桁数字だが long 範囲外（#288）。
+        // 全桁数字だが long 範囲外。
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         return false;
       }
