@@ -14,9 +14,9 @@ import org.springframework.stereotype.Component;
  * prefix を付けずそのまま {@link GrantedAuthority} へ変換する。principal name は {@code sub} （email）で標準 {@link
  * JwtAuthenticationConverter} の既定どおり。
  *
- * <p>{@code authorities} claim が空（欠落・空配列）の token は認証を確立しない。旧手書きフィルタは authorities
- * が空なら認証済みコンテキストを一切構築せず匿名のまま続行していたが、標準 converter は空権限でも「認証済み」トークンを 作ってしまい、{@code isAuthenticated()}
- * のみを要求する端点が拒否→受理へ反転してしまう。安全側に倒し、ここで fail-closed に例外へ変換する（decoder の失敗と同じ経路で {@link
+ * <p>{@code authorities} claim が空（欠落・空配列）の token は認証を確立しない。標準の {@link
+ * JwtGrantedAuthoritiesConverter} は空権限でも「認証済み」トークンを作ってしまい、{@code isAuthenticated()} のみを要求する端点が
+ * 受理してしまう。安全側に倒し、ここで fail-closed に例外へ変換する（decoder の失敗と同じ経路で {@link
  * PlatformAuthenticationEntryPoint} が 401 を返す）。
  *
  * <p>判定は {@code authorities} claim 由来の権限のみを見る（{@link #authoritiesConverter} を直接呼ぶ）。標準 {@link
