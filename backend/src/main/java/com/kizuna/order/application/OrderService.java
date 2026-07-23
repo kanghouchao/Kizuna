@@ -38,7 +38,7 @@ public class OrderService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<OrderResponse> list(String customerId, Pageable pageable) {
-    // 一覧は集約を経由せず JPQL join projection で取得（D3）。customerId は顧客詳細の注文履歴用
+    // 一覧は集約を経由せず JPQL join projection で取得。customerId は顧客詳細の注文履歴用
     String filter = (customerId == null || customerId.isBlank()) ? null : customerId;
     return orderRepository.findAllViews(filter, pageable).map(orderMapper::toResponse);
   }

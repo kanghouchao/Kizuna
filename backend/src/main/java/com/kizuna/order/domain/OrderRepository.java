@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 public interface OrderRepository
     extends JpaRepository<Order, String>, JpaSpecificationExecutor<Order> {
 
-  // 関連集約の表示名は ID 参照（D3）のため JPQL join で取得する。
+  // 関連集約の表示名は ID 参照のため JPQL join で取得する。
   // Order / Cast は HQL の予約語と衝突しうるため FQCN でエンティティを参照する。
   String VIEW_SELECT =
       """
