@@ -146,7 +146,7 @@ jar {
 
 // 統合テスト（本物の PostgreSQL/Redis に接続。docker-compose.test.yml 経由で実行する）
 // check には紐づけない: 単体テストは従来どおり Dockerfile test ステージで完結させ、
-// 統合テストは compose ネットワーク内のランナーからのみ実行する（issue #225 の方式決定）
+// 統合テストは compose ネットワーク内のランナーからのみ実行する
 sourceSets {
     integrationTest {
         java.srcDir 'src/integrationTest/java'
