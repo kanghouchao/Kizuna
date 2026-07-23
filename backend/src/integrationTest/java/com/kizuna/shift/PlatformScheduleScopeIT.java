@@ -32,10 +32,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * 本人（キャスト）ポータル週間スケジュールの cast_id 単層自限を本物の PostgreSQL で強断言する統合テスト（issue #328）。
  *
- * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外の実データ（別キャストの確定シフト・非所属店舗の確定シフト・TENTATIVE）が
- * 一切現れないこと（AC story 8）で行う。読みは cast_id 単層自限のみで濾過し、{@code storeSetFilter}/{@code storeFilter}
- * は経由しない。先例は {@link com.kizuna.order.PlatformOrderScopeIT}（リポジトリ直挿 + 実データ断言）と {@link
- * ShiftCrossStoreIT}（単店隔離）。
+ * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外の実データ（別キャストの確定シフト・非所属店舗の確定シフト・TENTATIVE）が 一切現れないこと（AC story
+ * 8）で行う。読みは cast_id 単層自限のみで濾過し、{@code storeSetFilter}/{@code storeFilter} は経由しない。先例は {@link
+ * com.kizuna.order.PlatformOrderScopeIT}（リポジトリ直挿 + 実データ断言）と {@link ShiftCrossStoreIT}（単店隔離）。
  */
 class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
@@ -79,15 +78,15 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
     storeCId = ensureStore(STORE_C_DOMAIN, STORE_C_NAME);
 
     Long castUserId =
-        ensurePlatformUser(CAST_EMAIL, UserType.CAST, StoreScopeType.ALL_STORES, Set.of())
-            .getId();
+        ensurePlatformUser(CAST_EMAIL, UserType.CAST, StoreScopeType.ALL_STORES, Set.of()).getId();
 
     // 本人の cast 行を店 A・店 B の双方に作る（跨店集約の対象。cast_id 自限が同時に店舗自限として機能する所以）。
     String myCastA = createCast(STORE_A, "週間集約IT本人（店A）", castUserId);
     String myCastB = createCast(storeBId, "週間集約IT本人（店B）", castUserId);
 
     // 正向: 本人の確定シフト（跨店）。
-    saveShift(myCastA, STORE_A, LocalTime.parse(MY_A_START), LocalTime.parse(MY_A_END), "CONFIRMED");
+    saveShift(
+        myCastA, STORE_A, LocalTime.parse(MY_A_START), LocalTime.parse(MY_A_END), "CONFIRMED");
     saveShift(
         myCastB, storeBId, LocalTime.parse(MY_B_START), LocalTime.parse(MY_B_END), "CONFIRMED");
 
@@ -102,8 +101,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
     // 負向2: 非所属店舗（店 C）の別キャストの確定シフト。cast_id 単層自限は店舗を跨いで一切現れないこと。
     String foreignCastInStoreC = createCast(storeCId, "週間集約IT非所属店キャスト", null);
-    saveShift(
-        foreignCastInStoreC, storeCId, LocalTime.of(14, 0), LocalTime.of(16, 0), "CONFIRMED");
+    saveShift(foreignCastInStoreC, storeCId, LocalTime.of(14, 0), LocalTime.of(16, 0), "CONFIRMED");
 
     // 負向3: 本人（店A）の TENTATIVE シフト。CONFIRMED のみ返す不変条件のカナリア。
     saveShift(
@@ -142,8 +140,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
   /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
   private String createCast(long storeId, String name, Long platformUserId) {
-    Cast cast =
-        Cast.builder().name(name).status("ACTIVE").platformUserId(platformUserId).build();
+    Cast cast = Cast.builder().name(name).status("ACTIVE").platformUserId(platformUserId).build();
     cast.setStoreId(storeId);
     return castRepository.save(cast).getId();
   }
@@ -215,12 +212,8 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     JsonNode body = res.getBody();
-    assertThat(containsEntry(body, STORE_A, MY_A_START))
-        .as("店 A の本人確定シフトが応答に含まれること")
-        .isTrue();
-    assertThat(containsEntry(body, storeBId, MY_B_START))
-        .as("店 B の本人確定シフトが応答に含まれること")
-        .isTrue();
+    assertThat(containsEntry(body, STORE_A, MY_A_START)).as("店 A の本人確定シフトが応答に含まれること").isTrue();
+    assertThat(containsEntry(body, storeBId, MY_B_START)).as("店 B の本人確定シフトが応答に含まれること").isTrue();
     for (JsonNode node : body) {
       assertThat(node.path("status").asString()).as("応答は常に CONFIRMED であること").isEqualTo("CONFIRMED");
     }
