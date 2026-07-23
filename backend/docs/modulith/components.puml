@@ -54,6 +54,7 @@ Rel(Application.Application.Auth, Application.Application.Shared, "uses", $techn
 Rel(Application.Application.Menu, Application.Application.User, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Storage, Application.Application.User, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Storage, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Shift, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Shift, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Shift, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Storeprofile, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
