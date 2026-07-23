@@ -41,13 +41,16 @@ export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  // 平台セッションがあれば、コンソール値に応じて自動遷移する（cookie 値は platform/store）
+  // 平台セッションがあれば、コンソール値に応じて自動遷移する（cookie 値は platform/store/cast）
   const platformConsole = cookieStore.get('platform-role')?.value;
   if (platformConsole) {
     const platformToken = cookieStore.get('token')?.value;
     if (!platformToken) {
       // token 失効後も platform-role cookie が残っていると /store・/platform のガードと無限リダイレクトになるため、先に検出する
       redirect('/platform/login');
+    }
+    if (platformConsole === 'cast') {
+      redirect('/cast/schedule/');
     }
     const destination = resolvePlatformDestination(platformConsole as PlatformConsole);
     if (destination === 'platform') {
