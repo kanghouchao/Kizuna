@@ -64,9 +64,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   /** ログアウト検証専用ユーザー（他ケースのトークンを巻き込まないため独立させる）。 */
   private static final String LOGOUT_EMAIL = "bridge-logout@kizuna.test";
 
-  private static final String MARKER_S1_STORE_NAME = "店舗1過橋受注";
   private static final String MARKER_S1_REMARKS = "BRIDGE_MARKER_S1";
-  private static final String CANARY_S2_STORE_NAME = "店舗2機密受注";
   private static final String CANARY_S2_REMARKS = "STORE2_LEAK_CANARY";
 
   /** マーカー受注の営業日（PlatformOrderScopeIT の 2999-01-01 と区別する）。 */
@@ -81,8 +79,8 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   @BeforeEach
   void prepareBridgeFixture() {
     // store1 に正向マーカー、store2（v0.5.0 シードの実在店舗 = STORE_B）にカナリアを直挿する。
-    ensureMarkerOrder(STORE_A, MARKER_S1_STORE_NAME, MARKER_S1_REMARKS);
-    ensureMarkerOrder(STORE_B, CANARY_S2_STORE_NAME, CANARY_S2_REMARKS);
+    ensureMarkerOrder(STORE_A, MARKER_S1_REMARKS);
+    ensureMarkerOrder(STORE_B, CANARY_S2_REMARKS);
 
     ensurePlatformUser(CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
     ensurePlatformUser(
@@ -94,7 +92,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   }
 
   /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
-  private void ensureMarkerOrder(long storeId, String storeName, String remarks) {
+  private void ensureMarkerOrder(long storeId, String remarks) {
     boolean exists =
         orderRepository.findAll().stream()
             .anyMatch(
@@ -107,7 +105,6 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     }
     Order order =
         Order.builder()
-            .storeName(storeName)
             .remarks(remarks)
             .businessDate(MARKER_DATE)
             .status(OrderStatus.CREATED)
@@ -217,8 +214,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     assertThat(store1.getBody())
         .as("店舗1の一覧は店舗1マーカーを含み、店舗2カナリアを一切含まないこと")
         .contains(MARKER_S1_REMARKS)
-        .doesNotContain(CANARY_S2_REMARKS)
-        .doesNotContain(CANARY_S2_STORE_NAME);
+        .doesNotContain(CANARY_S2_REMARKS);
 
     ResponseEntity<String> store2 = getStoreOrdersRaw(bridgeHeaders(token, STORE_B));
     assertThat(store2.getStatusCode()).as("授権内の正側: 店舗2も読めること").isEqualTo(HttpStatus.OK);
@@ -234,8 +230,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     assertThat(read.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(read.getBody() == null ? "" : read.getBody())
         .as("拒否応答に店舗2の実データが一切現れないこと")
-        .doesNotContain(CANARY_S2_REMARKS)
-        .doesNotContain(CANARY_S2_STORE_NAME);
+        .doesNotContain(CANARY_S2_REMARKS);
 
     long before = castCountForStore(STORE_B);
     ResponseEntity<String> write =

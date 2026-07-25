@@ -13,8 +13,6 @@ public interface PlatformOrderView {
 
   Long getStoreId();
 
-  String getStoreName();
-
   LocalDate getBusinessDate();
 
   LocalTime getArrivalScheduledStartTime();

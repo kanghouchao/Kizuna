@@ -9,8 +9,6 @@ public interface OrderView {
 
   String getId();
 
-  String getStoreName();
-
   Long getReceptionistId();
 
   String getReceptionistName();

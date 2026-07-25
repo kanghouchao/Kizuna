@@ -52,7 +52,7 @@ _Avoid_: 各コンポーネントでの me()/stores() 個別取得、店舗パ�
 _Avoid_: Member と Customer の混用、「会員」を店舗台帳の意味で使うこと
 
 **Order（注文）**:
-顧客の店舗における 1 回の予約／受注記録。Customer、Cast、および接客担当（PlatformUser）に紐づく。
+顧客の店舗における 1 回の予約／受注記録。Customer、Cast、および接客担当（PlatformUser）に紐づく。店舗への帰属は `store_id`（StoreScopedEntity）のみで表し、店舗名を非正規化して保存しない（表示が必要な場合は Store への JOIN で導出する。ADR 0003）。
 _Avoid_: Reservation, Booking
 
 **出勤希望（ShiftRequest）**:
@@ -75,5 +75,4 @@ _Avoid_: TenantMenu（旧名）
 
 ## Open questions（未解決の論点）
 
-- **Order.storeName**：注文上の自由テキストの「店名」フィールド。Tenant と店舗は 1:1 と確認済みのため、このフィールドの実際の意味（屋号／ブランド／チャネル名？）は明確化後に改名または削除する。
 - **Customer.rank / classification**：いずれも自由テキストで、等級／区分の正式な値体系は未定義（DB デフォルトは rank='SILVER'）。UI はテキスト入力で暫定対応し、業務側で値集合が確定次第 enum + ドロップダウンに収束させる。

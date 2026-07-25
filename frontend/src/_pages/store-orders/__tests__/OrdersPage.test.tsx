@@ -35,7 +35,6 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
       content: [
         {
           id: '1',
-          store_name: '沼津H',
           business_date: '2026-07-03',
           customer_name: '山田太郎',
           cast_name: '花子',
@@ -56,8 +55,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
 
     render(<OrderListPage />);
 
-    expect(await screen.findByText('沼津H')).toBeInTheDocument();
-    expect(screen.getByText('2026-07-03')).toBeInTheDocument();
+    expect(await screen.findByText('2026-07-03')).toBeInTheDocument();
     expect(screen.getByText('山田太郎')).toBeInTheDocument();
     expect(screen.getByText('花子')).toBeInTheDocument();
     expect(screen.getByText('60 分')).toBeInTheDocument();
@@ -71,9 +69,9 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
 
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
     const body = mockedOrderApi.create.mock.calls[0][0] as unknown as Record<string, unknown>;
-    expect(body).toHaveProperty('store_name', '沼津H');
     expect(body).toHaveProperty('business_date');
     expect(body).toHaveProperty('course_minutes', 60);
+    expect(body).not.toHaveProperty('store_name');
     expect(body).not.toHaveProperty('storeName');
     expect(body).not.toHaveProperty('businessDate');
   });

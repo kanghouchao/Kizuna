@@ -67,7 +67,7 @@ class OrderServiceTest {
   private static final long STORE_ID = 1L;
 
   private OrderPatch emptyPatch() {
-    return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null, null);
+    return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null);
   }
 
   /** 受付担当ヘルパーが持つ既定束 id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
@@ -321,8 +321,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(
-            new OrderPatch(
-                "新しい店名", null, null, null, null, null, null, null, null, null, null, null));
+            new OrderPatch(null, null, null, null, null, "新しい割引名", null, null, null, null, null));
     when(castRepository.existsById("g2")).thenReturn(true);
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -336,7 +335,7 @@ class OrderServiceTest {
 
     service.update("o1", req);
 
-    assertThat(existing.getStoreName()).isEqualTo("新しい店名");
+    assertThat(existing.getDiscountName()).isEqualTo("新しい割引名");
   }
 
   @Test

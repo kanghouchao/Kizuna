@@ -15,7 +15,6 @@ export default function EditOrderPage() {
   // Mock initial data - in real app, fetch by id
   const mockInitialData: Partial<OrderFormData> = {
     customerName: '山田太郎',
-    storeName: '沼津H',
     courseMinutes: 60,
     phoneNumber: '09012345678',
   };

@@ -5,7 +5,6 @@ import java.util.List;
 
 /** 注文の部分更新コマンド。null のフィールドは「変更しない」を意味する。 */
 public record OrderPatch(
-    String storeName,
     LocalTime arrivalScheduledStartTime,
     LocalTime arrivalScheduledEndTime,
     Integer courseMinutes,

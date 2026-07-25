@@ -8,8 +8,6 @@ import lombok.Data;
 
 @Data
 public class OrderUpdateRequest {
-  private String storeName;
-
   @NotNull(message = "受付は必須です")
   private Long receptionistId;
 

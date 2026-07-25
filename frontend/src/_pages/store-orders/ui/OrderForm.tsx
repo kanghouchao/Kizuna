@@ -8,7 +8,6 @@ import { OrderReceptionist, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 
 export interface OrderFormData {
-  storeName: string;
   receptionistId: string;
   businessDate: string;
   arrivalStartTime: string;
@@ -150,16 +149,6 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
           基本情報
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">店舗名</label>
-            <select
-              {...register('storeName')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="沼津H">沼津H</option>
-              <option value="横浜F">横浜F</option>
-            </select>
-          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">受付</label>
             <select

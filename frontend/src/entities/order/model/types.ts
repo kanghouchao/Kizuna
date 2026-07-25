@@ -1,7 +1,6 @@
 // バックエンド API の JSON キーに一致（Jackson グローバル SNAKE_CASE）
 export interface Order {
   id: string;
-  store_name: string;
   receptionist_id?: string;
   receptionist_name?: string;
   business_date: string;
@@ -31,7 +30,6 @@ export interface OrderReceptionist {
 }
 
 export interface OrderCreateRequest {
-  store_name: string;
   receptionist_id?: string;
   business_date: string;
   arrival_scheduled_start_time?: string;

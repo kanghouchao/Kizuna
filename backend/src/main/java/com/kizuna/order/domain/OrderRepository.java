@@ -15,7 +15,7 @@ public interface OrderRepository
   // Order / Cast は HQL の予約語と衝突しうるため FQCN でエンティティを参照する。
   String VIEW_SELECT =
       """
-      select o.id as id, o.storeName as storeName,
+      select o.id as id,
              o.receptionistId as receptionistId, u.displayName as receptionistName,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
@@ -51,7 +51,7 @@ public interface OrderRepository
   // 店舗（store）表示名の join は張らない。
   String PLATFORM_VIEW_SELECT =
       """
-      select o.id as id, o.storeId as storeId, o.storeName as storeName,
+      select o.id as id, o.storeId as storeId,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,

@@ -34,7 +34,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * 集合作用域の実データ非漏洩を本物の PostgreSQL で強断言する統合テスト。
  *
- * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外店舗の実データ（店舗名・カナリア文字列）が 一切現れないこと（AC2）で行う。読みは storeSetFilter が
+ * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外店舗の実データ（店舗ID・カナリア文字列）が 一切現れないこと（AC2）で行う。読みは storeSetFilter が
  * session 層で機構的に濾過し、書きは明示的単店 storeId の 授権検証（{@code PlatformOrderService.create}）が担う。先例は {@link
  * com.kizuna.menu.MenuCrossStoreIT}（リポジトリ直挿 + 実データ断言）と {@link
  * com.kizuna.auth.PlatformAuthIT}（平台トークン取得 + planted-user）。
@@ -51,13 +51,13 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
   private static final String STORE_B_DOMAIN = "platform-scope-it.kizuna.test";
 
-  private static final String MARKER_A_STORE_NAME = "店舗A受注マーカー";
   private static final String MARKER_A_REMARKS = "SCOPE_MARKER_A";
-  private static final String CANARY_B_STORE_NAME = "店舗B機密受注";
   private static final String CANARY_B_REMARKS = "SCOPE_LEAK_CANARY_B";
 
-  /** マーカー受注が一覧の先頭ページに現れるよう、他 IT の受注より新しい営業日を使う。 */
-  private static final LocalDate MARKER_DATE = LocalDate.of(2999, 1, 1);
+  /** マーカー受注が一覧の先頭ページに現れるよう、他 IT の受注より新しい営業日を使う。店舗ごとに異なる値とし受注を識別する。 */
+  private static final LocalDate MARKER_A_DATE = LocalDate.of(2999, 1, 1);
+
+  private static final LocalDate CANARY_B_DATE = LocalDate.of(2999, 1, 2);
 
   /** v0.5.0 central/01 の山田次郎シード(platform_users id=3, STORE_STAFF, SPECIFIC_STORES{1})。受付担当として使用。 */
   private static final long SEED_RECEPTIONIST_ID = 3L;
@@ -79,8 +79,8 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
             .orElseGet(() -> storeRepository.save(new Store("集合作用域IT第二店舗", STORE_B_DOMAIN, null)));
     storeBId = storeB.getId();
 
-    ensureMarkerOrder(STORE_A, MARKER_A_STORE_NAME, MARKER_A_REMARKS);
-    ensureMarkerOrder(storeBId, CANARY_B_STORE_NAME, CANARY_B_REMARKS);
+    ensureMarkerOrder(STORE_A, MARKER_A_DATE, MARKER_A_REMARKS);
+    ensureMarkerOrder(storeBId, CANARY_B_DATE, CANARY_B_REMARKS);
 
     ensurePlatformUser(
         SPECIFIC_EMAIL,
@@ -92,22 +92,21 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
   }
 
   /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
-  private void ensureMarkerOrder(long storeId, String storeName, String remarks) {
+  private void ensureMarkerOrder(long storeId, LocalDate businessDate, String remarks) {
     boolean exists =
         orderRepository.findAll().stream()
             .anyMatch(
                 o ->
                     o.getStoreId() != null
                         && storeId == o.getStoreId()
-                        && storeName.equals(o.getStoreName()));
+                        && businessDate.equals(o.getBusinessDate()));
     if (exists) {
       return;
     }
     Order order =
         Order.builder()
-            .storeName(storeName)
             .remarks(remarks)
-            .businessDate(MARKER_DATE)
+            .businessDate(businessDate)
             .status(OrderStatus.CREATED)
             .build();
     order.setStoreId(storeId);
@@ -212,7 +211,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
     boolean hasMarker = false;
     for (JsonNode node : content) {
-      if (MARKER_A_STORE_NAME.equals(node.path("store_name").asString())) {
+      if (MARKER_A_DATE.toString().equals(node.path("business_date").asString())) {
         hasMarker = true;
         break;
       }
@@ -225,7 +224,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("集合外店舗の実データ(店舗B機密受注/カナリア)が応答の生ボディに一切現れないこと(AC2)")
+  @DisplayName("集合外店舗の実データ(store_id/カナリア)が応答の生ボディに一切現れないこと(AC2)")
   void outOfSetRealDataNeverAppearsInResponse() {
     ResponseEntity<String> res =
         rest.exchange(
@@ -236,9 +235,9 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody())
-        .as("授権外店舗の店舗名・カナリア文字列が生ボディに現れないこと")
+        .as("授権外店舗の店舗ID・カナリア文字列が生ボディに現れないこと")
         .doesNotContain(CANARY_B_REMARKS)
-        .doesNotContain(CANARY_B_STORE_NAME);
+        .doesNotContain("\"store_id\":" + storeBId);
   }
 
   @Test
@@ -253,15 +252,15 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     JsonNode content = res.getBody().path("content");
-    List<String> storeNames = new ArrayList<>();
+    List<String> businessDates = new ArrayList<>();
     Set<Long> storeIds = new HashSet<>();
     content.forEach(
         node -> {
-          storeNames.add(node.path("store_name").asString());
+          businessDates.add(node.path("business_date").asString());
           storeIds.add(node.path("store_id").asLong());
         });
 
-    assertThat(storeNames).contains(MARKER_A_STORE_NAME, CANARY_B_STORE_NAME);
+    assertThat(businessDates).contains(MARKER_A_DATE.toString(), CANARY_B_DATE.toString());
     assertThat(storeIds).contains(STORE_A, storeBId);
   }
 
