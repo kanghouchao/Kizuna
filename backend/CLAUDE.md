@@ -1,32 +1,8 @@
 # Backend (Java) Conventions
 
-- **Java version**: 25
-- **Framework**: Spring Boot 4.1+, Spring Modulith, Spring Data JPA, Spring Security, Liquibase
-- **Testing**: JUnit 5, Jacoco (LINE ≥ 70%)
-- **Code generation**: Lombok, MapStruct
-- **Database**: PostgreSQL 18+, Redis 8+
-
 ## Module structure (Spring Modulith)
 
-```
-com.kizuna
-├── shared/          # Shared kernel (OPEN module): storescope, web, config, exception, persistence
-├── store/  auth/  user/  cast/  customer/  order/
-└── menu/  settings/  storeprofile/  shift/  notification/  storage/
-```
-
-Each module follows the DDD four layers:
-
-```
-<module>/
-├── domain/          # Aggregate (JPA entity, rich model), value objects, enums, domain events, repository interfaces
-├── application/     # Use-case services (transaction boundary), read-side queries
-├── infrastructure/  # Additional adapters (interceptors, utilities, etc.)
-└── api/
-    ├── platform/    # Platform-side controllers (when needed)
-    ├── store/       # Store-side controllers (when needed)
-    └── dto/         # request/response + MapStruct mappers
-```
+Each module under `com.kizuna` follows the DDD four layers — `domain/` / `application/` (use-case services = the transaction boundary) / `infrastructure/` / `api/` (`platform/` + `store/` controllers, `dto/` + MapStruct mappers); `shared/` is the OPEN shared kernel.
 
 ### Layer / module rules
 
