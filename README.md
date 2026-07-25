@@ -19,30 +19,6 @@ Kizuna Platform is a modern platform system for running multiple stores under a 
 - Responsive UI with Tailwind CSS
 - Container-first: easy local dev and ops via Make + Docker compose
 
-## Tech Stack
-
-Below are the actual frameworks and key dependency versions used in this repository (extracted from `backend/build.gradle` and `frontend/package.json`). If you upgrade any of these in the project, please update this table accordingly.
-
-| Area                             | Technology                              | Version / Notes                                           |
-| -------------------------------- | --------------------------------------- | --------------------------------------------------------- |
-| Backend framework                | Spring Boot                             | 4.1.0 (see `backend/build.gradle`)                        |
-| Backend language                 | Java                                    | 25 (sourceCompatibility in `backend/build.gradle`)        |
-| Web / Security                   | Spring Web, Spring Security             | `spring-boot-starter-web`, `spring-boot-starter-security` |
-| JWT library                      | JJWT                                    | 0.13.0 (`io.jsonwebtoken`)                                |
-| Data / DB                        | Spring Data JPA, PostgreSQL driver      | `org.postgresql:postgresql` (runtime)                     |
-| Cache                            | Spring Data Redis, Lettuce              | `io.lettuce:lettuce-core` (runtime)                       |
-| Migrations                       | Liquibase                               | `org.liquibase:liquibase-core`                            |
-| Frontend framework               | Next.js                                 | ^14 (`frontend/package.json`)                             |
-| Frontend UI                      | React                                   | ^18                                                       |
-| Frontend language                | TypeScript                              | 5.4.5 (devDependency)                                     |
-| Styling                          | Tailwind CSS                            | ^3.4.1                                                    |
-| HTTP client                      | axios                                   | ^1.6.0                                                    |
-| Containers / Local orchestration | Docker, Docker Compose                  | see `docker-compose.yml`                                  |
-| Reverse proxy                    | Traefik                                 | configured under `infrastructure/` (Traefik configs)      |
-| Testing                          | JUnit/Jacoco (backend), Jest (frontend) | see `backend/build.gradle` and `frontend/package.json`    |
-
-Note: references to other frameworks (e.g. Micronaut, Quarkus) were removed from the table — they are not used in this repository.
-
 ## Architecture
 
 Traefik routes all requests to the right service. The frontend and backend are fully decoupled and communicate over HTTP. All frontend API calls go through the reverse proxy under the `/api` prefix.
