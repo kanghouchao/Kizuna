@@ -27,6 +27,7 @@ import org.hibernate.annotations.Type;
 @Builder
 @ToString
 @Filter(name = "storeFilter", condition = "store_id = :storeId")
+@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 public class StoreProfile extends StoreScopedEntity {
 
   @Column(name = "template_key", length = 50)

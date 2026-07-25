@@ -17,6 +17,7 @@ import org.hibernate.annotations.Type;
 @Entity
 @Table(name = "t_casts")
 @Filter(name = "storeFilter", condition = "store_id = :storeId")
+@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
