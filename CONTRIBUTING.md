@@ -14,7 +14,7 @@ Keep changes small and focused. If a change touches more than one area (frontend
 
 ## Try locally (minimal reproducible steps)
 
-You should install Docker and Docker Buildx to run the full stack locally. The Makefile provides common commands.
+You should install Docker, Docker Buildx and [Task](https://taskfile.dev) to run the full stack locally. The Taskfiles provide common commands.
 
 Before opening a PR it's helpful to run a minimal local validation to save reviewers time. Example quick steps (copy/paste):
 
@@ -32,7 +32,7 @@ task up
 
 ## Local development & useful commands
 
-This repository uses Make targets and Docker for local development. Common commands (run from the repository root):
+This repository uses Task and Docker for local development. Common commands (run from the repository root):
 
 - Build all images: task build service=frontend|backend
 - Start local stack: task up
@@ -97,7 +97,7 @@ Notes on coverage enforcement:
 - Frontend server components (store templates): `frontend/src/_pages/store-site/templates/`
 - Backend Java: `backend/src/main/java/com/kizuna/`
 - Backend changelogs/migrations: `backend/src/main/resources/db/changelog/`
-- Makefile and Docker compose at repo root control local orchestration.
+- `Taskfile.yml` at repo root and the compose files under `infrastructure/` control local orchestration.
 
 Architecture reminders:
 
