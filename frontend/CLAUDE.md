@@ -1,6 +1,5 @@
 # Frontend (TypeScript) Conventions
 
-- **Stack**: TypeScript 5.9, React 19, Next.js 16 (App Router), Jest, ESLint, Prettier
 - **UI work**: read [`DESIGN.md`](./DESIGN.md) FIRST (design system: colors/fonts/spacing/components); if a frontend-design skill is available, invoke it before writing markup.
 - **Architecture**: Feature-Sliced Design (FSD). The layer structure is machine-checked by **Steiger** in `task lint` / CI.
 
