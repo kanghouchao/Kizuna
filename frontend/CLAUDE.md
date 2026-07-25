@@ -21,6 +21,8 @@ frontend/src/
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (generic components)
 ```
 
+Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice), `proxy.ts` + `proxy.test.ts` (the Next proxy entry — Host-based store/platform dispatch, delegating to `shared/lib/proxy`), and `__tests__/` (cross-cutting invariant tests).
+
 - **Import through a slice's index (public API)**. Inside a slice, use relative paths. Do not import your own slice via the alias.
 - **Layer dependencies point downward only**: app → _pages → widgets → features → entities → shared.
 - **Entities must not import each other**. Composition spanning multiple entities (e.g. store-site's storefrontService) is the page layer's responsibility.
@@ -30,6 +32,8 @@ frontend/src/
   - Top-level public routes under `app/` (`/casts`, `/schedule`, `/menu`, `/about`) are thin shells rendering `StoreSitePage`.
   - Shared section components live in `templates/_sections/` (an underscore dir, never a template key); each template dir holds only its `theme.css` and page layouts.
   - Template text-slot metadata lives in `entities/store-profile` (`getTemplateMeta`) because both store-site and store-settings consume it.
+- **Store context is a single seam**: `entities/user`'s `StoreContextProvider` / `useStoreContext` (mounted in both console layouts, `src/app/platform/(console)/layout.tsx` and `src/app/store/layout.tsx`) fetches `me()` + `stores()` **once**. Do not call them per component.
+- **Store path assembly lives only in `shared/lib/store-route`** (`storePath` / `storeSelectPath` / `resolveStoreHref` / `replaceStoreIdInPath`). Hand-written store-path template literals elsewhere are machine-rejected by the negative invariant test `src/__tests__/store-path-invariants.test.ts`, which fs-scans all of `src/`.
 - **alias**: `@/*` → `./src/*` (configured in both tsconfig and jest).
 
 ## Code Conventions

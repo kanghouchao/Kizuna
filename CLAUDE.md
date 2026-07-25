@@ -11,6 +11,12 @@ A platform CMS/CRM/HRM system for running the operations of multiple stores unde
 
 Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/`) and `backend/gradle/gradle-daemon-jvm.properties` (Gradle daemon). Builds, tests, and Spotless must run on JDK 25.
 
+## Key documents
+
+- [CONTEXT.md](CONTEXT.md) — the ubiquitous language, in full (Tenant/Store, PlatformUser, AuthSession, StoreScope, Store Context). The glossary below is a summary; **read CONTEXT.md before reasoning about domain terms**.
+- [ADRs](docs/adr/) — accepted architecture decisions. Read the relevant one before revisiting a decided question.
+- [Issue tracker conventions](docs/agents/issue-tracker.md) — `gh` CLI usage for issues and PRs.
+
 ## Domain Glossary
 
 - **Central** is retired as a structural concept — it survives only as the former name of the platform-management capability group (`Capability.Console.PLATFORM`). Behavior follows role (capability bundle); data follows store (`StoreScope`). Accounts are unified as **PlatformUser**; store-side vocabulary uses the Store prefix (e.g. StoreProfile).
@@ -44,7 +50,7 @@ task test-unit                      # frontend Jest + backend unit + coverage ga
 task test-integration               # backend integration only
 task test service=frontend          # Jest only
 task test service=backend           # JUnit + Jacoco + integration
-task e2e                            # Playwright BDD e2e — PR author's local responsibility, not run in CI
+task e2e                            # Playwright BDD e2e — needs `jq` on the host; PR author's local responsibility, not run in CI
 
 # Lint & format
 task lint                           # check
@@ -69,10 +75,11 @@ Per-directory `CLAUDE.md` files carry the area conventions and are auto-loaded w
 - [Backend](backend/CLAUDE.md)
 - [Frontend](frontend/CLAUDE.md) — plus the design system in [frontend/DESIGN.md](frontend/DESIGN.md) (read FIRST for any UI work)
 - [Infrastructure](infrastructure/CLAUDE.md)
+- [E2E](e2e/CLAUDE.md) — Playwright BDD scenarios (Japanese Gherkin)
 
 ## Repository-wide guardrails
 
-Forbidden operations (enforced locally via `.claude/settings.json` deny rules + hooks; they are policy even where enforcement is absent):
+Forbidden operations (enforced locally by `.claude/settings.json` deny rules only — there are no hooks in this repo; they are policy even where enforcement is absent):
 
 - **Force push in any form** (`--force`, `-f`, `--force-with-lease`) — history rewrites go through a replacement PR.
 - **Merging PRs** (`gh pr merge`, auto-merge) — the repository owner merges every PR by hand.
@@ -91,3 +98,4 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 - Global state libraries (Redux / MobX / Zustand) — none is in use; forms use react-hook-form.
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
 - ModelMapper / Dozer (MapStruct is the mapper), MyBatis (Spring Data JPA is the data layer), TestNG (JUnit 5 is the test framework).
+- `jjwt` or a hand-written JWT filter — authentication is the Spring Security standard stack (`docs/adr/0001-authentication-spring-security-standard-stack.md`).
