@@ -14,7 +14,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OrderResponse {
   private String id;
-  private String storeName;
   private Long receptionistId;
   private String receptionistName; // Helper for display
   private LocalDate businessDate;

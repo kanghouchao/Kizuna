@@ -9,8 +9,6 @@ import lombok.Data;
 
 @Data
 public class OrderCreateRequest {
-  private String storeName;
-
   @NotNull(message = "受付は必須です")
   private Long receptionistId;
 

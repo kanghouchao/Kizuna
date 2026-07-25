@@ -27,9 +27,6 @@ import org.hibernate.annotations.Type;
 @Builder
 public class Order extends StoreScopedEntity {
 
-  @Column(name = "store_name")
-  private String storeName;
-
   @Column(name = "receptionist_id")
   private Long receptionistId;
 
@@ -118,9 +115,6 @@ public class Order extends StoreScopedEntity {
 
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(OrderPatch patch) {
-    if (patch.storeName() != null) {
-      this.storeName = patch.storeName();
-    }
     if (patch.arrivalScheduledStartTime() != null) {
       this.arrivalScheduledStartTime = patch.arrivalScheduledStartTime();
     }
@@ -184,14 +178,6 @@ public class Order extends StoreScopedEntity {
 
   @Override
   public String toString() {
-    return "Order(id="
-        + getId()
-        + ", storeName="
-        + storeName
-        + ", businessDate="
-        + businessDate
-        + ", status="
-        + status
-        + ")";
+    return "Order(id=" + getId() + ", businessDate=" + businessDate + ", status=" + status + ")";
   }
 }

@@ -15,7 +15,6 @@ import lombok.NoArgsConstructor;
 public class PlatformOrderResponse {
   private String id;
   private Long storeId;
-  private String storeName;
   private LocalDate businessDate;
   private LocalTime arrivalScheduledStartTime;
   private LocalTime arrivalScheduledEndTime;
