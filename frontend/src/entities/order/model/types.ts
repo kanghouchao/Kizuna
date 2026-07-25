@@ -26,7 +26,7 @@ export interface Order {
 }
 
 export interface OrderReceptionist {
-  id: string;
+  id: number;
   display_name: string;
 }
 
