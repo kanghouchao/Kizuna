@@ -11,6 +11,11 @@ A platform CMS/CRM/HRM system for running the operations of multiple stores unde
 
 Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/`) and `backend/gradle/gradle-daemon-jvm.properties` (Gradle daemon). Builds, tests, and Spotless must run on JDK 25.
 
+## Key documents
+
+- [CONTEXT.md](CONTEXT.md) — the ubiquitous language, in full (Tenant/Store, PlatformUser, AuthSession, StoreScope, Store Context). The glossary below is a summary; **read CONTEXT.md before reasoning about domain terms**.
+- [ADRs](docs/adr/) — accepted architecture decisions. Read the relevant one before revisiting a decided question.
+
 ## Domain Glossary
 
 - **Central** is retired as a structural concept — it survives only as the former name of the platform-management capability group (`Capability.Console.PLATFORM`). Behavior follows role (capability bundle); data follows store (`StoreScope`). Accounts are unified as **PlatformUser**; store-side vocabulary uses the Store prefix (e.g. StoreProfile).
@@ -44,7 +49,7 @@ task test-unit                      # frontend Jest + backend unit + coverage ga
 task test-integration               # backend integration only
 task test service=frontend          # Jest only
 task test service=backend           # JUnit + Jacoco + integration
-task e2e                            # Playwright BDD e2e — PR author's local responsibility, not run in CI
+task e2e                            # Playwright BDD e2e — needs `jq` on the host; PR author's local responsibility, not run in CI
 
 # Lint & format
 task lint                           # check
@@ -60,7 +65,7 @@ Use the Taskfile (Docker = CI parity) for final verification before committing. 
 
 `task build` also runs as a PR gate inside each side's `Lint and Test (frontend)` / `Lint and Test (backend)` job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
 
-CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only and manual: review the branch diff before opening a PR (the `mattpocock-skills:code-review` skill is the recommended tool). There is no CI-side automated review job and no Claude-triggered GitHub Action.
+CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. Those steps are skipped when the diff touches none of `frontend/`, `backend/`, `e2e/`, `infrastructure/`, `Taskfile*`, `.github/workflows/`, `.github/scripts/` — in a docs-only PR both side jobs still start and report success; what is skipped are their Buildx / lint / test / build **steps**, while **Repo Lint (actionlint) is ungated and always executes**. The detection is by path prefix, so a CLAUDE.md under those directories still triggers the full gate. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only and manual: review the branch diff before opening a PR (the `mattpocock-skills:code-review` skill is the recommended tool). There is no CI-side automated review job and no Claude-triggered GitHub Action.
 
 ## Code Style & Conventions
 
@@ -69,10 +74,11 @@ Per-directory `CLAUDE.md` files carry the area conventions and are auto-loaded w
 - [Backend](backend/CLAUDE.md)
 - [Frontend](frontend/CLAUDE.md) — plus the design system in [frontend/DESIGN.md](frontend/DESIGN.md) (read FIRST for any UI work)
 - [Infrastructure](infrastructure/CLAUDE.md)
+- [E2E](e2e/CLAUDE.md) — Playwright BDD scenarios (Japanese Gherkin)
 
 ## Repository-wide guardrails
 
-Forbidden operations (enforced locally via `.claude/settings.json` deny rules + hooks; they are policy even where enforcement is absent):
+Forbidden operations (enforced locally by `.claude/settings.json` deny rules only — there are no hooks in this repo; they are policy even where enforcement is absent):
 
 - **Force push in any form** (`--force`, `-f`, `--force-with-lease`) — history rewrites go through a replacement PR.
 - **Merging PRs** (`gh pr merge`, auto-merge) — the repository owner merges every PR by hand.
@@ -91,3 +97,4 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 - Global state libraries (Redux / MobX / Zustand) — none is in use; forms use react-hook-form.
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
 - ModelMapper / Dozer (MapStruct is the mapper), MyBatis (Spring Data JPA is the data layer), TestNG (JUnit 5 is the test framework).
+- `jjwt` or a hand-written JWT filter — authentication is the Spring Security standard stack (`docs/adr/0001-authentication-spring-security-standard-stack.md`).

@@ -21,6 +21,8 @@ frontend/src/
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (generic components)
 ```
 
+Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice), `proxy.ts` + `proxy.test.ts` (the Next proxy entry — Host-based store/platform dispatch, delegating to `shared/lib/proxy`), and `__tests__/` (cross-cutting invariant tests).
+
 - **Import through a slice's index (public API)**. Inside a slice, use relative paths. Do not import your own slice via the alias.
 - **Layer dependencies point downward only**: app → _pages → widgets → features → entities → shared.
 - **Entities must not import each other**. Composition spanning multiple entities (e.g. store-site's storefrontService) is the page layer's responsibility.
@@ -30,6 +32,8 @@ frontend/src/
   - Top-level public routes under `app/` (`/casts`, `/schedule`, `/menu`, `/about`) are thin shells rendering `StoreSitePage`.
   - Shared section components live in `templates/_sections/` (an underscore dir, never a template key); each template dir holds only its `theme.css` and page layouts.
   - Template text-slot metadata lives in `entities/store-profile` (`getTemplateMeta`) because both store-site and store-settings consume it.
+- **Store context is a single seam**: `entities/user`'s `StoreContextProvider` / `useStoreContext` (mounted in both console layouts, `src/app/platform/(console)/layout.tsx` and `src/app/store/layout.tsx`) resolves the _current user's switchable stores_ **once** — `me()` always, then `stores()` only when `me().store_bridge` is true (otherwise the list is empty by design). Consume that through `useStoreContext()`; do not re-fetch it per component. The administrative **catalog** is a different question and stays a direct `platformAuthApi.stores()` call (staff management's pickers and drawers), because an HQ admin with `store_bridge=false` has an empty switchable list yet still assigns every store.
+- **Store path assembly lives only in `shared/lib/store-route`** (`storePath` / `storeSelectPath` / `resolveStoreHref` / `replaceStoreIdInPath`). The negative invariant test `src/__tests__/store-path-invariants.test.ts` fs-scans `src/` and rejects the `/store/${...}` template-literal form; it does not catch concatenation or an interpolated base, so treat it as a backstop, not a proof.
 - **alias**: `@/*` → `./src/*` (configured in both tsconfig and jest).
 
 ## Code Conventions
