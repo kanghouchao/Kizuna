@@ -15,7 +15,6 @@ Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/
 
 - [CONTEXT.md](CONTEXT.md) — the ubiquitous language, in full (Tenant/Store, PlatformUser, AuthSession, StoreScope, Store Context). The glossary below is a summary; **read CONTEXT.md before reasoning about domain terms**.
 - [ADRs](docs/adr/) — accepted architecture decisions. Read the relevant one before revisiting a decided question.
-- [Issue tracker conventions](docs/agents/issue-tracker.md) — `gh` CLI usage for issues and PRs.
 
 ## Domain Glossary
 
@@ -66,7 +65,7 @@ Use the Taskfile (Docker = CI parity) for final verification before committing. 
 
 `task build` also runs as a PR gate inside each side's `Lint and Test (frontend)` / `Lint and Test (backend)` job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
 
-CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only and manual: review the branch diff before opening a PR (the `mattpocock-skills:code-review` skill is the recommended tool). There is no CI-side automated review job and no Claude-triggered GitHub Action.
+CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. Those steps are skipped when the diff touches none of `frontend/`, `backend/`, `e2e/`, `infrastructure/`, `Taskfile*`, `.github/workflows/`, `.github/scripts/` — a docs-only PR goes green having executed nothing, and the detection is by path prefix, so a CLAUDE.md under those directories still triggers the full gate. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only and manual: review the branch diff before opening a PR (the `mattpocock-skills:code-review` skill is the recommended tool). There is no CI-side automated review job and no Claude-triggered GitHub Action.
 
 ## Code Style & Conventions
 

@@ -32,8 +32,8 @@ Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice),
   - Top-level public routes under `app/` (`/casts`, `/schedule`, `/menu`, `/about`) are thin shells rendering `StoreSitePage`.
   - Shared section components live in `templates/_sections/` (an underscore dir, never a template key); each template dir holds only its `theme.css` and page layouts.
   - Template text-slot metadata lives in `entities/store-profile` (`getTemplateMeta`) because both store-site and store-settings consume it.
-- **Store context is a single seam**: `entities/user`'s `StoreContextProvider` / `useStoreContext` (mounted in both console layouts, `src/app/platform/(console)/layout.tsx` and `src/app/store/layout.tsx`) fetches `me()` + `stores()` **once**. Do not call them per component.
-- **Store path assembly lives only in `shared/lib/store-route`** (`storePath` / `storeSelectPath` / `resolveStoreHref` / `replaceStoreIdInPath`). Hand-written store-path template literals elsewhere are machine-rejected by the negative invariant test `src/__tests__/store-path-invariants.test.ts`, which fs-scans all of `src/`.
+- **Store context is a single seam**: `entities/user`'s `StoreContextProvider` / `useStoreContext` (mounted in both console layouts, `src/app/platform/(console)/layout.tsx` and `src/app/store/layout.tsx`) resolves the store list **once** — `me()` always, then `stores()` only when `me().store_bridge` is true (otherwise the list is empty by design). Do not call either per component.
+- **Store path assembly lives only in `shared/lib/store-route`** (`storePath` / `storeSelectPath` / `resolveStoreHref` / `replaceStoreIdInPath`). The negative invariant test `src/__tests__/store-path-invariants.test.ts` fs-scans `src/` and rejects the `/store/${...}` template-literal form; it does not catch concatenation or an interpolated base, so treat it as a backstop, not a proof.
 - **alias**: `@/*` → `./src/*` (configured in both tsconfig and jest).
 
 ## Code Conventions
