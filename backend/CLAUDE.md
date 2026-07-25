@@ -2,7 +2,7 @@
 
 ## Module structure (Spring Modulith)
 
-Each module under `com.kizuna` follows the DDD four layers — `domain/` / `application/` (use-case services = the transaction boundary) / `infrastructure/` / `api/` (`platform/` + `store/` controllers, `dto/` + MapStruct mappers); `shared/` is the OPEN shared kernel.
+Each module under `com.kizuna` follows the DDD four layers — `domain/` / `application/` (use-case services = the transaction boundary) / `infrastructure/` / `api/` (`dto/` + MapStruct mappers, plus `platform/` and `store/` controllers **each only when that scope is actually exposed**: a single-scope module is normal, not incomplete); `shared/` is the OPEN shared kernel.
 
 ### Layer / module rules
 
