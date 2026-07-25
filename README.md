@@ -108,7 +108,8 @@ All accounts share the same default password `pass`
 - `task build` or `task build service=frontend|backend` — build docker images for all or specified service
 - `task up` — start the full stack (Traefik, DB, Redis, backend, frontend)
 - `task down` — stop and remove containers
-- `task clean` or `task clean service=frontend|backend` — remove the built docker images for all or specified service (database volumes are left untouched)
+- `task clean service=frontend|backend` — remove the built docker images of that service. Database volumes are never touched.
+- `task clean` (no `service=`) — the same for both services, **and then `docker system prune -f`**, which reclaims stopped containers, unused networks, dangling images and build cache across your **entire** Docker installation, not just Kizuna's. Prefer the `service=` form unless you really want that.
 - `task ps` — show running services
 - `task logs` or `task logs service=frontend|backend|traefik|database` — follow service logs
 - `task test` or `task test service=backend|frontend` — run tests

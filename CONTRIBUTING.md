@@ -42,7 +42,8 @@ This repository uses Task and Docker for local development. Common commands (run
 - Lint or format: task lint service=frontend|backend
 - Format: task format service=frontend|backend
 - Stop and remove containers: task down
-- (be careful!) Clean all containers, volumes, images: task clean service=frontend|backend
+- Remove the built images of a service: task clean service=frontend|backend (database volumes are never touched)
+- (be careful!) `task clean` without `service=` additionally runs `docker system prune -f`, which affects your entire Docker installation, not just Kizuna
 
 Notes:
 - When you are not specifying service=..., the command applies to both frontend and backend, or all services(e.g. `task logs`).
