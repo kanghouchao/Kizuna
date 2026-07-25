@@ -26,6 +26,7 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 class StoreIsolationTests {
 
   private static final String EXPECTED_CONDITION = "store_id = :storeId";
+  private static final String EXPECTED_SET_CONDITION = "store_id in (:storeIds)";
 
   @Test
   @DisplayName("store_id 列を持つ全 @Entity が storeFilter の @Filter を宣言していること")
@@ -61,6 +62,48 @@ class StoreIsolationTests {
         .as(
             "@Filter(name=\"storeFilter\", condition=\"%s\") が無い store_id 列保持エンティティ",
             EXPECTED_CONDITION)
+        .isEmpty();
+  }
+
+  /**
+   * {@code @Filter(storeSetFilter)} の宣言は、対象エンティティを実際に読む {@code @StoreSetScoped}
+   * メソッドが存在しなければ休眠（dormant）のままになる。 宣言済みであることは、そのエンティティが集合作用域の平台横断一覧に既に対応済みであることを意味しない。
+   */
+  @Test
+  @DisplayName("store_id 列を持つ全 @Entity が storeSetFilter の @Filter を宣言していること")
+  void allStoreScopedEntitiesDeclareStoreSetFilter() throws Exception {
+    ClassPathScanningCandidateComponentProvider scanner =
+        new ClassPathScanningCandidateComponentProvider(false);
+    scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
+
+    List<String> offenders = new ArrayList<>();
+    List<String> scanned = new ArrayList<>();
+    for (var candidate : scanner.findCandidateComponents("com.kizuna")) {
+      Class<?> entity = Class.forName(candidate.getBeanClassName());
+      if (!hasStoreIdColumn(entity)) {
+        continue;
+      }
+      scanned.add(entity.getSimpleName());
+      // @Filter は Hibernate 6 で repeatable のため、storeSetFilter を宣言していれば
+      // 他フィルタ（storeFilter 等）が並置されていても違反としない。
+      boolean declaresStoreSetFilter = false;
+      for (Filter filter : entity.getAnnotationsByType(Filter.class)) {
+        if ("storeSetFilter".equals(filter.name())
+            && EXPECTED_SET_CONDITION.equals(filter.condition())) {
+          declaresStoreSetFilter = true;
+          break;
+        }
+      }
+      if (!declaresStoreSetFilter) {
+        offenders.add(entity.getName());
+      }
+    }
+
+    assertThat(scanned).isNotEmpty();
+    assertThat(offenders)
+        .as(
+            "@Filter(name=\"storeSetFilter\", condition=\"%s\") が無い store_id 列保持エンティティ",
+            EXPECTED_SET_CONDITION)
         .isEmpty();
   }
 

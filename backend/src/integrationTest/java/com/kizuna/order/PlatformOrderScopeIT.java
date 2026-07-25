@@ -218,6 +218,10 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
       }
     }
     assertThat(hasMarker).as("授権店舗の正向マーカーが一覧に含まれること").isTrue();
+
+    assertThat(res.getBody().path("total_elements").asLong())
+        .as("total_elements が授権店舗(store A)の実件数と一致し、集合外店舗の件数を含まないこと")
+        .isEqualTo(orderCountForStore(STORE_A));
   }
 
   @Test
