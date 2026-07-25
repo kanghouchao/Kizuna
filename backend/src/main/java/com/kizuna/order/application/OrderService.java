@@ -5,6 +5,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.domain.Order;
@@ -15,8 +16,12 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.domain.Capability;
 import com.kizuna.user.domain.CapabilityBundleRepository;
+import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.UserType;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -111,22 +116,52 @@ public class OrderService {
     }
   }
 
+  private void validateReceptionist(Long receptionistId) {
+    Long storeId = storeContext.getStoreId();
+    Set<Long> orderManageBundleIds =
+        capabilityBundleRepository.findIdsByCapability(Capability.ORDER_MANAGE);
+    platformUserRepository
+        .findById(receptionistId)
+        .filter(user -> isEligibleReceptionist(user, storeId, orderManageBundleIds))
+        .orElseThrow(() -> new ServiceException("受付担当者が見つかりません: " + receptionistId));
+  }
+
+  /**
+   * 受付選択肢の一覧（現店舗を授権する ORDER_MANAGE 保持 STAFF）。書き込み時の {@link #validateReceptionist} と同一の適格条件を共有する。
+   *
+   * <p>店舗授権の絞り込みは {@link PlatformUserRepository#findAuthorizedByUserTypeOrderByDisplayNameAsc} が DB
+   * 層で行う（無関係な他店舗ユーザーの ElementCollection を読み込まないため）。能力束の判定のみ {@link #isEligibleReceptionist}
+   * で引き続き行う。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public List<OrderReceptionistResponse> listReceptionists() {
+    Long storeId = storeContext.getStoreId();
+    Set<Long> orderManageBundleIds =
+        capabilityBundleRepository.findIdsByCapability(Capability.ORDER_MANAGE);
+    return platformUserRepository
+        .findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, storeId)
+        .stream()
+        .filter(user -> isEligibleReceptionist(user, storeId, orderManageBundleIds))
+        .map(
+            user ->
+                OrderReceptionistResponse.builder()
+                    .id(user.getId())
+                    .displayName(user.getDisplayName())
+                    .build())
+        .toList();
+  }
+
   // 受付担当者は「有効(enabled)かつ受注管理能力（ORDER_MANAGE）を持つ STAFF」かつ「現店舗(店舗)を授権する
   // PlatformUser」でなければならない。t_users には store_id が無いため、単なる存在確認では
   // 他店舗/CAST/MEMBER も通ってしまう。停止済み(enabled=false)の口座は束・授権を保持したままなので明示的に弾く。
-  // userType 判定を先行させ、束を持たない CAST/MEMBER で束問い合わせ（空 in 句）へ進まないようにする。
-  private void validateReceptionist(Long receptionistId) {
-    Long storeId = storeContext.getStoreId();
-    platformUserRepository
-        .findById(receptionistId)
-        .filter(
-            user ->
-                user.getUserType() == UserType.STAFF
-                    && user.getEnabled()
-                    && user.authorizes(storeId)
-                    && capabilityBundleRepository.anyBundleHasCapability(
-                        user.getBundleIds(), Capability.ORDER_MANAGE))
-        .orElseThrow(() -> new ServiceException("受付担当者が見つかりません: " + receptionistId));
+  // 書き込み時の検証（validateReceptionist）と一覧（listReceptionists）が同一条件を共有する。
+  private boolean isEligibleReceptionist(
+      PlatformUser user, Long storeId, Set<Long> orderManageBundleIds) {
+    return user.getUserType() == UserType.STAFF
+        && user.getEnabled()
+        && user.authorizes(storeId)
+        && !Collections.disjoint(user.getBundleIds(), orderManageBundleIds);
   }
 
   @StoreScoped

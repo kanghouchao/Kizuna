@@ -1,10 +1,12 @@
 package com.kizuna.order.api.store;
 
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.application.OrderService;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,6 +42,12 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> get(@PathVariable String id) {
     return ResponseEntity.ok(orderService.get(id));
+  }
+
+  @GetMapping("/receptionists")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<List<OrderReceptionistResponse>> listReceptionists() {
+    return ResponseEntity.ok(orderService.listReceptionists());
   }
 
   @PostMapping

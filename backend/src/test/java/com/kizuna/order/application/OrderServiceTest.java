@@ -16,6 +16,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.domain.Order;
@@ -74,13 +75,11 @@ class OrderServiceTest {
 
   @BeforeEach
   void stubReceptionistBundle() {
-    // 受付担当検証は「束のいずれかが ORDER_MANAGE を含むか」を照会する。happy path 用に既定束は
-    // 含む前提で lenient stub し、検証へ到達しないテストで UnnecessaryStubbing を出さない。
+    // 受付担当検証・受付候補一覧はいずれも「ORDER_MANAGE を含む束 id 集合」を照会する。happy path 用に
+    // 既定束を含む前提で lenient stub し、検証へ到達しないテストで UnnecessaryStubbing を出さない。
     lenient()
-        .when(
-            capabilityBundleRepository.anyBundleHasCapability(
-                Set.of(STAFF_BUNDLE_ID), Capability.ORDER_MANAGE))
-        .thenReturn(true);
+        .when(capabilityBundleRepository.findIdsByCapability(Capability.ORDER_MANAGE))
+        .thenReturn(Set.of(STAFF_BUNDLE_ID));
   }
 
   private PlatformUser receptionist(
@@ -263,8 +262,6 @@ class OrderServiceTest {
             .storeIds(Set.of())
             .build();
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
-    when(capabilityBundleRepository.anyBundleHasCapability(Set.of(31L), Capability.ORDER_MANAGE))
-        .thenReturn(false);
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)
@@ -468,5 +465,90 @@ class OrderServiceTest {
   void deleteThrowsWhenMissing() {
     when(orderRepository.existsById("nope")).thenReturn(false);
     assertThatThrownBy(() -> service.delete("nope")).isInstanceOf(ServiceException.class);
+  }
+
+  /** {@link #authorizedReceptionist()} を id・表示名だけ差し替えて複製する（一覧テストで複数件を区別するため）。 */
+  private PlatformUser staffAuthorizedForCurrentStore(long id, String displayName) {
+    PlatformUser user = authorizedReceptionist();
+    user.setId(id);
+    user.updateDisplayName(displayName);
+    return user;
+  }
+
+  @Test
+  void listReceptionistsReturnsEligibleStaffOrderedByDisplayName() {
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    PlatformUser first = staffAuthorizedForCurrentStore(10L, "あさひ");
+    PlatformUser second = staffAuthorizedForCurrentStore(11L, "ひかり");
+    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.STAFF, STORE_ID))
+        .thenReturn(List.of(first, second));
+
+    List<OrderReceptionistResponse> result = service.listReceptionists();
+
+    assertThat(result).hasSize(2);
+    assertThat(result.get(0).getId()).isEqualTo(10L);
+    assertThat(result.get(0).getDisplayName()).isEqualTo("あさひ");
+    assertThat(result.get(1).getId()).isEqualTo(11L);
+    assertThat(result.get(1).getDisplayName()).isEqualTo("ひかり");
+  }
+
+  @Test
+  void listReceptionistsExcludesDisabledStaff() {
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    PlatformUser disabled = staffAuthorizedForCurrentStore(10L, "停止済み");
+    disabled.stop();
+    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.STAFF, STORE_ID))
+        .thenReturn(List.of(disabled));
+
+    assertThat(service.listReceptionists()).isEmpty();
+  }
+
+  @Test
+  void listReceptionistsExcludesStaffAuthorizedForDifferentStore() {
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    PlatformUser otherStore =
+        receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    otherStore.setId(10L);
+    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.STAFF, STORE_ID))
+        .thenReturn(List.of(otherStore));
+
+    assertThat(service.listReceptionists()).isEmpty();
+  }
+
+  @Test
+  void listReceptionistsExcludesCastRole() {
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    PlatformUser cast = receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of());
+    cast.setId(10L);
+    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.STAFF, STORE_ID))
+        .thenReturn(List.of(cast));
+
+    assertThat(service.listReceptionists()).isEmpty();
+  }
+
+  @Test
+  void listReceptionistsExcludesStaffWithoutOrderManageCapability() {
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    PlatformUser noCapability =
+        PlatformUser.builder()
+            .email("hq2@kizuna.test")
+            .password("pw")
+            .displayName("HQ系スタッフ2")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .bundleIds(Set.of(31L))
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeIds(Set.of())
+            .build();
+    noCapability.setId(10L);
+    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.STAFF, STORE_ID))
+        .thenReturn(List.of(noCapability));
+
+    assertThat(service.listReceptionists()).isEmpty();
   }
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { CastResponse, castApi } from '@/entities/cast';
+import { OrderReceptionist, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 
 export interface OrderFormData {
@@ -63,6 +64,20 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
   const [isCastLoading, setIsCastLoading] = useState(false);
   const [isCastOpen, setIsCastOpen] = useState(false);
   const skipNextSearchRef = useRef(false);
+  const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+
+  useEffect(() => {
+    const loadReceptionists = async () => {
+      try {
+        const receptionists = await orderApi.listReceptionists();
+        setReceptionistOptions(receptionists);
+      } catch {
+        toast.error('受付担当者の取得に失敗しました');
+      }
+    };
+
+    loadReceptionists();
+  }, []);
 
   useEffect(() => {
     const loadInitialCast = async () => {
@@ -152,8 +167,11 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             >
               <option value="">－－－</option>
-              <option value="1">なほ</option>
-              <option value="2">松本</option>
+              {receptionistOptions.map(option => (
+                <option key={option.id} value={option.id}>
+                  {option.display_name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
