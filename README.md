@@ -1,9 +1,5 @@
 # Kizuna Platform — Platform CMS, CRM, & HRM for Multiple Stores (Spring Boot + Next.js)
 
-![Spring Boot](https://img.shields.io/badge/SpringBoot-3.5+-green.svg)
-![Next.js](https://img.shields.io/badge/Next.js-14+-blue.svg)
-![Java](https://img.shields.io/badge/Java-21+-blue.svg)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)
 ![Docker](https://img.shields.io/badge/Docker-latest-blue.svg)
 [![CodeQL](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml/badge.svg)](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/kanghouchao/Kizuna/security/dependabot)
@@ -17,7 +13,7 @@ Kizuna Platform is a modern platform system for running multiple stores under a 
 - Comprehensive suite: CMS (Content), CRM (Customer Relationships), HRM (Human Resources)
 - Stateless JWT auth; platform and store APIs split
 - Responsive UI with Tailwind CSS
-- Container-first: easy local dev and ops via Make + Docker compose
+- Container-first: easy local dev and ops via Task + Docker Compose
 
 ## Architecture
 
@@ -37,8 +33,8 @@ The application is strictly divided into two functional domains based on the use
     - **Purpose:** Day-to-day store operations (Orders, Cast management, Customer CRM).
     - **Access:** Accessible via Store Domains (e.g., `store1.kizuna.com`).
     - **Sub-modules:**
-      - `/store/dashboard`: The secured back-office area (requires login).
-      - `/store/site` (Future): Public landing pages for customers.
+      - `/store/{storeId}/...`: The secured back-office area (requires login).
+      - Public store site: served from the store domain root (`/`, `/casts`, `/schedule`, `/menu`, `/about`), rendered with the template selected in the store profile.
 
 ### Platform/store flow and cookies
 
@@ -54,7 +50,7 @@ The application is strictly divided into two functional domains based on the use
 ### Prerequisites
 
 - Docker & Docker Compose
-- Make
+- [Task](https://taskfile.dev) (go-task) — every build/test/lint command in this repo is driven through it
 
 ### Setup
 
@@ -71,45 +67,48 @@ cd Kizuna
 cp infrastructure/.env.example infrastructure/development/.env
 ```
 
-2. edit .env to set your preferred admin domain (e.g. `kizuna.com`)
+3. edit .env to set your preferred admin domain (e.g. `kizuna.com`)
 
-3. Start services
+4. Start services
 
 ```bash
 task build up
 ```
 
-4. Map local domains (for admin/store switching)
+5. Map local domains (for admin/store switching)
 
 Add the following lines to `/etc/hosts` (example using the repo default):
 
 ```text
-127.0.0.1 kizuna.test store1.kizuna.test
+127.0.0.1 kizuna.test store1.kizuna.test store2.kizuna.test
 ```
 
-5. Access
+6. Access
 
 - Platform (admin UI): [kizuna.test](http://kizuna.test) (or your configured admin domain)
-- Sample Tenant (store UI): [store1.kizuna.test](http://store1.kizuna.test)
+- Sample store (store UI): [store1.kizuna.test](http://store1.kizuna.test)
 
-6. Default Credentials
+7. Default Credentials
 
-You can find the initial data setup in [05-initial-data.yaml](./backend/src/main/resources/db/changelog/releases/v0.1.0/central/05-initial-data.yaml).
+Login is by email address. The accounts come from the seed changelogs under [`seed/`](./backend/src/main/resources/db/changelog/releases/v0.1.0/seed/).
 
-- **Platform Admin:** `admin` / default password (see note below)
-- **Sample Tenant Admin:** `admin@store1.kizuna.com` / default password (see note below)
+- **HQ Admin:** `admin@kizuna.test` — all stores. Part of the baseline, so it is seeded in **every** environment including production.
+- **Store Manager:** `tanaka.hanako@kizuna.test` — store1 + store2
+- **Store Staff:** `yamada.jiro@kizuna.test` — store1
 
-Both accounts share the same default password `pass`
+The two store accounts and the sample stores themselves are demo data: they are seeded only under `LIQUIBASE_CONTEXTS=demo`, which is already the default in `infrastructure/development/docker-compose.yml` (the application default is `production`, i.e. no demo data).
 
-7. Login and have fun!
+All accounts share the same default password `pass`
 
-### Useful Make targets
+8. Login and have fun!
+
+### Useful Task commands
 
 - `task help` — list all commands
 - `task build` or `task build service=frontend|backend` — build docker images for all or specified service
 - `task up` — start the full stack (Traefik, DB, Redis, backend, frontend)
 - `task down` — stop and remove containers
-- `task clean` or `task clean service=frontend|backend` — remove containers, volumes, and images for all or specified service
+- `task clean` or `task clean service=frontend|backend` — remove the built docker images for all or specified service (database volumes are left untouched)
 - `task ps` — show running services
 - `task logs` or `task logs service=frontend|backend|traefik|database` — follow service logs
 - `task test` or `task test service=backend|frontend` — run tests
@@ -127,6 +126,8 @@ Both accounts share the same default password `pass`
 Kizuna/
 ├── backend/                     # Backend Spring Boot API
 ├── frontend/                    # Frontend Next.js app
+├── e2e/                         # Playwright BDD end-to-end suite
+├── docs/                        # Design docs and ADRs
 ├── infrastructure/              # Docker Compose / Traefik config per environment
 │   ├── .env.example             # Example env file
 │   ├── development/             # docker-compose.yml + Traefik config (development)
@@ -138,7 +139,7 @@ Kizuna/
 
 - If ports are busy, ensure nothing else is using 80, 443
 - Confirm `/etc/hosts` entries resolve to your machine
-- If you cannot log in, generate a new bcrypt password hash locally using trusted tooling (e.g. `htpasswd` or Python's `bcrypt`), update the password in [05-initial-data.yaml](./backend/src/main/resources/db/changelog/releases/v0.1.0/central/05-initial-data.yaml), then run `task clean` and `task up` again.
+- If you cannot log in, note that the seeded passwords are fixed at the **first** deployment. The hashes come from changelog parameters — `initialAdminPasswordHash` (env `INITIAL_ADMIN_PASSWORD_HASH`) for the HQ admin, `demoUserPasswordHash` (env `DEMO_USER_PASSWORD_HASH`) for the demo store users — and Liquibase checksums each changeset *after* the parameter is expanded. Set those env vars before the first `task up`; editing them against an already-migrated database makes the backend fail to start with a checksum validation error. Rotate passwords through the application instead. If you are already locked out of a local database, recreate the database itself (`DROP DATABASE kizuna` + `CREATE DATABASE kizuna`, then `task up`) — never by removing the Docker volume.
 
 ## Support
 
@@ -147,7 +148,7 @@ Kizuna/
 ## Contributing & AI Guidelines
 
 - Contributing Guide: see `CONTRIBUTING.md`
-- AI submission rules and PR checklist: see `.github/pull_request_template.md` and `.github/copilot-instructions.md`
+- AI submission rules and PR checklist: see `.github/pull_request_template.md` and `CLAUDE.md`
 
 ---
 
