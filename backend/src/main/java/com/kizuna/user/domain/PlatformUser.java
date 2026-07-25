@@ -16,6 +16,7 @@ import java.util.Set;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 /**
  * プラットフォーム共通ユーザー集約。email でログインし、授権は「能力束 × 担当店舗集合 ×（必要時）精算範囲」で表す。
@@ -54,9 +55,13 @@ public class PlatformUser extends BaseEntity {
   @Column(name = "user_type", nullable = false, length = 20)
   private UserType userType;
 
+  // 3 つの EAGER ElementCollection（本フィールド・storeIds・settlementStoreIds）は既定では
+  // 親エンティティ1行ごとに個別 SELECT を発行する。複数ユーザーを一括取得する経路(受付候補一覧等)で
+  // 行数分の副問い合わせが積み上がらないよう、@BatchSize で IN 句によるまとめ取得に切り替える。
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(name = "t_user_bundles", joinColumns = @JoinColumn(name = "platform_user_id"))
   @Column(name = "bundle_id")
+  @BatchSize(size = 25)
   private Set<Long> bundleIds = new HashSet<>();
 
   @Enumerated(EnumType.STRING)
@@ -66,6 +71,7 @@ public class PlatformUser extends BaseEntity {
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(name = "t_user_stores", joinColumns = @JoinColumn(name = "platform_user_id"))
   @Column(name = "store_id")
+  @BatchSize(size = 25)
   private Set<Long> storeIds = new HashSet<>();
 
   /** 精算範囲種別。null は「精算範囲なし」（経理系能力を持たない通常ユーザーの既定）。 */
@@ -78,6 +84,7 @@ public class PlatformUser extends BaseEntity {
       name = "t_user_settlement_stores",
       joinColumns = @JoinColumn(name = "platform_user_id"))
   @Column(name = "store_id")
+  @BatchSize(size = 25)
   private Set<Long> settlementStoreIds = new HashSet<>();
 
   @Builder
