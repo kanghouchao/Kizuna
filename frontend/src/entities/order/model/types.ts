@@ -25,6 +25,11 @@ export interface Order {
   status: string;
 }
 
+export interface OrderReceptionist {
+  id: string;
+  display_name: string;
+}
+
 export interface OrderCreateRequest {
   store_name: string;
   receptionist_id?: string;

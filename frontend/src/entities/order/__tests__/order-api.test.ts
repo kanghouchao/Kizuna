@@ -17,4 +17,10 @@ describe('orderApi', () => {
   it('create は /store/orders を POST する', async () => {
     expect(await orderApi.create({} as never)).toEqual({ ok: true, url: '/store/orders' });
   });
+  it('listReceptionists は /store/orders/receptionists を GET する', async () => {
+    expect(await orderApi.listReceptionists()).toEqual({
+      ok: true,
+      url: '/store/orders/receptionists',
+    });
+  });
 });

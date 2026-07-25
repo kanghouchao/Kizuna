@@ -10,12 +10,9 @@ public interface CapabilityBundleRepository extends JpaRepository<CapabilityBund
 
   Optional<CapabilityBundle> findByName(String name);
 
-  /**
-   * 指定した束集合のいずれかが能力を含むか。呼び出し側は bundleIds の非空を保証すること（STAFF は「1 束以上」の不変条件があるため、STAFF の束集合をそのまま渡せる）。
-   */
+  /** 指定した能力を含む束の id 集合。呼び出し側はユーザーの束集合とこの集合の共通部分の有無で能力保持を判定する。 */
   @Query(
-      "select count(b) > 0 from com.kizuna.user.domain.CapabilityBundle b"
-          + " join b.capabilities c where b.id in :bundleIds and c = :capability")
-  boolean anyBundleHasCapability(
-      @Param("bundleIds") Set<Long> bundleIds, @Param("capability") Capability capability);
+      "select b.id from com.kizuna.user.domain.CapabilityBundle b"
+          + " join b.capabilities c where c = :capability")
+  Set<Long> findIdsByCapability(@Param("capability") Capability capability);
 }

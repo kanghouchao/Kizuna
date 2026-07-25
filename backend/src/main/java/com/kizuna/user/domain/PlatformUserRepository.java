@@ -14,6 +14,18 @@ public interface PlatformUserRepository extends JpaRepository<PlatformUser, Long
   List<PlatformUser> findByUserTypeOrderByDisplayNameAsc(UserType userType);
 
   /**
+   * 指定した本人種別で、現店舗を授権する（ALL_STORES または個別授権店舗集合に含む）有効なユーザーを表示名昇順で取得する。店舗スコープの絞り込みを DB
+   * 層で行うことで、無関係な他店舗ユーザーの ElementCollection（束・店舗集合・精算範囲）を読み込まずに済む。
+   */
+  @Query(
+      "select u from PlatformUser u where u.userType = :userType and u.enabled = true"
+          + " and (u.storeScopeType = com.kizuna.user.domain.StoreScopeType.ALL_STORES"
+          + " or :storeId member of u.storeIds)"
+          + " order by u.displayName asc")
+  List<PlatformUser> findAuthorizedByUserTypeOrderByDisplayNameAsc(
+      @Param("userType") UserType userType, @Param("storeId") Long storeId);
+
+  /**
    * email でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR UPDATE）を掛ける。
    *
    * <p>並行する既存受諾が同一ユーザーの授権店舗集合を read-modify-write する際、ロック取得後に最新状態を読み直させることで 「後着の save
