@@ -6,6 +6,30 @@ import { useRouter } from 'next/navigation';
 import { CastResponse, castApi } from '@/entities/cast';
 import { OrderReceptionist, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from '@/shared/ui';
+
+// Radix Select は value="" を許容しないため、空選択を表す番兵値。
+// onValueChange 側で '' に戻すことで送信ペイロードは従来どおり空文字になる。
+const SELECT_NONE = '__none__';
 
 export interface OrderFormData {
   receptionistId: string;
@@ -44,11 +68,14 @@ interface OrderFormProps {
 
 export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProps) {
   const router = useRouter();
-  const { register, handleSubmit, setValue } = useForm<OrderFormData>({
+  const form = useForm<OrderFormData>({
     defaultValues: {
+      receptionistId: '',
       businessDate: new Date().toISOString().split('T')[0],
+      classification: 'ーー',
       courseMinutes: 60,
       extensionMinutes: 0,
+      discountName: '',
       manualDiscount: 0,
       usedPoints: 0,
       manualGrantPoints: 0,
@@ -57,6 +84,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
       ...initialData,
     },
   });
+  const { register, handleSubmit, setValue, control } = form;
 
   const [castNameInput, setCastNameInput] = useState('');
   const [castOptions, setCastOptions] = useState<CastResponse[]>([]);
@@ -139,256 +167,273 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
   };
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-100"
-    >
-      {/* 1. 基本情報 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          基本情報
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">受付</label>
-            <select
-              {...register('receptionistId')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="">－－－</option>
-              {receptionistOptions.map(option => (
-                <option key={option.id} value={option.id}>
-                  {option.display_name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">営業日</label>
-            <input
-              type="date"
-              {...register('businessDate')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
+    <Form {...form}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* 1. 基本情報 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>基本情報</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FormField
+                control={control}
+                name="receptionistId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>受付</FormLabel>
+                    <Select
+                      value={field.value ? field.value : SELECT_NONE}
+                      onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={SELECT_NONE}>－－－</SelectItem>
+                        {receptionistOptions.map(option => (
+                          <SelectItem key={option.id} value={String(option.id)}>
+                            {option.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <div className="grid gap-2">
+                <Label htmlFor="businessDate">営業日</Label>
+                <Input id="businessDate" type="date" {...register('businessDate')} />
+              </div>
+            </div>
 
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">到着予定時刻</label>
-          <div className="flex items-center space-x-2">
-            <input
-              type="time"
-              {...register('arrivalStartTime')}
-              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-            <span className="text-gray-500">～</span>
-            <input
-              type="time"
-              {...register('arrivalEndTime')}
-              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-      </section>
+            <div className="grid gap-2">
+              <Label>到着予定時刻</Label>
+              <div className="flex items-center gap-2">
+                <Input type="time" className="w-fit" {...register('arrivalStartTime')} />
+                <span className="text-muted-foreground">～</span>
+                <Input type="time" className="w-fit" {...register('arrivalEndTime')} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* 2. お客様情報 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          お客様情報
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">お客様名</label>
-            <input
-              type="text"
-              {...register('customerName')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">電話番号</label>
-            <input
-              type="text"
-              {...register('phoneNumber')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">住所</label>
-            <input
-              type="text"
-              {...register('address')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">建物</label>
-            <input
-              type="text"
-              {...register('buildingName')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">区分</label>
-            <select
-              {...register('classification')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="ーー">ーー</option>
-              <option value="自宅">自宅</option>
-              <option value="ラブホ">ラブホ</option>
-              <option value="ビジホ">ビジホ</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ペット有無</label>
-            <select
-              {...register('hasPet')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="false">なし</option>
-              <option value="true">あり</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">目印</label>
-            <input
-              type="text"
-              {...register('landmark')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-      </section>
+        {/* 2. お客様情報 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>お客様情報</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="customerName">お客様名</Label>
+                <Input id="customerName" type="text" {...register('customerName')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="phoneNumber">電話番号</Label>
+                <Input id="phoneNumber" type="text" {...register('phoneNumber')} />
+              </div>
+              <div className="grid gap-2 md:col-span-2">
+                <Label htmlFor="address">住所</Label>
+                <Input id="address" type="text" {...register('address')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="buildingName">建物</Label>
+                <Input id="buildingName" type="text" {...register('buildingName')} />
+              </div>
+              <FormField
+                control={control}
+                name="classification"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>区分</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="ーー">ーー</SelectItem>
+                        <SelectItem value="自宅">自宅</SelectItem>
+                        <SelectItem value="ラブホ">ラブホ</SelectItem>
+                        <SelectItem value="ビジホ">ビジホ</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name="hasPet"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ペット有無</FormLabel>
+                    <Select
+                      value={String(field.value)}
+                      onValueChange={v => field.onChange(v === 'true')}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="false">なし</SelectItem>
+                        <SelectItem value="true">あり</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <div className="grid gap-2">
+                <Label htmlFor="landmark">目印</Label>
+                <Input id="landmark" type="text" {...register('landmark')} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* 3. コース・料金 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          コース・料金
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">キャスト</label>
-            <input
-              type="text"
-              value={castNameInput}
-              onChange={e => handleCastInputChange(e.target.value)}
-              onFocus={() => castOptions.length > 0 && setIsCastOpen(true)}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              placeholder="名前で検索"
-              role="combobox"
-              aria-expanded={isCastOpen}
-              aria-controls="cast-suggestions"
-              autoComplete="off"
-            />
-            <input type="hidden" {...register('castId')} />
-            {isCastOpen && (
-              <div
-                id="cast-suggestions"
-                role="listbox"
-                className="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg"
-              >
-                {isCastLoading ? (
-                  <div className="px-4 py-2 text-sm text-gray-500">検索中...</div>
-                ) : castOptions.length === 0 ? (
-                  <div className="px-4 py-2 text-sm text-gray-500">該当するキャストがいません</div>
-                ) : (
-                  <ul className="max-h-56 overflow-auto py-1">
-                    {castOptions.map(cast => (
-                      <li key={cast.id}>
-                        <button
-                          type="button"
-                          onClick={() => handleCastSelect(cast)}
-                          className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-indigo-50"
-                          role="option"
-                        >
-                          <span className="font-medium text-gray-900">{cast.name}</span>
-                          <span className="text-xs text-gray-400">ID: {cast.id}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+        {/* 3. コース・料金 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>コース・料金</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="relative grid gap-2">
+                <Label htmlFor="castName">キャスト</Label>
+                <Input
+                  id="castName"
+                  type="text"
+                  value={castNameInput}
+                  onChange={e => handleCastInputChange(e.target.value)}
+                  onFocus={() => castOptions.length > 0 && setIsCastOpen(true)}
+                  placeholder="名前で検索"
+                  role="combobox"
+                  aria-expanded={isCastOpen}
+                  aria-controls="cast-suggestions"
+                  autoComplete="off"
+                />
+                <input type="hidden" {...register('castId')} />
+                {isCastOpen && (
+                  <div
+                    id="cast-suggestions"
+                    role="listbox"
+                    className="absolute top-full z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-lg"
+                  >
+                    {isCastLoading ? (
+                      <div className="px-4 py-2 text-sm text-muted-foreground">検索中...</div>
+                    ) : castOptions.length === 0 ? (
+                      <div className="px-4 py-2 text-sm text-muted-foreground">
+                        該当するキャストがいません
+                      </div>
+                    ) : (
+                      <ul className="max-h-56 overflow-auto py-1">
+                        {castOptions.map(cast => (
+                          <li key={cast.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleCastSelect(cast)}
+                              className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-foreground hover:bg-blue-50"
+                              role="option"
+                            >
+                              <span className="font-medium">{cast.name}</span>
+                              <span className="text-xs text-muted-foreground">ID: {cast.id}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ｺｰｽ(分)</label>
-            <select
-              {...register('courseMinutes')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="60">60</option>
-              <option value="90">90</option>
-              <option value="120">120</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">延長</label>
-            <input
-              type="number"
-              {...register('extensionMinutes')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">割引</label>
-            <select
-              {...register('discountName')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="">なし</option>
-              <option value="一番最初割">一番最初割</option>
-            </select>
-          </div>
-        </div>
-      </section>
+              <FormField
+                control={control}
+                name="courseMinutes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ｺｰｽ(分)</FormLabel>
+                    <Select
+                      value={String(field.value)}
+                      onValueChange={v => field.onChange(Number(v))}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="60">60</SelectItem>
+                        <SelectItem value="90">90</SelectItem>
+                        <SelectItem value="120">120</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <div className="grid gap-2">
+                <Label htmlFor="extensionMinutes">延長</Label>
+                <Input id="extensionMinutes" type="number" {...register('extensionMinutes')} />
+              </div>
+              <FormField
+                control={control}
+                name="discountName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>割引</FormLabel>
+                    <Select
+                      value={field.value ? field.value : SELECT_NONE}
+                      onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={SELECT_NONE}>なし</SelectItem>
+                        <SelectItem value="一番最初割">一番最初割</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* 4. その他 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          その他
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
-            <textarea
-              {...register('remarks')}
-              rows={3}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              キャスト・ドライバーへのメッセージ
-            </label>
-            <textarea
-              {...register('castDriverMessage')}
-              rows={3}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-      </section>
+        {/* 4. その他 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>その他</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="remarks">備考</Label>
+                <Textarea id="remarks" rows={3} {...register('remarks')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="castDriverMessage">キャスト・ドライバーへのメッセージ</Label>
+                <Textarea id="castDriverMessage" rows={3} {...register('castDriverMessage')} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* ボタン */}
-      <div className="flex justify-end space-x-4 pt-6 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="px-6 py-2.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          キャンセル
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-10 py-2.5 rounded-md bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all"
-        >
-          {isSubmitting ? '登録中...' : '登録する'}
-        </button>
-      </div>
-    </form>
+        {/* ボタン */}
+        <div className="flex justify-end gap-4">
+          <Button type="button" variant="outline" onClick={() => router.back()}>
+            キャンセル
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? '登録中...' : '登録する'}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }

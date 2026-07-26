@@ -71,6 +71,12 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
     const body = mockedOrderApi.create.mock.calls[0][0] as unknown as Record<string, unknown>;
     expect(body).toHaveProperty('business_date');
     expect(body).toHaveProperty('course_minutes', 60);
+    // セレクト未操作時の既定ペイロード（挙動維持の錨）
+    expect(body).toHaveProperty('classification', 'ーー');
+    expect(body).toHaveProperty('has_pet', false);
+    expect(body).toHaveProperty('discount_name', '');
+    // 受付未選択は '' のまま → マッピングで undefined になり送信時に欠落する
+    expect(body).toHaveProperty('receptionist_id', undefined);
     expect(body).not.toHaveProperty('store_name');
     expect(body).not.toHaveProperty('storeName');
     expect(body).not.toHaveProperty('businessDate');
