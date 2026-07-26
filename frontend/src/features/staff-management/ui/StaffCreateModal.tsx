@@ -1,6 +1,5 @@
 'use client';
 
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
@@ -10,6 +9,7 @@ import {
   platformStaffApi,
 } from '@/entities/user';
 import { getApiErrorMessage, useManagedList } from '@/shared/lib';
+import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import { BundlePicker } from './BundlePicker';
 import { SettlementScopePicker } from './SettlementScopePicker';
 import { StoreSetPicker } from './StoreSetPicker';
@@ -83,94 +83,100 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
   };
 
   return (
-    <Dialog open={open} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-gray-900/40" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="max-h-full w-full max-w-md overflow-y-auto rounded-[10px] border border-gray-200 bg-white shadow-lg">
-          <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
-            スタッフを追加
-          </DialogTitle>
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
-            <div>
-              <label htmlFor="staff-email" className="mb-1 block text-sm font-medium text-gray-700">
-                メールアドレス
-              </label>
-              <input
-                id="staff-email"
-                type="email"
-                {...register('email', { required: true })}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="staff-password"
-                className="mb-1 block text-sm font-medium text-gray-700"
-              >
-                初期パスワード
-              </label>
-              <input
-                id="staff-password"
-                type="password"
-                {...register('password', { required: true })}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="staff-display-name"
-                className="mb-1 block text-sm font-medium text-gray-700"
-              >
-                氏名
-              </label>
-              <input
-                id="staff-display-name"
-                type="text"
-                {...register('display_name', { required: true })}
-                className={inputClass}
-              />
-            </div>
-            <BundlePicker
-              bundles={bundles}
-              isLoading={bundlesLoading}
-              bundleIds={bundleIds}
-              onChange={setBundleIds}
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] border-gray-200 p-0 sm:max-w-md"
+      >
+        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+          スタッフを追加
+        </DialogTitle>
+        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+          <div>
+            <label htmlFor="staff-email" className="mb-1 block text-sm font-medium text-gray-700">
+              メールアドレス
+            </label>
+            <input
+              id="staff-email"
+              type="email"
+              {...register('email', { required: true })}
+              className={inputClass}
             />
-            <StoreSetPicker
-              storeScopeType={storeScopeType}
-              storeIds={storeIds}
-              onChange={next => {
-                setStoreScopeType(next.storeScopeType);
-                setStoreIds(next.storeIds);
-              }}
+          </div>
+          <div>
+            <label
+              htmlFor="staff-password"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
+              初期パスワード
+            </label>
+            <input
+              id="staff-password"
+              type="password"
+              {...register('password', { required: true })}
+              className={inputClass}
             />
-            <SettlementScopePicker
-              scopeType={settlementScopeType}
-              storeIds={settlementStoreIds}
-              onChange={next => {
-                setSettlementScopeType(next.scopeType);
-                setSettlementStoreIds(next.storeIds);
-              }}
+          </div>
+          <div>
+            <label
+              htmlFor="staff-display-name"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
+              氏名
+            </label>
+            <input
+              id="staff-display-name"
+              type="text"
+              {...register('display_name', { required: true })}
+              className={inputClass}
             />
-            <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                キャンセル
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                {isSubmitting ? '追加中...' : '追加する'}
-              </button>
-            </div>
-          </form>
-        </DialogPanel>
-      </div>
+          </div>
+          <BundlePicker
+            bundles={bundles}
+            isLoading={bundlesLoading}
+            bundleIds={bundleIds}
+            onChange={setBundleIds}
+          />
+          <StoreSetPicker
+            storeScopeType={storeScopeType}
+            storeIds={storeIds}
+            onChange={next => {
+              setStoreScopeType(next.storeScopeType);
+              setStoreIds(next.storeIds);
+            }}
+          />
+          <SettlementScopePicker
+            scopeType={settlementScopeType}
+            storeIds={settlementStoreIds}
+            onChange={next => {
+              setSettlementScopeType(next.scopeType);
+              setSettlementStoreIds(next.storeIds);
+            }}
+          />
+          <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              {isSubmitting ? '追加中...' : '追加する'}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }

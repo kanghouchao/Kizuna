@@ -1,11 +1,11 @@
 'use client';
 
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastFieldDefinitionCreateRequest, castFieldDefinitionApi } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
+import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 
 interface CastFieldCreateModalProps {
   open: boolean;
@@ -54,72 +54,78 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
   };
 
   return (
-    <Dialog open={open} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-gray-900/40" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-md rounded-[10px] border border-gray-200 bg-white shadow-lg">
-          <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
-            フィールドを追加
-          </DialogTitle>
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
-            <div>
-              <label htmlFor="field-key" className="mb-1 block text-sm font-medium text-gray-700">
-                key
-              </label>
-              <input
-                id="field-key"
-                type="text"
-                {...register('key', {
-                  required: true,
-                  // バックエンドの @Pattern と同期。constructor・prototype は
-                  // react-hook-form の register 内部予約名で、定義化するとキャスト
-                  // 編集フォームの描画をクラッシュさせるため作成時に拒否する。
-                  pattern: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
-                })}
-                className={inputClass}
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(作成後は変更できません)
-              </p>
-            </div>
-            <div>
-              <label htmlFor="field-label" className="mb-1 block text-sm font-medium text-gray-700">
-                label
-              </label>
-              <input
-                id="field-label"
-                type="text"
-                {...register('label', { required: true })}
-                className={inputClass}
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                {...register('is_public')}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              公開する(公開詳細ページに表示)
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="gap-0 rounded-[10px] border-gray-200 p-0 sm:max-w-md"
+      >
+        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+          フィールドを追加
+        </DialogTitle>
+        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+          <div>
+            <label htmlFor="field-key" className="mb-1 block text-sm font-medium text-gray-700">
+              key
             </label>
-            <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                キャンセル
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                {isSubmitting ? '追加中...' : '追加する'}
-              </button>
-            </div>
-          </form>
-        </DialogPanel>
-      </div>
+            <input
+              id="field-key"
+              type="text"
+              {...register('key', {
+                required: true,
+                // バックエンドの @Pattern と同期。constructor・prototype は
+                // react-hook-form の register 内部予約名で、定義化するとキャスト
+                // 編集フォームの描画をクラッシュさせるため作成時に拒否する。
+                pattern: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
+              })}
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(作成後は変更できません)
+            </p>
+          </div>
+          <div>
+            <label htmlFor="field-label" className="mb-1 block text-sm font-medium text-gray-700">
+              label
+            </label>
+            <input
+              id="field-label"
+              type="text"
+              {...register('label', { required: true })}
+              className={inputClass}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              {...register('is_public')}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            公開する(公開詳細ページに表示)
+          </label>
+          <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              {isSubmitting ? '追加中...' : '追加する'}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }

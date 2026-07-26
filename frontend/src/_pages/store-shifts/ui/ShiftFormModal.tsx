@@ -1,11 +1,11 @@
 'use client';
 
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
+import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 
 interface ShiftFormValues {
   cast_id: string;
@@ -109,96 +109,102 @@ export function ShiftFormModal({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-gray-900/40" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-md rounded-[10px] border border-gray-200 bg-white shadow-lg">
-          <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
-            {editing ? 'シフトを編集' : 'シフトを追加'}
-          </DialogTitle>
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="gap-0 rounded-[10px] border-gray-200 p-0 sm:max-w-md"
+      >
+        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+          {editing ? 'シフトを編集' : 'シフトを追加'}
+        </DialogTitle>
+        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">キャスト</label>
+            <select {...register('cast_id', { required: true })} className={inputClass}>
+              {casts.length === 0 && <option value="">キャストが未登録です</option>}
+              {casts.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">日付</label>
+            <input
+              type="date"
+              {...register('work_date', { required: true })}
+              className={inputClass}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">キャスト</label>
-              <select {...register('cast_id', { required: true })} className={inputClass}>
-                {casts.length === 0 && <option value="">キャストが未登録です</option>}
-                {casts.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">日付</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">開始</label>
               <input
-                type="date"
-                {...register('work_date', { required: true })}
+                type="time"
+                {...register('start_time', { required: true })}
                 className={inputClass}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">開始</label>
-                <input
-                  type="time"
-                  {...register('start_time', { required: true })}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">終了</label>
-                <input
-                  type="time"
-                  {...register('end_time', { required: true })}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            <p className="text-xs text-gray-500">
-              終了が開始以前のときは翌日にまたがる勤務として扱います。
-            </p>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">ステータス</label>
-              <select {...register('status')} className={inputClass}>
-                {STATUS_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1 block text-sm font-medium text-gray-700">終了</label>
+              <input
+                type="time"
+                {...register('end_time', { required: true })}
+                className={inputClass}
+              />
             </div>
-            <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-              <div>
-                {editing && (
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className="rounded text-sm font-medium text-red-600 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    削除
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-3">
+          </div>
+          <p className="text-xs text-gray-500">
+            終了が開始以前のときは翌日にまたがる勤務として扱います。
+          </p>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">ステータス</label>
+            <select {...register('status')} className={inputClass}>
+              {STATUS_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+            <div>
+              {editing && (
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  onClick={handleDelete}
+                  className="rounded text-sm font-medium text-red-600 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
-                  キャンセル
+                  削除
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  {isSubmitting ? '保存中...' : '保存する'}
-                </button>
-              </div>
+              )}
             </div>
-          </form>
-        </DialogPanel>
-      </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                キャンセル
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                {isSubmitting ? '保存中...' : '保存する'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }
