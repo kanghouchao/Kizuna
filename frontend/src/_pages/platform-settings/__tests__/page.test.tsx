@@ -86,4 +86,18 @@ describe('SystemSettingsPage', () => {
     fireEvent.click(await screen.findByText('25'));
     expect(screen.getByRole('spinbutton')).toBeInTheDocument();
   });
+
+  it('編集した値は config_key と config_value のペイロードで保存される', async () => {
+    render(<SystemSettingsPage />);
+    fireEvent.click(await screen.findByText('25'));
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '587' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() =>
+      expect(mockUpdateConfig).toHaveBeenCalledWith({
+        config_key: 'smtp_port',
+        config_value: '587',
+      })
+    );
+  });
 });
