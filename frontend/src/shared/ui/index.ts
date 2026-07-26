@@ -1,3 +1,3 @@
-export { default as ImageUpload } from './ImageUpload';
-export { default as AuthLayout } from './AuthLayout';
+export { default as ImageUpload } from './image-upload';
+export { default as AuthLayout } from './auth-layout';
 export { ThemeProvider } from './theme-provider';
