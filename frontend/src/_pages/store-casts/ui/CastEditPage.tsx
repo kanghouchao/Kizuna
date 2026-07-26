@@ -59,7 +59,7 @@ export default function CastEditPage() {
   };
 
   if (isLoading) {
-    return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
+    return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
   }
 
   if (!cast) return null;
@@ -67,8 +67,8 @@ export default function CastEditPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">キャスト編集</h1>
-        <p className="text-sm text-gray-500 mt-1">「{cast.name}」の情報を編集します。</p>
+        <h1 className="text-2xl font-bold text-foreground">キャスト編集</h1>
+        <p className="text-sm text-muted-foreground mt-1">「{cast.name}」の情報を編集します。</p>
       </div>
       <CastForm
         initialData={{
