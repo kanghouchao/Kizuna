@@ -496,7 +496,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
         </section>
 
         {/* Buttons */}
-        <div className="flex justify-end space-x-4 pt-6 border-t sticky bottom-0 bg-card/90 backdrop-blur-sm p-4 -mx-8 -mb-8 rounded-b-xl">
+        <div className="flex justify-end gap-4 pt-6 border-t">
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? '保存中...' : '設定を保存する'}
           </Button>
