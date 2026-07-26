@@ -131,7 +131,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                   return (
                     <label
                       key={meta.key}
-                      className={`block rounded-lg border p-3 cursor-pointer transition-colors has-[:focus-visible]:ring-2 ${
+                      className={`group block rounded-lg border p-3 cursor-pointer transition-colors has-[:focus-visible]:ring-2 ${
                         selected
                           ? 'border-primary ring-2 ring-primary bg-primary/10'
                           : 'hover:bg-muted'
@@ -152,7 +152,17 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                       >
                         {meta.name}
                       </p>
-                      <p className="text-xs text-muted-foreground">{meta.description}</p>
+                      {/* muted 文字を muted 面へ載せない。ホバー塗りと選択タイントの上では
+                          いずれも 4.5:1 を割るため、面が変わる状態では foreground へ上げる */}
+                      <p
+                        className={`text-xs ${
+                          selected
+                            ? 'text-foreground'
+                            : 'text-muted-foreground group-hover:text-foreground'
+                        }`}
+                      >
+                        {meta.description}
+                      </p>
                     </label>
                   );
                 })}
