@@ -103,7 +103,7 @@ export default function ShiftsPage() {
         <p className="mt-1 text-sm text-gray-500">キャストの出勤シフトを登録・確認できます。</p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={setTab} className="gap-0">
         <TabsList
           variant="line"
           className="h-auto w-full justify-start gap-6 rounded-none border-b border-gray-200 p-0"
