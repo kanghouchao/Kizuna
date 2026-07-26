@@ -4,19 +4,6 @@ import { useStoreContext } from '@/entities/user';
 import { isStoreDomain } from '@/shared/lib';
 import type { PlatformStore } from '@/entities/user';
 
-// Radix の DropdownMenu は Popper（floating-ui）で位置決めし、開閉時に ResizeObserver を、
-// フォーカス移動時に scrollIntoView を、トリガーで hasPointerCapture を使うが、いずれも
-// jsdom には無いため最小スタブを差す。
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-global.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
-Element.prototype.scrollIntoView = jest.fn();
-Element.prototype.hasPointerCapture = jest.fn();
-Element.prototype.releasePointerCapture = jest.fn();
-
 // 現在店舗・授権店舗・切替は店舗コンテキストが担い、その全ケースは StoreContext.test.tsx で検証する。
 // ここでは context 出力（stores / currentStoreId）に対する Header 自身の表示条件・ラベル・
 // accountHref・切替クリックの委譲を検証する。
