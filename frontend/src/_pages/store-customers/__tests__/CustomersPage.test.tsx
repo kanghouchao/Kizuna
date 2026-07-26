@@ -4,15 +4,6 @@ import CustomerCreatePage from '../ui/CustomerCreatePage';
 import { CustomerForm } from '../ui/CustomerForm';
 import { customerApi } from '@/entities/customer';
 
-// Radix Checkbox は <form> 内で hidden な BubbleInput を描画し、その採寸に
-// ResizeObserver を使う。jsdom には未実装のため最小スタブを供給する。
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-globalThis.ResizeObserver = ResizeObserverStub;
-
 jest.mock('@/entities/customer', () => ({
   customerApi: {
     list: jest.fn(),
