@@ -11,7 +11,7 @@ describe('fileApi.upload', () => {
     apiClient.defaults.adapter = (async (config: { data: unknown }) => {
       capturedData = config.data;
       return {
-        data: { url: '/uploads/a.png', originalName: 'a.png', size: 1 },
+        data: { url: '/uploads/a.png', original_name: 'a.png', size: 1 },
         status: 200,
         statusText: 'OK',
         headers: {},
