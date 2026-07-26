@@ -338,7 +338,7 @@ Permanently out of scope, and the only exemptions:
 - the auth screens: `AuthLayout`, everything it wraps, and `shared/ui/auth-layout.tsx` itself — also its own token world;
 - the vendored shadcn primitives, kept exactly as generated (`badge.tsx` and `button.tsx` carry `text-white`; `dialog.tsx` and `sheet.tsx` carry `bg-black/50`).
 
-`widgets/sidebar` and `widgets/header` still match the grep. They are not exemptions — they are simply not converted yet, and the sidebar's conversion is additionally blocked on the open question recorded in the mapping notes.
+Everything else that still matches the grep — the unconverted slices, `widgets/header`, `widgets/sidebar`, the `app/` route shells — is **pending, not exempt**. A partially converted file counts as matching: `store-orders/ui/OrderForm.tsx` is otherwise migrated yet still carries one `hover:bg-blue-50`. The sidebar is the one case that is additionally blocked, on the open question recorded in the mapping notes.
 
 ### What in `shared/ui` may be edited
 
