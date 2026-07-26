@@ -30,4 +30,4 @@ title: "feat: "
 
 ## 参考
 
-<!-- 関連 issue / PR / 設計資料 / Figma ノード -->
+<!-- 関連 issue / PR / 設計資料 -->

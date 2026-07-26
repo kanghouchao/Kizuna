@@ -88,7 +88,7 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 ## Do NOT introduce (unless explicitly requested)
 
 - A second HTTP client on the frontend — `axios` is the established client.
-- CSS-in-JS (styled-components / emotion) or component kits that conflict with Tailwind CSS + Headless UI.
+- CSS-in-JS (styled-components / emotion) or UI kits that bypass the vendored shadcn/ui primitives (`frontend/src/shared/ui`, Radix-based) + Tailwind CSS.
 - Global state libraries (Redux / MobX / Zustand) — none is in use; forms use react-hook-form.
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
 - ModelMapper / Dozer (MapStruct is the mapper), MyBatis (Spring Data JPA is the data layer), TestNG (JUnit 5 is the test framework).

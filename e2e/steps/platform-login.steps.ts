@@ -20,7 +20,7 @@ function castsUrl(page: Page): string {
   return `${PLATFORM_URL}/store/${currentStoreId(page)}/casts`;
 }
 
-// Header の店舗切替ドロップダウンは Headless UI Menu（唯一の aria-haspopup 要素）。
+// Header の店舗切替ドロップダウンは唯一の aria-haspopup 要素。
 // アカウントメニューは group-hover の素の要素で aria-haspopup を持たないため一意に特定できる。
 const storeSwitchToggle = (page: Page): Locator => page.locator('header [aria-haspopup]');
 
