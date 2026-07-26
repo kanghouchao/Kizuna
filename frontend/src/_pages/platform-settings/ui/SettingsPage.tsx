@@ -186,7 +186,7 @@ export default function SystemSettingsPage() {
                         </div>
                       ) : (
                         <div
-                          className="mt-2 text-sm text-foreground break-all font-mono p-2 rounded cursor-pointer border border-transparent hover:border-border"
+                          className="mt-2 text-sm text-foreground break-all font-mono p-2 rounded cursor-pointer border"
                           onClick={() => handleEdit(config)}
                           title="クリックして編集"
                         >
