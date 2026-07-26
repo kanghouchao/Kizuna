@@ -4,13 +4,18 @@ import { useStoreContext } from '@/entities/user';
 import { isStoreDomain } from '@/shared/lib';
 import type { PlatformStore } from '@/entities/user';
 
-// Headless UI の Menu は開閉時に ResizeObserver を使うが jsdom には無いため最小スタブを差す。
+// Radix の DropdownMenu は Popper（floating-ui）で位置決めし、開閉時に ResizeObserver を、
+// フォーカス移動時に scrollIntoView を、トリガーで hasPointerCapture を使うが、いずれも
+// jsdom には無いため最小スタブを差す。
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
   disconnect() {}
 }
 global.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+Element.prototype.scrollIntoView = jest.fn();
+Element.prototype.hasPointerCapture = jest.fn();
+Element.prototype.releasePointerCapture = jest.fn();
 
 // 現在店舗・授権店舗・切替は店舗コンテキストが担い、その全ケースは StoreContext.test.tsx で検証する。
 // ここでは context 出力（stores / currentStoreId）に対する Header 自身の表示条件・ラベル・
@@ -70,7 +75,7 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     expect(screen.getByRole('button', { name: '店舗A' })).toBeInTheDocument();
   });
 
-  it('店舗切替クリックは context の switchStore に店舗 id を委譲する', () => {
+  it('店舗切替クリックは context の switchStore に店舗 id を委譲する', async () => {
     withContext(
       [
         { id: 1, name: '店舗A' },
@@ -80,8 +85,10 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     );
 
     render(<Header />);
-    fireEvent.click(screen.getByRole('button', { name: '店舗A' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '店舗B' }));
+    // Radix のトリガーは pointerdown/キー入力で開く。jsdom の fireEvent.click は
+    // pointerdown を合成しないため、キーボードでメニューを開いてから項目を選ぶ。
+    fireEvent.keyDown(screen.getByRole('button', { name: '店舗A' }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: '店舗B' }));
 
     expect(mockSwitchStore).toHaveBeenCalledWith(2);
   });
