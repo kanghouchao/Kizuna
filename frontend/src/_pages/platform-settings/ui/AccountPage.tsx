@@ -7,8 +7,8 @@ export default function AccountPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">アカウント設定</h1>
-        <p className="text-sm text-gray-500 mt-1">自分のパスワードを管理します。</p>
+        <h1 className="text-2xl font-bold text-foreground">アカウント設定</h1>
+        <p className="text-sm text-muted-foreground mt-1">自分のパスワードを管理します。</p>
       </div>
       <PasswordChangeForm />
     </div>
