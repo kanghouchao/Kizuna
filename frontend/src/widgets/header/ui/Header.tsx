@@ -1,9 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { useAuth, useStoreContext } from '@/entities/user';
 import { isStoreDomain, storePath } from '@/shared/lib';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui';
 import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export function Header() {
@@ -37,27 +42,23 @@ export function Header() {
         <div className="h-8 w-px bg-gray-200" />
 
         {stores && stores.length > 0 && (
-          <Menu as="div" className="relative">
-            <MenuButton
-              disabled={stores.length === 0}
-              className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <BuildingStorefrontIcon className="h-5 w-5 text-gray-400" />
               <span>{currentStoreName || '店舗を選択'}</span>
-            </MenuButton>
-            <MenuItems className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 border border-gray-100 focus:outline-none">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} className="w-56">
               {stores.map(store => (
-                <MenuItem key={store.id}>
-                  <button
-                    onClick={() => switchStore(store.id)}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
-                  >
-                    {store.name}
-                  </button>
-                </MenuItem>
+                <DropdownMenuItem
+                  key={store.id}
+                  onSelect={() => switchStore(store.id)}
+                  className="px-4 py-2 text-sm text-gray-700"
+                >
+                  {store.name}
+                </DropdownMenuItem>
               ))}
-            </MenuItems>
-          </Menu>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
 
         <div className="flex items-center space-x-4">
