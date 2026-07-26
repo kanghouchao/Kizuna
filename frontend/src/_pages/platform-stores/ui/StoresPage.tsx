@@ -151,7 +151,7 @@ export default function StoresPage() {
               <>
                 <ul className="divide-y">
                   {stores.data.map(store => (
-                    <li key={store.id} className="px-4 py-4 hover:bg-muted">
+                    <li key={store.id} className="px-4 py-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center min-w-0 flex-1">
                           <div className="flex-shrink-0">

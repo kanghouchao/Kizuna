@@ -220,7 +220,7 @@ export default function AdminDashboard() {
                 </li>
               ) : (
                 recentStores.map(store => (
-                  <li key={store.id} className="px-4 py-4 hover:bg-muted">
+                  <li key={store.id} className="px-4 py-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <div className="shrink-0 h-10 w-10">
