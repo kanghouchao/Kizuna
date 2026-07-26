@@ -34,6 +34,11 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          // scaffold 段階の暫定強制。既存画面は shadcn token 未使用のまま
+          // ダーク OS では UA 由来のフォーム/スクロールバーだけが暗転して崩れるため、
+          // ライトに固定する。ダークモード有効化票(mode-toggle + ページ restyle 完了)で
+          // 除去し、system 既定へ戻す。
+          forcedTheme="light"
         >
           <AuthProvider>
             {children}
