@@ -63,7 +63,7 @@ export default function ImageUpload({
   return (
     <div className="space-y-2">
       <div
-        className={`relative border-2 border-dashed border-gray-300 rounded-lg overflow-hidden cursor-pointer hover:border-indigo-400 transition-colors ${className}`}
+        className={`relative border-2 border-dashed rounded-lg overflow-hidden cursor-pointer hover:border-primary transition-colors ${className}`}
         onClick={() => inputRef.current?.click()}
       >
         {displayUrl ? (
@@ -75,20 +75,22 @@ export default function ImageUpload({
                 e.stopPropagation();
                 handleRemove();
               }}
-              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
             >
               <XMarkIcon className="h-4 w-4" />
             </button>
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <PhotoIcon className="h-10 w-10 mb-2" />
             <span className="text-xs">{isUploading ? 'アップロード中...' : '写真を選択'}</span>
           </div>
         )}
         {isUploading && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+          // 遮蔽は不透明にする。半透明だと背後のプレビュー画像次第でスピナーの
+          // コントラストが保証できない（明るい画像の暗色モードで 3:1 を割る）。
+          <div className="absolute inset-0 bg-card flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         )}
       </div>
