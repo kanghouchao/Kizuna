@@ -18,46 +18,86 @@ Never mix the vocabularies: no gold-serif storefront styling in admin screens, n
 
 The token layer lives in `src/app/globals.css`: `:root` / `.dark` oklch values exposed to Tailwind through `@theme inline`. Always name the semantic, never the hue — that is what makes both light and dark modes follow without per-screen edits.
 
-| Token                 | Class examples                                                   | Usage rules                                                                    |
-| --------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Page background       | `bg-background`                                                  | App shell behind cards                                                         |
-| Surface               | `bg-card` (+ `text-card-foreground`)                             | Cards, sidebar, header                                                         |
-| Border                | bare `border` (the base layer already applies `border-border`)   | Card, input and divider borders                                                |
-| Text primary          | `text-foreground`                                                | Headings, key figures                                                          |
-| Text secondary        | `text-muted-foreground`                                          | Labels, body, hints, "vs 先月"-style annotations                               |
-| Muted surface         | `bg-muted`                                                       | Progress-bar tracks, table heads, inert fills                                  |
-| **Primary**           | `bg-primary text-primary-foreground`, `text-primary`             | CTAs, links, active states, progress fill (blue-600 in both modes)             |
-| Primary tint          | `bg-primary/10`                                                  | Active nav background, rank chips                                              |
-| Destructive           | `text-destructive`, `bg-destructive text-destructive-foreground` | Delete actions, validation errors, 却下 / NG status                            |
-| Success               | `text-success`, `bg-success text-success-foreground`             | Positive trends, 確定 / 有効 / 在籍 / 承認 status                              |
-| Warning               | `text-warning`, `bg-warning text-warning-foreground`             | 保留 / 申請中 status, attention icons                                          |
-| Decorative categories | `bg-chart-1` … `bg-chart-5`                                      | Stat-card icon chips, 指名 chips — category hues that carry no state semantics |
+| Token                 | Class examples                                                   | Usage rules                                                                     |
+| --------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Page background       | `bg-background`                                                  | App shell behind cards                                                          |
+| Surface               | `bg-card` (+ `text-card-foreground`)                             | Cards, header (the sidebar is a separate open question — see the mapping notes) |
+| Border                | bare `border` (the base layer already applies `border-border`)   | Card, input and divider borders                                                 |
+| Text primary          | `text-foreground`                                                | Headings, key figures                                                           |
+| Text secondary        | `text-muted-foreground`                                          | Labels, body, hints, "vs 先月"-style annotations                                |
+| Muted surface         | `bg-muted`                                                       | Progress-bar tracks, table heads, inert fills                                   |
+| **Primary**           | `bg-primary text-primary-foreground`, `text-primary`             | CTAs, links, active states, progress fill (blue-600 in both modes)              |
+| Primary tint          | `bg-primary/10`                                                  | Active nav background, rank chips                                               |
+| Destructive           | `text-destructive`, `bg-destructive text-destructive-foreground` | Delete actions, validation errors, 却下 / NG status                             |
+| Success               | `text-success`, `bg-success text-success-foreground`             | Positive trends, 確定 / 有効 / 在籍 / 承認 status                               |
+| Warning               | `text-warning`, `bg-warning text-warning-foreground`             | 保留 / 申請中 status, attention icons                                           |
+| Decorative categories | `bg-chart-1` … `bg-chart-5`                                      | Stat-card icon chips, 指名 chips — category hues that carry no state semantics  |
 
 `destructive` is the only danger vocabulary; there is no `--danger`. If a genuinely new state semantic appears, extend `globals.css` **and** this table in a dedicated PR rather than reaching for a raw hue.
 
 #### Legacy → token mapping (restyle sweep)
 
-Screens still carrying pre-shadcn classes are converted with this table. It is exhaustive for the admin surface; anything not listed needs a decision, not a guess.
+Screens still carrying pre-shadcn classes are converted with this table.
 
-| Legacy                                                 | Token                                                     |
-| ------------------------------------------------------ | --------------------------------------------------------- |
-| `text-gray-900`                                        | `text-foreground`                                         |
-| `text-gray-600` / `-500` / `-400`                      | `text-muted-foreground`                                   |
-| `bg-gray-50` (page) / `bg-white` (surface)             | `bg-background` / `bg-card`                               |
-| `border-gray-200` / `-300`                             | bare `border` (or `border-border`)                        |
-| `bg-gray-200` track                                    | `bg-muted`                                                |
-| `blue-600` / `indigo-600`                              | `primary`                                                 |
-| `bg-blue-50`                                           | `bg-primary/10`                                           |
-| `text-red-600` / `bg-red-100 text-red-800`             | `text-destructive` / `bg-destructive/10 text-destructive` |
-| `text-green-600` / `bg-green-100 text-green-800`       | `text-success` / `bg-success/10 text-success`             |
-| `text-amber-600` / `bg-yellow-100 text-yellow-800`     | `text-warning` / `bg-warning/10 text-warning`             |
-| `bg-green-500 text-white` (確定 shift bar)             | `bg-success text-success-foreground`                      |
-| `bg-yellow-400 text-yellow-900` (未確定 shift bar)     | `bg-warning text-warning-foreground`                      |
-| Decorative chips blue / green / orange / purple / pink | `chart-1` … `chart-5`                                     |
-| Weekend `text-red-500` (Sun) / `text-blue-500` (Sat)   | `text-destructive` / `text-primary`                       |
-| Now marker `bg-red-500`                                | `bg-destructive`                                          |
-| Coverage bar `bg-blue-500/80`                          | `bg-primary/80`                                           |
-| Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring       |
+**Substitute the primitive before reaching for this table.** Most legacy class strings belong to hand-built buttons, labels, inputs and tables; swapping in `Button` / `Label` / `Input` / `Table` deletes the whole string rather than mapping it. In the two slices migrated so far, every single occurrence of `text-gray-700` and `hover:bg-gray-50` disappeared this way and none was replaced by a token. Only the classes that survive on bare elements need the table below.
+
+The table is **not exhaustive** — it covers the recurring cases, not every class in the codebase. If something you are converting is not listed, do not guess: raise it in the PR so the answer is recorded here once, for everyone.
+
+| Legacy                                                 | Token                                                      |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
+| `text-gray-900` / `-800`                               | `text-foreground`                                          |
+| `text-gray-700`                                        | **by role — see below**                                    |
+| `text-gray-600` / `-500` / `-400`                      | `text-muted-foreground`                                    |
+| `bg-gray-50` (page) / `bg-white` (surface)             | `bg-background` / `bg-card`                                |
+| `bg-white/90` (sticky footer backdrop)                 | `bg-card/90`                                               |
+| `hover:bg-gray-50`                                     | `hover:bg-muted`                                           |
+| `border-gray-200` / `-300` / `-100`                    | bare `border` (or `border-border`)                         |
+| `divide-gray-200`                                      | bare `divide-y` — the base layer already colors it         |
+| `bg-gray-200` track                                    | `bg-muted`                                                 |
+| `bg-gray-100 text-gray-800` (neutral/無効 pill)        | `bg-muted text-muted-foreground`                           |
+| `placeholder-gray-500`                                 | drop it — `Input` already ships the placeholder color      |
+| `shadow-indigo-200` / `shadow-indigo-900/20`           | drop the tint; keep the plain elevation (`shadow-sm` etc.) |
+| `blue-600` / `indigo-600`                              | `primary`                                                  |
+| `bg-blue-50`                                           | `bg-primary/10`                                            |
+| `text-red-600` / `bg-red-100 text-red-800`             | `text-destructive` / `bg-destructive/10 text-destructive`  |
+| `text-green-600` / `bg-green-100 text-green-800`       | `text-success` / `bg-success/10 text-success`              |
+| `text-amber-600` / `bg-yellow-100 text-yellow-800`     | `text-warning` / `bg-warning/10 text-warning`              |
+| `bg-green-500 text-white` (確定 shift bar)             | `bg-success text-success-foreground`                       |
+| `bg-yellow-400 text-yellow-900` (未確定 shift bar)     | `bg-warning text-warning-foreground`                       |
+| Decorative chips blue / green / orange / purple / pink | `chart-1` … `chart-5` — **see the recipe below**           |
+| `bg-slate-*` (sidebar)                                 | **do not map — see below**                                 |
+| Weekend `text-red-500` (Sun) / `text-blue-500` (Sat)   | `text-destructive` / `text-primary`                        |
+| Now marker `bg-red-500`                                | `bg-destructive`                                           |
+| Coverage bar `bg-blue-500/80`                          | `bg-primary/80`                                            |
+| Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring        |
+
+##### `text-gray-700` is decided by role, not by class
+
+It is the second most common legacy class and it has no single correct token: it sits between `gray-900` (headings) and `gray-500/600` (annotations), so either destination passes the review grep. Guessing per-file is what makes parallel slices diverge. Decide by what the text **does**:
+
+- Text the reader consumes as substance — record values, list items, row labels, body copy → `text-foreground`
+- Text that annotates something else — counts, hints, helper text, timestamps, "N 件中 x-y を表示" → `text-muted-foreground`
+
+Most occurrences never reach this rule because they sit on `<label>` and secondary-button class strings that the `Label` / `Button` primitives replace outright.
+
+##### Decorative chip recipes
+
+The `chart-*` tokens are category hues with **no `-foreground` pair**, so the solid recipe (`bg-<token> text-<token>-foreground`) does not apply to them. Pick any hue that keeps sibling categories distinct, and use:
+
+- **Tint (chips, pills, icon chips)**: `bg-chart-3/10 text-chart-3`.
+- **Solid**: not available for chart hues. A solid colored element that the user can click is an action, not a category — use `Button` (which is `primary`), as with the dashboard's report button. A non-interactive solid category block is a new pattern: raise it rather than inventing a foreground.
+- The neutral counterpart of a category chip (e.g. the フリー fallback beside a 指名 chip) is `bg-muted text-muted-foreground`.
+
+##### The sidebar is deliberately left undecided
+
+`widgets/sidebar/ui/Sidebar.tsx` is a **dark** surface (`bg-slate-800 text-white`, `border-slate-700`, active `bg-indigo-600 text-white`) and the only slate consumer in the admin UI. It contradicts the Sidebar nav item entry in Components above, which describes a light `bg-primary/10 text-primary` treatment.
+
+**Do not mechanically map slate → muted.** That yields a half-tokenized surface that is neither the current dark design nor the documented light one. The two coherent options both change something a class-level mapping cannot decide:
+
+- Keep it dark: map onto the `--sidebar-*` token family, whose values in `:root` are currently light — so keeping the dark look means changing those token values in `globals.css`, a shared file and therefore its own PR.
+- Make it light: this is not a class mapping at all but a rebuild against the Sidebar nav item spec in Components, and it visibly changes the app's most prominent chrome.
+
+This is a visual product decision, so it belongs to the sidebar slice's owner, not to the agent converting it. Until it is made, leave the sidebar alone.
 
 One-off domain colors (now marker, weekend, coverage bar, category chips) intentionally reuse existing tokens instead of gaining dedicated ones: a token with a single consumer is dead weight.
 
@@ -109,7 +149,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Loading placeholder**: `Skeleton` sized with layout classes, never a hand-rolled `animate-pulse` block.
 - **Status pill**: `Badge variant="outline"` plus one tint recipe — `border-transparent bg-success/10 text-success` (確定) / `bg-warning/10 text-warning` (保留) / `bg-destructive/10 text-destructive` (却下 / NG). Precedent: `CustomersPage`.
 - **Stat card**: `Card`; label (`text-muted-foreground` 14px) → figure (`text-foreground` 30px bold) → trend row (`text-success` delta + `text-muted-foreground` comparison); category icon chip top-right (`rounded-lg p-3`, 24px icon, `bg-chart-*`).
-- **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-primary/10 text-primary` with a 2px `bg-primary` edge bar. Inactive: `text-muted-foreground`, hover `bg-muted`. Groups collapse with a chevron.
+- **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-primary/10 text-primary` with a 2px `bg-primary` edge bar. Inactive: `text-muted-foreground`, hover `bg-muted`. Groups collapse with a chevron. **This describes a light sidebar, which the shipped one is not** — do not apply it until the open question in the mapping notes is settled.
 - **Progress bar**: track `bg-muted h-2 rounded-full`, fill `bg-primary`.
 - **Ranking row**: 32px circular rank chip (`bg-primary/10 text-primary`), name + area line (12px icon + `text-muted-foreground`), right-aligned amount (bold) over count (`text-muted-foreground`).
 - **Selectable preview card**: `<label>` wrapping an `sr-only` radio; `rounded-lg border p-3 cursor-pointer`. Unselected hover `bg-muted`; selected `border-primary ring-2 ring-primary bg-primary/10`. Body = thumbnail (`w-full rounded border`) → name (`text-sm font-medium`, selected `text-primary`) → description (`text-xs text-muted-foreground`); keyboard focus via `has-[:focus-visible]:ring-2`.
@@ -180,7 +220,7 @@ Submitted payloads, react-hook-form wiring and existing `confirm()` calls are pr
 A restyled admin file keeps **no** raw palette classes. Review with:
 
 ```
-grep -rnE '(bg|text|border|ring)-(gray|slate|zinc|white|black|red|green|yellow|amber|orange|blue|indigo|purple|pink)' <slice>
+grep -rnE '(bg|text|border|ring|divide|shadow|placeholder)-(gray|slate|zinc|white|black|red|green|yellow|amber|orange|blue|indigo|purple|pink)' <slice>
 ```
 
 Out of scope for this invariant: the storefront (`_pages/store-site/**`) and the auth screens.
