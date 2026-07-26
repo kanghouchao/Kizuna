@@ -15,6 +15,17 @@ import {
   storeSetLabel,
 } from '@/features/staff-management';
 import { useManagedList } from '@/shared/lib';
+import {
+  Badge,
+  Button,
+  Card,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/ui';
 
 /** スタッフ一覧ページ。一覧内モーダル=新規作成、ドロワー=編集。 */
 export default function StaffPage() {
@@ -40,90 +51,85 @@ export default function StaffPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">スタッフ管理</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-foreground">スタッフ管理</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             権限束・担当店舗・精算範囲の付与と編集ができます。
           </p>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          <PlusIcon className="h-5 w-5" />
+        <Button onClick={() => setCreateOpen(true)}>
+          <PlusIcon />
           スタッフを追加
-        </button>
+        </Button>
       </div>
 
-      <div className="overflow-hidden rounded-[10px] border border-gray-200 bg-white shadow-sm">
+      <Card className="py-0 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-gray-500">読み込み中...</div>
+          <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
         ) : staff.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">スタッフが登録されていません</div>
+          <div className="p-8 text-center text-muted-foreground">スタッフが登録されていません</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  氏名
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  権限束
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  状態
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  担当店舗
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  アクション
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>氏名</TableHead>
+                <TableHead>権限束</TableHead>
+                <TableHead>状態</TableHead>
+                <TableHead>担当店舗</TableHead>
+                <TableHead className="text-right">アクション</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {staff.map(member => (
-                <tr
+                <TableRow
                   key={member.id}
-                  className="cursor-pointer hover:bg-gray-50"
+                  className="cursor-pointer"
                   onClick={() => setEditingId(member.id)}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <TableCell className="font-medium text-foreground">
                     {member.display_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {bundleSetLabel(member.bundles)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  </TableCell>
+                  <TableCell>
                     {member.enabled ? (
-                      <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-success/10 text-success-strong"
+                      >
                         有効
-                      </span>
+                      </Badge>
                     ) : (
-                      <span className="inline-flex rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-warning/10 text-warning-strong"
+                      >
                         停止中
-                      </span>
+                      </Badge>
                     )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {storeSetLabel(member.store_scope_type, member.store_ids, stores)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-primary-strong"
                       onClick={e => {
                         e.stopPropagation();
                         setEditingId(member.id);
                       }}
-                      className="rounded text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       編集
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
       <StaffCreateModal
         open={createOpen}
