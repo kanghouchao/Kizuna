@@ -26,9 +26,9 @@ function initialData(overrides: Partial<StoreProfileResponse> = {}): StoreProfil
     id: '1',
     template_key: 'default',
     mv_type: 'image',
-    logo_url: '',
-    banner_url: '',
-    mv_url: '',
+    logo_url: '/uploads/logo.png',
+    banner_url: '/uploads/banner.png',
+    mv_url: '/uploads/mv.png',
     description: '説明',
     catch_copy: '',
     address: '',
@@ -71,6 +71,10 @@ describe('店舗プロフィールフォームの送信ペイロード', () => {
     // 選択肢の先頭値（twitter）へ化けず、保存済みの platform と label が保たれること
     expect(body.sns_links).toEqual([{ platform: 'instagram', url: 'https://insta', label: '' }]);
     expect(body.partner_links).toEqual([]);
+    // 画像欄はアップロード済み URL を保持するだけで、無編集の送信でも値ごと往復すること
+    expect(body.logo_url).toBe('/uploads/logo.png');
+    expect(body.banner_url).toBe('/uploads/banner.png');
+    expect(body.mv_url).toBe('/uploads/mv.png');
   });
 
   it('既定値ではない mv_type が無編集の送信で保持されること', async () => {
@@ -118,5 +122,31 @@ describe('店舗プロフィールフォームの送信ペイロード', () => {
       url: 'https://new.test',
       label: '',
     });
+  });
+
+  it('保存済みのパートナー行がロゴ URL ごと無編集の送信で往復すること', async () => {
+    const partner = { name: '提携店', url: 'https://partner.test', logo_url: '/uploads/p.png' };
+    const { onSubmit } = renderForm(initialData({ partner_links: [partner] }));
+
+    const body = await submitAndGetBody(onSubmit);
+
+    expect(body.partner_links).toEqual([partner]);
+  });
+
+  it('パートナーリンクの追加行が既定値どおりのキーで送られること', async () => {
+    const { onSubmit } = renderForm(initialData());
+
+    fireEvent.click(screen.getAllByRole('button', { name: '+ 追加' })[1]);
+    fireEvent.change(screen.getByPlaceholderText('パートナー名'), { target: { value: '提携B' } });
+    const urlInputs = screen.getAllByPlaceholderText('https://...');
+    fireEvent.change(urlInputs[urlInputs.length - 1], {
+      target: { value: 'https://partner-b.test' },
+    });
+
+    const body = await submitAndGetBody(onSubmit);
+
+    expect(body.partner_links).toEqual([
+      { name: '提携B', url: 'https://partner-b.test', logo_url: '' },
+    ]);
   });
 });
