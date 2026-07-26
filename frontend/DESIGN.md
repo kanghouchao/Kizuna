@@ -1,39 +1,65 @@
 # Design System
 
-Design rules for all UI work. Structure follows the DESIGN.md convention (designmd.app): Colors / Fonts / Spacing / Components / Do's and Don'ts. **Any agent implementing or modifying UI MUST read this file first** and, if a frontend-design skill is available in its environment, invoke it before writing markup. (`frontend/CLAUDE.md` points here.)
+Design rules for all UI work. Structure follows the DESIGN.md convention (designmd.app): Colors / Fonts / Spacing / Components / Admin restyle rules / Do's and Don'ts. **Any agent implementing or modifying UI MUST read this file first** and, if a frontend-design skill is available in its environment, invoke it before writing markup. (`frontend/CLAUDE.md` points here.)
 
-## Scope: two visual worlds
+## Scope: three visual worlds
 
-| World                                                                                 | Source of truth                                                                                                                      | Where styles live                                                                           |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| **Admin UI** (platform + store management screens: dashboards, lists, settings forms) | Figma file `5r40p5muNqFxwZLa5itKB8` (page 総合ダッシュボード). Screens not yet designed in Figma are extrapolated from these tokens. | Tailwind semantic classes (default v4 palette — the Figma design uses exactly these values) |
-| **Public storefront** (`_pages/store-site/templates/**`)                              | Template code itself; per-template `theme.css` tokens                                                                                | `templates/<key>/theme.css` CSS custom properties + shared `_sections/` components          |
+| World                                                                                                                      | Source of truth                                                                                        | Where styles live                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Admin UI** (platform + store management screens: dashboards, lists, settings forms)                                      | `src/app/globals.css` token layer + the vendored shadcn/ui primitives in `src/shared/ui` (Radix-based) | shadcn primitives composed with Tailwind token classes (`bg-background` / `text-muted-foreground` / …); raw palette classes are banned |
+| **Public storefront** (`_pages/store-site/templates/**`)                                                                   | Template code itself; per-template `theme.css` tokens                                                  | `templates/<key>/theme.css` CSS custom properties + shared `_sections/` components                                                     |
+| **Auth screens** (`features/platform-login`, `password-change`, `cast-invite-accept` and the `_pages` shells hosting them) | `src/styles/auth.css` (the Midnight Atelier look)                                                      | `auth.css` classes; outside the admin token contract                                                                                   |
 
-Never mix the two vocabularies: no gold-serif storefront styling in admin screens, no admin blue/gray cards in storefront templates.
+Never mix the vocabularies: no gold-serif storefront styling in admin screens, no admin cards in storefront templates, and no admin token restyling of the auth screens.
 
 ## Colors
 
-### Admin UI (Tailwind semantic classes only — never raw hex)
+### Admin UI (token classes only — never raw palette classes, never raw hex)
 
-| Token              | Tailwind                                                           | Usage rules                                                                                                                                                                                                                |
-| ------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Page background    | `bg-gray-50`                                                       | App shell behind cards                                                                                                                                                                                                     |
-| Surface            | `bg-white`                                                         | Cards, sidebar, header                                                                                                                                                                                                     |
-| Border             | `border-gray-200`                                                  | Card and input borders                                                                                                                                                                                                     |
-| Text primary       | `text-gray-900`                                                    | Headings, key figures                                                                                                                                                                                                      |
-| Text secondary     | `text-gray-600`                                                    | Labels, body                                                                                                                                                                                                               |
-| Text muted         | `text-gray-500`                                                    | Hints, "vs 先月"-style annotations                                                                                                                                                                                         |
-| **Primary**        | `blue-600` (`text-blue-600`, `bg-blue-600`)                        | CTAs, links, active states, progress fill. **Primary is blue, not indigo** — new screens use blue-600; existing indigo-600 usages are migrated opportunistically in PRs that already touch them (no dedicated recolor PRs) |
-| Primary tint       | `bg-blue-50`                                                       | Active nav background, rank chips                                                                                                                                                                                          |
-| Success            | `green-600` text / `bg-green-100 text-green-800` pill              | Positive trends; 確定 status                                                                                                                                                                                               |
-| Warning            | `bg-yellow-100 text-yellow-800` pill                               | 保留 status                                                                                                                                                                                                                |
-| Danger             | `red-600`                                                          | Destructive actions, errors                                                                                                                                                                                                |
-| Icon chips         | `bg-blue-500` / `bg-green-500` / `bg-orange-500` / `bg-purple-500` | Stat-card icons; one hue per metric, white icon                                                                                                                                                                            |
-| Shift bar (確定)   | `bg-green-500 text-white`, hover `bg-green-600`                    | Shift timeline bars and calendar legend dot for confirmed shifts                                                                                                                                                           |
-| Shift bar (未確定) | `bg-yellow-400 text-yellow-900`, hover `bg-yellow-500`             | Shift timeline bars and calendar legend dot for tentative shifts                                                                                                                                                           |
-| Coverage bar       | `bg-blue-500/80`                                                   | Shift timeline concurrent-attendance bars                                                                                                                                                                                  |
-| Now marker         | `bg-red-500`                                                       | Shift timeline current-time line + label (informational — distinct from Danger red-600)                                                                                                                                    |
-| Weekend text       | `text-red-500` (Sun) / `text-blue-500` (Sat)                       | Calendar weekday header                                                                                                                                                                                                    |
+The token layer lives in `src/app/globals.css`: `:root` / `.dark` oklch values exposed to Tailwind through `@theme inline`. Always name the semantic, never the hue — that is what makes both light and dark modes follow without per-screen edits.
+
+| Token                 | Class examples                                                   | Usage rules                                                                    |
+| --------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Page background       | `bg-background`                                                  | App shell behind cards                                                         |
+| Surface               | `bg-card` (+ `text-card-foreground`)                             | Cards, sidebar, header                                                         |
+| Border                | bare `border` (the base layer already applies `border-border`)   | Card, input and divider borders                                                |
+| Text primary          | `text-foreground`                                                | Headings, key figures                                                          |
+| Text secondary        | `text-muted-foreground`                                          | Labels, body, hints, "vs 先月"-style annotations                               |
+| Muted surface         | `bg-muted`                                                       | Progress-bar tracks, table heads, inert fills                                  |
+| **Primary**           | `bg-primary text-primary-foreground`, `text-primary`             | CTAs, links, active states, progress fill (blue-600 in both modes)             |
+| Primary tint          | `bg-primary/10`                                                  | Active nav background, rank chips                                              |
+| Destructive           | `text-destructive`, `bg-destructive text-destructive-foreground` | Delete actions, validation errors, 却下 / NG status                            |
+| Success               | `text-success`, `bg-success text-success-foreground`             | Positive trends, 確定 / 有効 / 在籍 / 承認 status                              |
+| Warning               | `text-warning`, `bg-warning text-warning-foreground`             | 保留 / 申請中 status, attention icons                                          |
+| Decorative categories | `bg-chart-1` … `bg-chart-5`                                      | Stat-card icon chips, 指名 chips — category hues that carry no state semantics |
+
+`destructive` is the only danger vocabulary; there is no `--danger`. If a genuinely new state semantic appears, extend `globals.css` **and** this table in a dedicated PR rather than reaching for a raw hue.
+
+#### Legacy → token mapping (restyle sweep)
+
+Screens still carrying pre-shadcn classes are converted with this table. It is exhaustive for the admin surface; anything not listed needs a decision, not a guess.
+
+| Legacy                                                 | Token                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| `text-gray-900`                                        | `text-foreground`                                         |
+| `text-gray-600` / `-500` / `-400`                      | `text-muted-foreground`                                   |
+| `bg-gray-50` (page) / `bg-white` (surface)             | `bg-background` / `bg-card`                               |
+| `border-gray-200` / `-300`                             | bare `border` (or `border-border`)                        |
+| `bg-gray-200` track                                    | `bg-muted`                                                |
+| `blue-600` / `indigo-600`                              | `primary`                                                 |
+| `bg-blue-50`                                           | `bg-primary/10`                                           |
+| `text-red-600` / `bg-red-100 text-red-800`             | `text-destructive` / `bg-destructive/10 text-destructive` |
+| `text-green-600` / `bg-green-100 text-green-800`       | `text-success` / `bg-success/10 text-success`             |
+| `text-amber-600` / `bg-yellow-100 text-yellow-800`     | `text-warning` / `bg-warning/10 text-warning`             |
+| `bg-green-500 text-white` (確定 shift bar)             | `bg-success text-success-foreground`                      |
+| `bg-yellow-400 text-yellow-900` (未確定 shift bar)     | `bg-warning text-warning-foreground`                      |
+| Decorative chips blue / green / orange / purple / pink | `chart-1` … `chart-5`                                     |
+| Weekend `text-red-500` (Sun) / `text-blue-500` (Sat)   | `text-destructive` / `text-primary`                       |
+| Now marker `bg-red-500`                                | `bg-destructive`                                          |
+| Coverage bar `bg-blue-500/80`                          | `bg-primary/80`                                           |
+| Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring       |
+
+One-off domain colors (now marker, weekend, coverage bar, category chips) intentionally reuse existing tokens instead of gaining dedicated ones: a token with a single consumer is dead weight.
 
 ### Public storefront (three templates)
 
@@ -61,34 +87,125 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 
 ## Fonts
 
-- **Admin UI**: system sans stack (Figma uses Inter; Japanese text renders via Noto Sans JP fallback). Weights: bold for headings and key figures, medium for emphasized inline text, regular otherwise. Key figures: 30px bold. Body/labels: 14px.
+- **Admin UI**: system sans stack; Japanese text renders via the Noto Sans JP fallback. Weights: bold for headings and key figures, medium for emphasized inline text, regular otherwise. Key figures: 30px bold. Body/labels: 14px.
 - **Storefront default**: `'Noto Serif JP', 'Hiragino Mincho Pro', serif` with wide letter-spacing (`tracking-[0.25em]`-class values) for headings/nav; this serif-luxury voice is part of the template identity.
 
 ## Spacing
 
-- Admin: content padding 24px (`p-6`); card padding ~25px (`p-6`); gap between cards 24px (`gap-6`); sidebar fixed 256px (`w-64`); header 64px (`h-16`); card radius 10px (`rounded-[10px]`, visually ≈ `rounded-lg`); subtle shadow (`shadow-sm`).
+- Admin: content padding 24px (`p-6`); card padding ~25px (`p-6`); gap between cards 24px (`gap-6`); sidebar fixed 256px (`w-64`); header 64px (`h-16`); card radius `rounded-lg` (= `var(--radius)`, 0.5rem); subtle shadow (`shadow-sm`).
 - Storefront: sections manage their own rhythm; follow existing `_sections/` patterns (max-w-7xl containers, px-5 lg:px-10).
 
 ## Components (admin)
 
-- **Stat card**: white card; label (`text-gray-600` 14px) → figure (`text-gray-900` 30px bold) → trend row (green-600 delta + gray-500 comparison); colored icon chip top-right (`rounded-[10px] p-3`, 24px white icon).
-- **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-blue-50 text-blue-600` with a 2px blue-600 edge bar. Inactive: gray-600 text, hover `bg-gray-50`. Groups collapse with chevron.
-- **Status pill**: fully rounded, 12px text, `bg-green-100 text-green-800` (確定) / `bg-yellow-100 text-yellow-800` (保留) / `bg-red-100 text-red-800` (却下); add hues per new status semantics, always `*-100` bg + `*-800` text.
-- **Progress bar**: track `bg-gray-200 h-2 rounded-full`, fill `bg-blue-600`.
-- **Ranking row**: 32px circular rank chip (`bg-blue-50 text-blue-600`), name + area line (12px icon + gray-500), right-aligned amount (bold) over count (gray-500).
-- **Selectable preview card**: `<label>` wrapping an `sr-only` radio; `rounded-[10px] border p-3 cursor-pointer`. Unselected `border-gray-200 hover:bg-gray-50`; selected `border-blue-600 ring-2 ring-blue-600 bg-blue-50`. Body = thumbnail image (`w-full rounded border border-gray-200`) → name (`text-sm font-medium`, selected `text-blue-600`) → description (`text-xs text-gray-500`); keyboard focus via `has-[:focus-visible]:ring-blue-500`.
-- **Modal (centered dialog)**: Headless UI `Dialog`; backdrop `fixed inset-0 bg-gray-900/40`; panel `w-full max-w-md rounded-[10px] border border-gray-200 bg-white shadow-lg` centered via `fixed inset-0 flex items-center justify-center p-4`. Tall forms add `max-h-full overflow-y-auto` on the panel so the modal scrolls internally instead of overflowing the viewport (precedent: `StaffCreateModal`). `DialogTitle` = `border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900`. Body/form = `space-y-4 px-6 py-5`. Footer actions = `flex justify-end gap-3 border-t border-gray-200 pt-4`, secondary button `border border-gray-300 text-gray-700 hover:bg-gray-50`, primary button `bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50` (both `focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`). Precedent: `ShiftFormModal`.
-- **Drawer (side-slide dialog)**: same Headless UI `Dialog`/backdrop as Modal, but the wrapper is `fixed inset-0 flex justify-end` and the panel is `flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-gray-200 bg-white shadow-lg` (title/body/footer styling identical to Modal). Used for record-scoped edit forms opened from a list row.
-- **Mobile bottom tab bar**: `fixed inset-x-0 bottom-0` `bg-white` with a `border-t border-gray-200` top edge; each tab is an equal-width flex column (`flex flex-1 flex-col items-center gap-1 py-2`), 24px icon above a 12px label. Active: `text-blue-600`. Inactive: `text-gray-600`, hover `hover:bg-gray-50`. Keyboard focus via `focus-visible:ring-2 focus-visible:ring-blue-500`. Content area adds bottom padding (`pb-16`) so the fixed bar never overlaps scrollable content. Precedent: `CastPortalShell`.
+Primitives come from `@/shared/ui` (the barrel over the vendored shadcn components). This section records **which primitive to use and how to compose it** — never a restatement of the styling already baked into the primitive.
 
-Component states (hover / focus / disabled) must always be styled: hover darkens one step (e.g. `hover:bg-blue-700`), focus uses ring (`focus:ring-blue-500`), disabled uses `disabled:opacity-50`.
+- **Buttons**: `Button`. `default` = primary CTA, `outline` = secondary, `ghost` + `size="icon-sm"` = in-row actions, `destructive` = delete. Render links with `asChild` wrapping the anchor.
+- **Form controls**: `Input` / `Textarea` / `Select` / `Checkbox` / `Switch` / `RadioGroup` / `Label`, wired per the form pattern below.
+- **Modal (centered dialog)**: `Dialog` (`DialogContent` / `DialogHeader` / `DialogTitle` / `DialogFooter`). Tall forms add `max-h-[calc(100vh-2rem)] overflow-y-auto` on the content so the modal scrolls internally instead of overflowing the viewport (precedent: `StaffCreateModal`). Precedent for the plain case: `ShiftFormModal`.
+- **Drawer (side-slide dialog)**: `Sheet` with `side="right"` for record-scoped edit forms opened from a list row. Never re-create a drawer by re-positioning `DialogContent`.
+- **Combobox (searchable select)**: `Popover` + `Command` (`CommandInput` / `CommandList` / `CommandEmpty` / `CommandItem`).
+- **Table**: shadcn `Table` inside a `Card`. Precedent: `CustomersPage`.
+- **Tabs**: shadcn `Tabs`. Precedent: `ShiftsPage`.
+- **Loading placeholder**: `Skeleton` sized with layout classes, never a hand-rolled `animate-pulse` block.
+- **Status pill**: `Badge variant="outline"` plus one tint recipe — `border-transparent bg-success/10 text-success` (確定) / `bg-warning/10 text-warning` (保留) / `bg-destructive/10 text-destructive` (却下 / NG). Precedent: `CustomersPage`.
+- **Stat card**: `Card`; label (`text-muted-foreground` 14px) → figure (`text-foreground` 30px bold) → trend row (`text-success` delta + `text-muted-foreground` comparison); category icon chip top-right (`rounded-lg p-3`, 24px icon, `bg-chart-*`).
+- **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-primary/10 text-primary` with a 2px `bg-primary` edge bar. Inactive: `text-muted-foreground`, hover `bg-muted`. Groups collapse with a chevron.
+- **Progress bar**: track `bg-muted h-2 rounded-full`, fill `bg-primary`.
+- **Ranking row**: 32px circular rank chip (`bg-primary/10 text-primary`), name + area line (12px icon + `text-muted-foreground`), right-aligned amount (bold) over count (`text-muted-foreground`).
+- **Selectable preview card**: `<label>` wrapping an `sr-only` radio; `rounded-lg border p-3 cursor-pointer`. Unselected hover `bg-muted`; selected `border-primary ring-2 ring-primary bg-primary/10`. Body = thumbnail (`w-full rounded border`) → name (`text-sm font-medium`, selected `text-primary`) → description (`text-xs text-muted-foreground`); keyboard focus via `has-[:focus-visible]:ring-2`.
+- **Mobile bottom tab bar**: `fixed inset-x-0 bottom-0` `bg-card` with a `border-t` top edge; each tab is an equal-width flex column (`flex flex-1 flex-col items-center gap-1 py-2`), 24px icon above a 12px label. Active `text-primary`, inactive `text-muted-foreground` with hover `bg-muted`. The content area adds `pb-16` so the fixed bar never overlaps scrollable content. Precedent: `CastPortalShell`.
+
+Hover / focus / disabled states come from the primitives. Only hand-write a state when composing bare elements, and then express it in tokens (`hover:bg-muted`, `disabled:opacity-50`) — never a raw hue.
+
+## Admin restyle rules (shadcn sweep)
+
+Rules for converting a remaining admin slice to the primitives + token vocabulary. Slices are converted independently and in parallel, so these are contracts, not suggestions.
+
+### Form pattern
+
+Keep native inputs bound straight to `register` and swap the element for the shadcn `Input` / `Textarea`. Reach for `FormField` only where a Radix-controlled component needs a controlled value (`Select` / `Checkbox` / `Switch` / `RadioGroup`). Wrap the whole form in `<Form {...form}>`. Never introduce a bare `Controller`.
+
+```tsx
+<FormField
+  control={control}
+  name="classification"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>区分</FormLabel>
+      <Select value={field.value} onValueChange={field.onChange}>
+        <FormControl>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+        </FormControl>
+        <SelectContent>
+          <SelectItem value="自宅">自宅</SelectItem>
+        </SelectContent>
+      </Select>
+    </FormItem>
+  )}
+/>
+```
+
+### Select sentinel
+
+Radix `SelectItem` throws on `value=""`, so an "unset" option needs a sentinel. Convert back at the boundary so the submitted payload keeps its empty string (precedent: `OrderForm`):
+
+```tsx
+const SELECT_NONE = '__none__';
+
+<Select
+  value={field.value ? field.value : SELECT_NONE}
+  onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+>
+  <SelectItem value={SELECT_NONE}>－－－</SelectItem>
+```
+
+Fill in `defaultValues` for every field so the payload's key set is unchanged by the migration.
+
+### Type restoration
+
+Radix hands back strings and tri-state booleans; restore the original type at the `onChange` boundary: `onValueChange={v => field.onChange(Number(v))}`, `v === 'true'`, `onCheckedChange={v => field.onChange(v === true)}`.
+
+### Tint vs solid
+
+Status labels and badges use the tint recipe (`bg-<token>/10 text-<token>`). Solid (`bg-<token> text-<token>-foreground`) is for **filled surfaces** such as timeline bars; labels on a solid success surface stay bold and 12px or larger, since that combination meets the large-text contrast bar rather than the body-text one.
+
+### Behavior preservation
+
+Submitted payloads, react-hook-form wiring and existing `confirm()` calls are preserved exactly. Anything that would change the payload — turning a free-text field into a `Select`, normalizing a value — is a separate issue, not part of a restyle.
+
+### Negative invariant
+
+A restyled admin file keeps **no** raw palette classes. Review with:
+
+```
+grep -rnE '(bg|text|border|ring)-(gray|slate|zinc|white|black|red|green|yellow|amber|orange|blue|indigo|purple|pink)' <slice>
+```
+
+Out of scope for this invariant: the storefront (`_pages/store-site/**`) and the auth screens.
+
+### Parallel-PR contract
+
+A slice restyle PR does **not** edit the shared files — `src/shared/ui/**`, `src/app/globals.css`, `setupTests.ts`, the `shared/ui` barrel, or this document. If something is missing, raise it in the PR instead of patching it locally.
+
+### jsdom shims
+
+`setupTests.ts` supplies `ResizeObserver` for all tests. Radix components that are actually _opened_ in a test may additionally need the following; add them to `setupTests.ts` verbatim the first time they are required, so parallel branches converge on identical text:
+
+```ts
+Element.prototype.scrollIntoView = jest.fn();
+Element.prototype.hasPointerCapture = jest.fn();
+Element.prototype.setPointerCapture = jest.fn();
+Element.prototype.releasePointerCapture = jest.fn();
+```
 
 ## Do's and Don'ts
 
-- **DO** use only the Tailwind classes listed above for admin colors; if a needed semantic is missing, extend THIS file in the same PR.
-- **DO** fetch the Figma node via the Figma MCP (`get_design_context` / `get_screenshot`) when a task references a designed screen; match it, then record any new tokens here.
+- **DO** use token classes for admin colors; if a needed semantic is genuinely missing, extend `globals.css` and THIS file in a dedicated PR.
+- **DO** reach for an existing primitive in `@/shared/ui` before composing one from bare elements.
 - **DO** keep storefront changes token-driven: template look changes go through `theme.css`, structural blocks through shared `_sections/`.
-- **DON'T** introduce raw hex values in admin UI markup.
-- **DON'T** use indigo for new admin UI (legacy only, migrate on touch).
+- **DON'T** introduce raw palette classes or raw hex values in admin UI markup.
+- **DON'T** restyle the vendored primitives in `src/shared/ui` from a slice PR — they are kept as generated, and per-screen deviation goes in the consumer's `className`.
 - **DON'T** fork or restyle `_sections/` components per template; differences live in tokens and page layout only.
-- **DON'T** invent new visual patterns when a component above fits; extend the pattern table instead if genuinely new.
+- **DON'T** invent new visual patterns when a component above fits; extend the pattern list instead if genuinely new.
