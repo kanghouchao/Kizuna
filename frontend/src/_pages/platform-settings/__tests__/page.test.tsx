@@ -100,4 +100,37 @@ describe('SystemSettingsPage', () => {
       })
     );
   });
+
+  it('秘匿設定の編集はマスク入力欄が空欄の状態から始まる', async () => {
+    render(<SystemSettingsPage />);
+    fireEvent.click(await screen.findByText('(秘匿設定)'));
+
+    const input = screen.getByPlaceholderText('新しい値を入力');
+    expect(input).toHaveAttribute('type', 'password');
+    expect(input).toHaveValue('');
+  });
+
+  it('文字列設定は編集時に複数行入力欄になり現在値が初期表示される', async () => {
+    mockGetAllConfigs.mockResolvedValue([
+      ...configs,
+      {
+        id: 4,
+        config_key: 'site_name',
+        config_value: 'キズナ',
+        value_type: 'STRING',
+        secret: false,
+        category: 'SYSTEM',
+        description: 'サイト名',
+        created_at: '',
+        updated_at: '',
+      },
+    ]);
+
+    render(<SystemSettingsPage />);
+    fireEvent.click(await screen.findByText('キズナ'));
+
+    const textarea = screen.getByRole('textbox');
+    expect(textarea.tagName).toBe('TEXTAREA');
+    expect(textarea).toHaveValue('キズナ');
+  });
 });
