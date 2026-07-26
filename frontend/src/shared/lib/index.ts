@@ -19,3 +19,4 @@ export {
   storePath,
   storeSelectPath,
 } from './store-route';
+export { cn } from './utils';
