@@ -57,7 +57,7 @@ export default function CustomerEditPage() {
   };
 
   if (isLoading) {
-    return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
+    return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
   }
 
   if (!customer) return null;
@@ -66,10 +66,12 @@ export default function CustomerEditPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">顧客編集</h1>
-          <p className="text-sm text-gray-500 mt-1">「{customer.name}」の情報を編集します。</p>
+          <h1 className="text-2xl font-bold text-foreground">顧客編集</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            「{customer.name}」の情報を編集します。
+          </p>
         </div>
-        <div className="text-sm text-gray-600 bg-white px-4 py-2 rounded-md border border-gray-200">
+        <div className="text-sm text-muted-foreground bg-card px-4 py-2 rounded-md border border-border">
           保有ポイント: <span className="font-semibold">{customer.points ?? 0}</span>
         </div>
       </div>

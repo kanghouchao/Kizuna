@@ -30,8 +30,8 @@ export default function CustomerCreatePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">新規顧客登録</h1>
-        <p className="text-sm text-gray-500 mt-1">新しい顧客情報を入力してください。</p>
+        <h1 className="text-2xl font-bold text-foreground">新規顧客登録</h1>
+        <p className="text-sm text-muted-foreground mt-1">新しい顧客情報を入力してください。</p>
       </div>
       <CustomerForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
     </div>

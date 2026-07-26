@@ -87,8 +87,8 @@ export default function CustomersPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">顧客管理</h1>
-          <p className="text-sm text-gray-500 mt-1">顧客情報の登録・編集ができます。</p>
+          <h1 className="text-2xl font-bold text-foreground">顧客管理</h1>
+          <p className="text-sm text-muted-foreground mt-1">顧客情報の登録・編集ができます。</p>
         </div>
         <Button asChild>
           <Link href={storePath(storeId, '/customers/create')}>
@@ -173,7 +173,7 @@ export default function CustomersPage() {
                     {customer.ng_type ? (
                       <Badge
                         variant="outline"
-                        className="border-transparent bg-red-100 text-red-800"
+                        className="border-transparent bg-destructive/10 text-destructive"
                       >
                         {customer.ng_type}
                       </Badge>
