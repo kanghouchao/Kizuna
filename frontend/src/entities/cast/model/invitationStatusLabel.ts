@@ -1,19 +1,19 @@
 import { CastInvitationStatus } from './types';
 
-/** 招待状態の表示ラベルと配色（DESIGN.md Status pill: *-100 bg + *-800 text）を返す。 */
+/** 招待状態の表示ラベルと配色（DESIGN.md Status pill の tint レシピ）を返す。 */
 export function castInvitationStatusLabel(status: CastInvitationStatus): {
   text: string;
   color: string;
 } {
   switch (status) {
     case 'LINKED':
-      return { text: '連携済み', color: 'bg-green-100 text-green-800' };
+      return { text: '連携済み', color: 'bg-success/10 text-success-strong' };
     case 'INVITED':
-      return { text: '招待中', color: 'bg-blue-100 text-blue-800' };
+      return { text: '招待中', color: 'bg-primary/10 text-primary-strong' };
     case 'EXPIRED':
-      return { text: '期限切れ', color: 'bg-red-100 text-red-800' };
+      return { text: '期限切れ', color: 'bg-destructive/10 text-destructive-strong' };
     case 'NOT_INVITED':
     default:
-      return { text: '未招待', color: 'bg-gray-100 text-gray-800' };
+      return { text: '未招待', color: 'bg-muted text-foreground' };
   }
 }

@@ -16,6 +16,19 @@ import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
 import { storePath, useManagedList } from '@/shared/lib';
 import { toast } from 'react-hot-toast';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/ui';
 
 /** キャスト一覧ページ */
 export default function CastListPage() {
@@ -73,15 +86,15 @@ export default function CastListPage() {
     }
   };
 
-  /** ステータスの表示ラベルと色を返す */
+  /** ステータスの表示ラベルと配色を返す */
   const statusLabel = (status: string) => {
     switch (status) {
       case 'ACTIVE':
-        return { text: '有効', color: 'bg-green-100 text-green-800' };
+        return { text: '有効', color: 'bg-success/10 text-success-strong' };
       case 'INACTIVE':
-        return { text: '無効', color: 'bg-gray-100 text-gray-800' };
+        return { text: '無効', color: 'bg-muted text-foreground' };
       default:
-        return { text: status, color: 'bg-gray-100 text-gray-800' };
+        return { text: status, color: 'bg-muted text-foreground' };
     }
   };
 
@@ -89,97 +102,78 @@ export default function CastListPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">キャスト管理</h1>
-          <p className="text-sm text-gray-500 mt-1">キャスト情報の登録・編集ができます。</p>
+          <h1 className="text-2xl font-bold text-foreground">キャスト管理</h1>
+          <p className="text-sm text-muted-foreground mt-1">キャスト情報の登録・編集ができます。</p>
         </div>
         <div className="flex items-center gap-3">
           {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定。 */}
           {canManageFieldDefs && (
-            <Link
-              href={storePath(storeId, '/casts/fields')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              <Cog6ToothIcon className="-ml-1 mr-2 h-5 w-5" />
-              カスタムフィールド管理
-            </Link>
+            <Button asChild variant="outline">
+              <Link href={storePath(storeId, '/casts/fields')}>
+                <Cog6ToothIcon />
+                カスタムフィールド管理
+              </Link>
+            </Button>
           )}
-          <Link
-            href={storePath(storeId, '/casts/create')}
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-          >
-            <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-            新規キャスト登録
-          </Link>
+          <Button asChild>
+            <Link href={storePath(storeId, '/casts/create')}>
+              <PlusIcon />
+              新規キャスト登録
+            </Link>
+          </Button>
         </div>
       </div>
 
       {/* 検索バー */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex items-center space-x-4">
-        <div className="flex-1 relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+      <Card>
+        <CardContent className="flex items-center gap-4">
+          <div className="flex-1 relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <Input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              className="pl-10"
+              placeholder="名前で検索..."
+            />
           </div>
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            placeholder="名前で検索..."
-          />
-        </div>
-        <button
-          onClick={handleSearch}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-        >
-          検索
-        </button>
-      </div>
+          <Button variant="outline" onClick={handleSearch}>
+            検索
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* テーブル */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+      <Card className="py-0 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-gray-500">読み込み中...</div>
+          <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
         ) : casts.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">キャストが登録されていません</div>
+          <div className="p-8 text-center text-muted-foreground">キャストが登録されていません</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  写真
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  名前
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  年齢
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  スリーサイズ
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  表示順
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ステータス
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  招待状態
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  アクション
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>写真</TableHead>
+                <TableHead>名前</TableHead>
+                <TableHead>年齢</TableHead>
+                <TableHead>スリーサイズ</TableHead>
+                <TableHead>表示順</TableHead>
+                <TableHead>ステータス</TableHead>
+                <TableHead>招待状態</TableHead>
+                <TableHead className="text-right">アクション</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {casts.map(cast => {
                 const status = statusLabel(cast.status);
                 const invitation = castInvitationStatusLabel(cast.invitation_status);
                 return (
-                  <tr key={cast.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="h-12 w-10 rounded overflow-hidden bg-gray-100 relative">
+                  <TableRow key={cast.id}>
+                    <TableCell>
+                      <div className="h-12 w-10 rounded overflow-hidden bg-muted relative">
                         {cast.photo_url ? (
                           <Image
                             src={cast.photo_url}
@@ -189,68 +183,64 @@ export default function CastListPage() {
                             sizes="40px"
                           />
                         ) : (
-                          <div className="flex items-center justify-center h-full text-gray-300 text-xs">
+                          <div className="flex items-center justify-center h-full text-foreground text-xs">
                             No
                           </div>
                         )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{cast.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    </TableCell>
+                    <TableCell className="font-medium text-foreground">{cast.name}</TableCell>
+                    <TableCell className="text-muted-foreground">
                       {cast.age ? `${cast.age}歳` : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {cast.bust && cast.waist && cast.hip
                         ? `B${cast.bust} W${cast.waist} H${cast.hip}`
                         : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {cast.display_order ?? 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}
-                      >
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`border-transparent ${status.color}`}>
                         {status.text}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${invitation.color}`}
-                      >
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`border-transparent ${invitation.color}`}>
                         {invitation.text}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                      {canInvite && (
-                        <InvitationButton
-                          castId={cast.id}
-                          status={cast.invitation_status}
-                          onIssued={handleIssued}
-                        />
-                      )}
-                      <Link
-                        href={storePath(storeId, `/casts/${cast.id}/edit`)}
-                        className="text-gray-400 hover:text-amber-600 inline-block"
-                      >
-                        <PencilSquareIcon className="h-5 w-5" />
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(cast.id, cast.name)}
-                        className="text-gray-400 hover:text-red-600"
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                      </button>
-                    </td>
-                  </tr>
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {canInvite && (
+                          <InvitationButton
+                            castId={cast.id}
+                            status={cast.invitation_status}
+                            onIssued={handleIssued}
+                          />
+                        )}
+                        <Button asChild variant="ghost" size="icon-sm">
+                          <Link href={storePath(storeId, `/casts/${cast.id}/edit`)}>
+                            <PencilSquareIcon />
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleDelete(cast.id, cast.name)}
+                        >
+                          <TrashIcon />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
       <InvitationModal
         open={issuedInvitation !== null}
