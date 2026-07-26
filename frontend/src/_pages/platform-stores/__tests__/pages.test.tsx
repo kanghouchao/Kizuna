@@ -44,7 +44,10 @@ const store = (override: Partial<Store>): Store => ({
   ...override,
 });
 
-const paginated = (data: Store[]): PaginatedResponse<Store> => ({
+const paginated = (
+  data: Store[],
+  override: Partial<PaginatedResponse<Store>> = {}
+): PaginatedResponse<Store> => ({
   data,
   current_page: 1,
   from: 1,
@@ -56,6 +59,7 @@ const paginated = (data: Store[]): PaginatedResponse<Store> => ({
   last_page_url: '',
   next_page_url: null,
   prev_page_url: null,
+  ...override,
 });
 
 describe('店舗管理 3 画面の挙動', () => {
@@ -94,6 +98,35 @@ describe('店舗管理 3 画面の挙動', () => {
         search: 'アルファ',
       })
     );
+  });
+
+  it('ページ番号のクリックで該当ページを取得し、両端で前後ボタンが無効になること', async () => {
+    mockedApi.getList.mockResolvedValue(
+      paginated([store({ id: '1', name: 'アルファ店' })], { last_page: 3, to: 10, total: 25 })
+    );
+
+    render(<StoresPage />);
+    await screen.findByText('アルファ店');
+
+    // 1 ページ目では「前へ」が押せない
+    expect(screen.getByRole('button', { name: '前へ' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '次へ' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+
+    await waitFor(() =>
+      expect(mockedApi.getList).toHaveBeenLastCalledWith({
+        page: 2,
+        per_page: 10,
+        search: undefined,
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '3' }));
+
+    // 最終ページでは「次へ」が押せない
+    await waitFor(() => expect(screen.getByRole('button', { name: '次へ' })).toBeDisabled());
+    expect(screen.getByRole('button', { name: '前へ' })).toBeEnabled();
   });
 
   it('削除は confirm で承諾されたときだけ実行されること', async () => {
