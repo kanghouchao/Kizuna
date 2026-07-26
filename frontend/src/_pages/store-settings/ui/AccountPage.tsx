@@ -4,6 +4,16 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { platformAuthApi } from '@/entities/user';
 import { PasswordChangeForm } from '@/features/password-change';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+} from '@/shared/ui';
 
 /** アカウント設定ページ（プロフィール + パスワード変更） */
 export default function AccountPage() {
@@ -42,57 +52,47 @@ export default function AccountPage() {
   };
 
   if (isLoading) {
-    return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
+    return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">アカウント設定</h1>
-        <p className="text-sm text-gray-500 mt-1">自分のプロフィールとパスワードを管理します。</p>
+        <h1 className="text-2xl font-bold text-foreground">アカウント設定</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          自分のプロフィールとパスワードを管理します。
+        </p>
       </div>
 
       {/* プロフィール */}
-      <form
-        onSubmit={handleProfileSubmit}
-        className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 space-y-6"
-      >
-        <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-indigo-500 pl-3">
-          プロフィール
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              メールアドレス（ログインID）
-            </label>
-            <input
-              type="email"
-              value={email}
-              disabled
-              className="w-full rounded-md border-gray-300 bg-gray-50 text-gray-500 shadow-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ニックネーム *</label>
-            <input
-              type="text"
-              value={nickname}
-              onChange={e => setNickname(e.target.value)}
-              required
-              maxLength={150}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-10 py-2.5 rounded-md bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all"
-          >
-            {isSubmitting ? '保存中...' : '保存する'}
-          </button>
-        </div>
+      <form onSubmit={handleProfileSubmit}>
+        <Card>
+          <CardHeader>
+            <CardTitle>プロフィール</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid gap-2">
+              <Label htmlFor="account-email">メールアドレス（ログインID）</Label>
+              <Input id="account-email" type="email" value={email} disabled />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="account-nickname">ニックネーム *</Label>
+              <Input
+                id="account-nickname"
+                type="text"
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                required
+                maxLength={150}
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="justify-end">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? '保存中...' : '保存する'}
+            </Button>
+          </CardFooter>
+        </Card>
       </form>
 
       <PasswordChangeForm />

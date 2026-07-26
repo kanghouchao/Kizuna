@@ -4,6 +4,17 @@ import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { platformAuthApi, useAuth } from '@/entities/user';
 import { getApiErrorMessage } from '@/shared/lib';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+} from '@/shared/ui';
 
 /** パスワード変更フォーム。成功するとトークンが失効するため、ログアウトして再ログインを促す。 */
 export function PasswordChangeForm() {
@@ -38,66 +49,57 @@ export function PasswordChangeForm() {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 space-y-6"
-    >
-      <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-indigo-500 pl-3">
-        パスワード変更
-      </h3>
-      <p className="text-sm text-gray-500">
-        変更後は自動的にログアウトされ、新しいパスワードでの再ログインが必要です。
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">現在のパスワード *</label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={e => setCurrentPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            新しいパスワード（8文字以上）*
-          </label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            新しいパスワード（確認）*
-          </label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-        </div>
-      </div>
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-10 py-2.5 rounded-md bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all"
-        >
-          {isSubmitting ? '変更中...' : 'パスワードを変更する'}
-        </button>
-      </div>
+    <form onSubmit={handleSubmit}>
+      <Card>
+        <CardHeader>
+          <CardTitle>パスワード変更</CardTitle>
+          <CardDescription>
+            変更後は自動的にログアウトされ、新しいパスワードでの再ログインが必要です。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="current-password">現在のパスワード *</Label>
+            <Input
+              id="current-password"
+              type="password"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="new-password">新しいパスワード（8文字以上）*</Label>
+            <Input
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="confirm-password">新しいパスワード（確認）*</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="justify-end">
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? '変更中...' : 'パスワードを変更する'}
+          </Button>
+        </CardFooter>
+      </Card>
     </form>
   );
 }
