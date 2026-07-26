@@ -95,7 +95,9 @@ export function CastForm({
         {/* 基本情報 */}
         <Card>
           <CardHeader>
-            <CardTitle>基本情報</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              基本情報
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-8">
@@ -148,7 +150,9 @@ export function CastForm({
         {/* プロフィール */}
         <Card>
           <CardHeader>
-            <CardTitle>プロフィール</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              プロフィール
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -181,7 +185,9 @@ export function CastForm({
         {/* 自己紹介 */}
         <Card>
           <CardHeader>
-            <CardTitle>自己紹介</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              自己紹介
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -197,7 +203,9 @@ export function CastForm({
         {isEdit && (
           <Card>
             <CardHeader>
-              <CardTitle>カスタムフィールド</CardTitle>
+              <CardTitle role="heading" aria-level={3}>
+                カスタムフィールド
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {isLoadingDefinitions ? (
