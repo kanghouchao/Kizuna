@@ -68,7 +68,9 @@ export default function AccountPage() {
       <form onSubmit={handleProfileSubmit}>
         <Card>
           <CardHeader>
-            <CardTitle>プロフィール</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              プロフィール
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="grid gap-2">

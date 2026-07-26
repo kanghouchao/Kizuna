@@ -52,7 +52,9 @@ export function PasswordChangeForm() {
     <form onSubmit={handleSubmit}>
       <Card>
         <CardHeader>
-          <CardTitle>パスワード変更</CardTitle>
+          <CardTitle role="heading" aria-level={3}>
+            パスワード変更
+          </CardTitle>
           <CardDescription>
             変更後は自動的にログアウトされ、新しいパスワードでの再ログインが必要です。
           </CardDescription>
