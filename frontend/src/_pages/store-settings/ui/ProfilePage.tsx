@@ -45,7 +45,7 @@ export default function StoreProfilePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-100">
-        <div className="text-gray-500">読み込み中...</div>
+        <div className="text-muted-foreground">読み込み中...</div>
       </div>
     );
   }
@@ -53,7 +53,7 @@ export default function StoreProfilePage() {
   if (!config) {
     return (
       <div className="flex items-center justify-center min-h-100">
-        <div className="text-red-500">設定の読み込みに失敗しました</div>
+        <div className="text-destructive-strong">設定の読み込みに失敗しました</div>
       </div>
     );
   }
@@ -61,8 +61,8 @@ export default function StoreProfilePage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">店舗情報</h1>
-        <p className="text-sm text-gray-500 mt-1">店舗サイトの外観をカスタマイズします。</p>
+        <h1 className="text-2xl font-bold text-foreground">店舗情報</h1>
+        <p className="text-sm text-muted-foreground mt-1">店舗サイトの外観をカスタマイズします。</p>
       </div>
       <StoreProfileForm initialData={config} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
     </div>
