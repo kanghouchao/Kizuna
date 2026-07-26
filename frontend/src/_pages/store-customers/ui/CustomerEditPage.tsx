@@ -7,6 +7,7 @@ import { CustomerResponse, customerApi } from '@/entities/customer';
 import { Order, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 import { storePath } from '@/shared/lib';
+import { Card, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui';
 
 /** 顧客編集ページ（プロフィール編集 + 注文履歴） */
 export default function CustomerEditPage() {
@@ -93,58 +94,40 @@ export default function CustomerEditPage() {
       />
 
       {/* 注文履歴 */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="text-lg font-medium text-gray-900">注文履歴</h3>
+      <Card className="py-0 overflow-hidden">
+        <div className="border-b bg-muted/50 px-6 py-4">
+          <h3 className="text-lg font-medium text-foreground">注文履歴</h3>
         </div>
         {orders.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">注文履歴がありません</div>
+          <div className="p-8 text-center text-muted-foreground">注文履歴がありません</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  営業日
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  キャスト
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  コース
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  使用ポイント
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ステータス
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>営業日</TableHead>
+                <TableHead>キャスト</TableHead>
+                <TableHead>コース</TableHead>
+                <TableHead>使用ポイント</TableHead>
+                <TableHead>ステータス</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {orders.map(order => (
-                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.business_date}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.cast_name || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <TableRow key={order.id}>
+                  <TableCell className="text-foreground">{order.business_date}</TableCell>
+                  <TableCell className="text-muted-foreground">{order.cast_name || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">
                     {order.course_minutes}分
                     {order.extension_minutes > 0 && ` (+延長${order.extension_minutes}分)`}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.used_points}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.status}
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{order.used_points}</TableCell>
+                  <TableCell className="text-muted-foreground">{order.status}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
