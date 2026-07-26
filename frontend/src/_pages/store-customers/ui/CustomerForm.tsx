@@ -91,7 +91,9 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
         {/* 基本情報 */}
         <Card>
           <CardHeader>
-            <CardTitle>基本情報</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              基本情報
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -126,7 +128,9 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
         {/* 住所 */}
         <Card>
           <CardHeader>
-            <CardTitle>住所</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              住所
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -164,7 +168,9 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
         {/* NG 情報 */}
         <Card>
           <CardHeader>
-            <CardTitle>NG 情報</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              NG 情報
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

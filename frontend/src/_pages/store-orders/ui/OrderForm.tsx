@@ -172,7 +172,9 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 1. 基本情報 */}
         <Card>
           <CardHeader>
-            <CardTitle>基本情報</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              基本情報
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -223,7 +225,9 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 2. お客様情報 */}
         <Card>
           <CardHeader>
-            <CardTitle>お客様情報</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              お客様情報
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -299,7 +303,9 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 3. コース・料金 */}
         <Card>
           <CardHeader>
-            <CardTitle>コース・料金</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              コース・料金
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -408,7 +414,9 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 4. その他 */}
         <Card>
           <CardHeader>
-            <CardTitle>その他</CardTitle>
+            <CardTitle role="heading" aria-level={3}>
+              その他
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
