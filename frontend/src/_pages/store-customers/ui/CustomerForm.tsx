@@ -3,6 +3,22 @@
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { CustomerCreateRequest } from '@/entities/customer';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  Input,
+  Label,
+  Textarea,
+} from '@/shared/ui';
 
 /** 顧客フォームのデータ型 */
 export interface CustomerFormData {
@@ -50,7 +66,7 @@ interface CustomerFormProps {
 /** 顧客登録・編集フォームコンポーネント */
 export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFormProps) {
   const router = useRouter();
-  const { register, handleSubmit } = useForm<CustomerFormData>({
+  const form = useForm<CustomerFormData>({
     defaultValues: {
       name: '',
       phone_number: '',
@@ -67,156 +83,118 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
       ...initialData,
     },
   });
+  const { register, handleSubmit, control } = form;
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-100"
-    >
-      {/* 基本情報 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          基本情報
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">名前 *</label>
-            <input
-              type="text"
-              {...register('name', { required: true })}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">区分</label>
-            <input
-              type="text"
-              {...register('classification')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">電話番号</label>
-            <input
-              type="tel"
-              {...register('phone_number')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">電話番号2</label>
-            <input
-              type="tel"
-              {...register('phone_number2')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">LINE ID</label>
-            <input
-              type="text"
-              {...register('line_id')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ランク</label>
-            <input
-              type="text"
-              {...register('rank')}
-              placeholder="SILVER"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-      </section>
+    <Form {...form}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* 基本情報 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>基本情報</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="name">名前 *</Label>
+                <Input id="name" type="text" {...register('name', { required: true })} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="classification">区分</Label>
+                <Input id="classification" type="text" {...register('classification')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="phone_number">電話番号</Label>
+                <Input id="phone_number" type="tel" {...register('phone_number')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="phone_number2">電話番号2</Label>
+                <Input id="phone_number2" type="tel" {...register('phone_number2')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="line_id">LINE ID</Label>
+                <Input id="line_id" type="text" {...register('line_id')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="rank">ランク</Label>
+                <Input id="rank" type="text" placeholder="SILVER" {...register('rank')} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* 住所 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          住所
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">住所</label>
-            <input
-              type="text"
-              {...register('address')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">建物名</label>
-            <input
-              type="text"
-              {...register('building_name')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">利用エリア</label>
-            <input
-              type="text"
-              {...register('usage_areas')}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div className="flex items-end pb-2">
-            <label className="inline-flex items-center text-sm font-medium text-gray-700">
-              <input
-                type="checkbox"
-                {...register('has_pet')}
-                className="mr-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+        {/* 住所 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>住所</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="address">住所</Label>
+                <Input id="address" type="text" {...register('address')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="building_name">建物名</Label>
+                <Input id="building_name" type="text" {...register('building_name')} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="usage_areas">利用エリア</Label>
+                <Input id="usage_areas" type="text" {...register('usage_areas')} />
+              </div>
+              <FormField
+                control={control}
+                name="has_pet"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-2 self-end pb-2">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={value => field.onChange(value === true)}
+                      />
+                    </FormControl>
+                    <FormLabel className="font-medium">ペットあり</FormLabel>
+                  </FormItem>
+                )}
               />
-              ペットあり
-            </label>
-          </div>
-        </div>
-      </section>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* NG 情報 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          NG 情報
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">NG タイプ</label>
-            <input
-              type="text"
-              {...register('ng_type')}
-              placeholder="注意・禁止など"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">NG 内容</label>
-          <textarea
-            {...register('ng_content')}
-            rows={3}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-        </div>
-      </section>
+        {/* NG 情報 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>NG 情報</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="ng_type">NG タイプ</Label>
+                <Input
+                  id="ng_type"
+                  type="text"
+                  placeholder="注意・禁止など"
+                  {...register('ng_type')}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ng_content">NG 内容</Label>
+              <Textarea id="ng_content" rows={3} {...register('ng_content')} />
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* ボタン */}
-      <div className="flex justify-end space-x-4 pt-6 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="px-6 py-2.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          キャンセル
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-10 py-2.5 rounded-md bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all"
-        >
-          {isSubmitting ? '保存中...' : '保存する'}
-        </button>
-      </div>
-    </form>
+        {/* ボタン */}
+        <div className="flex justify-end gap-4">
+          <Button type="button" variant="outline" onClick={() => router.back()}>
+            キャンセル
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? '保存中...' : '保存する'}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }

@@ -1,0 +1,96 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import CustomersPage from '../ui/CustomersPage';
+import CustomerCreatePage from '../ui/CustomerCreatePage';
+import { CustomerForm } from '../ui/CustomerForm';
+import { customerApi } from '@/entities/customer';
+
+// Radix Checkbox は <form> 内で hidden な BubbleInput を描画し、その採寸に
+// ResizeObserver を使う。jsdom には未実装のため最小スタブを供給する。
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver = ResizeObserverStub;
+
+jest.mock('@/entities/customer', () => ({
+  customerApi: {
+    list: jest.fn(),
+    create: jest.fn(),
+  },
+}));
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useParams: () => ({ storeId: '1' }),
+}));
+
+const mockedCustomerApi = customerApi as jest.Mocked<typeof customerApi>;
+
+describe('店側顧客画面と API JSON（snake_case）の整合', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('一覧はバックエンドが実際に返す snake_case のフィールドを表示すること', async () => {
+    // バックエンドは Jackson グローバル SNAKE_CASE（既知の実レスポンス形）
+    mockedCustomerApi.list.mockResolvedValue({
+      content: [
+        {
+          id: '1',
+          name: '山田太郎',
+          phone_number: '090-1111-2222',
+          line_id: 'yamada',
+          rank: 'GOLD',
+          classification: '常連',
+          points: 120,
+          ng_type: '注意',
+        },
+      ],
+      total_pages: 1,
+      total_elements: 1,
+      size: 20,
+      number: 0,
+    } as never);
+
+    render(<CustomersPage />);
+
+    expect(await screen.findByText('山田太郎')).toBeInTheDocument();
+    expect(screen.getByText('090-1111-2222')).toBeInTheDocument();
+    expect(screen.getByText('yamada')).toBeInTheDocument();
+    // NG バッジは ng_type をそのまま表示する
+    expect(screen.getByText('注意')).toBeInTheDocument();
+  });
+
+  it('新規登録はバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
+    mockedCustomerApi.create.mockResolvedValue({} as never);
+
+    render(<CustomerCreatePage />);
+    // name は required のため、未入力だと create が呼ばれない
+    fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '田中花子' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedCustomerApi.create).toHaveBeenCalledTimes(1));
+    const body = mockedCustomerApi.create.mock.calls[0][0] as unknown as Record<string, unknown>;
+    expect(body).toHaveProperty('name', '田中花子');
+    // 未操作チェックボックスは boolean false のまま（挙動維持の錨）
+    expect(body).toHaveProperty('has_pet', false);
+    // defaultValues の rank はそのまま送信される
+    expect(body).toHaveProperty('rank', 'SILVER');
+    // 空文字フィールドは toCustomerRequest で undefined に落ちる
+    expect(body).toHaveProperty('phone_number', undefined);
+    // camelCase キーが混入しないこと
+    expect(body).not.toHaveProperty('phoneNumber');
+    expect(body).not.toHaveProperty('hasPet');
+    expect(body).not.toHaveProperty('lineId');
+  });
+
+  it('編集時の has_pet:true が controlled チェックボックスに反映されること', () => {
+    render(<CustomerForm initialData={{ name: '太郎', has_pet: true }} onSubmit={jest.fn()} />);
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    // ラベル文字クリックでトグルできること（label→control の関連付け維持）
+    fireEvent.click(screen.getByText('ペットあり'));
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+  });
+});

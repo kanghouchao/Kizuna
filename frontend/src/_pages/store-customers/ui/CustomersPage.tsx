@@ -12,6 +12,19 @@ import { useParams } from 'next/navigation';
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { toast } from 'react-hot-toast';
 import { storePath } from '@/shared/lib';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/ui';
 
 /** 顧客一覧ページ */
 export default function CustomersPage() {
@@ -77,161 +90,140 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold text-gray-900">顧客管理</h1>
           <p className="text-sm text-gray-500 mt-1">顧客情報の登録・編集ができます。</p>
         </div>
-        <Link
-          href={storePath(storeId, '/customers/create')}
-          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-        >
-          <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-          新規顧客登録
-        </Link>
+        <Button asChild>
+          <Link href={storePath(storeId, '/customers/create')}>
+            <PlusIcon />
+            新規顧客登録
+          </Link>
+        </Button>
       </div>
 
       {/* 検索・絞り込みバー */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row md:items-center gap-4">
-        <div className="flex-1 relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+      <Card>
+        <CardContent className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex-1 relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <Input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              className="pl-10"
+              placeholder="名前・電話番号・LINE ID で検索..."
+            />
           </div>
-          <input
+          <Input
             type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={rank}
+            onChange={e => setRank(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            placeholder="名前・電話番号・LINE ID で検索..."
+            className="w-full md:w-32"
+            placeholder="ランク"
           />
-        </div>
-        <input
-          type="text"
-          value={rank}
-          onChange={e => setRank(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          className="w-full md:w-32 px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          placeholder="ランク"
-        />
-        <input
-          type="text"
-          value={classification}
-          onChange={e => setClassification(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          className="w-full md:w-32 px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          placeholder="区分"
-        />
-        <button
-          onClick={handleSearch}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-        >
-          検索
-        </button>
-      </div>
+          <Input
+            type="text"
+            value={classification}
+            onChange={e => setClassification(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            className="w-full md:w-32"
+            placeholder="区分"
+          />
+          <Button variant="outline" onClick={handleSearch}>
+            検索
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* テーブル */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+      <Card className="py-0 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-gray-500">読み込み中...</div>
+          <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
         ) : customers.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">顧客が登録されていません</div>
+          <div className="p-8 text-center text-muted-foreground">顧客が登録されていません</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  名前
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  電話番号
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  LINE ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ランク
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  区分
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ポイント
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  NG
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  アクション
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>名前</TableHead>
+                <TableHead>電話番号</TableHead>
+                <TableHead>LINE ID</TableHead>
+                <TableHead>ランク</TableHead>
+                <TableHead>区分</TableHead>
+                <TableHead>ポイント</TableHead>
+                <TableHead>NG</TableHead>
+                <TableHead className="text-right">アクション</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {customers.map(customer => (
-                <tr key={customer.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{customer.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <TableRow key={customer.id}>
+                  <TableCell className="font-medium text-foreground">{customer.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
                     {customer.phone_number || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {customer.line_id || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {customer.rank || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{customer.line_id || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">{customer.rank || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">
                     {customer.classification || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {customer.points ?? 0}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{customer.points ?? 0}</TableCell>
+                  <TableCell>
                     {customer.ng_type ? (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-red-100 text-red-800"
+                      >
                         {customer.ng_type}
-                      </span>
+                      </Badge>
                     ) : (
-                      <span className="text-sm text-gray-400">-</span>
+                      <span className="text-muted-foreground">-</span>
                     )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                    <Link
-                      href={storePath(storeId, `/customers/${customer.id}/edit`)}
-                      className="text-gray-400 hover:text-amber-600 inline-block"
-                    >
-                      <PencilSquareIcon className="h-5 w-5" />
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(customer.id, customer.name)}
-                      className="text-gray-400 hover:text-red-600"
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button asChild variant="ghost" size="icon-sm">
+                        <Link href={storePath(storeId, `/customers/${customer.id}/edit`)}>
+                          <PencilSquareIcon />
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleDelete(customer.id, customer.name)}
+                      >
+                        <TrashIcon />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
       {/* ページネーション */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center space-x-4">
-          <button
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            variant="outline"
             onClick={() => fetchCustomers(page - 1)}
             disabled={page <= 0 || isLoading}
-            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             前へ
-          </button>
-          <span className="text-sm text-gray-600">
+          </Button>
+          <span className="text-sm text-muted-foreground">
             {page + 1} / {totalPages} ページ
           </span>
-          <button
+          <Button
+            variant="outline"
             onClick={() => fetchCustomers(page + 1)}
             disabled={page >= totalPages - 1 || isLoading}
-            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             次へ
-          </button>
+          </Button>
         </div>
       )}
     </div>
