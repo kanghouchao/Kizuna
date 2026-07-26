@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/entities/user';
 import { useRouter } from 'next/navigation';
 import { Store, StoreStats, platformStoreApi } from '@/entities/store';
+import { Badge, Button, Card, CardContent, Skeleton } from '@/shared/ui';
 import toast from 'react-hot-toast';
 
 export default function AdminDashboard() {
@@ -34,28 +35,20 @@ export default function AdminDashboard() {
   }, [loadDashboardData]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* ナビゲーションバー */}
-      <nav className="bg-white shadow">
+      <nav className="bg-card shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">管理コンソール</h1>
+              <h1 className="text-xl font-semibold text-foreground">管理コンソール</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">ようこそ、adminさん</span>
-              <button
-                onClick={() => router.push('/platform/stores')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-              >
-                店舗管理
-              </button>
-              <button
-                onClick={logout}
-                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-              >
+              <span className="text-sm text-muted-foreground">ようこそ、adminさん</span>
+              <Button onClick={() => router.push('/platform/stores')}>店舗管理</Button>
+              <Button variant="ghost" size="sm" onClick={logout}>
                 ログアウト
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -68,24 +61,22 @@ export default function AdminDashboard() {
             {loadingStats ? (
               // 統計データ読み込み状態
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-5">
-                    <div className="animate-pulse">
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                      <div className="h-8 bg-gray-200 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                </div>
+                <Card key={i}>
+                  <CardContent>
+                    <Skeleton className="h-4 w-3/4 mb-2" />
+                    <Skeleton className="h-8 w-1/2" />
+                  </CardContent>
+                </Card>
               ))
             ) : (
               // 統計データカード
               <>
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-5">
+                <Card>
+                  <CardContent>
                     <div className="flex items-center">
                       <div className="shrink-0">
                         <svg
-                          className="h-6 w-6 text-gray-400"
+                          className="h-6 w-6 text-muted-foreground"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -100,20 +91,24 @@ export default function AdminDashboard() {
                       </div>
                       <div className="ml-5 w-0 flex-1">
                         <dl>
-                          <dt className="text-sm font-medium text-gray-500 truncate">総店舗数</dt>
-                          <dd className="text-lg font-medium text-gray-900">{stats?.total || 0}</dd>
+                          <dt className="text-sm font-medium text-muted-foreground truncate">
+                            総店舗数
+                          </dt>
+                          <dd className="text-lg font-medium text-foreground">
+                            {stats?.total || 0}
+                          </dd>
                         </dl>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
 
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-5">
+                <Card>
+                  <CardContent>
                     <div className="flex items-center">
                       <div className="shrink-0">
                         <svg
-                          className="h-6 w-6 text-green-400"
+                          className="h-6 w-6 text-success"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -128,22 +123,24 @@ export default function AdminDashboard() {
                       </div>
                       <div className="ml-5 w-0 flex-1">
                         <dl>
-                          <dt className="text-sm font-medium text-gray-500 truncate">有効店舗</dt>
-                          <dd className="text-lg font-medium text-gray-900">
+                          <dt className="text-sm font-medium text-muted-foreground truncate">
+                            有効店舗
+                          </dt>
+                          <dd className="text-lg font-medium text-foreground">
                             {stats?.active || 0}
                           </dd>
                         </dl>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
 
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-5">
+                <Card>
+                  <CardContent>
                     <div className="flex items-center">
                       <div className="shrink-0">
                         <svg
-                          className="h-6 w-6 text-yellow-400"
+                          className="h-6 w-6 text-warning"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -158,22 +155,24 @@ export default function AdminDashboard() {
                       </div>
                       <div className="ml-5 w-0 flex-1">
                         <dl>
-                          <dt className="text-sm font-medium text-gray-500 truncate">審査待ち</dt>
-                          <dd className="text-lg font-medium text-gray-900">
+                          <dt className="text-sm font-medium text-muted-foreground truncate">
+                            審査待ち
+                          </dt>
+                          <dd className="text-lg font-medium text-foreground">
                             {stats?.pending || 0}
                           </dd>
                         </dl>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
 
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="p-5">
+                <Card>
+                  <CardContent>
                     <div className="flex items-center">
                       <div className="shrink-0">
                         <svg
-                          className="h-6 w-6 text-red-400"
+                          className="h-6 w-6 text-destructive"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -188,64 +187,66 @@ export default function AdminDashboard() {
                       </div>
                       <div className="ml-5 w-0 flex-1">
                         <dl>
-                          <dt className="text-sm font-medium text-gray-500 truncate">無効店舗</dt>
-                          <dd className="text-lg font-medium text-gray-900">
+                          <dt className="text-sm font-medium text-muted-foreground truncate">
+                            無効店舗
+                          </dt>
+                          <dd className="text-lg font-medium text-foreground">
                             {stats?.inactive || 0}
                           </dd>
                         </dl>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </>
             )}
           </div>
 
           {/* 直近追加店舗一覧 */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
+          <Card className="py-0 overflow-hidden">
+            <div className="px-4 py-5 sm:px-6 flex justify-between items-center border-b">
               <div>
-                <h3 className="text-lg leading-6 font-medium text-gray-900">最近追加された店舗</h3>
-                <p className="mt-1 max-w-2xl text-sm text-gray-500">直近で作成された5件</p>
+                <h3 className="text-lg leading-6 font-medium text-foreground">
+                  最近追加された店舗
+                </h3>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">直近で作成された5件</p>
               </div>
-              <button
-                onClick={() => router.push('/platform/stores/create')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-              >
-                店舗追加
-              </button>
+              <Button onClick={() => router.push('/platform/stores/create')}>店舗追加</Button>
             </div>
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y">
               {recentStores.length === 0 ? (
-                <li className="px-4 py-4 text-center text-gray-500">店舗データがありません</li>
+                <li className="px-4 py-4 text-center text-muted-foreground">
+                  店舗データがありません
+                </li>
               ) : (
                 recentStores.map(store => (
-                  <li key={store.id} className="px-4 py-4 hover:bg-gray-50">
+                  <li key={store.id} className="px-4 py-4 hover:bg-muted">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <div className="shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                            <span className="text-sm font-medium text-indigo-600">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-medium text-primary-strong">
                               {store.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{store.name}</div>
-                          <div className="text-sm text-gray-500">{store.domain}</div>
+                          <div className="text-sm font-medium text-foreground">{store.name}</div>
+                          <div className="text-sm text-muted-foreground">{store.domain}</div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        <Badge
+                          variant="outline"
+                          className={`border-transparent ${
                             store.is_active
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
+                              ? 'bg-success/10 text-success-strong'
+                              : 'bg-destructive/10 text-destructive-strong'
                           }`}
                         >
                           {store.is_active ? '有効' : '無効'}
-                        </span>
-                        <span className="text-sm text-gray-500">
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
                           {new Date(store.created_at).toLocaleDateString('ja-JP')}
                         </span>
                       </div>
@@ -254,16 +255,16 @@ export default function AdminDashboard() {
                 ))
               )}
             </ul>
-          </div>
+          </Card>
 
           {/* クイック操作 */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-6">
+            <Card>
+              <CardContent>
                 <div className="flex items-center">
-                  <div className="shrink-0">
+                  <div className="shrink-0 rounded-lg bg-chart-1/10 p-3">
                     <svg
-                      className="h-8 w-8 text-indigo-600"
+                      className="h-8 w-8 text-foreground"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -277,27 +278,24 @@ export default function AdminDashboard() {
                     </svg>
                   </div>
                   <div className="ml-4">
-                    <h3 className="text-lg font-medium text-gray-900">店舗作成</h3>
-                    <p className="text-sm text-gray-500">新しい店舗を追加</p>
+                    <h3 className="text-lg font-medium text-foreground">店舗作成</h3>
+                    <p className="text-sm text-muted-foreground">新しい店舗を追加</p>
                   </div>
                 </div>
                 <div className="mt-4">
-                  <button
-                    onClick={() => router.push('/platform/stores/create')}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm font-medium"
-                  >
+                  <Button className="w-full" onClick={() => router.push('/platform/stores/create')}>
                     今すぐ作成
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-6">
+            <Card>
+              <CardContent>
                 <div className="flex items-center">
-                  <div className="shrink-0">
+                  <div className="shrink-0 rounded-lg bg-chart-2/10 p-3">
                     <svg
-                      className="h-8 w-8 text-green-600"
+                      className="h-8 w-8 text-foreground"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -311,27 +309,24 @@ export default function AdminDashboard() {
                     </svg>
                   </div>
                   <div className="ml-4">
-                    <h3 className="text-lg font-medium text-gray-900">店舗管理</h3>
-                    <p className="text-sm text-gray-500">既存店舗の閲覧と編集</p>
+                    <h3 className="text-lg font-medium text-foreground">店舗管理</h3>
+                    <p className="text-sm text-muted-foreground">既存店舗の閲覧と編集</p>
                   </div>
                 </div>
                 <div className="mt-4">
-                  <button
-                    onClick={() => router.push('/platform/stores')}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md text-sm font-medium"
-                  >
+                  <Button className="w-full" onClick={() => router.push('/platform/stores')}>
                     すべて表示
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-6">
+            <Card>
+              <CardContent>
                 <div className="flex items-center">
-                  <div className="shrink-0">
+                  <div className="shrink-0 rounded-lg bg-chart-5/10 p-3">
                     <svg
-                      className="h-8 w-8 text-purple-600"
+                      className="h-8 w-8 text-foreground"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -345,20 +340,17 @@ export default function AdminDashboard() {
                     </svg>
                   </div>
                   <div className="ml-4">
-                    <h3 className="text-lg font-medium text-gray-900">システム統計</h3>
-                    <p className="text-sm text-gray-500">詳細レポートを表示</p>
+                    <h3 className="text-lg font-medium text-foreground">システム統計</h3>
+                    <p className="text-sm text-muted-foreground">詳細レポートを表示</p>
                   </div>
                 </div>
                 <div className="mt-4">
-                  <button
-                    onClick={() => toast('機能開発中...', { icon: 'ℹ️' })}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-md text-sm font-medium"
-                  >
+                  <Button className="w-full" onClick={() => toast('機能開発中...', { icon: 'ℹ️' })}>
                     レポートを見る
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
