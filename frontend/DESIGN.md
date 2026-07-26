@@ -39,7 +39,7 @@ The token layer lives in `src/app/globals.css`: `:root` / `.dark` oklch values e
 
 Screens still carrying pre-shadcn classes are converted with this table.
 
-**Substitute the primitive before reaching for this table.** Most legacy class strings belong to hand-built buttons, labels, inputs and tables; swapping in `Button` / `Label` / `Input` / `Table` deletes the whole string rather than mapping it. In the two slices migrated so far, every single occurrence of `text-gray-700` and `hover:bg-gray-50` disappeared this way and none was replaced by a token. Only the classes that survive on bare elements need the table below.
+**Substitute the primitive before reaching for this table.** Most legacy class strings belong to hand-built buttons, labels, inputs and tables; swapping in `Button` / `Label` / `Input` / `Table` deletes the whole string rather than mapping it. In the files migrated so far (`store-orders/ui/OrderForm.tsx` and the `store-customers` slice), every occurrence of `text-gray-700` and `hover:bg-gray-50` inside them disappeared this way and none was replaced by a token. Files those PRs did not touch still carry the legacy classes — `store-orders/ui/OrdersPage.tsx` is one. Only the classes that survive on bare elements need the table below.
 
 The table is **not exhaustive** — it covers the recurring cases, not every class in the codebase. If something you are converting is not listed, do not guess: raise it in the PR so the answer is recorded here once, for everyone.
 
@@ -65,7 +65,7 @@ The table is **not exhaustive** — it covers the recurring cases, not every cla
 | `bg-green-500 text-white` (確定 shift bar)             | `bg-success text-success-foreground`                       |
 | `bg-yellow-400 text-yellow-900` (未確定 shift bar)     | `bg-warning text-warning-foreground`                       |
 | Decorative chips blue / green / orange / purple / pink | `chart-1` … `chart-5` — **see the recipe below**           |
-| `bg-slate-*` (sidebar)                                 | **do not map — see below**                                 |
+| any `slate-*` (sidebar)                                | **do not map — see below**                                 |
 | Weekend `text-red-500` (Sun) / `text-blue-500` (Sat)   | `text-destructive` / `text-primary`                        |
 | Now marker `bg-red-500`                                | `bg-destructive`                                           |
 | Coverage bar `bg-blue-500/80`                          | `bg-primary/80`                                            |
