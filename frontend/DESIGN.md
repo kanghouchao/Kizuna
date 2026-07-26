@@ -12,7 +12,7 @@ Design rules for all UI work. Structure follows the DESIGN.md convention (design
 
 Never mix the vocabularies: no gold-serif storefront styling in admin screens, no admin cards in storefront templates, and no admin token restyling of the auth screens.
 
-Membership in the auth world is decided by `AuthLayout`, which is the only importer of `auth.css` — not by a slice's name. `features/password-change` in particular is **admin**, not auth: it is embedded in the account settings pages of both consoles (`_pages/store-settings` and `_pages/platform-settings`) and never appears under `AuthLayout`, so it is restyled with the admin tokens along with the page that hosts it.
+Membership in the auth world is decided by `AuthLayout`, which is the only importer of `auth.css` — not by a slice's name. `features/password-change` in particular is **admin**, not auth: it is embedded in the account settings pages of both consoles (`_pages/store-settings` and `_pages/platform-settings`) and never appears under `AuthLayout`, so it is restyled with the admin tokens. Because two page slices host it, it belongs to the **`store-settings`** restyle ticket — the console whose `AccountPage` carries the surrounding form. The `platform-settings` ticket renders it but does not edit it.
 
 ## Colors
 
@@ -78,33 +78,33 @@ Screens still carrying pre-shadcn classes are converted with this table.
 
 The table is **not exhaustive** — it covers the recurring cases, not every class in the codebase. If something you are converting is not listed, do not guess: raise it in the PR so the answer is recorded here once, for everyone.
 
-| Legacy                                                 | Token                                                                   |
-| ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `text-gray-900` / `-800`                               | `text-foreground`                                                       |
-| `text-gray-700`                                        | **by role — see below**                                                 |
-| `text-gray-600` / `-500` / `-400`                      | `text-muted-foreground`                                                 |
-| `bg-gray-50` (page) / `bg-white` (surface)             | `bg-background` / `bg-card`                                             |
-| `bg-white/90` (sticky footer backdrop)                 | `bg-card/90`                                                            |
-| `hover:bg-gray-50`                                     | `hover:bg-muted`                                                        |
-| `border-gray-200` / `-300` / `-100`                    | bare `border` (or `border-border`)                                      |
-| `divide-gray-200`                                      | bare `divide-y` — the base layer already colors it                      |
-| `bg-gray-200` track                                    | `bg-muted`                                                              |
-| `bg-gray-100 text-gray-800` (neutral/無効 pill)        | `bg-muted text-muted-foreground`                                        |
-| `placeholder-gray-500`                                 | drop it — `Input` already ships the placeholder color                   |
-| `shadow-indigo-200` / `shadow-indigo-900/20`           | drop the tint; keep the plain elevation (`shadow-sm` etc.)              |
-| `blue-600` / `indigo-600`                              | `primary`                                                               |
-| `bg-blue-50`                                           | `bg-primary/10`                                                         |
-| `text-red-600` / `bg-red-100 text-red-800`             | `text-destructive-strong` / `bg-destructive/10 text-destructive-strong` |
-| `text-green-600` / `bg-green-100 text-green-800`       | `text-success-strong` / `bg-success/10 text-success-strong`             |
-| `text-amber-600` / `bg-yellow-100 text-yellow-800`     | `text-warning-strong` / `bg-warning/10 text-warning-strong`             |
-| `bg-green-500 text-white` (確定 shift bar)             | `bg-success text-success-foreground` (foreground is now dark)           |
-| `bg-yellow-400 text-yellow-900` (未確定 shift bar)     | `bg-warning text-warning-foreground`                                    |
-| Decorative chips blue / green / orange / purple / pink | `chart-1` … `chart-5` — **see the recipe below**                        |
-| any `slate-*` (sidebar)                                | **do not map — see below**                                              |
-| Weekend `text-red-500` (Sun) / `text-blue-500` (Sat)   | `text-destructive` / `text-primary`                                     |
-| Now marker `bg-red-500`                                | `bg-destructive`                                                        |
-| Coverage bar `bg-blue-500/80`                          | `bg-primary/80`                                                         |
-| Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring                     |
+| Legacy                                                 | Token                                                                                                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text-gray-900` / `-800`                               | `text-foreground`                                                                                                                             |
+| `text-gray-700`                                        | **by role — see below**                                                                                                                       |
+| `text-gray-600` / `-500` / `-400`                      | `text-muted-foreground`                                                                                                                       |
+| `bg-gray-50` (page) / `bg-white` (surface)             | `bg-background` / `bg-card`                                                                                                                   |
+| `bg-white/90` (sticky footer backdrop)                 | `bg-card/90`                                                                                                                                  |
+| `hover:bg-gray-50`                                     | `hover:bg-muted`                                                                                                                              |
+| `border-gray-200` / `-300` / `-100`                    | bare `border` (or `border-border`)                                                                                                            |
+| `divide-gray-200`                                      | bare `divide-y` — the base layer already colors it                                                                                            |
+| `bg-gray-200` track                                    | `bg-muted`                                                                                                                                    |
+| `bg-gray-100 text-gray-800` (neutral/無効 pill)        | `bg-muted text-muted-foreground`                                                                                                              |
+| `placeholder-gray-500`                                 | drop it — `Input` already ships the placeholder color                                                                                         |
+| `shadow-indigo-200` / `shadow-indigo-900/20`           | drop the tint; keep the plain elevation (`shadow-sm` etc.)                                                                                    |
+| `blue-600` / `indigo-600`                              | `primary`                                                                                                                                     |
+| `bg-blue-50`                                           | `bg-primary/10`                                                                                                                               |
+| `text-red-600` / `bg-red-100 text-red-800`             | `text-destructive-strong` / `bg-destructive/10 text-destructive-strong` — on an icon, `text-destructive`                                      |
+| `text-green-600` / `bg-green-100 text-green-800`       | `text-success-strong` / `bg-success/10 text-success-strong` — on an icon, `text-success`                                                      |
+| `text-amber-600` / `bg-yellow-100 text-yellow-800`     | `text-warning-strong` / `bg-warning/10 text-warning-strong` — on an icon, `text-warning`                                                      |
+| `bg-green-500 text-white` (確定 shift bar)             | `bg-success text-success-foreground` (foreground is now dark)                                                                                 |
+| `bg-yellow-400 text-yellow-900` (未確定 shift bar)     | `bg-warning text-warning-foreground`                                                                                                          |
+| Decorative chips blue / green / orange / purple / pink | `chart-1` … `chart-5` — **see the recipe below**                                                                                              |
+| any `slate-*` (sidebar)                                | **do not map — see below**                                                                                                                    |
+| Weekend `text-red-500` (Sun) / `text-blue-500` (Sat)   | `text-destructive` / `text-primary` — deliberate base exception: the calendar header is colour-coding, and both clear AA anyway (4.76 / 5.26) |
+| Now marker `bg-red-500`                                | `bg-destructive`                                                                                                                              |
+| Coverage bar `bg-blue-500/80`                          | `bg-primary/80`                                                                                                                               |
+| Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring                                                                                           |
 
 ##### `text-gray-700` is decided by role, not by class
 
