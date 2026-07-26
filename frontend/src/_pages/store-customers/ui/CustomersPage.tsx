@@ -173,7 +173,7 @@ export default function CustomersPage() {
                     {customer.ng_type ? (
                       <Badge
                         variant="outline"
-                        className="border-transparent bg-destructive/10 text-destructive"
+                        className="border-transparent bg-destructive/10 text-destructive-strong"
                       >
                         {customer.ng_type}
                       </Badge>
