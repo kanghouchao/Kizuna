@@ -125,7 +125,7 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="inset-y-0 top-0 right-0 left-auto flex h-full max-w-md translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-l border-gray-200 p-0 sm:max-w-md"
+        className="inset-y-0 top-0 right-0 left-auto flex h-full max-w-md translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 border-l border-gray-200 p-0 sm:max-w-md"
       >
         <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
           {staff?.display_name} の権限を編集
