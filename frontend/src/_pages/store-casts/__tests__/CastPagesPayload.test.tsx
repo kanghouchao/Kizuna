@@ -102,6 +102,8 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     render(<CastEditPage />);
     const customField = (await screen.findByLabelText('血液型')) as HTMLInputElement;
     expect(customField.value).toBe('A');
+    // 取得値のステータスがセレクトに選択済みとして表示されること
+    expect(screen.getByRole('combobox', { name: 'ステータス' })).toHaveTextContent('無効');
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 

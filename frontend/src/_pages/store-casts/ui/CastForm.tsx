@@ -3,7 +3,27 @@
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
-import { ImageUpload } from '@/shared/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  ImageUpload,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from '@/shared/ui';
 import { useManagedList } from '@/shared/lib';
 
 /** キャストフォームのデータ型 */
@@ -41,7 +61,7 @@ export function CastForm({
   isSubmitting,
 }: CastFormProps) {
   const router = useRouter();
-  const { register, handleSubmit, setValue, watch } = useForm<CastFormData>({
+  const form = useForm<CastFormData>({
     defaultValues: {
       name: '',
       status: 'ACTIVE',
@@ -56,6 +76,7 @@ export function CastForm({
       ...initialData,
     },
   });
+  const { register, handleSubmit, setValue, watch, control } = form;
 
   const photoUrl = watch('photo_url');
 
@@ -69,178 +90,160 @@ export function CastForm({
     );
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-100"
-    >
-      {/* 基本情報 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          基本情報
-        </h3>
-        <div className="flex gap-8">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">写真</label>
-            <ImageUpload
-              value={photoUrl}
-              onChange={url => setValue('photo_url', url)}
-              bucket="public"
-            />
-          </div>
-          <div className="flex-1 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">名前 *</label>
-              <input
-                type="text"
-                {...register('name', { required: true })}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ステータス</label>
-              <select
-                {...register('status')}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              >
-                <option value="ACTIVE">有効</option>
-                <option value="INACTIVE">無効</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">表示順</label>
-              <input
-                type="number"
-                {...register('display_order', { valueAsNumber: true })}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* プロフィール */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          プロフィール
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">年齢</label>
-            <input
-              type="number"
-              {...register('age', { valueAsNumber: true })}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">身長 (cm)</label>
-            <input
-              type="number"
-              {...register('height', { valueAsNumber: true })}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">バスト (cm)</label>
-            <input
-              type="number"
-              {...register('bust', { valueAsNumber: true })}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ウエスト (cm)</label>
-            <input
-              type="number"
-              {...register('waist', { valueAsNumber: true })}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ヒップ (cm)</label>
-            <input
-              type="number"
-              {...register('hip', { valueAsNumber: true })}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* 自己紹介 */}
-      <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-indigo-500 pl-3">
-          自己紹介
-        </h3>
-        <textarea
-          {...register('introduction')}
-          rows={4}
-          className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          placeholder="自己紹介を入力してください..."
-        />
-      </section>
-
-      {/* カスタムフィールド（編集時のみ。作成時はキャストがまだ無いため値を付与できない） */}
-      {isEdit && (
-        <section>
-          <h3 className="text-lg font-semibold text-gray-900 mb-6 border-l-4 border-blue-600 pl-3">
-            カスタムフィールド
-          </h3>
-          {isLoadingDefinitions ? (
-            <div className="p-6 text-center text-sm text-gray-500">読み込み中...</div>
-          ) : definitions.length === 0 ? (
-            <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-gray-500 text-sm">
-              カスタムフィールドは登録されていません
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {definitions.map(definition => (
-                <div key={definition.key}>
-                  <label
-                    htmlFor={`cast-custom-field-${definition.key}`}
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    {definition.label}
-                  </label>
-                  <input
-                    id={`cast-custom-field-${definition.key}`}
-                    type="text"
-                    // 自身が所有するキーのみ初期値に採用する。プレーンオブジェクトの
-                    // ブラケットアクセスは 'constructor' 等の継承プロパティを拾うため hasOwn で防ぐ。
-                    defaultValue={
-                      existingCustomFields && Object.hasOwn(existingCustomFields, definition.key)
-                        ? existingCustomFields[definition.key]
-                        : ''
-                    }
-                    {...register(`custom_fields.${definition.key}`)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+    <Form {...form}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* 基本情報 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>基本情報</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-8">
+              <div className="grid gap-2">
+                <Label>写真</Label>
+                <ImageUpload
+                  value={photoUrl}
+                  onChange={url => setValue('photo_url', url)}
+                  bucket="public"
+                />
+              </div>
+              <div className="flex-1 space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">名前 *</Label>
+                  <Input id="name" type="text" {...register('name', { required: true })} />
+                </div>
+                <FormField
+                  control={control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ステータス</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="ACTIVE">有効</SelectItem>
+                          <SelectItem value="INACTIVE">無効</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                <div className="grid gap-2">
+                  <Label htmlFor="display_order">表示順</Label>
+                  <Input
+                    id="display_order"
+                    type="number"
+                    {...register('display_order', { valueAsNumber: true })}
                   />
                 </div>
-              ))}
+              </div>
             </div>
-          )}
-        </section>
-      )}
+          </CardContent>
+        </Card>
 
-      {/* ボタン */}
-      <div className="flex justify-end space-x-4 pt-6 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="px-6 py-2.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          キャンセル
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-10 py-2.5 rounded-md bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:opacity-50 transition-all"
-        >
-          {isSubmitting ? '保存中...' : '保存する'}
-        </button>
-      </div>
-    </form>
+        {/* プロフィール */}
+        <Card>
+          <CardHeader>
+            <CardTitle>プロフィール</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="age">年齢</Label>
+                <Input id="age" type="number" {...register('age', { valueAsNumber: true })} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="height">身長 (cm)</Label>
+                <Input id="height" type="number" {...register('height', { valueAsNumber: true })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="bust">バスト (cm)</Label>
+                <Input id="bust" type="number" {...register('bust', { valueAsNumber: true })} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="waist">ウエスト (cm)</Label>
+                <Input id="waist" type="number" {...register('waist', { valueAsNumber: true })} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="hip">ヒップ (cm)</Label>
+                <Input id="hip" type="number" {...register('hip', { valueAsNumber: true })} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 自己紹介 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>自己紹介</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              id="introduction"
+              rows={4}
+              {...register('introduction')}
+              placeholder="自己紹介を入力してください..."
+            />
+          </CardContent>
+        </Card>
+
+        {/* カスタムフィールド（編集時のみ。作成時はキャストがまだ無いため値を付与できない） */}
+        {isEdit && (
+          <Card>
+            <CardHeader>
+              <CardTitle>カスタムフィールド</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingDefinitions ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">読み込み中...</div>
+              ) : definitions.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  カスタムフィールドは登録されていません
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {definitions.map(definition => (
+                    <div key={definition.key} className="grid gap-2">
+                      <Label htmlFor={`cast-custom-field-${definition.key}`}>
+                        {definition.label}
+                      </Label>
+                      <Input
+                        id={`cast-custom-field-${definition.key}`}
+                        type="text"
+                        // 自身が所有するキーのみ初期値に採用する。プレーンオブジェクトの
+                        // ブラケットアクセスは 'constructor' 等の継承プロパティを拾うため hasOwn で防ぐ。
+                        defaultValue={
+                          existingCustomFields &&
+                          Object.hasOwn(existingCustomFields, definition.key)
+                            ? existingCustomFields[definition.key]
+                            : ''
+                        }
+                        {...register(`custom_fields.${definition.key}`)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ボタン */}
+        <div className="flex justify-end gap-4">
+          <Button type="button" variant="outline" onClick={() => router.back()}>
+            キャンセル
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? '保存中...' : '保存する'}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }
