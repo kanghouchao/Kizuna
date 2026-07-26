@@ -1,6 +1,7 @@
 /* default 模版のテーマトークン（全色トークン化済み）。
    模版はこのトークン表と排布のみで差別化する（frontend/DESIGN.md）。 */
 .storefront-default {
+  color-scheme: dark;
   --storefront-bg: #080808;
   --storefront-fg: #f8f4f0;
   --storefront-accent: #c9a84c;
