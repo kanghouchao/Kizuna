@@ -9,3 +9,7 @@ class ResizeObserverStub {
   disconnect() {}
 }
 globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+// Radix の Select は content のマウント時 effect で選択済み項目をビューへスクロールする。
+// jsdom には scrollIntoView が無く、開き方に依らず同じ effect で落ちるため空実装を与える。
+Element.prototype.scrollIntoView = jest.fn();

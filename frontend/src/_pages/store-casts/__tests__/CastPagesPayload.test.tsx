@@ -122,4 +122,35 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(body).not.toHaveProperty('customFields');
     expect(body).not.toHaveProperty('invitation_status');
   });
+
+  it('セレクトで選び直したステータスが送信ボディに反映されること', async () => {
+    mockedCastApi.get.mockResolvedValue({
+      id: 'cast-1',
+      name: '花子',
+      status: 'INACTIVE',
+      photo_url: '',
+      introduction: '',
+      display_order: 0,
+      custom_fields: {},
+      invitation_status: 'NOT_INVITED',
+      created_at: '2026-07-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+    });
+    mockedCastApi.update.mockResolvedValue({} as never);
+    mockedFieldApi.list.mockResolvedValue([]);
+
+    render(<CastEditPage />);
+    const trigger = await screen.findByRole('combobox', { name: 'ステータス' });
+    expect(trigger).toHaveTextContent('無効');
+
+    // キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: '有効' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedCastApi.update).toHaveBeenCalledTimes(1));
+    const body = mockedCastApi.update.mock.calls[0][1] as unknown as Record<string, unknown>;
+    // 取得値 INACTIVE ではなく、選び直した値がフォーム状態に届いていること
+    expect(body).toHaveProperty('status', 'ACTIVE');
+  });
 });

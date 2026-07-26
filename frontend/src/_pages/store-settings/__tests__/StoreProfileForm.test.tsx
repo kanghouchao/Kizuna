@@ -85,6 +85,32 @@ describe('店舗プロフィールフォームの送信ペイロード', () => {
     expect(body.mv_type).toBe('video');
   });
 
+  it('セレクトで選び直した MV タイプが送信ペイロードに反映されること', async () => {
+    const { onSubmit } = renderForm(initialData());
+
+    // キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'タイプ:' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: '動画' }));
+
+    const body = await submitAndGetBody(onSubmit);
+
+    expect(body.mv_type).toBe('video');
+  });
+
+  it('セレクトで選び直した SNS プラットフォームが送信ペイロードに反映されること', async () => {
+    const { onSubmit } = renderForm(initialData());
+
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'プラットフォーム' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.click(await screen.findByRole('option', { name: 'LINE' }));
+
+    const body = await submitAndGetBody(onSubmit);
+
+    // 行の他のキーは巻き添えで消えないこと
+    expect(body.sns_links).toEqual([{ platform: 'line', url: 'https://insta', label: '' }]);
+  });
+
   it('模版テキストの編集後も現模版に無い custom_texts の key が保持されること', async () => {
     const { container, onSubmit } = renderForm(initialData());
 
