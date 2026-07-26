@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { useAuth } from '@/entities/user';
 import { useRouter } from 'next/navigation';
 import { CreateStoreRequest, platformStoreApi } from '@/entities/store';
+import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
 import toast from 'react-hot-toast';
 
 export default function CreateStorePage() {
@@ -80,28 +81,27 @@ export default function CreateStorePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* ナビゲーションバー */}
-      <nav className="bg-white shadow">
+      <nav className="bg-card shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center space-x-4">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary-strong"
                 onClick={() => router.push('/platform/stores')}
-                className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
               >
                 ← 店舗一覧に戻る
-              </button>
-              <h1 className="text-xl font-semibold text-gray-900">店舗作成</h1>
+              </Button>
+              <h1 className="text-xl font-semibold text-foreground">店舗作成</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">ようこそ、someone さん</span>
-              <button
-                onClick={logout}
-                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-              >
+              <span className="text-sm text-muted-foreground">ようこそ、someone さん</span>
+              <Button variant="ghost" size="sm" onClick={logout}>
                 ログアウト
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -110,122 +110,110 @@ export default function CreateStorePage() {
       {/* メインコンテンツ */}
       <div className="max-w-3xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
+          <Card>
+            <CardContent>
               <div className="mb-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">店舗情報</h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <h3 className="text-lg leading-6 font-medium text-foreground">店舗情報</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
                   新しい店舗の基本情報を入力してください。ドメインは独立サイトへのアクセスに使用されます。
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* 店舗名 */}
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    店舗名 <span className="text-red-500">*</span>
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="text"
-                      name="name"
-                      id="name"
-                      value={formData.name}
-                      onChange={e => handleInputChange('name', e.target.value)}
-                      className={`shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
-                        errors.name ? 'border-red-300' : ''
-                      }`}
-                      placeholder="例：ABC株式会社"
-                    />
-                    {errors.name && <p className="mt-2 text-sm text-red-600">{errors.name}</p>}
-                  </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="name">
+                    店舗名 <span className="text-destructive-strong">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    name="name"
+                    id="name"
+                    value={formData.name}
+                    onChange={e => handleInputChange('name', e.target.value)}
+                    aria-invalid={!!errors.name}
+                    placeholder="例：ABC株式会社"
+                  />
+                  {errors.name && <p className="text-sm text-destructive-strong">{errors.name}</p>}
                 </div>
 
                 {/* 域名 */}
-                <div>
-                  <label htmlFor="domain" className="block text-sm font-medium text-gray-700">
-                    ドメイン <span className="text-red-500">*</span>
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="text"
-                      name="domain"
-                      id="domain"
-                      value={formData.domain}
-                      onChange={e => handleInputChange('domain', e.target.value.toLowerCase())}
-                      className={`focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
-                        errors.domain ? 'border-red-300' : ''
-                      }`}
-                      placeholder="example.com"
-                    />
-                  </div>
-                  {errors.domain && <p className="mt-2 text-sm text-red-600">{errors.domain}</p>}
-                  <p className="mt-2 text-sm text-gray-500">
+                <div className="grid gap-2">
+                  <Label htmlFor="domain">
+                    ドメイン <span className="text-destructive-strong">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    name="domain"
+                    id="domain"
+                    value={formData.domain}
+                    onChange={e => handleInputChange('domain', e.target.value.toLowerCase())}
+                    aria-invalid={!!errors.domain}
+                    placeholder="example.com"
+                  />
+                  {errors.domain && (
+                    <p className="text-sm text-destructive-strong">{errors.domain}</p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
                     完全なドメイン名を入力してください（例：company.shop.example.org）
                   </p>
                 </div>
 
                 {/* 連絡用メール */}
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    連絡用メール <span className="text-red-500">*</span>
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="email"
-                      name="email"
-                      id="email"
-                      value={formData.email}
-                      onChange={e => handleInputChange('email', e.target.value)}
-                      className={`shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
-                        errors.email ? 'border-red-300' : ''
-                      }`}
-                      placeholder="contact@abc-company.com"
-                    />
-                    {errors.email && <p className="mt-2 text-sm text-red-600">{errors.email}</p>}
-                  </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">
+                    連絡用メール <span className="text-destructive-strong">*</span>
+                  </Label>
+                  <Input
+                    type="email"
+                    name="email"
+                    id="email"
+                    value={formData.email}
+                    onChange={e => handleInputChange('email', e.target.value)}
+                    aria-invalid={!!errors.email}
+                    placeholder="contact@abc-company.com"
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-destructive-strong">{errors.email}</p>
+                  )}
                 </div>
 
                 {/* 预览信息 */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">プレビュー情報</h4>
+                <div className="rounded-lg border p-4">
+                  <h4 className="text-sm font-medium text-foreground mb-2">プレビュー情報</h4>
                   <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">店舗名</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{formData.name || '未入力'}</dd>
+                      <dt className="text-sm font-medium text-muted-foreground">店舗名</dt>
+                      <dd className="mt-1 text-sm text-foreground">{formData.name || '未入力'}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">アクセスドメイン</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{formData.domain || '未入力'}</dd>
+                      <dt className="text-sm font-medium text-muted-foreground">
+                        アクセスドメイン
+                      </dt>
+                      <dd className="mt-1 text-sm text-foreground">
+                        {formData.domain || '未入力'}
+                      </dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">連絡用メール</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{formData.email || '未入力'}</dd>
+                      <dt className="text-sm font-medium text-muted-foreground">連絡用メール</dt>
+                      <dd className="mt-1 text-sm text-foreground">{formData.email || '未入力'}</dd>
                     </div>
                   </dl>
                 </div>
 
                 {/* 提交按钮 */}
                 <div className="flex justify-end space-x-3">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => router.push('/platform/stores')}
-                    className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     キャンセル
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
-                        <svg
-                          className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
+                        <svg className="animate-spin" fill="none" viewBox="0 0 24 24">
                           <circle
                             className="opacity-25"
                             cx="12"
@@ -245,11 +233,11 @@ export default function CreateStorePage() {
                     ) : (
                       '店舗を作成'
                     )}
-                  </button>
+                  </Button>
                 </div>
               </form>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
