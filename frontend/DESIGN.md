@@ -47,6 +47,7 @@ So each hue also has a `-strong` variant: the value that reads against the surfa
 | -------------------------------------------------- | ------------------------------------------------------------------- |
 | Text (on a surface or on a `/10` tint)             | `text-primary-strong` / `-success-` / `-warning-` / `-destructive-` |
 | Meaningful graphic (progress fill, edge bar, ring) | `bg-primary-strong`, `border-primary`                               |
+| Icon carrying a state semantic                     | base — `text-success` / `text-warning` / `text-destructive`         |
 | Filled surface carrying a label                    | `bg-success` + `text-success-foreground`                            |
 | Solid CTA                                          | `bg-primary` + `text-primary-foreground`                            |
 
@@ -88,7 +89,7 @@ Ratios are WCAG relative-luminance figures computed from the oklch values in `gl
 
 Every prescribed combination clears its bar in both modes, so **no size or weight condition is attached to any of them**.
 
-Three of these recipes exist in this form only because the matrix caught them failing: `text-primary` on a dark surface (3.37), solid destructive with a near-white foreground in dark (2.77), and category chips coloured with `text-chart-*`, where four of the five hues fall below 3:1 in one mode or the other (as low as 1.62). Where a fix changed appearance it is noted with the recipe.
+Three of these recipes exist in this form only because the matrix caught them failing: `text-primary` on a dark surface (3.37), solid destructive with a near-white foreground in dark (2.77), and category chips coloured with `text-chart-*`, where three of the five hues fall below 3:1 against their own tint in one mode or the other (as low as 1.62). Where a fix changed appearance it is noted with the recipe.
 
 Two relationships inherited from the vendored shadcn tokens sit below these bars and are **deliberately not changed here**, since altering them would restyle every primitive: `border-border` against a surface (1.27 / 1.33 — decorative separators, exempt as they carry no state) and `text-muted-foreground` on `bg-muted` (4.39 in light). The second is why the hover recipes in Components pair `bg-muted` with `text-foreground` rather than leaving muted text on a muted surface.
 
@@ -115,7 +116,7 @@ The table is **not exhaustive** — it covers the recurring cases, not every cla
 | `border-gray-200` / `-300` / `-100`                    | bare `border` (or `border-border`)                                                                                                            |
 | `divide-gray-200`                                      | bare `divide-y` — the base layer already colors it                                                                                            |
 | `bg-gray-200` track                                    | `bg-muted`                                                                                                                                    |
-| `bg-gray-100 text-gray-800` (neutral/無効 pill)        | `bg-muted text-muted-foreground`                                                                                                              |
+| `bg-gray-100 text-gray-800` (neutral/無効 pill)        | `bg-muted text-foreground` — not `text-muted-foreground`, which is the 4.39 pairing noted above                                               |
 | `placeholder-gray-500`                                 | drop it — `Input` already ships the placeholder color                                                                                         |
 | `shadow-indigo-200` / `shadow-indigo-900/20`           | drop the tint; keep the plain elevation (`shadow-sm` etc.)                                                                                    |
 | `blue-600` / `indigo-600` as a CTA fill                | `bg-primary` + `text-primary-foreground`                                                                                                      |
