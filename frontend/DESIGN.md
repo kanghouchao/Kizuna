@@ -86,16 +86,37 @@ Ratios are WCAG relative-luminance figures computed from the oklch values in `gl
 | `bg-destructive` graphic vs `bg-card`                  | 4.76      | 6.13      | 3    |
 | `text-destructive` on `bg-card` (FormMessage)          | 4.76      | 6.13      | 4.5  |
 | `bg-chart-1/10` … `bg-chart-5/10` + `text-foreground`  | 16.87 min | 14.40 min | 4.5  |
+| `text-foreground` on `bg-primary/10`                   | 17.22     | 15.75     | 4.5  |
+| `text-primary-strong` on `bg-accent` (ghost hover)     | 4.78      | 5.65      | 4.5  |
+| `border-primary` / `ring-primary` edge vs a surface    | 5.26      | 3.37      | 3    |
+| `bg-destructive/90` hover fill + its icon              | 4.32      | 5.64      | 3    |
 
 Every prescribed combination clears its bar in both modes, so **no size or weight condition is attached to any of them**.
+
+Three of the newer rows need a note, since each answers a question that came up more than once:
+
+- `bg-accent` is not a fourth surface: `globals.css` defines `--accent` identically to `--muted` in both modes, so a ghost `Button`'s hover fill is numerically `bg-muted` and needs no separate measurement beyond this row.
+- The `border-primary` row is the edge form of the primary hue — the selectable card's selected ring, and the `hover:border-primary` edge on the image-upload dropzone. Dark mode is the tight side (3.37 against `bg-card`, 3.78 against `bg-background`), so the row carries the worse of the two.
+- The `bg-destructive/90` row is the hover state of a solid destructive fill, as the vendored `Button` destructive variant emits it. Its 10% transparency means the figure depends on what sits behind; the values here are the **worst case over any backdrop**, which the small alpha keeps close to the opaque `bg-destructive` row. It carries an icon, not text, hence the 3:1 bar.
 
 Three of these recipes exist in this form only because the matrix caught them failing: `text-primary` on a dark surface (3.37), solid destructive with a near-white foreground in dark (2.77), and category chips coloured with `text-chart-*`, where three of the five hues fall below 3:1 against their own tint in one mode or the other (as low as 1.62). Where a fix changed appearance it is noted with the recipe.
 
 Two relationships inherited from the vendored shadcn tokens sit below these bars and are **deliberately not changed here**, since altering them would restyle every primitive: `border-border` against a surface (1.27 / 1.33 — decorative separators, exempt as they carry no state) and `text-muted-foreground` on `bg-muted` (4.39 in light). The second is why the hover recipes in Components pair `bg-muted` with `text-foreground` rather than leaving muted text on a muted surface.
 
+`text-muted-foreground` is short of headroom generally — 4.83 on a plain surface is only 0.33 above the bar — so **any** tint underneath it is likely to push it under. Besides the 4.39 on `bg-muted`, it is 4.18 on `bg-primary/10`. Neither is a prescribed pairing; both are listed here so the next screen that reaches for muted text on a tinted surface finds the answer instead of re-deriving it. The fix in both directions is the same: where the surface changes, the text goes up to `text-foreground`.
+
+A translucent fill over **arbitrary** content (a loading veil over a user-supplied image, say) cannot be put in this table at all, because the backdrop is not known at authoring time. Measure the worst case; if it fails — `bg-card/70` with a `border-primary` spinner bottoms out at 1.25, and even `bg-card/90` only reaches 2.54 — make the fill opaque so the pairing becomes one of the rows above.
+
 ##### Adding a colour combination
 
-**Do not write a colour pairing that is not in the matrix above.** If a screen needs one, compute both modes, add the row, and only then use it — the same script that produced this table lives in the PR that introduced it. This is a hard rule rather than advice: three separate review rounds found regressions in exactly the combinations nobody had measured, and a parallel sweep multiplies a single unmeasured pairing across every slice that copies it.
+**Do not write a colour pairing that is not in the matrix above.** If a screen needs one, compute both modes, add the row, and only then use it. This is a hard rule rather than advice: three separate review rounds found regressions in exactly the combinations nobody had measured, and a parallel sweep multiplies a single unmeasured pairing across every slice that copies it. It binds the PRs that edit this document too.
+
+The computation is oklch → sRGB (OKLab matrices, gamma-encoded and clamped to gamut) → WCAG relative luminance, with `/N` tints composited over the surface in gamma-encoded sRGB the way a browser does. **Calibrate the calculator before trusting it**, in two steps, because the two halves fail independently:
+
+1. Against values that need no token data — black on white is 21.00, `#767676` on white is 4.54. This validates the luminance half only.
+2. Against rows already in the table — `text-muted-foreground` on `bg-card` (4.83 / 6.74), `bg-primary/10` + `text-primary-strong` (4.55 / 6.23), `bg-primary-strong` vs `bg-muted` (4.78 / 5.65). This is what validates the oklch conversion and the compositing convention.
+
+If step 2 disagrees, the calculator is wrong and the table is right: these rows have survived several review rounds. Never "correct" an existing row as a side effect of adding a new one.
 
 #### Legacy → token mapping (restyle sweep)
 
@@ -111,7 +132,9 @@ The table is **not exhaustive** — it covers the recurring cases, not every cla
 | `text-gray-700`                                        | **by role — see below**                                                                                                                       |
 | `text-gray-600` / `-500` / `-400`                      | `text-muted-foreground`                                                                                                                       |
 | `bg-gray-50` (page) / `bg-white` (surface)             | `bg-background` / `bg-card`                                                                                                                   |
+| `bg-gray-50` (inset panel of annotations)              | **drop the fill** — `rounded-lg border p-4`; see below                                                                                        |
 | `bg-white/90` (sticky footer backdrop)                 | `bg-card/90`                                                                                                                                  |
+| `bg-white/70` (veil over an arbitrary image)           | `bg-card` — opaque, because a translucent veil cannot be measured; see the matrix notes                                                       |
 | `hover:bg-gray-50`                                     | `hover:bg-muted`                                                                                                                              |
 | `border-gray-200` / `-300` / `-100`                    | bare `border` (or `border-border`)                                                                                                            |
 | `divide-gray-200`                                      | bare `divide-y` — the base layer already colors it                                                                                            |
@@ -133,6 +156,16 @@ The table is **not exhaustive** — it covers the recurring cases, not every cla
 | Now marker `bg-red-500`                                | `bg-destructive`                                                                                                                              |
 | Coverage bar `bg-blue-500/80`                          | `bg-primary-strong` — the `/80` variant drops to 2.58:1 against a dark card                                                                   |
 | Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring                                                                                           |
+| `hover:border-indigo-400` (dropzone edge)              | `hover:border-primary`                                                                                                                        |
+| `hover:bg-red-600` under a `bg-red-500` fill           | `hover:bg-destructive/90` — the form the vendored `Button` destructive variant emits                                                          |
+
+##### An inset `bg-gray-50` panel loses its fill, not its edge
+
+The `bg-gray-50 → bg-background` row above is about the **page** backdrop. An inset panel — a read-only summary or a note block sitting inside a card — is a different case, and applying the token table's "inert fills → `bg-muted`" mechanically breaks it: the annotations such a panel contains are `text-muted-foreground`, and muted text on a muted surface is the 4.39 pairing.
+
+Dropping the fill is the cheaper repair, so the panel becomes `rounded-lg border p-4` on the surrounding `bg-card`. **Nothing new needs measuring**: the annotations are `text-muted-foreground` on `bg-card` (4.83 / 6.74) and the edge is a decorative `border-border`. Precedent: the store summary panels in `StoreCreatePage` and `StoreEditPage`.
+
+If the fill genuinely carries meaning and has to stay, the other resolution is `bg-muted` with the text raised to `text-foreground` (18.07 / 14.26). What is not available is `bg-muted` with the text left muted.
 
 ##### `text-gray-700` is decided by role, not by class
 
@@ -210,6 +243,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Modal (centered dialog)**: `Dialog` (`DialogContent` / `DialogHeader` / `DialogTitle` / `DialogFooter`). Tall forms add `max-h-[calc(100vh-2rem)] overflow-y-auto` on the content so the modal scrolls internally instead of overflowing the viewport (precedent: `StaffCreateModal`). Precedent for the plain case: `ShiftFormModal`.
 - **Drawer (side-slide dialog)**: `Sheet` with `side="right"` for record-scoped edit forms opened from a list row. Never re-create a drawer by re-positioning `DialogContent`.
 - **Combobox (searchable select)**: `Popover` + `Command` (`CommandInput` / `CommandList` / `CommandEmpty` / `CommandItem`).
+- **Card section heading**: `CardTitle` renders a `<div>`, so wherever it replaces an `<h2>` / `<h3>` it must be written `<CardTitle role="heading" aria-level={3}>`. Without both attributes the section disappears from screen-reader heading navigation, and the loss is invisible in a rendered diff. The primitive stays pristine — it spreads `React.ComponentProps<'div'>`, so the consumer supplies them. (Where the card is genuinely not a section heading — a bare label on a stat card — leave it a `div` and do not add the role.)
 - **Table**: shadcn `Table` inside a `Card`. Precedent: `CustomersPage`.
 - **Tabs**: shadcn `Tabs`. Precedent: `ShiftsPage`.
 - **Loading placeholder**: `Skeleton` sized with layout classes, never a hand-rolled `animate-pulse` block.
@@ -218,7 +252,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-primary/10 text-primary-strong` with a 2px `bg-primary-strong` edge bar. Inactive: `text-muted-foreground`, hover `bg-muted text-foreground`. Groups collapse with a chevron. **This describes a light sidebar, which the shipped one is not** — do not apply it until the open question in the mapping notes is settled.
 - **Progress bar**: track `bg-muted h-2 rounded-full`, fill `bg-primary-strong` (plain `bg-primary` is only 2.83:1 against the dark-mode track).
 - **Ranking row**: 32px circular rank chip (`bg-primary/10 text-primary-strong`), name + area line (12px icon + `text-muted-foreground`), right-aligned amount (bold) over count (`text-muted-foreground`).
-- **Selectable preview card**: `<label>` wrapping an `sr-only` radio; `rounded-lg border p-3 cursor-pointer`. Unselected hover `bg-muted`; selected `border-primary ring-2 ring-primary bg-primary/10`. Body = thumbnail (`w-full rounded border`) → name (`text-sm font-medium`, selected `text-primary-strong`) → description (`text-xs text-muted-foreground`); keyboard focus via `has-[:focus-visible]:ring-2`.
+- **Selectable preview card**: `<label class="group">` wrapping an `sr-only` radio; `rounded-lg border p-3 cursor-pointer`. Unselected hover `bg-muted`; selected `border-primary ring-2 ring-primary bg-primary/10`. Body = thumbnail (`w-full rounded border`) → name (`text-sm font-medium`, selected `text-primary-strong`) → description (`text-xs`); keyboard focus via `has-[:focus-visible]:ring-2`. The description is the one part that cannot stay muted throughout, because **both** of the card's non-default surfaces put `text-muted-foreground` under the bar — 4.39 on the hover fill, 4.18 on the selected tint. So it is `text-muted-foreground group-hover:text-foreground` when unselected and `text-foreground` when selected. That is the same "the hover flips the fill and the text together" rule the Sidebar nav item and Mobile bottom tab bar entries follow; the `group` on the label is what lets the text follow a hover owned by its ancestor. Precedent: the template picker in `StoreProfileForm`.
 - **Mobile bottom tab bar**: `fixed inset-x-0 bottom-0` `bg-card` with a `border-t` top edge; each tab is an equal-width flex column (`flex flex-1 flex-col items-center gap-1 py-2`), 24px icon above a 12px label. Active `text-primary-strong`, inactive `text-muted-foreground` with hover `bg-muted text-foreground`. The content area adds `pb-16` so the fixed bar never overlaps scrollable content. Precedent: `CastPortalShell`.
 
 Hover / focus / disabled states come from the primitives. Only hand-write a state when composing bare elements, and then express it in tokens (`hover:bg-muted`, `disabled:opacity-50`) — never a raw hue.
@@ -291,7 +325,31 @@ A restyled admin file keeps **no** raw palette classes. Review with:
 grep -rnE '(bg|text|border|ring|divide|shadow|placeholder)-(gray|slate|zinc|white|black|red|green|yellow|amber|orange|blue|indigo|purple|pink)' <slice>
 ```
 
-Out of scope for this invariant: the storefront (`_pages/store-site/**`) and the auth screens.
+**Grepping the slice directory alone is not sufficient**, because admin colours reach the screen from two places that no slice-scoped grep can see:
+
+- `entities/**` — model helpers that hand the slice a ready-made class string (`entities/cast/model/invitationStatusLabel.ts` returned a raw palette badge recipe this way). Every entity the slice consumes is in scope for the slice that consumes it.
+- `shared/ui/**` — but only the hand-written components there, not the vendored primitives. See the next section for which is which.
+
+Neither shows up when the reviewer greps `_pages/<slice>`, so run the grep over both as well as the slice.
+
+Permanently out of scope, and the only exemptions:
+
+- the storefront (`_pages/store-site/**`) — its own token world;
+- the auth screens: `AuthLayout`, everything it wraps, and `shared/ui/auth-layout.tsx` itself — also its own token world;
+- the vendored shadcn primitives, kept exactly as generated (`badge.tsx` and `button.tsx` carry `text-white`; `dialog.tsx` and `sheet.tsx` carry `bg-black/50`).
+
+`widgets/sidebar` and `widgets/header` still match the grep. They are not exemptions — they are simply not converted yet, and the sidebar's conversion is additionally blocked on the open question recorded in the mapping notes.
+
+### What in `shared/ui` may be edited
+
+`src/shared/ui` holds two kinds of file, and only one of them is frozen.
+
+- **Vendored shadcn primitives** — `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `sheet` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
+- **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
+
+Tell them apart by the generator's fingerprints rather than by guessing: a vendored file carries `data-slot` attributes, imports from `radix-ui`, and declares its variants with `cva`. The hand-written three carry none of those and import application code a generator would never emit (`@/shared/api`, `@heroicons/react`, `next-themes`). `git log --follow` confirms it — the hand-written files predate the shadcn adoption.
+
+Editing a hand-written one is still a shared-file change, so it goes through the contract below rather than through a slice PR.
 
 ### Parallel-PR contract
 
@@ -299,14 +357,16 @@ A slice restyle PR does **not** edit the shared files — `src/shared/ui/**`, `s
 
 ### jsdom shims
 
-`setupTests.ts` supplies `ResizeObserver` for all tests. Radix components that are actually _opened_ in a test may additionally need the following; add them to `setupTests.ts` verbatim the first time they are required, so parallel branches converge on identical text:
+`setupTests.ts` supplies two stubs for all tests:
 
 ```ts
+globalThis.ResizeObserver = ResizeObserverStub;
 Element.prototype.scrollIntoView = jest.fn();
-Element.prototype.hasPointerCapture = jest.fn();
-Element.prototype.setPointerCapture = jest.fn();
-Element.prototype.releasePointerCapture = jest.fn();
 ```
+
+`scrollIntoView` is needed by any test that **opens** a Radix `Select`: the content scrolls the selected item into view from a mount effect, so the failure (`candidate?.scrollIntoView is not a function`) happens on open regardless of which key opened it. A `DropdownMenu` test passing without the stub proves nothing — that component has no such effect, so it is not a precedent to copy from.
+
+Add a further stub **only after seeing a test fail without it**, and put it here rather than in the test file so parallel branches converge on one text. In particular, the pointer-capture trio (`hasPointerCapture` / `setPointerCapture` / `releasePointerCapture`) is **not** required: tests open Radix components by keyboard (`fireEvent.keyDown(trigger, { key: 'ArrowDown' })`), which never reaches the pointer path. Adding it pre-emptively is how unreachable code accumulates in a file every branch has to merge.
 
 ## Do's and Don'ts
 
@@ -314,6 +374,6 @@ Element.prototype.releasePointerCapture = jest.fn();
 - **DO** reach for an existing primitive in `@/shared/ui` before composing one from bare elements.
 - **DO** keep storefront changes token-driven: template look changes go through `theme.css`, structural blocks through shared `_sections/`.
 - **DON'T** introduce raw palette classes or raw hex values in admin UI markup.
-- **DON'T** restyle the vendored primitives in `src/shared/ui` from a slice PR — they are kept as generated, and per-screen deviation goes in the consumer's `className`.
+- **DON'T** restyle the vendored primitives in `src/shared/ui` at all — they are kept as generated, and per-screen deviation goes in the consumer's `className`. The hand-written components in that directory are a different matter; see "What in `shared/ui` may be edited".
 - **DON'T** fork or restyle `_sections/` components per template; differences live in tokens and page layout only.
 - **DON'T** invent new visual patterns when a component above fits; extend the pattern list instead if genuinely new.
