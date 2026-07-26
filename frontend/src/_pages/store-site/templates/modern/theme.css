@@ -3,6 +3,7 @@
    注: --storefront-subtle は計画のパレット比較表に modern 値の記載が無かったため、
    default の bg→neutral 関係（極薄の近背景トーン）に合わせて外推した値。 */
 .storefront-modern {
+  color-scheme: dark;
   --storefront-bg: #0b0b12;
   --storefront-fg: #f2eff4;
   --storefront-accent: #e64980;

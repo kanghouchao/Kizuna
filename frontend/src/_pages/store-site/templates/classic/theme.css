@@ -4,6 +4,7 @@
    注: --storefront-subtle は計画のパレット比較表に classic 値の記載が無かったため、
    default の bg→neutral 関係（極薄の近背景トーン）に合わせて外推した値。 */
 .storefront-classic {
+  color-scheme: light;
   --storefront-bg: #faf7f2;
   --storefront-fg: #2a2a28;
   --storefront-accent: #4e8da6;
