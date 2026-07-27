@@ -3,7 +3,6 @@ import { Inter, Cormorant_Garamond } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/entities/user';
 import { ToastProvider } from '@/_app/providers';
-import { ThemeProvider } from '@/shared/ui';
 
 const inter = Inter({ subsets: ['latin'] });
 const cormorant = Cormorant_Garamond({
@@ -29,17 +28,10 @@ export default function RootLayout({
         <link rel="icon" href="/images/favicon.ico" />
       </head>
       <body className={`${inter.className} ${cormorant.variable}`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AuthProvider>
-            {children}
-            <ToastProvider />
-          </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          {children}
+          <ToastProvider />
+        </AuthProvider>
       </body>
     </html>
   );
