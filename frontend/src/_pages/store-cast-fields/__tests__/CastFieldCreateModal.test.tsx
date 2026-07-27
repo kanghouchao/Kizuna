@@ -52,3 +52,66 @@ describe('カスタムフィールド定義の新規作成モーダルは予約�
     expect(mockedApi.create.mock.calls[0][0]).toMatchObject({ key: 'constructors' });
   });
 });
+
+describe('カスタムフィールド定義の新規作成モーダルの送信ペイロード', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedApi.create.mockResolvedValue({} as never);
+  });
+
+  it('閉じているときは何も描画しない', () => {
+    render(<CastFieldCreateModal open={false} onClose={jest.fn()} onCreated={jest.fn()} />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('key・label・公開設定の3項目だけを送ること', async () => {
+    render(<CastFieldCreateModal open onClose={jest.fn()} onCreated={jest.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('key'), { target: { value: 'blood_type' } });
+    fireEvent.change(screen.getByLabelText('label'), { target: { value: '血液型' } });
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+
+    await waitFor(() => expect(mockedApi.create).toHaveBeenCalledTimes(1));
+    expect(mockedApi.create.mock.calls[0][0]).toEqual({
+      key: 'blood_type',
+      label: '血液型',
+      is_public: false,
+    });
+  });
+
+  it('公開チェックは真偽値で送られること', async () => {
+    render(<CastFieldCreateModal open onClose={jest.fn()} onCreated={jest.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('key'), { target: { value: 'blood_type' } });
+    fireEvent.change(screen.getByLabelText('label'), { target: { value: '血液型' } });
+    fireEvent.click(screen.getByLabelText('公開する(公開詳細ページに表示)'));
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+
+    await waitFor(() => expect(mockedApi.create).toHaveBeenCalledTimes(1));
+    expect(mockedApi.create.mock.calls[0][0].is_public).toBe(true);
+  });
+
+  it('作成成功で onCreated と onClose を呼ぶこと', async () => {
+    const onClose = jest.fn();
+    const onCreated = jest.fn();
+    render(<CastFieldCreateModal open onClose={onClose} onCreated={onCreated} />);
+
+    fireEvent.change(screen.getByLabelText('key'), { target: { value: 'blood_type' } });
+    fireEvent.change(screen.getByLabelText('label'), { target: { value: '血液型' } });
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('キャンセルは作成せず閉じること', () => {
+    const onClose = jest.fn();
+    render(<CastFieldCreateModal open onClose={onClose} onCreated={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockedApi.create).not.toHaveBeenCalled();
+  });
+});

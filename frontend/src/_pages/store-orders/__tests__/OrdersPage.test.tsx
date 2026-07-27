@@ -61,6 +61,82 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
     expect(screen.getByText('60 分')).toBeInTheDocument();
   });
 
+  it('一覧の遷移リンクは店舗スコープのパスを指すこと', async () => {
+    mockedOrderApi.list.mockResolvedValue({
+      content: [
+        {
+          id: '7',
+          business_date: '2026-07-03',
+          customer_name: '山田太郎',
+          cast_name: '花子',
+          course_minutes: 60,
+          extension_minutes: 0,
+          option_codes: [],
+          manual_discount: 0,
+          used_points: 0,
+          manual_grant_points: 0,
+          status: 'CREATED',
+        },
+      ],
+      total_pages: 1,
+      total_elements: 1,
+      size: 100,
+      number: 0,
+    } as never);
+
+    render(<OrderListPage />);
+    await screen.findByText('2026-07-03');
+
+    expect(screen.getByRole('link', { name: /新規オーダー登録/ })).toHaveAttribute(
+      'href',
+      '/store/1/orders/create'
+    );
+    const links = screen.getAllByRole('link');
+    expect(links.map(link => link.getAttribute('href'))).toContain('/store/1/orders/7/edit');
+  });
+
+  it('キャスト未指名はフリー表記になること', async () => {
+    mockedOrderApi.list.mockResolvedValue({
+      content: [
+        {
+          id: '8',
+          business_date: '2026-07-04',
+          customer_name: '鈴木花子',
+          cast_name: null,
+          course_minutes: 90,
+          extension_minutes: 0,
+          option_codes: [],
+          manual_discount: 0,
+          used_points: 0,
+          manual_grant_points: 0,
+          status: 'CREATED',
+        },
+      ],
+      total_pages: 1,
+      total_elements: 1,
+      size: 100,
+      number: 0,
+    } as never);
+
+    render(<OrderListPage />);
+
+    expect(await screen.findByText('フリー')).toBeInTheDocument();
+  });
+
+  it('オーダーが0件なら不在メッセージを表示すること', async () => {
+    mockedOrderApi.list.mockResolvedValue({
+      content: [],
+      total_pages: 0,
+      total_elements: 0,
+      size: 100,
+      number: 0,
+    } as never);
+
+    render(<OrderListPage />);
+
+    expect(await screen.findByText('オーダーがありません')).toBeInTheDocument();
+  });
+
   it('新規登録はバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
     mockedOrderApi.create.mockResolvedValue({} as never);
 

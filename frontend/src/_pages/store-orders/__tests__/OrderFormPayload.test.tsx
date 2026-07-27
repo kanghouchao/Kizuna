@@ -1,5 +1,6 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
+import { castApi } from '@/entities/cast';
 import { orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
@@ -128,5 +129,70 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const body = await submitAndGetBody(onSubmit);
 
     expect(body.discountName).toBe('');
+  });
+});
+
+describe('オーダーフォームのキャスト候補リストの選択配線', () => {
+  const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    mockedOrderApi.listReceptionists.mockResolvedValue([]);
+    mockedCastApi.list.mockResolvedValue({
+      content: [{ id: 'cast-1', name: '花子' }],
+      total_pages: 1,
+      total_elements: 1,
+      size: 10,
+      number: 0,
+    } as never);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** 入力→デバウンス経過→候補描画までを進める。 */
+  const openSuggestions = async () => {
+    fireEvent.change(screen.getByRole('combobox', { name: 'キャスト' }), {
+      target: { value: '花' },
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+  };
+
+  it('候補を選ぶと castId がその id で送られること', async () => {
+    const onSubmit = jest.fn<void, [OrderFormData]>();
+    render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+
+    await openSuggestions();
+    fireEvent.click(screen.getByRole('option', { name: /花子/ }));
+
+    expect(screen.getByRole('combobox', { name: 'キャスト' })).toHaveValue('花子');
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await act(async () => {
+      jest.advanceTimersByTime(0);
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].castId).toBe('cast-1');
+  });
+
+  it('候補選択後に名前を打ち直すと castId は空へ戻ること', async () => {
+    const onSubmit = jest.fn<void, [OrderFormData]>();
+    render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+
+    await openSuggestions();
+    fireEvent.click(screen.getByRole('option', { name: /花子/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'キャスト' }), {
+      target: { value: '別の人' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await act(async () => {
+      jest.advanceTimersByTime(0);
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].castId).toBe('');
   });
 });
