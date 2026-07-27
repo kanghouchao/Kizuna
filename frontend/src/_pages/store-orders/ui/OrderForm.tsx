@@ -343,7 +343,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                             <button
                               type="button"
                               onClick={() => handleCastSelect(cast)}
-                              className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-foreground hover:bg-blue-50"
+                              className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-foreground hover:bg-primary/10"
                               role="option"
                             >
                               <span className="font-medium">{cast.name}</span>

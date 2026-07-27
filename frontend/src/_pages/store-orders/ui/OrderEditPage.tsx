@@ -37,8 +37,10 @@ export default function EditOrderPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">オーダー編集</h1>
-        <p className="text-sm text-gray-500 mt-1">オーダー ID: {params.id} の情報を編集します。</p>
+        <h1 className="text-2xl font-bold text-foreground">オーダー編集</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          オーダー ID: {params.id} の情報を編集します。
+        </p>
       </div>
 
       <OrderForm
