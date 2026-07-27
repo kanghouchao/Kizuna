@@ -99,10 +99,12 @@ describe('顧客一覧ページの外殻', () => {
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
-    render(<CustomersPage />);
+    const { container } = render(<CustomersPage />);
     await screen.findByText('顧客が登録されていません');
 
     expect(screen.getByRole('heading', { level: 1, name: '顧客管理' })).toBeInTheDocument();
+    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
+    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(screen.getByText('顧客情報の登録・編集ができます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規顧客登録' })).toHaveAttribute(
       'href',
