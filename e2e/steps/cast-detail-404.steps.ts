@@ -10,11 +10,19 @@ const FOREIGN_CAST_ID = '00000000-0000-0000-0000-000000000000';
 let createdCastId = '';
 let createdCastName = '';
 
-Given('店舗 {string} にキャスト {string} を作成する', async ({ request }, _store: string, name: string) => {
+Given('店舗 {string} にキャスト {string} を作成する', async ({ request }, _store: string, baseName: string) => {
+  // 一意名で作成し、中断した過去 run の残骸との重複（strict モード違反）を避ける
+  //（platform-login.steps.ts と同じ手法）。{string} は可読性のための基底名の表記で、
+  // 後続ステップの照合は解決済みの createdCastName / seededCastName() を使う。
+  createdCastName = `${baseName}-${Date.now()}`;
   const token = await loginAsStoreAdmin(request);
-  createdCastId = await createCast(request, token, name);
-  createdCastName = name;
+  createdCastId = await createCast(request, token, createdCastName);
 });
+
+/** この Given で播種した cast の解決済み一意名。別 steps ファイル（cast-custom-fields）が参照する。 */
+export function seededCastName(): string {
+  return createdCastName;
+}
 
 Then('作成したキャストの詳細ページが表示される', async ({ page, $testInfo }) => {
   // fetchCasts は revalidate: 60 の ISR キャッシュのため、作成した cast が公開詳細に

@@ -1,6 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
+import { seededCastName } from './cast-detail-404.steps';
 import {
   STORE_HEADERS,
   deleteCast,
@@ -19,7 +20,8 @@ let createdFieldKey = '';
 let createdFieldLabel = '';
 // キャストの編集画面遷移時、一覧行の編集リンク（/store/{storeId}/casts/{id}/edit）から id を取り出して
 // 後続の公開詳細ページ遷移・After での削除に使う（作成ステップは cast-detail-404.steps.ts の
-// 既存 Given を再利用するため、その内部状態にはここから直接アクセスできない）。
+// 既存 Given を再利用する。名前は seededCastName() で解決済み一意名を受け取れるが、id は
+// 公開しておらず編集リンクから読み取る）。
 let currentCastId = '';
 let currentCastName = '';
 // ルート移設（#413）で店舗管理画面 URL に storeId が必須になった。ログイン着地先の
@@ -77,10 +79,12 @@ Then('フィールド一覧に {string} が表示される', async ({ page }, _l
 
 When(
   '{string} の編集画面で {string} に {string} と入力して保存する',
-  async ({ page }, castName: string, _fieldLabel: string, value: string) => {
-    currentCastName = castName;
+  async ({ page }, _castName: string, _fieldLabel: string, value: string) => {
+    // {string} のキャスト名は可読性のための基底名の表記。実際の照合は Given が播種した
+    // 解決済み一意名で行う（残骸の同基底名の行と衝突させない）。
+    currentCastName = seededCastName();
     await page.goto(`${PLATFORM_URL}/store/${storeId}/casts`);
-    const row = page.getByRole('row', { name: new RegExp(castName) });
+    const row = page.getByRole('row', { name: new RegExp(currentCastName) });
     await expect(row).toBeVisible({ timeout: 15000 });
     const editLink = row.locator('a[href$="/edit"]');
     const href = await editLink.getAttribute('href');
