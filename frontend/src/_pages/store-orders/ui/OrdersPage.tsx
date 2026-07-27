@@ -42,7 +42,7 @@ export default function OrderListPage() {
       />
 
       {/* Orders Table */}
-      <Card className="overflow-hidden py-0">
+      <Card className="py-0 overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
         ) : orders.length === 0 ? (
