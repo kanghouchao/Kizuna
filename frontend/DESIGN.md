@@ -311,7 +311,7 @@ The heading block is a component, not a class string to copy, because a document
 </div>
 ```
 
-`description` and `actions` are optional; `actions` takes one `Button` or several, and the wrapper spaces them, so a page never writes a wrapper of its own. **A list page carries no heading class string** — if a `text-2xl` appears under `_pages/`, the shell was re-derived instead of composed.
+`description` and `actions` are optional; `actions` takes one `Button` or several, and the wrapper spaces them, so a page never writes a wrapper of its own. **A list page carries no heading class string of its own** — a `text-2xl` surviving in a list page file means the shell was re-derived rather than composed. (Form and settings pages still write their own `<h1 className="text-2xl font-bold text-foreground">`; unifying those shells is a separate question and `PageHeader` is deliberately not claimed for them yet.)
 
 Four consequences that are easy to get wrong:
 
