@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
+import { Button } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
   casts: CastResponse[];
@@ -60,10 +61,10 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   };
 
   if (loading) {
-    return <p className="text-sm text-gray-500">読み込み中...</p>;
+    return <p className="text-sm text-muted-foreground">読み込み中...</p>;
   }
   if (requests.length === 0) {
-    return <p className="text-sm text-gray-500">受付中の出勤希望はありません</p>;
+    return <p className="text-sm text-muted-foreground">受付中の出勤希望はありません</p>;
   }
 
   return (
@@ -71,32 +72,33 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
       {requests.map(request => (
         <li
           key={request.id}
-          className="flex items-center justify-between rounded-[10px] border border-gray-200 bg-white p-4 shadow-sm"
+          className="flex items-center justify-between rounded-[10px] border bg-card p-4 shadow-sm"
         >
           <div>
-            <p className="text-sm font-medium text-gray-900">{castName(request.cast_id)}</p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm font-medium text-foreground">{castName(request.cast_id)}</p>
+            <p className="text-sm text-muted-foreground">
               {request.work_date} {request.start_time.slice(0, 5)}–{request.end_time.slice(0, 5)}
             </p>
-            {request.note && <p className="mt-1 text-xs text-gray-500">{request.note}</p>}
+            {request.note && <p className="mt-1 text-xs text-muted-foreground">{request.note}</p>}
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => decline(request.id)}
               disabled={processingId === request.id}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               辞退
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
               onClick={() => approve(request.id)}
               disabled={processingId === request.id}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               承認
-            </button>
+            </Button>
           </div>
         </li>
       ))}
