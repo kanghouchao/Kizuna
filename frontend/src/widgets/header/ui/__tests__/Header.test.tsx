@@ -7,10 +7,15 @@ import type { PlatformStore } from '@/entities/user';
 // 現在店舗・授権店舗・切替は店舗コンテキストが担い、その全ケースは StoreContext.test.tsx で検証する。
 // ここでは context 出力（stores / currentStoreId）に対する Header 自身の表示条件・ラベル・
 // accountHref・切替クリックの委譲を検証する。
-jest.mock('@/entities/user', () => ({
-  useAuth: () => ({ logout: jest.fn() }),
-  useStoreContext: jest.fn(),
-}));
+jest.mock('@/entities/user', () => {
+  const logout = jest.fn();
+  return {
+    // フックを介さず参照できるよう、同じ実体をテスト向けにも公開する。
+    __logout: logout,
+    useAuth: () => ({ logout }),
+    useStoreContext: jest.fn(),
+  };
+});
 
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
@@ -20,6 +25,7 @@ jest.mock('@/shared/lib', () => ({
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
 const mockedIsStoreDomain = isStoreDomain as jest.MockedFunction<typeof isStoreDomain>;
 const mockSwitchStore = jest.fn();
+const mockedLogout = (jest.requireMock('@/entities/user') as { __logout: jest.Mock }).__logout;
 
 function withContext(stores: PlatformStore[] | null, currentStoreId?: string) {
   mockedUseStoreContext.mockReturnValue({
@@ -80,28 +86,45 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     expect(mockSwitchStore).toHaveBeenCalledWith(2);
   });
 
-  it('店舗別ドメイン経由ではアカウント設定リンクが currentStoreId を含む店舗ルートを指す', () => {
+  // アカウントメニューの中身は開いている間だけ描かれる。
+  function openAccountMenu() {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'アカウントメニュー' }), { key: 'Enter' });
+  }
+
+  it('店舗別ドメイン経由ではアカウント設定リンクが currentStoreId を含む店舗ルートを指す', async () => {
     mockedIsStoreDomain.mockReturnValue(true);
     withContext([], '2');
 
     render(<Header />);
+    openAccountMenu();
 
-    expect(screen.getByRole('link', { name: 'アカウント設定' })).toHaveAttribute(
+    expect(await screen.findByRole('menuitem', { name: 'アカウント設定' })).toHaveAttribute(
       'href',
       '/store/2/settings/account'
     );
   });
 
-  it('店舗別ドメイン経由でも currentStoreId が未確定ならアカウント設定リンクは platform 側へ fallback する', () => {
+  it('店舗別ドメイン経由でも currentStoreId が未確定ならアカウント設定リンクは platform 側へ fallback する', async () => {
     mockedIsStoreDomain.mockReturnValue(true);
     withContext([], undefined);
 
     render(<Header />);
+    openAccountMenu();
 
-    expect(screen.getByRole('link', { name: 'アカウント設定' })).toHaveAttribute(
+    expect(await screen.findByRole('menuitem', { name: 'アカウント設定' })).toHaveAttribute(
       'href',
       '/platform/settings/account'
     );
+  });
+
+  it('ログアウトはアカウントメニューから選べる', async () => {
+    withContext([], '1');
+
+    render(<Header />);
+    openAccountMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'ログアウト' }));
+
+    expect(mockedLogout).toHaveBeenCalledTimes(1);
   });
 
   it('currentStoreId が変化するとラベルが新しい店舗名へ追随する', () => {

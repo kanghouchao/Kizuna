@@ -65,26 +65,31 @@ export function Header() {
             <p className="text-sm font-semibold text-foreground">管理者</p>
             <p className="text-xs text-muted-foreground">Platform Admin</p>
           </div>
-          <div className="relative group">
-            {' '}
-            <button className="flex items-center focus:outline-none">
-              <UserCircleIcon className="h-8 w-8 text-muted-foreground group-hover:text-primary-strong transition-colors" />
-            </button>
-            <div className="absolute right-0 mt-2 w-48 bg-card rounded-md shadow-lg py-1 border hidden group-hover:block transition-all duration-200 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 origin-top-right">
-              <Link
-                href={accountHref}
-                className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="アカウントメニュー"
+                className="text-muted-foreground hover:text-primary-strong"
               >
-                アカウント設定
-              </Link>
-              <button
-                onClick={logout}
-                className="block w-full text-left px-4 py-2 text-sm text-destructive-strong hover:bg-destructive/10"
+                <UserCircleIcon className="size-8" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} className="w-48">
+              <DropdownMenuItem asChild>
+                <Link href={accountHref}>アカウント設定</Link>
+              </DropdownMenuItem>
+              {/* 原語の destructive 変種は淡色地の上で既定の赤を使い明モードで 4.5 を割るため、
+                  文字は -strong 側を指定する。 */}
+              <DropdownMenuItem
+                onSelect={logout}
+                className="text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong"
               >
                 ログアウト
-              </button>
-            </div>
-          </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
