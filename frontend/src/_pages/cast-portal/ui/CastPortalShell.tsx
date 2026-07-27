@@ -52,16 +52,16 @@ export function CastPortalShell({ children }: CastPortalShellProps) {
 
   if (!authorized) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">読み込み中...</p>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">読み込み中...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-background">
       <main className="flex-1 overflow-y-auto pb-16">{children}</main>
-      <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-gray-200 bg-white">
+      <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t bg-card">
         {TABS.map(tab => {
           const active = pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
           const Icon = tab.icon;
@@ -70,8 +70,10 @@ export function CastPortalShell({ children }: CastPortalShellProps) {
               key={tab.href}
               href={tab.href}
               aria-current={active ? 'page' : undefined}
-              className={`flex flex-1 flex-col items-center gap-1 py-2 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                active ? 'text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+              className={`flex flex-1 flex-col items-center gap-1 py-2 text-xs font-medium ${
+                active
+                  ? 'text-primary-strong'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
             >
               <Icon className="h-6 w-6" />
