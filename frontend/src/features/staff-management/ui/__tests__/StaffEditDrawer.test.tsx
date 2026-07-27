@@ -45,8 +45,8 @@ describe('スタッフ授権編集ドロワー', () => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
     mockedStaffApi.bundles.mockResolvedValue([
-      { id: 3, name: '店長' },
-      { id: 4, name: '経理' },
+      { id: 3, name: '店長', capabilities: [] },
+      { id: 4, name: '経理', capabilities: [] },
     ]);
     mockedStaffApi.grantHistory.mockResolvedValue([]);
     mockedStaffApi.update.mockResolvedValue({} as never);
