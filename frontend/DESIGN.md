@@ -125,11 +125,13 @@ The computation is oklch → sRGB (OKLab matrices, gamma-encoded and clamped to 
 
 If step 2 disagrees, the calculator is wrong and the table is right: these rows have survived several review rounds. Never "correct" an existing row as a side effect of adding a new one.
 
+A row certifies a **pairing**, not a line of shipped code. Rows are added ahead of the slice that will use them — the restyle sweep needs the pairing settled before the slice PR may write it — so a row's "where it appears" note names the intended site, which may not be in the tree yet. Read those notes as the destination, never as evidence the code is already there.
+
 ##### Nested tints compound
 
 A `/10` tint row in the matrix certifies the tint composited **directly over `bg-card` / `bg-background`** — nothing else. When a tinted element sits inside another tinted surface (a chip inside a hovered cell, a badge on a hovered row), the browser composites both layers, and the result is a colour no matrix row has measured. Two recipes that each pass in isolation can fail combined: a `bg-primary/10` chip on a cell whose hover is also `bg-primary/10` puts `text-primary-strong` on a double tint at **3.97 in light** (5.73 dark) — under the bar, even though each layer alone is the certified 4.55 / 6.23.
 
-- The known repair is the same hover-flips-the-text rule the Selectable preview card uses: while the ancestor's hover tint is active, raise the chip text to `text-foreground` (`group-hover:text-foreground`, 15.04 / 14.47). The day-cell count chip in `store-shifts`' `ShiftCalendar` takes this repair.
+- The known repair is the same hover-flips-the-text rule the Selectable preview card uses: while the ancestor's hover tint is active, raise the chip text to `text-foreground` (`group-hover:text-foreground`, 15.04 / 14.47). The day-cell count chip in `store-shifts`' `ShiftCalendar` is where this was measured; the repair ships with that slice's restyle, so apply it there rather than assuming it is already in the tree.
 - A new nesting must be measured even when it happens to pass. The status Badge tint on a table row hovering `hover:bg-muted/50` (the NG badge in `store-customers`' `CustomersPage`) composites to 8.04 / 4.94 at worst (destructive) — clear, but clear by measurement, not by any matrix row.
 
 ##### The decorative exemption and its boundary
@@ -139,16 +141,15 @@ Contrast minima bind elements that carry information. An element is **decorative
 - 1px separators (`border-border`, or a `bg-border` hairline): they carry no state, only rhythm — the 1.27 / 1.33 figures noted above never bind.
 - A legend dot immediately beside its own text label (the 確定 / 未確定 dots in the shift calendar): the adjacent text carries the identical meaning, so the dots' worst case — the success / warning dots at 2.78 / 2.76, light mode on a `bg-primary/10` hovered cell — does not bind.
 
-The exemption is never automatic for an element whose position or extent is itself the message (a timeline bar, a chart mark): those are meaningful graphics at 3:1 however redundant their label, and any exemption for one must be an explicitly recorded per-case entry — see the OPEN item below — never a silent assumption. When in doubt, treat the element as meaningful and measure.
+The exemption is never automatic for an element whose position or extent is itself the message (a timeline bar, a chart mark): those are meaningful graphics at 3:1 however redundant their label, and any exemption for one must be an explicitly recorded per-case entry — see the recorded exemption below — never a silent assumption. When in doubt, treat the element as meaningful and measure.
 
-##### OPEN — timeline bars against their track
+##### Recorded exemption — timeline bars against their track
 
-The shift timeline's solid bars (`bg-success` 確定 / `bg-warning` 未確定) are drawn on a `bg-muted` track, and a bar's start / end position **is** the information, so the bar edge against the track is a meaningful graphic bound by 3:1. Measured: **2.92 / 2.90 in light — under the bar** (dark passes at 8.39 / 8.67). Mitigating: the in-bar time text (6.18:1) carries the same start / end redundantly, the bars carry `shadow-sm`, and the pre-restyle state (green-500 on gray-50) failed the same bound — this is not a regression. Two candidate resolutions, deliberately **not** decided here because each changes the shipped look:
+The shift timeline draws solid bars (`bg-success` 確定 / `bg-warning` 未確定) on a `bg-muted` track once the `store-shifts` restyle lands. A bar's start / end position **is** the information, so the bar edge against the track is a meaningful graphic bound by 3:1 — and it does not meet it: **2.92 / 2.90 in light** (dark passes at 8.39 / 8.67).
 
-1. Return the track to `bg-background` + `border`: the bars against it go back to the certified 3.22 / 3.19. But light mode's `--background` is identical to `--card`, so the track would melt into the card and be separated by its 1px border alone.
-2. Record an explicit decorative-style exemption for the bar edge, on the ground that the in-bar high-contrast text redundantly carries the same information.
+**The owner granted this one an explicit exemption.** The grounds: the in-bar time text carries the identical start / end at 6.18:1, the bars carry `shadow-sm`, and the pre-restyle state (green-500 on gray-50) failed the same bound, so keeping it is not a regression. The rejected alternative was returning the track to `bg-background` + `border` — that restores the certified 3.22 / 3.19, but light mode's `--background` is identical to `--card`, so the track would melt into the card and be told apart by its 1px border alone.
 
-Until the owner picks one, the shipped `bg-muted` track stands as recorded here. Do not copy the bar-on-track pattern to a new screen while this entry is open.
+This exemption covers **this screen only**. A new bar-on-track surface starts from the 3:1 bound again and needs its own entry; it does not inherit this one.
 
 #### Legacy → token mapping (restyle sweep)
 
