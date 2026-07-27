@@ -127,6 +127,17 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     expect(mockedLogout).toHaveBeenCalledTimes(1);
   });
 
+  // 切替 UI 自体の配線は ModeToggle.test.tsx が持つ。ここで押さえるのは
+  // 「両コンソールの共通殻から届く」こと、つまり Header への搭載そのもの。
+  it('表示モード切替はヘッダーから開ける', async () => {
+    withContext([], '1');
+
+    render(<Header />);
+    fireEvent.keyDown(screen.getByRole('button', { name: '表示モード' }), { key: 'Enter' });
+
+    expect(await screen.findByRole('menuitem', { name: 'システム' })).toBeInTheDocument();
+  });
+
   it('currentStoreId が変化するとラベルが新しい店舗名へ追随する', () => {
     withContext(
       [

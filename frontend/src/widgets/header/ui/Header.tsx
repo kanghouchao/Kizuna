@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui';
 import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { ModeToggle } from './ModeToggle';
 
 export function Header() {
   const { logout } = useAuth();
@@ -39,6 +40,10 @@ export function Header() {
         <Button variant="ghost" size="icon" className="text-muted-foreground">
           <BellIcon className="size-6" />
         </Button>
+
+        {/* ヘッダーは両コンソールの layout が搭載する唯一の共通殻なので、
+            表示モード切替はここに置けば双方から届く。 */}
+        <ModeToggle />
 
         <div className="h-8 w-px bg-border" />
 
