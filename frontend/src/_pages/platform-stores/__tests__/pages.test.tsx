@@ -230,4 +230,35 @@ describe('店舗一覧ページの外殻', () => {
     fireEvent.click(screen.getByRole('button', { name: '店舗を追加' }));
     expect(mockPush).toHaveBeenCalledWith('/platform/stores/create');
   });
+
+  // 検索語の変更だけでも取得は走るため、送信そのものを捉えるには「現在ページが 1 に戻る」
+  // という送信ハンドラ固有の副作用を見る必要がある（form が無くなるとここだけが赤くなる）。
+  it('検索の送信は現在ページを 1 へ戻すこと', async () => {
+    mockedApi.getList.mockResolvedValue(
+      paginated([store({ id: '1', name: 'アルファ店' })], { last_page: 3, to: 10, total: 25 })
+    );
+
+    render(<StoresPage />);
+    await screen.findByText('アルファ店');
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    await waitFor(() =>
+      expect(mockedApi.getList).toHaveBeenLastCalledWith({
+        page: 2,
+        per_page: 10,
+        search: undefined,
+      })
+    );
+
+    fireEvent.change(screen.getByLabelText('店舗を検索'), { target: { value: 'アルファ' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+
+    await waitFor(() =>
+      expect(mockedApi.getList).toHaveBeenLastCalledWith({
+        page: 1,
+        per_page: 10,
+        search: 'アルファ',
+      })
+    );
+  });
 });
