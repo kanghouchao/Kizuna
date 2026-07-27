@@ -33,9 +33,7 @@ describe('カスタムフィールド定義の編集モーダル', () => {
   });
 
   it('編集対象が null なら開いていても描画しない', () => {
-    render(
-      <CastFieldEditModal open definition={null} onClose={jest.fn()} onUpdated={jest.fn()} />
-    );
+    render(<CastFieldEditModal open definition={null} onClose={jest.fn()} onUpdated={jest.fn()} />);
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -140,12 +138,7 @@ describe('カスタムフィールド定義の編集モーダル', () => {
   it('キャンセルは更新せず閉じる', () => {
     const onClose = jest.fn();
     render(
-      <CastFieldEditModal
-        open
-        definition={definition()}
-        onClose={onClose}
-        onUpdated={jest.fn()}
-      />
+      <CastFieldEditModal open definition={definition()} onClose={onClose} onUpdated={jest.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
