@@ -20,4 +20,4 @@ export {
   storeSelectPath,
 } from './store-route';
 export { cn } from './utils';
-export { isPublicPlatformPath, isTokenThemedPath } from './app-area';
+export { isPublicPlatformPath } from './app-area';
