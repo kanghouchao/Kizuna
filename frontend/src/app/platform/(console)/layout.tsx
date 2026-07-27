@@ -8,13 +8,15 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   return (
     <StoreContextProvider>
       {/* 管理コンソールは下限幅を持つ。これより狭い窓では横スクロールへ倒し、
-          はみ出した操作を切り落とさない（切り落とすと到達手段が消える）。 */}
+          はみ出した操作を切り落とさない（切り落とすと到達手段が消える）。
+          値はヘッダー全体の最悪所要幅 674px（見出し 90 + 操作行 520 + 左右余白 64。
+          操作行は店舗セレクタが上限まで伸びた場合）の上に取る。 */}
       <div className="flex h-screen bg-background overflow-x-auto">
         {/* Sidebar Component */}
         <Sidebar />
 
         {/* Main Container */}
-        <div className="flex-1 flex flex-col min-w-[40rem] overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-[44rem] overflow-hidden">
           {/* Header Component */}
           <Header />
 
