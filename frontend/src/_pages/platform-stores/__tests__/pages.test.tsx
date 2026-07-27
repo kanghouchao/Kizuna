@@ -129,24 +129,25 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(screen.getByRole('button', { name: '前へ' })).toBeEnabled();
   });
 
-  it('削除は confirm で承諾されたときだけ実行されること', async () => {
+  it('削除は確認ダイアログで承諾されたときだけ実行されること', async () => {
     mockedApi.getList.mockResolvedValue(paginated([store({ id: '7', name: 'アルファ店' })]));
     mockedApi.delete.mockResolvedValue(undefined);
-    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
 
     render(<StoresPage />);
     fireEvent.click(await screen.findByRole('button', { name: '削除' }));
 
-    expect(confirmSpy).toHaveBeenCalledWith(
-      '店舗「アルファ店」を削除しますか？この操作は取り消せません。'
-    );
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('店舗「アルファ店」を削除しますか？');
+    expect(dialog).toHaveTextContent('この操作は取り消せません。');
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(mockedApi.delete).not.toHaveBeenCalled();
 
-    confirmSpy.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
 
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('7'));
-    confirmSpy.mockRestore();
   });
 
   it('新規作成は name/domain/email を送信し一覧へ遷移すること', async () => {

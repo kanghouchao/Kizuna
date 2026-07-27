@@ -38,16 +38,10 @@ const definitions = [
 ] as CastFieldDefinitionResponse[];
 
 describe('カスタムフィールド定義の管理ページ', () => {
-  const originalConfirm = window.confirm;
-
   beforeEach(() => {
     jest.clearAllMocks();
     mockedApi.list.mockResolvedValue(definitions);
     mockedApi.delete.mockResolvedValue(undefined as never);
-  });
-
-  afterEach(() => {
-    window.confirm = originalConfirm;
   });
 
   it('一覧の key・label・公開設定・表示順を表示する', async () => {
@@ -60,22 +54,26 @@ describe('カスタムフィールド定義の管理ページ', () => {
   });
 
   it('削除は確認ダイアログを label 付きで出し、キャンセルされたら削除 API を呼ばない', async () => {
-    window.confirm = jest.fn(() => false);
     render(<CastFieldsPage />);
     await screen.findByText('blood_type');
 
     fireEvent.click(screen.getAllByRole('button', { name: '削除' })[0]);
 
-    expect(window.confirm).toHaveBeenCalledWith('「血液型」を削除しますか？');
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('「血液型」を削除しますか？');
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
   it('削除を承諾すると対象 id を削除し一覧を再取得する', async () => {
-    window.confirm = jest.fn(() => true);
     render(<CastFieldsPage />);
     await screen.findByText('blood_type');
 
     fireEvent.click(screen.getAllByRole('button', { name: '削除' })[1]);
+    fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
 
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('def-2'));
     await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
@@ -83,7 +81,6 @@ describe('カスタムフィールド定義の管理ページ', () => {
   });
 
   it('削除ボタンのクリックは行クリックへ伝播せず編集モーダルを開かない', async () => {
-    window.confirm = jest.fn(() => false);
     render(<CastFieldsPage />);
     await screen.findByText('blood_type');
 
