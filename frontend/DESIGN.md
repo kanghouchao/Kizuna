@@ -62,48 +62,48 @@ Two consequences worth stating outright, because both are counter-intuitive:
 
 Ratios are WCAG relative-luminance figures computed from the oklch values in `globals.css`, with `/10` tints composited over the surface. **Text needs 4.5:1; meaningful non-text graphics need 3:1.** Both modes are checked, because several combinations pass in one and fail in the other — that asymmetry is the whole reason this table exists.
 
-| Combination                                            | Light     | Dark      | Need |
-| ------------------------------------------------------ | --------- | --------- | ---- |
-| `text-foreground` on `bg-background` / `bg-card`       | 19.89     | 16.98     | 4.5  |
-| `text-muted-foreground` on `bg-background` / `bg-card` | 4.83      | 6.74      | 4.5  |
-| `text-foreground` on `bg-muted` (hover rows)           | 18.07     | 14.26     | 4.5  |
-| `bg-primary` + `text-primary-foreground` (CTA)         | 5.03      | 5.03      | 4.5  |
-| `text-primary-strong` on `bg-card`                     | 5.26      | 6.72      | 4.5  |
-| `bg-primary/10` + `text-primary-strong`                | 4.55      | 6.23      | 4.5  |
-| `bg-primary-strong` graphic vs `bg-card`               | 5.26      | 6.72      | 3    |
-| `bg-primary-strong` fill vs `bg-muted` track           | 4.78      | 5.65      | 3    |
-| `text-success-strong` on `bg-card`                     | 9.07      | 9.99      | 4.5  |
-| `bg-success/10` + `text-success-strong`                | 8.10      | 8.35      | 4.5  |
-| `bg-success` + `text-success-foreground`               | 6.18      | 11.20     | 4.5  |
-| `bg-success` graphic vs `bg-card`                      | 3.22      | 9.99      | 3    |
-| `text-warning-strong` on `bg-card`                     | 9.09      | 10.33     | 4.5  |
-| `bg-warning/10` + `text-warning-strong`                | 8.15      | 8.50      | 4.5  |
-| `bg-warning` + `text-warning-foreground`               | 6.23      | 11.58     | 4.5  |
-| `bg-warning` graphic vs `bg-card`                      | 3.19      | 10.33     | 3    |
-| `text-destructive-strong` on `bg-card`                 | 10.06     | 6.13      | 4.5  |
-| `bg-destructive/10` + `text-destructive-strong`        | 8.42      | 5.39      | 4.5  |
-| `bg-destructive` + `text-destructive-foreground`       | 4.56      | 6.88      | 4.5  |
-| `bg-destructive` graphic vs `bg-card`                  | 4.76      | 6.13      | 3    |
-| `text-destructive` on `bg-card` (FormMessage)          | 4.76      | 6.13      | 4.5  |
-| `bg-chart-1/10` … `bg-chart-5/10` + `text-foreground`  | 16.87 min | 14.40 min | 4.5  |
-| `text-foreground` on `bg-primary/10`                   | 17.22     | 15.75     | 4.5  |
-| `text-primary-strong` on `bg-accent` (ghost hover)     | 4.78      | 5.65      | 4.5  |
-| `border-primary` / `ring-primary` edge vs a surface    | 5.26      | 3.37      | 3    |
-| `bg-destructive/90` hover fill + its icon              | 4.32      | 5.64      | 3    |
+| Combination                                                      | Light     | Dark      | Need |
+| ---------------------------------------------------------------- | --------- | --------- | ---- |
+| `text-foreground` on `bg-background` / `bg-card`                 | 19.89     | 16.98     | 4.5  |
+| `text-muted-foreground` on `bg-background` / `bg-card`           | 4.83      | 6.74      | 4.5  |
+| `text-foreground` on `bg-muted` (hover rows)                     | 18.07     | 14.26     | 4.5  |
+| `bg-primary` + `text-primary-foreground` (CTA)                   | 5.03      | 5.03      | 4.5  |
+| `text-primary-strong` on `bg-card`                               | 5.26      | 6.72      | 4.5  |
+| `bg-primary/10` + `text-primary-strong`                          | 4.55      | 6.23      | 4.5  |
+| `bg-primary-strong` graphic vs `bg-card`                         | 5.26      | 6.72      | 3    |
+| `bg-primary-strong` fill vs `bg-muted` track                     | 4.78      | 5.65      | 3    |
+| `text-success-strong` on `bg-card`                               | 9.07      | 9.99      | 4.5  |
+| `bg-success/10` + `text-success-strong`                          | 8.10      | 8.35      | 4.5  |
+| `bg-success` + `text-success-foreground`                         | 6.18      | 11.20     | 4.5  |
+| `bg-success` graphic vs `bg-card`                                | 3.22      | 9.99      | 3    |
+| `text-warning-strong` on `bg-card`                               | 9.09      | 10.33     | 4.5  |
+| `bg-warning/10` + `text-warning-strong`                          | 8.15      | 8.50      | 4.5  |
+| `bg-warning` + `text-warning-foreground`                         | 6.23      | 11.58     | 4.5  |
+| `bg-warning` graphic vs `bg-card`                                | 3.19      | 10.33     | 3    |
+| `text-destructive-strong` on `bg-card`                           | 10.06     | 6.13      | 4.5  |
+| `bg-destructive/10` + `text-destructive-strong`                  | 8.42      | 5.39      | 4.5  |
+| `bg-destructive` + `text-destructive-foreground`                 | 4.56      | 6.88      | 4.5  |
+| `bg-destructive` graphic vs `bg-card`                            | 4.76      | 6.13      | 3    |
+| `text-destructive` on `bg-card` (FormMessage)                    | 4.76      | 6.13      | 4.5  |
+| `bg-chart-1/10` … `bg-chart-5/10` + `text-foreground`            | 16.87 min | 14.40 min | 4.5  |
+| `text-foreground` on `bg-primary/10`                             | 17.22     | 15.75     | 4.5  |
+| `text-primary-strong` on `bg-accent` (ghost hover)               | 4.78      | 5.65      | 4.5  |
+| `border-primary` / `ring-primary` vs `bg-card` / `bg-background` | 5.26      | 3.37      | 3    |
+| `bg-destructive/90` hover fill + its icon                        | 4.32      | 5.64      | 3    |
 
 Every prescribed combination clears its bar in both modes, so **no size or weight condition is attached to any of them**.
 
 Three of the newer rows need a note, since each answers a question that came up more than once:
 
 - `bg-accent` is not a fourth surface: `globals.css` defines `--accent` identically to `--muted` in both modes, so a ghost `Button`'s hover fill is numerically `bg-muted` and needs no separate measurement beyond this row. Note what the primitive actually paints there: `ghost` emits `hover:bg-accent hover:text-accent-foreground`, and a consumer's plain `className="text-primary-strong"` does **not** survive the hover — the modifier wins on specificity, giving 16.11 / 14.26. The row is what bounds the case where the consumer's colour does survive, such as a hovered ancestor tinting bare text.
-- The `border-primary` row is the edge form of the primary hue — the selectable card's selected ring, and the `hover:border-primary` edge on the image-upload dropzone. Dark mode is the tight side (3.37 against `bg-card`, 3.78 against `bg-background`), so the row carries the worse of the two.
+- The `border-primary` row is the edge form of the primary hue — the selectable card's selected ring, and the `hover:border-primary` edge on the image-upload dropzone. Its two named surfaces are the **only** ones it certifies, and the row deliberately does not say "vs a surface": dark mode is tight everywhere (3.37 against `bg-card`, 3.78 against `bg-background`) and it **fails on `bg-muted` — 4.78 / 2.83**. So a primary edge must not be drawn on a muted or accent fill; move the edge to a card/background surface, or drop to a `border-border` edge there. Within the prescribed recipes the worst case is the selected card's ring, whose inner side sits on `bg-primary/10` at 4.55 / 3.13 — still clear, but that 3.13 is the real headroom, not the 3.37 in the row.
 - The `bg-destructive/90` row is the hover state of a solid destructive fill, as the vendored `Button` destructive variant emits it. Its 10% transparency means the figure depends on what sits behind; the values here are the **worst case over any backdrop**, which the small alpha keeps close to the opaque `bg-destructive` row. It carries an icon, not text, hence the 3:1 bar.
 
 Three of these recipes exist in this form only because the matrix caught them failing: `text-primary` on a dark surface (3.37), solid destructive with a near-white foreground in dark (2.77), and category chips coloured with `text-chart-*`, where three of the five hues fall below 3:1 against their own tint in one mode or the other (as low as 1.62). Where a fix changed appearance it is noted with the recipe.
 
 Two relationships inherited from the vendored shadcn tokens sit below these bars and are **deliberately not changed here**, since altering them would restyle every primitive: `border-border` against a surface (1.27 / 1.33 — decorative separators, exempt as they carry no state) and `text-muted-foreground` on `bg-muted` (4.39 in light). The second is why the hover recipes in Components pair `bg-muted` with `text-foreground` rather than leaving muted text on a muted surface.
 
-`text-muted-foreground` is short of headroom generally — 4.83 on a plain surface is only 0.33 above the bar — so **any** tint underneath it is likely to push it under. Besides the 4.39 on `bg-muted`, it is 4.18 on `bg-primary/10`. Neither is a prescribed pairing; both are listed here so the next screen that reaches for muted text on a tinted surface finds the answer instead of re-deriving it. The fix in both directions is the same: where the surface changes, the text goes up to `text-foreground`.
+`text-muted-foreground` is short of headroom generally — 4.83 on a plain surface is only 0.33 above the bar — so **any** tint underneath it is likely to push it under, and light is always the failing mode because muted text is darkest there. Besides the **4.39 light / 5.66 dark** on `bg-muted`, it is **4.18 light / 6.25 dark** on `bg-primary/10`. Neither is a prescribed pairing; both are listed here so the next screen that reaches for muted text on a tinted surface finds the answer instead of re-deriving it. The fix in both directions is the same: where the surface changes, the text goes up to `text-foreground`.
 
 A translucent fill over **arbitrary** content (a loading veil over a user-supplied image, say) cannot be put in this table at all, because the backdrop is not known at authoring time. Measure the worst case; if it fails — `bg-card/70` with a `border-primary` spinner bottoms out at 1.25, and even `bg-card/90` only reaches 2.54 — make the fill opaque so the pairing becomes one of the rows above.
 
@@ -252,7 +252,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-primary/10 text-primary-strong` with a 2px `bg-primary-strong` edge bar. Inactive: `text-muted-foreground`, hover `bg-muted text-foreground`. Groups collapse with a chevron. **This describes a light sidebar, which the shipped one is not** — do not apply it until the open question in the mapping notes is settled.
 - **Progress bar**: track `bg-muted h-2 rounded-full`, fill `bg-primary-strong` (plain `bg-primary` is only 2.83:1 against the dark-mode track).
 - **Ranking row**: 32px circular rank chip (`bg-primary/10 text-primary-strong`), name + area line (12px icon + `text-muted-foreground`), right-aligned amount (bold) over count (`text-muted-foreground`).
-- **Selectable preview card**: `<label class="group">` wrapping an `sr-only` radio; `rounded-lg border p-3 cursor-pointer`. Unselected hover `bg-muted`; selected `border-primary ring-2 ring-primary bg-primary/10`. Body = thumbnail (`w-full rounded border`) → name (`text-sm font-medium`, selected `text-primary-strong`) → description (`text-xs`); keyboard focus via `has-[:focus-visible]:ring-2`. The description is the one part that cannot stay muted throughout, because **both** of the card's non-default surfaces put `text-muted-foreground` under the bar — 4.39 on the hover fill, 4.18 on the selected tint. So it is `text-muted-foreground group-hover:text-foreground` when unselected and `text-foreground` when selected. That is the same "the hover flips the fill and the text together" rule the Sidebar nav item and Mobile bottom tab bar entries follow; the `group` on the label is what lets the text follow a hover owned by its ancestor. Precedent: the template picker in `StoreProfileForm`.
+- **Selectable preview card**: `<label class="group">` wrapping an `sr-only` radio; `rounded-lg border p-3 cursor-pointer`. Unselected hover `bg-muted`; selected `border-primary ring-2 ring-primary bg-primary/10`. Body = thumbnail (`w-full rounded border`) → name (`text-sm font-medium`, selected `text-primary-strong`) → description (`text-xs`); keyboard focus via `has-[:focus-visible]:ring-2`. The description is the one part that cannot stay muted throughout, because **both** of the card's non-default surfaces put `text-muted-foreground` under the bar in light mode — 4.39 on the hover fill, 4.18 on the selected tint (dark clears both, at 5.66 and 6.25). So it is `text-muted-foreground group-hover:text-foreground` when unselected and `text-foreground` when selected. That is the same "the hover flips the fill and the text together" rule the Sidebar nav item and Mobile bottom tab bar entries follow; the `group` on the label is what lets the text follow a hover owned by its ancestor. Precedent: the template picker in `StoreProfileForm`.
 - **Mobile bottom tab bar**: `fixed inset-x-0 bottom-0` `bg-card` with a `border-t` top edge; each tab is an equal-width flex column (`flex flex-1 flex-col items-center gap-1 py-2`), 24px icon above a 12px label. Active `text-primary-strong`, inactive `text-muted-foreground` with hover `bg-muted text-foreground`. The content area adds `pb-16` so the fixed bar never overlaps scrollable content. Precedent: `CastPortalShell`.
 
 Hover / focus / disabled states come from the primitives. Only hand-write a state when composing bare elements, and then express it in tokens (`hover:bg-muted`, `disabled:opacity-50`) — never a raw hue.
@@ -347,7 +347,7 @@ Everything else that still matches the grep — the unconverted slices, `widgets
 - **Vendored shadcn primitives** — `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `sheet` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
 - **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
 
-Tell them apart by the generator's fingerprints rather than by guessing: a vendored file carries `data-slot` attributes, imports from `radix-ui`, and declares its variants with `cva`. The hand-written three carry none of those and import application code a generator would never emit (`@/shared/api`, `@heroicons/react`, `next-themes`). `git log --follow` confirms it — the hand-written files predate the shadcn adoption.
+Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 19 vendored files carry it and none of the three hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 8 of the 19, and `cva` from 17 of the 19, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written three carry none of the markers, and import application code a generator would never emit (`@/shared/api`, `@heroicons/react`, `next-themes`). `git log --follow` settles any remaining doubt — the hand-written files predate the shadcn adoption by months.
 
 Editing a hand-written one is still a shared-file change, so it goes through the contract below rather than through a slice PR.
 
