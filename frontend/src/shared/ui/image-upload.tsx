@@ -62,8 +62,10 @@ export default function ImageUpload({
 
   return (
     <div className="space-y-2">
+      {/* ドロップ可能域の境界はその機能を示す唯一の手掛かりなので装飾免除にならず 3:1 を要する。
+          既定の border-border は 1.27/1.33 でほぼ不可視のため muted-foreground を明示する。 */}
       <div
-        className={`relative border-2 border-dashed rounded-lg overflow-hidden cursor-pointer hover:border-primary transition-colors ${className}`}
+        className={`relative border-2 border-dashed border-muted-foreground rounded-lg overflow-hidden cursor-pointer hover:border-primary transition-colors ${className}`}
         onClick={() => inputRef.current?.click()}
       >
         {displayUrl ? (

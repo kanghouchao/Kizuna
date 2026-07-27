@@ -20,9 +20,11 @@ function castsUrl(page: Page): string {
   return `${PLATFORM_URL}/store/${currentStoreId(page)}/casts`;
 }
 
-// Header の店舗切替ドロップダウンは唯一の aria-haspopup 要素。
-// アカウントメニューは group-hover の素の要素で aria-haspopup を持たないため一意に特定できる。
-const storeSwitchToggle = (page: Page): Locator => page.locator('header [aria-haspopup]');
+// Header のドロップダウン（表示モード・店舗切替・アカウントメニュー）はいずれも aria-haspopup を
+// 持つ。うち店舗切替だけはアクセシブル名が現在店舗名（動的値）で aria-label を持たないため、
+// その欠如で一意に特定する。
+const storeSwitchToggle = (page: Page): Locator =>
+  page.locator('header button[aria-haspopup]:not([aria-label])');
 
 // 播種したキャストの id / 一意名。scenario 2 の Given でのみ設定し、断言と後始末で共有する。
 let createdCastId = '';
@@ -31,7 +33,8 @@ let createdCastName = '';
 /** 店舗切替ドロップダウンを開いた状態にし、開いたメニュー要素を返す（既に開いていれば再クリックしない）。 */
 async function openStoreSwitch(page: Page): Promise<Locator> {
   const toggle = storeSwitchToggle(page);
-  // stores() の取得完了までボタンは disabled。有効化＝一覧ロード済みを待ってから開く。
+  // stores() の取得完了までトグルは描画されない。toBeEnabled は出現も併せて待つため、
+  // これで一覧ロード済みを待ってから開くことになる。
   await expect(toggle).toBeEnabled();
   const menu = page.getByRole('menu');
   if ((await menu.count()) === 0) {

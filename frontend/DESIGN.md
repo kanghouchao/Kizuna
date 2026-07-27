@@ -95,6 +95,7 @@ Ratios are WCAG relative-luminance figures computed from the oklch values in `gl
 | `text-primary-strong` on `bg-accent` (ghost hover)               | 4.78      | 5.65      | 4.5  |
 | `border-primary` / `ring-primary` vs `bg-card` / `bg-background` | 5.26      | 3.37      | 3    |
 | `bg-destructive/90` hover fill + its icon                        | 4.32      | 5.64      | 3    |
+| `border-muted-foreground` dropzone edge vs `bg-card`             | 4.83      | 6.74      | 3    |
 
 Every prescribed combination clears its bar in both modes, so **no size or weight condition is attached to any of them**.
 
@@ -105,6 +106,8 @@ A few of the newer rows need a note, since each answers a question that came up 
 - The `bg-destructive/90` row is the hover state of a solid destructive fill, as the vendored `Button` destructive variant emits it. Its 10% transparency means the figure depends on what sits behind; the values here are the **worst case over any backdrop**, which the small alpha keeps close to the opaque `bg-destructive` row. It carries an icon, not text, hence the 3:1 bar. The `bg-success/90` / `bg-warning/90` rows follow the same worst-case convention for the hover state of the solid timeline bars; these carry the bar's own time text, hence 4.5, and over their actual `bg-muted` track they measure 6.82 / 6.89 in light (9.41 / 9.75 in dark).
 - The two `on bg-background` rows cover text drawn on the page shell outside a card — the timeline view's selected tab (`text-primary-strong`) and page-level error copy (`text-destructive-strong`). In light mode `--background` is identical to `--card`, so only the dark figures differ from the `on bg-card` rows.
 - The `bg-destructive` marker row is the timeline's current-time line where it crosses the `bg-muted` track (its crossing of the card gaps is the `vs bg-card` row above).
+- The `border-muted-foreground` row is the image-upload dropzone's dashed edge. A dropzone's boundary is the only cue to where dropping works, so it is a meaningful graphic bound by 3:1 — the decorative exemption that covers `border-border` separators does not extend to it, and `border-border` itself sits at 1.27 / 1.33. Against `bg-background` the same edge measures 4.83 / 7.56, so the row's `bg-card` figures are the binding worst case.
+- The success toast (`ToastProvider`) is the `bg-success` + `text-success-foreground` row: react-hot-toast takes inline styles, so the pairing is written as `var(--success)` / `var(--success-foreground)` rather than classes, and follows the mode the same way.
 
 Three of these recipes exist in this form only because the matrix caught them failing: `text-primary` on a dark surface (3.37), solid destructive with a near-white foreground in dark (2.77), and category chips coloured with `text-chart-*`, where three of the five hues fall below 3:1 against their own tint in one mode or the other (as low as 1.62). Where a fix changed appearance it is noted with the recipe.
 
@@ -219,14 +222,7 @@ The `chart-*` tokens are category hues with **no `-foreground` pair** and no con
 
 Pick whichever hue keeps sibling categories distinct — with the hue confined to a 10% tint, that choice can no longer create a contrast problem.
 
-##### Sidebar facts: dormant `--sidebar-*` tokens and the no-op `custom-scrollbar`
-
-`widgets/sidebar/ui/Sidebar.tsx` is now an ordinary admin surface — `bg-card` behind the Sidebar nav item recipe from Components, with no raw palette classes left. Two adjacent facts are recorded so nobody re-derives them:
-
-- The `--sidebar-*` token family in `globals.css` (exposed as `bg-sidebar` etc. through `@theme inline`) has **no consumer**: the sidebar restyle used the generic tokens instead. Do not reach for these tokens in new markup; whether to delete the family is a `globals.css` shared-file decision, not a slice PR.
-- The `custom-scrollbar` class (on the sidebar scroll area and the two console `app/` layout shells) is defined **nowhere** — no stylesheet or config declares it, so it is a no-op. Do not copy it into new markup; removing the three usages is a code cleanup outside any restyle PR.
-
-One-off domain colors (now marker, weekend, coverage bar, category chips) intentionally reuse existing tokens instead of gaining dedicated ones: a token with a single consumer is dead weight.
+One-off domain colors (now marker, weekend, coverage bar, category chips) intentionally reuse existing tokens instead of gaining dedicated ones: a token with a single consumer is dead weight. The same policy is why `globals.css` carries no `--sidebar-*` family: the sidebar is an ordinary admin surface (`bg-card` behind the Sidebar nav item recipe from Components) built from the generic tokens.
 
 ### Public storefront (three templates)
 
@@ -285,6 +281,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Drawer (side-slide dialog)**: `Sheet` with `side="right"` for record-scoped edit forms opened from a list row. Never re-create a drawer by re-positioning `DialogContent`.
 - **Confirm dialog (destructive confirmation)**: `ConfirmDialog` — controlled `open` + `title` (optionally `description`), with a destructive action button (`confirmLabel`, default 削除する) and a キャンセル cancel. Never call `window.confirm`, and never rebuild the pattern from `AlertDialog` parts in a page. Precedent: `CastFieldsPage`.
 - **Combobox (searchable select)**: `Popover` + `Command` (`CommandInput` / `CommandList` / `CommandEmpty` / `CommandItem`).
+- **Destructive menu item**: do not use the vendored `DropdownMenuItem`'s own `variant="destructive"` — it keeps the default red as the text over its tinted focus fill (`text-destructive` on `bg-destructive/10`), which measures **3.99 in light mode** (dark passes at 4.58 over its `/20` fill). Spell the colours out on the consumer instead: `className="text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong"` — certified by the `bg-destructive/10` + `text-destructive-strong` row (8.42 / 5.39). The primitive itself stays as generated; this rule binds the call sites. Precedent: the logout item in `widgets/header`.
 - **Card section heading**: `CardTitle` renders a `<div>`, so wherever it stands for a section heading it must be written `<CardTitle role="heading" aria-level={N}>`. Without both attributes the section disappears from screen-reader heading navigation, and the loss is invisible in a rendered diff. The primitive stays pristine — it spreads `React.ComponentProps<'div'>`, so the consumer supplies them. (Where the card is genuinely not a section heading — a bare label on a stat card — leave it a `div` and do not add the role.)
   - **Pick `N` from the outline the page actually has, never from the tag the card replaced.** Levels must not skip: a card section directly under the page's `<h1>` is `aria-level={2}`, whatever the pre-shadcn markup used. Every admin page today is `<h1>` + card sections, so **2** is the level in practice; a nested sub-section inside such a card would be 3. Sibling headings written as real tags follow the same outline (`CustomerEditPage`'s 注文履歴 is an `<h2>`, not an `<h3>`).
 - **Table**: shadcn `Table` inside a `Card`. Precedent: `CustomersPage`.
