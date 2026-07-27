@@ -91,7 +91,7 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
         {/* 基本情報 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               基本情報
             </CardTitle>
           </CardHeader>
@@ -128,7 +128,7 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
         {/* 住所 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               住所
             </CardTitle>
           </CardHeader>
@@ -168,7 +168,7 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
         {/* NG 情報 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               NG 情報
             </CardTitle>
           </CardHeader>

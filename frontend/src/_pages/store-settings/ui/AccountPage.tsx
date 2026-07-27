@@ -68,7 +68,7 @@ export default function AccountPage() {
       <form onSubmit={handleProfileSubmit}>
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               プロフィール
             </CardTitle>
           </CardHeader>

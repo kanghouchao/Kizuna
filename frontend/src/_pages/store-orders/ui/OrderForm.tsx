@@ -172,7 +172,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 1. 基本情報 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               基本情報
             </CardTitle>
           </CardHeader>
@@ -225,7 +225,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 2. お客様情報 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               お客様情報
             </CardTitle>
           </CardHeader>
@@ -303,7 +303,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 3. コース・料金 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               コース・料金
             </CardTitle>
           </CardHeader>
@@ -414,7 +414,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
         {/* 4. その他 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               その他
             </CardTitle>
           </CardHeader>
