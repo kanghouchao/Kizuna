@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isLegacyStorePath, storeSelectPath } from '../store-route';
-import { isPublicPlatformPath } from '../app-area';
+import { consoleAreaOfPath, isPublicPlatformPath } from '../app-area';
+
+// コンソール別の入場可能エリアとホーム。/me の console（サーバ側が能力目録から導出）を
+// ログイン時に保存した platform-role cookie が根拠。platform コンソールは storeBridge に
+// よる店舗コンソール操作があるため /store も許可する。認可の根拠ではなく画面遷移の整合のみ
+// — データはバックエンドが能力ベースで fail-closed に拒否する。
+const CONSOLE_AREAS: Record<string, { allowed: readonly string[]; home: string }> = {
+  platform: { allowed: ['platform', 'store'], home: '/platform/dashboard' },
+  store: { allowed: ['store'], home: storeSelectPath() },
+  cast: { allowed: ['cast'], home: '/cast/schedule' },
+};
 
 export function handleRouteProtection(request: NextRequest, role: 'platform' | 'store') {
   const path = request.nextUrl.pathname;
@@ -36,7 +46,25 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
     return NextResponse.redirect(new URL('/platform/login', request.url));
   }
 
-  // 3. Legacy id-less store URL handling
+  // 3. Console/area alignment
+  // 店舗文脈のまま /platform/* を直打ちすると、サイドバー（能力由来）と本文（URL 由来）が
+  // 食い違ったまま描画され、平台 API も 403 になる。トークン保持者のコンソールと URL エリアが
+  // 一致しない場合は自コンソールのホームへ差し戻す。cookie 不在（レガシーセッション）や
+  // 未知の旧形式値は対象外 — 後者は apiClient の 403 応答経路がセッション破棄で回収する。
+  if (hasToken && !isPublicPlatformRoute) {
+    const consoleValue = request.cookies.get('platform-role')?.value ?? '';
+    // cookie は利用者が任意値を書ける。素の添字だと 'constructor' 等が原型鎖に当たるため
+    // 自有プロパティに限定する。
+    const consoleArea = Object.hasOwn(CONSOLE_AREAS, consoleValue)
+      ? CONSOLE_AREAS[consoleValue]
+      : undefined;
+    const pathArea = consoleAreaOfPath(path);
+    if (consoleArea && pathArea && !consoleArea.allowed.includes(pathArea)) {
+      return NextResponse.redirect(new URL(consoleArea.home, request.url));
+    }
+  }
+
+  // 4. Legacy id-less store URL handling
   // id 無しの店舗 URL（例 /store/orders、ブックマーク・共有リンクに残りうる）は
   // /store/[storeId]/... にも /store/select にもマッチせず 404 になる。
   // トークン保持者に限り店舗選択画面へ誘導し、選択後に元の遷移先（next）へ復帰させる。

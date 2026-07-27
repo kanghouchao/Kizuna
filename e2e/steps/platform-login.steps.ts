@@ -65,6 +65,11 @@ When(
   }
 );
 
+When('パス {string} を直接開く', async ({ page }, path: string) => {
+  // アドレスバー直打ち相当。SPA 内遷移ではなくフルロードでルート守衛（proxy）を通す。
+  await page.goto(`${PLATFORM_URL}${path}`, { waitUntil: 'domcontentloaded' });
+});
+
 Then('中央ダッシュボードへ遷移する', async ({ page }) => {
   await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 15000 });
 });

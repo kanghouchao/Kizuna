@@ -13,14 +13,16 @@ jest.mock('next/server', () => {
   };
 });
 
-const createRequest = (path: string, hasToken: boolean) => {
+const createRequest = (path: string, hasToken: boolean, cookies: Record<string, string> = {}) => {
   return {
     nextUrl: {
       pathname: path,
     },
     url: 'http://localhost' + path,
     cookies: {
-      has: (name: string) => (name === 'token' ? hasToken : false),
+      has: (name: string) => (name === 'token' ? hasToken : Object.hasOwn(cookies, name)),
+      get: (name: string) =>
+        cookies[name] !== undefined ? { name, value: cookies[name] } : undefined,
     },
   } as unknown as NextRequest;
 };
@@ -131,6 +133,114 @@ describe('routeGuard', () => {
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
+  });
+
+  describe('console/area alignment', () => {
+    it('redirects a store-console session on /platform/* to /store/select', () => {
+      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'store' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/store/select' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('redirects a store-console session on /cast/* to /store/select', () => {
+      const req = createRequest('/cast/schedule', true, { 'platform-role': 'store' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/store/select' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('redirects a cast-console session on /platform/* to /cast/schedule', () => {
+      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'cast' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/cast/schedule' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('redirects a cast-console session on /store/* to /cast/schedule', () => {
+      const req = createRequest('/store/5/orders', true, { 'platform-role': 'cast' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/cast/schedule' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('redirects a platform-console session on /cast/* to /platform/dashboard', () => {
+      const req = createRequest('/cast/schedule', true, { 'platform-role': 'platform' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/platform/dashboard' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('allows a platform-console session on /platform/*', () => {
+      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'platform' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('allows a platform-console session on an id-scoped /store/* route (store bridge)', () => {
+      const req = createRequest('/store/5/orders', true, { 'platform-role': 'platform' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('allows a store-console session on an id-scoped /store/* route', () => {
+      const req = createRequest('/store/5/orders', true, { 'platform-role': 'store' });
+      const res = handleRouteProtection(req, 'store');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('allows a store-console session on the public /platform/login route', () => {
+      const req = createRequest('/platform/login', true, { 'platform-role': 'store' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('does not guard when the console cookie is absent (legacy session)', () => {
+      const req = createRequest('/platform/dashboard', true);
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('does not guard an unknown (old-format) console cookie value', () => {
+      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'admin' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('does not crash or guard on a prototype-chain cookie value', () => {
+      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'constructor' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
   });
 
   it('ignores other routes', () => {
