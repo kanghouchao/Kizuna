@@ -2,9 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { ThemeProvider } from '@/shared/ui';
-
-/** 管理コンソールのパス。店舗ドメインはこの外側で公開店舗サイトを配信する。 */
-const CONSOLE_PREFIXES = ['/platform', '/store'];
+import { isTokenThemedPath } from '@/shared/lib';
 
 /**
  * テーマは管理コンソールだけの関心事。公開店舗サイトと同一 origin で配信されるため、
@@ -17,7 +15,7 @@ const CONSOLE_PREFIXES = ['/platform', '/store'];
  */
 export function ThemeScope({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const inConsole = CONSOLE_PREFIXES.some(prefix => pathname?.startsWith(prefix));
+  const themed = isTokenThemedPath(pathname);
 
   return (
     <ThemeProvider
@@ -25,7 +23,7 @@ export function ThemeScope({ children }: { children: React.ReactNode }) {
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange
-      forcedTheme={inConsole ? undefined : 'light'}
+      forcedTheme={themed ? undefined : 'light'}
     >
       {children}
     </ThemeProvider>

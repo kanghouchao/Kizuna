@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isLegacyStorePath, storeSelectPath } from '../store-route';
+import { isPublicPlatformPath } from '../app-area';
 
 export function handleRouteProtection(request: NextRequest, role: 'platform' | 'store') {
   const path = request.nextUrl.pathname;
@@ -8,8 +9,7 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 公開 platform ルート（ログインフォーム・招待受諾 — セッション不要）は守衛の対象外。
   // これを除外しないと /platform/login への redirect 自身が /platform 前綴に再マッチし、
   // 無限リダイレクト（ERR_TOO_MANY_REDIRECTS）に陥る。
-  const isPublicPlatformRoute =
-    path.startsWith('/platform/login') || path.startsWith('/platform/invite');
+  const isPublicPlatformRoute = isPublicPlatformPath(path);
 
   // 1. Platform Route Protection
   // If accessing a protected /platform/* route without a token, redirect to /platform/login
