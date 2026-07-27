@@ -13,11 +13,6 @@ const STAFF_URL = `${PLATFORM_URL}/platform/staff`;
 let createdStaffName = '';
 let createdStaffEmail = '';
 
-// Modal/Drawer の Dialog ルート要素は子要素がすべて fixed 配置のため自身は 0x0 サイズになり、
-// role=dialog を直接 toBeVisible/toBeHidden で判定すると常に「非表示」扱いになる（DESIGN.md の
-// Modal/Drawer 仕様どおりの構造。ShiftFormModal と同型）。開閉判定は実サイズを持つ見出し
-// （DialogTitle）で行う。
-
 When('スタッフ管理画面を開く', async ({ page }) => {
   await page.goto(STAFF_URL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('button', { name: 'スタッフを追加', exact: true })).toBeVisible();
