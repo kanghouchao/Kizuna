@@ -36,6 +36,14 @@ function storeCombobox(): Promise<HTMLElement> {
   return screen.findByRole('combobox', { name: '店舗' });
 }
 
+/**
+ * 所属店舗の読み込み完了を待つ。Radix Select は form 内で隠し native <select> を併走させ
+ * 同じ店舗名を選択中ラベルと option の二箇所に描くため、件数を問わない findAll で待つ。
+ */
+function waitStoresLoaded() {
+  return screen.findAllByText('店舗A');
+}
+
 /** 店舗を選ぶ。native は値変更、Radix はキーボードで開いて項目クリック。 */
 async function pickStore(name: string, value: string) {
   const combobox = await storeCombobox();
@@ -70,7 +78,7 @@ describe('出勤希望フォームの店舗セレクト配線と送信ペイロ�
 
   it('未操作の既定値がキー集合ごとそのまま送られること', async () => {
     render(<CastRequestsPage />);
-    await screen.findByText('店舗A');
+    await waitStoresLoaded();
 
     submitForm();
 
@@ -89,7 +97,7 @@ describe('出勤希望フォームの店舗セレクト配線と送信ペイロ�
 
   it('店舗を切り替えると選んだ店舗 ID が数値で送られること', async () => {
     render(<CastRequestsPage />);
-    await screen.findByText('店舗A');
+    await waitStoresLoaded();
 
     await pickStore('店舗B', '2');
     submitForm();
@@ -100,7 +108,7 @@ describe('出勤希望フォームの店舗セレクト配線と送信ペイロ�
 
   it('セレクタの表示が選択中の店舗に追従すること', async () => {
     render(<CastRequestsPage />);
-    await screen.findByText('店舗A');
+    await waitStoresLoaded();
     expect(await selectedStoreLabel()).toBe('店舗A');
 
     await pickStore('店舗B', '2');
@@ -110,7 +118,7 @@ describe('出勤希望フォームの店舗セレクト配線と送信ペイロ�
 
   it('備考は入力された文字列がそのまま載ること', async () => {
     render(<CastRequestsPage />);
-    await screen.findByText('店舗A');
+    await waitStoresLoaded();
 
     fireEvent.change(screen.getByLabelText('備考'), { target: { value: '遅れます' } });
     submitForm();
@@ -121,7 +129,7 @@ describe('出勤希望フォームの店舗セレクト配線と送信ペイロ�
 
   it('提出後は選択店舗を保ったまま日時だけ既定へ戻ること', async () => {
     render(<CastRequestsPage />);
-    await screen.findByText('店舗A');
+    await waitStoresLoaded();
 
     await pickStore('店舗B', '2');
     fireEvent.change(screen.getByLabelText('開始'), { target: { value: '20:00' } });
