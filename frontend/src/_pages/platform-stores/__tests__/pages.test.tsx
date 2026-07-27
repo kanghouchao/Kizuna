@@ -220,11 +220,12 @@ describe('店舗一覧ページの外殻', () => {
   });
 
   it('見出し・副題を備え、主アクションが button ロールのまま作成画面へ遷移すること', async () => {
-    render(<StoresPage />);
+    const { container } = render(<StoresPage />);
     await screen.findByText('アルファ店');
 
-    // 見出しレベルは他の一覧ページに揃えて h2→h1 へ変える予定のため、ここでは level を断言しない
-    expect(screen.getByRole('heading', { name: '店舗一覧' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '店舗一覧' })).toBeInTheDocument();
+    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
+    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(screen.getByText('システム内の全ての店舗を管理します')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '店舗を追加' }));

@@ -125,12 +125,14 @@ describe('カスタムフィールド管理ページの外殻', () => {
   });
 
   it('見出し（h1）・副題を備え、主アクションが button ロールのままであること', async () => {
-    render(<CastFieldsPage />);
+    const { container } = render(<CastFieldsPage />);
     await screen.findByText('フィールドが登録されていません');
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'カスタムフィールド管理' })
     ).toBeInTheDocument();
+    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
+    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(
       screen.getByText(
         'キャストの追加プロフィール項目を定義します。公開設定した項目は公開詳細ページに表示されます。'

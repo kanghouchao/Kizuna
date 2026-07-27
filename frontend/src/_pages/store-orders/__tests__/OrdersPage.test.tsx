@@ -172,11 +172,13 @@ describe('オーダー一覧ページの外殻', () => {
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
-    render(<OrderListPage />);
+    const { container } = render(<OrderListPage />);
     await screen.findByText('オーダーがありません');
 
     // e2e（hybrid-console-access）は見出し名 'オーダー一覧' の完全一致で到達確認する
     expect(screen.getByRole('heading', { level: 1, name: 'オーダー一覧' })).toBeInTheDocument();
+    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
+    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(screen.getByText('当日の注文状況を確認・管理できます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規オーダー登録' })).toHaveAttribute(
       'href',
