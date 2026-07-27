@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
-import { PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ImageIcon, XIcon } from 'lucide-react';
 import { fileApi } from '@/shared/api';
 import { toast } from 'react-hot-toast';
 
@@ -79,12 +79,12 @@ export default function ImageUpload({
               }}
               className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
             >
-              <XMarkIcon className="h-4 w-4" />
+              <XIcon className="h-4 w-4" />
             </button>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <PhotoIcon className="h-10 w-10 mb-2" />
+            <ImageIcon className="h-10 w-10 mb-2" />
             <span className="text-xs">{isUploading ? 'アップロード中...' : '写真を選択'}</span>
           </div>
         )}

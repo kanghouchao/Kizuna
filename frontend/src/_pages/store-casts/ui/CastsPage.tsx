@@ -3,13 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
-import {
-  PlusIcon,
-  MagnifyingGlassIcon,
-  PencilSquareIcon,
-  TrashIcon,
-  Cog6ToothIcon,
-} from '@heroicons/react/24/outline';
+import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon, SettingsIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { platformAuthApi } from '@/entities/user';
@@ -112,7 +106,7 @@ export default function CastListPage() {
             {canManageFieldDefs && (
               <Button asChild variant="outline">
                 <Link href={storePath(storeId, '/casts/fields')}>
-                  <Cog6ToothIcon />
+                  <SettingsIcon />
                   カスタムフィールド管理
                 </Link>
               </Button>
@@ -132,7 +126,7 @@ export default function CastListPage() {
         <CardContent className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex-1 relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" />
+              <SearchIcon className="h-5 w-5 text-muted-foreground" />
             </div>
             <Input
               type="text"
@@ -225,7 +219,7 @@ export default function CastListPage() {
                         )}
                         <Button asChild variant="ghost" size="icon-sm">
                           <Link href={storePath(storeId, `/casts/${cast.id}/edit`)}>
-                            <PencilSquareIcon />
+                            <SquarePenIcon />
                           </Link>
                         </Button>
                         <Button
@@ -233,7 +227,7 @@ export default function CastListPage() {
                           size="icon-sm"
                           onClick={() => setDeleteTarget(cast)}
                         >
-                          <TrashIcon />
+                          <Trash2Icon />
                         </Button>
                       </div>
                     </TableCell>

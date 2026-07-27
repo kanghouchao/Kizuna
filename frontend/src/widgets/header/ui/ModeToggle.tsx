@@ -9,7 +9,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/shared/ui';
-import { MoonIcon, SunIcon } from '@heroicons/react/24/outline';
+import { MoonIcon, SunIcon } from 'lucide-react';
 
 export function ModeToggle() {
   // トリガーの絵柄は現在値を読まず dark: 変種、すなわち適用済みの .dark の有無だけで決める。

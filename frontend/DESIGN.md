@@ -253,6 +253,13 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 - **Admin UI**: system sans stack; Japanese text renders via the Noto Sans JP fallback. Weights: bold for headings and key figures, medium for emphasized inline text, regular otherwise. Key figures: 30px bold. Body/labels: 14px.
 - **Storefront default**: `'Noto Serif JP', 'Hiragino Mincho Pro', serif` with wide letter-spacing (`tracking-[0.25em]`-class values) for headings/nav; this serif-luxury voice is part of the template identity.
 
+## Icons
+
+- **One library: `lucide-react`.** Do not (re-)introduce `@heroicons/react` or any other icon set. `components.json`'s `iconLibrary` is what `shadcn add` consults when it generates a primitive, so the icons baked into vendored primitives are lucide; the application uses the same family so that icons sharing a screen share one stroke width and terminal style.
+- Import the `Icon`-suffixed aliases (`BellIcon`, not `Bell`) — the style the vendored primitives already use.
+- Keep the default `strokeWidth` (2px). Thinning an icon per call site re-creates the mixed-family look the single library exists to prevent.
+- The sidebar's `ICON_MAP` keys are the icon strings served by the menu API's seed data. They keep their heroicons-style names as a wire contract; only the mapped values point at lucide components.
+
 ## Spacing
 
 - Admin: content padding 24px (`p-6`); card padding ~25px (`p-6`); gap between cards 24px (`gap-6`); sidebar fixed 256px (`w-64`); header 64px (`h-16`); card radius `rounded-lg` (= `var(--radius)`, 0.5rem); subtle shadow (`shadow-sm`).
@@ -423,7 +430,7 @@ Everything else that still matches the grep — the unconverted slices, `widgets
 - **Vendored shadcn primitives** — `alert-dialog` / `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `sheet` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
 - **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`, `confirm-dialog.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
 
-Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 20 vendored files carry it and none of the four hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 6 of the 20, and `cva` from 17 of the 20, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written four carry none of the markers, and either import application code a generator would never emit (`@/shared/api`, `@heroicons/react`, `next-themes`) or, as `confirm-dialog.tsx` does, compose sibling primitives through relative imports where the generator emits the `@/shared/ui` alias. `git log --follow` settles any remaining doubt.
+Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 20 vendored files carry it and none of the four hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 6 of the 20, and `cva` from 17 of the 20, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written four carry none of the markers, and either import application code a generator would never emit (`@/shared/api`, `react-hot-toast`, `next-themes`) or, as `confirm-dialog.tsx` does, compose sibling primitives through relative imports where the generator emits the `@/shared/ui` alias. `git log --follow` settles any remaining doubt.
 
 Editing a hand-written one is still a shared-file change, so it goes through the contract below rather than through a slice PR.
 

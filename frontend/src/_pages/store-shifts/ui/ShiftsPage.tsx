@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDaysIcon, ClockIcon, InboxIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, ClockIcon, InboxIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastResponse, castApi } from '@/entities/cast';

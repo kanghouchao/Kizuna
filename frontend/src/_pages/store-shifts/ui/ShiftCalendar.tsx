@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { ShiftResponse } from '@/entities/shift';
 import { Button } from '@/shared/ui';
 import { monthGrid, toDateStr } from '../lib/datetime';

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { PlusIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, SquarePenIcon } from 'lucide-react';
 import { Order, orderApi } from '@/entities/order';
 import { storePath, useManagedList } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
@@ -89,7 +89,7 @@ export default function OrderListPage() {
                     <div className="flex justify-end gap-1">
                       <Button asChild variant="ghost" size="icon-sm">
                         <Link href={storePath(storeId, `/orders/${order.id}/edit`)}>
-                          <PencilSquareIcon />
+                          <SquarePenIcon />
                         </Link>
                       </Button>
                     </div>

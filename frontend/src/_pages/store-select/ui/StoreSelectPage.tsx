@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BuildingStorefrontIcon } from '@heroicons/react/24/outline';
+import { StoreIcon } from 'lucide-react';
 import { useStoreContext } from '@/entities/user';
 import { replaceStoreIdInPath, setPlatformStore } from '@/shared/lib';
 import { Button, Card } from '@/shared/ui';
@@ -64,7 +64,7 @@ export default function StoreSelectPage() {
                   onClick={() => goTo(store.id)}
                   className="h-auto w-full justify-start gap-3 px-4 py-3 text-left"
                 >
-                  <BuildingStorefrontIcon className="size-5 text-muted-foreground" />
+                  <StoreIcon className="size-5 text-muted-foreground" />
                   {store.name}
                 </Button>
               ))}

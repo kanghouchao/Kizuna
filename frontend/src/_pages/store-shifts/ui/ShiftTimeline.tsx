@@ -1,6 +1,6 @@
 'use client';
 
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon } from 'lucide-react';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
 import { Button } from '@/shared/ui';
