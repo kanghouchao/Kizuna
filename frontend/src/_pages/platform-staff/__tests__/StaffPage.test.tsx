@@ -91,3 +91,23 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
   });
 });
+
+describe('スタッフ一覧ページの外殻', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedAuthApi.stores.mockResolvedValue([]);
+    mockedStaffApi.list.mockResolvedValue([]);
+  });
+
+  it('見出し（h1）・副題を備え、主アクションが button ロールのままであること', async () => {
+    render(<StaffPage />);
+    await screen.findByText('スタッフが登録されていません');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'スタッフ管理' })).toBeInTheDocument();
+    expect(
+      screen.getByText('権限束・担当店舗・精算範囲の付与と編集ができます。')
+    ).toBeInTheDocument();
+    // e2e（staff-management）は button ロールで取得するため、リンク化してはならない
+    expect(screen.getByRole('button', { name: 'スタッフを追加' })).toBeInTheDocument();
+  });
+});

@@ -117,3 +117,26 @@ describe('カスタムフィールド定義の管理ページ', () => {
     expect(await screen.findByText('フィールドが登録されていません')).toBeInTheDocument();
   });
 });
+
+describe('カスタムフィールド管理ページの外殻', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedApi.list.mockResolvedValue([]);
+  });
+
+  it('見出し（h1）・副題を備え、主アクションが button ロールのままであること', async () => {
+    render(<CastFieldsPage />);
+    await screen.findByText('フィールドが登録されていません');
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'カスタムフィールド管理' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'キャストの追加プロフィール項目を定義します。公開設定した項目は公開詳細ページに表示されます。'
+      )
+    ).toBeInTheDocument();
+    // e2e（cast-custom-fields）は button ロールで取得するため、リンク化してはならない
+    expect(screen.getByRole('button', { name: 'フィールドを追加' })).toBeInTheDocument();
+  });
+});

@@ -158,3 +158,29 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
     expect(body).not.toHaveProperty('businessDate');
   });
 });
+
+describe('オーダー一覧ページの外殻', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedOrderApi.list.mockResolvedValue({
+      content: [],
+      total_pages: 0,
+      total_elements: 0,
+      size: 100,
+      number: 0,
+    } as never);
+  });
+
+  it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
+    render(<OrderListPage />);
+    await screen.findByText('オーダーがありません');
+
+    // e2e（hybrid-console-access）は見出し名 'オーダー一覧' の完全一致で到達確認する
+    expect(screen.getByRole('heading', { level: 1, name: 'オーダー一覧' })).toBeInTheDocument();
+    expect(screen.getByText('当日の注文状況を確認・管理できます。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '新規オーダー登録' })).toHaveAttribute(
+      'href',
+      '/store/1/orders/create'
+    );
+  });
+});
