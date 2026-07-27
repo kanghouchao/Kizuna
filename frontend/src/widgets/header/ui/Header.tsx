@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth, useStoreContext } from '@/entities/user';
 import { isStoreDomain, storePath } from '@/shared/lib';
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -29,31 +30,29 @@ export function Header() {
       : '/platform/settings/account';
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-20">
+    <header className="h-16 bg-card border-b flex items-center justify-between px-8 sticky top-0 z-20">
       <div className="flex items-center">
-        <h2 className="text-lg font-medium text-gray-800">管理パネル</h2>
+        <h2 className="text-lg font-medium text-foreground">管理パネル</h2>
       </div>
 
       <div className="flex items-center space-x-6">
-        <button className="text-gray-400 hover:text-gray-600 transition-colors">
-          <BellIcon className="h-6 w-6" />
-        </button>
+        <Button variant="ghost" size="icon" className="text-muted-foreground">
+          <BellIcon className="size-6" />
+        </Button>
 
-        <div className="h-8 w-px bg-gray-200" />
+        <div className="h-8 w-px bg-border" />
 
         {stores && stores.length > 0 && (
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <BuildingStorefrontIcon className="h-5 w-5 text-gray-400" />
-              <span>{currentStoreName || '店舗を選択'}</span>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <BuildingStorefrontIcon className="size-5 text-muted-foreground" />
+                <span>{currentStoreName || '店舗を選択'}</span>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-56">
               {stores.map(store => (
-                <DropdownMenuItem
-                  key={store.id}
-                  onSelect={() => switchStore(store.id)}
-                  className="px-4 py-2 text-sm text-gray-700"
-                >
+                <DropdownMenuItem key={store.id} onSelect={() => switchStore(store.id)}>
                   {store.name}
                 </DropdownMenuItem>
               ))}
@@ -63,24 +62,24 @@ export function Header() {
 
         <div className="flex items-center space-x-4">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-gray-900">管理者</p>
-            <p className="text-xs text-gray-500">Platform Admin</p>
+            <p className="text-sm font-semibold text-foreground">管理者</p>
+            <p className="text-xs text-muted-foreground">Platform Admin</p>
           </div>
           <div className="relative group">
             {' '}
             <button className="flex items-center focus:outline-none">
-              <UserCircleIcon className="h-8 w-8 text-gray-400 group-hover:text-indigo-500 transition-colors" />
+              <UserCircleIcon className="h-8 w-8 text-muted-foreground group-hover:text-primary-strong transition-colors" />
             </button>
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-gray-100 hidden group-hover:block transition-all duration-200 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 origin-top-right">
+            <div className="absolute right-0 mt-2 w-48 bg-card rounded-md shadow-lg py-1 border hidden group-hover:block transition-all duration-200 opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 origin-top-right">
               <Link
                 href={accountHref}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted"
               >
                 アカウント設定
               </Link>
               <button
                 onClick={logout}
-                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                className="block w-full text-left px-4 py-2 text-sm text-destructive-strong hover:bg-destructive/10"
               >
                 ログアウト
               </button>
