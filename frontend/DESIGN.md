@@ -266,9 +266,14 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 
 The console is a desktop surface. It is **not** made to reflow onto a phone, and pretending otherwise produces half-adapted screens: the sidebar already hides below `md` without putting any navigation in its place.
 
-Instead the shell declares a **minimum supported width** — the content column carries `min-w-[40rem]` (640px, chosen above the header action row's measured intrinsic requirement of 609px) and the shell scrolls horizontally below it. **The point is the failure mode.** Without the floor the shell's `overflow-hidden` silently clips whatever does not fit, and a clipped control is not merely ugly — it is unreachable. Horizontal scrolling keeps every control usable at any width.
+Instead the shell declares a **minimum supported width** — the content column carries `min-w-[44rem]` (704px, chosen above the header's **worst-case** requirement of 674px — heading 90 + action row 520 + horizontal padding 64, with the store selector stretched to its cap) and the shell scrolls horizontally below it. **The point is the failure mode.** Without the floor the shell's `overflow-hidden` silently clips whatever does not fit, and a clipped control is not merely ugly — it is unreachable. Horizontal scrolling keeps every control usable at any width.
 
 So when a header or toolbar gains a control, the question is not "does it still fit on a phone" but "does the row's intrinsic width still fit under the floor". Measure it with `scrollWidth` on the row rather than eyeballing a resized window; the sidebar takes 256px whenever it is visible, so the viewport needs that much more than the row does.
+
+Two traps this rule exists to catch, both hit in practice:
+
+- **A single measurement is not the worst case.** A row containing user data (a store name, a person's name) is only as wide as whatever happened to be on screen when you measured. Cap such labels — an uncapped `whitespace-nowrap` label has no upper bound, and a floor cannot hold a row that has none.
+- **Adding a cap changes the worst case.** The cap becomes the new maximum, so the floor must be recomputed **after** capping, not before.
 
 ## Components (admin)
 
