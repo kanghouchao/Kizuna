@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastInvitationStatus, castApi } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
+import { Button } from '@/shared/ui';
 
 export interface IssuedInvitation {
   token: string;
@@ -40,13 +41,15 @@ export function InvitationButton({ castId, status, onIssued }: InvitationButtonP
   };
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       onClick={handleIssue}
       disabled={issuing}
-      className="rounded text-blue-600 hover:text-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="text-primary-strong"
     >
       {status === 'INVITED' ? '再発行' : '招待を発行'}
-    </button>
+    </Button>
   );
 }
