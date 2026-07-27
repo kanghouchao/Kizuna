@@ -70,7 +70,7 @@ export function CastPortalShell({ children }: CastPortalShellProps) {
               key={tab.href}
               href={tab.href}
               aria-current={active ? 'page' : undefined}
-              className={`flex flex-1 flex-col items-center gap-1 py-2 text-xs font-medium ${
+              className={`flex flex-1 flex-col items-center gap-1 py-2 text-xs font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                 active
                   ? 'text-primary-strong'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'

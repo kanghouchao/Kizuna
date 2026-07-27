@@ -111,7 +111,6 @@ export function CastRequestsPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 初期店舗の流し込みは選択肢が描画され終えた次のコミットで行う。Radix Select は
