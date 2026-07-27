@@ -7,7 +7,7 @@ import { Header } from '@/widgets/header';
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
   return (
     <StoreContextProvider>
-      <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <div className="flex h-screen bg-background overflow-hidden">
         {/* Sidebar Component */}
         <Sidebar />
 
