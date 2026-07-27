@@ -19,6 +19,14 @@ const STORES = [
   { store_id: 2, store_name: '店舗B' },
 ];
 
+/**
+ * 所属店舗の読み込み完了を待つ。Radix Select は form 内で隠し native <select> を併走させ
+ * 同じ店舗名を選択中ラベルと option の二箇所に描くため、件数を問わない findAll で待つ。
+ */
+function waitStoresLoaded() {
+  return screen.findAllByText('店舗A');
+}
+
 describe('CastRequestsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -30,6 +38,8 @@ describe('CastRequestsPage', () => {
     render(<CastRequestsPage />);
 
     await waitFor(() => expect(mockedMyStores).toHaveBeenCalledTimes(1));
+    // Radix Select の選択肢は開いている間だけ描画される。
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: '店舗' }), { key: 'ArrowDown' });
     expect(await screen.findByRole('option', { name: '店舗A' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '店舗B' })).toBeInTheDocument();
   });
@@ -38,7 +48,7 @@ describe('CastRequestsPage', () => {
     render(<CastRequestsPage />);
     // 所属店セレクタの描画完了を待つ（マウント時の非同期読み込みが未解決のまま操作すると
     // store_id の初期値設定と競合するため、react-hook-form の値確定後に操作する）。
-    await screen.findByRole('option', { name: '店舗A' });
+    await waitStoresLoaded();
 
     fireEvent.change(screen.getByLabelText('日付'), { target: { value: '2000-01-01' } });
     fireEvent.click(screen.getByRole('button', { name: '提出する' }));
@@ -50,7 +60,7 @@ describe('CastRequestsPage', () => {
   it('本日の日付は許容され提出されること', async () => {
     mockedSubmit.mockResolvedValue({ id: 'sr1', status: 'PENDING' });
     render(<CastRequestsPage />);
-    await screen.findByRole('option', { name: '店舗A' });
+    await waitStoresLoaded();
 
     const d = new Date();
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
@@ -65,7 +75,7 @@ describe('CastRequestsPage', () => {
 
   it('備考が501文字だと検証エラーを表示し、提出しないこと', async () => {
     render(<CastRequestsPage />);
-    await screen.findByRole('option', { name: '店舗A' });
+    await waitStoresLoaded();
 
     fireEvent.change(screen.getByLabelText('備考'), { target: { value: 'あ'.repeat(501) } });
     fireEvent.click(screen.getByRole('button', { name: '提出する' }));
