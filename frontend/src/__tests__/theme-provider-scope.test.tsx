@@ -1,10 +1,11 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import RootLayout from '../app/layout';
-import StoreLayout from '../app/store/layout';
+import { render } from '@testing-library/react';
+import { usePathname } from 'next/navigation';
+import { ThemeScope } from '@/_app/providers';
 
 // テーマ配線は管理コンソールだけの関心事。店舗ドメインは公開サイトとコンソールを同一 origin で
-// 配信するため、provider が根 layout に載ると <html> の class と color-scheme が公開サイトにも
-// 及ぶ。そこで「根には無い」と「コンソールには規定の props で有る」を対で錨にする。
+// 配信するため、コンソール外では light を強制して <html> の class と color-scheme を現在地へ
+// 追随させる。next-themes はアンマウント時に適用済みの class を取り除かないので、provider の
+// 設置場所ではなく forcedTheme が唯一の防壁になる。
 const themeProviderProps: Record<string, unknown>[] = [];
 
 jest.mock('@/shared/ui', () => ({
@@ -14,39 +15,43 @@ jest.mock('@/shared/ui', () => ({
   },
 }));
 
-jest.mock('@/entities/user', () => ({
-  AuthProvider: (props: { children: React.ReactNode }) => props.children,
-  StoreContextProvider: (props: { children: React.ReactNode }) => props.children,
+jest.mock('next/navigation', () => ({
+  usePathname: jest.fn(),
 }));
 
-jest.mock('@/_app/providers', () => ({
-  ToastProvider: () => null,
-}));
+const mockedUsePathname = usePathname as jest.MockedFunction<typeof usePathname>;
 
-jest.mock('@/widgets/sidebar', () => ({ Sidebar: () => null }));
-jest.mock('@/widgets/header', () => ({ Header: () => null }));
+function propsFor(pathname: string) {
+  themeProviderProps.length = 0;
+  mockedUsePathname.mockReturnValue(pathname);
+  render(<ThemeScope>本文</ThemeScope>);
+  expect(themeProviderProps).toHaveLength(1);
+  return themeProviderProps[0];
+}
 
 describe('テーマ provider の作用範囲', () => {
-  beforeEach(() => {
-    themeProviderProps.length = 0;
-  });
+  it.each(['/platform/staff', '/platform/settings/account', '/store/1/customers', '/store/select'])(
+    'コンソール %s ではテーマを強制しない',
+    path => {
+      expect(propsFor(path)).not.toHaveProperty('forcedTheme', 'light');
+    }
+  );
 
-  it('根 layout はテーマを配線しない（公開店舗サイトへ及ばせない）', () => {
-    renderToStaticMarkup(<RootLayout>本文</RootLayout>);
+  it.each(['/', '/casts', '/casts/12', '/schedule', '/menu', '/about'])(
+    '公開店舗サイト %s では light を強制する',
+    path => {
+      expect(propsFor(path)).toMatchObject({ forcedTheme: 'light' });
+    }
+  );
 
-    expect(themeProviderProps).toHaveLength(0);
-  });
+  it('コンソールでは既定 system・OS 追随で、保存先の差し替えはしない', () => {
+    const props = propsFor('/store/1/customers');
 
-  it('店舗コンソールはテーマを配線し、強制も保存先の差し替えもしない', () => {
-    renderToStaticMarkup(<StoreLayout>本文</StoreLayout>);
-
-    expect(themeProviderProps).toHaveLength(1);
-    expect(themeProviderProps[0]).toMatchObject({
+    expect(props).toMatchObject({
       attribute: 'class',
       defaultTheme: 'system',
       enableSystem: true,
     });
-    expect(themeProviderProps[0]).not.toHaveProperty('forcedTheme');
-    expect(themeProviderProps[0]).not.toHaveProperty('storageKey');
+    expect(props).not.toHaveProperty('storageKey');
   });
 });

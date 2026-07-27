@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, Cormorant_Garamond } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/entities/user';
-import { ToastProvider } from '@/_app/providers';
+import { ThemeScope, ToastProvider } from '@/_app/providers';
 
 const inter = Inter({ subsets: ['latin'] });
 const cormorant = Cormorant_Garamond({
@@ -28,10 +28,12 @@ export default function RootLayout({
         <link rel="icon" href="/images/favicon.ico" />
       </head>
       <body className={`${inter.className} ${cormorant.variable}`}>
-        <AuthProvider>
-          {children}
-          <ToastProvider />
-        </AuthProvider>
+        <ThemeScope>
+          <AuthProvider>
+            {children}
+            <ToastProvider />
+          </AuthProvider>
+        </ThemeScope>
       </body>
     </html>
   );
