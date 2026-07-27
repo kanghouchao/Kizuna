@@ -14,6 +14,10 @@ const yesterdayInTokyo = () =>
 
 let createdShiftIds: string[] = [];
 let createdCastIds: string[] = [];
+// 一意名で作成し、中断した過去 run の残骸との重複（strict モード違反）を避ける
+//（platform-login.steps.ts と同じ手法）。feature の {string} は可読性のための基底名の表記で、
+// 断言ステップはこの写像で解決済み一意名に引き当てる。
+let resolvedCastNames: Record<string, string> = {};
 
 Given(
   '店舗 {string} に出勤表検証用のシフトデータを準備する',
@@ -22,10 +26,14 @@ Given(
     const today = todayInTokyo();
     const yesterday = yesterdayInTokyo();
 
-    const castA = await createCast(request, token, 'E2E出勤A');
-    const castB = await createCast(request, token, 'E2E出勤B');
-    const castC = await createCast(request, token, 'E2E出勤C');
-    const castD = await createCast(request, token, 'E2E出勤D');
+    const suffix = Date.now();
+    resolvedCastNames = Object.fromEntries(
+      ['E2E出勤A', 'E2E出勤B', 'E2E出勤C', 'E2E出勤D'].map(base => [base, `${base}-${suffix}`])
+    );
+    const castA = await createCast(request, token, resolvedCastNames['E2E出勤A']);
+    const castB = await createCast(request, token, resolvedCastNames['E2E出勤B']);
+    const castC = await createCast(request, token, resolvedCastNames['E2E出勤C']);
+    const castD = await createCast(request, token, resolvedCastNames['E2E出勤D']);
     createdCastIds.push(castA, castB, castC, castD);
 
     const shiftA = await createShift(request, token, {
@@ -67,13 +75,17 @@ When('出勤表ページを開く', async ({ page }) => {
 Then(
   '出勤表にキャスト {string} と時間帯 {string} が表示される',
   async ({ page }, castName: string, timeRange: string) => {
-    await expect(page.getByRole('heading', { name: castName, exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: resolvedCastNames[castName], exact: true })
+    ).toBeVisible();
     await expect(page.getByText(timeRange)).toBeVisible();
   }
 );
 
 Then('出勤表にキャスト {string} が表示されない', async ({ page }, castName: string) => {
-  await expect(page.getByRole('heading', { name: castName, exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: resolvedCastNames[castName], exact: true })
+  ).toHaveCount(0);
 });
 
 // 播種データを無条件で片付ける（テスト失敗・途中クラッシュでも実行）。
@@ -88,4 +100,5 @@ After(async ({ request }) => {
   }
   createdShiftIds = [];
   createdCastIds = [];
+  resolvedCastNames = {};
 });
