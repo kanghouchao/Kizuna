@@ -15,6 +15,7 @@ import {
   storeSetLabel,
 } from '@/features/staff-management';
 import { useManagedList } from '@/shared/lib';
+import { PageHeader } from '@/widgets/page-header';
 import {
   Badge,
   Button,
@@ -49,18 +50,16 @@ export default function StaffPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">スタッフ管理</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            権限束・担当店舗・精算範囲の付与と編集ができます。
-          </p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <PlusIcon />
-          スタッフを追加
-        </Button>
-      </div>
+      <PageHeader
+        title="スタッフ管理"
+        description="権限束・担当店舗・精算範囲の付与と編集ができます。"
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <PlusIcon />
+            スタッフを追加
+          </Button>
+        }
+      />
 
       <Card className="py-0 overflow-hidden">
         {isLoading ? (

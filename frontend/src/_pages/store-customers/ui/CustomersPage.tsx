@@ -12,6 +12,7 @@ import { useParams } from 'next/navigation';
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { toast } from 'react-hot-toast';
 import { storePath } from '@/shared/lib';
+import { PageHeader } from '@/widgets/page-header';
 import {
   Badge,
   Button,
@@ -85,18 +86,18 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">顧客管理</h1>
-          <p className="text-sm text-muted-foreground mt-1">顧客情報の登録・編集ができます。</p>
-        </div>
-        <Button asChild>
-          <Link href={storePath(storeId, '/customers/create')}>
-            <PlusIcon />
-            新規顧客登録
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="顧客管理"
+        description="顧客情報の登録・編集ができます。"
+        actions={
+          <Button asChild>
+            <Link href={storePath(storeId, '/customers/create')}>
+              <PlusIcon />
+              新規顧客登録
+            </Link>
+          </Button>
+        }
+      />
 
       {/* 検索・絞り込みバー */}
       <Card>

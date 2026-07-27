@@ -15,6 +15,7 @@ import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cas
 import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
 import { storePath, useManagedList } from '@/shared/lib';
+import { PageHeader } from '@/widgets/page-header';
 import { toast } from 'react-hot-toast';
 import {
   Badge,
@@ -100,33 +101,33 @@ export default function CastListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">キャスト管理</h1>
-          <p className="text-sm text-muted-foreground mt-1">キャスト情報の登録・編集ができます。</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定。 */}
-          {canManageFieldDefs && (
-            <Button asChild variant="outline">
-              <Link href={storePath(storeId, '/casts/fields')}>
-                <Cog6ToothIcon />
-                カスタムフィールド管理
+      <PageHeader
+        title="キャスト管理"
+        description="キャスト情報の登録・編集ができます。"
+        actions={
+          <>
+            {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定。 */}
+            {canManageFieldDefs && (
+              <Button asChild variant="outline">
+                <Link href={storePath(storeId, '/casts/fields')}>
+                  <Cog6ToothIcon />
+                  カスタムフィールド管理
+                </Link>
+              </Button>
+            )}
+            <Button asChild>
+              <Link href={storePath(storeId, '/casts/create')}>
+                <PlusIcon />
+                新規キャスト登録
               </Link>
             </Button>
-          )}
-          <Button asChild>
-            <Link href={storePath(storeId, '/casts/create')}>
-              <PlusIcon />
-              新規キャスト登録
-            </Link>
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* 検索バー */}
       <Card>
-        <CardContent className="flex items-center gap-4">
+        <CardContent className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex-1 relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" />
