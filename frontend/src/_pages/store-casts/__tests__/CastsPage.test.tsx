@@ -156,3 +156,23 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
     expect(screen.queryByRole('link', { name: 'カスタムフィールド管理' })).not.toBeInTheDocument();
   });
 });
+
+describe('キャスト一覧ページの外殻', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedCastApi.list.mockResolvedValue(toPage([]));
+    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE']));
+  });
+
+  it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
+    render(<CastListPage />);
+    await screen.findByText('キャストが登録されていません');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'キャスト管理' })).toBeInTheDocument();
+    expect(screen.getByText('キャスト情報の登録・編集ができます。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '新規キャスト登録' })).toHaveAttribute(
+      'href',
+      '/store/1/casts/create'
+    );
+  });
+});

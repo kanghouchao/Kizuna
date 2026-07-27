@@ -85,3 +85,28 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
     expect(screen.getByRole('checkbox')).not.toBeChecked();
   });
 });
+
+describe('顧客一覧ページの外殻', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedCustomerApi.list.mockResolvedValue({
+      content: [],
+      total_pages: 0,
+      total_elements: 0,
+      size: 20,
+      number: 0,
+    } as never);
+  });
+
+  it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
+    render(<CustomersPage />);
+    await screen.findByText('顧客が登録されていません');
+
+    expect(screen.getByRole('heading', { level: 1, name: '顧客管理' })).toBeInTheDocument();
+    expect(screen.getByText('顧客情報の登録・編集ができます。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '新規顧客登録' })).toHaveAttribute(
+      'href',
+      '/store/1/customers/create'
+    );
+  });
+});

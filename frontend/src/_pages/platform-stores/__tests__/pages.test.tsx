@@ -212,3 +212,22 @@ describe('店舗管理 3 画面の挙動', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/stores'));
   });
 });
+
+describe('店舗一覧ページの外殻', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedApi.getList.mockResolvedValue(paginated([store({ id: '1', name: 'アルファ店' })]));
+  });
+
+  it('見出し・副題を備え、主アクションが button ロールのまま作成画面へ遷移すること', async () => {
+    render(<StoresPage />);
+    await screen.findByText('アルファ店');
+
+    // 見出しレベルは他の一覧ページに揃えて h2→h1 へ変える予定のため、ここでは level を断言しない
+    expect(screen.getByRole('heading', { name: '店舗一覧' })).toBeInTheDocument();
+    expect(screen.getByText('システム内の全ての店舗を管理します')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '店舗を追加' }));
+    expect(mockPush).toHaveBeenCalledWith('/platform/stores/create');
+  });
+});
