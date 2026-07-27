@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CastScheduleItem, shiftApi } from '@/entities/shift';
+import { Badge, Button, Card, CardContent } from '@/shared/ui';
 import { groupByWorkDate } from '../lib/groupSchedule';
 import {
   formatEndTime,
@@ -60,55 +61,49 @@ export function CastSchedulePage() {
   return (
     <div className="p-4">
       <div className="mb-4 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => shiftWeek(-7)}
-          className="rounded-[10px] border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
+        <Button type="button" variant="outline" size="sm" onClick={() => shiftWeek(-7)}>
           前週
-        </button>
-        <p className="text-sm font-medium text-gray-900">{rangeLabel}</p>
-        <button
-          type="button"
-          onClick={() => shiftWeek(7)}
-          className="rounded-[10px] border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
+        </Button>
+        <p className="text-sm font-medium text-foreground">{rangeLabel}</p>
+        <Button type="button" variant="outline" size="sm" onClick={() => shiftWeek(7)}>
           次週
-        </button>
+        </Button>
       </div>
 
       {hasError ? (
-        <p className="text-sm text-red-600">スケジュールの取得に失敗しました</p>
+        <p className="text-sm text-destructive-strong">スケジュールの取得に失敗しました</p>
       ) : items === null ? (
-        <p className="text-sm text-gray-500">読み込み中...</p>
+        <p className="text-sm text-muted-foreground">読み込み中...</p>
       ) : groups.length === 0 ? (
-        <p className="text-sm text-gray-500">今週の確定シフトはありません</p>
+        <p className="text-sm text-muted-foreground">今週の確定シフトはありません</p>
       ) : (
         <div className="space-y-3">
           {groups.map(group => (
-            <div
-              key={group.workDate}
-              className="rounded-[10px] border border-gray-200 bg-white p-4 shadow-sm"
-            >
-              <p className="mb-2 text-sm font-semibold text-gray-900">
-                {formatDateLabel(group.workDate)}
-              </p>
-              <ul className="space-y-2">
-                {group.items.map(item => (
-                  <li
-                    key={`${item.store_id}-${item.start_time}-${item.end_time}`}
-                    className="flex items-center justify-between text-sm text-gray-600"
-                  >
-                    <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-600">
-                      {item.store_name}
-                    </span>
-                    <span>
-                      {formatTime(item.start_time)}–{formatEndTime(item.end_time)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Card key={group.workDate} className="py-4">
+              <CardContent className="px-4">
+                <p className="mb-2 text-sm font-semibold text-foreground">
+                  {formatDateLabel(group.workDate)}
+                </p>
+                <ul className="space-y-2">
+                  {group.items.map(item => (
+                    <li
+                      key={`${item.store_id}-${item.start_time}-${item.end_time}`}
+                      className="flex items-center justify-between text-sm text-muted-foreground"
+                    >
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-primary/10 text-primary-strong"
+                      >
+                        {item.store_name}
+                      </Badge>
+                      <span>
+                        {formatTime(item.start_time)}–{formatEndTime(item.end_time)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
