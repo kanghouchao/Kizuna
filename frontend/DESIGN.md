@@ -262,6 +262,14 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 - Admin: content padding 24px (`p-6`); card padding ~25px (`p-6`); gap between cards 24px (`gap-6`); sidebar fixed 256px (`w-64`); header 64px (`h-16`); card radius `rounded-lg` (= `var(--radius)`, 0.5rem); subtle shadow (`shadow-sm`).
 - Storefront: sections manage their own rhythm; follow existing `_sections/` patterns (max-w-7xl containers, px-5 lg:px-10).
 
+### The admin console has a floor, not a phone layout
+
+The console is a desktop surface. It is **not** made to reflow onto a phone, and pretending otherwise produces half-adapted screens: the sidebar already hides below `md` without putting any navigation in its place.
+
+Instead the shell declares a **minimum supported width** — the content column carries `min-w-[40rem]` (640px, chosen above the header action row's measured intrinsic requirement of 609px) and the shell scrolls horizontally below it. **The point is the failure mode.** Without the floor the shell's `overflow-hidden` silently clips whatever does not fit, and a clipped control is not merely ugly — it is unreachable. Horizontal scrolling keeps every control usable at any width.
+
+So when a header or toolbar gains a control, the question is not "does it still fit on a phone" but "does the row's intrinsic width still fit under the floor". Measure it with `scrollWidth` on the row rather than eyeballing a resized window; the sidebar takes 256px whenever it is visible, so the viewport needs that much more than the row does.
+
 ## Components (admin)
 
 Primitives come from `@/shared/ui` (the barrel over the vendored shadcn components). This section records **which primitive to use and how to compose it** — never a restatement of the styling already baked into the primitive.

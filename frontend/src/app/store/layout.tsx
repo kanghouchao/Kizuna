@@ -7,12 +7,14 @@ import { Header } from '@/widgets/header';
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
   return (
     <StoreContextProvider>
-      <div className="flex h-screen bg-background overflow-hidden">
+      {/* 管理コンソールは下限幅を持つ。これより狭い窓では横スクロールへ倒し、
+          はみ出した操作を切り落とさない（切り落とすと到達手段が消える）。 */}
+      <div className="flex h-screen bg-background overflow-x-auto">
         {/* Sidebar Component */}
         <Sidebar />
 
         {/* Main Container */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-[40rem] overflow-hidden">
           {/* Header Component */}
           <Header />
 
