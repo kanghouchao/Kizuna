@@ -3,6 +3,7 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
+import { Button } from '@/shared/ui';
 import { shiftSpan, toDateStr } from '../lib/datetime';
 
 interface ShiftTimelineProps {
@@ -61,37 +62,34 @@ export function ShiftTimeline({
   const rowIds = Array.from(new Set(shifts.map(s => s.cast_id)));
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-        <h2 className="text-lg font-semibold text-gray-900">{date} の出勤</h2>
-        <button
-          type="button"
-          onClick={onAddShift}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <PlusIcon className="h-5 w-5" />
+    <div className="rounded-lg border bg-card shadow-sm">
+      <div className="flex items-center justify-between border-b px-6 py-4">
+        <h2 className="text-lg font-semibold text-foreground">{date} の出勤</h2>
+        <Button type="button" onClick={onAddShift}>
+          <PlusIcon />
           シフト追加
-        </button>
+        </Button>
       </div>
 
       {loading ? (
-        <div className="p-8 text-center text-gray-500">読み込み中...</div>
+        <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
       ) : !hasShifts ? (
         <div className="p-12 text-center">
-          <p className="text-gray-500">この日のシフトはまだありません。</p>
-          <button
+          <p className="text-muted-foreground">この日のシフトはまだありません。</p>
+          <Button
             type="button"
+            variant="link"
             onClick={onAddShift}
-            className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700"
+            className="mt-3 h-auto p-0 text-sm font-medium text-primary-strong"
           >
             シフトを追加する
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="space-y-4 p-6">
           {/* 同時出勤数カバレッジ */}
           <div>
-            <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+            <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
               <span>同時出勤数</span>
               <span>ピーク {peak}名</span>
             </div>
@@ -99,7 +97,7 @@ export function ShiftTimeline({
               {coverage.map(c => (
                 <div
                   key={c.at}
-                  className="flex-1 rounded-t bg-blue-500/80"
+                  className="flex-1 rounded-t bg-primary-strong"
                   style={{ height: `${(c.count / peak) * 100}%` }}
                   title={`${hourLabel(c.at)} ${c.count}名`}
                 />
@@ -113,7 +111,7 @@ export function ShiftTimeline({
               {hourMarks.map(m => (
                 <span
                   key={m}
-                  className="absolute -translate-x-1/2 text-[10px] text-gray-400"
+                  className="absolute -translate-x-1/2 text-[10px] text-muted-foreground"
                   style={{ left: `${pct(m)}%` }}
                 >
                   {hourLabel(m)}
@@ -128,15 +126,15 @@ export function ShiftTimeline({
                 return (
                   <div key={castId} className="flex items-center">
                     <div
-                      className={`${LABEL_COL} shrink-0 truncate pr-2 text-sm font-medium text-gray-700`}
+                      className={`${LABEL_COL} shrink-0 truncate pr-2 text-sm font-medium text-foreground`}
                     >
                       {castName(castId)}
                     </div>
-                    <div className="relative h-9 flex-1 rounded bg-gray-50">
+                    <div className="relative h-9 flex-1 rounded bg-muted">
                       {hourMarks.map(m => (
                         <div
                           key={m}
-                          className="absolute top-0 h-full border-l border-gray-100"
+                          className="absolute top-0 h-full border-l"
                           style={{ left: `${pct(m)}%` }}
                         />
                       ))}
@@ -150,8 +148,8 @@ export function ShiftTimeline({
                             onClick={() => onEditShift(s)}
                             className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-xs font-medium shadow-sm ${
                               confirmed
-                                ? 'bg-green-500 text-white hover:bg-green-600'
-                                : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500'
+                                ? 'bg-success text-success-foreground hover:bg-success/90'
+                                : 'bg-warning text-warning-foreground hover:bg-warning/90'
                             }`}
                             style={{
                               left: `${pct(start)}%`,
@@ -175,10 +173,10 @@ export function ShiftTimeline({
             {showNow && (
               <div className="pointer-events-none absolute inset-y-0 right-0 left-28">
                 <div
-                  className="absolute top-0 bottom-0 w-px bg-red-500"
+                  className="absolute top-0 bottom-0 w-px bg-destructive"
                   style={{ left: `${pct(nowMin)}%` }}
                 >
-                  <span className="absolute -top-0.5 -translate-x-1/2 rounded bg-red-500 px-1 text-[9px] font-medium text-white">
+                  <span className="absolute -top-0.5 -translate-x-1/2 rounded bg-destructive px-1 text-[9px] font-medium text-destructive-foreground">
                     現在
                   </span>
                 </div>

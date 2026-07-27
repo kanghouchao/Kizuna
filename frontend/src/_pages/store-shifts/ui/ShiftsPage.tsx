@@ -93,20 +93,23 @@ export default function ShiftsPage() {
     setTab(TIMELINE_TAB);
   };
 
+  // 既定・ホバーの文字色はプリミティブに任せ、選択中だけをプライマリの下線と文字色で示す。
   const tabTriggerClass =
-    'h-auto flex-none rounded-none border-0 border-b-2 border-transparent px-1 py-3 text-sm font-medium text-gray-500 shadow-none after:hidden hover:text-gray-700 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none';
+    'h-auto flex-none rounded-none border-0 border-b-2 border-transparent px-1 py-3 text-sm font-medium shadow-none after:hidden data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary-strong data-[state=active]:shadow-none';
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">出勤管理</h1>
-        <p className="mt-1 text-sm text-gray-500">キャストの出勤シフトを登録・確認できます。</p>
+        <h1 className="text-2xl font-bold text-foreground">出勤管理</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          キャストの出勤シフトを登録・確認できます。
+        </p>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="gap-0">
         <TabsList
           variant="line"
-          className="h-auto w-full justify-start gap-6 rounded-none border-b border-gray-200 p-0"
+          className="h-auto w-full justify-start gap-6 rounded-none border-b p-0"
         >
           <TabsTrigger value={CALENDAR_TAB} className={tabTriggerClass}>
             <span className="inline-flex items-center gap-1.5">
