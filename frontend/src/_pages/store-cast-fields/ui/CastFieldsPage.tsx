@@ -4,6 +4,7 @@ import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outli
 import { useState } from 'react';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
 import { useManagedList } from '@/shared/lib';
+import { PageHeader } from '@/widgets/page-header';
 import {
   Badge,
   Button,
@@ -45,18 +46,16 @@ export default function CastFieldsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">カスタムフィールド管理</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            キャストの追加プロフィール項目を定義します。公開設定した項目は公開詳細ページに表示されます。
-          </p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <PlusIcon />
-          フィールドを追加
-        </Button>
-      </div>
+      <PageHeader
+        title="カスタムフィールド管理"
+        description="キャストの追加プロフィール項目を定義します。公開設定した項目は公開詳細ページに表示されます。"
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <PlusIcon />
+            フィールドを追加
+          </Button>
+        }
+      />
 
       <Card className="overflow-hidden py-0">
         {isLoading ? (

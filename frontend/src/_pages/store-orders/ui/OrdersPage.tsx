@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { PlusIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { Order, orderApi } from '@/entities/order';
 import { storePath, useManagedList } from '@/shared/lib';
+import { PageHeader } from '@/widgets/page-header';
 import {
   Badge,
   Button,
@@ -27,18 +28,18 @@ export default function OrderListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">オーダー一覧</h1>
-          <p className="text-sm text-muted-foreground mt-1">当日の注文状況を確認・管理できます。</p>
-        </div>
-        <Button asChild>
-          <Link href={storePath(storeId, '/orders/create')}>
-            <PlusIcon aria-hidden="true" />
-            新規オーダー登録
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="オーダー一覧"
+        description="当日の注文状況を確認・管理できます。"
+        actions={
+          <Button asChild>
+            <Link href={storePath(storeId, '/orders/create')}>
+              <PlusIcon aria-hidden="true" />
+              新規オーダー登録
+            </Link>
+          </Button>
+        }
+      />
 
       {/* Orders Table */}
       <Card className="overflow-hidden py-0">
