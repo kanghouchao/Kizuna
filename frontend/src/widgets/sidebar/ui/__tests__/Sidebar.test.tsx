@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import Cookies from 'js-cookie';
 import { Sidebar } from '../Sidebar';
 import { menuApi } from '@/entities/menu';
@@ -109,5 +109,70 @@ describe('Sidebar', () => {
       'href',
       '/store/select?next=%2Fstore%2Forders'
     );
+  });
+
+  // 現在地の項目だけが他と異なる見えを持つ、という関係だけを見る。
+  // 具体的なクラス名に依存しないので配色の作り替えを跨いでも意味が変わらない。
+  it('現在地の項目だけが他項目と異なる見えになる', async () => {
+    mockPathname = '/platform/stores';
+    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'platform-role' ? 'platform' : undefined
+    );
+    mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
+
+    render(<Sidebar />);
+
+    const active = await screen.findByRole('link', { name: '店舗一覧' });
+    const inactive = screen.getByRole('link', { name: '受注一覧' });
+
+    expect(active.className).not.toBe(inactive.className);
+  });
+
+  it('現在地でない画面では全項目が同じ見えになる', async () => {
+    mockPathname = '/platform/dashboard';
+    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'platform-role' ? 'platform' : undefined
+    );
+    mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
+
+    render(<Sidebar />);
+
+    const first = await screen.findByRole('link', { name: '受注一覧' });
+    const second = screen.getByRole('link', { name: '店舗一覧' });
+
+    expect(first.className).toBe(second.className);
+  });
+
+  // グループ見出しと配下項目の親子関係。折りたたみ機構は現状無く、
+  // 全項目が操作なしで見えていることが e2e の前提でもある。
+  it('グループ見出しの配下に当該グループの項目が展開されている', async () => {
+    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'platform-role' ? 'platform' : undefined
+    );
+    mockedGetMenus.mockResolvedValue([
+      ...menuWithStoreAndPlatform,
+      { name: '設定', items: [{ name: '店舗情報', path: '/store/profile', icon: 'CogIcon' }] },
+    ]);
+
+    render(<Sidebar />);
+
+    const mainGroup = (await screen.findByText('メイン')).parentElement as HTMLElement;
+    const settingsGroup = screen.getByText('設定').parentElement as HTMLElement;
+
+    expect(within(mainGroup).getByRole('link', { name: '受注一覧' })).toBeVisible();
+    expect(within(mainGroup).getByRole('link', { name: '店舗一覧' })).toBeVisible();
+    expect(within(mainGroup).queryByRole('link', { name: '店舗情報' })).toBeNull();
+    expect(within(settingsGroup).getByRole('link', { name: '店舗情報' })).toBeVisible();
+  });
+
+  it('コンソール種別に応じた識別ラベルを掲げる', async () => {
+    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'platform-role' ? 'store' : undefined
+    );
+
+    render(<Sidebar />);
+
+    expect(await screen.findByText('STORE')).toBeVisible();
+    expect(screen.queryByText('PLATFORM')).toBeNull();
   });
 });
