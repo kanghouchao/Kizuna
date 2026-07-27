@@ -35,13 +35,7 @@ const renderDrawer = (props: Partial<React.ComponentProps<typeof StaffEditDrawer
   const onClose = jest.fn();
   const onUpdated = jest.fn();
   render(
-    <StaffEditDrawer
-      open
-      staff={staff()}
-      onClose={onClose}
-      onUpdated={onUpdated}
-      {...props}
-    />
+    <StaffEditDrawer open staff={staff()} onClose={onClose} onUpdated={onUpdated} {...props} />
   );
   return { onClose, onUpdated };
 };
