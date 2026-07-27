@@ -5,7 +5,24 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
-import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui';
 
 interface ShiftFormValues {
   cast_id: string;
@@ -32,8 +49,9 @@ const STATUS_OPTIONS = [
   { value: 'CONFIRMED', label: '確定' },
 ];
 
-const inputClass =
-  'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
+// Radix Select は value="" を許容しないため、キャスト未登録の案内項目に与える番兵値。
+// onValueChange で '' に戻すことで、フォームが持つ値は従来どおり空文字になる。
+const SELECT_NONE = '__none__';
 
 /** シフトの追加・編集モーダル。 */
 export function ShiftFormModal({
@@ -44,12 +62,22 @@ export function ShiftFormModal({
   defaultDate,
   onSaved,
 }: ShiftFormModalProps) {
+  const form = useForm<ShiftFormValues>({
+    defaultValues: {
+      cast_id: '',
+      work_date: '',
+      start_time: '',
+      end_time: '',
+      status: 'TENTATIVE',
+    },
+  });
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { isSubmitting },
-  } = useForm<ShiftFormValues>();
+  } = form;
 
   useEffect(() => {
     if (!open) return;
@@ -118,92 +146,111 @@ export function ShiftFormModal({
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="gap-0 rounded-[10px] border-gray-200 p-0 sm:max-w-md"
+        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
       >
-        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+        <DialogTitle className="border-b px-6 py-4">
           {editing ? 'シフトを編集' : 'シフトを追加'}
         </DialogTitle>
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">キャスト</label>
-            <select {...register('cast_id', { required: true })} className={inputClass}>
-              {casts.length === 0 && <option value="">キャストが未登録です</option>}
-              {casts.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">日付</label>
-            <input
-              type="date"
-              {...register('work_date', { required: true })}
-              className={inputClass}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">開始</label>
-              <input
-                type="time"
-                {...register('start_time', { required: true })}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">終了</label>
-              <input
-                type="time"
-                {...register('end_time', { required: true })}
-                className={inputClass}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-gray-500">
-            終了が開始以前のときは翌日にまたがる勤務として扱います。
-          </p>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">ステータス</label>
-            <select {...register('status')} className={inputClass}>
-              {STATUS_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-            <div>
-              {editing && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="rounded text-sm font-medium text-red-600 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  削除
-                </button>
+        <Form {...form}>
+          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+            <FormField
+              control={control}
+              name="cast_id"
+              rules={{ required: true }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>キャスト</FormLabel>
+                  <Select
+                    value={field.value ? field.value : SELECT_NONE}
+                    onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {casts.length === 0 && (
+                        <SelectItem value={SELECT_NONE}>キャストが未登録です</SelectItem>
+                      )}
+                      {casts.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
               )}
+            />
+            <div className="grid gap-2">
+              <Label htmlFor="work_date">日付</Label>
+              <Input id="work_date" type="date" {...register('work_date', { required: true })} />
             </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                キャンセル
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                {isSubmitting ? '保存中...' : '保存する'}
-              </button>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="start_time">開始</Label>
+                <Input
+                  id="start_time"
+                  type="time"
+                  {...register('start_time', { required: true })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="end_time">終了</Label>
+                <Input id="end_time" type="time" {...register('end_time', { required: true })} />
+              </div>
             </div>
-          </div>
-        </form>
+            <p className="text-xs text-muted-foreground">
+              終了が開始以前のときは翌日にまたがる勤務として扱います。
+            </p>
+            <FormField
+              control={control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ステータス</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+            <div className="flex items-center justify-between border-t pt-4">
+              <div>
+                {editing && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleDelete}
+                    className="text-destructive-strong"
+                  >
+                    削除
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? '保存中...' : '保存する'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
