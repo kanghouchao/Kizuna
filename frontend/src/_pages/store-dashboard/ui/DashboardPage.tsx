@@ -1,22 +1,32 @@
 'use client';
 
+import { Card, CardDescription, CardHeader, CardTitle } from '@/shared/ui';
+
 export default function StoreDashboard() {
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center">
-      <div className="max-w-2xl w-full px-6 py-10 rounded-lg shadow-lg bg-gray-50">
-        <h1 className="text-3xl font-bold text-indigo-700 mb-4 text-center">店舗ダッシュボード</h1>
-        <p className="text-lg text-gray-700 text-center mb-6">ようこそ、someone さん！</p>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+      <div className="max-w-2xl w-full px-6 py-10 rounded-lg shadow-lg bg-card">
+        <h1 className="text-3xl font-bold text-foreground mb-4 text-center">店舗ダッシュボード</h1>
+        <p className="text-lg text-foreground text-center mb-6">ようこそ、someone さん！</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-indigo-600 mb-2">コンテンツ管理</h2>
-            <p className="text-gray-600 text-sm">記事やページの作成・編集・公開ができます。</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-indigo-600 mb-2">ユーザー管理</h2>
-            <p className="text-gray-600 text-sm">店舗内のユーザーの追加・権限設定ができます。</p>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle role="heading" aria-level={2} className="text-xl">
+                コンテンツ管理
+              </CardTitle>
+              <CardDescription>記事やページの作成・編集・公開ができます。</CardDescription>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle role="heading" aria-level={2} className="text-xl">
+                ユーザー管理
+              </CardTitle>
+              <CardDescription>店舗内のユーザーの追加・権限設定ができます。</CardDescription>
+            </CardHeader>
+          </Card>
         </div>
-        <div className="mt-8 text-center text-gray-400 text-xs">Powered by Kizuna</div>
+        <div className="mt-8 text-center text-muted-foreground text-xs">Powered by Kizuna</div>
       </div>
     </div>
   );
