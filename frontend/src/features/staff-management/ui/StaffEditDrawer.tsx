@@ -12,7 +12,7 @@ import {
   platformStaffApi,
 } from '@/entities/user';
 import { getApiErrorMessage, useManagedList } from '@/shared/lib';
-import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
+import { Button, Label, Sheet, SheetContent, SheetTitle } from '@/shared/ui';
 import { bundleSetLabel } from '../lib/bundleSetLabel';
 import { storeSetLabel } from '../lib/storeSetLabel';
 import { BundlePicker } from './BundlePicker';
@@ -116,20 +116,21 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
   };
 
   return (
-    <Dialog
+    <Sheet
       open={open && staff !== null}
       onOpenChange={next => {
         if (!next) onClose();
       }}
     >
-      <DialogContent
+      <SheetContent
+        side="right"
         showCloseButton={false}
         aria-describedby={undefined}
-        className="inset-y-0 top-0 right-0 left-auto flex h-full max-w-md translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 border-l border-gray-200 p-0 sm:max-w-md"
+        className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md"
       >
-        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+        <SheetTitle className="border-b px-6 py-4 text-lg">
           {staff?.display_name} の権限を編集
-        </DialogTitle>
+        </SheetTitle>
         <div className="flex-1 space-y-4 px-6 py-5">
           <BundlePicker
             bundles={bundles}
@@ -154,46 +155,44 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
             }}
           />
           <div>
-            <span className="mb-1 block text-sm font-medium text-gray-700">状態</span>
+            <span className="mb-1 block text-sm font-medium text-foreground">状態</span>
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <Label className="font-normal">
                 <input
                   type="radio"
                   name="staff-enabled"
                   checked={enabled}
                   onChange={() => setEnabled(true)}
-                  className="border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 有効
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              </Label>
+              <Label className="font-normal">
                 <input
                   type="radio"
                   name="staff-enabled"
                   checked={!enabled}
                   onChange={() => setEnabled(false)}
-                  className="border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 停止
-              </label>
+              </Label>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               停止してもアカウントは削除されず、過去の操作記録は保持されます。
             </p>
           </div>
           <div>
-            <p className="mb-1 text-sm font-medium text-gray-700">この設定の結果</p>
-            <p className="rounded-md bg-blue-50 p-3 text-sm text-blue-800">{summary}</p>
+            <p className="mb-1 text-sm font-medium text-foreground">この設定の結果</p>
+            <p className="rounded-md bg-primary/10 p-3 text-sm text-primary-strong">{summary}</p>
           </div>
           <div>
-            <p className="mb-1 text-sm font-medium text-gray-700">付与履歴</p>
+            <p className="mb-1 text-sm font-medium text-foreground">付与履歴</p>
             {history.length === 0 ? (
-              <p className="text-sm text-gray-500">履歴はありません</p>
+              <p className="text-sm text-muted-foreground">履歴はありません</p>
             ) : (
-              <ul className="space-y-1 rounded-md border border-gray-200 p-3">
+              <ul className="space-y-1 rounded-md border p-3">
                 {history.map(entry => (
-                  <li key={entry.id} className="text-xs text-gray-600">
-                    <span className="font-medium text-gray-900">
+                  <li key={entry.id} className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
                       {GRANT_ACTION_LABELS[entry.action] ?? entry.action}
                     </span>
                     {' — '}
@@ -204,24 +203,15 @@ export function StaffEditDrawer({ open, onClose, staff, onUpdated }: StaffEditDr
             )}
           </div>
         </div>
-        <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
+        <div className="flex justify-end gap-3 border-t px-6 py-4">
+          <Button type="button" variant="outline" onClick={onClose}>
             キャンセル
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={isSubmitting}
-            className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
+          </Button>
+          <Button type="button" onClick={submit} disabled={isSubmitting}>
             {isSubmitting ? '保存中...' : '保存する'}
-          </button>
+          </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -2,6 +2,7 @@
 
 import { PlatformStore, PlatformStoreScopeType, platformAuthApi } from '@/entities/user';
 import { useManagedList } from '@/shared/lib';
+import { Label } from '@/shared/ui';
 
 interface SettlementScopePickerProps {
   scopeType: PlatformStoreScopeType | null;
@@ -32,53 +33,49 @@ export function SettlementScopePicker({
 
   return (
     <div>
-      <span className="mb-1 block text-sm font-medium text-gray-700">精算範囲（任意）</span>
+      <span className="mb-1 block text-sm font-medium text-foreground">精算範囲（任意）</span>
       <div className="space-y-2">
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        <Label className="font-normal">
           <input
             type="radio"
             name="settlement-scope-type"
             checked={scopeType === null}
             onChange={() => onChange({ scopeType: null, storeIds: [] })}
-            className="border-gray-300 text-blue-600 focus:ring-blue-500"
           />
           なし
-        </label>
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        </Label>
+        <Label className="font-normal">
           <input
             type="radio"
             name="settlement-scope-type"
             checked={scopeType === 'ALL_STORES'}
             onChange={() => onChange({ scopeType: 'ALL_STORES', storeIds: [] })}
-            className="border-gray-300 text-blue-600 focus:ring-blue-500"
           />
           全店舗
-        </label>
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        </Label>
+        <Label className="font-normal">
           <input
             type="radio"
             name="settlement-scope-type"
             checked={scopeType === 'SPECIFIC_STORES'}
             onChange={() => onChange({ scopeType: 'SPECIFIC_STORES', storeIds })}
-            className="border-gray-300 text-blue-600 focus:ring-blue-500"
           />
           指定店舗
-        </label>
+        </Label>
         {scopeType === 'SPECIFIC_STORES' && (
-          <div className="ml-6 space-y-1 rounded-md border border-gray-200 p-3">
+          <div className="ml-6 space-y-1 rounded-md border p-3">
             {isLoading ? (
-              <p className="text-sm text-gray-500">読み込み中...</p>
+              <p className="text-sm text-muted-foreground">読み込み中...</p>
             ) : (
               stores.map(store => (
-                <label key={store.id} className="flex items-center gap-2 text-sm text-gray-700">
+                <Label key={store.id} className="font-normal">
                   <input
                     type="checkbox"
                     checked={storeIds.includes(store.id)}
                     onChange={() => toggleStore(store.id)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   {store.name}
-                </label>
+                </Label>
               ))
             )}
           </div>
