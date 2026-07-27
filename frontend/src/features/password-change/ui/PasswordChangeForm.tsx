@@ -52,7 +52,7 @@ export function PasswordChangeForm() {
     <form onSubmit={handleSubmit}>
       <Card>
         <CardHeader>
-          <CardTitle role="heading" aria-level={3}>
+          <CardTitle role="heading" aria-level={2}>
             パスワード変更
           </CardTitle>
           <CardDescription>

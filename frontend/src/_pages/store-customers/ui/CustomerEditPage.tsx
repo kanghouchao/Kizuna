@@ -98,7 +98,7 @@ export default function CustomerEditPage() {
       {/* 注文履歴 */}
       <Card className="py-0 overflow-hidden">
         <div className="border-b bg-muted/50 px-6 py-4">
-          <h3 className="text-lg font-medium text-foreground">注文履歴</h3>
+          <h2 className="text-lg font-medium text-foreground">注文履歴</h2>
         </div>
         {orders.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">注文履歴がありません</div>

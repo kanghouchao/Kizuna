@@ -95,7 +95,7 @@ export function CastForm({
         {/* 基本情報 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               基本情報
             </CardTitle>
           </CardHeader>
@@ -150,7 +150,7 @@ export function CastForm({
         {/* プロフィール */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               プロフィール
             </CardTitle>
           </CardHeader>
@@ -185,7 +185,7 @@ export function CastForm({
         {/* 自己紹介 */}
         <Card>
           <CardHeader>
-            <CardTitle role="heading" aria-level={3}>
+            <CardTitle role="heading" aria-level={2}>
               自己紹介
             </CardTitle>
           </CardHeader>
@@ -203,7 +203,7 @@ export function CastForm({
         {isEdit && (
           <Card>
             <CardHeader>
-              <CardTitle role="heading" aria-level={3}>
+              <CardTitle role="heading" aria-level={2}>
                 カスタムフィールド
               </CardTitle>
             </CardHeader>
