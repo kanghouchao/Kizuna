@@ -19,7 +19,9 @@ export function ToastProvider() {
         },
         success: {
           duration: 2500,
-          style: { background: '#16a34a' }, // green-600
+          // react-hot-toast はインライン style しか受けないため、success トークンは
+          // CSS 変数で参照する（bg-success + text-success-foreground、6.18/11.20 — 両モード AA 達成）。
+          style: { background: 'var(--success)', color: 'var(--success-foreground)' },
         },
         error: {
           duration: 5000,

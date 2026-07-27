@@ -5,11 +5,8 @@ import { getStoreConfig, loginAsStoreAdmin, loginViaUiAndEnterStore, setCustomTe
 
 const { Given, When, Then, After } = createBdd();
 
-// StoreProfileForm.tsx の模版テキスト欄は <label> と <textarea> が id/htmlFor で
-// 紐付いていない（隣接する兄弟要素）ため getByLabel は使えず、隣接セレクタで特定する。
 const ACCESS_NOTE_LABEL = 'アクセス補足（店舗情報ページに表示）';
-const accessNoteTextarea = (page: Page) =>
-  page.locator(`label:text-is("${ACCESS_NOTE_LABEL}") + textarea`);
+const accessNoteTextarea = (page: Page) => page.getByLabel(ACCESS_NOTE_LABEL, { exact: true });
 
 let originalCustomTexts: Record<string, string> | null = null;
 // 退避ステップが実際に成功したかの哨兵。退避前にシナリオが失敗した場合、

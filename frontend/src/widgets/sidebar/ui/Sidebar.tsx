@@ -126,7 +126,7 @@ export function Sidebar() {
           {role === 'store' ? 'STORE' : 'PLATFORM'}
         </span>
       </div>
-      <div className="p-4 overflow-y-auto h-[calc(100vh-4rem)] custom-scrollbar">
+      <div className="p-4 overflow-y-auto h-[calc(100vh-4rem)]">
         <nav className="space-y-8">
           {navigation.map(section => (
             <div key={section.name}>
