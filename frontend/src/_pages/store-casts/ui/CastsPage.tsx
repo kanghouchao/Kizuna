@@ -22,6 +22,7 @@ import {
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   Input,
   Table,
   TableBody,
@@ -37,6 +38,7 @@ export default function CastListPage() {
   const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CastResponse | null>(null);
   // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）
   const [canInvite, setCanInvite] = useState(false);
   const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
@@ -76,10 +78,10 @@ export default function CastListPage() {
   };
 
   /** キャストを削除する */
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`「${name}」を削除しますか？`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await castApi.delete(id);
+      await castApi.delete(deleteTarget.id);
       toast.success('キャストを削除しました');
       void refetch();
     } catch {
@@ -229,7 +231,7 @@ export default function CastListPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => handleDelete(cast.id, cast.name)}
+                          onClick={() => setDeleteTarget(cast)}
                         >
                           <TrashIcon />
                         </Button>
@@ -252,6 +254,12 @@ export default function CastListPage() {
         }
         expiresAt={issuedInvitation?.expiresAt ?? null}
         onClose={() => setIssuedInvitation(null)}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `「${deleteTarget.name}」を削除しますか？` : ''}
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteTarget(null)}
       />
     </div>
   );

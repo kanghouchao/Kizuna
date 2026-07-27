@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
 import {
   Button,
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -78,6 +79,7 @@ export function ShiftFormModal({
     control,
     formState: { isSubmitting },
   } = form;
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -125,7 +127,6 @@ export function ShiftFormModal({
 
   const handleDelete = async () => {
     if (!editing) return;
-    if (!confirm('このシフトを削除しますか？')) return;
     try {
       await shiftApi.delete(editing.id);
       toast.success('シフトを削除しました');
@@ -233,7 +234,7 @@ export function ShiftFormModal({
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={handleDelete}
+                    onClick={() => setConfirmOpen(true)}
                     className="text-destructive-strong"
                   >
                     削除
@@ -251,6 +252,12 @@ export function ShiftFormModal({
             </div>
           </form>
         </Form>
+        <ConfirmDialog
+          open={confirmOpen}
+          title="このシフトを削除しますか？"
+          onConfirm={() => void handleDelete()}
+          onClose={() => setConfirmOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   );

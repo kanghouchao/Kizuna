@@ -129,8 +129,11 @@ When('キャストカスタムフィールド管理画面で {string} を削除�
   await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/fields`);
   const row = page.getByRole('row', { name: new RegExp(createdFieldLabel) });
   await expect(row).toBeVisible({ timeout: 15000 });
-  page.once('dialog', dialog => dialog.accept());
   await row.getByRole('button', { name: '削除', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: '削除する', exact: true })
+    .click();
   await expect(row).toHaveCount(0, { timeout: 15000 });
 });
 

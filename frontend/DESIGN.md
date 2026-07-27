@@ -283,6 +283,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Form controls**: `Input` / `Textarea` / `Select` / `Checkbox` / `Switch` / `RadioGroup` / `Label`, wired per the form pattern below.
 - **Modal (centered dialog)**: `Dialog` (`DialogContent` / `DialogHeader` / `DialogTitle` / `DialogFooter`). Tall forms add `max-h-[calc(100vh-2rem)] overflow-y-auto` on the content so the modal scrolls internally instead of overflowing the viewport (precedent: `StaffCreateModal`). Precedent for the plain case: `ShiftFormModal`.
 - **Drawer (side-slide dialog)**: `Sheet` with `side="right"` for record-scoped edit forms opened from a list row. Never re-create a drawer by re-positioning `DialogContent`.
+- **Confirm dialog (destructive confirmation)**: `ConfirmDialog` — controlled `open` + `title` (optionally `description`), with a destructive action button (`confirmLabel`, default 削除する) and a キャンセル cancel. Never call `window.confirm`, and never rebuild the pattern from `AlertDialog` parts in a page. Precedent: `CastFieldsPage`.
 - **Combobox (searchable select)**: `Popover` + `Command` (`CommandInput` / `CommandList` / `CommandEmpty` / `CommandItem`).
 - **Card section heading**: `CardTitle` renders a `<div>`, so wherever it stands for a section heading it must be written `<CardTitle role="heading" aria-level={N}>`. Without both attributes the section disappears from screen-reader heading navigation, and the loss is invisible in a rendered diff. The primitive stays pristine — it spreads `React.ComponentProps<'div'>`, so the consumer supplies them. (Where the card is genuinely not a section heading — a bare label on a stat card — leave it a `div` and do not add the role.)
   - **Pick `N` from the outline the page actually has, never from the tag the card replaced.** Levels must not skip: a card section directly under the page's `<h1>` is `aria-level={2}`, whatever the pre-shadcn markup used. Every admin page today is `<h1>` + card sections, so **2** is the level in practice; a nested sub-section inside such a card would be 3. Sibling headings written as real tags follow the same outline (`CustomerEditPage`'s 注文履歴 is an `<h2>`, not an `<h3>`).
@@ -393,7 +394,7 @@ This holds for `success`, `warning` and `destructive` — the three semantics wh
 
 ### Behavior preservation
 
-Submitted payloads, react-hook-form wiring and existing `confirm()` calls are preserved exactly. Anything that would change the payload — turning a free-text field into a `Select`, normalizing a value — is a separate issue, not part of a restyle.
+Submitted payloads, react-hook-form wiring and existing `ConfirmDialog` confirmation flows are preserved exactly. Anything that would change the payload — turning a free-text field into a `Select`, normalizing a value — is a separate issue, not part of a restyle.
 
 ### Negative invariant
 
@@ -422,10 +423,10 @@ Everything else that still matches the grep — the unconverted slices, `widgets
 
 `src/shared/ui` holds two kinds of file, and only one of them is frozen.
 
-- **Vendored shadcn primitives** — `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `sheet` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
-- **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
+- **Vendored shadcn primitives** — `alert-dialog` / `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `sheet` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
+- **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`, `confirm-dialog.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
 
-Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 19 vendored files carry it and none of the three hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 8 of the 19, and `cva` from 17 of the 19, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written three carry none of the markers, and import application code a generator would never emit (`@/shared/api`, `@heroicons/react`, `next-themes`). `git log --follow` settles any remaining doubt — the hand-written files predate the shadcn adoption by months.
+Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 20 vendored files carry it and none of the four hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 6 of the 20, and `cva` from 17 of the 20, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written four carry none of the markers, and either import application code a generator would never emit (`@/shared/api`, `@heroicons/react`, `next-themes`) or, as `confirm-dialog.tsx` does, compose sibling primitives through relative imports where the generator emits the `@/shared/ui` alias. `git log --follow` settles any remaining doubt.
 
 Editing a hand-written one is still a shared-file change, so it goes through the contract below rather than through a slice PR.
 

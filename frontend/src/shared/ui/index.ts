@@ -1,11 +1,13 @@
 export { default as ImageUpload } from './image-upload';
 export { default as AuthLayout } from './auth-layout';
 export { ThemeProvider } from './theme-provider';
+export * from './alert-dialog';
 export * from './button';
 export * from './badge';
 export * from './card';
 export * from './checkbox';
 export * from './command';
+export * from './confirm-dialog';
 export * from './dialog';
 export * from './dropdown-menu';
 export * from './form';

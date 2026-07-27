@@ -246,18 +246,20 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
   });
 
   it('削除は確認を経て呼ばれ、取り消すと呼ばれないこと', async () => {
-    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
     const { onSaved } = renderModal({ editing: EDITING });
 
     fireEvent.click(screen.getByRole('button', { name: '削除' }));
-    expect(confirmSpy).toHaveBeenCalledWith('このシフトを削除しますか？');
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('このシフトを削除しますか？');
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(mockedDelete).not.toHaveBeenCalled();
 
-    confirmSpy.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
 
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('shift-1'));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-    confirmSpy.mockRestore();
   });
 });

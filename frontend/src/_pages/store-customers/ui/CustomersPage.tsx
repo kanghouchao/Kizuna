@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   CardContent,
+  ConfirmDialog,
   Input,
   Table,
   TableBody,
@@ -38,6 +39,7 @@ export default function CustomersPage() {
   const [classification, setClassification] = useState('');
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerResponse | null>(null);
 
   const fetchCustomers = useCallback(
     async (pageNumber: number) => {
@@ -73,10 +75,10 @@ export default function CustomersPage() {
     fetchCustomers(0);
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`「${name}」を削除しますか？`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await customerApi.delete(id);
+      await customerApi.delete(deleteTarget.id);
       toast.success('顧客を削除しました');
       fetchCustomers(page);
     } catch {
@@ -192,7 +194,7 @@ export default function CustomersPage() {
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => handleDelete(customer.id, customer.name)}
+                        onClick={() => setDeleteTarget(customer)}
                       >
                         <TrashIcon />
                       </Button>
@@ -227,6 +229,13 @@ export default function CustomersPage() {
           </Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `「${deleteTarget.name}」を削除しますか？` : ''}
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

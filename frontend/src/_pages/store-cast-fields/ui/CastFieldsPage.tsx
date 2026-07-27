@@ -9,6 +9,7 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   Table,
   TableBody,
   TableCell,
@@ -32,11 +33,12 @@ export default function CastFieldsPage() {
   );
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CastFieldDefinitionResponse | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CastFieldDefinitionResponse | null>(null);
 
-  const handleDelete = async (id: string, label: string) => {
-    if (!confirm(`「${label}」を削除しますか？`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await castFieldDefinitionApi.delete(id);
+      await castFieldDefinitionApi.delete(deleteTarget.id);
       toast.success('フィールドを削除しました');
       void refetch();
     } catch {
@@ -121,7 +123,7 @@ export default function CastFieldsPage() {
                         size="icon-sm"
                         onClick={e => {
                           e.stopPropagation();
-                          void handleDelete(definition.id, definition.label);
+                          setDeleteTarget(definition);
                         }}
                         aria-label="削除"
                       >
@@ -146,6 +148,12 @@ export default function CastFieldsPage() {
         definition={editing}
         onClose={() => setEditing(null)}
         onUpdated={refetch}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `「${deleteTarget.label}」を削除しますか？` : ''}
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteTarget(null)}
       />
     </div>
   );

@@ -5,7 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '@heroicons/react/24
 import { useRouter } from 'next/navigation';
 import { Store, platformStoreApi } from '@/entities/store';
 import { PaginatedResponse } from '@/shared/api';
-import { Badge, Button, Card, CardContent, Input } from '@/shared/ui';
+import { Badge, Button, Card, CardContent, ConfirmDialog, Input } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import toast from 'react-hot-toast';
 
@@ -15,6 +15,7 @@ export default function StoresPage() {
   const [loadingStores, setLoadingStores] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<Store | null>(null);
 
   const loadStores = useCallback(async () => {
     setLoadingStores(true);
@@ -43,13 +44,10 @@ export default function StoresPage() {
     loadStores();
   };
 
-  const handleDeleteStore = async (id: string, name: string) => {
-    if (!confirm(`店舗「${name}」を削除しますか？この操作は取り消せません。`)) {
-      return;
-    }
-
+  const handleDeleteStore = async () => {
+    if (!deleteTarget) return;
     try {
-      await platformStoreApi.delete(id);
+      await platformStoreApi.delete(deleteTarget.id);
       toast.success('店舗を削除しました');
       loadStores();
     } catch (error) {
@@ -155,7 +153,7 @@ export default function StoresPage() {
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => handleDeleteStore(store.id, store.name)}
+                          onClick={() => setDeleteTarget(store)}
                         >
                           削除
                         </Button>
@@ -267,6 +265,14 @@ export default function StoresPage() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `店舗「${deleteTarget.name}」を削除しますか？` : ''}
+        description="この操作は取り消せません。"
+        onConfirm={() => void handleDeleteStore()}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
