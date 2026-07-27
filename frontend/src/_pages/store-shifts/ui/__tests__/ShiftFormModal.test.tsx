@@ -232,6 +232,19 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  // キャスト取得が失敗しても既存シフトは描けるため、未登録の案内項目と編集値が同時に存在しうる。
+  // このときだけ案内項目は「選択されていない項目」になり、選ぶと値が空へ戻って送信が止まる。
+  it('キャストが未登録のまま編集を開き案内項目を選ぶと送信されないこと', async () => {
+    const { onSaved } = renderModal({ casts: [], editing: EDITING });
+
+    await pickOption(CAST_SELECT, 'キャストが未登録です');
+    await act(async () => submit());
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it('削除は確認を経て呼ばれ、取り消すと呼ばれないこと', async () => {
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
     const { onSaved } = renderModal({ editing: EDITING });
