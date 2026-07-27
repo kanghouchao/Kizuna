@@ -1,6 +1,7 @@
 'use client';
 
 import { CapabilityBundleResponse } from '@/entities/user';
+import { Label } from '@/shared/ui';
 
 interface BundlePickerProps {
   bundles: CapabilityBundleResponse[];
@@ -22,25 +23,26 @@ export function BundlePicker({ bundles, isLoading, bundleIds, onChange }: Bundle
 
   return (
     <div>
-      <span className="mb-1 block text-sm font-medium text-gray-700">権限束</span>
-      <div className="space-y-1 rounded-md border border-gray-200 p-3">
+      <span className="mb-1 block text-sm font-medium text-foreground">権限束</span>
+      <div className="space-y-1 rounded-md border p-3">
         {isLoading ? (
-          <p className="text-sm text-gray-500">読み込み中...</p>
+          <p className="text-sm text-muted-foreground">読み込み中...</p>
         ) : (
           bundles.map(bundle => (
-            <label key={bundle.id} className="flex items-center gap-2 text-sm text-gray-700">
+            <Label key={bundle.id} className="font-normal">
               <input
                 type="checkbox"
                 checked={bundleIds.includes(bundle.id)}
                 onChange={() => toggle(bundle.id)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               {bundle.name}
-            </label>
+            </Label>
           ))
         )}
       </div>
-      <p className="mt-1 text-xs text-gray-500">1 つ以上を選択してください（兼務は複数選択）。</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        1 つ以上を選択してください（兼務は複数選択）。
+      </p>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   platformStaffApi,
 } from '@/entities/user';
 import { getApiErrorMessage, useManagedList } from '@/shared/lib';
-import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
+import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
 import { BundlePicker } from './BundlePicker';
 import { SettlementScopePicker } from './SettlementScopePicker';
 import { StoreSetPicker } from './StoreSetPicker';
@@ -26,9 +26,6 @@ interface StaffCreateFormValues {
   password: string;
   display_name: string;
 }
-
-const inputClass =
-  'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
 /** スタッフの新規作成モーダル（メール・初期パスワード・氏名・権限束・担当店舗・任意の精算範囲）。 */
 export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalProps) {
@@ -92,49 +89,30 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] border-gray-200 p-0 sm:max-w-md"
+        className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
       >
-        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
           スタッフを追加
         </DialogTitle>
         <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
-          <div>
-            <label htmlFor="staff-email" className="mb-1 block text-sm font-medium text-gray-700">
-              メールアドレス
-            </label>
-            <input
-              id="staff-email"
-              type="email"
-              {...register('email', { required: true })}
-              className={inputClass}
-            />
+          <div className="grid gap-1">
+            <Label htmlFor="staff-email">メールアドレス</Label>
+            <Input id="staff-email" type="email" {...register('email', { required: true })} />
           </div>
-          <div>
-            <label
-              htmlFor="staff-password"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              初期パスワード
-            </label>
-            <input
+          <div className="grid gap-1">
+            <Label htmlFor="staff-password">初期パスワード</Label>
+            <Input
               id="staff-password"
               type="password"
               {...register('password', { required: true })}
-              className={inputClass}
             />
           </div>
-          <div>
-            <label
-              htmlFor="staff-display-name"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              氏名
-            </label>
-            <input
+          <div className="grid gap-1">
+            <Label htmlFor="staff-display-name">氏名</Label>
+            <Input
               id="staff-display-name"
               type="text"
               {...register('display_name', { required: true })}
-              className={inputClass}
             />
           </div>
           <BundlePicker
@@ -159,21 +137,13 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
               setSettlementStoreIds(next.storeIds);
             }}
           />
-          <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
+          <div className="flex justify-end gap-3 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? '追加中...' : '追加する'}
-            </button>
+            </Button>
           </div>
         </form>
       </DialogContent>
