@@ -288,6 +288,38 @@ Hover / focus / disabled states come from the primitives. Only hand-write a stat
 
 A bare interactive element does not inherit the primitives' focus ring, so it hand-writes one: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`. `ring-primary` is certified against `bg-card` / `bg-background` by the matrix row above (5.26 / 3.37) — and against nothing else, so an element on a muted or tinted fill moves its ring to a certified surface or stays with the primitive. Add `ring-inset` where an overflow container would clip an outer ring (a calendar cell inside a framed grid).
 
+### List page shell
+
+Every admin list page is assembled from the same four parts. **The strings below are the specification, not an illustration — write them verbatim.** They are spelled out rather than delegated to "follow the precedent" because a precedent is re-derived independently by every parallel branch, and independent re-derivations do not converge: the parts this document states as strings come out identical across slices, the parts it leaves to a reference do not.
+
+| Part          | Markup                                                                                 |
+| ------------- | -------------------------------------------------------------------------------------- |
+| Outer         | `<div className="space-y-6">`                                                          |
+| Heading block | `<PageHeader title description actions />` from `@/widgets/page-header`                |
+| Search card   | `<Card>` > `<CardContent className="flex flex-col md:flex-row md:items-center gap-4">` |
+| Table card    | `<Card className="py-0 overflow-hidden">`                                              |
+
+The heading block is a component, not a class string to copy, because a documented rule can be departed from and a component cannot. `PageHeader` renders exactly:
+
+```tsx
+<div className="flex items-center justify-between">
+  <div>
+    <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+    {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+  </div>
+  {actions && <div className="flex items-center gap-3">{actions}</div>}
+</div>
+```
+
+`description` and `actions` are optional; `actions` takes one `Button` or several, and the wrapper spaces them, so a page never writes a wrapper of its own. **A list page carries no heading class string** — if a `text-2xl` appears under `_pages/`, the shell was re-derived instead of composed.
+
+Four consequences that are easy to get wrong:
+
+- **The page heading is `text-2xl` at every breakpoint.** No `sm:text-3xl` step, no `font-semibold` variant.
+- **The console layout already supplies `p-8` and `max-w-7xl mx-auto`** (`app/platform/(console)/layout.tsx`, `app/store/layout.tsx`), so a list page adds no padding, width cap or `min-h-screen` of its own — and no navigation bar: the sidebar and header own logout, store switching and cross-page navigation.
+- **The primary action keeps its element type.** A page that opens a modal passes a plain `Button`; only a page that navigates passes `Button asChild` wrapping a `Link`. The two differ in ARIA role (`button` vs `link`), and the Playwright steps under `e2e/steps/` select by role — swapping one for the other breaks them silently, since e2e does not run in CI.
+- **Where the search must submit on Enter, the `<form>` wraps the `Card`**, so `CardContent` still carries the exact string above (precedent: `StoresPage`). Pages without a form put the search behind `onKeyDown` instead (precedent: `CustomersPage`).
+
 ## Admin restyle rules (shadcn sweep)
 
 Rules for converting a remaining admin slice to the primitives + token vocabulary. Slices are converted independently and in parallel, so these are contracts, not suggestions.
