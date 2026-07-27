@@ -107,7 +107,9 @@ export function ShiftCalendar({
               </span>
               {agg && (
                 <div className="mt-1 space-y-1">
-                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary-strong">
+                  {/* ホバー時はチップ自身の淡色地が同色の地に重なり、primary 系の文字色では
+                      コントラストが 4.5 を割る。重なる間だけ本文色へ上げる。 */}
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary-strong group-hover:text-foreground">
                     {agg.total}名
                   </span>
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground group-hover:text-foreground">
