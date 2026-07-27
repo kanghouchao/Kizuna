@@ -135,7 +135,7 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     render(<Header />);
     fireEvent.keyDown(screen.getByRole('button', { name: '表示モード' }), { key: 'Enter' });
 
-    expect(await screen.findByRole('menuitem', { name: 'システム' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitemradio', { name: 'システム' })).toBeInTheDocument();
   });
 
   it('currentStoreId が変化するとラベルが新しい店舗名へ追随する', () => {
@@ -162,5 +162,15 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
 
     expect(screen.getByRole('button', { name: '店舗A' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '店舗B' })).not.toBeInTheDocument();
+  });
+
+  it('店舗名は上限付きで切り詰められる（行の固有幅に上界を与えるため）', () => {
+    withContext([{ id: 1, name: '店舗A' }], '1');
+
+    render(<Header />);
+
+    // 店名は 200 字まで許されるため、上限が無いとシェルの下限幅では守れなくなる。
+    // 幅は jsdom では測れないので、規格として定めた class 文字列そのものを錨にする。
+    expect(screen.getByText('店舗A')).toHaveClass('max-w-40', 'truncate');
   });
 });

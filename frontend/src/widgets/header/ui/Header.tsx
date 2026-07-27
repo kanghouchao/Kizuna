@@ -51,8 +51,10 @@ export function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
-                <BuildingStorefrontIcon className="size-5 text-muted-foreground" />
-                <span>{currentStoreName || '店舗を選択'}</span>
+                <BuildingStorefrontIcon className="size-5 shrink-0 text-muted-foreground" />
+                {/* 店名は 200 字まで許されるため、上限を置かないと行の固有幅に上界が無くなり、
+                    シェルの下限幅では守れなくなる。 */}
+                <span className="max-w-40 truncate">{currentStoreName || '店舗を選択'}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-56">
