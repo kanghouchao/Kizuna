@@ -20,20 +20,20 @@ Membership in the auth world is decided by `AuthLayout`, which is the only impor
 
 The token layer lives in `src/app/globals.css`: `:root` / `.dark` oklch values exposed to Tailwind through `@theme inline`. Always name the semantic, never the hue — that is what makes both light and dark modes follow without per-screen edits.
 
-| Token                 | Class examples                                                                                     | Usage rules                                                                     |
-| --------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Page background       | `bg-background`                                                                                    | App shell behind cards                                                          |
-| Surface               | `bg-card` (+ `text-card-foreground`)                                                               | Cards, header (the sidebar is a separate open question — see the mapping notes) |
-| Border                | bare `border` (the base layer already applies `border-border`)                                     | Card, input and divider borders                                                 |
-| Text primary          | `text-foreground`                                                                                  | Headings, key figures                                                           |
-| Text secondary        | `text-muted-foreground`                                                                            | Labels, body, hints, "vs 先月"-style annotations                                |
-| Muted surface         | `bg-muted`                                                                                         | Progress-bar tracks, table heads, inert fills                                   |
-| **Primary**           | CTA `bg-primary text-primary-foreground`, text/graphic `text-primary-strong` / `bg-primary-strong` | CTAs, links, active states, progress fill                                       |
-| Primary tint          | `bg-primary/10` (+ `text-primary-strong`)                                                          | Active nav background, rank chips                                               |
-| Destructive           | fill `bg-destructive`, text `text-destructive-strong`                                              | Delete actions, validation errors, 却下 / NG status                             |
-| Success               | fill `bg-success`, text `text-success-strong`                                                      | Positive trends, 確定 / 有効 / 在籍 / 承認 status                               |
-| Warning               | fill `bg-warning`, text `text-warning-strong`                                                      | 保留 / 申請中 status, attention icons                                           |
-| Decorative categories | `bg-chart-1/10` … `bg-chart-5/10` behind `text-foreground`                                         | Stat-card icon chips, 指名 chips — category hues that carry no state semantics  |
+| Token                 | Class examples                                                                                     | Usage rules                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Page background       | `bg-background`                                                                                    | App shell behind cards                                                         |
+| Surface               | `bg-card` (+ `text-card-foreground`)                                                               | Cards, header, sidebar                                                         |
+| Border                | bare `border` (the base layer already applies `border-border`)                                     | Card, input and divider borders                                                |
+| Text primary          | `text-foreground`                                                                                  | Headings, key figures                                                          |
+| Text secondary        | `text-muted-foreground`                                                                            | Labels, body, hints, "vs 先月"-style annotations                               |
+| Muted surface         | `bg-muted`                                                                                         | Progress-bar tracks, table heads, inert fills                                  |
+| **Primary**           | CTA `bg-primary text-primary-foreground`, text/graphic `text-primary-strong` / `bg-primary-strong` | CTAs, links, active states, progress fill                                      |
+| Primary tint          | `bg-primary/10` (+ `text-primary-strong`)                                                          | Active nav background, rank chips                                              |
+| Destructive           | fill `bg-destructive`, text `text-destructive-strong`                                              | Delete actions, validation errors, 却下 / NG status                            |
+| Success               | fill `bg-success`, text `text-success-strong`                                                      | Positive trends, 確定 / 有効 / 在籍 / 承認 status                              |
+| Warning               | fill `bg-warning`, text `text-warning-strong`                                                      | 保留 / 申請中 status, attention icons                                          |
+| Decorative categories | `bg-chart-1/10` … `bg-chart-5/10` behind `text-foreground`                                         | Stat-card icon chips, 指名 chips — category hues that carry no state semantics |
 
 `destructive` is the only danger vocabulary; there is no `--danger`. If a genuinely new state semantic appears, extend `globals.css` **and** this table in a dedicated PR rather than reaching for a raw hue.
 
@@ -69,21 +69,26 @@ Ratios are WCAG relative-luminance figures computed from the oklch values in `gl
 | `text-foreground` on `bg-muted` (hover rows)                     | 18.07     | 14.26     | 4.5  |
 | `bg-primary` + `text-primary-foreground` (CTA)                   | 5.03      | 5.03      | 4.5  |
 | `text-primary-strong` on `bg-card`                               | 5.26      | 6.72      | 4.5  |
+| `text-primary-strong` on `bg-background`                         | 5.26      | 7.54      | 4.5  |
 | `bg-primary/10` + `text-primary-strong`                          | 4.55      | 6.23      | 4.5  |
 | `bg-primary-strong` graphic vs `bg-card`                         | 5.26      | 6.72      | 3    |
 | `bg-primary-strong` fill vs `bg-muted` track                     | 4.78      | 5.65      | 3    |
 | `text-success-strong` on `bg-card`                               | 9.07      | 9.99      | 4.5  |
 | `bg-success/10` + `text-success-strong`                          | 8.10      | 8.35      | 4.5  |
 | `bg-success` + `text-success-foreground`                         | 6.18      | 11.20     | 4.5  |
+| `bg-success/90` hover + `text-success-foreground`                | 5.10      | 9.04      | 4.5  |
 | `bg-success` graphic vs `bg-card`                                | 3.22      | 9.99      | 3    |
 | `text-warning-strong` on `bg-card`                               | 9.09      | 10.33     | 4.5  |
 | `bg-warning/10` + `text-warning-strong`                          | 8.15      | 8.50      | 4.5  |
 | `bg-warning` + `text-warning-foreground`                         | 6.23      | 11.58     | 4.5  |
+| `bg-warning/90` hover + `text-warning-foreground`                | 5.14      | 9.35      | 4.5  |
 | `bg-warning` graphic vs `bg-card`                                | 3.19      | 10.33     | 3    |
 | `text-destructive-strong` on `bg-card`                           | 10.06     | 6.13      | 4.5  |
+| `text-destructive-strong` on `bg-background`                     | 10.06     | 6.88      | 4.5  |
 | `bg-destructive/10` + `text-destructive-strong`                  | 8.42      | 5.39      | 4.5  |
 | `bg-destructive` + `text-destructive-foreground`                 | 4.56      | 6.88      | 4.5  |
 | `bg-destructive` graphic vs `bg-card`                            | 4.76      | 6.13      | 3    |
+| `bg-destructive` marker vs `bg-muted` track                      | 4.33      | 5.15      | 3    |
 | `text-destructive` on `bg-card` (FormMessage)                    | 4.76      | 6.13      | 4.5  |
 | `bg-chart-1/10` … `bg-chart-5/10` + `text-foreground`            | 16.87 min | 14.40 min | 4.5  |
 | `text-foreground` on `bg-primary/10`                             | 17.22     | 15.75     | 4.5  |
@@ -93,11 +98,13 @@ Ratios are WCAG relative-luminance figures computed from the oklch values in `gl
 
 Every prescribed combination clears its bar in both modes, so **no size or weight condition is attached to any of them**.
 
-Three of the newer rows need a note, since each answers a question that came up more than once:
+A few of the newer rows need a note, since each answers a question that came up more than once:
 
 - `bg-accent` is not a fourth surface: `globals.css` defines `--accent` identically to `--muted` in both modes, so a ghost `Button`'s hover fill is numerically `bg-muted` and needs no separate measurement beyond this row. Note what the primitive actually paints there: `ghost` emits `hover:bg-accent hover:text-accent-foreground`, and a consumer's plain `className="text-primary-strong"` does **not** survive the hover — the modifier wins on specificity, giving 16.11 / 14.26. The row is what bounds the case where the consumer's colour does survive, such as a hovered ancestor tinting bare text.
 - The `border-primary` row is the edge form of the primary hue — the selectable card's selected ring, and the `hover:border-primary` edge on the image-upload dropzone. Its two named surfaces are the **only** ones it certifies, and the row deliberately does not say "vs a surface": dark mode is tight everywhere (3.37 against `bg-card`, 3.78 against `bg-background`) and it **fails on `bg-muted` — 4.78 / 2.83**. So a primary edge must not be drawn on a muted or accent fill; move the edge to a card/background surface, or drop to a `border-border` edge there. Within the prescribed recipes the worst case is the selected card's ring, whose inner side sits on `bg-primary/10` at 4.55 / 3.13 — still clear, but that 3.13 is the real headroom, not the 3.37 in the row.
-- The `bg-destructive/90` row is the hover state of a solid destructive fill, as the vendored `Button` destructive variant emits it. Its 10% transparency means the figure depends on what sits behind; the values here are the **worst case over any backdrop**, which the small alpha keeps close to the opaque `bg-destructive` row. It carries an icon, not text, hence the 3:1 bar.
+- The `bg-destructive/90` row is the hover state of a solid destructive fill, as the vendored `Button` destructive variant emits it. Its 10% transparency means the figure depends on what sits behind; the values here are the **worst case over any backdrop**, which the small alpha keeps close to the opaque `bg-destructive` row. It carries an icon, not text, hence the 3:1 bar. The `bg-success/90` / `bg-warning/90` rows follow the same worst-case convention for the hover state of the solid timeline bars; these carry the bar's own time text, hence 4.5, and over their actual `bg-muted` track they measure 6.82 / 6.89 in light (9.41 / 9.75 in dark).
+- The two `on bg-background` rows cover text drawn on the page shell outside a card — the timeline view's selected tab (`text-primary-strong`) and page-level error copy (`text-destructive-strong`). In light mode `--background` is identical to `--card`, so only the dark figures differ from the `on bg-card` rows.
+- The `bg-destructive` marker row is the timeline's current-time line where it crosses the `bg-muted` track (its crossing of the card gaps is the `vs bg-card` row above).
 
 Three of these recipes exist in this form only because the matrix caught them failing: `text-primary` on a dark surface (3.37), solid destructive with a near-white foreground in dark (2.77), and category chips coloured with `text-chart-*`, where three of the five hues fall below 3:1 against their own tint in one mode or the other (as low as 1.62). Where a fix changed appearance it is noted with the recipe.
 
@@ -117,6 +124,31 @@ The computation is oklch → sRGB (OKLab matrices, gamma-encoded and clamped to 
 2. Against rows already in the table — `text-muted-foreground` on `bg-card` (4.83 / 6.74), `bg-primary/10` + `text-primary-strong` (4.55 / 6.23), `bg-primary-strong` vs `bg-muted` (4.78 / 5.65). This is what validates the oklch conversion and the compositing convention.
 
 If step 2 disagrees, the calculator is wrong and the table is right: these rows have survived several review rounds. Never "correct" an existing row as a side effect of adding a new one.
+
+##### Nested tints compound
+
+A `/10` tint row in the matrix certifies the tint composited **directly over `bg-card` / `bg-background`** — nothing else. When a tinted element sits inside another tinted surface (a chip inside a hovered cell, a badge on a hovered row), the browser composites both layers, and the result is a colour no matrix row has measured. Two recipes that each pass in isolation can fail combined: a `bg-primary/10` chip on a cell whose hover is also `bg-primary/10` puts `text-primary-strong` on a double tint at **3.97 in light** (5.73 dark) — under the bar, even though each layer alone is the certified 4.55 / 6.23.
+
+- The known repair is the same hover-flips-the-text rule the Selectable preview card uses: while the ancestor's hover tint is active, raise the chip text to `text-foreground` (`group-hover:text-foreground`, 15.04 / 14.47). The day-cell count chip in `store-shifts`' `ShiftCalendar` takes this repair.
+- A new nesting must be measured even when it happens to pass. The status Badge tint on a table row hovering `hover:bg-muted/50` (the NG badge in `store-customers`' `CustomersPage`) composites to 8.04 / 4.94 at worst (destructive) — clear, but clear by measurement, not by any matrix row.
+
+##### The decorative exemption and its boundary
+
+Contrast minima bind elements that carry information. An element is **decorative — and exempt — only when deleting it loses nothing**: everything it expresses is fully available elsewhere on the same screen, or it expresses nothing at all. The recorded instances:
+
+- 1px separators (`border-border`, or a `bg-border` hairline): they carry no state, only rhythm — the 1.27 / 1.33 figures noted above never bind.
+- A legend dot immediately beside its own text label (the 確定 / 未確定 dots in the shift calendar): the adjacent text carries the identical meaning, so the dots' worst case — the success / warning dots at 2.78 / 2.76, light mode on a `bg-primary/10` hovered cell — does not bind.
+
+The exemption is never automatic for an element whose position or extent is itself the message (a timeline bar, a chart mark): those are meaningful graphics at 3:1 however redundant their label, and any exemption for one must be an explicitly recorded per-case entry — see the OPEN item below — never a silent assumption. When in doubt, treat the element as meaningful and measure.
+
+##### OPEN — timeline bars against their track
+
+The shift timeline's solid bars (`bg-success` 確定 / `bg-warning` 未確定) are drawn on a `bg-muted` track, and a bar's start / end position **is** the information, so the bar edge against the track is a meaningful graphic bound by 3:1. Measured: **2.92 / 2.90 in light — under the bar** (dark passes at 8.39 / 8.67). Mitigating: the in-bar time text (6.18:1) carries the same start / end redundantly, the bars carry `shadow-sm`, and the pre-restyle state (green-500 on gray-50) failed the same bound — this is not a regression. Two candidate resolutions, deliberately **not** decided here because each changes the shipped look:
+
+1. Return the track to `bg-background` + `border`: the bars against it go back to the certified 3.22 / 3.19. But light mode's `--background` is identical to `--card`, so the track would melt into the card and be separated by its 1px border alone.
+2. Record an explicit decorative-style exemption for the bar edge, on the ground that the in-bar high-contrast text redundantly carries the same information.
+
+Until the owner picks one, the shipped `bg-muted` track stands as recorded here. Do not copy the bar-on-track pattern to a new screen while this entry is open.
 
 #### Legacy → token mapping (restyle sweep)
 
@@ -151,11 +183,10 @@ The table is **not exhaustive** — it covers the recurring cases, not every cla
 | `bg-green-500 text-white` (確定 shift bar)             | `bg-success text-success-foreground` (foreground is now dark)                                                                                 |
 | `bg-yellow-400 text-yellow-900` (未確定 shift bar)     | `bg-warning text-warning-foreground`                                                                                                          |
 | Decorative chips blue / green / orange / purple / pink | `bg-chart-1/10` … `bg-chart-5/10` + `text-foreground` — **see the recipe below**                                                              |
-| any `slate-*` (sidebar)                                | **do not map — see below**                                                                                                                    |
 | Weekend `text-red-500` (Sun) / `text-blue-500` (Sat)   | `text-destructive` / `text-primary-strong` — destructive is the one base token that reads as text in both modes (4.76 / 6.13); primary is not |
 | Now marker `bg-red-500`                                | `bg-destructive`                                                                                                                              |
 | Coverage bar `bg-blue-500/80`                          | `bg-primary-strong` — the `/80` variant drops to 2.58:1 against a dark card                                                                   |
-| Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring                                                                                           |
+| Hand-written `focus:ring-blue-500` etc.                | drop it — the primitives carry their own focus ring; on an element that stays bare, use the focus recipe in Components instead                |
 | `hover:border-indigo-400` (dropzone edge)              | `hover:border-primary`                                                                                                                        |
 | `hover:bg-red-600` under a `bg-red-500` fill           | `hover:bg-destructive/90` — the form the vendored `Button` destructive variant emits                                                          |
 
@@ -187,16 +218,12 @@ The `chart-*` tokens are category hues with **no `-foreground` pair** and no con
 
 Pick whichever hue keeps sibling categories distinct — with the hue confined to a 10% tint, that choice can no longer create a contrast problem.
 
-##### The sidebar is deliberately left undecided
+##### Sidebar facts: dormant `--sidebar-*` tokens and the no-op `custom-scrollbar`
 
-`widgets/sidebar/ui/Sidebar.tsx` is a **dark** surface (`bg-slate-800 text-white`, `border-slate-700`, active `bg-indigo-600 text-white`) and the only slate consumer in the admin UI. It contradicts the Sidebar nav item entry in Components above, which describes a light `bg-primary/10 text-primary-strong` treatment.
+`widgets/sidebar/ui/Sidebar.tsx` is now an ordinary admin surface — `bg-card` behind the Sidebar nav item recipe from Components, with no raw palette classes left. Two adjacent facts are recorded so nobody re-derives them:
 
-**Do not mechanically map slate → muted.** That yields a half-tokenized surface that is neither the current dark design nor the documented light one. The two coherent options both change something a class-level mapping cannot decide:
-
-- Keep it dark: map onto the `--sidebar-*` token family, whose values in `:root` are currently light — so keeping the dark look means changing those token values in `globals.css`, a shared file and therefore its own PR.
-- Make it light: this is not a class mapping at all but a rebuild against the Sidebar nav item spec in Components, and it visibly changes the app's most prominent chrome.
-
-This is a visual product decision, so it belongs to the sidebar slice's owner, not to the agent converting it. Until it is made, leave the sidebar alone.
+- The `--sidebar-*` token family in `globals.css` (exposed as `bg-sidebar` etc. through `@theme inline`) has **no consumer**: the sidebar restyle used the generic tokens instead. Do not reach for these tokens in new markup; whether to delete the family is a `globals.css` shared-file decision, not a slice PR.
+- The `custom-scrollbar` class (on the sidebar scroll area and the two console `app/` layout shells) is defined **nowhere** — no stylesheet or config declares it, so it is a no-op. Do not copy it into new markup; removing the three usages is a code cleanup outside any restyle PR.
 
 One-off domain colors (now marker, weekend, coverage bar, category chips) intentionally reuse existing tokens instead of gaining dedicated ones: a token with a single consumer is dead weight.
 
@@ -250,13 +277,15 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Loading placeholder**: `Skeleton` sized with layout classes, never a hand-rolled `animate-pulse` block.
 - **Status pill**: `Badge variant="outline"` plus one tint recipe — `border-transparent bg-success/10 text-success-strong` (確定) / `bg-warning/10 text-warning-strong` (保留) / `bg-destructive/10 text-destructive-strong` (却下 / NG). Precedent: `CustomersPage`.
 - **Stat card**: `Card`; label (`text-muted-foreground` 14px) → figure (`text-foreground` 30px bold) → trend row (`text-success-strong` delta + `text-muted-foreground` comparison); category icon chip top-right (`rounded-lg p-3`, 24px icon, `bg-chart-N/10` with a `text-foreground` icon).
-- **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-primary/10 text-primary-strong` with a 2px `bg-primary-strong` edge bar. Inactive: `text-muted-foreground`, hover `bg-muted text-foreground`. Groups collapse with a chevron. **This describes a light sidebar, which the shipped one is not** — do not apply it until the open question in the mapping notes is settled.
+- **Sidebar nav item**: 40px tall, icon 20px + label 14px. Active: `bg-primary/10 text-primary-strong` with a 2px `bg-primary-strong` edge bar. Inactive: `text-muted-foreground`, hover `bg-muted text-foreground`. Group headings are static `text-muted-foreground` labels — there is no collapse mechanism. Precedent: `widgets/sidebar`.
 - **Progress bar**: track `bg-muted h-2 rounded-full`, fill `bg-primary-strong` (plain `bg-primary` is only 2.83:1 against the dark-mode track).
 - **Ranking row**: 32px circular rank chip (`bg-primary/10 text-primary-strong`), name + area line (12px icon + `text-muted-foreground`), right-aligned amount (bold) over count (`text-muted-foreground`).
 - **Selectable preview card**: `<label class="group">` wrapping an `sr-only` radio; `rounded-lg border p-3 cursor-pointer`. Unselected hover `bg-muted`; selected `border-primary ring-2 ring-primary bg-primary/10`. Body = thumbnail (`w-full rounded border`) → name (`text-sm font-medium`, selected `text-primary-strong`) → description (`text-xs`); keyboard focus via `has-[:focus-visible]:ring-2`. The description is the one part that cannot stay muted throughout, because **both** of the card's non-default surfaces put `text-muted-foreground` under the bar in light mode — 4.39 on the hover fill, 4.18 on the selected tint (dark clears both, at 5.66 and 6.25). So it is `text-muted-foreground group-hover:text-foreground` when unselected and `text-foreground` when selected. That is the same "the hover flips the fill and the text together" rule the Sidebar nav item and Mobile bottom tab bar entries follow; the `group` on the label is what lets the text follow a hover owned by its ancestor. Precedent: the template picker in `StoreProfileForm`.
 - **Mobile bottom tab bar**: `fixed inset-x-0 bottom-0` `bg-card` with a `border-t` top edge; each tab is an equal-width flex column (`flex flex-1 flex-col items-center gap-1 py-2`), 24px icon above a 12px label. Active `text-primary-strong`, inactive `text-muted-foreground` with hover `bg-muted text-foreground`. The content area adds `pb-16` so the fixed bar never overlaps scrollable content. Precedent: `CastPortalShell`.
 
 Hover / focus / disabled states come from the primitives. Only hand-write a state when composing bare elements, and then express it in tokens (`hover:bg-muted`, `disabled:opacity-50`) — never a raw hue.
+
+A bare interactive element does not inherit the primitives' focus ring, so it hand-writes one: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`. `ring-primary` is certified against `bg-card` / `bg-background` by the matrix row above (5.26 / 3.37) — and against nothing else, so an element on a muted or tinted fill moves its ring to a certified surface or stays with the primitive. Add `ring-inset` where an overflow container would clip an outer ring (a calendar cell inside a framed grid).
 
 ## Admin restyle rules (shadcn sweep)
 
@@ -339,7 +368,7 @@ Permanently out of scope, and the only exemptions:
 - the auth screens: `AuthLayout`, everything it wraps, and `shared/ui/auth-layout.tsx` itself — also its own token world;
 - the vendored shadcn primitives, kept exactly as generated (`badge.tsx` and `button.tsx` carry `text-white`; `dialog.tsx` and `sheet.tsx` carry `bg-black/50`).
 
-Everything else that still matches the grep — the unconverted slices, `widgets/header`, `widgets/sidebar`, the `app/` route shells — is **pending, not exempt**. A partially converted file counts as matching: `store-orders/ui/OrderForm.tsx` is otherwise migrated yet still carries one `hover:bg-blue-50`. The sidebar is the one case that is additionally blocked, on the open question recorded in the mapping notes.
+Everything else that still matches the grep — the unconverted slices, `widgets/header`, the `app/` route shells — is **pending, not exempt**. A partially converted file counts as matching: `store-orders/ui/OrderForm.tsx` is otherwise migrated yet still carries one `hover:bg-blue-50`.
 
 ### What in `shared/ui` may be edited
 
