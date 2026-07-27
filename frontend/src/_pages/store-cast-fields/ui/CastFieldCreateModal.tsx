@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastFieldDefinitionCreateRequest, castFieldDefinitionApi } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
-import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
+import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
 
 interface CastFieldCreateModalProps {
   open: boolean;
@@ -19,9 +19,6 @@ interface CastFieldCreateFormValues {
   label: string;
   is_public: boolean;
 }
-
-const inputClass =
-  'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
 /** カスタムフィールド定義の新規作成モーダル(key・label・公開設定)。 */
 export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCreateModalProps) {
@@ -63,17 +60,15 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="gap-0 rounded-[10px] border-gray-200 p-0 sm:max-w-md"
+        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
       >
-        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
           フィールドを追加
         </DialogTitle>
         <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
-          <div>
-            <label htmlFor="field-key" className="mb-1 block text-sm font-medium text-gray-700">
-              key
-            </label>
-            <input
+          <div className="grid gap-1">
+            <Label htmlFor="field-key">key</Label>
+            <Input
               id="field-key"
               type="text"
               {...register('key', {
@@ -83,46 +78,26 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
                 // 編集フォームの描画をクラッシュさせるため作成時に拒否する。
                 pattern: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
               })}
-              className={inputClass}
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(作成後は変更できません)
             </p>
           </div>
-          <div>
-            <label htmlFor="field-label" className="mb-1 block text-sm font-medium text-gray-700">
-              label
-            </label>
-            <input
-              id="field-label"
-              type="text"
-              {...register('label', { required: true })}
-              className={inputClass}
-            />
+          <div className="grid gap-1">
+            <Label htmlFor="field-label">label</Label>
+            <Input id="field-label" type="text" {...register('label', { required: true })} />
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              {...register('is_public')}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
+          <Label className="font-normal">
+            <input type="checkbox" {...register('is_public')} />
             公開する(公開詳細ページに表示)
-          </label>
-          <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
+          </Label>
+          <div className="flex justify-end gap-3 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? '追加中...' : '追加する'}
-            </button>
+            </Button>
           </div>
         </form>
       </DialogContent>
