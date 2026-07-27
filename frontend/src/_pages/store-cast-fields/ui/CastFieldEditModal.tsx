@@ -9,7 +9,7 @@ import {
   castFieldDefinitionApi,
 } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
-import { Dialog, DialogContent, DialogTitle } from '@/shared/ui';
+import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
 
 interface CastFieldEditModalProps {
   open: boolean;
@@ -25,9 +25,6 @@ interface CastFieldEditFormValues {
   display_order: number;
   is_public: boolean;
 }
-
-const inputClass =
-  'w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500';
 
 /** カスタムフィールド定義の編集モーダル(label・表示順・公開設定のみ、key は不変のため編集不可)。 */
 export function CastFieldEditModal({
@@ -79,67 +76,39 @@ export function CastFieldEditModal({
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="gap-0 rounded-[10px] border-gray-200 p-0 sm:max-w-md"
+        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
       >
-        <DialogTitle className="border-b border-gray-200 px-6 py-4 text-lg font-semibold text-gray-900">
+        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
           フィールドを編集
         </DialogTitle>
         <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
           <div>
-            <span className="mb-1 block text-sm font-medium text-gray-700">key</span>
-            <p className="text-sm text-gray-500">{definition?.key}</p>
+            <span className="mb-1 block text-sm font-medium text-foreground">key</span>
+            <p className="text-sm text-muted-foreground">{definition?.key}</p>
           </div>
-          <div>
-            <label
-              htmlFor="field-edit-label"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              label
-            </label>
-            <input
-              id="field-edit-label"
-              type="text"
-              {...register('label', { required: true })}
-              className={inputClass}
-            />
+          <div className="grid gap-1">
+            <Label htmlFor="field-edit-label">label</Label>
+            <Input id="field-edit-label" type="text" {...register('label', { required: true })} />
           </div>
-          <div>
-            <label
-              htmlFor="field-edit-display-order"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              表示順
-            </label>
-            <input
+          <div className="grid gap-1">
+            <Label htmlFor="field-edit-display-order">表示順</Label>
+            <Input
               id="field-edit-display-order"
               type="number"
               {...register('display_order', { valueAsNumber: true, required: true })}
-              className={inputClass}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              {...register('is_public')}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
+          <Label className="font-normal">
+            <input type="checkbox" {...register('is_public')} />
             公開する(公開詳細ページに表示)
-          </label>
-          <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
+          </Label>
+          <div className="flex justify-end gap-3 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? '保存中...' : '保存する'}
-            </button>
+            </Button>
           </div>
         </form>
       </DialogContent>
