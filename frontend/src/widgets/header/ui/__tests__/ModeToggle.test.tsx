@@ -5,8 +5,9 @@ import { ModeToggle } from '../ModeToggle';
 // 差し替えられていないことを保証する。ここで検証するのは本 UI が持つ配線、
 // すなわち「どの項目がどの値で setTheme を呼ぶか」に限る。
 const mockSetTheme = jest.fn();
+const mockTheme = { current: 'system' as string | undefined };
 jest.mock('next-themes', () => ({
-  useTheme: () => ({ setTheme: mockSetTheme }),
+  useTheme: () => ({ theme: mockTheme.current, setTheme: mockSetTheme }),
 }));
 
 // Radix のトリガーは pointerdown/キー入力で開く。jsdom の fireEvent.click は
@@ -24,9 +25,9 @@ describe('ModeToggle', () => {
     render(<ModeToggle />);
     openModeMenu();
 
-    expect(await screen.findByRole('menuitem', { name: 'ライト' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'ダーク' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'システム' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitemradio', { name: 'ライト' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'ダーク' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'システム' })).toBeInTheDocument();
   });
 
   it.each([
@@ -36,7 +37,7 @@ describe('ModeToggle', () => {
   ])('%s を選ぶと setTheme に %s を渡す', async (label, value) => {
     render(<ModeToggle />);
     openModeMenu();
-    fireEvent.click(await screen.findByRole('menuitem', { name: label }));
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: label }));
 
     expect(mockSetTheme).toHaveBeenCalledWith(value);
   });
@@ -48,5 +49,21 @@ describe('ModeToggle', () => {
     // どちらも常に描かれるので、サーバ描画と初回フレームが一致する。
     expect(container.querySelector('.dark\\:hidden')).toBeInTheDocument();
     expect(container.querySelector('.hidden.dark\\:block')).toBeInTheDocument();
+  });
+
+  it('現在の設定が選択中として示される', async () => {
+    mockTheme.current = 'system';
+
+    render(<ModeToggle />);
+    openModeMenu();
+
+    expect(await screen.findByRole('menuitemradio', { name: 'システム' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'ライト' })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
   });
 });
