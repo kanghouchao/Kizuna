@@ -29,8 +29,8 @@ describe('スタッフ新規作成モーダル', () => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
     mockedStaffApi.bundles.mockResolvedValue([
-      { id: 3, name: '店長' },
-      { id: 4, name: '経理' },
+      { id: 3, name: '店長', capabilities: [] },
+      { id: 4, name: '経理', capabilities: [] },
     ]);
     mockedStaffApi.create.mockResolvedValue({} as never);
   });
