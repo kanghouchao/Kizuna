@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Store, platformStoreApi } from '@/entities/store';
 import { PaginatedResponse } from '@/shared/api';

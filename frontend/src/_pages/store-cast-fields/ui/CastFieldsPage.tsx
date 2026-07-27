@@ -1,6 +1,6 @@
 'use client';
 
-import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
 import { useManagedList } from '@/shared/lib';
@@ -116,7 +116,7 @@ export default function CastFieldsPage() {
                           setEditing(definition);
                         }}
                       >
-                        <PencilSquareIcon />
+                        <SquarePenIcon />
                       </Button>
                       <Button
                         variant="ghost"
@@ -127,7 +127,7 @@ export default function CastFieldsPage() {
                         }}
                         aria-label="削除"
                       >
-                        <TrashIcon />
+                        <Trash2Icon />
                       </Button>
                     </div>
                   </TableCell>

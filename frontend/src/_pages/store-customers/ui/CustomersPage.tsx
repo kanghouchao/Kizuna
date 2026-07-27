@@ -1,12 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  PlusIcon,
-  MagnifyingGlassIcon,
-  PencilSquareIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline';
+import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CustomerResponse, customerApi } from '@/entities/customer';
@@ -106,7 +101,7 @@ export default function CustomersPage() {
         <CardContent className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex-1 relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" />
+              <SearchIcon className="h-5 w-5 text-muted-foreground" />
             </div>
             <Input
               type="text"
@@ -188,7 +183,7 @@ export default function CustomersPage() {
                     <div className="flex justify-end gap-1">
                       <Button asChild variant="ghost" size="icon-sm">
                         <Link href={storePath(storeId, `/customers/${customer.id}/edit`)}>
-                          <PencilSquareIcon />
+                          <SquarePenIcon />
                         </Link>
                       </Button>
                       <Button
@@ -196,7 +191,7 @@ export default function CustomersPage() {
                         size="icon-sm"
                         onClick={() => setDeleteTarget(customer)}
                       >
-                        <TrashIcon />
+                        <Trash2Icon />
                       </Button>
                     </div>
                   </TableCell>

@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/ui';
-import { BellIcon, BuildingStorefrontIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { BellIcon, CircleUserRoundIcon, StoreIcon } from 'lucide-react';
 import { ModeToggle } from './ModeToggle';
 
 export function Header() {
@@ -51,7 +51,7 @@ export function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
-                <BuildingStorefrontIcon className="size-5 shrink-0 text-muted-foreground" />
+                <StoreIcon className="size-5 shrink-0 text-muted-foreground" />
                 {/* 店名は 200 字まで許されるため、上限を置かないと行の固有幅に上界が無くなり、
                     シェルの下限幅では守れなくなる。 */}
                 <span className="max-w-40 truncate">{currentStoreName || '店舗を選択'}</span>
@@ -80,7 +80,7 @@ export function Header() {
                 aria-label="アカウントメニュー"
                 className="text-muted-foreground hover:text-primary-strong"
               >
-                <UserCircleIcon className="size-8" />
+                <CircleUserRoundIcon className="size-8" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-48">
