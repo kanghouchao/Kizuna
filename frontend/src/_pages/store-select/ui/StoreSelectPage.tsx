@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { BuildingStorefrontIcon } from '@heroicons/react/24/outline';
 import { useStoreContext } from '@/entities/user';
 import { replaceStoreIdInPath, setPlatformStore } from '@/shared/lib';
+import { Button, Card } from '@/shared/ui';
 
 /** クエリ next（店舗スコープの遷移先テンプレート）を読む。無ければダッシュボード。 */
 function resolveNext(): string {
@@ -41,35 +42,36 @@ export default function StoreSelectPage() {
   if (stores === null || stores.length === 1) {
     return (
       <div className="mx-auto max-w-md">
-        <p className="text-sm text-gray-500">読み込み中...</p>
+        <p className="text-sm text-muted-foreground">読み込み中...</p>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-md">
-      <div className="rounded-[10px] border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">店舗を選択</h1>
+      <Card className="gap-0 p-6">
+        <h1 className="text-2xl font-bold text-foreground">店舗を選択</h1>
         {stores.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-600">アクセス可能な店舗がありません</p>
+          <p className="mt-4 text-sm text-muted-foreground">アクセス可能な店舗がありません</p>
         ) : (
           <>
-            <p className="mt-1 text-sm text-gray-500">業務を行う店舗を選んでください。</p>
+            <p className="mt-1 text-sm text-muted-foreground">業務を行う店舗を選んでください。</p>
             <div className="mt-6 space-y-2">
               {stores.map(store => (
-                <button
+                <Button
                   key={store.id}
+                  variant="outline"
                   onClick={() => goTo(store.id)}
-                  className="flex w-full items-center gap-3 rounded-[10px] border border-gray-200 px-4 py-3 text-left text-sm font-medium text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                  className="h-auto w-full justify-start gap-3 px-4 py-3 text-left"
                 >
-                  <BuildingStorefrontIcon className="h-5 w-5 text-gray-400" />
+                  <BuildingStorefrontIcon className="size-5 text-muted-foreground" />
                   {store.name}
-                </button>
+                </Button>
               ))}
             </div>
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
