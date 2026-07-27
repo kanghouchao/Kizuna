@@ -30,21 +30,31 @@ function propsFor(pathname: string) {
 }
 
 describe('テーマ provider の作用範囲', () => {
-  it.each(['/platform/staff', '/platform/settings/account', '/store/1/customers', '/store/select'])(
-    'コンソール %s ではテーマを強制しない',
-    path => {
-      expect(propsFor(path)).not.toHaveProperty('forcedTheme', 'light');
-    }
-  );
+  it.each([
+    '/platform/staff',
+    '/platform/settings/account',
+    '/store/1/customers',
+    '/store/select',
+    '/cast',
+    '/cast/requests',
+  ])('トークン層で描かれる %s ではテーマを強制しない', path => {
+    expect(propsFor(path)).not.toHaveProperty('forcedTheme', 'light');
+  });
 
-  it.each(['/', '/casts', '/casts/12', '/schedule', '/menu', '/about'])(
-    '公開店舗サイト %s では light を強制する',
-    path => {
-      expect(propsFor(path)).toMatchObject({ forcedTheme: 'light' });
-    }
-  );
+  it.each([
+    '/',
+    '/casts',
+    '/casts/12',
+    '/schedule',
+    '/menu',
+    '/about',
+    '/platform/login',
+    '/platform/invite/abc123',
+  ])('トークン層の外にある %s では light を強制する', path => {
+    expect(propsFor(path)).toMatchObject({ forcedTheme: 'light' });
+  });
 
-  it('コンソールでは既定 system・OS 追随で、保存先の差し替えはしない', () => {
+  it('トークン層の画面では既定 system・OS 追随で、保存先の差し替えはしない', () => {
     const props = propsFor('/store/1/customers');
 
     expect(props).toMatchObject({
