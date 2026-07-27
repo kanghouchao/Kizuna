@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isLegacyStorePath, storeSelectPath } from '../store-route';
-import { consoleAreaOfPath, isPublicPlatformPath } from '../app-area';
+import { consoleAreaOfPath, isPublicPlatformPath, isSharedPlatformPath } from '../app-area';
 
 // コンソール別の入場可能エリアとホーム。/me の console（サーバ側が能力目録から導出）を
 // ログイン時に保存した platform-role cookie が根拠。platform コンソールは storeBridge に
@@ -51,7 +51,8 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 食い違ったまま描画され、平台 API も 403 になる。トークン保持者のコンソールと URL エリアが
   // 一致しない場合は自コンソールのホームへ差し戻す。cookie 不在（レガシーセッション）や
   // 未知の旧形式値は対象外 — 後者は apiClient の 403 応答経路がセッション破棄で回収する。
-  if (hasToken && !isPublicPlatformRoute) {
+  // 共有 platform ルート（自アカウント設定）は店舗コンソールの正当な到達先のため対象外。
+  if (hasToken && !isPublicPlatformRoute && !isSharedPlatformPath(path)) {
     const consoleValue = request.cookies.get('platform-role')?.value ?? '';
     // cookie は利用者が任意値を書ける。素の添字だと 'constructor' 等が原型鎖に当たるため
     // 自有プロパティに限定する。

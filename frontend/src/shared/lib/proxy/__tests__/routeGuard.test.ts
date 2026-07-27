@@ -241,6 +241,32 @@ describe('routeGuard', () => {
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
     });
+
+    it('allows a store-console session on the shared /platform/settings/account route', () => {
+      const req = createRequest('/platform/settings/account', true, { 'platform-role': 'store' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('allows a cast-console session on the shared /platform/settings/account route', () => {
+      const req = createRequest('/platform/settings/account', true, { 'platform-role': 'cast' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('still guards a store-console session on the non-shared /platform/settings hub', () => {
+      const req = createRequest('/platform/settings', true, { 'platform-role': 'store' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/store/select' })
+      );
+      expect(res).not.toBeNull();
+    });
   });
 
   it('ignores other routes', () => {
