@@ -292,6 +292,8 @@ A bare interactive element does not inherit the primitives' focus ring, so it ha
 
 Every admin list page is assembled from the same four parts. **The strings below are the specification, not an illustration — write them verbatim.** They are spelled out rather than delegated to "follow the precedent" because a precedent is re-derived independently by every parallel branch, and independent re-derivations do not converge: the parts this document states as strings come out identical across slices, the parts it leaves to a reference do not.
 
+The section binds the six record-list pages that compose `PageHeader` today — `store-customers` / `store-casts` / `store-orders` / `platform-staff` / `platform-stores` / `store-cast-fields`. Every other admin page still writes its own heading markup: the form pages, the two settings consoles, `store-shifts` and `store-select`. Widening `PageHeader` to those is a separate question and **is not authority to convert one in passing** — but it is equally not a licence to leave a page from the list above unconverted.
+
 | Part          | Markup                                                                                 |
 | ------------- | -------------------------------------------------------------------------------------- |
 | Outer         | `<div className="space-y-6">`                                                          |
@@ -311,7 +313,7 @@ The heading block is a component, not a class string to copy, because a document
 </div>
 ```
 
-`description` and `actions` are optional; `actions` takes one `Button` or several, and the wrapper spaces them, so a page never writes a wrapper of its own. **A list page carries no heading class string of its own** — a `text-2xl` surviving in a list page file means the shell was re-derived rather than composed. (Form and settings pages still write their own `<h1 className="text-2xl font-bold text-foreground">`; unifying those shells is a separate question and `PageHeader` is deliberately not claimed for them yet.)
+`description` and `actions` are optional; `actions` takes one `Button` or several, and the wrapper spaces them, so a page never writes a wrapper of its own. **A list page carries no heading class string of its own** — a `text-2xl` surviving in one of the six files above means the shell was re-derived rather than composed.
 
 Four consequences that are easy to get wrong:
 
