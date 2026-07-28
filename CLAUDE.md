@@ -88,6 +88,7 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 ## Do NOT introduce (unless explicitly requested)
 
 - A second HTTP client on the frontend — `axios` is the established client.
+- A second icon library — `lucide-react` is the icon set (`@heroicons/react` was removed; see `frontend/DESIGN.md`).
 - CSS-in-JS (styled-components / emotion) or UI kits that bypass the vendored shadcn/ui primitives (`frontend/src/shared/ui`, Radix-based) + Tailwind CSS.
 - Global state libraries (Redux / MobX / Zustand) — none is in use; forms use react-hook-form.
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
