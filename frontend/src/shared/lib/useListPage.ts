@@ -41,7 +41,7 @@ export function useListPage<T>(
   useEffect(() => {
     void load(0);
     return () => {
-      // requestIdRef is a request counter, not a DOM ref.
+      // requestIdRef はリクエストカウンタであり DOM ref ではない
       // eslint-disable-next-line react-hooks/exhaustive-deps
       requestIdRef.current++;
     };
