@@ -38,7 +38,6 @@ const store = (override: Partial<Store>): Store => ({
   name: 'アルファ店',
   email: 'alpha@example.com',
   domain: 'alpha.example.com',
-  is_active: true,
   created_at: '2026-01-01T00:00:00Z',
   ...override,
 });
@@ -60,20 +59,15 @@ describe('店舗管理 3 画面の挙動', () => {
     mockedApi.getList.mockResolvedValue(paginated([]));
   });
 
-  it('一覧は店舗名と有効/無効の状態を表示すること', async () => {
+  it('一覧は店舗名を表示すること', async () => {
     mockedApi.getList.mockResolvedValue(
-      paginated([
-        store({ id: '1', name: 'アルファ店', is_active: true }),
-        store({ id: '2', name: 'ベータ店', is_active: false }),
-      ])
+      paginated([store({ id: '1', name: 'アルファ店' }), store({ id: '2', name: 'ベータ店' })])
     );
 
     render(<StoresPage />);
 
     expect(await screen.findByText('アルファ店')).toBeInTheDocument();
     expect(screen.getByText('ベータ店')).toBeInTheDocument();
-    expect(screen.getByText('有効')).toBeInTheDocument();
-    expect(screen.getByText('無効')).toBeInTheDocument();
   });
 
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {

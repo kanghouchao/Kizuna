@@ -15,6 +15,7 @@ import com.kizuna.store.api.dto.StoreVO;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -78,6 +79,7 @@ class StoreRegistryServiceTest {
     assertThat(result).isPresent();
     assertThat(result.get().getName()).isEqualTo("Store1");
     assertThat(result.get().getDomain()).isEqualTo("store1.com");
+    assertThat(result.get().getCreatedAt()).isEqualTo(t.getCreatedAt());
   }
 
   @Test
@@ -167,6 +169,7 @@ class StoreRegistryServiceTest {
     t.setName(name);
     t.setDomain(domain);
     t.setEmail(email);
+    t.setCreatedAt(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
     return t;
   }
 }

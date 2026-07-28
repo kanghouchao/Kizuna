@@ -2,6 +2,7 @@ package com.kizuna.store.api.dto;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,4 +19,5 @@ public class StoreVO implements Serializable {
   private String name;
   private String domain;
   private String email;
+  private OffsetDateTime createdAt;
 }
