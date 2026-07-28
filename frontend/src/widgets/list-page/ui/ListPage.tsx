@@ -146,6 +146,7 @@ export function ListPage({
                         key={buttonPage}
                         variant="outline"
                         size="sm"
+                        aria-current={buttonPage === page ? 'page' : undefined}
                         className={
                           buttonPage === page
                             ? 'border-primary bg-primary/10 text-primary-strong'

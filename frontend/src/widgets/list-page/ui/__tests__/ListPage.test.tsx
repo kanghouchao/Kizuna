@@ -89,7 +89,9 @@ describe('ListPage', () => {
     );
 
     expect(screen.getByRole('button', { name: '1' })).toHaveClass('border-primary');
+    expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument();
   });
 
