@@ -38,8 +38,8 @@ export default function ShiftsPage() {
         const all: CastResponse[] = [];
         for (let page = 0; ; page += 1) {
           const res = await castApi.list({ page, size, sort: 'displayOrder,asc' });
-          all.push(...res.content);
-          if (res.content.length < size) break; // 最終ページ
+          all.push(...res.rows);
+          if (res.rows.length < size) break; // 最終ページ
         }
         setCasts(all);
       } catch {

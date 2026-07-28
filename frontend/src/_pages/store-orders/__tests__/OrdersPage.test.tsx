@@ -32,7 +32,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
   it('一覧はバックエンドが実際に返す snake_case のフィールドを表示すること', async () => {
     // バックエンドは Jackson グローバル SNAKE_CASE（既知の実レスポンス形）
     mockedOrderApi.list.mockResolvedValue({
-      content: [
+      rows: [
         {
           id: '1',
           business_date: '2026-07-03',
@@ -47,10 +47,9 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
           status: 'CREATED',
         },
       ],
-      total_pages: 1,
-      total_elements: 1,
-      size: 100,
-      number: 0,
+      page: 0,
+      pageCount: 1,
+      total: 1,
     } as never);
 
     render(<OrderListPage />);
@@ -63,7 +62,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
 
   it('一覧の遷移リンクは店舗スコープのパスを指すこと', async () => {
     mockedOrderApi.list.mockResolvedValue({
-      content: [
+      rows: [
         {
           id: '7',
           business_date: '2026-07-03',
@@ -78,10 +77,9 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
           status: 'CREATED',
         },
       ],
-      total_pages: 1,
-      total_elements: 1,
-      size: 100,
-      number: 0,
+      page: 0,
+      pageCount: 1,
+      total: 1,
     } as never);
 
     render(<OrderListPage />);
@@ -97,7 +95,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
 
   it('キャスト未指名はフリー表記になること', async () => {
     mockedOrderApi.list.mockResolvedValue({
-      content: [
+      rows: [
         {
           id: '8',
           business_date: '2026-07-04',
@@ -112,10 +110,9 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
           status: 'CREATED',
         },
       ],
-      total_pages: 1,
-      total_elements: 1,
-      size: 100,
-      number: 0,
+      page: 0,
+      pageCount: 1,
+      total: 1,
     } as never);
 
     render(<OrderListPage />);
@@ -125,11 +122,10 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
 
   it('オーダーが0件なら不在メッセージを表示すること', async () => {
     mockedOrderApi.list.mockResolvedValue({
-      content: [],
-      total_pages: 0,
-      total_elements: 0,
-      size: 100,
-      number: 0,
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
     } as never);
 
     render(<OrderListPage />);
@@ -159,30 +155,61 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
   });
 });
 
-describe('オーダー一覧ページの外殻', () => {
+describe('オーダー一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedOrderApi.list.mockResolvedValue({
-      content: [],
-      total_pages: 0,
-      total_elements: 0,
-      size: 100,
-      number: 0,
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
     } as never);
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
-    const { container } = render(<OrderListPage />);
+    render(<OrderListPage />);
     await screen.findByText('オーダーがありません');
 
     // e2e（hybrid-console-access）は見出し名 'オーダー一覧' の完全一致で到達確認する
     expect(screen.getByRole('heading', { level: 1, name: 'オーダー一覧' })).toBeInTheDocument();
-    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
-    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(screen.getByText('当日の注文状況を確認・管理できます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規オーダー登録' })).toHaveAttribute(
       'href',
       '/store/1/orders/create'
+    );
+  });
+});
+
+describe('オーダー一覧のページ送り', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // 従来は size: 100 の先頭切り取りで、101 件目以降には到達手段が無かった
+  it('2 ページ目のボタンで 0 起点の page=1 を取得すること', async () => {
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [{ id: '1', business_date: '2026-07-03', course_minutes: 60, status: 'CREATED' }],
+      page: 0,
+      pageCount: 6,
+      total: 120,
+    } as never);
+
+    render(<OrderListPage />);
+    await screen.findByText('2026-07-03');
+    expect(mockedOrderApi.list).toHaveBeenCalledWith({
+      page: 0,
+      size: 20,
+      sort: 'createdAt,desc',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.list).toHaveBeenLastCalledWith({
+        page: 1,
+        size: 20,
+        sort: 'createdAt,desc',
+      })
     );
   });
 });

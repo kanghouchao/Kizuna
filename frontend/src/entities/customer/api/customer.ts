@@ -1,4 +1,4 @@
-import { Page, PaginationParams, apiClient } from '@/shared/api';
+import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
 import { CustomerCreateRequest, CustomerResponse, CustomerUpdateRequest } from '../model/types';
 
 // 一覧のクエリ: 共通ページネーション + rank / classification の絞り込み
@@ -9,9 +9,9 @@ export type CustomerListParams = PaginationParams & {
 
 export const customerApi = {
   /** 顧客一覧を取得する */
-  list: async (params?: CustomerListParams): Promise<Page<CustomerResponse>> => {
+  list: async (params?: CustomerListParams): Promise<PageResult<CustomerResponse>> => {
     const response = await apiClient.get('/store/customers', { params });
-    return response.data;
+    return fromSpringPage(response.data);
   },
   /** 顧客詳細を取得する */
   get: async (id: string): Promise<CustomerResponse> => {

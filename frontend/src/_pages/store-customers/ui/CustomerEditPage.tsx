@@ -34,7 +34,7 @@ export default function CustomerEditPage() {
       }
       try {
         const page = await orderApi.list({ customer_id: id, size: 20, sort: 'businessDate,desc' });
-        setOrders(page.content);
+        setOrders(page.rows);
       } catch {
         // 注文履歴が取れなくてもプロフィール編集は可能にする
         toast.error('注文履歴の取得に失敗しました');

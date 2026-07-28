@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { PaginatedResponse } from '@/shared/api';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { PageResult } from '@/shared/api';
 import { Store, platformStoreApi } from '@/entities/store';
 import StoresPage from '../ui/StoresPage';
 import StoreCreatePage from '../ui/StoreCreatePage';
@@ -45,20 +45,13 @@ const store = (override: Partial<Store>): Store => ({
 });
 
 const paginated = (
-  data: Store[],
-  override: Partial<PaginatedResponse<Store>> = {}
-): PaginatedResponse<Store> => ({
-  data,
-  current_page: 1,
-  from: 1,
-  last_page: 1,
-  per_page: 10,
-  to: data.length,
-  total: data.length,
-  first_page_url: '',
-  last_page_url: '',
-  next_page_url: null,
-  prev_page_url: null,
+  rows: Store[],
+  override: Partial<PageResult<Store>> = {}
+): PageResult<Store> => ({
+  rows,
+  page: 0,
+  pageCount: 1,
+  total: rows.length,
   ...override,
 });
 
@@ -84,7 +77,7 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(screen.getByText('無効')).toBeInTheDocument();
   });
 
-  it('検索は page/per_page/search のペイロードで再取得すること', async () => {
+  it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
     render(<StoresPage />);
     await waitFor(() => expect(mockedApi.getList).toHaveBeenCalled());
 
@@ -93,31 +86,36 @@ describe('店舗管理 3 画面の挙動', () => {
 
     await waitFor(() =>
       expect(mockedApi.getList).toHaveBeenLastCalledWith({
-        page: 1,
-        per_page: 10,
+        page: 0,
+        size: 10,
         search: 'アルファ',
       })
     );
   });
 
   it('ページ番号のクリックで該当ページを取得し、両端で前後ボタンが無効になること', async () => {
-    mockedApi.getList.mockResolvedValue(
-      paginated([store({ id: '1', name: 'アルファ店' })], { last_page: 3, to: 10, total: 25 })
+    // 応答の page は要求されたページを返す（外殻は応答の page を現在位置として描く）
+    mockedApi.getList.mockImplementation(({ page }) =>
+      Promise.resolve(
+        paginated([store({ id: '1', name: 'アルファ店' })], { page, pageCount: 3, total: 25 })
+      )
     );
 
     render(<StoresPage />);
     await screen.findByText('アルファ店');
 
+    // 前後ボタンはモバイル用と nav 内アイコン用の 2 つがあるため nav 内に限定する
+    const nav = () => screen.getByRole('navigation', { name: 'ページネーション' });
     // 1 ページ目では「前へ」が押せない
-    expect(screen.getByRole('button', { name: '前へ' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '次へ' })).toBeEnabled();
+    expect(within(nav()).getByRole('button', { name: '前へ' })).toBeDisabled();
+    expect(within(nav()).getByRole('button', { name: '次へ' })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: '2' }));
 
     await waitFor(() =>
       expect(mockedApi.getList).toHaveBeenLastCalledWith({
-        page: 2,
-        per_page: 10,
+        page: 1,
+        size: 10,
         search: undefined,
       })
     );
@@ -125,8 +123,8 @@ describe('店舗管理 3 画面の挙動', () => {
     fireEvent.click(screen.getByRole('button', { name: '3' }));
 
     // 最終ページでは「次へ」が押せない
-    await waitFor(() => expect(screen.getByRole('button', { name: '次へ' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: '前へ' })).toBeEnabled();
+    await waitFor(() => expect(within(nav()).getByRole('button', { name: '次へ' })).toBeDisabled());
+    expect(within(nav()).getByRole('button', { name: '前へ' })).toBeEnabled();
   });
 
   it('削除は確認ダイアログで承諾されたときだけ実行されること', async () => {
@@ -214,30 +212,30 @@ describe('店舗管理 3 画面の挙動', () => {
   });
 });
 
-describe('店舗一覧ページの外殻', () => {
+describe('店舗一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedApi.getList.mockResolvedValue(paginated([store({ id: '1', name: 'アルファ店' })]));
   });
 
   it('見出し・副題を備え、主アクションが button ロールのまま作成画面へ遷移すること', async () => {
-    const { container } = render(<StoresPage />);
+    render(<StoresPage />);
     await screen.findByText('アルファ店');
 
     expect(screen.getByRole('heading', { level: 1, name: '店舗一覧' })).toBeInTheDocument();
-    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
-    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(screen.getByText('システム内の全ての店舗を管理します')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '店舗を追加' }));
     expect(mockPush).toHaveBeenCalledWith('/platform/stores/create');
   });
 
-  // 検索語の変更だけでも取得は走るため、送信そのものを捉えるには「現在ページが 1 に戻る」
+  // 検索語の変更だけでは取得は走らないため、送信そのものを捉えるには「現在ページが先頭へ戻る」
   // という送信ハンドラ固有の副作用を見る必要がある（form が無くなるとここだけが赤くなる）。
-  it('検索の送信は現在ページを 1 へ戻すこと', async () => {
-    mockedApi.getList.mockResolvedValue(
-      paginated([store({ id: '1', name: 'アルファ店' })], { last_page: 3, to: 10, total: 25 })
+  it('検索の送信は現在ページを先頭へ戻すこと', async () => {
+    mockedApi.getList.mockImplementation(({ page }) =>
+      Promise.resolve(
+        paginated([store({ id: '1', name: 'アルファ店' })], { page, pageCount: 3, total: 25 })
+      )
     );
 
     render(<StoresPage />);
@@ -246,8 +244,8 @@ describe('店舗一覧ページの外殻', () => {
     fireEvent.click(screen.getByRole('button', { name: '2' }));
     await waitFor(() =>
       expect(mockedApi.getList).toHaveBeenLastCalledWith({
-        page: 2,
-        per_page: 10,
+        page: 1,
+        size: 10,
         search: undefined,
       })
     );
@@ -257,10 +255,38 @@ describe('店舗一覧ページの外殻', () => {
 
     await waitFor(() =>
       expect(mockedApi.getList).toHaveBeenLastCalledWith({
-        page: 1,
-        per_page: 10,
+        page: 0,
+        size: 10,
         search: 'アルファ',
       })
     );
+  });
+
+  // クリアは入力を空にすると同時に取り直す。検索語 state をそのまま読むと更新前の値で
+  // 取得してしまうため、適用済み検索語は ref で持っている（その回帰を固定する）。
+  it('クリアは検索語を空にして取り直すこと', async () => {
+    render(<StoresPage />);
+    await screen.findByText('アルファ店');
+
+    fireEvent.change(screen.getByLabelText('店舗を検索'), { target: { value: 'アルファ' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+    await waitFor(() =>
+      expect(mockedApi.getList).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: 'アルファ',
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'クリア' }));
+
+    await waitFor(() =>
+      expect(mockedApi.getList).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: undefined,
+      })
+    );
+    expect(screen.getByLabelText('店舗を検索')).toHaveValue('');
   });
 });

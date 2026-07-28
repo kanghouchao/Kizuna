@@ -8,14 +8,12 @@ import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import { storePath, useManagedList } from '@/shared/lib';
-import { PageHeader } from '@/widgets/page-header';
+import { storePath, useListPage } from '@/shared/lib';
+import { ListPage } from '@/widgets/list-page';
 import { toast } from 'react-hot-toast';
 import {
   Badge,
   Button,
-  Card,
-  CardContent,
   ConfirmDialog,
   Input,
   Table,
@@ -25,6 +23,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
+
+/** 一覧 1 ページあたりの件数 */
+const PAGE_SIZE = 20;
 
 /** キャスト一覧ページ */
 export default function CastListPage() {
@@ -47,28 +48,28 @@ export default function CastListPage() {
         // 取得失敗時は導線を出さない（fail-closed）。操作自体はサーバ側が拒否する。
       });
   }, []);
-  const {
-    items: casts,
-    isLoading,
-    refetch,
-  } = useManagedList<CastResponse>(
-    () =>
-      castApi
-        .list({ size: 100, sort: 'displayOrder,asc', search: search || undefined })
-        .then(page => page.content),
+  const list = useListPage(
+    page =>
+      castApi.list({
+        page,
+        size: PAGE_SIZE,
+        sort: 'displayOrder,asc',
+        search: search || undefined,
+      }),
     'キャスト一覧の取得に失敗しました'
   );
+  const casts = list.rows;
 
-  /** 検索を実行する */
-  const handleSearch = () => {
-    void refetch();
+  /** 現在のページを取り直す（発行・削除の後始末） */
+  const reload = () => {
+    void list.onPageChange(list.page);
   };
 
   /** 招待発行成功時: モーダル表示と一覧の再取得を行う（isLoading に連動して行がアンマウントされても、
    *  モーダル state はページ層が持つためモーダルは表示され続ける） */
   const handleIssued = (result: IssuedInvitation) => {
     setIssuedInvitation(result);
-    void refetch();
+    reload();
   };
 
   /** キャストを削除する */
@@ -77,7 +78,7 @@ export default function CastListPage() {
     try {
       await castApi.delete(deleteTarget.id);
       toast.success('キャストを削除しました');
-      void refetch();
+      reload();
     } catch {
       toast.error('キャストの削除に失敗しました');
     }
@@ -96,8 +97,8 @@ export default function CastListPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <>
+      <ListPage
         title="キャスト管理"
         description="キャスト情報の登録・編集ができます。"
         actions={
@@ -119,126 +120,114 @@ export default function CastListPage() {
             </Button>
           </>
         }
-      />
+        search={{
+          onSearch: list.search,
+          content: (
+            <>
+              <div className="flex-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <SearchIcon className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <Input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-10"
+                  placeholder="名前で検索..."
+                />
+              </div>
+              <Button type="submit" variant="outline">
+                検索
+              </Button>
+            </>
+          ),
+        }}
+        state={list}
+        emptyMessage="キャストが登録されていません"
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>写真</TableHead>
+              <TableHead>名前</TableHead>
+              <TableHead>年齢</TableHead>
+              <TableHead>スリーサイズ</TableHead>
+              <TableHead>表示順</TableHead>
+              <TableHead>ステータス</TableHead>
+              <TableHead>招待状態</TableHead>
+              <TableHead className="text-right">アクション</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {casts.map(cast => {
+              const status = statusLabel(cast.status);
+              const invitation = castInvitationStatusLabel(cast.invitation_status);
+              return (
+                <TableRow key={cast.id}>
+                  <TableCell>
+                    <div className="h-12 w-10 rounded overflow-hidden bg-muted relative">
+                      {cast.photo_url ? (
+                        <Image
+                          src={cast.photo_url}
+                          alt={cast.name}
+                          fill
+                          className="object-cover"
+                          sizes="40px"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-foreground text-xs">
+                          No
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium text-foreground">{cast.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {cast.age ? `${cast.age}歳` : '-'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {cast.bust && cast.waist && cast.hip
+                      ? `B${cast.bust} W${cast.waist} H${cast.hip}`
+                      : '-'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{cast.display_order ?? 0}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={`border-transparent ${status.color}`}>
+                      {status.text}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={`border-transparent ${invitation.color}`}>
+                      {invitation.text}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {canInvite && (
+                        <InvitationButton
+                          castId={cast.id}
+                          status={cast.invitation_status}
+                          onIssued={handleIssued}
+                        />
+                      )}
+                      <Button asChild variant="ghost" size="icon-sm">
+                        <Link href={storePath(storeId, `/casts/${cast.id}/edit`)}>
+                          <SquarePenIcon />
+                        </Link>
+                      </Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => setDeleteTarget(cast)}>
+                        <Trash2Icon />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </ListPage>
 
-      {/* 検索バー */}
-      <Card>
-        <CardContent className="flex flex-col md:flex-row md:items-center gap-4">
-          <div className="flex-1 relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <SearchIcon className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <Input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              className="pl-10"
-              placeholder="名前で検索..."
-            />
-          </div>
-          <Button variant="outline" onClick={handleSearch}>
-            検索
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* テーブル */}
-      <Card className="py-0 overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
-        ) : casts.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">キャストが登録されていません</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>写真</TableHead>
-                <TableHead>名前</TableHead>
-                <TableHead>年齢</TableHead>
-                <TableHead>スリーサイズ</TableHead>
-                <TableHead>表示順</TableHead>
-                <TableHead>ステータス</TableHead>
-                <TableHead>招待状態</TableHead>
-                <TableHead className="text-right">アクション</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {casts.map(cast => {
-                const status = statusLabel(cast.status);
-                const invitation = castInvitationStatusLabel(cast.invitation_status);
-                return (
-                  <TableRow key={cast.id}>
-                    <TableCell>
-                      <div className="h-12 w-10 rounded overflow-hidden bg-muted relative">
-                        {cast.photo_url ? (
-                          <Image
-                            src={cast.photo_url}
-                            alt={cast.name}
-                            fill
-                            className="object-cover"
-                            sizes="40px"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-foreground text-xs">
-                            No
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">{cast.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {cast.age ? `${cast.age}歳` : '-'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {cast.bust && cast.waist && cast.hip
-                        ? `B${cast.bust} W${cast.waist} H${cast.hip}`
-                        : '-'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {cast.display_order ?? 0}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`border-transparent ${status.color}`}>
-                        {status.text}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`border-transparent ${invitation.color}`}>
-                        {invitation.text}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {canInvite && (
-                          <InvitationButton
-                            castId={cast.id}
-                            status={cast.invitation_status}
-                            onIssued={handleIssued}
-                          />
-                        )}
-                        <Button asChild variant="ghost" size="icon-sm">
-                          <Link href={storePath(storeId, `/casts/${cast.id}/edit`)}>
-                            <SquarePenIcon />
-                          </Link>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setDeleteTarget(cast)}
-                        >
-                          <Trash2Icon />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-
+      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <InvitationModal
         open={issuedInvitation !== null}
         link={
@@ -255,6 +244,6 @@ export default function CastListPage() {
         onConfirm={() => void handleDelete()}
         onClose={() => setDeleteTarget(null)}
       />
-    </div>
+    </>
   );
 }

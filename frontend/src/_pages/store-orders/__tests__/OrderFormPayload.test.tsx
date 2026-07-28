@@ -140,11 +140,10 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     jest.useFakeTimers();
     mockedOrderApi.listReceptionists.mockResolvedValue([]);
     mockedCastApi.list.mockResolvedValue({
-      content: [{ id: 'cast-1', name: '花子' }],
-      total_pages: 1,
-      total_elements: 1,
-      size: 10,
-      number: 0,
+      rows: [{ id: 'cast-1', name: '花子' }],
+      page: 0,
+      pageCount: 1,
+      total: 1,
     } as never);
   });
 

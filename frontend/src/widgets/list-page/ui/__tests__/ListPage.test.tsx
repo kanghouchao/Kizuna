@@ -77,6 +77,21 @@ describe('ListPage', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
+  it('ページング情報を持たない一覧（配列形 API）はページネーションを描かないこと', () => {
+    render(
+      <ListPage
+        title="スタッフ管理"
+        state={{ rows: ['a', 'b'], isLoading: false }}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByText('table-content')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
   it('0 起点の page をボタン表示では 1 起点に換算すること', () => {
     render(
       <ListPage

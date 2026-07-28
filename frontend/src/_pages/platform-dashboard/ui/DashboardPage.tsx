@@ -18,11 +18,11 @@ export default function AdminDashboard() {
     try {
       const [statsResponse, storesResponse] = await Promise.all([
         platformStoreApi.getStats(),
-        platformStoreApi.getList({ per_page: 5, page: 1 }),
+        platformStoreApi.getList({ page: 0, size: 5 }),
       ]);
 
       setStats(statsResponse);
-      setRecentStores(storesResponse.data);
+      setRecentStores(storesResponse.rows);
     } catch (error) {
       toast.error('データの読み込みに失敗しました');
     } finally {

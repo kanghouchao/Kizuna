@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { PaginatedResponse } from '@/shared/api';
+import { PageResult } from '@/shared/api';
 import { Store, platformStoreApi } from '@/entities/store';
 import DashboardPage from '../ui/DashboardPage';
 
@@ -38,18 +38,11 @@ const store = (override: Partial<Store>): Store => ({
   ...override,
 });
 
-const paginated = (data: Store[]): PaginatedResponse<Store> => ({
-  data,
-  current_page: 1,
-  from: 1,
-  last_page: 1,
-  per_page: 5,
-  to: data.length,
-  total: data.length,
-  first_page_url: '',
-  last_page_url: '',
-  next_page_url: null,
-  prev_page_url: null,
+const paginated = (rows: Store[]): PageResult<Store> => ({
+  rows,
+  page: 0,
+  pageCount: 1,
+  total: rows.length,
 });
 
 describe('プラットフォームダッシュボード', () => {
@@ -67,7 +60,7 @@ describe('プラットフォームダッシュボード', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('アルファ店')).toBeInTheDocument();
-    expect(mockedApi.getList).toHaveBeenCalledWith({ per_page: 5, page: 1 });
+    expect(mockedApi.getList).toHaveBeenCalledWith({ page: 0, size: 5 });
   });
 
   it('店舗追加ボタンで作成画面へ遷移すること', async () => {
