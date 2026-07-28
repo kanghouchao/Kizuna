@@ -21,8 +21,8 @@ const menuWithStoreAndPlatform = [
   {
     name: 'メイン',
     items: [
-      { name: '受注一覧', path: '/store/orders', icon: 'HomeIcon' },
-      { name: '店舗一覧', path: '/platform/stores', icon: 'HomeIcon' },
+      { name: '受注一覧', path: '/store/orders', icon: 'HouseIcon' },
+      { name: '店舗一覧', path: '/platform/stores', icon: 'HouseIcon' },
     ],
   },
 ];
@@ -151,7 +151,7 @@ describe('Sidebar', () => {
     );
     mockedGetMenus.mockResolvedValue([
       ...menuWithStoreAndPlatform,
-      { name: '設定', items: [{ name: '店舗情報', path: '/store/profile', icon: 'CogIcon' }] },
+      { name: '設定', items: [{ name: '店舗情報', path: '/store/profile', icon: 'SettingsIcon' }] },
     ]);
 
     render(<Sidebar />);

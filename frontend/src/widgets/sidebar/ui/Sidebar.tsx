@@ -33,27 +33,27 @@ import {
   resolveStoreHref,
 } from '@/shared/lib';
 
-// キーはメニュー API（seed データ）が返す icon 文字列との wire 契約であり、
-// アイコンライブラリを差し替えてもキー側は変更しない。値のみ lucide の等価アイコンを指す。
+// キーはメニュー API（seed データ）が返す icon 文字列との wire 契約。
+// lucide-react のエクスポート名をそのまま用い、メニューが参照してよいアイコンの許可リストを兼ねる。
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
-  HomeIcon: HouseIcon,
-  BuildingOfficeIcon: BuildingIcon,
-  ClipboardDocumentListIcon: ClipboardListIcon,
-  PlusCircleIcon: CirclePlusIcon,
-  CurrencyYenIcon: JapaneseYenIcon,
   BriefcaseIcon,
-  ChartBarIcon: ChartColumnIcon,
-  UserGroupIcon: UsersRoundIcon,
-  CogIcon: SettingsIcon,
-  AdjustmentsHorizontalIcon: SlidersHorizontalIcon,
-  FaceSmileIcon: SmileIcon,
+  BuildingIcon,
+  ChartColumnIcon,
+  CirclePlusIcon,
+  ClipboardListIcon,
   ClockIcon,
-  UsersIcon,
+  FileTextIcon,
+  HouseIcon,
+  ImageIcon,
+  JapaneseYenIcon,
+  KeyRoundIcon,
   MegaphoneIcon,
-  DocumentTextIcon: FileTextIcon,
-  PhotoIcon: ImageIcon,
-  BuildingStorefrontIcon: StoreIcon,
-  KeyIcon: KeyRoundIcon,
+  SettingsIcon,
+  SlidersHorizontalIcon,
+  SmileIcon,
+  StoreIcon,
+  UsersIcon,
+  UsersRoundIcon,
 };
 
 export function Sidebar() {
