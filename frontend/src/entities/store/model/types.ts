@@ -4,7 +4,6 @@ export interface Store {
   name: string;
   email: string;
   domain: string;
-  domains: string[];
   created_at: string;
   updated_at?: string;
 }

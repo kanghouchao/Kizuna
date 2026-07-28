@@ -154,18 +154,8 @@ export default function EditStorePage() {
                 {/* ドメイン（読み取り専用） */}
                 {store && (
                   <div className="rounded-lg border p-4">
-                    <h4 className="text-sm font-medium text-foreground mb-2">関連ドメイン</h4>
-                    {store.domains && store.domains.length > 0 ? (
-                      <ul className="list-disc ml-6 text-sm text-foreground">
-                        {store.domains.map(d => (
-                          <li key={d} className="break-all">
-                            {d}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">ドメインは設定されていません</p>
-                    )}
+                    <h4 className="text-sm font-medium text-foreground mb-2">ドメイン</h4>
+                    <p className="text-sm text-foreground break-all">{store.domain}</p>
                   </div>
                 )}
 

@@ -38,7 +38,6 @@ const store = (override: Partial<Store>): Store => ({
   name: 'アルファ店',
   email: 'alpha@example.com',
   domain: 'alpha.example.com',
-  domains: ['alpha.example.com'],
   created_at: '2026-01-01T00:00:00Z',
   ...override,
 });
@@ -182,7 +181,7 @@ describe('店舗管理 3 画面の挙動', () => {
         id: '1',
         name: 'デルタ店',
         email: 'delta@example.com',
-        domains: ['delta.example.com', 'delta2.example.com'],
+        domain: 'delta.example.com',
       })
     );
     mockedApi.update.mockResolvedValue(store({}));
@@ -191,7 +190,7 @@ describe('店舗管理 3 画面の挙動', () => {
 
     const nameInput = (await screen.findByLabelText(/店舗名/)) as HTMLInputElement;
     await waitFor(() => expect(nameInput.value).toBe('デルタ店'));
-    expect(screen.getByText('delta2.example.com')).toBeInTheDocument();
+    expect(screen.getByText('delta.example.com')).toBeInTheDocument();
 
     fireEvent.change(nameInput, { target: { value: 'デルタ本店' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
