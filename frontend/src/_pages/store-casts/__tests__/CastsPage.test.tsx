@@ -57,12 +57,11 @@ const cast: CastResponse = {
   updated_at: '2026-07-01T00:00:00Z',
 };
 
-const toPage = (content: CastResponse[]) => ({
-  content,
-  total_pages: 1,
-  total_elements: content.length,
-  size: 100,
-  number: 0,
+const toPage = (rows: CastResponse[]) => ({
+  rows,
+  page: 0,
+  pageCount: 1,
+  total: rows.length,
 });
 
 describe('招待発行モーダルが一覧の再取得中もアンマウントされない', () => {
@@ -157,7 +156,7 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
   });
 });
 
-describe('キャスト一覧ページの外殻', () => {
+describe('キャスト一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedCastApi.list.mockResolvedValue(toPage([]));
@@ -165,16 +164,65 @@ describe('キャスト一覧ページの外殻', () => {
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
-    const { container } = render(<CastListPage />);
+    render(<CastListPage />);
     await screen.findByText('キャストが登録されていません');
 
     expect(screen.getByRole('heading', { level: 1, name: 'キャスト管理' })).toBeInTheDocument();
-    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
-    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(screen.getByText('キャスト情報の登録・編集ができます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規キャスト登録' })).toHaveAttribute(
       'href',
       '/store/1/casts/create'
+    );
+  });
+});
+
+describe('キャスト一覧のページ送りと検索', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE']));
+  });
+
+  // 従来は size: 100 の先頭切り取りで、101 人目以降には到達手段が無かった
+  it('2 ページ目のボタンで 0 起点の page=1 を取得すること', async () => {
+    mockedCastApi.list.mockResolvedValue({ rows: [cast], page: 0, pageCount: 6, total: 120 });
+
+    render(<CastListPage />);
+    await screen.findByText('花子');
+    expect(mockedCastApi.list).toHaveBeenCalledWith({
+      page: 0,
+      size: 20,
+      sort: 'displayOrder,asc',
+      search: undefined,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+
+    await waitFor(() =>
+      expect(mockedCastApi.list).toHaveBeenLastCalledWith({
+        page: 1,
+        size: 20,
+        sort: 'displayOrder,asc',
+        search: undefined,
+      })
+    );
+  });
+
+  it('検索の送信で入力中の名前を 1 ページ目から取り直すこと', async () => {
+    mockedCastApi.list.mockResolvedValue(toPage([cast]));
+
+    render(<CastListPage />);
+    await screen.findByText('花子');
+
+    fireEvent.change(screen.getByPlaceholderText('名前で検索...'), { target: { value: '花' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+
+    await waitFor(() =>
+      expect(mockedCastApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 20,
+        sort: 'displayOrder,asc',
+        search: '花',
+      })
     );
   });
 });

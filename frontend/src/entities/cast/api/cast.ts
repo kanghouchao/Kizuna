@@ -1,4 +1,4 @@
-import { Page, PaginationParams, apiClient } from '@/shared/api';
+import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
 import {
   CastCreateRequest,
   CastFieldDefinitionCreateRequest,
@@ -12,9 +12,9 @@ import {
 
 export const castApi = {
   /** キャスト一覧を取得する */
-  list: async (params?: PaginationParams): Promise<Page<CastResponse>> => {
+  list: async (params?: PaginationParams): Promise<PageResult<CastResponse>> => {
     const response = await apiClient.get('/store/casts', { params });
-    return response.data;
+    return fromSpringPage(response.data);
   },
   /** キャスト詳細を取得する */
   get: async (id: string): Promise<CastResponse> => {

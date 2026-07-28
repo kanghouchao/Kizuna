@@ -142,7 +142,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
           sort: 'displayOrder,asc',
           search: keyword,
         });
-        setCastOptions(response.content);
+        setCastOptions(response.rows);
         setIsCastOpen(true);
       } catch {
         toast.error('キャスト候補の取得に失敗しました');

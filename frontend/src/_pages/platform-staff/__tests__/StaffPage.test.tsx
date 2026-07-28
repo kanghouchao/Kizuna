@@ -92,7 +92,7 @@ describe('スタッフ一覧ページ', () => {
   });
 });
 
-describe('スタッフ一覧ページの外殻', () => {
+describe('スタッフ一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
@@ -100,12 +100,10 @@ describe('スタッフ一覧ページの外殻', () => {
   });
 
   it('見出し（h1）・副題を備え、主アクションが button ロールのままであること', async () => {
-    const { container } = render(<StaffPage />);
+    render(<StaffPage />);
     await screen.findByText('スタッフが登録されていません');
 
     expect(screen.getByRole('heading', { level: 1, name: 'スタッフ管理' })).toBeInTheDocument();
-    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
-    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(
       screen.getByText('権限束・担当店舗・精算範囲の付与と編集ができます。')
     ).toBeInTheDocument();

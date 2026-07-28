@@ -1,4 +1,5 @@
 import { castApi, castFieldDefinitionApi } from '@/entities/cast';
+import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -10,9 +11,27 @@ jest.mock('@/shared/api/client', () => ({
   },
 }));
 
+const mockedGet = apiClient.get as jest.Mock;
+
 describe('castApi', () => {
-  it('list は /store/casts を GET する', async () => {
-    expect(await castApi.list()).toEqual({ ok: true, url: '/store/casts' });
+  it('list は /store/casts を GET し、Spring Page を PageResult へ正規化する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        content: [{ id: 'c1' }],
+        total_pages: 5,
+        total_elements: 100,
+        size: 20,
+        number: 2,
+      },
+    });
+
+    await expect(castApi.list({ page: 2, size: 20 })).resolves.toEqual({
+      rows: [{ id: 'c1' }],
+      page: 2,
+      pageCount: 5,
+      total: 100,
+    });
+    expect(mockedGet).toHaveBeenCalledWith('/store/casts', { params: { page: 2, size: 20 } });
   });
   it('get は /store/casts/:id を GET する', async () => {
     expect(await castApi.get('c1')).toEqual({ ok: true, url: '/store/casts/c1' });

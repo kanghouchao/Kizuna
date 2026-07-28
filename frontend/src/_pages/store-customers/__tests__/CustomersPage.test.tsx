@@ -26,7 +26,7 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
   it('一覧はバックエンドが実際に返す snake_case のフィールドを表示すること', async () => {
     // バックエンドは Jackson グローバル SNAKE_CASE（既知の実レスポンス形）
     mockedCustomerApi.list.mockResolvedValue({
-      content: [
+      rows: [
         {
           id: '1',
           name: '山田太郎',
@@ -38,10 +38,9 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
           ng_type: '注意',
         },
       ],
-      total_pages: 1,
-      total_elements: 1,
-      size: 20,
-      number: 0,
+      page: 0,
+      pageCount: 1,
+      total: 1,
     } as never);
 
     render(<CustomersPage />);
@@ -86,29 +85,48 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
   });
 });
 
-describe('顧客一覧ページの外殻', () => {
+describe('顧客一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedCustomerApi.list.mockResolvedValue({
-      content: [],
-      total_pages: 0,
-      total_elements: 0,
-      size: 20,
-      number: 0,
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
     } as never);
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
-    const { container } = render(<CustomersPage />);
+    render(<CustomersPage />);
     await screen.findByText('顧客が登録されていません');
 
     expect(screen.getByRole('heading', { level: 1, name: '顧客管理' })).toBeInTheDocument();
-    // 外殻の class 文字列は DESIGN.md が規格として定めた面そのもの。
-    expect(container.firstElementChild).toHaveClass('space-y-6');
     expect(screen.getByText('顧客情報の登録・編集ができます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規顧客登録' })).toHaveAttribute(
       'href',
       '/store/1/customers/create'
+    );
+  });
+
+  it('検索の送信で入力中の絞り込み条件を 1 ページ目から取り直すこと', async () => {
+    render(<CustomersPage />);
+    await screen.findByText('顧客が登録されていません');
+
+    fireEvent.change(screen.getByPlaceholderText('名前・電話番号・LINE ID で検索...'), {
+      target: { value: '山田' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('ランク'), { target: { value: 'GOLD' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+
+    await waitFor(() =>
+      expect(mockedCustomerApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 20,
+        sort: 'createdAt,desc',
+        search: '山田',
+        rank: 'GOLD',
+        classification: undefined,
+      })
     );
   });
 });

@@ -1,14 +1,17 @@
-import { apiClient, PaginatedResponse } from '@/shared/api';
+import { apiClient, PageResult, fromLaravelPage, toLaravelPageParams } from '@/shared/api';
 import { CreateStoreRequest, Store, StoreStats, UpdateStoreRequest } from '../model/types';
 
 export const platformStoreApi = {
-  getList: async (params?: {
-    page?: number;
-    per_page?: number;
+  /** 店舗一覧を取得する。page は他一覧と同じ 0 起点で、1 起点のワイヤ形式への換算はここに閉じる */
+  getList: async (params: {
+    page: number;
+    size: number;
     search?: string;
-  }): Promise<PaginatedResponse<Store>> => {
-    const response = await apiClient.get('/platform/stores', { params });
-    return response.data;
+  }): Promise<PageResult<Store>> => {
+    const response = await apiClient.get('/platform/stores', {
+      params: { ...toLaravelPageParams(params.page, params.size), search: params.search },
+    });
+    return fromLaravelPage(response.data);
   },
   getById: async (id: string): Promise<Store> => {
     const response = await apiClient.get(`/platform/stores/${id}`);

@@ -13,12 +13,12 @@ export interface ListPageSearch {
 
 export interface ListPageState {
   rows: unknown[];
-  /** 0 起点 */
-  page: number;
-  pageCount: number;
-  total: number;
   isLoading: boolean;
-  onPageChange: (page: number) => void;
+  /** 0 起点。ページングしない一覧（配列形の API）では以下 4 つを省略する */
+  page?: number;
+  pageCount?: number;
+  total?: number;
+  onPageChange?: (page: number) => void;
 }
 
 interface ListPageProps {
@@ -46,7 +46,7 @@ export function ListPage({
   emptyMessage,
   children,
 }: ListPageProps) {
-  const { rows, page, pageCount, total, isLoading, onPageChange } = state;
+  const { rows, isLoading, page = 0, pageCount = 1, total = rows.length, onPageChange } = state;
   const isEmpty = !isLoading && rows.length === 0;
 
   const searchCard = search && (
@@ -102,7 +102,7 @@ export function ListPage({
 
         {/* pageCount が 1 に潰れても、削除等で page が範囲外（page > 0）になった場合は
             戻る手段を残す必要があるため、pageCount > 1 だけでは判定しない */}
-        {!isLoading && (pageCount > 1 || page > 0) && (
+        {onPageChange && !isLoading && (pageCount > 1 || page > 0) && (
           <div className="px-4 py-3 flex items-center justify-between border-t sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <Button
