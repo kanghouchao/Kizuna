@@ -97,8 +97,7 @@ public class PlatformUser extends BaseEntity {
   }
 
   /** 授権（ロール・担当店舗集合）を再割当てする。構築時と同一の不変条件を検証する（本人属性は変更しない）。 */
-  public void reassignGrants(
-      Set<Long> roleIds, StoreScopeType storeScopeType, Set<Long> storeIds) {
+  public void reassignGrants(Set<Long> roleIds, StoreScopeType storeScopeType, Set<Long> storeIds) {
     Set<Long> roles = roleIds == null ? Set.of() : roleIds;
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(this.userType, roles);

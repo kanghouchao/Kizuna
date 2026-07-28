@@ -15,7 +15,7 @@ Tenant と同一の対象を、店舗運営の文脈から自称したもの。�
 _Avoid_: Branch
 
 **Central（プラットフォーム側、旧称）**:
-Central は構造概念としては退場済みで、プラットフォーム管理系権限グループ（`Capability.Console.PLATFORM`）の旧称として残るのみ。機能は職位（権限バンドル）に従い、データは店舗（StoreScope）に従う。Platform と Store は同一システムの 2 つのアクセスコンソール（権限境界）であり、独立した 2 つのシステムではない。
+Central は構造概念としては退場済みで、プラットフォーム管理系権限グループ（`PermissionCode.Console.PLATFORM`）の旧称として残るのみ。機能は職位（ロール）に従い、データは店舗（StoreScope）に従う。Platform と Store は同一システムの 2 つのアクセスコンソール（権限境界）であり、独立した 2 つのシステムではない。
 
 ### アカウント
 
@@ -23,7 +23,7 @@ Central は構造概念としては退場済みで、プラットフォーム管
 プラットフォーム共通アカウントとしての「プラットフォーム身分」。email でログインし、授権は「ロール×店舗集合」（店舗集合は「全店舗」「個別店舗」の 2 種のみ）で表す。旧 CentralUser / StoreUser の二本立て認証は撤去済みで、PlatformUser が唯一のアカウント種別である（#326）。
 _Avoid_: PlatformAccount、「テナントユーザー」系の呼称
 
-統一ログイン（`/platform/login`）はロールに応じて自動ルーティングする（HQ_ADMIN → Central、STORE_MANAGER/STORE_STAFF → Store）。店舗コンソールは平台トークン + `X-Store-ID` を集合作用域（授権店舗集合）で fail-closed 検証したうえで旧業務 API に過橋する（#324）。この過橋機構は撤去せず恒久的に運用する（旧 CentralUser/StoreUser の二本立て認証自体は #326 で撤去済み）。過橋資格（店舗コンソール能力の保持）はログイン時に JWT の `storeBridge` claim として確立され、`GET /platform/me` の `store_bridge` にも同源で露出される（フロントエンドに能力→コンソールの対応表を複製させない — #428）。
+統一ログイン（`/platform/login`）はロールに応じて自動ルーティングする（HQ_ADMIN → Central、STORE_MANAGER/STORE_STAFF → Store）。店舗コンソールは平台トークン + `X-Store-ID` を集合作用域（授権店舗集合）で fail-closed 検証したうえで旧業務 API に過橋する（#324）。この過橋機構は撤去せず恒久的に運用する（旧 CentralUser/StoreUser の二本立て認証自体は #326 で撤去済み）。過橋資格（店舗コンソール権限の保持）はログイン時に JWT の `storeBridge` claim として確立され、`GET /platform/me` の `store_bridge` にも同源で露出される（フロントエンドに権限→コンソールの対応表を複製させない — #428）。
 
 **AuthSession（認証セッション）**:
 発行済みの 1 枚の JWT が表す認証状態。失効には 2 つの粒度がある。**セッション単位失効**（ログアウト・パスワード変更 = token ブラックリスト）は当該 1 枚のトークンのみを失効させる。**アカウント単位失効**（スタッフ停止 = user ブラックリスト）は当該ユーザーが保有する全セッションを一括して即時失効させ、再開すれば即時に解除される。
@@ -33,7 +33,11 @@ _Avoid_: Token の裸使用（token は担体、session は概念）
 PlatformUser の授権を表す店舗集合（ALL_STORES または SPECIFIC_STORES の店舗 ID 集合）。読みは Hibernate の第二 filter（`storeSetFilter`）が機構的に濾過する fail-closed 設計（解決不能なら例外）。書きは明示的単一 storeId を受け取り、その storeId が授権集合に含まれるか検証したうえで既存の単店機構（StoreContext + storeFilter）へ委譲する。
 _Avoid_: 読み・書きを同一機構と混同すること（読みは集合フィルタ、書きは単一 storeId 検証で別経路）
 
-スタッフ管理（`/platform/staff`、HQ_ADMIN 限定）で PlatformUser のロール×店舗集合を付与・変更できる（#325）。対象は HQ_ADMIN/STORE_MANAGER/STORE_STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う。停止（enabled=false）だけが唯一の例外で即時失効する。束・店舗集合・精算範囲の変更は従来どおり次回ログイン反映。
+スタッフ管理（`/platform/staff`、HQ_ADMIN 限定）で PlatformUser のロール×店舗集合を付与・変更できる（#325）。対象は HQ_ADMIN/STORE_MANAGER/STORE_STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う。停止（enabled=false）だけが唯一の例外で即時失効する。ロール・店舗集合の変更は従来どおり次回ログイン反映。
+
+**Role（ロール）/ Permission（権限）**:
+授権モデルは伝統的な RBAC。**Permission** は機能権限の目録行で、コード定義（`PermissionCode` enum）を `t_permissions` へ播種したものが正本であり書き込み API を持たない。**Role** は権限の束（`t_roles` + `t_role_permissions`）で、平台既定ロール（`is_system=true`、播種の 3 件）は改廃を拒否し、利用者は `/platform/roles` から自作ロールを自由に追加・改廃できる。**ロールは店舗を持たない** — 担当店舗集合は PlatformUser 側（StoreScope）に付く。SecurityContext 上の authority は所持権限を `PERM_` 接頭辞で発行したもので、ロール名は authority に現れない（Spring Security の `ROLE_CAST` / `ROLE_MEMBER` は本人種別の標識であり別物）。
+_Avoid_: 能力束・Capability（旧称）、ロールへの店舗の紐付け
 
 **店舗コンテキスト（Store Context）**:
 フロントエンドの「現在店舗・授権店舗・店舗切替・店舗リンク生成・ログイン後着地の授権店舗解決」を一手に担う seam（`entities/user` の StoreContextProvider / useStoreContext）。provider は platform / store 両コンソールの layout に搭載され、`me()` + `stores()` は provider で 1 回のみ取得する。店舗パス組立の知識は `shared/lib/store-route`（storePath / storeSelectPath / resolveStoreHref / replaceStoreIdInPath）へ集約し、各所での裸テンプレート字面を禁じる。ログイン後の着地方針（1 店舗 = 自動転送 / N 店舗 = 選択画面 / 0 店舗 = 案内表示）は店舗選択ページ一箇所に集約する（#428）。
@@ -66,7 +70,7 @@ _Avoid_: TenantConfig（旧名。SystemConfig と紛らわしい）
 ### プラットフォーム設定
 
 **SystemConfig（システム設定）**:
-プラットフォームレベルのキーバリュー設定（SMTP、メンテナンスモード等）。SYSTEM_CONFIG_MANAGE 能力の保持者のみが管理できる。
+プラットフォームレベルのキーバリュー設定（SMTP、メンテナンスモード等）。SYSTEM_CONFIG_MANAGE 権限の保持者のみが管理できる。
 _Avoid_: Config（裸使用。StoreProfile と混同しやすい）
 
 **Menu（メニュー）**:

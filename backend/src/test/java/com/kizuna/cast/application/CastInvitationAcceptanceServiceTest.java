@@ -73,7 +73,7 @@ class CastInvitationAcceptanceServiceTest {
             .displayName("既存キャスト")
             .enabled(true)
             .userType(userType)
-            .bundleIds(userType == UserType.STAFF ? Set.of(99L) : Set.of())
+            .roleIds(userType == UserType.STAFF ? Set.of(99L) : Set.of())
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(storeIds)
             .build();

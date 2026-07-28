@@ -100,7 +100,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
                         .displayName("出勤希望IT " + userType.name())
                         .enabled(true)
                         .userType(userType)
-                        .bundleIds(Set.of())
+                        .roleIds(Set.of())
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));

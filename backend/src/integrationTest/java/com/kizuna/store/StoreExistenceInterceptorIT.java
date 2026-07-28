@@ -4,14 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.domain.Capability;
-import com.kizuna.user.domain.CapabilityBundle;
-import com.kizuna.user.domain.CapabilityBundleRepository;
+import com.kizuna.user.domain.Permission;
+import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.Role;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +32,7 @@ import tools.jackson.databind.JsonNode;
  * 店舗存在性検証（{@link com.kizuna.store.infrastructure.StoreExistenceInterceptor}）の受け入れ IT。
  *
  * <p>陳旧化した JWT 授権集合や公開サイトの不正ヘッダで実在しない storeId が文脈に載った場合、500 や空 200 でなく 400 を返すことを固定する。 授権側は種子 HQ
- * admin に storeBridge が無いため、ALL_STORES + STORE コンソール能力（CAST_MANAGE）を持つ束を現場作成して用いる（{@link
+ * admin に storeBridge が無いため、ALL_STORES + STORE コンソール権限（CAST_MANAGE）を持つロールを現場作成して用いる（{@link
  * com.kizuna.user.AuthorizationScenesIT} と同型）。
  */
 class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
@@ -37,14 +40,15 @@ class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
   private static final String PASSWORD = "pass";
   private static final String ALL_STORES_EMAIL = "store-existence-it-allstores@kizuna.test";
 
-  /** 種子に無い束（DB データとして追加）。CAST_MANAGE は STORE コンソール能力なので storeBridge を導出させる。 */
-  private static final String ALL_STORES_BUNDLE = "店舗存在性IT_全店舗キャスト管理";
+  /** 種子に無いロール（DB データとして追加）。CAST_MANAGE は STORE コンソール権限なので storeBridge を導出させる。 */
+  private static final String ALL_STORES_ROLE = "店舗存在性IT_全店舗キャスト管理";
 
   /** 実在しない storeId（自動採番の実 id 群と衝突しない大きな値）。 */
   private static final long NONEXISTENT_STORE_ID = 999_999_999L;
 
   @Autowired private PlatformUserRepository platformUserRepository;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
+  @Autowired private PermissionRepository permissionRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private StoreRepository storeRepository;
 
@@ -54,15 +58,15 @@ class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
         .as("前提: 対象 storeId が実在しないこと")
         .isFalse();
 
-    CapabilityBundle bundle =
-        capabilityBundleRepository
-            .findByName(ALL_STORES_BUNDLE)
+    Role role =
+        roleRepository
+            .findByName(ALL_STORES_ROLE)
             .orElseGet(
                 () ->
-                    capabilityBundleRepository.save(
-                        CapabilityBundle.builder()
-                            .name(ALL_STORES_BUNDLE)
-                            .capabilities(Set.of(Capability.CAST_MANAGE))
+                    roleRepository.save(
+                        Role.builder()
+                            .name(ALL_STORES_ROLE)
+                            .permissionIds(permissionIdsOf(PermissionCode.CAST_MANAGE))
                             .build()));
     platformUserRepository
         .findByEmail(ALL_STORES_EMAIL)
@@ -75,10 +79,17 @@ class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
                         .displayName("店舗存在性IT 全店舗")
                         .enabled(true)
                         .userType(UserType.STAFF)
-                        .bundleIds(Set.of(bundle.getId()))
+                        .roleIds(Set.of(role.getId()))
                         .storeScopeType(StoreScopeType.ALL_STORES)
                         .storeIds(Set.of())
                         .build()));
+  }
+
+  /** 権限コードから播種済み権限行の id 集合を引く（ロールは権限を id 集合で持つ）。 */
+  private Set<Long> permissionIdsOf(PermissionCode code) {
+    return permissionRepository.findByCodeIn(Set.of(code.name())).stream()
+        .map(Permission::getId)
+        .collect(Collectors.toSet());
   }
 
   private String platformToken(String email) {

@@ -3,9 +3,9 @@ package com.kizuna.order;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.shared.CrossStoreTestSupport;
-import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.Set;
@@ -37,7 +37,7 @@ class OrderReceptionistIT extends CrossStoreTestSupport {
   private static final String CAST_EMAIL = "receptionist-it-cast@kizuna.test";
 
   @Autowired private PlatformUserRepository platformUserRepository;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
   @BeforeEach
@@ -46,7 +46,7 @@ class OrderReceptionistIT extends CrossStoreTestSupport {
         STORE_B_STAFF_EMAIL,
         STORE_B_STAFF_NAME,
         UserType.STAFF,
-        bundleIdsOf("店舗スタッフ"),
+        roleIdsOf("店舗スタッフ"),
         StoreScopeType.SPECIFIC_STORES,
         Set.of(STORE_B));
     ensurePlatformUser(
@@ -63,7 +63,7 @@ class OrderReceptionistIT extends CrossStoreTestSupport {
       String email,
       String displayName,
       UserType userType,
-      Set<Long> bundleIds,
+      Set<Long> roleIds,
       StoreScopeType scopeType,
       Set<Long> storeIds) {
     platformUserRepository
@@ -77,15 +77,15 @@ class OrderReceptionistIT extends CrossStoreTestSupport {
                         .displayName(displayName)
                         .enabled(true)
                         .userType(userType)
-                        .bundleIds(bundleIds)
+                        .roleIds(roleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
   }
 
   /** 種子の既定束を名称で解決する（束はデータ — id を決め打ちしない）。 */
-  private Set<Long> bundleIdsOf(String bundleName) {
-    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
+  private Set<Long> roleIdsOf(String roleName) {
+    return Set.of(roleRepository.findByName(roleName).orElseThrow().getId());
   }
 
   private String platformToken(String email, String password) {

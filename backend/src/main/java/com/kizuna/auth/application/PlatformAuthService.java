@@ -34,8 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
  * DisabledException が投げられる（enabled 判定がパスワード照合に先行するため、無効化アカウントでのパスワード正誤オラクルを塞ぐ）。列挙耐性・タイミング均一化も
  * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
- * <p>authorities の発行: STAFF は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER は本人種別標識 {@code ROLE_CAST}
- * / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
+ * <p>authorities の発行: STAFF は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER は本人種別標識 {@code
+ * ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
  */
 @Service
 @RequiredArgsConstructor
@@ -117,8 +117,8 @@ public class PlatformAuthService {
   /**
    * 保持ロールの権限並集。STAFF 以外は権限を持たない（本人種別の既定）。
    *
-   * <p>ロールは権限を id 集合で持つため、id→コード→enum の 2 段で解決する。目録行はコード側 enum の播種済み写像であり、写像できないコードは存在しない前提で
-   * {@code valueOf} が fail-loud に落ちる。
+   * <p>ロールは権限を id 集合で持つため、id→コード→enum の 2 段で解決する。目録行はコード側 enum の播種済み写像であり、写像できないコードは存在しない前提で {@code
+   * valueOf} が fail-loud に落ちる。
    */
   private Set<PermissionCode> permissionsOf(PlatformUser user) {
     if (user.getUserType() != UserType.STAFF) {

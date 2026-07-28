@@ -11,7 +11,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
-import com.kizuna.user.domain.Capability;
+import com.kizuna.user.domain.PermissionCode;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +63,7 @@ class FileUploadControllerTest {
   @Test
   @DisplayName("PLATFORM_ASSET_MANAGE 能力のトークンは店舗文脈が無くても platform 配下に保存すること")
   void upload_storesUnderPlatformForPlatformAssetManage() {
-    authenticateWithAuthorities(Capability.PLATFORM_ASSET_MANAGE.authority());
+    authenticateWithAuthorities(PermissionCode.PLATFORM_ASSET_MANAGE.authority());
     when(fileStorageService.store("platform", "public", file)).thenReturn("public/platform/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);

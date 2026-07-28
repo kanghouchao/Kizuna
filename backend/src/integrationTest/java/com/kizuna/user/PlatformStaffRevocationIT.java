@@ -3,9 +3,9 @@ package com.kizuna.user;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
@@ -62,7 +62,7 @@ class PlatformStaffRevocationIT {
 
   @Autowired private TestRestTemplate rest;
   @Autowired private PlatformUserRepository platformUserRepository;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RedisTemplate<String, Object> redisTemplate;
   @Autowired private AppProperties appProperties;
@@ -84,7 +84,7 @@ class PlatformStaffRevocationIT {
   }
 
   /** 専用テストユーザーを取得または作成する。前回実行の残留（停止済み）状態があれば enabled=true へリセットする。 */
-  private PlatformUser ensureEnabledTestUser(String email, String bundleName) {
+  private PlatformUser ensureEnabledTestUser(String email, String roleName) {
     PlatformUser user =
         platformUserRepository
             .findByEmail(email)
@@ -97,7 +97,7 @@ class PlatformStaffRevocationIT {
                             .displayName("失効IT " + email)
                             .enabled(true)
                             .userType(UserType.STAFF)
-                            .bundleIds(bundleIdsOf(bundleName))
+                            .roleIds(roleIdsOf(roleName))
                             .storeScopeType(StoreScopeType.ALL_STORES)
                             .storeIds(Set.of())
                             .build()));
@@ -109,20 +109,20 @@ class PlatformStaffRevocationIT {
   }
 
   /** 種子の既定束を名称で解決する(束はデータ — id を決め打ちしない)。 */
-  private Set<Long> bundleIdsOf(String bundleName) {
-    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
+  private Set<Long> roleIdsOf(String roleName) {
+    return Set.of(roleRepository.findByName(roleName).orElseThrow().getId());
   }
 
-  private String bundlesJson(String bundleName) {
-    return "[" + capabilityBundleRepository.findByName(bundleName).orElseThrow().getId() + "]";
+  private String rolesJson(String roleName) {
+    return "[" + roleRepository.findByName(roleName).orElseThrow().getId() + "]";
   }
 
   private static String updateBody(
-      String bundleIdsJson, String scopeType, String storeIds, boolean enabled, long version) {
+      String roleIdsJson, String scopeType, String storeIds, boolean enabled, long version) {
     return String.format(
-        "{\"bundle_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s,\"enabled\":%b,"
+        "{\"role_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s,\"enabled\":%b,"
             + "\"version\":%d}",
-        bundleIdsJson, scopeType, storeIds, enabled, version);
+        roleIdsJson, scopeType, storeIds, enabled, version);
   }
 
   private String platformToken(String email, String password) {
@@ -173,7 +173,7 @@ class PlatformStaffRevocationIT {
         "/platform/staff/" + targetId,
         HttpMethod.PUT,
         new HttpEntity<>(
-            updateBody(bundlesJson("店舗スタッフ"), "ALL_STORES", "[]", enabled, version),
+            updateBody(rolesJson("店舗スタッフ"), "ALL_STORES", "[]", enabled, version),
             bearerJson(actorToken)),
         JsonNode.class);
   }
@@ -235,7 +235,7 @@ class PlatformStaffRevocationIT {
             HttpMethod.PUT,
             new HttpEntity<>(
                 updateBody(
-                    bundlesJson("店長"), "SPECIFIC_STORES", "[999999]", false, target.getVersion()),
+                    rolesJson("店長"), "SPECIFIC_STORES", "[999999]", false, target.getVersion()),
                 bearerJson(admin)),
             JsonNode.class);
 
@@ -262,7 +262,7 @@ class PlatformStaffRevocationIT {
             "/platform/staff/" + admin.getId(),
             HttpMethod.PUT,
             new HttpEntity<>(
-                updateBody(bundlesJson("HQ管理者"), "ALL_STORES", "[]", false, admin.getVersion()),
+                updateBody(rolesJson("HQ管理者"), "ALL_STORES", "[]", false, admin.getVersion()),
                 bearerJson(adminToken)),
             JsonNode.class);
 

@@ -34,7 +34,7 @@ class PlatformUserDetailsServiceTest {
             .displayName("HQ管理者")
             .enabled(true)
             .userType(UserType.STAFF)
-            .bundleIds(Set.of(10L))
+            .roleIds(Set.of(10L))
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
