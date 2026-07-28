@@ -36,7 +36,7 @@ databaseChangeLog:
               - column:
                   name: icon
                   type: VARCHAR(50)
-                  remarks: アイコン名（heroicons）
+                  remarks: アイコン名（lucide-react のエクスポート名）
               - column:
                   name: permission
                   type: VARCHAR(100)

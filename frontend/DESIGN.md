@@ -258,7 +258,7 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 - **One library: `lucide-react`.** Do not (re-)introduce `@heroicons/react` or any other icon set. `components.json`'s `iconLibrary` is what `shadcn add` consults when it generates a primitive, so the icons baked into vendored primitives are lucide; the application uses the same family so that icons sharing a screen share one stroke width and terminal style.
 - Import the `Icon`-suffixed aliases (`BellIcon`, not `Bell`) — the style the vendored primitives already use.
 - Keep the default `strokeWidth` (2px). Thinning an icon per call site re-creates the mixed-family look the single library exists to prevent.
-- The sidebar's `ICON_MAP` keys are the icon strings served by the menu API's seed data. They keep their heroicons-style names as a wire contract; only the mapped values point at lucide components.
+- The sidebar's `ICON_MAP` keys are the icon strings served by the menu API's seed data. Keys are lucide-react export names verbatim (`HouseIcon`, `SettingsIcon`, …) — the map doubles as the allowlist of icons a menu row may reference, and an unknown key falls back to `HouseIcon`.
 
 ## Spacing
 

@@ -23,7 +23,7 @@ databaseChangeLog:
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: ダッシュボード }
               - column: { name: path, value: /platform/dashboard }
-              - column: { name: icon, value: HomeIcon }
+              - column: { name: icon, value: HouseIcon }
               - column: { name: permission, value: PLATFORM_MENU_VIEW }
               - column: { name: sort_order, valueNumeric: 1 }
         - insert:
@@ -33,7 +33,7 @@ databaseChangeLog:
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 店舗一覧 }
               - column: { name: path, value: /platform/stores }
-              - column: { name: icon, value: BuildingOfficeIcon }
+              - column: { name: icon, value: BuildingIcon }
               - column: { name: permission, value: STORE_MANAGE }
               - column: { name: sort_order, valueNumeric: 2 }
         - insert:
@@ -60,7 +60,7 @@ databaseChangeLog:
               - column: { name: parent_id, value: platform-settings }
               - column: { name: label, value: システム設定 }
               - column: { name: path, value: /platform/settings }
-              - column: { name: icon, value: CogIcon }
+              - column: { name: icon, value: SettingsIcon }
               - column: { name: permission, value: SYSTEM_CONFIG_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
         # --- 店舗コンソール ---
@@ -78,7 +78,7 @@ databaseChangeLog:
               - column: { name: parent_id, value: store-main }
               - column: { name: label, value: ダッシュボード }
               - column: { name: path, value: /store/dashboard }
-              - column: { name: icon, value: HomeIcon }
+              - column: { name: icon, value: HouseIcon }
               - column: { name: permission, value: STORE_MENU_VIEW }
               - column: { name: sort_order, valueNumeric: 1 }
         - insert:
@@ -95,7 +95,7 @@ databaseChangeLog:
               - column: { name: parent_id, value: store-ops }
               - column: { name: label, value: 予約・案件管理 }
               - column: { name: path, value: /store/orders }
-              - column: { name: icon, value: ClipboardDocumentListIcon }
+              - column: { name: icon, value: ClipboardListIcon }
               - column: { name: permission, value: ORDER_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
         - insert:
@@ -112,7 +112,7 @@ databaseChangeLog:
               - column: { name: parent_id, value: store-hrm }
               - column: { name: label, value: キャスト管理 }
               - column: { name: path, value: /store/casts }
-              - column: { name: icon, value: FaceSmileIcon }
+              - column: { name: icon, value: SmileIcon }
               - column: { name: permission, value: CAST_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
         - insert:
@@ -139,7 +139,7 @@ databaseChangeLog:
               - column: { name: parent_id, value: store-crm }
               - column: { name: label, value: 顧客一覧 }
               - column: { name: path, value: /store/customers }
-              - column: { name: icon, value: UserGroupIcon }
+              - column: { name: icon, value: UsersRoundIcon }
               - column: { name: permission, value: CUSTOMER_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
         - insert:
@@ -156,6 +156,6 @@ databaseChangeLog:
               - column: { name: parent_id, value: store-settings }
               - column: { name: label, value: 店舗情報 }
               - column: { name: path, value: /store/settings/profile }
-              - column: { name: icon, value: BuildingStorefrontIcon }
+              - column: { name: icon, value: StoreIcon }
               - column: { name: permission, value: STORE_PROFILE_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
