@@ -28,6 +28,7 @@ databaseChangeLog:
                   name: domain
                   type: VARCHAR(128)
                   constraints:
+                    nullable: false
                     unique: true
                     uniqueConstraintName: uq_t_stores_domain
                   remarks: 公開サイトのホスト名（店舗文脈の解決キー）
