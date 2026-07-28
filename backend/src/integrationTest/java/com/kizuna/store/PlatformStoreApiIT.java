@@ -151,6 +151,27 @@ class PlatformStoreApiIT {
   }
 
   @Test
+  @DisplayName("GET /platform/stores の一覧応答は他一覧と同形の Spring Page 形（0 起点）であること")
+  void storeListUsesSpringPageShape() {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/stores?page=0&size=10",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode body = res.getBody();
+    assertThat(body.path("content").isArray()).as("content 配列を持つこと").isTrue();
+    assertThat(body.path("content").size()).as("シード店舗が載ること").isGreaterThan(0);
+    assertThat(body.path("number").asInt()).as("ページ番号は 0 起点であること").isEqualTo(0);
+    assertThat(body.path("total_elements").asLong()).isGreaterThan(0);
+    assertThat(body.path("total_pages").asInt()).isGreaterThan(0);
+    assertThat(body.has("data")).as("Laravel 風封筒の data キーが消えていること").isFalse();
+    assertThat(body.has("current_page")).as("Laravel 風封筒の current_page キーが消えていること").isFalse();
+  }
+
+  @Test
   @DisplayName("GET /platform/stores/me は店長トークンで 200 と授権店舗(1,2)のみを返すこと（受入基準3）")
   void meReturnsAuthorizedStoresOnly() {
     ResponseEntity<JsonNode> res =

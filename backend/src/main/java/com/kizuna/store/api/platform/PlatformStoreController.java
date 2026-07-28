@@ -1,6 +1,5 @@
 package com.kizuna.store.api.platform;
 
-import com.kizuna.store.api.dto.PaginatedStoreVO;
 import com.kizuna.store.api.dto.PlatformStoreResponse;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
@@ -12,6 +11,10 @@ import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,13 +45,16 @@ public class PlatformStoreController {
     return ResponseEntity.ok(platformStoreService.listAuthorizedStores());
   }
 
+  // offset ページングはページ境界の安定に全順序を要するため、既定の並びに一意な副キー id を添える。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
-  public ResponseEntity<PaginatedStoreVO<StoreVO>> list(
-      @RequestParam(defaultValue = "1") int page,
-      @RequestParam(name = "per_page", defaultValue = "10") int perPage,
-      @RequestParam(required = false) String search) {
-    return ResponseEntity.ok(storeRegistryService.list(page, perPage, search));
+  public ResponseEntity<Page<StoreVO>> list(
+      @RequestParam(required = false) String search,
+      @PageableDefault(
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return ResponseEntity.ok(storeRegistryService.list(search, pageable));
   }
 
   @GetMapping("/{id}")
