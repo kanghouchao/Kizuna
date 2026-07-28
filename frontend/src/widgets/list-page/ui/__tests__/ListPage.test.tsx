@@ -1,0 +1,175 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { ListPage, ListPageState } from '../ListPage';
+
+const baseState = (override: Partial<ListPageState> = {}): ListPageState => ({
+  rows: ['a', 'b'],
+  page: 0,
+  pageCount: 1,
+  total: 2,
+  isLoading: false,
+  onPageChange: jest.fn(),
+  ...override,
+});
+
+describe('ListPage', () => {
+  it('見出しを h1 として描き、副題とアクションを並べること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        description="顧客情報の登録・編集ができます。"
+        actions={<button type="button">新規顧客登録</button>}
+        state={baseState()}
+        emptyMessage="顧客が登録されていません"
+      >
+        <div>table</div>
+      </ListPage>
+    );
+
+    expect(screen.getByRole('heading', { level: 1, name: '顧客管理' })).toBeInTheDocument();
+    expect(screen.getByText('顧客情報の登録・編集ができます。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新規顧客登録' })).toBeInTheDocument();
+  });
+
+  it('isLoading 中は children を描かず読み込み中を表示すること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ isLoading: true, rows: [] })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.queryByText('table-content')).not.toBeInTheDocument();
+  });
+
+  it('rows が空なら emptyMessage を表示すること', () => {
+    render(
+      <ListPage title="顧客管理" state={baseState({ rows: [], total: 0 })} emptyMessage="empty">
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByText('empty')).toBeInTheDocument();
+    expect(screen.queryByText('table-content')).not.toBeInTheDocument();
+  });
+
+  it('rows があれば children をそのまま描くこと', () => {
+    render(
+      <ListPage title="顧客管理" state={baseState()} emptyMessage="empty">
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByText('table-content')).toBeInTheDocument();
+    expect(screen.queryByText('empty')).not.toBeInTheDocument();
+  });
+
+  it('pageCount が 1 以下ならページネーションを描かないこと', () => {
+    render(
+      <ListPage title="顧客管理" state={baseState({ pageCount: 1 })} emptyMessage="empty">
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
+  it('0 起点の page をボタン表示では 1 起点に換算すること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ page: 0, pageCount: 3, total: 21, rows: Array(10).fill('x') })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByRole('button', { name: '1' })).toHaveClass('border-primary');
+    expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument();
+  });
+
+  it('件数範囲は非最終ページで rows.length を基準に算出すること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ page: 1, pageCount: 3, total: 25, rows: Array(10).fill('x') })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByText('25 件中 11-20 を表示')).toBeInTheDocument();
+  });
+
+  it('件数範囲は最終ページで total から逆算すること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ page: 2, pageCount: 3, total: 25, rows: Array(5).fill('x') })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByText('25 件中 21-25 を表示')).toBeInTheDocument();
+  });
+
+  it('ページボタン押下で onPageChange が 0 起点の対象ページで呼ばれること', () => {
+    const onPageChange = jest.fn();
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({
+          page: 0,
+          pageCount: 3,
+          total: 21,
+          rows: Array(10).fill('x'),
+          onPageChange,
+        })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    expect(onPageChange).toHaveBeenCalledWith(1);
+  });
+
+  it('form の submit で onSearch が発火し、ページ遷移は起きないこと', () => {
+    const onSearch = jest.fn();
+    render(
+      <ListPage
+        title="顧客管理"
+        search={{ content: <input aria-label="検索" />, onSearch }}
+        state={baseState()}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    const form = screen.getByLabelText('検索').closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(onSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('search を渡さなければフォームを描かないこと', () => {
+    const { container } = render(
+      <ListPage title="顧客管理" state={baseState()} emptyMessage="empty">
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(container.querySelector('form')).toBeNull();
+  });
+});
