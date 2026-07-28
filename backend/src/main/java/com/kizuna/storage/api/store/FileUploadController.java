@@ -5,7 +5,7 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreOptional;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
-import com.kizuna.user.domain.Capability;
+import com.kizuna.user.domain.PermissionCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -67,7 +67,7 @@ public class FileUploadController {
     if (authentication == null) {
       return false;
     }
-    String required = Capability.PLATFORM_ASSET_MANAGE.authority();
+    String required = PermissionCode.PLATFORM_ASSET_MANAGE.authority();
     return authentication.getAuthorities().stream()
         .anyMatch(granted -> required.equals(granted.getAuthority()));
   }

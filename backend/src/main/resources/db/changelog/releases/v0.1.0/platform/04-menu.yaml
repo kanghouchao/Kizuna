@@ -3,7 +3,7 @@ databaseChangeLog:
       id: platform-v0100-004-menu-schema
       author: kanghouchao
       # Menu は単一のプラットフォーム集約（店舗次元を持たない）。可視性は permission に
-      # 置いた Capability 名で決まり、プラットフォーム／店舗コンソールの出し分けもここで行う。
+      # 置いた PermissionCode 名で決まり、プラットフォーム／店舗コンソールの出し分けもここで行う。
       preConditions:
         - dbms:
             type: postgresql
@@ -40,7 +40,7 @@ databaseChangeLog:
               - column:
                   name: permission
                   type: VARCHAR(100)
-                  remarks: 可視化に必要な能力（Capability 名）
+                  remarks: 可視化に必要な権限（PermissionCode 名）
               - column:
                   name: sort_order
                   type: INTEGER

@@ -6,7 +6,7 @@ databaseChangeLog:
       # demo コンテキストに隔離する。実行時コンテキストは spring.liquibase.contexts（環境変数
       # LIQUIBASE_CONTEXTS）で切り替える。既定は production＝投入しないので、開発・統合テスト・E2E は
       # compose 側で demo を明示する。
-      # id は採番に委ね、FK は自然キー（domain / email / 束名）の部分問い合わせで解決する。
+      # id は採番に委ね、FK は自然キー（domain / email / ロール名）の部分問い合わせで解決する。
       contextFilter: demo
       preConditions:
         - dbms:
@@ -48,15 +48,15 @@ databaseChangeLog:
               - column: { name: store_scope_type, value: SPECIFIC_STORES }
 
         - insert:
-            tableName: t_user_bundles
+            tableName: t_user_roles
             columns:
               - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')" }
-              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店長')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
         - insert:
-            tableName: t_user_bundles
+            tableName: t_user_roles
             columns:
               - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')" }
-              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
 
         - insert:
             tableName: t_user_stores

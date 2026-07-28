@@ -10,7 +10,7 @@ databaseChangeLog:
       changes:
         - createTable:
             tableName: t_users
-            remarks: プラットフォーム共通ユーザー（能力束 × 授権店舗集合 ×（必要時）精算範囲で授権する）
+            remarks: プラットフォーム共通ユーザー（ロール × 授権店舗集合で授権する）
             columns:
               - column:
                   name: id
@@ -60,10 +60,6 @@ databaseChangeLog:
                     nullable: false
                   remarks: 授権店舗範囲種別（ALL_STORES / SPECIFIC_STORES）
               - column:
-                  name: settlement_scope_type
-                  type: VARCHAR(20)
-                  remarks: 精算範囲種別（NULL=精算範囲なし / ALL_STORES / SPECIFIC_STORES）
-              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   defaultValueComputed: CURRENT_TIMESTAMP
@@ -112,38 +108,6 @@ databaseChangeLog:
             # authorizes() が全 false になる fail-closed 挙動。
             constraintName: fk_t_user_stores_store
             baseTableName: t_user_stores
-            baseColumnNames: store_id
-            referencedTableName: t_stores
-            referencedColumnNames: id
-            onDelete: CASCADE
-        - createTable:
-            tableName: t_user_settlement_stores
-            remarks: 精算対象店舗集合（settlement_scope_type=SPECIFIC_STORES 時のみ行を持つ）
-            columns:
-              - column:
-                  name: platform_user_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-              - column:
-                  name: store_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-        - addPrimaryKey:
-            tableName: t_user_settlement_stores
-            columnNames: platform_user_id,store_id
-            constraintName: pk_t_user_settlement_stores
-        - addForeignKeyConstraint:
-            constraintName: fk_t_user_settlement_stores_user
-            baseTableName: t_user_settlement_stores
-            baseColumnNames: platform_user_id
-            referencedTableName: t_users
-            referencedColumnNames: id
-            onDelete: CASCADE
-        - addForeignKeyConstraint:
-            constraintName: fk_t_user_settlement_stores_store
-            baseTableName: t_user_settlement_stores
             baseColumnNames: store_id
             referencedTableName: t_stores
             referencedColumnNames: id

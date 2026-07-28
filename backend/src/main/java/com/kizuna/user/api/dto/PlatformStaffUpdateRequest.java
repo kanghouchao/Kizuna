@@ -9,26 +9,21 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * スタッフ授権編集リクエスト。能力束×店舗集合×精算範囲のみを更新する（email/displayName/password は含めない）。JSON キーは Jackson 設定により
- * snake_case（bundle_ids / store_scope_type / store_ids / settlement_scope_type /
- * settlement_store_ids）。
+ * スタッフ授権編集リクエスト。ロール×店舗集合のみを更新する（email/displayName/password は含めない）。JSON キーは Jackson 設定により
+ * snake_case（role_ids / store_scope_type / store_ids）。
  */
 @Getter
 @Setter
 @NoArgsConstructor
 public class PlatformStaffUpdateRequest {
 
-  @NotEmpty(message = "bundle_ids is required")
-  private Set<Long> bundleIds;
+  @NotEmpty(message = "role_ids is required")
+  private Set<Long> roleIds;
 
   @NotNull(message = "store_scope_type is required")
   private StoreScopeType storeScopeType;
 
   private Set<Long> storeIds;
-
-  private StoreScopeType settlementScopeType;
-
-  private Set<Long> settlementStoreIds;
 
   /** 停止・再開。null は現状維持。false=停止（行は残り、過去の実行主体記録を保持）、true=再開。 */
   private Boolean enabled;
