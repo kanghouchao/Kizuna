@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Store, platformStoreApi } from '@/entities/store';
 import { useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
-import { Badge, Button, ConfirmDialog, Input } from '@/shared/ui';
+import { Button, ConfirmDialog, Input } from '@/shared/ui';
 import toast from 'react-hot-toast';
 
 /** 一覧 1 ページあたりの件数 */
@@ -134,19 +134,7 @@ export default function StoresPage() {
                     </div>
                   </div>
                   <div className="ml-4 min-w-0 flex-1">
-                    <div className="flex items-center">
-                      <p className="text-lg font-medium text-foreground truncate">{store.name}</p>
-                      <Badge
-                        variant="outline"
-                        className={`ml-2 border-transparent ${
-                          store.is_active
-                            ? 'bg-success/10 text-success-strong'
-                            : 'bg-destructive/10 text-destructive-strong'
-                        }`}
-                      >
-                        {store.is_active ? '有効' : '無効'}
-                      </Badge>
-                    </div>
+                    <p className="text-lg font-medium text-foreground truncate">{store.name}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">

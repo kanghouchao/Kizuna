@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/entities/user';
 import { useRouter } from 'next/navigation';
 import { Store, StoreStats, platformStoreApi } from '@/entities/store';
-import { Badge, Button, Card, CardContent, Skeleton } from '@/shared/ui';
+import { Button, Card, CardContent, Skeleton } from '@/shared/ui';
 import toast from 'react-hot-toast';
 
 export default function AdminDashboard() {
@@ -236,16 +236,6 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <Badge
-                          variant="outline"
-                          className={`border-transparent ${
-                            store.is_active
-                              ? 'bg-success/10 text-success-strong'
-                              : 'bg-destructive/10 text-destructive-strong'
-                          }`}
-                        >
-                          {store.is_active ? '有効' : '無効'}
-                        </Badge>
                         <span className="text-sm text-muted-foreground">
                           {new Date(store.created_at).toLocaleDateString('ja-JP')}
                         </span>

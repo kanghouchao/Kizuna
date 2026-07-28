@@ -33,7 +33,6 @@ const store = (override: Partial<Store>): Store => ({
   email: 'alpha@example.com',
   domain: 'alpha.example.com',
   domains: ['alpha.example.com'],
-  is_active: true,
   created_at: '2026-01-01T00:00:00Z',
   ...override,
 });
