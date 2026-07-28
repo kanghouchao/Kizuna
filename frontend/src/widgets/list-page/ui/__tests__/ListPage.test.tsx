@@ -191,6 +191,39 @@ describe('ListPage', () => {
     expect(screen.getByText('25 件')).toBeInTheDocument();
   });
 
+  it('削除で pageCount が 1 に潰れても、範囲外の page なら前へ戻る手段を残すこと', () => {
+    const onPageChange = jest.fn();
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ page: 1, pageCount: 1, total: 10, rows: [], onPageChange })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    const nav = screen.getByRole('navigation');
+    const prev = within(nav).getByRole('button', { name: '前へ' });
+    expect(prev).not.toBeDisabled();
+    fireEvent.click(prev);
+    expect(onPageChange).toHaveBeenCalledWith(0);
+  });
+
+  it('ページネーションの nav にアクセシブルネームがあること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ page: 0, pageCount: 3, total: 21, rows: Array(10).fill('x') })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByRole('navigation', { name: 'ページネーション' })).toBeInTheDocument();
+  });
+
   it('現在ページが 5 起点の window を超えても番号ボタンに含まれること', () => {
     const onPageChange = jest.fn();
     render(

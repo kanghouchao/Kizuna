@@ -100,7 +100,9 @@ export function ListPage({
           children
         )}
 
-        {!isLoading && pageCount > 1 && (
+        {/* pageCount が 1 に潰れても、削除等で page が範囲外（page > 0）になった場合は
+            戻る手段を残す必要があるため、pageCount > 1 だけでは判定しない */}
+        {!isLoading && (pageCount > 1 || page > 0) && (
           <div className="px-4 py-3 flex items-center justify-between border-t sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <Button
@@ -128,7 +130,7 @@ export function ListPage({
                 </p>
               </div>
               <div>
-                <nav className="flex gap-1">
+                <nav className="flex gap-1" aria-label="ページネーション">
                   <Button
                     variant="outline"
                     size="icon-sm"
