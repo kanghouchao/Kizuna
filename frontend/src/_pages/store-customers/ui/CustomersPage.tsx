@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { toast } from 'react-hot-toast';
@@ -33,19 +33,30 @@ export default function CustomersPage() {
   const [classification, setClassification] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<CustomerResponse | null>(null);
 
+  // 適用済みの絞り込み条件。取得は検索の送信・ページ送り・再取得のいずれからも走るため、
+  // 入力中の state を fetcher が読むと、送信していない条件がページ送りに紛れ込む。
+  const applied = useRef({ search: '', rank: '', classification: '' });
   const list = useListPage(
     page =>
       customerApi.list({
         page,
         size: PAGE_SIZE,
-        sort: 'createdAt,desc',
-        search: search || undefined,
-        rank: rank || undefined,
-        classification: classification || undefined,
+        // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
+        // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
+        sort: 'createdAt,id,desc',
+        search: applied.current.search || undefined,
+        rank: applied.current.rank || undefined,
+        classification: applied.current.classification || undefined,
       }),
     '顧客一覧の取得に失敗しました'
   );
   const customers = list.rows;
+
+  /** 入力中の絞り込み条件を適用して 1 ページ目から取り直す */
+  const handleSearch = () => {
+    applied.current = { search, rank, classification };
+    list.search();
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -72,7 +83,7 @@ export default function CustomersPage() {
           </Button>
         }
         search={{
-          onSearch: list.search,
+          onSearch: handleSearch,
           content: (
             <>
               <div className="flex-1 relative">

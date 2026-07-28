@@ -24,7 +24,9 @@ export default function OrderListPage() {
   const params = useParams();
   const storeId = params.storeId as string;
   const list = useListPage(
-    page => orderApi.list({ page, size: PAGE_SIZE, sort: 'createdAt,desc' }),
+    // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
+    // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
+    page => orderApi.list({ page, size: PAGE_SIZE, sort: 'createdAt,id,desc' }),
     'オーダーの取得に失敗しました'
   );
   const orders = list.rows;
