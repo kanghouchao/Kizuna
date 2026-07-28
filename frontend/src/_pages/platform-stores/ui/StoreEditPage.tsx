@@ -155,12 +155,7 @@ export default function EditStorePage() {
                 {store && (
                   <div className="rounded-lg border p-4">
                     <h4 className="text-sm font-medium text-foreground mb-2">ドメイン</h4>
-                    {/* DB の domain 列は unique だが NOT NULL ではないため空値があり得る */}
-                    {store.domain ? (
-                      <p className="text-sm text-foreground break-all">{store.domain}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">ドメインは設定されていません</p>
-                    )}
+                    <p className="text-sm text-foreground break-all">{store.domain}</p>
                   </div>
                 )}
 
