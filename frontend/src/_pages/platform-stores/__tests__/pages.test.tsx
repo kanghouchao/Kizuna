@@ -203,6 +203,14 @@ describe('店舗管理 3 画面の挙動', () => {
     );
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/stores'));
   });
+
+  it('編集はドメインが空のとき未設定の文言を表示すること', async () => {
+    mockedApi.getById.mockResolvedValue(store({ domain: '' }));
+
+    render(<StoreEditPage />);
+
+    expect(await screen.findByText('ドメインは設定されていません')).toBeInTheDocument();
+  });
 });
 
 describe('店舗一覧ページ固有の要素', () => {
