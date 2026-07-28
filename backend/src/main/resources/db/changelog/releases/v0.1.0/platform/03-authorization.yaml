@@ -1,16 +1,17 @@
 databaseChangeLog:
   - changeSet:
-      id: platform-v0100-003-authorization-schema
+      id: platform-v0100-003-rbac-schema
       author: kanghouchao
-      # 授権モデル「能力束 × 担当店舗集合 ×（必要時）精算範囲」の基座。
-      # 能力目録はコード定義（Capability enum）、束は DB データとして管理し固定ロール一覧を作らない。
+      # 授権モデル「ロール × 権限」の基座（RBAC）。権限目録はコード定義（PermissionCode enum）を
+      # t_permissions へ播種したものが正本で、書き込み API を持たない。ロールは平台既定（is_system）と
+      # 利用者自作の 2 種で、担当店舗集合はロールではなくユーザー側（t_user_stores）が持つ。
       preConditions:
         - dbms:
             type: postgresql
       changes:
         - createTable:
-            tableName: t_capability_bundles
-            remarks: 能力束（ロール=能力束の名前。束はデータとして追加でき発版を要しない）
+            tableName: t_roles
+            remarks: ロール（権限の束。平台既定ロールは is_system=true で改廃不可）
             columns:
               - column:
                   name: id
@@ -19,15 +20,22 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                     primaryKey: true
-                    primaryKeyName: pk_t_capability_bundles
+                    primaryKeyName: pk_t_roles
               - column:
                   name: name
                   type: VARCHAR(100)
                   constraints:
                     nullable: false
                     unique: true
-                    uniqueConstraintName: uq_t_capability_bundles_name
-                  remarks: 束の表示名（自然キー）
+                    uniqueConstraintName: uq_t_roles_name
+                  remarks: ロールの表示名（自然キー）
+              - column:
+                  name: is_system
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+                  remarks: 平台既定ロール（true = 名称・権限の変更と削除を拒否）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -48,66 +56,8 @@ databaseChangeLog:
                     nullable: false
                   remarks: 楽観ロック用バージョン
         - createTable:
-            tableName: t_capability_bundle_items
-            remarks: 束が含む能力（Capability enum 名）
-            columns:
-              - column:
-                  name: bundle_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-              - column:
-                  name: capability
-                  type: VARCHAR(50)
-                  constraints:
-                    nullable: false
-        - addPrimaryKey:
-            tableName: t_capability_bundle_items
-            columnNames: bundle_id,capability
-            constraintName: pk_t_capability_bundle_items
-        - addForeignKeyConstraint:
-            constraintName: fk_t_capability_bundle_items_bundle
-            baseTableName: t_capability_bundle_items
-            baseColumnNames: bundle_id
-            referencedTableName: t_capability_bundles
-            referencedColumnNames: id
-            onDelete: CASCADE
-        - createTable:
-            tableName: t_user_bundles
-            remarks: ユーザーへの能力束授与（STAFF は 1 束以上。兼務=複数束）
-            columns:
-              - column:
-                  name: platform_user_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-              - column:
-                  name: bundle_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-        - addPrimaryKey:
-            tableName: t_user_bundles
-            columnNames: platform_user_id,bundle_id
-            constraintName: pk_t_user_bundles
-        - addForeignKeyConstraint:
-            constraintName: fk_t_user_bundles_user
-            baseTableName: t_user_bundles
-            baseColumnNames: platform_user_id
-            referencedTableName: t_users
-            referencedColumnNames: id
-            onDelete: CASCADE
-        - addForeignKeyConstraint:
-            # 授与中の束の削除は授権を黙って失わせるため RESTRICT で拒否する（fail-loud）。
-            constraintName: fk_t_user_bundles_bundle
-            baseTableName: t_user_bundles
-            baseColumnNames: bundle_id
-            referencedTableName: t_capability_bundles
-            referencedColumnNames: id
-            onDelete: RESTRICT
-        - createTable:
-            tableName: t_grant_history
-            remarks: 授権の付与・変更・停止・再開の追記専用履歴（停止後も実行主体の記録を保持する）
+            tableName: t_permissions
+            remarks: 権限目録（PermissionCode enum 名。播種が唯一の供給経路で書き込み API を持たない）
             columns:
               - column:
                   name: id
@@ -116,31 +66,15 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                     primaryKey: true
-                    primaryKeyName: pk_t_grant_history
+                    primaryKeyName: pk_t_permissions
               - column:
-                  name: platform_user_id
-                  type: BIGINT
+                  name: code
+                  type: VARCHAR(50)
                   constraints:
                     nullable: false
-                  remarks: 授権を変更された対象ユーザー
-              - column:
-                  name: actor_email
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-                  remarks: 変更を実行した主体のメールアドレス
-              - column:
-                  name: action
-                  type: VARCHAR(20)
-                  constraints:
-                    nullable: false
-                  remarks: 操作種別（付与・変更・停止・再開）
-              - column:
-                  name: detail
-                  type: TEXT
-                  constraints:
-                    nullable: false
-                  remarks: 変更内容の詳細
+                    unique: true
+                    uniqueConstraintName: uq_t_permissions_code
+                  remarks: 権限コード（PermissionCode enum 名。自然キー）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -160,17 +94,69 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                   remarks: 楽観ロック用バージョン
+        - createTable:
+            tableName: t_role_permissions
+            remarks: ロールが含む権限
+            columns:
+              - column:
+                  name: role_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: permission_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: t_role_permissions
+            columnNames: role_id,permission_id
+            constraintName: pk_t_role_permissions
         - addForeignKeyConstraint:
-            # 履歴の対象ユーザー行が消えると実行主体の記録が失われるため RESTRICT（履歴保全、fail-loud）。
-            constraintName: fk_t_grant_history_user
-            baseTableName: t_grant_history
-            baseColumnNames: platform_user_id
-            referencedTableName: t_users
+            constraintName: fk_t_role_permissions_role
+            baseTableName: t_role_permissions
+            baseColumnNames: role_id
+            referencedTableName: t_roles
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            # 権限目録は播種で固定される正本であり、参照中の削除は授権を黙って失わせるため RESTRICT（fail-loud）。
+            constraintName: fk_t_role_permissions_permission
+            baseTableName: t_role_permissions
+            baseColumnNames: permission_id
+            referencedTableName: t_permissions
             referencedColumnNames: id
             onDelete: RESTRICT
-        - createIndex:
-            indexName: idx_t_grant_history_user
-            tableName: t_grant_history
+        - createTable:
+            tableName: t_user_roles
+            remarks: ユーザーへのロール授与（STAFF は 1 ロール以上。兼務=複数ロール）
             columns:
               - column:
                   name: platform_user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: role_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: t_user_roles
+            columnNames: platform_user_id,role_id
+            constraintName: pk_t_user_roles
+        - addForeignKeyConstraint:
+            constraintName: fk_t_user_roles_user
+            baseTableName: t_user_roles
+            baseColumnNames: platform_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            # 授与中のロールの削除は授権を黙って失わせるため RESTRICT で拒否する（fail-loud）。
+            constraintName: fk_t_user_roles_role
+            baseTableName: t_user_roles
+            baseColumnNames: role_id
+            referencedTableName: t_roles
+            referencedColumnNames: id
+            onDelete: RESTRICT

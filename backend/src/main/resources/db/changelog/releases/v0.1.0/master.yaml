@@ -37,7 +37,7 @@ databaseChangeLog:
       file: store/05-shift.yaml
       relativeToChangelogFile: true
   - include:
-      file: seed/01-capability-bundles.yaml
+      file: seed/01-roles.yaml
       relativeToChangelogFile: true
   - include:
       file: seed/02-menus.yaml

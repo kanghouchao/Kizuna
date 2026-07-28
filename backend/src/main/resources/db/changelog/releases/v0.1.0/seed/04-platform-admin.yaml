@@ -35,7 +35,7 @@ databaseChangeLog:
               - column: { name: user_type, value: STAFF }
               - column: { name: store_scope_type, value: ALL_STORES }
         - insert:
-            tableName: t_user_bundles
+            tableName: t_user_roles
             columns:
               - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'admin@kizuna.test')" }
-              - column: { name: bundle_id, valueComputed: "(SELECT id FROM t_capability_bundles WHERE name = 'HQ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }

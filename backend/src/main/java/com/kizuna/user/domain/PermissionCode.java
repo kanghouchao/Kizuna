@@ -3,27 +3,27 @@ package com.kizuna.user.domain;
 import lombok.Getter;
 
 /**
- * 能力（機能権限）の目録。授権モデル「能力 × 担当店舗集合 ×（必要時）精算範囲」の能力次元を表す。
+ * 機能権限コードの目録。授権モデル「ロール × 担当店舗集合」の権限次元を表す。
  *
- * <p>能力は端点から静的に参照されるため部署（デプロイ）と生命周期を共にするコード定義とする。「固定ロール一覧を作らない」裁定が禁じるのは束（ロール）の固定であり、
- * 能力目録は既存端点に対応する範囲のみ定義する。
+ * <p>権限は端点から静的に参照されるためデプロイと生命周期を共にするコード定義とし、DB の t_permissions
+ * 行は本 enum の播種済み写像である（追加はコード変更と播種を伴う）。ロールは DB データとして自由に増減できる。
  *
- * <p>各能力の javadoc に操作単位（閲覧・登録・更新・確定・公開・出力 等）を明示する。SecurityContext への発行は {@link
+ * <p>各権限の javadoc に操作単位（閲覧・登録・更新・確定・公開・出力 等）を明示する。SecurityContext への発行は {@link
  * Authorities#permission(String)}（{@code PERM_} 接頭辞）を経由する。
  */
 @Getter
-public enum Capability {
+public enum PermissionCode {
 
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM),
 
-  /** 社内アカウント・権限の閲覧・付与・変更・停止と付与履歴の閲覧（PlatformStaffController / CapabilityBundleController）。 */
+  /** 社内アカウント・権限の閲覧・付与・変更・停止とロールの管理（PlatformStaffController / RoleController）。 */
   STAFF_MANAGE(Console.PLATFORM),
 
   /** 共通設定の閲覧・更新（PlatformConfigController）。 */
   SYSTEM_CONFIG_MANAGE(Console.PLATFORM),
 
-  /** プラットフォームコンソールメニューの標識能力。 */
+  /** プラットフォームコンソールメニューの標識権限。 */
   PLATFORM_MENU_VIEW(Console.PLATFORM),
 
   /** プラットフォーム共有領域への資産アップロード（登録・出力 — FileUploadController の platform 保存経路）。 */
@@ -59,10 +59,10 @@ public enum Capability {
   /** 店舗公開プロフィールの閲覧・更新・公開（StoreProfileController）。 */
   STORE_PROFILE_MANAGE(Console.STORE),
 
-  /** 店舗コンソールメニューの標識能力。 */
+  /** 店舗コンソールメニューの標識権限。 */
   STORE_MENU_VIEW(Console.STORE);
 
-  /** 能力が属するコンソール。ログイン後の着地先導出と店舗文脈ブリッジ（storeBridge claim）の判定に用いる。 */
+  /** 権限が属するコンソール。ログイン後の着地先導出と店舗文脈ブリッジ（storeBridge claim）の判定に用いる。 */
   public enum Console {
     /** プラットフォーム（HQ）コンソール専用。 */
     PLATFORM,
@@ -74,7 +74,7 @@ public enum Capability {
 
   private final Console console;
 
-  Capability(Console console) {
+  PermissionCode(Console console) {
     this.console = console;
   }
 

@@ -1,6 +1,5 @@
 package com.kizuna.user.api.platform;
 
-import com.kizuna.user.api.dto.GrantHistoryEntryResponse;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
 import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
@@ -19,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 平台スタッフ（能力束×店舗集合×精算範囲）管理 API。全操作 STAFF_MANAGE 能力限定。 */
+/** 平台スタッフ（ロール×店舗集合）管理 API。全操作 STAFF_MANAGE 権限限定。 */
 @RestController
 @RequestMapping("/platform/staff")
 @RequiredArgsConstructor
@@ -36,8 +35,8 @@ public class PlatformStaffController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> create(
-      @Valid @RequestBody PlatformStaffCreateRequest req, Principal principal) {
-    return ResponseEntity.ok(platformStaffService.create(req, principal.getName()));
+      @Valid @RequestBody PlatformStaffCreateRequest req) {
+    return ResponseEntity.ok(platformStaffService.create(req));
   }
 
   @PutMapping("/{id}")
@@ -48,15 +47,6 @@ public class PlatformStaffController {
       Principal principal) {
     return platformStaffService
         .update(id, req, principal.getName())
-        .map(ResponseEntity::ok)
-        .orElseGet(() -> ResponseEntity.notFound().build());
-  }
-
-  @GetMapping("/{id}/grant-history")
-  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
-  public ResponseEntity<List<GrantHistoryEntryResponse>> grantHistory(@PathVariable Long id) {
-    return platformStaffService
-        .grantHistory(id)
         .map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.notFound().build());
   }

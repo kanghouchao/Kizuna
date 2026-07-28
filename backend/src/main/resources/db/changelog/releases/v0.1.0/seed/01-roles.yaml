@@ -1,0 +1,233 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-v0100-001-roles
+      author: kanghouchao
+      # 権限目録（PermissionCode enum 名 16 件）と平台既定ロール 3 件。権限目録は播種が唯一の
+      # 供給経路であり、コード側 enum との一致は AuthorizationScenesIT が機械検証する。
+      # 既定ロールは is_system=true で改廃を拒否する。id は採番に委ね、中間表は自然キー
+      # （ロール名・権限コード）の部分問い合わせで解決する。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: STORE_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: STAFF_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: SYSTEM_CONFIG_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: PLATFORM_MENU_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: PLATFORM_ASSET_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: STORE_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: ORDER_SET_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: ORDER_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: CUSTOMER_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: SHIFT_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: CAST_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: CAST_INVITE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: CAST_FIELD_DEF_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: CAST_FIELD_DEF_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: STORE_PROFILE_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: STORE_MENU_VIEW }
+
+        - insert:
+            tableName: t_roles
+            columns:
+              - column: { name: name, value: "HQ管理者" }
+              - column: { name: is_system, valueBoolean: true }
+        - insert:
+            tableName: t_roles
+            columns:
+              - column: { name: name, value: "店長" }
+              - column: { name: is_system, valueBoolean: true }
+        - insert:
+            tableName: t_roles
+            columns:
+              - column: { name: name, value: "店舗スタッフ" }
+              - column: { name: is_system, valueBoolean: true }
+
+        # HQ管理者: プラットフォーム 5 権限 + 跨店参照 2 権限
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SYSTEM_CONFIG_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'PLATFORM_MENU_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'PLATFORM_ASSET_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_MANAGE')" }
+
+        # 店長: 跨店参照 2 権限 + 店舗 9 権限（店舗側の全権限）
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CUSTOMER_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SHIFT_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_INVITE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_FIELD_DEF_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_FIELD_DEF_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_PROFILE_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_MENU_VIEW')" }
+
+        # 店舗スタッフ: 店長 − CAST_INVITE − CAST_FIELD_DEF_MANAGE（店長専用境界の保存）
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CUSTOMER_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SHIFT_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_FIELD_DEF_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_PROFILE_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_MENU_VIEW')" }
