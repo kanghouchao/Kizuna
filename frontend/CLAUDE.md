@@ -20,7 +20,7 @@ frontend/src/
 ├── entities/     # Mirror of the backend domain modules:
 │                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift
 │                 #   each slice = model (types) / api (requests) / index (public API)
-└── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (generic components)
+└── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (shadcn/ui barrel + hand-written generics)
 ```
 
 Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice), `proxy.ts` + `proxy.test.ts` (the Next proxy entry — Host-based store/platform dispatch, delegating to `shared/lib/proxy`), and `__tests__/` (cross-cutting invariant tests).
@@ -29,6 +29,7 @@ Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice),
 - **Layer dependencies point downward only**: app → _pages → widgets → features → entities → shared.
 - **Entities must not import each other**. Composition spanning multiple entities (e.g. store-site's storefrontService) is the page layer's responsibility.
 - **server-only modules** (those depending on next/headers, etc.) are not exported from the normal index but from a separate `index.server.ts` entry (e.g. serverClient in `shared/api/index.server.ts`).
+- **`shared/ui` is the shadcn/ui layer** (ADR 0004): import primitives through the `@/shared/ui` barrel. The vendored primitives are frozen — which files are vendored vs hand-written, and the restyle rules, live in [`DESIGN.md`](./DESIGN.md). This applies to _any_ change touching `shared/ui`, not only UI work.
 - **Public storefront templates live at `_pages/store-site/templates/<key>/<page>.tsx`** where `<page>` is one of `page` (TOP) / `casts` / `cast-detail` / `schedule` / `menu` / `about`:
   - This is the dynamic-import contract keyed by the cookie's templateKey (dispatched via `loadTemplatePage`, which falls back to the default template's same page for unknown keys), so do not change the path structure.
   - Top-level public routes under `app/(public)/` (`/casts`, `/schedule`, `/menu`, `/about`) are thin shells rendering `StoreSitePage`.
