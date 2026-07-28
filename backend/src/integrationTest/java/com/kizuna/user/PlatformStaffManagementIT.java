@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.Set;
@@ -25,11 +25,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * スタッフ・権限管理（能力束モデル）の HTTP 境界統合テスト。STAFF_MANAGE
- * 能力限定の授権書き込み（付与・変更・停止・履歴）と、付与した店舗集合が本人の次回ログインのデータ範囲に反映されること、 授権外店舗の実データが応答生ボディに一切現れないこと（強断言）を本物の
- * PostgreSQL で固定する。ヘルパは {@link com.kizuna.order.PlatformOrderScopeIT} の {@code
- * ensurePlatformUser}/{@code platformToken} 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT}
- * に由来する。
+ * スタッフ・ロール管理（RBAC）の HTTP 境界統合テスト。STAFF_MANAGE 権限限定の授権書き込み（付与・変更・停止）とロール
+ * CRUD、付与した店舗集合が本人の次回ログインのデータ範囲に反映されること、 授権外店舗の実データが応答生ボディに一切現れないこと（強断言）を本物の PostgreSQL で固定する。ヘルパは
+ * {@link com.kizuna.order.PlatformOrderScopeIT} の {@code ensurePlatformUser}/{@code platformToken}
+ * 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
  */
 class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
@@ -55,7 +54,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
 
   private long storeAId;
   private long storeBId;
@@ -65,7 +64,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     storeAId = ensureStore(STORE_A_DOMAIN, STORE_A_NAME);
     storeBId = ensureStore(STORE_B_DOMAIN, STORE_B_NAME);
     ensurePlatformUser(
-        NON_HQ_EMAIL, UserType.STAFF, bundleIdsOf("店長"), StoreScopeType.ALL_STORES, Set.of());
+        NON_HQ_EMAIL, UserType.STAFF, roleIdsOf("店長"), StoreScopeType.ALL_STORES, Set.of());
     ensurePlatformUser(
         CAST_CANARY_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
   }
@@ -80,7 +79,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   private void ensurePlatformUser(
       String email,
       UserType userType,
-      Set<Long> bundleIds,
+      Set<Long> roleIds,
       StoreScopeType scopeType,
       Set<Long> storeIds) {
     platformUserRepository
@@ -94,15 +93,15 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                         .displayName("スタッフ管理IT " + userType.name())
                         .enabled(true)
                         .userType(userType)
-                        .bundleIds(bundleIds)
+                        .roleIds(roleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
   }
 
   /** 種子の既定束を名称で解決する（束はデータ — id を決め打ちしない）。 */
-  private Set<Long> bundleIdsOf(String bundleName) {
-    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
+  private Set<Long> roleIdsOf(String roleName) {
+    return Set.of(roleRepository.findByName(roleName).orElseThrow().getId());
   }
 
   private String platformToken(String email, String password) {
@@ -120,28 +119,28 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   private static String createBody(
-      String email, String bundleIdsJson, String scopeType, String storeIds) {
+      String email, String roleIdsJson, String scopeType, String storeIds) {
     return String.format(
-        "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"IT表示名\",\"bundle_ids\":%s,"
+        "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"IT表示名\",\"role_ids\":%s,"
             + "\"store_scope_type\":\"%s\",\"store_ids\":%s}",
-        email, PASSWORD, bundleIdsJson, scopeType, storeIds);
+        email, PASSWORD, roleIdsJson, scopeType, storeIds);
   }
 
   private static String updateBody(
-      String bundleIdsJson, String scopeType, String storeIds, long version) {
+      String roleIdsJson, String scopeType, String storeIds, long version) {
     return String.format(
-        "{\"bundle_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s,\"version\":%d}",
-        bundleIdsJson, scopeType, storeIds, version);
+        "{\"role_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s,\"version\":%d}",
+        roleIdsJson, scopeType, storeIds, version);
   }
 
   /** 束名を JSON の id 配列へ解決する（例: ["店長"] → "[3]"）。 */
-  private String bundlesJson(String... bundleNames) {
+  private String rolesJson(String... roleNames) {
     StringBuilder sb = new StringBuilder("[");
-    for (int i = 0; i < bundleNames.length; i++) {
+    for (int i = 0; i < roleNames.length; i++) {
       if (i > 0) {
         sb.append(',');
       }
-      sb.append(capabilityBundleRepository.findByName(bundleNames[i]).orElseThrow().getId());
+      sb.append(roleRepository.findByName(roleNames[i]).orElseThrow().getId());
     }
     return sb.append(']').toString();
   }
@@ -174,7 +173,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(CASE1_EMAIL, bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                createBody(CASE1_EMAIL, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -208,7 +207,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff",
             new HttpEntity<>(
                 createBody(
-                    "staff-it-forbidden@kizuna.test", bundlesJson("店舗スタッフ"), "ALL_STORES", "[]"),
+                    "staff-it-forbidden@kizuna.test", rolesJson("店舗スタッフ"), "ALL_STORES", "[]"),
                 bearerJson(mgr)),
             String.class);
     assertThat(post.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -223,7 +222,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(CASE3_EMAIL, bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                createBody(CASE3_EMAIL, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -246,7 +245,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                updateBody(bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", version),
+                updateBody(rolesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", version),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -267,7 +266,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   @DisplayName("同一メールの二重作成は 2 回目が 400")
   void duplicateEmailRejected() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
-    String body = createBody(DUP_EMAIL, bundlesJson("店舗スタッフ"), "ALL_STORES", "[]");
+    String body = createBody(DUP_EMAIL, rolesJson("店舗スタッフ"), "ALL_STORES", "[]");
 
     ResponseEntity<JsonNode> first =
         rest.postForEntity(
@@ -282,14 +281,14 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   @Test
   @DisplayName("存在しない能力束 id での作成は 400 で拒否")
-  void unknownBundleRejected() {
+  void unknownRoleRejected() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody("staff-it-unknown-bundle@kizuna.test", "[999999]", "ALL_STORES", "[]"),
+                createBody("staff-it-unknown-role@kizuna.test", "[999999]", "ALL_STORES", "[]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -306,7 +305,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(
                     "staff-it-empty-specific@kizuna.test",
-                    bundlesJson("店長"),
+                    rolesJson("店長"),
                     "SPECIFIC_STORES",
                     "[]"),
                 bearerJson(hq)),
@@ -321,7 +320,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(
                     "staff-it-nonempty-all@kizuna.test",
-                    bundlesJson("店長"),
+                    rolesJson("店長"),
                     "ALL_STORES",
                     "[" + storeAId + "]"),
                 bearerJson(hq)),
@@ -342,7 +341,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(
                     "staff-it-unknown-store@kizuna.test",
-                    bundlesJson("店長"),
+                    rolesJson("店長"),
                     "SPECIFIC_STORES",
                     "[999999]"),
                 bearerJson(hq)),
@@ -367,7 +366,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   @Test
   @DisplayName("兼務(HQ管理者+店長の複数束)のスタッフは中央端点と店舗端点の両方へ到達できること")
-  void multiBundleStaffReachesBothConsoles() {
+  void multiRoleStaffReachesBothConsoles() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-multi@kizuna.test";
 
@@ -376,7 +375,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff",
             new HttpEntity<>(
                 createBody(
-                    email, bundlesJson("HQ管理者", "店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                    email, rolesJson("HQ管理者", "店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -398,7 +397,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("停止(enabled=false)後はログイン不可だが一覧に残り、付与履歴に実行主体つきで STOP が記録されること(停止後の記録保全)")
+  @DisplayName("停止(enabled=false)後はログイン不可だが一覧には残ること(停止後の記録保全)")
   void stoppedStaffCannotLoginButRecordsRemain() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stopped@kizuna.test";
@@ -407,7 +406,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, bundlesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
     long staffId = created.getBody().path("id").asLong();
@@ -419,8 +418,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                "{\"bundle_ids\":"
-                    + bundlesJson("店舗スタッフ")
+                "{\"role_ids\":"
+                    + rolesJson("店舗スタッフ")
                     + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
                     + "\"version\":"
                     + version
@@ -445,72 +444,6 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.exchange(
             "/platform/staff", HttpMethod.GET, new HttpEntity<>(bearer(hq)), String.class);
     assertThat(list.getBody()).as("停止後も一覧に残ること").contains(email);
-
-    // 付与履歴: GRANT → CHANGE → STOP が実行主体(SEED_EMAIL)つきで残る。
-    ResponseEntity<String> history =
-        rest.exchange(
-            "/platform/staff/" + staffId + "/grant-history",
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(hq)),
-            String.class);
-    assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(history.getBody())
-        .as("履歴に GRANT/STOP と実行主体が残ること")
-        .contains("GRANT")
-        .contains("STOP")
-        .contains(SEED_EMAIL);
-  }
-
-  @Test
-  @DisplayName("精算範囲(SPECIFIC)つきで付与でき、回読と付与履歴快照に精算次元が現れること(次元の表現)")
-  void settlementScopeDimensionIsExpressible() {
-    String hq = platformToken(SEED_EMAIL, PASSWORD);
-    String email = "staff-it-settlement@kizuna.test";
-    String body =
-        String.format(
-            "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"IT表示名\","
-                + "\"bundle_ids\":%s,\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],"
-                + "\"settlement_scope_type\":\"SPECIFIC_STORES\",\"settlement_store_ids\":[%d]}",
-            email, PASSWORD, bundlesJson("店長"), storeAId);
-
-    ResponseEntity<JsonNode> created =
-        rest.postForEntity(
-            "/platform/staff", new HttpEntity<>(body, bearerJson(hq)), JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
-    long staffId = created.getBody().path("id").asLong();
-    assertThat(created.getBody().path("settlement_scope_type").asString())
-        .isEqualTo("SPECIFIC_STORES");
-    assertThat(created.getBody().path("settlement_store_ids").get(0).asLong()).isEqualTo(storeAId);
-
-    // 回読（一覧）にも精算次元が現れる。
-    ResponseEntity<String> list =
-        rest.exchange(
-            "/platform/staff", HttpMethod.GET, new HttpEntity<>(bearer(hq)), String.class);
-    assertThat(list.getBody()).contains("settlement_scope_type");
-
-    // 付与履歴の快照にも精算次元が残る。
-    ResponseEntity<String> history =
-        rest.exchange(
-            "/platform/staff/" + staffId + "/grant-history",
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(hq)),
-            String.class);
-    assertThat(history.getBody())
-        .as("履歴快照に精算範囲が残ること")
-        .contains("settlement_scope_type")
-        .contains("SPECIFIC_STORES");
-  }
-
-  /** 付与履歴の行数を返す（陳腐更新の拒否で履歴が増えないことの断言に使う）。 */
-  private int grantHistorySize(String token, long staffId) {
-    ResponseEntity<JsonNode> res =
-        rest.exchange(
-            "/platform/staff/" + staffId + "/grant-history",
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(token)),
-            JsonNode.class);
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    return res.getBody().size();
   }
 
   /** スタッフ一覧から email 一致の 1 件を返す（見つからなければ失敗）。 */
@@ -528,7 +461,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("同一 version の二連 PUT は 2 発目が 409 になり、授権・enabled が巻き戻らず付与履歴も増えないこと(AC1)")
+  @DisplayName("同一 version の二連 PUT は 2 発目が 409 になり、授権・enabled が巻き戻らないこと(AC1)")
   void staleUpdateWithSameVersionIsRejectedWithoutRollback() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stale@kizuna.test";
@@ -537,7 +470,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                createBody(email, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -551,7 +484,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>(
                 updateBody(
-                    bundlesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", initialVersion),
+                    rolesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", initialVersion),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -559,16 +492,14 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         .as("更新成功の応答は増加した version を返すこと")
         .isGreaterThan(initialVersion);
 
-    int historyCountAfterFirst = grantHistorySize(hq, staffId);
-
     // 2 発目: 同じ（陳腐化した）version で店舗集合を A へ戻し停止も試みる上書きは 409。
     ResponseEntity<JsonNode> second =
         rest.exchange(
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                "{\"bundle_ids\":"
-                    + bundlesJson("店長")
+                "{\"role_ids\":"
+                    + rolesJson("店長")
                     + ",\"store_scope_type\":\"SPECIFIC_STORES\",\"store_ids\":["
                     + storeAId
                     + "],\"enabled\":false,\"version\":"
@@ -585,11 +516,6 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     assertThat(target.path("store_ids").get(0).asLong())
         .as("店舗集合は 1 発目の B のまま残ること")
         .isEqualTo(storeBId);
-
-    // 付与履歴の行も増えない。
-    assertThat(grantHistorySize(hq, staffId))
-        .as("拒否された陳腐更新で付与履歴が増えないこと")
-        .isEqualTo(historyCountAfterFirst);
   }
 
   @Test
@@ -602,7 +528,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, bundlesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
     long staffId = created.getBody().path("id").asLong();
@@ -614,8 +540,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                "{\"bundle_ids\":"
-                    + bundlesJson("店舗スタッフ")
+                "{\"role_ids\":"
+                    + rolesJson("店舗スタッフ")
                     + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
                     + "\"version\":"
                     + preStopVersion
@@ -631,8 +557,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                "{\"bundle_ids\":"
-                    + bundlesJson("店舗スタッフ")
+                "{\"role_ids\":"
+                    + rolesJson("店舗スタッフ")
                     + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":true,"
                     + "\"version\":"
                     + preStopVersion
@@ -656,26 +582,118 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("能力束一覧は STAFF_MANAGE 保持者に既定 3 束を返し、非保持者には 403")
-  void capabilityBundleListingRequiresStaffManage() {
+  @DisplayName("ロール一覧は STAFF_MANAGE 保持者に既定 3 ロールを返し、非保持者には 403")
+  void roleListingRequiresStaffManage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
-    ResponseEntity<String> bundles =
+    ResponseEntity<String> roles =
         rest.exchange(
-            "/platform/capability-bundles",
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(hq)),
-            String.class);
-    assertThat(bundles.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(bundles.getBody()).contains("HQ管理者").contains("店長").contains("店舗スタッフ");
+            "/platform/roles", HttpMethod.GET, new HttpEntity<>(bearer(hq)), String.class);
+    assertThat(roles.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(roles.getBody()).contains("HQ管理者").contains("店長").contains("店舗スタッフ");
 
     String nonHq = platformToken(NON_HQ_EMAIL, PASSWORD);
     ResponseEntity<String> forbidden =
         rest.exchange(
-            "/platform/capability-bundles",
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(nonHq)),
-            String.class);
+            "/platform/roles", HttpMethod.GET, new HttpEntity<>(bearer(nonHq)), String.class);
     assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("権限目録は STAFF_MANAGE 保持者に 16 件の code+console を返すこと")
+  void permissionCatalogIsExposedToStaffManage() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/permissions", HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(res.getBody()).hasSize(16);
+    assertThat(res.getBody().toString()).contains("ORDER_MANAGE").contains("PLATFORM");
+  }
+
+  @Test
+  @DisplayName("自作ロールは作成・授与でき、授与中は削除が 409、既定ロールの改廃は 400 になること")
+  void customRoleLifecycleAndSystemRoleImmutability() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+
+    // 自作ロールの作成（system=false）。
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/platform/roles",
+            new HttpEntity<>(
+                "{\"name\":\"スタッフ管理IT_受付担当\",\"permissions\":[\"ORDER_MANAGE\"]}", bearerJson(hq)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    long roleId = created.getBody().path("id").asLong();
+    assertThat(created.getBody().path("system").asBoolean()).isFalse();
+    assertThat(created.getBody().path("permissions").get(0).asString()).isEqualTo("ORDER_MANAGE");
+
+    // 存在しない権限コードは 400。
+    ResponseEntity<String> unknownPermission =
+        rest.postForEntity(
+            "/platform/roles",
+            new HttpEntity<>(
+                "{\"name\":\"スタッフ管理IT_不正権限\",\"permissions\":[\"NOT_A_PERMISSION\"]}",
+                bearerJson(hq)),
+            String.class);
+    assertThat(unknownPermission.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    // 未授与のうちは削除できる版を作るため、まず別ロールで授与→削除拒否を確認する。
+    ResponseEntity<JsonNode> staff =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(
+                    "staff-it-customrole@kizuna.test", "[" + roleId + "]", "ALL_STORES", "[]"),
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(staff.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<String> deleteInUse =
+        rest.exchange(
+            "/platform/roles/" + roleId,
+            HttpMethod.DELETE,
+            new HttpEntity<>(bearer(hq)),
+            String.class);
+    assertThat(deleteInUse.getStatusCode()).as("授与中のロール削除は 409").isEqualTo(HttpStatus.CONFLICT);
+
+    // 既定ロール（is_system）の改名・削除は 400。
+    long systemRoleId = roleRepository.findByName("店長").orElseThrow().getId();
+    ResponseEntity<String> renameSystem =
+        rest.exchange(
+            "/platform/roles/" + systemRoleId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                "{\"name\":\"改名試行\",\"permissions\":[\"ORDER_MANAGE\"],\"version\":0}",
+                bearerJson(hq)),
+            String.class);
+    assertThat(renameSystem.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<String> deleteSystem =
+        rest.exchange(
+            "/platform/roles/" + systemRoleId,
+            HttpMethod.DELETE,
+            new HttpEntity<>(bearer(hq)),
+            String.class);
+    assertThat(deleteSystem.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    // 未授与の自作ロールは削除できる（204）。
+    ResponseEntity<JsonNode> unused =
+        rest.postForEntity(
+            "/platform/roles",
+            new HttpEntity<>(
+                "{\"name\":\"スタッフ管理IT_未授与\",\"permissions\":[\"CUSTOMER_MANAGE\"]}",
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(unused.getStatusCode()).isEqualTo(HttpStatus.OK);
+    ResponseEntity<String> deleted =
+        rest.exchange(
+            "/platform/roles/" + unused.getBody().path("id").asLong(),
+            HttpMethod.DELETE,
+            new HttpEntity<>(bearer(hq)),
+            String.class);
+    assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
   }
 }

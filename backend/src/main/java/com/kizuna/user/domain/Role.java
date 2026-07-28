@@ -20,8 +20,8 @@ import lombok.NoArgsConstructor;
  *
  * <p>平台既定ロール（{@code systemRole=true}）は播種で投入され、名称・権限の変更と削除を拒否する。利用者は自作ロールを API から自由に追加・改廃できる。
  *
- * <p>本ロールは Spring Security の {@code ROLE_*} authority（CAST / MEMBER の本人種別標識）とは別物である。ロール保持者の authority
- * は所持権限を {@code PERM_} 接頭辞で発行したものであり、ロール名は authority に現れない。
+ * <p>本ロールは Spring Security の {@code ROLE_*} authority（CAST / MEMBER の本人種別標識）とは別物である。ロール保持者の
+ * authority は所持権限を {@code PERM_} 接頭辞で発行したものであり、ロール名は authority に現れない。
  */
 @Entity
 @Table(name = "t_roles")

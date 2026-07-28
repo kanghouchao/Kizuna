@@ -8,9 +8,9 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
@@ -66,7 +66,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
 
   /** 保存後に採番された第二店舗の実 id。 */
   private long storeBId;
@@ -85,7 +85,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
     ensurePlatformUser(
         SPECIFIC_EMAIL,
         UserType.STAFF,
-        bundleIdsOf("店長"),
+        roleIdsOf("店長"),
         StoreScopeType.SPECIFIC_STORES,
         Set.of(STORE_A));
     ensurePlatformUser(CAST_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
@@ -116,7 +116,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
   private void ensurePlatformUser(
       String email,
       UserType userType,
-      Set<Long> bundleIds,
+      Set<Long> roleIds,
       StoreScopeType scopeType,
       Set<Long> storeIds) {
     platformUserRepository
@@ -130,15 +130,15 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
                         .displayName("集合作用域IT " + userType.name())
                         .enabled(true)
                         .userType(userType)
-                        .bundleIds(bundleIds)
+                        .roleIds(roleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
   }
 
   /** 種子の既定束を名称で解決する（束はデータ — id を決め打ちしない）。 */
-  private Set<Long> bundleIdsOf(String bundleName) {
-    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
+  private Set<Long> roleIdsOf(String roleName) {
+    return Set.of(roleRepository.findByName(roleName).orElseThrow().getId());
   }
 
   private String platformToken(String email, String password) {

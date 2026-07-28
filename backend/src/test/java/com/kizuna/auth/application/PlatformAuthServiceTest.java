@@ -13,17 +13,20 @@ import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.domain.Capability;
-import com.kizuna.user.domain.CapabilityBundle;
-import com.kizuna.user.domain.CapabilityBundleRepository;
+import com.kizuna.user.domain.Permission;
+import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.Role;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,11 +42,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @ExtendWith(MockitoExtension.class)
 class PlatformAuthServiceTest {
 
-  private static final long HQ_BUNDLE_ID = 10L;
-  private static final long STORE_BUNDLE_ID = 20L;
+  private static final long HQ_ROLE_ID = 10L;
+  private static final long STORE_ROLE_ID = 20L;
 
   @Mock private PlatformUserRepository userRepository;
-  @Mock private CapabilityBundleRepository capabilityBundleRepository;
+  @Mock private RoleRepository roleRepository;
+  @Mock private PermissionRepository permissionRepository;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private PlatformJwtIssuer jwtIssuer;
   @Mock private AuthSessionService authSessionService;
@@ -62,6 +66,21 @@ class PlatformAuthServiceTest {
     when(authentication.getPrincipal()).thenReturn(new PlatformUserDetails(user));
   }
 
+  /** 権限解決の 2 段（ロール id → 権限 id 集合 → 権限コード）を配線する。 */
+  private void stubRolePermissions(long roleId, String roleName, Set<PermissionCode> codes) {
+    Set<Long> permissionIds =
+        codes.stream().map(PlatformAuthServiceTest::permissionId).collect(Collectors.toSet());
+    when(roleRepository.findAllById(Set.of(roleId)))
+        .thenReturn(List.of(Role.builder().name(roleName).permissionIds(permissionIds).build()));
+    when(permissionRepository.findAllById(permissionIds))
+        .thenReturn(
+            codes.stream().map(code -> Permission.builder().code(code.name()).build()).toList());
+  }
+
+  private static long permissionId(PermissionCode code) {
+    return code.ordinal() + 1L;
+  }
+
   private PlatformUser hqAdmin() {
     return PlatformUser.builder()
         .email("admin@kizuna.test")
@@ -69,32 +88,43 @@ class PlatformAuthServiceTest {
         .displayName("HQ管理者")
         .enabled(true)
         .userType(UserType.STAFF)
-        .bundleIds(Set.of(HQ_BUNDLE_ID))
+        .roleIds(Set.of(HQ_ROLE_ID))
         .storeScopeType(StoreScopeType.ALL_STORES)
         .storeIds(Set.of())
         .build();
   }
 
-  private CapabilityBundle hqBundle() {
-    return CapabilityBundle.builder()
-        .name("HQ管理者")
-        .capabilities(
-            Set.of(
-                Capability.STORE_MANAGE,
-                Capability.STAFF_MANAGE,
-                Capability.SYSTEM_CONFIG_MANAGE,
-                Capability.PLATFORM_MENU_VIEW,
-                Capability.PLATFORM_ASSET_MANAGE,
-                Capability.STORE_VIEW,
-                Capability.ORDER_SET_MANAGE))
+  private void stubHqRole() {
+    stubRolePermissions(
+        HQ_ROLE_ID,
+        "HQ管理者",
+        Set.of(
+            PermissionCode.STORE_MANAGE,
+            PermissionCode.STAFF_MANAGE,
+            PermissionCode.SYSTEM_CONFIG_MANAGE,
+            PermissionCode.PLATFORM_MENU_VIEW,
+            PermissionCode.PLATFORM_ASSET_MANAGE,
+            PermissionCode.STORE_VIEW,
+            PermissionCode.ORDER_SET_MANAGE));
+  }
+
+  private PlatformUser storeStaff(String email, String displayName, StoreScopeType scopeType) {
+    return PlatformUser.builder()
+        .email(email)
+        .password("stored-hash")
+        .displayName(displayName)
+        .enabled(true)
+        .userType(UserType.STAFF)
+        .roleIds(Set.of(STORE_ROLE_ID))
+        .storeScopeType(scopeType)
+        .storeIds(scopeType == StoreScopeType.ALL_STORES ? Set.of() : Set.of(1L))
         .build();
   }
 
   @Test
   void login_staff_issuesSortedPermAuthoritiesWithoutRoleClaim() {
     stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
-    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
-        .thenReturn(List.of(hqBundle()));
+    stubHqRole();
     Token mockToken = new Token("platform_token", 12345L);
     when(jwtIssuer.issue(eq("admin@kizuna.test"), any())).thenReturn(mockToken);
 
@@ -116,7 +146,7 @@ class PlatformAuthServiceTest {
                 "PERM_STORE_VIEW",
                 "PERM_SYSTEM_CONFIG_MANAGE"));
     assertThat(claims.get("userType")).isEqualTo("STAFF");
-    // HQ は STORE コンソール能力を持たないため店舗文脈を確立できない（僭称ヘッダは従来どおり 403）。
+    // HQ は STORE コンソール権限を持たないため店舗文脈を確立できない（僭称ヘッダは従来どおり 403）。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
     assertThat(claims).doesNotContainKey("role");
     assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
@@ -124,26 +154,11 @@ class PlatformAuthServiceTest {
   }
 
   @Test
-  void login_staffWithStoreCapabilities_setsStoreBridgeTrue() {
-    PlatformUser staff =
-        PlatformUser.builder()
-            .email("staff@kizuna.test")
-            .password("stored-hash")
-            .displayName("店舗スタッフ")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .bundleIds(Set.of(STORE_BUNDLE_ID))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+  void login_staffWithStorePermissions_setsStoreBridgeTrue() {
+    PlatformUser staff = storeStaff("staff@kizuna.test", "店舗スタッフ", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
-    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
-        .thenReturn(
-            List.of(
-                CapabilityBundle.builder()
-                    .name("店舗スタッフ")
-                    .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_VIEW))
-                    .build()));
+    stubRolePermissions(
+        STORE_ROLE_ID, "店舗スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
     when(jwtIssuer.issue(eq("staff@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("staff@kizuna.test", "pass");
@@ -161,62 +176,32 @@ class PlatformAuthServiceTest {
   @Test
   void login_staffWithOnlyStoreMenuMarker_doesNotSetStoreBridge() {
     PlatformUser staff =
-        PlatformUser.builder()
-            .email("menu@kizuna.test")
-            .password("stored-hash")
-            .displayName("店舗メニュー標識のみ")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .bundleIds(Set.of(STORE_BUNDLE_ID))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+        storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("menu@kizuna.test", "pass", staff);
-    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
-        .thenReturn(
-            List.of(
-                CapabilityBundle.builder()
-                    .name("店舗メニュー標識のみ")
-                    .capabilities(Set.of(Capability.STORE_MENU_VIEW))
-                    .build()));
+    stubRolePermissions(STORE_ROLE_ID, "店舗メニュー標識のみ", Set.of(PermissionCode.STORE_MENU_VIEW));
     when(jwtIssuer.issue(eq("menu@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("menu@kizuna.test", "pass");
 
     verify(jwtIssuer).issue(eq("menu@kizuna.test"), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
-    // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できない。
+    // 標識権限（STORE_MENU_VIEW）単独では店舗文脈を確立できない。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
   }
 
   @Test
-  void login_staffWithOperationalStoreCapabilityAndMenuMarker_setsStoreBridgeTrue() {
-    PlatformUser staff =
-        PlatformUser.builder()
-            .email("manager@kizuna.test")
-            .password("stored-hash")
-            .displayName("店長")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .bundleIds(Set.of(STORE_BUNDLE_ID))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+  void login_staffWithOperationalStorePermissionAndMenuMarker_setsStoreBridgeTrue() {
+    PlatformUser staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("manager@kizuna.test", "pass", staff);
-    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
-        .thenReturn(
-            List.of(
-                CapabilityBundle.builder()
-                    .name("店長")
-                    .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_MENU_VIEW))
-                    .build()));
+    stubRolePermissions(
+        STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_MENU_VIEW));
     when(jwtIssuer.issue(eq("manager@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("manager@kizuna.test", "pass");
 
     verify(jwtIssuer).issue(eq("manager@kizuna.test"), claimsCaptor.capture());
     Map<String, Object> claims = claimsCaptor.getValue();
-    // 実運用の STORE 能力（ORDER_MANAGE）を保持するため、標識との併存でも店舗文脈を確立できる。
+    // 実運用の STORE 権限（ORDER_MANAGE）を保持するため、標識との併存でも店舗文脈を確立できる。
     assertThat(claims.get("storeBridge")).isEqualTo(true);
   }
 
@@ -249,8 +234,7 @@ class PlatformAuthServiceTest {
   @Test
   void login_mixedCaseEmail_resolvesToLowercaseUser() {
     stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
-    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
-        .thenReturn(List.of(hqBundle()));
+    stubHqRole();
     when(jwtIssuer.issue(eq("admin@kizuna.test"), any()))
         .thenReturn(new Token("platform_token", 12345L));
 
@@ -265,72 +249,41 @@ class PlatformAuthServiceTest {
   }
 
   @Test
-  void me_staff_returnsCapabilitiesAndDerivedConsole() {
+  void me_staff_returnsPermissionsAndDerivedConsole() {
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
-    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
-        .thenReturn(List.of(hqBundle()));
+    stubHqRole();
 
     Optional<PlatformMeResponse> res = authService.me("admin@kizuna.test");
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
     assertThat(res.get().console()).isEqualTo("platform");
-    assertThat(res.get().capabilities()).contains("STORE_MANAGE", "STAFF_MANAGE");
-    // HQ 束は PLATFORM 能力 + SHARED（STORE_VIEW / ORDER_SET_MANAGE）のみで、STORE コンソール能力を持たないため false。
+    assertThat(res.get().permissions()).contains("STORE_MANAGE", "STAFF_MANAGE");
+    // HQ ロールは PLATFORM 権限 + SHARED（STORE_VIEW / ORDER_SET_MANAGE）のみで、STORE コンソール権限を持たないため false。
     assertThat(res.get().storeBridge()).isFalse();
   }
 
   @Test
-  void me_staffWithStoreConsoleCapability_returnsStoreBridgeTrue() {
-    PlatformUser staff =
-        PlatformUser.builder()
-            .email("manager@kizuna.test")
-            .password("stored-hash")
-            .displayName("店長")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .bundleIds(Set.of(STORE_BUNDLE_ID))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+  void me_staffWithStoreConsolePermission_returnsStoreBridgeTrue() {
+    PlatformUser staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
     when(userRepository.findByEmail("manager@kizuna.test")).thenReturn(Optional.of(staff));
-    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
-        .thenReturn(
-            List.of(
-                CapabilityBundle.builder()
-                    .name("店長")
-                    .capabilities(Set.of(Capability.ORDER_MANAGE, Capability.STORE_VIEW))
-                    .build()));
+    stubRolePermissions(
+        STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
 
     Optional<PlatformMeResponse> res = authService.me("manager@kizuna.test");
 
     assertThat(res).isPresent();
-    // 実運用の STORE コンソール能力（ORDER_MANAGE）保持者は JWT storeBridge claim と同源で true を返す。
+    // 実運用の STORE コンソール権限（ORDER_MANAGE）保持者は JWT storeBridge claim と同源で true を返す。
     assertThat(res.get().storeBridge()).isTrue();
   }
 
   @Test
-  void me_hybridStaffWithPlatformAndStoreCapabilities_returnsPlatformConsoleAndStoreBridgeTrue() {
-    // 混成束（PLATFORM 能力と実運用 STORE 能力の併持）: 着地は platform 優先のまま store_bridge=true。
-    PlatformUser staff =
-        PlatformUser.builder()
-            .email("hybrid@kizuna.test")
-            .password("stored-hash")
-            .displayName("兼務者")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .bundleIds(Set.of(STORE_BUNDLE_ID))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+  void me_hybridStaffWithPlatformAndStorePermissions_returnsPlatformConsoleAndStoreBridgeTrue() {
+    // 混成ロール（PLATFORM 権限と実運用 STORE 権限の併持）: 着地は platform 優先のまま store_bridge=true。
+    PlatformUser staff = storeStaff("hybrid@kizuna.test", "兼務者", StoreScopeType.SPECIFIC_STORES);
     when(userRepository.findByEmail("hybrid@kizuna.test")).thenReturn(Optional.of(staff));
-    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
-        .thenReturn(
-            List.of(
-                CapabilityBundle.builder()
-                    .name("兼務束")
-                    .capabilities(Set.of(Capability.STORE_MANAGE, Capability.ORDER_MANAGE))
-                    .build()));
+    stubRolePermissions(
+        STORE_ROLE_ID, "兼務ロール", Set.of(PermissionCode.STORE_MANAGE, PermissionCode.ORDER_MANAGE));
 
     Optional<PlatformMeResponse> res = authService.me("hybrid@kizuna.test");
 
@@ -340,36 +293,23 @@ class PlatformAuthServiceTest {
   }
 
   @Test
-  void me_staffWithOnlySharedCapabilities_returnsStoreBridgeFalse() {
-    PlatformUser staff =
-        PlatformUser.builder()
-            .email("shared@kizuna.test")
-            .password("stored-hash")
-            .displayName("跨店参照のみ")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .bundleIds(Set.of(STORE_BUNDLE_ID))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
-            .build();
+  void me_staffWithOnlySharedPermissions_returnsStoreBridgeFalse() {
+    PlatformUser staff = storeStaff("shared@kizuna.test", "跨店参照のみ", StoreScopeType.ALL_STORES);
     when(userRepository.findByEmail("shared@kizuna.test")).thenReturn(Optional.of(staff));
-    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
-        .thenReturn(
-            List.of(
-                CapabilityBundle.builder()
-                    .name("跨店参照のみ")
-                    .capabilities(Set.of(Capability.STORE_VIEW, Capability.ORDER_SET_MANAGE))
-                    .build()));
+    stubRolePermissions(
+        STORE_ROLE_ID,
+        "跨店参照のみ",
+        Set.of(PermissionCode.STORE_VIEW, PermissionCode.ORDER_SET_MANAGE));
 
     Optional<PlatformMeResponse> res = authService.me("shared@kizuna.test");
 
     assertThat(res).isPresent();
-    // SHARED 能力（跨店参照）は STORE コンソール能力ではないため店舗文脈を確立できない → false。
+    // SHARED 権限（跨店参照）は STORE コンソール権限ではないため店舗文脈を確立できない → false。
     assertThat(res.get().storeBridge()).isFalse();
   }
 
   @Test
-  void me_cast_returnsNoneConsoleWithoutCapabilities() {
+  void me_cast_returnsNoneConsoleWithoutPermissions() {
     PlatformUser cast =
         PlatformUser.builder()
             .email("cast@kizuna.test")
@@ -387,38 +327,23 @@ class PlatformAuthServiceTest {
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("CAST");
     assertThat(res.get().console()).isEqualTo("none");
-    assertThat(res.get().capabilities()).isEmpty();
+    assertThat(res.get().permissions()).isEmpty();
   }
 
   @Test
   void me_staffWithOnlyStoreMenuMarker_returnsNoneConsole() {
     PlatformUser staff =
-        PlatformUser.builder()
-            .email("menu@kizuna.test")
-            .password("stored-hash")
-            .displayName("店舗メニュー標識のみ")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .bundleIds(Set.of(STORE_BUNDLE_ID))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+        storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
     when(userRepository.findByEmail("menu@kizuna.test")).thenReturn(Optional.of(staff));
-    when(capabilityBundleRepository.findAllById(Set.of(STORE_BUNDLE_ID)))
-        .thenReturn(
-            List.of(
-                CapabilityBundle.builder()
-                    .name("店舗メニュー標識のみ")
-                    .capabilities(Set.of(Capability.STORE_MENU_VIEW))
-                    .build()));
+    stubRolePermissions(STORE_ROLE_ID, "店舗メニュー標識のみ", Set.of(PermissionCode.STORE_MENU_VIEW));
 
     Optional<PlatformMeResponse> res = authService.me("menu@kizuna.test");
 
     assertThat(res).isPresent();
-    // 標識のみの束は店舗コンソールに着地しない（fail-closed）。
+    // 標識のみのロールは店舗コンソールに着地しない（fail-closed）。
     assertThat(res.get().console()).isEqualTo("none");
-    assertThat(res.get().capabilities()).containsExactly("STORE_MENU_VIEW");
-    // 標識能力（STORE_MENU_VIEW）単独では店舗文脈を確立できないため false。
+    assertThat(res.get().permissions()).containsExactly("STORE_MENU_VIEW");
+    // 標識権限（STORE_MENU_VIEW）単独では店舗文脈を確立できないため false。
     assertThat(res.get().storeBridge()).isFalse();
   }
 
@@ -434,8 +359,7 @@ class PlatformAuthServiceTest {
   void updateMe_success_updatesDisplayNameAndReturnsResponse() {
     PlatformUser user = hqAdmin();
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
-    when(capabilityBundleRepository.findAllById(Set.of(HQ_BUNDLE_ID)))
-        .thenReturn(List.of(hqBundle()));
+    stubHqRole();
 
     PlatformMeResponse res = authService.updateMe("admin@kizuna.test", "新しい表示名");
 

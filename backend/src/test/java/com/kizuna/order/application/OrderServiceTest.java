@@ -26,10 +26,10 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.user.domain.Capability;
-import com.kizuna.user.domain.CapabilityBundleRepository;
+import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
@@ -55,7 +55,7 @@ class OrderServiceTest {
   @Mock CustomerRepository customerRepository;
   @Mock CastRepository castRepository;
   @Mock PlatformUserRepository platformUserRepository;
-  @Mock CapabilityBundleRepository capabilityBundleRepository;
+  @Mock RoleRepository roleRepository;
   @Mock StoreContext storeContext;
   @Mock OrderMapper orderMapper;
 
@@ -70,16 +70,16 @@ class OrderServiceTest {
     return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null);
   }
 
-  /** 受付担当ヘルパーが持つ既定束 id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
-  private static final long STAFF_BUNDLE_ID = 30L;
+  /** 受付担当ヘルパーが持つ既定ロール id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
+  private static final long STAFF_ROLE_ID = 30L;
 
   @BeforeEach
-  void stubReceptionistBundle() {
-    // 受付担当検証・受付候補一覧はいずれも「ORDER_MANAGE を含む束 id 集合」を照会する。happy path 用に
-    // 既定束を含む前提で lenient stub し、検証へ到達しないテストで UnnecessaryStubbing を出さない。
+  void stubReceptionistRole() {
+    // 受付担当検証・受付候補一覧はいずれも「ORDER_MANAGE を含むロール id 集合」を照会する。happy path 用に
+    // 既定ロールを含む前提で lenient stub し、検証へ到達しないテストで UnnecessaryStubbing を出さない。
     lenient()
-        .when(capabilityBundleRepository.findIdsByCapability(Capability.ORDER_MANAGE))
-        .thenReturn(Set.of(STAFF_BUNDLE_ID));
+        .when(roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name()))
+        .thenReturn(Set.of(STAFF_ROLE_ID));
   }
 
   private PlatformUser receptionist(
@@ -90,13 +90,13 @@ class OrderServiceTest {
         .displayName("受付担当")
         .enabled(true)
         .userType(userType)
-        .bundleIds(userType == UserType.STAFF ? Set.of(STAFF_BUNDLE_ID) : Set.of())
+        .roleIds(userType == UserType.STAFF ? Set.of(STAFF_ROLE_ID) : Set.of())
         .storeScopeType(scopeType)
         .storeIds(storeIds)
         .build();
   }
 
-  /** 現店舗(store_id=1)を授権し ORDER_MANAGE 能力を持つ受付担当者。 */
+  /** 現店舗(store_id=1)を授権し ORDER_MANAGE 権限を持つ受付担当者。 */
   private PlatformUser authorizedReceptionist() {
     return receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(STORE_ID));
   }
@@ -241,7 +241,7 @@ class OrderServiceTest {
   }
 
   @Test
-  void createRejectsStaffWithoutOrderManageCapability() {
+  void createRejectsStaffWithoutOrderManagePermission() {
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCastId("g1");
     req.setReceptionistId(1L);
@@ -249,7 +249,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
-    // 店舗を授権していても、束が ORDER_MANAGE を含まない STAFF（HQ 系束のみ等）は受付担当者になれない。
+    // 店舗を授権していても、ロールが ORDER_MANAGE を含まない STAFF（HQ 系ロールのみ等）は受付担当者になれない。
     PlatformUser staffWithoutOrderManage =
         PlatformUser.builder()
             .email("hq@kizuna.test")
@@ -257,7 +257,7 @@ class OrderServiceTest {
             .displayName("HQ系スタッフ")
             .enabled(true)
             .userType(UserType.STAFF)
-            .bundleIds(Set.of(31L))
+            .roleIds(Set.of(31L))
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
@@ -278,7 +278,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(castRepository.existsById("g1")).thenReturn(true);
-    // 停止(enabled=false)された STAFF は束・店舗授権を保持したままだが、受付担当者にはなれない。
+    // 停止(enabled=false)された STAFF はロール・店舗授権を保持したままだが、受付担当者にはなれない。
     PlatformUser stopped = authorizedReceptionist();
     stopped.stop();
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(stopped));
@@ -530,23 +530,23 @@ class OrderServiceTest {
   }
 
   @Test
-  void listReceptionistsExcludesStaffWithoutOrderManageCapability() {
+  void listReceptionistsExcludesStaffWithoutOrderManagePermission() {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    PlatformUser noCapability =
+    PlatformUser noPermission =
         PlatformUser.builder()
             .email("hq2@kizuna.test")
             .password("pw")
             .displayName("HQ系スタッフ2")
             .enabled(true)
             .userType(UserType.STAFF)
-            .bundleIds(Set.of(31L))
+            .roleIds(Set.of(31L))
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
-    noCapability.setId(10L);
+    noPermission.setId(10L);
     when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
             UserType.STAFF, STORE_ID))
-        .thenReturn(List.of(noCapability));
+        .thenReturn(List.of(noPermission));
 
     assertThat(service.listReceptionists()).isEmpty();
   }

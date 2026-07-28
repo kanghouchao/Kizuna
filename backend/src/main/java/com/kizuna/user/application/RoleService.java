@@ -117,8 +117,8 @@ public class RoleService {
   /**
    * 保存時の整合性違反を 400 へ変換する（現状の経路は名称の一意制約違反のみ — 権限は事前検証済み）。
    *
-   * <p>権限集合の @ElementCollection 行はトランザクション commit 時に flush されるため、{@code save} だけでは違反がこの try
-   * を突き抜けて 500 になる。{@code saveAndFlush} で違反をここで顕在化させる。
+   * <p>権限集合の @ElementCollection 行はトランザクション commit 時に flush されるため、{@code save} だけでは違反がこの try を突き抜けて
+   * 500 になる。{@code saveAndFlush} で違反をここで顕在化させる。
    */
   private Role save(Role role) {
     try {

@@ -10,9 +10,9 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
@@ -74,7 +74,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   @Autowired private CastRepository castRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
 
   @BeforeEach
   void prepareBridgeFixture() {
@@ -86,7 +86,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     ensurePlatformUser(
         LOGOUT_EMAIL,
         UserType.STAFF,
-        bundleIdsOf("店舗スタッフ"),
+        roleIdsOf("店舗スタッフ"),
         StoreScopeType.SPECIFIC_STORES,
         Set.of(STORE_A));
   }
@@ -116,7 +116,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   private void ensurePlatformUser(
       String email,
       UserType userType,
-      Set<Long> bundleIds,
+      Set<Long> roleIds,
       StoreScopeType scopeType,
       Set<Long> storeIds) {
     platformUserRepository
@@ -130,15 +130,15 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
                         .displayName("過橋IT " + userType.name())
                         .enabled(true)
                         .userType(userType)
-                        .bundleIds(bundleIds)
+                        .roleIds(roleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
   }
 
   /** 種子の既定束を名称で解決する（束はデータ — id を決め打ちしない）。 */
-  private Set<Long> bundleIdsOf(String bundleName) {
-    return Set.of(capabilityBundleRepository.findByName(bundleName).orElseThrow().getId());
+  private Set<Long> roleIdsOf(String roleName) {
+    return Set.of(roleRepository.findByName(roleName).orElseThrow().getId());
   }
 
   private ResponseEntity<JsonNode> platformLogin(String email, String password) {

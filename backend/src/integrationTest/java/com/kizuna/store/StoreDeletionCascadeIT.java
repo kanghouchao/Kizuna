@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.Set;
@@ -45,7 +45,7 @@ class StoreDeletionCascadeIT {
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
 
   private String platformLogin() {
     HttpHeaders headers = new HttpHeaders();
@@ -80,8 +80,7 @@ class StoreDeletionCascadeIT {
                 .displayName("店舗授権カスケード検証")
                 .enabled(true)
                 .userType(UserType.STAFF)
-                .bundleIds(
-                    Set.of(capabilityBundleRepository.findByName("店長").orElseThrow().getId()))
+                .roleIds(Set.of(roleRepository.findByName("店長").orElseThrow().getId()))
                 .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(storeId))
                 .build());

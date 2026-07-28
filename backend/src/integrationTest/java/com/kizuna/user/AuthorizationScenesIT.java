@@ -5,16 +5,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
-import com.kizuna.user.domain.Capability;
-import com.kizuna.user.domain.CapabilityBundle;
-import com.kizuna.user.domain.CapabilityBundleRepository;
+import com.kizuna.user.domain.Permission;
+import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.Role;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,10 +37,9 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>場面の分担: 場面 1（他店舗の閲覧・更新不可）は {@link com.kizuna.menu.MenuCrossStoreIT} / {@link
  * com.kizuna.order.OrderCrossStoreIT} 等、場面 2（複数店舗の切替・集約）は {@link com.kizuna.auth.PlatformBridgeIT}
- * / {@link com.kizuna.order.PlatformOrderScopeIT}、場面 3（精算範囲次元の表現）は {@link
- * PlatformStaffManagementIT#settlementScopeDimensionIsExpressible} が既に固定しているため本クラスでは重複させない。
+ * / {@link com.kizuna.order.PlatformOrderScopeIT} が既に固定しているため本クラスでは重複させない。
  *
- * <p>本クラスは場面 4・5（CAST/MEMBER 本人種別の隔離）と場面 6（公開/内部の分離 +「束はデータ」の証明）を扱う。 強断言様式（リポジトリ直挿カナリア + 生ボディ
+ * <p>本クラスは場面 4・5（CAST/MEMBER 本人種別の隔離）と場面 6（公開/内部の分離 +「ロールはデータ」の証明）を扱う。 強断言様式（リポジトリ直挿カナリア + 生ボディ
  * doesNotContain）は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
  */
 class AuthorizationScenesIT extends CrossStoreTestSupport {
@@ -53,20 +56,21 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   /** STORE_VIEW も店舗コンソール資格も持たない STAFF（403 を検証）。 */
   private static final String PLATFORM_ONLY_EMAIL = "scenes-it-platform-only@kizuna.test";
 
-  /** 種子に無い束（DB データとして追加 — 発版不要の証明）。 */
-  private static final String PROFILE_ONLY_BUNDLE = "公開プロフィール担当IT";
+  /** 種子に無いロール（DB データとして追加 — 発版不要の証明）。 */
+  private static final String PROFILE_ONLY_ROLE = "公開プロフィール担当IT";
 
-  /** STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ — storeBridge=true）。 */
-  private static final String STORE_CONSOLE_ONLY_BUNDLE = "受注担当IT";
+  /** STORE_VIEW を含まない店舗コンソールロール（ORDER_MANAGE のみ — storeBridge=true）。 */
+  private static final String STORE_CONSOLE_ONLY_ROLE = "受注担当IT";
 
-  /** PLATFORM 能力のみで STORE_VIEW も店舗コンソール能力も持たない束。 */
-  private static final String PLATFORM_ONLY_BUNDLE = "プラットフォームメニュー標識のみIT";
+  /** PLATFORM 権限のみで STORE_VIEW も店舗コンソール権限も持たないロール。 */
+  private static final String PLATFORM_ONLY_ROLE = "プラットフォームメニュー標識のみIT";
 
   /** 内部キャスト情報のカナリア。公開プロフィール応答へ混入しないことを強断言する。 */
   private static final String CAST_CANARY_NAME = "場面IT_内部キャスト機密カナリア";
 
   @Autowired private PlatformUserRepository platformUserRepository;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
+  @Autowired private PermissionRepository permissionRepository;
   @Autowired private CastRepository castRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
@@ -77,16 +81,16 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
     ensureUser(
         MEMBER_EMAIL, UserType.MEMBER, Set.of(), StoreScopeType.SPECIFIC_STORES, Set.of(STORE_A));
 
-    // 場面 6: 種子に無い束を DB データとして現場作成し、STORE_PROFILE_MANAGE のみを持つスタッフへ授与する。
-    CapabilityBundle profileOnly =
-        capabilityBundleRepository
-            .findByName(PROFILE_ONLY_BUNDLE)
+    // 場面 6: 種子に無いロールを DB データとして現場作成し、STORE_PROFILE_MANAGE のみを持つスタッフへ授与する。
+    Role profileOnly =
+        roleRepository
+            .findByName(PROFILE_ONLY_ROLE)
             .orElseGet(
                 () ->
-                    capabilityBundleRepository.save(
-                        CapabilityBundle.builder()
-                            .name(PROFILE_ONLY_BUNDLE)
-                            .capabilities(Set.of(Capability.STORE_PROFILE_MANAGE))
+                    roleRepository.save(
+                        Role.builder()
+                            .name(PROFILE_ONLY_ROLE)
+                            .permissionIds(permissionIdsOf(PermissionCode.STORE_PROFILE_MANAGE))
                             .build()));
     ensureUser(
         PROFILE_ONLY_EMAIL,
@@ -95,16 +99,16 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
         StoreScopeType.SPECIFIC_STORES,
         Set.of(STORE_A));
 
-    // STORE_VIEW を含まない店舗コンソール束（ORDER_MANAGE のみ）を ALL_STORES スタッフへ授与する。
-    CapabilityBundle storeConsoleOnly =
-        capabilityBundleRepository
-            .findByName(STORE_CONSOLE_ONLY_BUNDLE)
+    // STORE_VIEW を含まない店舗コンソールロール（ORDER_MANAGE のみ）を ALL_STORES スタッフへ授与する。
+    Role storeConsoleOnly =
+        roleRepository
+            .findByName(STORE_CONSOLE_ONLY_ROLE)
             .orElseGet(
                 () ->
-                    capabilityBundleRepository.save(
-                        CapabilityBundle.builder()
-                            .name(STORE_CONSOLE_ONLY_BUNDLE)
-                            .capabilities(Set.of(Capability.ORDER_MANAGE))
+                    roleRepository.save(
+                        Role.builder()
+                            .name(STORE_CONSOLE_ONLY_ROLE)
+                            .permissionIds(permissionIdsOf(PermissionCode.ORDER_MANAGE))
                             .build()));
     ensureUser(
         STORE_CONSOLE_ALL_EMAIL,
@@ -113,16 +117,16 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
         StoreScopeType.ALL_STORES,
         Set.of());
 
-    // STORE_VIEW も店舗コンソール能力も持たない PLATFORM 標識のみの束（403 を検証）。
-    CapabilityBundle platformOnly =
-        capabilityBundleRepository
-            .findByName(PLATFORM_ONLY_BUNDLE)
+    // STORE_VIEW も店舗コンソール権限も持たない PLATFORM 標識のみのロール（403 を検証）。
+    Role platformOnly =
+        roleRepository
+            .findByName(PLATFORM_ONLY_ROLE)
             .orElseGet(
                 () ->
-                    capabilityBundleRepository.save(
-                        CapabilityBundle.builder()
-                            .name(PLATFORM_ONLY_BUNDLE)
-                            .capabilities(Set.of(Capability.PLATFORM_MENU_VIEW))
+                    roleRepository.save(
+                        Role.builder()
+                            .name(PLATFORM_ONLY_ROLE)
+                            .permissionIds(permissionIdsOf(PermissionCode.PLATFORM_MENU_VIEW))
                             .build()));
     ensureUser(
         PLATFORM_ONLY_EMAIL,
@@ -144,7 +148,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   private void ensureUser(
       String email,
       UserType userType,
-      Set<Long> bundleIds,
+      Set<Long> roleIds,
       StoreScopeType scopeType,
       Set<Long> storeIds) {
     platformUserRepository
@@ -158,10 +162,17 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
                         .displayName("場面IT " + userType.name())
                         .enabled(true)
                         .userType(userType)
-                        .bundleIds(bundleIds)
+                        .roleIds(roleIds)
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
+  }
+
+  /** 権限コードから播種済み権限行の id 集合を引く（ロールは権限を id 集合で持つ）。 */
+  private Set<Long> permissionIdsOf(PermissionCode code) {
+    return permissionRepository.findByCodeIn(Set.of(code.name())).stream()
+        .map(Permission::getId)
+        .collect(Collectors.toSet());
   }
 
   private String platformToken(String email) {
@@ -192,8 +203,8 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("場面4: CAST は staff 管理・跨店参照・店舗文脈のいずれにも到達できないこと（本人種別は能力モデル外）")
-  void scene4_castIsIsolatedFromStaffCapabilities() {
+  @DisplayName("場面4: CAST は staff 管理・跨店参照・店舗文脈のいずれにも到達できないこと（本人種別は権限モデル外）")
+  void scene4_castIsIsolatedFromStaffPermissions() {
     String token = platformToken(CAST_EMAIL);
 
     ResponseEntity<String> staff =
@@ -218,7 +229,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
 
   @Test
   @DisplayName("場面5: MEMBER も同様に隔離されること")
-  void scene5_memberIsIsolatedFromStaffCapabilities() {
+  void scene5_memberIsIsolatedFromStaffPermissions() {
     String token = platformToken(MEMBER_EMAIL);
 
     ResponseEntity<String> staff =
@@ -236,11 +247,11 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("場面6: 種子に無い公開担当束(DB データ追加のみ)で店舗档案へ到達でき、内部キャスト情報へは到達も混入もしないこと")
-  void scene6_nonSeedBundleGrantsProfileOnlyAccess() {
+  @DisplayName("場面6: 種子に無い公開担当ロール(DB データ追加のみ)で店舗档案へ到達でき、内部キャスト情報へは到達も混入もしないこと")
+  void scene6_nonSeedRoleGrantsProfileOnlyAccess() {
     String token = platformToken(PROFILE_ONLY_EMAIL);
 
-    // STORE_PROFILE_MANAGE を含む束で店舗档案(公開側設定)へ到達できる — 束はデータであり発版を要しない。
+    // STORE_PROFILE_MANAGE を含むロールで店舗档案(公開側設定)へ到達できる — ロールはデータであり発版を要しない。
     ResponseEntity<String> profile =
         rest.exchange(
             "/store/config",
@@ -323,5 +334,22 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
             String.class);
 
     assertThat(stores.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("権限目録の播種行がコード側 PermissionCode の全成員と一致すること")
+  void seededPermissionCatalogMatchesEnum() {
+    // 目録は播種が唯一の供給経路。enum に足りない行があると GET /platform/permissions が
+    // 提示したコードをロール作成が「存在しない」と 400 で弾く不整合が起きるため、双方向で一致を固定する。
+    Set<String> seeded =
+        permissionRepository.findAll().stream()
+            .map(Permission::getCode)
+            .collect(Collectors.toSet());
+    Set<String> declared =
+        Arrays.stream(PermissionCode.values())
+            .map(PermissionCode::name)
+            .collect(Collectors.toSet());
+
+    assertThat(seeded).isEqualTo(declared);
   }
 }

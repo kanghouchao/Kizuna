@@ -132,7 +132,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
                         .displayName("週間集約IT " + userType.name())
                         .enabled(true)
                         .userType(userType)
-                        .bundleIds(Set.of())
+                        .roleIds(Set.of())
                         .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));

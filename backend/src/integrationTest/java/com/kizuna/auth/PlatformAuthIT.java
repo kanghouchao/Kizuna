@@ -3,9 +3,9 @@ package com.kizuna.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
-import com.kizuna.user.domain.CapabilityBundleRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.Instant;
@@ -55,7 +55,7 @@ class PlatformAuthIT {
   private static final String DISABLED_ACCOUNT_MESSAGE = "アカウントが無効化されています";
 
   @Autowired private TestRestTemplate rest;
-  @Autowired private CapabilityBundleRepository capabilityBundleRepository;
+  @Autowired private RoleRepository roleRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private JwtEncoder jwtEncoder;
@@ -173,7 +173,7 @@ class PlatformAuthIT {
                         .displayName("無効化済み")
                         .enabled(false)
                         .userType(UserType.STAFF)
-                        .bundleIds(managerBundleIds())
+                        .roleIds(managerRoleIds())
                         .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of(1L))
                         .build()));
@@ -195,7 +195,7 @@ class PlatformAuthIT {
     assertThat(body.path("display_name").asString()).isEqualTo(SEED_DISPLAY_NAME);
     assertThat(body.path("user_type").asString()).isEqualTo("STAFF");
     assertThat(body.path("console").asString()).isEqualTo("platform");
-    assertThat(body.path("capabilities").toString()).contains("STAFF_MANAGE");
+    assertThat(body.path("permissions").toString()).contains("STAFF_MANAGE");
     assertThat(body.path("store_scope_type").asString()).isEqualTo("ALL_STORES");
     assertThat(body.path("store_ids")).isEmpty();
   }
@@ -214,7 +214,7 @@ class PlatformAuthIT {
                         .displayName("個別店舗担当")
                         .enabled(true)
                         .userType(UserType.STAFF)
-                        .bundleIds(managerBundleIds())
+                        .roleIds(managerRoleIds())
                         .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of(1L))
                         .build()));
@@ -242,7 +242,7 @@ class PlatformAuthIT {
   }
 
   /** 種子の既定束「店長」を名称で解決する（束はデータ — id を決め打ちしない）。 */
-  private Set<Long> managerBundleIds() {
-    return Set.of(capabilityBundleRepository.findByName("店長").orElseThrow().getId());
+  private Set<Long> managerRoleIds() {
+    return Set.of(roleRepository.findByName("店長").orElseThrow().getId());
   }
 }
