@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ListPage, ListPageState } from '../ListPage';
 
 const baseState = (override: Partial<ListPageState> = {}): ListPageState => ({
@@ -171,5 +171,58 @@ describe('ListPage', () => {
     );
 
     expect(container.querySelector('form')).toBeNull();
+  });
+
+  it('削除等で現在ページの rows が空になっても pageCount > 1 ならページネーションを描き続けること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ page: 2, pageCount: 3, total: 25, rows: [] })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByText('empty')).toBeInTheDocument();
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+    expect(screen.getByText('25 件')).toBeInTheDocument();
+  });
+
+  it('現在ページが 5 起点の window を超えても番号ボタンに含まれること', () => {
+    const onPageChange = jest.fn();
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({
+          page: 6,
+          pageCount: 10,
+          total: 100,
+          rows: Array(10).fill('x'),
+          onPageChange,
+        })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByRole('button', { name: '7' })).toHaveClass('border-primary');
+  });
+
+  it('デスクトップ用の前へ/次へアイコンボタンにアクセシブルネームがあること', () => {
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ page: 1, pageCount: 3, total: 21, rows: Array(10).fill('x') })}
+        emptyMessage="empty"
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).getByRole('button', { name: '前へ' })).toBeInTheDocument();
+    expect(within(nav).getByRole('button', { name: '次へ' })).toBeInTheDocument();
   });
 });

@@ -62,6 +62,14 @@ export function ListPage({
   const from = isLastPage ? total - rows.length + 1 : page * rows.length + 1;
   const to = isLastPage ? total : from + rows.length - 1;
 
+  // 削除等で現在ページの rows が空になっても（total は残っていても）前ページへ戻れるよう、
+  // ページネーションは isEmpty 分岐の外側で常に描画する
+  const windowSize = Math.min(5, pageCount);
+  const windowStart = Math.max(
+    0,
+    Math.min(page - Math.floor(windowSize / 2), pageCount - windowSize)
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -89,80 +97,80 @@ export function ListPage({
         ) : isEmpty ? (
           <div className="p-8 text-center text-muted-foreground">{emptyMessage}</div>
         ) : (
-          <>
-            {children}
+          children
+        )}
 
-            {pageCount > 1 && (
-              <div className="px-4 py-3 flex items-center justify-between border-t sm:px-6">
-                <div className="flex-1 flex justify-between sm:hidden">
+        {!isLoading && pageCount > 1 && (
+          <div className="px-4 py-3 flex items-center justify-between border-t sm:px-6">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPageChange(page - 1)}
+                disabled={page <= 0}
+              >
+                前へ
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-3"
+                onClick={() => onPageChange(page + 1)}
+                disabled={page >= pageCount - 1}
+              >
+                次へ
+              </Button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {rows.length > 0 ? `${total} 件中 ${from}-${to} を表示` : `${total} 件`}
+                </p>
+              </div>
+              <div>
+                <nav className="flex gap-1">
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon-sm"
+                    aria-label="前へ"
                     onClick={() => onPageChange(page - 1)}
                     disabled={page <= 0}
                   >
-                    前へ
+                    <ChevronLeftIcon />
                   </Button>
+
+                  {Array.from({ length: windowSize }, (_, i) => {
+                    const buttonPage = windowStart + i;
+                    return (
+                      <Button
+                        key={buttonPage}
+                        variant="outline"
+                        size="sm"
+                        className={
+                          buttonPage === page
+                            ? 'border-primary bg-primary/10 text-primary-strong'
+                            : undefined
+                        }
+                        onClick={() => onPageChange(buttonPage)}
+                      >
+                        {buttonPage + 1}
+                      </Button>
+                    );
+                  })}
+
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="ml-3"
+                    size="icon-sm"
+                    aria-label="次へ"
                     onClick={() => onPageChange(page + 1)}
                     disabled={page >= pageCount - 1}
                   >
-                    次へ
+                    <ChevronRightIcon />
                   </Button>
-                </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {total} 件中 {from}-{to} を表示
-                    </p>
-                  </div>
-                  <div>
-                    <nav className="flex gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={() => onPageChange(page - 1)}
-                        disabled={page <= 0}
-                      >
-                        <ChevronLeftIcon />
-                      </Button>
-
-                      {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
-                        const buttonPage = i;
-                        return (
-                          <Button
-                            key={buttonPage}
-                            variant="outline"
-                            size="sm"
-                            className={
-                              buttonPage === page
-                                ? 'border-primary bg-primary/10 text-primary-strong'
-                                : undefined
-                            }
-                            onClick={() => onPageChange(buttonPage)}
-                          >
-                            {buttonPage + 1}
-                          </Button>
-                        );
-                      })}
-
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={() => onPageChange(page + 1)}
-                        disabled={page >= pageCount - 1}
-                      >
-                        <ChevronRightIcon />
-                      </Button>
-                    </nav>
-                  </div>
-                </div>
+                </nav>
               </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
       </Card>
     </div>

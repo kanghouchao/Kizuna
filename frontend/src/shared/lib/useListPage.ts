@@ -47,7 +47,10 @@ export function useListPage<T>(
     };
   }, [load]);
 
-  // 検索条件が変わったときの再取得は 1 ページ目に戻す
+  // 検索条件が変わったときの再取得は 1 ページ目に戻す。
+  // fetcher クロージャは直近のレンダーの値を参照するため、検索条件の state を更新した
+  // 同一ハンドラ内で続けて呼ぶと再レンダー前の古い条件で取得してしまう
+  // （useManagedList の refetch と同じ制約）。state 更新の反映後（次のレンダー以降）に呼ぶこと。
   const search = useCallback(() => load(0), [load]);
   const onPageChange = useCallback((page: number) => load(page), [load]);
 
