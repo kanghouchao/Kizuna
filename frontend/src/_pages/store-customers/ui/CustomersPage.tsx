@@ -52,7 +52,7 @@ export default function CustomersPage() {
     try {
       await customerApi.delete(deleteTarget.id);
       toast.success('顧客を削除しました');
-      void list.onPageChange(list.page);
+      void list.reload();
     } catch {
       toast.error('顧客の削除に失敗しました');
     }

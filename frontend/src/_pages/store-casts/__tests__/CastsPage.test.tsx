@@ -182,7 +182,7 @@ describe('キャスト一覧のページ送りと検索', () => {
     mockedMe.mockResolvedValue(meWith(['CAST_MANAGE']));
   });
 
-  // 従来は size: 100 の先頭切り取りで、101 人目以降には到達手段が無かった
+  // 1 ページ 20 件で、101 人目以降にもページ送りで到達できることを固定する
   it('2 ページ目のボタンで 0 起点の page=1 を取得すること', async () => {
     mockedCastApi.list.mockResolvedValue({ rows: [cast], page: 0, pageCount: 6, total: 120 });
 

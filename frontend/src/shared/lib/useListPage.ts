@@ -53,6 +53,8 @@ export function useListPage<T>(
   // （useManagedList の refetch と同じ制約）。state 更新の反映後（次のレンダー以降）に呼ぶこと。
   const search = useCallback(() => load(0), [load]);
   const onPageChange = useCallback((page: number) => load(page), [load]);
+  // 削除・発行など一覧を書き換える操作の後始末。現在のページをそのまま取り直す
+  const reload = useCallback(() => load(pageResult.page), [load, pageResult.page]);
 
-  return { ...pageResult, isLoading, search, onPageChange };
+  return { ...pageResult, isLoading, search, onPageChange, reload };
 }

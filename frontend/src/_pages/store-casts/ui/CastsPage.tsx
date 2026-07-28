@@ -60,16 +60,11 @@ export default function CastListPage() {
   );
   const casts = list.rows;
 
-  /** 現在のページを取り直す（発行・削除の後始末） */
-  const reload = () => {
-    void list.onPageChange(list.page);
-  };
-
   /** 招待発行成功時: モーダル表示と一覧の再取得を行う（isLoading に連動して行がアンマウントされても、
    *  モーダル state はページ層が持つためモーダルは表示され続ける） */
   const handleIssued = (result: IssuedInvitation) => {
     setIssuedInvitation(result);
-    reload();
+    void list.reload();
   };
 
   /** キャストを削除する */
@@ -78,7 +73,7 @@ export default function CastListPage() {
     try {
       await castApi.delete(deleteTarget.id);
       toast.success('キャストを削除しました');
-      reload();
+      void list.reload();
     } catch {
       toast.error('キャストの削除に失敗しました');
     }

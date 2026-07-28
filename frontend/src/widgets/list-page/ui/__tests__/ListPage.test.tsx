@@ -12,6 +12,19 @@ const baseState = (override: Partial<ListPageState> = {}): ListPageState => ({
 });
 
 describe('ListPage', () => {
+  // DESIGN.md が外殻の面として定める class 文字列。6 ページ側の複製を退役させた分、
+  // この 1 本が唯一のアンカーになる
+  it('外枠は space-y-6、テーブルカードは py-0 overflow-hidden であること', () => {
+    const { container } = render(
+      <ListPage title="顧客管理" state={baseState()} emptyMessage="empty">
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(container.firstElementChild).toHaveClass('space-y-6');
+    expect(screen.getByText('table-content').parentElement).toHaveClass('py-0', 'overflow-hidden');
+  });
+
   it('見出しを h1 として描き、副題とアクションを並べること', () => {
     render(
       <ListPage

@@ -310,7 +310,9 @@ A bare interactive element does not inherit the primitives' focus ring, so it ha
 
 **The shell is a component, not a set of class strings to copy: `ListPage` from `@/widgets/list-page`.** It owns the outer spacing, the heading block, the search card, the table card wrapper, the loading / empty branches and the pagination control. A list page passes `title / description / actions / search / state / emptyMessage` and supplies its own table markup as `children` — nothing above the table is the page's to write, and a `space-y-6` or `text-2xl` surviving in a list page file means the shell was re-derived rather than composed.
 
-The six record-list pages are `store-customers` / `store-casts` / `store-orders` / `platform-staff` / `platform-stores` / `store-cast-fields`. Every other admin page still writes its own heading markup or composes `PageHeader` (`@/widgets/page-header`, the heading block alone) — the form pages, the two settings consoles, `store-shifts` and `store-select`. Those are not list pages; converting one in passing is a separate question.
+The six record-list pages are `store-customers` / `store-casts` / `store-orders` / `platform-staff` / `platform-stores` / `store-cast-fields`. Every other admin page — the form pages, the two settings consoles, `store-shifts` and `store-select` — still hand-writes its own heading markup, and for those the heading block alone is available as `PageHeader` (`@/widgets/page-header`; no page composes it today). Widening it to them is a separate question and is not authority to convert one in passing.
+
+**The page heading is `text-2xl` at every breakpoint** — no `sm:text-3xl` step, no `font-semibold` variant. `ListPage` enforces that for the six; a hand-written heading elsewhere follows the same rule.
 
 The paging state comes from `useListPage` (`@/shared/lib`), whose fetcher returns the normalized `PageResult` (`rows / page / pageCount / total`, `page` 0-based) that `shared/api`'s adapters produce from either wire format. A list backed by a plain array API omits `page / pageCount / total / onPageChange` and the shell renders no pagination.
 

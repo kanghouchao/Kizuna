@@ -39,6 +39,23 @@ describe('useListPage', () => {
     expect(result.current.page).toBe(2);
   });
 
+  it('reload は現在のページのまま再取得する', async () => {
+    const fetcher = jest.fn(async (page: number) => pageOf(page));
+    const { result } = renderHook(() => useListPage(fetcher, '取得失敗'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.onPageChange(2);
+    });
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(fetcher).toHaveBeenLastCalledWith(2);
+    expect(result.current.page).toBe(2);
+  });
+
   it('search は現在ページに関わらず 0 ページ目へ戻して再取得する', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
     const { result } = renderHook(() => useListPage(fetcher, '取得失敗'));

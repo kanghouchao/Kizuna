@@ -42,7 +42,7 @@ export default function StoresPage() {
     try {
       await platformStoreApi.delete(deleteTarget.id);
       toast.success('店舗を削除しました');
-      void list.onPageChange(list.page);
+      void list.reload();
     } catch {
       toast.error('店舗の削除に失敗しました');
     }
