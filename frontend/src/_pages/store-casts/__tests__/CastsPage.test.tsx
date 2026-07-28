@@ -191,7 +191,7 @@ describe('キャスト一覧のページ送りと検索', () => {
     expect(mockedCastApi.list).toHaveBeenCalledWith({
       page: 0,
       size: 20,
-      sort: 'displayOrder,asc',
+      sort: 'displayOrder,id,asc',
       search: undefined,
     });
 
@@ -201,7 +201,27 @@ describe('キャスト一覧のページ送りと検索', () => {
       expect(mockedCastApi.list).toHaveBeenLastCalledWith({
         page: 1,
         size: 20,
-        sort: 'displayOrder,asc',
+        sort: 'displayOrder,id,asc',
+        search: undefined,
+      })
+    );
+  });
+
+  it('送信していない検索語はページ送りに紛れ込まないこと', async () => {
+    mockedCastApi.list.mockResolvedValue({ rows: [cast], page: 0, pageCount: 6, total: 120 });
+
+    render(<CastListPage />);
+    await screen.findByText('花子');
+
+    // 入力しただけ（検索は未送信）でページ送りすると、表示中の結果集合とページが食い違う
+    fireEvent.change(screen.getByPlaceholderText('名前で検索...'), { target: { value: '花' } });
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+
+    await waitFor(() =>
+      expect(mockedCastApi.list).toHaveBeenLastCalledWith({
+        page: 1,
+        size: 20,
+        sort: 'displayOrder,id,asc',
         search: undefined,
       })
     );
@@ -220,7 +240,7 @@ describe('キャスト一覧のページ送りと検索', () => {
       expect(mockedCastApi.list).toHaveBeenLastCalledWith({
         page: 0,
         size: 20,
-        sort: 'displayOrder,asc',
+        sort: 'displayOrder,id,asc',
         search: '花',
       })
     );

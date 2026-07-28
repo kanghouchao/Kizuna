@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon, SettingsIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
@@ -48,17 +48,28 @@ export default function CastListPage() {
         // 取得失敗時は導線を出さない（fail-closed）。操作自体はサーバ側が拒否する。
       });
   }, []);
+  // 適用済みの検索語。取得は検索の送信・ページ送り・再取得のいずれからも走るため、
+  // 入力中の state を fetcher が読むと、送信していない語がページ送りに紛れ込む。
+  const appliedSearch = useRef('');
   const list = useListPage(
     page =>
       castApi.list({
         page,
         size: PAGE_SIZE,
-        sort: 'displayOrder,asc',
-        search: search || undefined,
+        // display_order は既定値 0 のため一意でない。offset ページングの境界を確定させるには
+        // 一意な副キーが要る（sort=prop1,prop2,direction は Spring Data の複数キー形式）
+        sort: 'displayOrder,id,asc',
+        search: appliedSearch.current || undefined,
       }),
     'キャスト一覧の取得に失敗しました'
   );
   const casts = list.rows;
+
+  /** 入力中の検索語を適用して 1 ページ目から取り直す */
+  const handleSearch = () => {
+    appliedSearch.current = search;
+    list.search();
+  };
 
   /** 招待発行成功時: モーダル表示と一覧の再取得を行う（isLoading に連動して行がアンマウントされても、
    *  モーダル state はページ層が持つためモーダルは表示され続ける） */
@@ -116,7 +127,7 @@ export default function CastListPage() {
           </>
         }
         search={{
-          onSearch: list.search,
+          onSearch: handleSearch,
           content: (
             <>
               <div className="flex-1 relative">

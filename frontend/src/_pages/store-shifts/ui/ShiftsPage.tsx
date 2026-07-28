@@ -37,7 +37,7 @@ export default function ShiftsPage() {
         const size = 200;
         const all: CastResponse[] = [];
         for (let page = 0; ; page += 1) {
-          const res = await castApi.list({ page, size, sort: 'displayOrder,asc' });
+          const res = await castApi.list({ page, size, sort: 'displayOrder,id,asc' });
           all.push(...res.rows);
           if (res.rows.length < size) break; // 最終ページ
         }

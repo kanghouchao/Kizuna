@@ -122,7 +122,7 @@ describe('顧客一覧ページ固有の要素', () => {
       expect(mockedCustomerApi.list).toHaveBeenLastCalledWith({
         page: 0,
         size: 20,
-        sort: 'createdAt,desc',
+        sort: 'createdAt,id,desc',
         search: '山田',
         rank: 'GOLD',
         classification: undefined,

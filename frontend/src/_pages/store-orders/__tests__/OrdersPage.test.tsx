@@ -199,7 +199,7 @@ describe('オーダー一覧のページ送り', () => {
     expect(mockedOrderApi.list).toHaveBeenCalledWith({
       page: 0,
       size: 20,
-      sort: 'createdAt,desc',
+      sort: 'createdAt,id,desc',
     });
 
     fireEvent.click(screen.getByRole('button', { name: '2' }));
@@ -208,7 +208,7 @@ describe('オーダー一覧のページ送り', () => {
       expect(mockedOrderApi.list).toHaveBeenLastCalledWith({
         page: 1,
         size: 20,
-        sort: 'createdAt,desc',
+        sort: 'createdAt,id,desc',
       })
     );
   });
