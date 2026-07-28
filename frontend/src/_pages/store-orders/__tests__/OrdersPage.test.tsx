@@ -185,7 +185,7 @@ describe('オーダー一覧のページ送り', () => {
     jest.clearAllMocks();
   });
 
-  // 従来は size: 100 の先頭切り取りで、101 件目以降には到達手段が無かった
+  // 1 ページ 20 件で、101 件目以降にもページ送りで到達できることを固定する
   it('2 ページ目のボタンで 0 起点の page=1 を取得すること', async () => {
     mockedOrderApi.list.mockResolvedValue({
       rows: [{ id: '1', business_date: '2026-07-03', course_minutes: 60, status: 'CREATED' }],
