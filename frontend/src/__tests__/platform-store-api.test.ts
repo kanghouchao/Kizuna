@@ -18,14 +18,14 @@ describe('platform store api wrappers', () => {
   });
 
   it('platformStoreApi basic CRUD and stats', async () => {
-    // 一覧だけワイヤ形式が Laravel 風封筒（1 起点）。0 起点の呼び出しとの換算は api 側に閉じている
+    // 一覧は他一覧と同形の Spring Page 形（0 起点）
     mockGet.mockResolvedValueOnce({
-      data: { data: [{ id: '1' }], current_page: 2, last_page: 4, total: 35 },
+      data: { content: [{ id: '1' }], total_pages: 4, total_elements: 35, size: 10, number: 1 },
     });
     const list = await platformStoreApi.getList({ page: 1, size: 10 });
     expect(list).toEqual({ rows: [{ id: '1' }], page: 1, pageCount: 4, total: 35 });
     expect(mockGet).toHaveBeenCalledWith('/platform/stores', {
-      params: { page: 2, per_page: 10, search: undefined },
+      params: { page: 1, size: 10, search: undefined },
     });
 
     mockGet.mockResolvedValueOnce({ data: { id: '2' } });

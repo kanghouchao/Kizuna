@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class StoreRegistryServiceTest {
@@ -38,7 +39,7 @@ class StoreRegistryServiceTest {
     when(storeRepository.findByNameContainingIgnoreCaseOrDomainContainingIgnoreCase(
             anyString(), anyString(), any()))
         .thenReturn(page);
-    assertThat(storeRegistryService.list(1, 10, "test").data()).hasSize(1);
+    assertThat(storeRegistryService.list("test", PageRequest.of(0, 10)).getContent()).hasSize(1);
   }
 
   @Test
@@ -64,7 +65,7 @@ class StoreRegistryServiceTest {
             anyString(), anyString(), any()))
         .thenReturn(page);
 
-    assertThat(storeRegistryService.list(1, 10, null).data()).isEmpty();
+    assertThat(storeRegistryService.list(null, PageRequest.of(0, 10)).getContent()).isEmpty();
   }
 
   @Test
