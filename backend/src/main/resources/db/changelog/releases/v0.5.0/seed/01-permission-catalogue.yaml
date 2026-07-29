@@ -3,7 +3,9 @@ databaseChangeLog:
       id: seed-v0500-001-permission-catalogue
       author: kanghouchao
       runAlways: true
-      # 権限目録（t_permissions）と平台既定ロールへの授与を PermissionCode の宣言から取り直す。
+      # 権限目録（t_permissions）・既定ロールの行・既定ロールへの授与を PermissionCode / SystemRole の
+      # 宣言から取り直す。既定ロールの行も本 changeset が用意する（毎回走る本 changeset は将来の
+      # release より先に動くため、ロールの追加を後続の changeset に任せると存在しない行で止まる）。
       # 目録行と既定授与を changeset へ手書きする形は「enum に足したが播種を忘れた」齟齬を許すため、
       # 宣言を唯一の源にしてこの欠陥類を構造的に閉じる。以後の権限追加は enum への追加のみで足りる。
       # 既定ロールの授与は宣言との完全な写像にする（不足を挿し、宣言に無いものを取り消す）。取り下げを
