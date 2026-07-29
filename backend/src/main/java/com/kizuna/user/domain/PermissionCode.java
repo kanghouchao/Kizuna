@@ -13,7 +13,7 @@ import lombok.Getter;
  * Authorities#permission(String)}（{@code PERM_} 接頭辞）を経由する。
  *
  * <p>{@code defaultRoles} は既定で授与する平台既定ロールの列挙で、省略は「どの既定ロールにも与えない」を意味する — 新しい権限が黙って既存ロールへ流れ込まないための
- * fail-closed である。播種は授与を取り消さないため、既に播種済みの権限について宣言を減らす変更には明示的な移行 changeset を要する。
+ * fail-closed である。既定ロールの授与は宣言の写像として毎回取り直されるため、取り下げもここを編集するだけで既存 DB に反映される（移行 changeset は要らない）。
  */
 @Getter
 public enum PermissionCode {

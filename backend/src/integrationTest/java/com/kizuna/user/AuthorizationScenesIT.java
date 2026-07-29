@@ -358,8 +358,8 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("平台既定ロールの権限がコード側宣言（PermissionCode の defaultRoles）と一致すること")
   void seededSystemRoleGrantsMatchDeclaration() {
-    // 既定ロールは API から改廃できないため、その権限集合はコード宣言の写像でしかありえない。
-    // 播種は挿入のみなので、宣言を減らして移行 changeset を書き忘れた場合ここで乖離が現れる。
+    // 既定ロールは API から改廃できないため、その権限集合はコード宣言の写像でしかありえない。播種は
+    // 不足の挿入と宣言に無い授与の取り消しの両方を行うので、ここが等しくないのは播種が届いていない証拠。
     Map<Long, String> codesById =
         permissionRepository.findAll().stream()
             .collect(Collectors.toMap(Permission::getId, Permission::getCode));
