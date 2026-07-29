@@ -1,5 +1,6 @@
 package com.kizuna.user.api.platform;
 
+import com.kizuna.shared.web.PageableSupport;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
 import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
@@ -30,12 +31,14 @@ public class PlatformStaffController {
   private final PlatformStaffService platformStaffService;
 
   // offset ページングはページ境界の安定に全順序を要するため、表示名の並びに一意な副キー id を添える。
+  // 呼出側が ?sort= で既定値を上書きしても副キーが消えないよう、その並びに id を補う。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<Page<PlatformStaffResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(sort = {"displayName", "id"}) Pageable pageable) {
-    return ResponseEntity.ok(platformStaffService.list(search, pageable));
+    return ResponseEntity.ok(
+        platformStaffService.list(search, PageableSupport.ensureTiebreaker(pageable, "id")));
   }
 
   @GetMapping("/{id}")
