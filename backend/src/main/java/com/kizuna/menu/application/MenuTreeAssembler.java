@@ -21,7 +21,17 @@ final class MenuTreeAssembler {
     return roots.stream()
         .filter(menu -> visible(menu, userAuthorities))
         .map(menu -> toVO(menu, userAuthorities))
+        .filter(MenuTreeAssembler::reachable)
         .collect(Collectors.toList());
+  }
+
+  /**
+   * 遷移先を持たない根の節（グループ見出し）は、可視な子が 1 つも残らなければ木から落とす。 権限を絞ったロールでは節だけが生き残る組み合わせが普通に起こり、消費側には空の見出しと
+   * 「壊れている」の区別が付かないため。判定は根に対してのみ行う — メニューは 2 階層厳守 （seed 02-menus.yaml が正典）で、子は必ず遷移先を持つ葉だからである。3
+   * 階層目を導入するなら toVO の子写像にも同じ判定を通すこと。
+   */
+  private static boolean reachable(MenuVO menu) {
+    return menu.getPath() != null || !menu.getItems().isEmpty();
   }
 
   private static MenuVO toVO(Menu menu, Set<String> userAuthorities) {

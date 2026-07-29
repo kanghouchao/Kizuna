@@ -34,10 +34,12 @@ class MenuServiceTest {
     SecurityContextHolder.clearContext();
   }
 
+  /** 遷移先を持つ葉。path の無い節は可視な子が無ければ木から落ちるため、葉には必ず path を持たせる。 */
   private Menu menu(String label, String permission) {
     Menu menu = new Menu();
     menu.setLabel(label);
     menu.setPermission(permission);
+    menu.setPath("/" + label);
     menu.setChildren(List.of());
     return menu;
   }
@@ -100,6 +102,50 @@ class MenuServiceTest {
     assertThat(result).hasSize(1);
     assertThat(result.get(0).getItems()).hasSize(1);
     assertThat(result.get(0).getItems().get(0).getName()).isEqualTo("キャスト管理");
+  }
+
+  @Test
+  void getMyMenus_dropsGroupHeadingWhoseChildrenAreAllFiltered() {
+    SecurityContextHolder.setContext(securityContext);
+    when(securityContext.getAuthentication()).thenReturn(authentication);
+    doReturn(List.of(new SimpleGrantedAuthority("PERM_CUSTOMER_MANAGE")))
+        .when(authentication)
+        .getAuthorities();
+
+    Menu emptied = new Menu();
+    emptied.setLabel("HRM");
+    emptied.setPermission(null); // 見出し自体は無条件可視
+    emptied.setChildren(List.of(menu("キャスト管理", "CAST_MANAGE")));
+
+    Menu kept = new Menu();
+    kept.setLabel("CRM");
+    kept.setPermission(null);
+    kept.setChildren(List.of(menu("顧客一覧", "CUSTOMER_MANAGE")));
+
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(emptied, kept));
+
+    List<MenuVO> result = menuService.getMyMenus();
+
+    // 子が全て濾過された見出しは、空の見出しとして残さず木ごと落とす
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getName()).isEqualTo("CRM");
+  }
+
+  @Test
+  void getMyMenus_keepsRootThatHasItsOwnPath() {
+    SecurityContextHolder.setContext(securityContext);
+    when(securityContext.getAuthentication()).thenReturn(authentication);
+    doReturn(List.of()).when(authentication).getAuthorities();
+
+    Menu link = menu("直リンク", null);
+
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(link));
+
+    List<MenuVO> result = menuService.getMyMenus();
+
+    // 子を持たない根でも、自身が遷移先を持つなら到達可能なので残る
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getPath()).isEqualTo("/直リンク");
   }
 
   @Test
