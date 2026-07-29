@@ -13,6 +13,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.SystemRole;
 import com.kizuna.user.domain.UserType;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -339,8 +340,9 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("権限目録の播種行がコード側 PermissionCode の全成員と一致すること")
   void seededPermissionCatalogMatchesEnum() {
-    // 目録は播種が唯一の供給経路。enum に足りない行があると GET /platform/permissions が
-    // 提示したコードをロール作成が「存在しない」と 400 で弾く不整合が起きるため、双方向で一致を固定する。
+    // 播種は宣言から目録行を導出するため「足りない行」は構造的に起きない。ここで捕まえるのは逆向き
+    // — enum から取り下げた権限の行が残っている状態。残ると GET /platform/permissions が
+    // 到達不能な権限（誰の @PreAuthorize も参照しない）を選択肢として提示してしまう。
     Set<String> seeded =
         permissionRepository.findAll().stream()
             .map(Permission::getCode)
@@ -351,5 +353,31 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
             .collect(Collectors.toSet());
 
     assertThat(seeded).isEqualTo(declared);
+  }
+
+  @Test
+  @DisplayName("平台既定ロールの権限がコード側宣言（PermissionCode の defaultRoles）と一致すること")
+  void seededSystemRoleGrantsMatchDeclaration() {
+    // 既定ロールは API から改廃できないため、その権限集合はコード宣言の写像でしかありえない。
+    // 播種は挿入のみなので、宣言を減らして移行 changeset を書き忘れた場合ここで乖離が現れる。
+    Map<Long, String> codesById =
+        permissionRepository.findAll().stream()
+            .collect(Collectors.toMap(Permission::getId, Permission::getCode));
+
+    for (SystemRole systemRole : SystemRole.values()) {
+      Role role =
+          roleRepository
+              .findByName(systemRole.getRoleName())
+              .orElseThrow(() -> new AssertionError("既定ロールが播種されていない: " + systemRole.getRoleName()));
+      Set<String> granted =
+          role.getPermissionIds().stream().map(codesById::get).collect(Collectors.toSet());
+      Set<String> declared =
+          Arrays.stream(PermissionCode.values())
+              .filter(code -> code.getDefaultRoles().contains(systemRole))
+              .map(PermissionCode::name)
+              .collect(Collectors.toSet());
+
+      assertThat(granted).as("%s の権限", systemRole.getRoleName()).isEqualTo(declared);
+    }
   }
 }

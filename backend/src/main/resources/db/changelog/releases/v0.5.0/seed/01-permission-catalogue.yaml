@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-v0500-001-permission-catalogue
+      author: kanghouchao
+      runAlways: true
+      # 権限目録（t_permissions）と平台既定ロールへの授与を PermissionCode の宣言から取り直す。
+      # 目録行と既定授与を changeset へ手書きする形は「enum に足したが播種を忘れた」齟齬を許すため、
+      # 宣言を唯一の源にしてこの欠陥類を構造的に閉じる。以後の権限追加は enum への追加のみで足りる。
+      # 挿入のみで削除はしない（減らす判断は明示的な移行 changeset に属する）ので毎回の実行は冪等。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - customChange:
+            class: com.kizuna.user.infrastructure.PermissionCatalogueSeed

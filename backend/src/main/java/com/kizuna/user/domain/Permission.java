@@ -9,7 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 権限（機能権限）の目録行。code は {@link PermissionCode} の enum 名で、播種が唯一の供給経路である（書き込み API を持たない）。
+ * 権限（機能権限）の目録行。code は {@link PermissionCode} の enum 名で、播種が唯一の供給経路である（書き込み API を持たない）。行は enum
+ * の宣言から播種が導出するため、目録は常に enum の写像である。
  *
  * <p>ロールからは跨集約 ID 参照（{@link Role#getPermissionIds()}）で参照する。
  */

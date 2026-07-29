@@ -2,10 +2,12 @@ databaseChangeLog:
   - changeSet:
       id: seed-v0100-001-roles
       author: kanghouchao
-      # 権限目録（PermissionCode enum 名 16 件）と平台既定ロール 3 件。権限目録は播種が唯一の
-      # 供給経路であり、コード側 enum との一致は AuthorizationScenesIT が機械検証する。
+      # 権限目録（PermissionCode enum 名 16 件）と平台既定ロール 3 件、および既定ロールへの授与。
       # 既定ロールは is_system=true で改廃を拒否する。id は採番に委ね、中間表は自然キー
       # （ロール名・権限コード）の部分問い合わせで解決する。
+      # 権限目録行と既定授与の供給は v0.5.0 で PermissionCode の宣言からの導出（seed/01-permission-catalogue.yaml）
+      # へ移った。本 changeset は適用済みで書き換えられない凍結された基線であり、権限の追加でここへ手書きを
+      # 足す必要は無い（enum への追加のみで足りる）。
       preConditions:
         - dbms:
             type: postgresql
