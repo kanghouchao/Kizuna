@@ -15,6 +15,8 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -26,6 +28,9 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,12 +48,39 @@ public class PlatformStaffService {
   private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
-  public List<PlatformStaffResponse> list() {
-    List<PlatformUser> staff = repository.findByUserTypeOrderByDisplayNameAsc(UserType.STAFF);
+  public Page<PlatformStaffResponse> list(String search, Pageable pageable) {
+    Page<PlatformUser> staff = repository.findAll(staffSpec(blankToNull(search)), pageable);
     Set<Long> allRoleIds =
-        staff.stream().flatMap(user -> user.getRoleIds().stream()).collect(Collectors.toSet());
+        staff.getContent().stream()
+            .flatMap(user -> user.getRoleIds().stream())
+            .collect(Collectors.toSet());
     Map<Long, String> roleNames = roleNamesOf(allRoleIds);
-    return staff.stream().map(user -> toResponse(user, roleNames)).toList();
+    return staff.map(user -> toResponse(user, roleNames));
+  }
+
+  /**
+   * 一覧の対象は本人種別 STAFF に限る（CAST/MEMBER は専用フローが扱う）。検索語は表示名とメールアドレスを横断する部分一致。
+   *
+   * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
+   * Specification で組み立てる）。
+   */
+  private static Specification<PlatformUser> staffSpec(String search) {
+    return (root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+      predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
+      if (search != null) {
+        String pattern = "%" + search.toLowerCase(Locale.ROOT) + "%";
+        predicates.add(
+            cb.or(
+                cb.like(cb.lower(root.get("displayName")), pattern),
+                cb.like(cb.lower(root.get("email")), pattern)));
+      }
+      return cb.and(predicates.toArray(new Predicate[0]));
+    };
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 
   @Transactional

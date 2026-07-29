@@ -12,9 +12,18 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('platformStaffApi', () => {
-  it('list は /platform/staff を GET する', async () => {
-    const res = await platformStaffApi.list();
-    expect(res).toEqual({ ok: true, url: '/platform/staff' });
+  // 一覧は他一覧と同形の Spring Page 形（0 起点）
+  it('list は /platform/staff を page/size/search 付きで GET し正規化ページを返す', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValueOnce({
+      data: { content: [{ id: 1 }], total_pages: 3, total_elements: 21, size: 10, number: 1 },
+    });
+
+    const res = await platformStaffApi.list({ page: 1, size: 10, search: '山田' });
+
+    expect(res).toEqual({ rows: [{ id: 1 }], page: 1, pageCount: 3, total: 21 });
+    expect(apiClient.get).toHaveBeenCalledWith('/platform/staff', {
+      params: { page: 1, size: 10, search: '山田' },
+    });
   });
   it('create は /platform/staff を POST する', async () => {
     const res = await platformStaffApi.create({

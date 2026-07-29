@@ -91,7 +91,9 @@ export function ListPage({
         </form>
       )}
 
-      <Card className="py-0 overflow-hidden">
+      {/* Card は既定で gap-6 の flex 列。テーブルとページネーションを地続きに見せるため間隔を潰す
+          （残すと最終行の下に 24px の空白が挟まる） */}
+      <Card className="py-0 gap-0 overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
         ) : isEmpty ? (

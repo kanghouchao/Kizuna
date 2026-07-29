@@ -349,6 +349,9 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
+  // 検索語は STAFF 限定と AND で重なる。両者の email に共通する接頭辞で引くことで、
+  // 「検索で拾える範囲にいてもなお CAST は現れない」ことまで断言する。size はページ境界に
+  // 隠れて偽陰性にならないよう、IT が作る件数より十分大きく取る。
   @Test
   @DisplayName("スタッフ一覧に CAST が現れず、STAFF は現れること(強断言)")
   void staffListExcludesCastAndMember() {
@@ -356,12 +359,42 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
     ResponseEntity<String> res =
         rest.exchange(
-            "/platform/staff", HttpMethod.GET, new HttpEntity<>(bearer(hq)), String.class);
+            "/platform/staff?search=staff-it-&size=100",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            String.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody())
         .as("STAFF は現れ、CAST は一覧の生ボディに一切現れないこと")
         .contains(NON_HQ_EMAIL)
         .doesNotContain(CAST_CANARY_EMAIL);
+  }
+
+  @Test
+  @DisplayName("スタッフ一覧は search で表示名・メールを横断して絞り込み、Spring Page 形で返すこと")
+  void staffListFiltersBySearchAndReturnsPage() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/staff?search=" + NON_HQ_EMAIL,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            JsonNode.class);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(res.getBody().path("total_elements").asLong()).isEqualTo(1);
+    assertThat(res.getBody().path("content").get(0).path("email").asString())
+        .isEqualTo(NON_HQ_EMAIL);
+
+    // 該当なしは空ページ（404 でも 500 でもない）
+    ResponseEntity<JsonNode> none =
+        rest.exchange(
+            "/platform/staff?search=staff-it-no-such-person",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            JsonNode.class);
+    assertThat(none.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(none.getBody().path("total_elements").asLong()).isZero();
   }
 
   @Test
@@ -442,17 +475,27 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     // 行は残る: 一覧に停止済みスタッフが現れる（過去の実行主体の記録保持）。
     ResponseEntity<String> list =
         rest.exchange(
-            "/platform/staff", HttpMethod.GET, new HttpEntity<>(bearer(hq)), String.class);
+            "/platform/staff?search=" + email,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            String.class);
     assertThat(list.getBody()).as("停止後も一覧に残ること").contains(email);
   }
 
-  /** スタッフ一覧から email 一致の 1 件を返す（見つからなければ失敗）。 */
+  /**
+   * スタッフ一覧から email 一致の 1 件を返す（見つからなければ失敗）。
+   *
+   * <p>一覧は Spring Page 形のため、対象がページ境界の向こうに隠れないよう email そのもので絞り込んでから {@code content} を走査する。
+   */
   private JsonNode findStaffByEmail(String token, String email) {
     ResponseEntity<JsonNode> res =
         rest.exchange(
-            "/platform/staff", HttpMethod.GET, new HttpEntity<>(bearer(token)), JsonNode.class);
+            "/platform/staff?search=" + email,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(token)),
+            JsonNode.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    for (JsonNode node : res.getBody()) {
+    for (JsonNode node : res.getBody().path("content")) {
       if (email.equals(node.path("email").asString())) {
         return node;
       }

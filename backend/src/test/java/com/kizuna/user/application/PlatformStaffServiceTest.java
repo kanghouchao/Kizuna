@@ -3,6 +3,7 @@ package com.kizuna.user.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -31,12 +32,18 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -45,6 +52,7 @@ class PlatformStaffServiceTest {
 
   private static final long HQ_ROLE = 10L;
   private static final long MANAGER_ROLE = 11L;
+  private static final Pageable PAGEABLE = PageRequest.of(0, 20);
 
   @Mock private PlatformUserRepository repository;
 
@@ -129,27 +137,28 @@ class PlatformStaffServiceTest {
 
   @Test
   void list_returnsStaffWithResolvedRoleNames() {
-    when(repository.findByUserTypeOrderByDisplayNameAsc(UserType.STAFF))
-        .thenReturn(
-            List.of(
-                staff(1L, "hq@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()),
-                staff(
-                    2L,
-                    "mgr@kizuna.test",
-                    Set.of(MANAGER_ROLE),
-                    StoreScopeType.SPECIFIC_STORES,
-                    Set.of(1L))));
+    List<PlatformUser> staff =
+        List.of(
+            staff(1L, "hq@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()),
+            staff(
+                2L,
+                "mgr@kizuna.test",
+                Set.of(MANAGER_ROLE),
+                StoreScopeType.SPECIFIC_STORES,
+                Set.of(1L)));
+    when(repository.findAll(ArgumentMatchers.<Specification<PlatformUser>>any(), eq(PAGEABLE)))
+        .thenReturn(new PageImpl<>(staff, PAGEABLE, staff.size()));
     when(roleRepository.findAllById(Set.of(HQ_ROLE, MANAGER_ROLE)))
         .thenReturn(List.of(role(HQ_ROLE, "HQ管理者"), role(MANAGER_ROLE, "店長")));
 
-    List<PlatformStaffResponse> result = service.list();
+    Page<PlatformStaffResponse> result = service.list(null, PAGEABLE);
 
-    assertThat(result).hasSize(2);
-    assertThat(result.get(0).roles())
+    assertThat(result.getTotalElements()).isEqualTo(2);
+    assertThat(result.getContent().get(0).roles())
         .containsExactly(new PlatformStaffResponse.RoleRef(HQ_ROLE, "HQ管理者"));
-    assertThat(result.get(1).roles())
+    assertThat(result.getContent().get(1).roles())
         .containsExactly(new PlatformStaffResponse.RoleRef(MANAGER_ROLE, "店長"));
-    assertThat(result.get(1).storeIds()).containsExactly(1L);
+    assertThat(result.getContent().get(1).storeIds()).containsExactly(1L);
   }
 
   @Test
