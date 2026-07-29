@@ -62,6 +62,11 @@ export function isLegacyStorePath(pathname: string): boolean {
   return LEGACY_STORE_PATH_PATTERN.test(pathname);
 }
 
+/** 入口ルート自身（およびその配下）か。入口が自分自身を遷移先に取らないための判定。 */
+export function isStoreEntryPath(pathname: string): boolean {
+  return STORE_ENTRY_PATTERN.test(pathname);
+}
+
 /** 遷移先として復元してはいけない廃止済みルートか。入口が next を捨てる判定に使う。 */
 export function isRetiredStorePath(pathname: string): boolean {
   return RETIRED_STORE_PATH_PATTERN.test(pathname);

@@ -2,6 +2,7 @@ import {
   getStoreIdFromPath,
   isLegacyStorePath,
   isRetiredStorePath,
+  isStoreEntryPath,
   replaceStoreIdInPath,
   resolveStoreHref,
   storePath,
@@ -132,6 +133,19 @@ describe('store-route', () => {
 
     it('/platform配下はfalse', () => {
       expect(isLegacyStorePath('/platform/dashboard')).toBe(false);
+    });
+  });
+
+  describe('isStoreEntryPath', () => {
+    it('入口ルート自身・配下・クエリ付きはtrue', () => {
+      expect(isStoreEntryPath('/store/entry')).toBe(true);
+      expect(isStoreEntryPath('/store/entry/')).toBe(true);
+      expect(isStoreEntryPath('/store/entry/foo')).toBe(true);
+      expect(isStoreEntryPath('/store/entry?next=%2Fstore%2Forders')).toBe(true);
+    });
+
+    it('entry を接頭辞に持つだけの別pathはfalse', () => {
+      expect(isStoreEntryPath('/store/entrypoint')).toBe(false);
     });
   });
 
