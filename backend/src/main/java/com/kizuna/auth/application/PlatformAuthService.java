@@ -5,6 +5,7 @@ import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -81,7 +82,9 @@ public class PlatformAuthService {
   @Transactional
   public PlatformMeResponse updateMe(String email, String displayName) {
     PlatformUser user =
-        userRepository.findByEmail(email).orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     user.updateDisplayName(displayName);
     userRepository.save(user);
     return toMeResponse(user);
@@ -92,7 +95,9 @@ public class PlatformAuthService {
   public void changePassword(
       String email, String currentPassword, String newPassword, String currentToken) {
     PlatformUser user =
-        userRepository.findByEmail(email).orElseThrow(() -> new ServiceException("ユーザーが見つかりません"));
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
       throw new ServiceException("現在のパスワードが正しくありません");
     }

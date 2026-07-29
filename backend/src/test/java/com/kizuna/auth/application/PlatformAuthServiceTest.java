@@ -13,6 +13,7 @@ import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
@@ -348,11 +349,11 @@ class PlatformAuthServiceTest {
   }
 
   @Test
-  void updateMe_emailNotFound_throwsServiceException() {
+  void updateMe_emailNotFound_throwsStaleSession() {
     when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> authService.updateMe("missing@kizuna.test", "新表示名"))
-        .isInstanceOf(ServiceException.class);
+        .isInstanceOf(StaleSessionException.class);
   }
 
   @Test

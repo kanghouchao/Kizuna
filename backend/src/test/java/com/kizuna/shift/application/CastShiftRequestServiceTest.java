@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
@@ -93,8 +94,8 @@ class CastShiftRequestServiceTest {
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.submit(EMAIL, req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("ユーザーが見つかりません");
+        .isInstanceOf(StaleSessionException.class)
+        .hasMessageContaining("認証セッションの主体が存在しません");
 
     verifyNoInteractions(castRepository, shiftRequestRepository);
   }
