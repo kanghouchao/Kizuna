@@ -262,8 +262,34 @@ Each template owns a `templates/<key>/theme.css` that defines the same `--storef
 
 ## Spacing
 
-- Admin: content padding 24px (`p-6`); card padding ~25px (`p-6`); gap between cards 24px (`gap-6`); sidebar fixed 256px (`w-64`); header 64px (`h-16`); card radius `rounded-lg` (= `var(--radius)`, 0.5rem); subtle shadow (`shadow-sm`).
-- Storefront: sections manage their own rhythm; follow existing `_sections/` patterns (max-w-7xl containers, px-5 lg:px-10).
+There is no custom spacing scale: `globals.css`'s `@theme inline` block defines radius and colour only, so Tailwind v4's default 4px step is what every `p-*` / `gap-*` resolves against. **Do not override `--spacing`** — it would rescale all three visual worlds at once, auth and storefront included.
+
+### Admin scale
+
+| Role                                      | Value                                                                                                                                                                                                                                             |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Console content padding                   | `p-8` (32px) + `max-w-7xl mx-auto` — supplied by the console layouts, never by a page                                                                                                                                                             |
+| **Card gutter — content ↔ card edge**     | **24px**, the one invariant this table exists for; see below                                                                                                                                                                                      |
+| Between cards / between form field blocks | 24px (`space-y-6` / the `Card`'s own `gap-6`)                                                                                                                                                                                                     |
+| Label ↔ control                           | 8px (`gap-2`, already in `FormItem`)                                                                                                                                                                                                              |
+| Control group in a header or toolbar      | 12px (`gap-3`)                                                                                                                                                                                                                                    |
+| In-row icon action cluster                | 4px (`gap-1`)                                                                                                                                                                                                                                     |
+| **Table cell**                            | horizontal 8px — the primitive's own `p-2`, deliberately left alone; vertical 12px (`py-3`); header `h-11`. 44px is the floor for a text-only row; in practice a row carrying an `icon-sm` action measures 56px and one carrying a thumbnail more |
+| **Calendar day cell**                     | `p-3` (12px) — a 7-column grid divides the available width, so the horizontal constraint that binds a table does not apply here                                                                                                                   |
+| **Row card** (one record per card)        | 16px (`p-4`). Precedent: `ShiftRequestInbox`                                                                                                                                                                                                      |
+| Fixed shell dimensions                    | sidebar `w-64` (256px); header `h-16` (64px); card radius `rounded-xl` (= `var(--radius)` + 4px, 12px); `shadow-sm` elevation                                                                                                                     |
+
+### The card gutter is a constant, the cell density is not
+
+A form never writes padding: `Card` supplies `py-6` and `CardContent` supplies `px-6`, so its content sits 24px inside the card for free. A table cannot get it the same way — wrapping a `Table` in `CardContent` would make every row's `border-b` and hover fill stop 24px short of the card edge, and a data table's row bands have to run full width.
+
+So a table builds the same gutter from the **edge cells** instead: `TableCard` (`@/shared/ui`) applies `pl-6` to the first cell of every row and `pr-6` to the last. Primer's `DataTable` solves it identically (`.TableRow > *:first-child { padding-inline-start: … }`, offset "to make sure type aligns regardless of cell padding selection"); Material Design states the same target as "24dp of padding around the perimeter of table cards".
+
+The consequence to keep hold of: **the 24px belongs to the card, the cell density belongs to the cell.** Changing one must not move the other. If a second density is ever genuinely needed, add it the way Primer does — condensed / normal / spacious tiers over one unchanged edge constant — rather than by nudging both numbers together.
+
+The two are also bounded by different things, which is why the table's horizontal cell padding stays at the primitive's 8px while its vertical padding goes to 12px. **Horizontal padding is multiplied by the column count and vertical padding is not**: widening cells to 12px adds 88px to the 8-column キャスト一覧's intrinsic width, enough to overflow the content column on a 1024px window where it previously fit. The edge gutter costs a fixed 32px and buys the alignment the whole rule is about, so it is worth paying; per-column width is not. Measure with `scrollWidth` on `[data-slot="table-container"]` before widening a cell.
+
+`TableCard`'s cell rules are descendant selectors (specificity 0,1,1), so they out-rank a `padding` a page writes on its own `TableCell`. No page does today. If one needs to, change `TableCard` rather than fighting it at the call site.
 
 ### The admin console has a floor, not a phone layout
 
@@ -278,6 +304,10 @@ Two traps this rule exists to catch, both hit in practice:
 - **A single measurement is not the worst case.** A row containing user data (a store name, a person's name) is only as wide as whatever happened to be on screen when you measured. Cap such labels — an uncapped `whitespace-nowrap` label has no upper bound, and a floor cannot hold a row that has none.
 - **Adding a cap changes the worst case.** The cap becomes the new maximum, so the floor must be recomputed **after** capping, not before.
 
+### Storefront
+
+Sections manage their own rhythm; follow existing `_sections/` patterns (max-w-7xl containers, px-5 lg:px-10).
+
 ## Components (admin)
 
 Primitives come from `@/shared/ui` (the barrel over the vendored shadcn components). This section records **which primitive to use and how to compose it** — never a restatement of the styling already baked into the primitive.
@@ -291,7 +321,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Destructive menu item**: do not use the vendored `DropdownMenuItem`'s own `variant="destructive"` — it keeps the default red as the text over its tinted focus fill (`text-destructive` on `bg-destructive/10`), which measures **3.99 in light mode** (dark passes at 4.58 over its `/20` fill). Spell the colours out on the consumer instead: `className="text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong"` — certified by the `bg-destructive/10` + `text-destructive-strong` row (8.42 / 5.39). The primitive itself stays as generated; this rule binds the call sites. Precedent: the logout item in `widgets/header`.
 - **Card section heading**: `CardTitle` renders a `<div>`, so wherever it stands for a section heading it must be written `<CardTitle role="heading" aria-level={N}>`. Without both attributes the section disappears from screen-reader heading navigation, and the loss is invisible in a rendered diff. The primitive stays pristine — it spreads `React.ComponentProps<'div'>`, so the consumer supplies them. (Where the card is genuinely not a section heading — a bare label on a stat card — leave it a `div` and do not add the role.)
   - **Pick `N` from the outline the page actually has, never from the tag the card replaced.** Levels must not skip: a card section directly under the page's `<h1>` is `aria-level={2}`, whatever the pre-shadcn markup used. Every admin page today is `<h1>` + card sections, so **2** is the level in practice; a nested sub-section inside such a card would be 3. Sibling headings written as real tags follow the same outline (`CustomerEditPage`'s 注文履歴 is an `<h2>`, not an `<h3>`).
-- **Table**: shadcn `Table` inside a `Card`. Precedent: `CustomersPage`.
+- **Table**: shadcn `Table` inside a **`TableCard`**, never a hand-assembled `Card className="py-0 …"` — the card gutter and cell density live in that one component (see Spacing). A list page gets it through `ListPage`; a table embedded in another page uses `TableCard` directly (precedent: `CustomerEditPage`'s 注文履歴).
 - **Tabs**: shadcn `Tabs`. Precedent: `ShiftsPage`.
 - **Loading placeholder**: `Skeleton` sized with layout classes, never a hand-rolled `animate-pulse` block.
 - **Status pill**: `Badge variant="outline"` plus one tint recipe — `border-transparent bg-success/10 text-success-strong` (確定) / `bg-warning/10 text-warning-strong` (保留) / `bg-destructive/10 text-destructive-strong` (却下 / NG). Precedent: `CustomersPage`.
@@ -318,7 +348,7 @@ The paging state comes from `useListPage` (`@/shared/lib`), whose fetcher return
 
 Consequences that the module cannot enforce for the page:
 
-- **The console layout already supplies `p-8` and `max-w-7xl mx-auto`** (`app/platform/(console)/layout.tsx`, `app/store/layout.tsx`), so a list page adds no padding, width cap or `min-h-screen` of its own — and no navigation bar: the sidebar and header own logout, store switching and cross-page navigation.
+- **The console layout already supplies `p-8` and `max-w-7xl mx-auto`** (`app/(admin)/platform/layout.tsx`, `app/(admin)/store/layout.tsx`), so a list page adds no padding, width cap or `min-h-screen` of its own — and no navigation bar: the sidebar and header own logout, store switching and cross-page navigation.
 - **The primary action keeps its element type.** A page that opens a modal passes a plain `Button`; only a page that navigates passes `Button asChild` wrapping a `Link`. The two differ in ARIA role (`button` vs `link`), and the Playwright steps under `e2e/steps/` select by role — swapping one for the other breaks them silently, since e2e does not run in CI.
 - **The search card submits through the shell's `<form>`.** The page's `search.content` is just the fields plus a `type="submit"` button; Enter submission is native form semantics, so no per-input `onKeyDown` is written.
 - **The fetcher reads _applied_ filters, never the live input state.** Keep the typed value in state for the field and the submitted value in a `useRef`; the submit handler copies state into the ref and then calls `search()`. Reading input state directly breaks twice: a page change would silently apply a filter the user typed but never submitted (the fetched page then belongs to a different result set), and a handler that changes a filter and refetches in one go — a clear button — would fetch with the pre-update value. Precedent: `StoresPage` / `CustomersPage`.
@@ -413,9 +443,11 @@ Everything else that still matches the grep — the unconverted slices, `widgets
 `src/shared/ui` holds two kinds of file, and only one of them is frozen.
 
 - **Vendored shadcn primitives** — `alert-dialog` / `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
-- **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`, `confirm-dialog.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
+- **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`, `confirm-dialog.tsx`, `table-card.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
 
-Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 19 vendored files carry it and none of the four hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 6 of the 19, and `cva` from 16 of the 19, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written four carry none of the markers, and either import application code a generator would never emit (`@/shared/api`, `react-hot-toast`, `next-themes`) or, as `confirm-dialog.tsx` does, compose sibling primitives through relative imports where the generator emits the `@/shared/ui` alias. `git log --follow` settles any remaining doubt.
+  `table-card.tsx` is where a per-context deviation from a primitive is _supposed_ to live: the table's card gutter depends on what the table is sitting in (the same rule baked into `table.tsx` would double to 48px inside an already-padded `CardContent`), so it belongs to the consumer side, composed once rather than copied.
+
+Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 19 vendored files carry it and none of the five hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 6 of the 19, and `cva` from 16 of the 19, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written five carry none of the markers, and either import application code a generator would never emit (`@/shared/api`, `react-hot-toast`, `next-themes`) or, as `confirm-dialog.tsx` and `table-card.tsx` do, compose sibling primitives through relative imports where the generator emits the `@/shared/ui` alias. `git log --follow` settles any remaining doubt.
 
 Editing a hand-written one is still a shared-file change, so it goes through the contract below rather than through a slice PR.
 
