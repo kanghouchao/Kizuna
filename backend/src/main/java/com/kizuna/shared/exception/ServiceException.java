@@ -1,13 +1,8 @@
 package com.kizuna.shared.exception;
 
 import lombok.NoArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
 
-/**
- * @author kanghouchao
- */
-@ResponseStatus(HttpStatus.BAD_REQUEST)
+/** 利用者が是正しうる要求誤りを表す例外基底。status への写像は {@link CommonExceptionHandler} が一手に持つ。 */
 @NoArgsConstructor
 public class ServiceException extends RuntimeException {
 
