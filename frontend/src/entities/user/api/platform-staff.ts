@@ -1,4 +1,4 @@
-import { apiClient } from '@/shared/api';
+import { apiClient, PageResult, fromSpringPage, toSpringPageParams } from '@/shared/api';
 import {
   PermissionResponse,
   PlatformStaffCreateRequest,
@@ -10,9 +10,16 @@ import {
 } from '../model/types';
 
 export const platformStaffApi = {
-  list: async (): Promise<PlatformStaffResponse[]> => {
-    const response = await apiClient.get('/platform/staff');
-    return response.data;
+  /** スタッフ一覧を取得する。page は他一覧と同じ 0 起点（Spring Page 形） */
+  list: async (params: {
+    page: number;
+    size: number;
+    search?: string;
+  }): Promise<PageResult<PlatformStaffResponse>> => {
+    const response = await apiClient.get('/platform/staff', {
+      params: { ...toSpringPageParams(params.page, params.size), search: params.search },
+    });
+    return fromSpringPage(response.data);
   },
   create: async (data: PlatformStaffCreateRequest): Promise<PlatformStaffResponse> => {
     const response = await apiClient.post('/platform/staff', data);

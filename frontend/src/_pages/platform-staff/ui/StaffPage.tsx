@@ -1,24 +1,20 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useState } from 'react';
-import {
-  PlatformStaffResponse,
-  PlatformStore,
-  platformAuthApi,
-  platformStaffApi,
-} from '@/entities/user';
+import { useRef, useState } from 'react';
+import { PlatformStore, platformAuthApi, platformStaffApi } from '@/entities/user';
 import {
   StaffCreateModal,
   StaffEditModal,
   roleSetLabel,
   storeSetLabel,
 } from '@/features/staff-management';
-import { useManagedList } from '@/shared/lib';
+import { useListPage, useManagedList } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
   Button,
+  Input,
   Table,
   TableBody,
   TableCell,
@@ -27,23 +23,39 @@ import {
   TableRow,
 } from '@/shared/ui';
 
+/** 一覧 1 ページあたりの件数 */
+const PAGE_SIZE = 10;
+
 /** スタッフ一覧ページ。一覧内モーダルで新規作成・編集を行う。 */
 export default function StaffPage() {
-  const {
-    items: staff,
-    isLoading,
-    refetch,
-  } = useManagedList<PlatformStaffResponse>(
-    () => platformStaffApi.list(),
+  const [searchTerm, setSearchTerm] = useState('');
+  // 適用済みの検索語。入力の state をそのまま読むと、値を変えた同一ハンドラ内で再取得したとき
+  // 再レンダー前の古い値で取得してしまう（useListPage の search 制約）ため ref で持つ。
+  const appliedSearch = useRef('');
+
+  const list = useListPage(
+    page =>
+      platformStaffApi.list({
+        page,
+        size: PAGE_SIZE,
+        search: appliedSearch.current || undefined,
+      }),
     'スタッフ一覧の取得に失敗しました'
   );
+  const staff = list.rows;
   const { items: stores } = useManagedList<PlatformStore>(
     () => platformAuthApi.stores(),
     '店舗一覧の取得に失敗しました'
   );
+
+  /** 検索語を適用して 1 ページ目から取り直す */
+  const applySearch = (term: string) => {
+    appliedSearch.current = term;
+    list.search();
+  };
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は id で保持し、staff オブジェクトは現在の一覧から導出する。
-  // これにより refetch がそのままモーダル内容の最新化になる（409 リフレッシュ）。
+  // これにより再取得がそのままモーダル内容の最新化になる（409 リフレッシュ）。
   const [editingId, setEditingId] = useState<number | null>(null);
   const editingStaff = staff.find(member => member.id === editingId) ?? null;
 
@@ -58,8 +70,43 @@ export default function StaffPage() {
             スタッフを追加
           </Button>
         }
-        state={{ rows: staff, isLoading }}
-        emptyMessage="スタッフが登録されていません"
+        search={{
+          onSearch: () => applySearch(searchTerm),
+          content: (
+            <>
+              <div className="w-full md:max-w-xs">
+                <label htmlFor="search" className="sr-only">
+                  スタッフを検索
+                </label>
+                <Input
+                  type="text"
+                  name="search"
+                  id="search"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="氏名またはメールアドレスで検索..."
+                />
+              </div>
+              <Button type="submit">検索</Button>
+              {searchTerm && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    applySearch('');
+                  }}
+                >
+                  クリア
+                </Button>
+              )}
+            </>
+          ),
+        }}
+        state={list}
+        emptyMessage={
+          searchTerm ? '該当するスタッフが見つかりません' : 'スタッフが登録されていません'
+        }
       >
         <Table>
           <TableHeader>
@@ -125,13 +172,13 @@ export default function StaffPage() {
       <StaffCreateModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={refetch}
+        onCreated={list.reload}
       />
       <StaffEditModal
         open={editingId !== null}
         staff={editingStaff}
         onClose={() => setEditingId(null)}
-        onUpdated={refetch}
+        onUpdated={list.reload}
       />
     </>
   );

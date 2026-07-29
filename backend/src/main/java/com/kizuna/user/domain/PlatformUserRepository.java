@@ -4,14 +4,14 @@ import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface PlatformUserRepository extends JpaRepository<PlatformUser, Long> {
+public interface PlatformUserRepository
+    extends JpaRepository<PlatformUser, Long>, JpaSpecificationExecutor<PlatformUser> {
   Optional<PlatformUser> findByEmail(String email);
-
-  List<PlatformUser> findByUserTypeOrderByDisplayNameAsc(UserType userType);
 
   /**
    * 指定した本人種別で、現店舗を授権する（ALL_STORES または個別授権店舗集合に含む）有効なユーザーを表示名昇順で取得する。店舗スコープの絞り込みを DB

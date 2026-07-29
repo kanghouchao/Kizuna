@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { PageResult } from '@/shared/api';
 import { PlatformStaffResponse, platformAuthApi, platformStaffApi } from '@/entities/user';
 import StaffPage from '../ui/StaffPage';
 
@@ -38,14 +39,27 @@ const staff = (override: Partial<PlatformStaffResponse>): PlatformStaffResponse 
   ...override,
 });
 
+const paginated = (
+  rows: PlatformStaffResponse[],
+  override: Partial<PageResult<PlatformStaffResponse>> = {}
+): PageResult<PlatformStaffResponse> => ({
+  rows,
+  page: 0,
+  pageCount: 1,
+  total: rows.length,
+  ...override,
+});
+
 describe('スタッフ一覧ページ', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
-    mockedStaffApi.list.mockResolvedValue([
-      staff({ id: 1, display_name: '山田太郎', enabled: true }),
-      staff({ id: 2, display_name: '鈴木花子', enabled: false }),
-    ]);
+    mockedStaffApi.list.mockResolvedValue(
+      paginated([
+        staff({ id: 1, display_name: '山田太郎', enabled: true }),
+        staff({ id: 2, display_name: '鈴木花子', enabled: false }),
+      ])
+    );
   });
 
   it('氏名と在籍状態を一覧表示すること', async () => {
@@ -82,13 +96,74 @@ describe('スタッフ一覧ページ', () => {
 
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
   });
+
+  it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+
+    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: '山田',
+      })
+    );
+  });
+
+  // クリアは入力を空にすると同時に取り直す。検索語 state をそのまま読むと更新前の値で
+  // 取得してしまうため、適用済み検索語は ref で持っている（その回帰を固定する）。
+  it('クリアは検索語を空にして取り直すこと', async () => {
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+
+    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({ page: 0, size: 10, search: '山田' })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'クリア' }));
+
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: undefined,
+      })
+    );
+    expect(screen.getByLabelText('スタッフを検索')).toHaveValue('');
+  });
+
+  it('ページ番号のクリックで該当ページを取得すること', async () => {
+    mockedStaffApi.list.mockImplementation(({ page }) =>
+      Promise.resolve(
+        paginated([staff({ id: 1, display_name: '山田太郎' })], { page, pageCount: 3, total: 25 })
+      )
+    );
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 1,
+        size: 10,
+        search: undefined,
+      })
+    );
+  });
 });
 
 describe('スタッフ一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
-    mockedStaffApi.list.mockResolvedValue([]);
+    mockedStaffApi.list.mockResolvedValue(paginated([]));
   });
 
   it('見出し（h1）・副題を備え、主アクションが button ロールのままであること', async () => {

@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
 
@@ -12,6 +12,21 @@ const STAFF_URL = `${PLATFORM_URL}/platform/staff`;
 // 氏名をそのままメールへ流用できない）。
 let createdStaffName = '';
 let createdStaffEmail = '';
+
+/**
+ * 作成した一意名で一覧を絞り込み、その行を返す。
+ *
+ * 一覧は 10 件ごとのページングのため、直前に作った 1 件が先頭ページに載る保証はない。
+ * 検索を通してから照合することで、過去 run の残骸が何件積もっても行を特定できる。
+ */
+async function findCreatedStaffRow(page: Page) {
+  const search = page.getByLabel('スタッフを検索', { exact: true });
+  await search.fill(createdStaffName);
+  await page.getByRole('button', { name: '検索', exact: true }).click();
+  const row = page.getByRole('row', { name: new RegExp(createdStaffName) });
+  await expect(row).toBeVisible({ timeout: 15000 });
+  return row;
+}
 
 When('スタッフ管理画面を開く', async ({ page }) => {
   await page.goto(STAFF_URL, { waitUntil: 'domcontentloaded' });
@@ -88,15 +103,13 @@ Then(
   'スタッフ一覧に {string} が {string} として表示される',
   async ({ page }, _label: string, roleLabel: string) => {
     // {string} は可読性のための表記。実際の照合は一意名（createdStaffName）で行う。
-    const row = page.getByRole('row', { name: new RegExp(createdStaffName) });
-    await expect(row).toBeVisible({ timeout: 15000 });
+    const row = await findCreatedStaffRow(page);
     await expect(row.getByText(roleLabel, { exact: true })).toBeVisible();
   }
 );
 
 When('{string} の編集モーダルを開く', async ({ page }, _label: string) => {
-  const row = page.getByRole('row', { name: new RegExp(createdStaffName) });
-  await expect(row).toBeVisible({ timeout: 15000 });
+  const row = await findCreatedStaffRow(page);
   await row.getByRole('button', { name: '編集', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: `${createdStaffName} の権限を編集`, exact: true })
@@ -134,7 +147,7 @@ When('保存する', async ({ page }) => {
 Then(
   'スタッフ一覧の {string} の担当店舗が {string} と表示される',
   async ({ page }, _label: string, scopeLabel: string) => {
-    const row = page.getByRole('row', { name: new RegExp(createdStaffName) });
+    const row = await findCreatedStaffRow(page);
     await expect(row.getByText(scopeLabel, { exact: true })).toBeVisible({ timeout: 15000 });
   }
 );

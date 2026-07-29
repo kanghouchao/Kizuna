@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  Input,
   Table,
   TableBody,
   TableCell,
@@ -22,10 +23,17 @@ import { RoleFormModal } from './RoleFormModal';
 /** ロール一覧ページ。一覧内モーダルで新規作成・編集を行う。 */
 export default function RolesPage() {
   const {
-    items: roles,
+    items: allRoles,
     isLoading,
     refetch,
   } = useManagedList<RoleResponse>(() => platformRoleApi.list(), 'ロール一覧の取得に失敗しました');
+  const [searchTerm, setSearchTerm] = useState('');
+  // ロールは定義数が限られ、GET /platform/roles も全量を返す（付与 UI のロール目録が同じ端点を
+  // 使うため分頁できない）。絞り込みは取得済みの配列に対して行い、送信で確定させる。
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const roles = appliedSearch
+    ? allRoles.filter(role => role.name.toLowerCase().includes(appliedSearch.toLowerCase()))
+    : allRoles;
   // フォームは 1 つだけ開く。新規と編集で実体を分けると権限目録の取得が二重に走るため、
   // 「閉じている / 新規 / 既存の編集」を 1 つの状態で表す。
   // 編集対象は id で保持し、role オブジェクトは現在の一覧から導出する。
@@ -61,8 +69,43 @@ export default function RolesPage() {
             ロールを追加
           </Button>
         }
+        search={{
+          onSearch: () => setAppliedSearch(searchTerm),
+          content: (
+            <>
+              <div className="w-full md:max-w-xs">
+                <label htmlFor="search" className="sr-only">
+                  ロールを検索
+                </label>
+                <Input
+                  type="text"
+                  name="search"
+                  id="search"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="ロール名で検索..."
+                />
+              </div>
+              <Button type="submit">検索</Button>
+              {searchTerm && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setAppliedSearch('');
+                  }}
+                >
+                  クリア
+                </Button>
+              )}
+            </>
+          ),
+        }}
         state={{ rows: roles, isLoading }}
-        emptyMessage="ロールが登録されていません"
+        emptyMessage={
+          appliedSearch ? '該当するロールが見つかりません' : 'ロールが登録されていません'
+        }
       >
         <Table>
           <TableHeader>

@@ -6,8 +6,10 @@ import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.application.PlatformStaffService;
 import jakarta.validation.Valid;
 import java.security.Principal;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 平台スタッフ（ロール×店舗集合）管理 API。全操作 STAFF_MANAGE 権限限定。 */
@@ -26,10 +29,13 @@ public class PlatformStaffController {
 
   private final PlatformStaffService platformStaffService;
 
+  // offset ページングはページ境界の安定に全順序を要するため、表示名の並びに一意な副キー id を添える。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
-  public ResponseEntity<List<PlatformStaffResponse>> list() {
-    return ResponseEntity.ok(platformStaffService.list());
+  public ResponseEntity<Page<PlatformStaffResponse>> list(
+      @RequestParam(required = false) String search,
+      @PageableDefault(sort = {"displayName", "id"}) Pageable pageable) {
+    return ResponseEntity.ok(platformStaffService.list(search, pageable));
   }
 
   @PostMapping
