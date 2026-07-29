@@ -68,4 +68,18 @@ class DefaultGrantApprovalTests {
         (code, approved) ->
             assertThat(code.getDefaultRoles()).as("%s の既定ロール", code).containsAll(approved));
   }
+
+  @Test
+  @DisplayName("全ての平台既定ロールが少なくとも 1 つの権限から宣言されていること")
+  void everySystemRoleHasAtLeastOnePermission() {
+    // 播種は宣言どおりロール行を作るため、権限を 1 つも宣言されていない既定ロールは「authority が
+    // 空のロール」として利用者に見え、それだけを付与された staff は権限ゼロのトークンになる。
+    // ロールの追加と授与の宣言は別の場所（SystemRole と各 PermissionCode）にあり書き忘れが起きうるので、
+    // DB へ届く前の単体段階で塞ぐ — 宣言だけで判定できる性質を起動時まで持ち越す理由は無い。
+    for (SystemRole systemRole : SystemRole.values()) {
+      assertThat(PermissionCode.values())
+          .as("%s を既定ロールに含む権限", systemRole.getRoleName())
+          .anyMatch(code -> code.getDefaultRoles().contains(systemRole));
+    }
+  }
 }
