@@ -71,11 +71,7 @@ export default function CastFieldsPage() {
           </TableHeader>
           <TableBody>
             {definitions.map(definition => (
-              <TableRow
-                key={definition.id}
-                className="cursor-pointer"
-                onClick={() => setEditing(definition)}
-              >
+              <TableRow key={definition.id}>
                 <TableCell className="font-medium text-foreground">{definition.key}</TableCell>
                 <TableCell className="text-muted-foreground">{definition.label}</TableCell>
                 <TableCell>
@@ -101,21 +97,16 @@ export default function CastFieldsPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={e => {
-                        e.stopPropagation();
-                        setEditing(definition);
-                      }}
+                      aria-label="編集"
+                      onClick={() => setEditing(definition)}
                     >
                       <SquarePenIcon />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={e => {
-                        e.stopPropagation();
-                        setDeleteTarget(definition);
-                      }}
                       aria-label="削除"
+                      onClick={() => setDeleteTarget(definition)}
                     >
                       <Trash2Icon />
                     </Button>
