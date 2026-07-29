@@ -1,12 +1,22 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { PlusIcon } from 'lucide-react';
+import { ExternalLinkIcon, PlusIcon, SquarePenIcon, StoreIcon, Trash2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Store, platformStoreApi } from '@/entities/store';
 import { useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
-import { Button, ConfirmDialog, Input } from '@/shared/ui';
+import {
+  Button,
+  ConfirmDialog,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/ui';
 import toast from 'react-hot-toast';
 
 /** 一覧 1 ページあたりの件数 */
@@ -95,19 +105,7 @@ export default function StoresPage() {
         state={list}
         emptyMessage={
           <>
-            <svg
-              className="mx-auto h-12 w-12 text-muted-foreground"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-              />
-            </svg>
+            <StoreIcon className="mx-auto h-12 w-12 text-muted-foreground" />
             <h3 className="mt-2 text-sm font-medium text-foreground">店舗がありません</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {searchTerm ? '該当する店舗が見つかりません' : '最初の店舗を作成しましょう'}
@@ -121,43 +119,59 @@ export default function StoresPage() {
           </>
         }
       >
-        <ul className="divide-y">
-          {stores.map(store => (
-            <li key={store.id} className="px-4 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center min-w-0 flex-1">
-                  <div className="flex-shrink-0">
-                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-lg font-medium text-primary-strong">
-                        {store.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="ml-4 min-w-0 flex-1">
-                    <p className="text-lg font-medium text-foreground truncate">{store.name}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-muted-foreground">
-                    {new Date(store.created_at).toLocaleDateString('ja-JP')}
-                  </span>
-                  <div className="flex space-x-2">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>店舗名</TableHead>
+              <TableHead>ドメイン</TableHead>
+              <TableHead>登録日</TableHead>
+              <TableHead className="text-right">アクション</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {stores.map(store => (
+              <TableRow key={store.id}>
+                <TableCell className="font-medium text-foreground">{store.name}</TableCell>
+                <TableCell>
+                  {/* 店舗サイトは店舗ドメインの別ホストで配信されるため、
+                      現在のスキームを引き継ぐプロトコル相対 URL で別タブへ開く */}
+                  <a
+                    href={`//${store.domain}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-primary-strong hover:underline"
+                  >
+                    {store.domain}
+                    <ExternalLinkIcon className="h-3.5 w-3.5" />
+                  </a>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {new Date(store.created_at).toLocaleDateString('ja-JP')}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1">
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="編集"
                       onClick={() => router.push(`/platform/stores/${store.id}/edit`)}
                     >
-                      編集
+                      <SquarePenIcon />
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(store)}>
-                      削除
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="削除"
+                      onClick={() => setDeleteTarget(store)}
+                    >
+                      <Trash2Icon />
                     </Button>
                   </div>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </ListPage>
 
       {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}

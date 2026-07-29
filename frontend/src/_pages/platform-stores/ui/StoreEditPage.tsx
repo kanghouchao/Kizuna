@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/entities/user';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
 import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
 import toast from 'react-hot-toast';
@@ -10,7 +9,6 @@ import toast from 'react-hot-toast';
 export default function EditStorePage() {
   const id = useParams<{ id: string }>()?.id;
   const router = useRouter();
-  const { logout } = useAuth();
 
   const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<Store | null>(null);
@@ -80,103 +78,71 @@ export default function EditStorePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* ナビゲーションバー */}
-      <nav className="bg-card shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-4">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">店舗編集</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          店舗の基本情報を編集します。ドメインは現在変更できません。
+        </p>
+      </div>
+
+      <Card>
+        <CardContent>
+          <form onSubmit={handleSave} className="space-y-6">
+            {/* 店舗名 */}
+            <div className="grid gap-2">
+              <Label htmlFor="name">
+                店舗名 <span className="text-destructive-strong">*</span>
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                value={formData.name}
+                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                aria-invalid={!!errors.name}
+              />
+              {errors.name && <p className="text-sm text-destructive-strong">{errors.name}</p>}
+            </div>
+
+            {/* 連絡用メール */}
+            <div className="grid gap-2">
+              <Label htmlFor="email">
+                連絡用メール <span className="text-destructive-strong">*</span>
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                aria-invalid={!!errors.email}
+              />
+              {errors.email && <p className="text-sm text-destructive-strong">{errors.email}</p>}
+            </div>
+
+            {/* ドメイン（読み取り専用） */}
+            {store && (
+              <div className="rounded-lg border p-4">
+                <h2 className="text-sm font-medium text-foreground mb-2">ドメイン</h2>
+                <p className="text-sm text-foreground break-all">{store.domain}</p>
+              </div>
+            )}
+
+            {/* 操作 */}
+            <div className="flex justify-end space-x-3">
               <Button
-                variant="ghost"
-                size="sm"
-                className="text-primary-strong"
+                type="button"
+                variant="outline"
                 onClick={() => router.push('/platform/stores')}
               >
-                ← 店舗一覧に戻る
+                キャンセル
               </Button>
-              <h1 className="text-xl font-semibold text-foreground">店舗編集</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">ようこそ、someone さん</span>
-              <Button variant="ghost" size="sm" onClick={logout}>
-                ログアウト
+              <Button type="submit" disabled={saving}>
+                {saving ? '保存中...' : '保存'}
               </Button>
             </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* メイン */}
-      <div className="max-w-3xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <Card>
-            <CardContent>
-              <div className="mb-6">
-                <h3 className="text-lg leading-6 font-medium text-foreground">店舗情報</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  店舗の基本情報を編集します。ドメインは現在変更できません。
-                </p>
-              </div>
-
-              <form onSubmit={handleSave} className="space-y-6">
-                {/* 店舗名 */}
-                <div className="grid gap-2">
-                  <Label htmlFor="name">
-                    店舗名 <span className="text-destructive-strong">*</span>
-                  </Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={formData.name}
-                    onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                    aria-invalid={!!errors.name}
-                  />
-                  {errors.name && <p className="text-sm text-destructive-strong">{errors.name}</p>}
-                </div>
-
-                {/* 連絡用メール */}
-                <div className="grid gap-2">
-                  <Label htmlFor="email">
-                    連絡用メール <span className="text-destructive-strong">*</span>
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                    aria-invalid={!!errors.email}
-                  />
-                  {errors.email && (
-                    <p className="text-sm text-destructive-strong">{errors.email}</p>
-                  )}
-                </div>
-
-                {/* ドメイン（読み取り専用） */}
-                {store && (
-                  <div className="rounded-lg border p-4">
-                    <h4 className="text-sm font-medium text-foreground mb-2">ドメイン</h4>
-                    <p className="text-sm text-foreground break-all">{store.domain}</p>
-                  </div>
-                )}
-
-                {/* 操作 */}
-                <div className="flex justify-end space-x-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => router.push('/platform/stores')}
-                  >
-                    キャンセル
-                  </Button>
-                  <Button type="submit" disabled={saving}>
-                    {saving ? '保存中...' : '保存'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
