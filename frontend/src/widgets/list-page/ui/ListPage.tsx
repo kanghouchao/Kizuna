@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Button, Card, CardContent } from '@/shared/ui';
+import { Button, Card, CardContent, TableCard } from '@/shared/ui';
 
 export interface ListPageSearch {
   /** 検索カードの中身（入力欄・ボタンなど） */
@@ -91,9 +91,7 @@ export function ListPage({
         </form>
       )}
 
-      {/* Card は既定で gap-6 の flex 列。テーブルとページネーションを地続きに見せるため間隔を潰す
-          （残すと最終行の下に 24px の空白が挟まる） */}
-      <Card className="py-0 gap-0 overflow-hidden">
+      <TableCard>
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
         ) : isEmpty ? (
@@ -105,7 +103,7 @@ export function ListPage({
         {/* pageCount が 1 に潰れても、削除等で page が範囲外（page > 0）になった場合は
             戻る手段を残す必要があるため、pageCount > 1 だけでは判定しない */}
         {onPageChange && !isLoading && (pageCount > 1 || page > 0) && (
-          <div className="px-4 py-3 flex items-center justify-between border-t sm:px-6">
+          <div className="px-6 py-4 flex items-center justify-between border-t">
             <div className="flex-1 flex justify-between sm:hidden">
               <Button
                 variant="outline"
@@ -177,7 +175,7 @@ export function ListPage({
             </div>
           </div>
         )}
-      </Card>
+      </TableCard>
     </div>
   );
 }

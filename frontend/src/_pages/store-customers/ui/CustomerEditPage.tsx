@@ -7,7 +7,15 @@ import { CustomerResponse, customerApi } from '@/entities/customer';
 import { Order, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 import { storePath } from '@/shared/lib';
-import { Card, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui';
+import {
+  Table,
+  TableBody,
+  TableCard,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/ui';
 
 /** 顧客編集ページ（プロフィール編集 + 注文履歴） */
 export default function CustomerEditPage() {
@@ -96,7 +104,7 @@ export default function CustomerEditPage() {
       />
 
       {/* 注文履歴 */}
-      <Card className="py-0 overflow-hidden">
+      <TableCard>
         <div className="border-b bg-muted/50 px-6 py-4">
           <h2 className="text-lg font-medium text-foreground">注文履歴</h2>
         </div>
@@ -129,7 +137,7 @@ export default function CustomerEditPage() {
             </TableBody>
           </Table>
         )}
-      </Card>
+      </TableCard>
     </div>
   );
 }

@@ -19,5 +19,6 @@ export * from './select';
 export * from './skeleton';
 export * from './switch';
 export * from './table';
+export * from './table-card';
 export * from './tabs';
 export * from './textarea';

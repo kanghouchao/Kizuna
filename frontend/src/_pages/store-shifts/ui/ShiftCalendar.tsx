@@ -67,7 +67,7 @@ export function ShiftCalendar({
         {WEEKDAYS.map((w, i) => (
           <div
             key={w}
-            className={`px-2 py-2 text-center text-xs font-medium ${
+            className={`px-3 py-2.5 text-center text-xs font-medium ${
               i === 0
                 ? 'text-destructive'
                 : i === 6
@@ -91,7 +91,7 @@ export function ShiftCalendar({
               type="button"
               key={ds}
               onClick={() => onSelectDate(ds)}
-              className="group h-24 border-b border-r p-2 text-left align-top transition-colors hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              className="group h-28 border-b border-r p-3 text-left align-top transition-colors hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             >
               {/* 当月外はホバーの色地に載るため、注記色のままだと沈む。ホバー時だけ本文色へ上げる。 */}
               <span
