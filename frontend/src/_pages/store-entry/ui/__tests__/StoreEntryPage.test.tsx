@@ -33,10 +33,14 @@ const bothConsolesMenu = [
   { name: 'CRM', items: [{ name: '顧客一覧', path: '/store/customers' }] },
 ];
 
+const reload = jest.fn();
+
 const storeContext = (override: Partial<ReturnType<typeof useStoreContext>> = {}) => ({
   stores: [{ id: 5, name: '店舗A' }],
   storeBridge: true,
   currentStoreId: undefined,
+  loadFailed: false,
+  reload,
   switchStore: jest.fn(),
   ...override,
 });
@@ -145,7 +149,46 @@ describe('店舗コンソール入口', () => {
     render(<StoreEntryPage />);
 
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+    // 店舗はあるので「店舗が無い」と言ってはいけない。管理者が直す先が授権ではなくロールの権限のため。
+    expect(mockedToast.error).toHaveBeenCalledWith(
+      'アクセスできる画面がありません。管理者にお問い合わせください'
+    );
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('文脈の取得失敗はログアウトも平台側への送出もせず再試行を出す', async () => {
+    // me()/stores() の失敗を空一覧・資格なしへ畳むと、通信障害が「授権店舗ゼロ」（ログアウト）や
+    // 「資格なし」（平台側へ送出 → 守衛が入口へ弾き返す往復）に化ける。
+    mockedUseStoreContext.mockReturnValue(
+      storeContext({ stores: null, storeBridge: null, loadFailed: true })
+    );
+
+    render(<StoreEntryPage />);
+
+    expect(await screen.findByRole('button', { name: '再試行' })).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('文脈の取得失敗の再試行は provider に取り直させる', async () => {
+    mockedUseStoreContext.mockReturnValue(
+      storeContext({ stores: null, storeBridge: null, loadFailed: true })
+    );
+
+    render(<StoreEntryPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '再試行' }));
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(mockedMenuApi.getMenus).not.toHaveBeenCalled();
+  });
+
+  it('廃止済みルートは next として復元せずメニュー由来の着地先へ回す', async () => {
+    // 復元すると実在しない /store/5/select へ飛ばして 404 になる。
+    window.history.pushState({}, '', '/store/entry?next=%2Fstore%2Fselect');
+
+    render(<StoreEntryPage />);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/5/orders'));
   });
 
   it('メニュー取得の失敗はログアウトさせず再試行を出す', async () => {

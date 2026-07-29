@@ -5,6 +5,9 @@ const STORE_ENTRY_PATTERN = /^\/store\/entry(?:\/|$)/;
 // /store/entry 自体と数値id配下（/store/5/...）は対象外 — entry を除外しないと入口ルート自身が
 // レガシー判定に掛かり、守衛が entry へ差し戻す先も entry になって無限リダイレクトになる。
 const LEGACY_STORE_PATH_PATTERN = /^\/store\/(?!entry\b)(?!\d+(\/|$))/;
+// 廃止済みの店舗ルート。レガシー判定には掛かるが遷移先が既に無いため、
+// storeId を埋めると実在しない /store/{id}/select・/store/{id}/dashboard になる。
+const RETIRED_STORE_PATH_PATTERN = /^\/store\/(select|dashboard)(?:\/|$)/;
 
 export function getStoreIdFromPath(pathname: string): string | undefined {
   return STORE_ID_PATTERN.exec(pathname)?.[1];
@@ -51,4 +54,9 @@ export function resolveStoreHref(itemPath: string, storeId: string | undefined):
 /** storeId 移設以前の id 無し店舗パス（レガシーブックマーク）か。routeGuard が誘導判定に使う。 */
 export function isLegacyStorePath(pathname: string): boolean {
   return LEGACY_STORE_PATH_PATTERN.test(pathname);
+}
+
+/** 遷移先として復元してはいけない廃止済みルートか。入口が next を捨てる判定に使う。 */
+export function isRetiredStorePath(pathname: string): boolean {
+  return RETIRED_STORE_PATH_PATTERN.test(pathname);
 }

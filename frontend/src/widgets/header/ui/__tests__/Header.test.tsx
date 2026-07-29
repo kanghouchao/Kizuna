@@ -32,6 +32,8 @@ function withContext(stores: PlatformStore[] | null, currentStoreId?: string) {
     stores,
     storeBridge: stores === null ? null : stores.length > 0,
     currentStoreId,
+    loadFailed: false,
+    reload: jest.fn(),
     switchStore: mockSwitchStore,
   });
 }

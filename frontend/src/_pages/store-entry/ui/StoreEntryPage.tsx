@@ -5,7 +5,12 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { MenuVO, menuApi } from '@/entities/menu';
 import { useAuth, useStoreContext } from '@/entities/user';
-import { getPlatformStoreId, resolveStoreHref, setPlatformStore } from '@/shared/lib';
+import {
+  getPlatformStoreId,
+  isRetiredStorePath,
+  resolveStoreHref,
+  setPlatformStore,
+} from '@/shared/lib';
 import { Button } from '@/shared/ui';
 
 /** メニュー木を先行順に辿り、最初の店舗スコープの葉（path 付き）を返す。 */
@@ -24,10 +29,13 @@ function firstStorePath(menus: MenuVO[]): string | undefined {
  * クエリ next（店舗スコープの遷移先テンプレート）を読む。
  * next は利用者が任意に書ける値なので、店舗スコープの相対パス以外は捨てる。
  * '//evil.example' や 'https://…' をそのまま遷移先にすると外部サイトへの誘導になる。
+ * 退役ルートも捨てる — 解決すると実在しない画面へ飛ばして 404 になるため、
+ * next 無しとして扱い、メニュー由来の着地先へ回す。
  */
 function readNext(): string | undefined {
   const raw = new URLSearchParams(window.location.search).get('next');
   if (!raw || !raw.startsWith('/store') || raw.startsWith('//')) return undefined;
+  if (isRetiredStorePath(raw)) return undefined;
   return raw;
 }
 
@@ -42,15 +50,17 @@ function readNext(): string | undefined {
 export default function StoreEntryPage() {
   const router = useRouter();
   const { logout } = useAuth();
-  const { stores, storeBridge } = useStoreContext();
+  const { stores, storeBridge, loadFailed, reload } = useStoreContext();
   const resolved = useRef(false);
   // メニュー取得が失敗した回。再試行のたびに増やして解決を再走させる。
   const [attempt, setAttempt] = useState(0);
-  const [fetchFailed, setFetchFailed] = useState(false);
+  const [menuFailed, setMenuFailed] = useState(false);
 
   useEffect(() => {
-    // stores / storeBridge の null は読み込み中。
-    if (resolved.current || stores === null || storeBridge === null) return;
+    if (resolved.current) return;
+    // 文脈の取得失敗（loadFailed）も読み込み中（null）も「授権の答えがまだ無い」状態。
+    // 前者は再試行 UI が受け持つので、どちらでも解決は進めない。
+    if (loadFailed || stores === null || storeBridge === null) return;
     // 解決は一度だけ。useAuth の logout は毎レンダー新しい関数なので、この旗で閉じないと
     // 遷移待ちの再レンダーのたびにメニュー取得が走る。
     resolved.current = true;
@@ -63,13 +73,14 @@ export default function StoreEntryPage() {
     }
 
     // 「行ける場所が無い」がサーバの答えとして確定した場合だけセッションを畳む。
-    const deadEnd = () => {
-      toast.error('アクセス可能な店舗がありません。管理者にお問い合わせください');
+    // 文言は店舗が無いのか画面が無いのかを言い分ける — 管理者が直す先が別（授権 か ロールの権限）なので。
+    const deadEnd = (message: string) => {
+      toast.error(message);
       void logout();
     };
 
     if (stores.length === 0) {
-      deadEnd();
+      deadEnd('アクセス可能な店舗がありません。管理者にお問い合わせください');
       return;
     }
 
@@ -92,7 +103,8 @@ export default function StoreEntryPage() {
         const target = firstStorePath(menus);
         if (!target) {
           // 取得は成功していて、その上で行ける画面が 1 つも無い＝授権の答えが空。
-          deadEnd();
+          // 店舗はあるので原因はロール側（店舗メニューの標識権限を欠いた権限組合せ）。
+          deadEnd('アクセスできる画面がありません。管理者にお問い合わせください');
           return;
         }
         setPlatformStore(storeId);
@@ -102,17 +114,21 @@ export default function StoreEntryPage() {
         // 取得そのものの失敗（ネットワーク・5xx）は授権の答えではないのでセッションを捨てない。
         // ここで畳むと、メニュー障害時にサイドバーが出す入口リンク自体がログアウトボタンになる。
         resolved.current = false;
-        setFetchFailed(true);
+        setMenuFailed(true);
       });
-  }, [stores, storeBridge, router, logout, attempt]);
+  }, [stores, storeBridge, loadFailed, router, logout, attempt]);
 
-  if (fetchFailed) {
+  if (loadFailed || menuFailed) {
     return (
       <div className="mx-auto max-w-md space-y-3">
-        <p className="text-sm text-foreground">メニューを取得できませんでした。</p>
+        <p className="text-sm text-foreground">読み込みに失敗しました。</p>
         <Button
           onClick={() => {
-            setFetchFailed(false);
+            if (loadFailed) {
+              reload();
+              return;
+            }
+            setMenuFailed(false);
             setAttempt(count => count + 1);
           }}
         >
