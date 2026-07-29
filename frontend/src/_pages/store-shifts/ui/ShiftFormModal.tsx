@@ -121,8 +121,8 @@ export function ShiftFormModal({
       }
       onSaved();
       onClose();
-    } catch {
-      toast.error('シフトの保存に失敗しました');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'シフトの保存に失敗しました'));
     }
   };
 

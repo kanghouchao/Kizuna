@@ -69,9 +69,7 @@ public class CastFieldDefinitionService {
   @Transactional
   public CastFieldDefinitionResponse update(String id, CastFieldDefinitionUpdateRequest request) {
     CastFieldDefinition definition =
-        repository
-            .findById(id)
-            .orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
+        repository.findById(id).orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
     definition.apply(mapper.toPatch(request));
     return mapper.toResponse(repository.save(definition));
   }

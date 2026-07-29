@@ -47,14 +47,14 @@ export default function CastListPage() {
       });
   }, []);
   const list = useListPage<CastResponse, string>(
-    (page, appliedSearch) =>
+    (page, criteria) =>
       castApi.list({
         page,
         size: PAGE_SIZE,
         // display_order は既定値 0 のため一意でない。offset ページングの境界を確定させるには
         // 一意な副キーが要る（sort=prop1,prop2,direction は Spring Data の複数キー形式）
         sort: 'displayOrder,id,asc',
-        search: appliedSearch || undefined,
+        search: criteria || undefined,
       }),
     'キャスト一覧の取得に失敗しました',
     ''
