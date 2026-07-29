@@ -8,7 +8,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
@@ -62,7 +62,7 @@ class StoreProfileServiceTest {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> storeProfileService.get())
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessage("店舗設定が見つかりません");
   }
 
@@ -150,7 +150,7 @@ class StoreProfileServiceTest {
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
 
     assertThatThrownBy(() -> storeProfileService.update(request))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessage("店舗設定が見つかりません");
   }
 

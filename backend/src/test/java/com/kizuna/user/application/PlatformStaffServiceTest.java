@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
@@ -292,7 +293,7 @@ class PlatformStaffServiceTest {
               return existing;
             });
 
-    Optional<PlatformStaffResponse> res =
+    PlatformStaffResponse res =
         service.update(
             3L,
             updateRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
@@ -301,11 +302,9 @@ class PlatformStaffServiceTest {
     assertThat(existing.getRoleIds()).containsExactly(MANAGER_ROLE);
     assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(existing.getStoreIds()).containsExactly(1L);
-    assertThat(res).isPresent();
-    assertThat(res.get().id()).isEqualTo(3L);
-    assertThat(res.get().roles())
-        .containsExactly(new PlatformStaffResponse.RoleRef(MANAGER_ROLE, "店長"));
-    assertThat(res.get().version()).as("応答は保存後の増加した version を返すこと").isEqualTo(1L);
+    assertThat(res.id()).isEqualTo(3L);
+    assertThat(res.roles()).containsExactly(new PlatformStaffResponse.RoleRef(MANAGER_ROLE, "店長"));
+    assertThat(res.version()).as("応答は保存後の増加した version を返すこと").isEqualTo(1L);
   }
 
   @Test
@@ -332,29 +331,31 @@ class PlatformStaffServiceTest {
   }
 
   @Test
-  void update_unknownId_returnsEmptyWithoutSaving() {
+  void update_unknownId_throwsNotFoundWithoutSaving() {
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(404L)).thenReturn(Optional.empty());
 
-    Optional<PlatformStaffResponse> res =
-        service.update(
-            404L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
-
-    assertThat(res).isEmpty();
+    assertThatThrownBy(
+            () ->
+                service.update(
+                    404L,
+                    updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()),
+                    ACTOR))
+        .isInstanceOf(NotFoundException.class);
     verify(repository, never()).save(any());
   }
 
   @Test
-  void update_targetIsNonStaff_returnsEmptyWithoutSaving() {
-    // CAST/MEMBER はスタッフ管理の可視対象外。id を直接指定してもスタッフへ昇格させない（本人種別検証）。
+  void update_targetIsNonStaff_throwsNotFoundWithoutSaving() {
+    // CAST/MEMBER はスタッフ管理の可視対象外。id を直接指定してもスタッフへ昇格させず、不在と同じ応答にする（本人種別検証）。
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(8L)).thenReturn(Optional.of(castUser(8L, "cast@kizuna.test")));
 
-    Optional<PlatformStaffResponse> res =
-        service.update(
-            8L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
-
-    assertThat(res).isEmpty();
+    assertThatThrownBy(
+            () ->
+                service.update(
+                    8L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+        .isInstanceOf(NotFoundException.class);
     verify(repository, never()).save(any());
   }
 
@@ -428,11 +429,10 @@ class PlatformStaffServiceTest {
         updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
     req.setEnabled(false);
 
-    Optional<PlatformStaffResponse> res = service.update(3L, req, ACTOR);
+    PlatformStaffResponse res = service.update(3L, req, ACTOR);
 
     assertThat(existing.getEnabled()).isFalse();
-    assertThat(res).isPresent();
-    assertThat(res.get().enabled()).isFalse();
+    assertThat(res.enabled()).isFalse();
   }
 
   @Test

@@ -1,5 +1,6 @@
 package com.kizuna.store.application;
 
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
@@ -36,8 +37,8 @@ public class StoreRegistryService {
   }
 
   @Transactional(readOnly = true)
-  public Optional<StoreVO> getById(String id) {
-    return storeRepository.findById(parseId(id)).map(this::toDto);
+  public StoreVO getById(String id) {
+    return storeRepository.findById(parseId(id)).map(this::toDto).orElseThrow(() -> notFound(id));
   }
 
   @Transactional(readOnly = true)
@@ -49,8 +50,16 @@ public class StoreRegistryService {
     return storeRepository.findByDomain(domain).map(this::toDto);
   }
 
+  /**
+   * 新規登録する。
+   *
+   * <p>ドメインの重複は、制約違反を捕まえるのではなく事前に照会して判定する — 一意制約はここを擦り抜けた競合を受け止める 最後の一枚（409）であり、業務上の重複判定を委ねる先ではない。
+   */
   @Transactional
   public void create(StoreCreateDTO req) {
+    if (storeRepository.findByDomain(req.getDomain()).isPresent()) {
+      throw new ServiceException("このドメインは既に登録されています");
+    }
     Store t = new Store();
     t.setName(req.getName());
     t.setDomain(req.getDomain());
@@ -61,8 +70,7 @@ public class StoreRegistryService {
 
   @Transactional
   public void update(String id, StoreUpdateDTO req) {
-    var store =
-        storeRepository.findById(parseId(id)).orElseThrow(() -> new ServiceException("店舗が見つかりません"));
+    var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
     store.setName(req.getName());
     storeRepository.save(store);
   }
@@ -76,6 +84,10 @@ public class StoreRegistryService {
   @Transactional(readOnly = true)
   public StoreStatusVO stats() {
     return new StoreStatusVO(storeRepository.count());
+  }
+
+  private static NotFoundException notFound(String id) {
+    return new NotFoundException("店舗が見つかりません: " + id);
   }
 
   private Long parseId(String id) {

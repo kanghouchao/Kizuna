@@ -63,10 +63,7 @@ public class PlatformStoreController {
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<StoreVO> getById(@PathVariable String id) {
-    return storeRegistryService
-        .getById(id)
-        .map(ResponseEntity::ok)
-        .orElseGet(() -> ResponseEntity.notFound().build());
+    return ResponseEntity.ok(storeRegistryService.getById(id));
   }
 
   /**

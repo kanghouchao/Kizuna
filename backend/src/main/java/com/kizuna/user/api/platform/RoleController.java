@@ -42,17 +42,13 @@ public class RoleController {
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<RoleResponse> update(
       @PathVariable Long id, @Valid @RequestBody RoleUpdateRequest req) {
-    return roleService
-        .update(id, req)
-        .map(ResponseEntity::ok)
-        .orElseGet(() -> ResponseEntity.notFound().build());
+    return ResponseEntity.ok(roleService.update(id, req));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable Long id) {
-    return roleService.delete(id)
-        ? ResponseEntity.noContent().build()
-        : ResponseEntity.notFound().build();
+    roleService.delete(id);
+    return ResponseEntity.noContent().build();
   }
 }

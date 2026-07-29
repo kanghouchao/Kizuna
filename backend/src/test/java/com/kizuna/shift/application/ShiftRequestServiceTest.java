@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
@@ -86,7 +87,7 @@ class ShiftRequestServiceTest {
     when(shiftRequestRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftRequestService.approve("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("出勤希望が見つかりません");
 
     verify(shiftRepository, never()).save(any());
@@ -148,7 +149,7 @@ class ShiftRequestServiceTest {
     when(shiftRequestRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftRequestService.decline("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("出勤希望が見つかりません");
   }
 }

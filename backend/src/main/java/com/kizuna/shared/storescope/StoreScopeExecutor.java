@@ -18,6 +18,10 @@ import org.springframework.stereotype.Component;
  * で解決した授権集合で検証し、解決不能または 授権外なら fail-closed（{@link AccessDeniedException} → 403）で拒否する。授権通過後、{@link
  * StoreExistenceCheck} で実在性を 検証し、実在しなければ {@link ServiceException}（400 — 制約違反が 500 に逃げるのは
  * bug）で拒否する。検証通過後に {@link StoreContext} へ storeId を 設定し、try/finally で必ず消す。
+ *
+ * <p>この実在性違反を {@link com.kizuna.shared.exception.NotFoundException}（404）にしてはならない。 直前の授権判定が 403
+ * を返すため、404 と対比させると「授権外だが実在する店舗」と「実在しない店舗」が 呼出側から判別可能になり、平台に存在する店舗 id が漏れる。行の id を指名した照会（404）とは異なり、
+ * ここは授権判定の一部であり、応答は授権の有無以上を語ってはならない。
  */
 @Component
 @RequiredArgsConstructor

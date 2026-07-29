@@ -44,10 +44,7 @@ public class PlatformStaffController {
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> get(@PathVariable Long id) {
-    return platformStaffService
-        .get(id)
-        .map(ResponseEntity::ok)
-        .orElseGet(() -> ResponseEntity.notFound().build());
+    return ResponseEntity.ok(platformStaffService.get(id));
   }
 
   @PostMapping
@@ -63,9 +60,6 @@ public class PlatformStaffController {
       @PathVariable Long id,
       @Valid @RequestBody PlatformStaffUpdateRequest req,
       Principal principal) {
-    return platformStaffService
-        .update(id, req, principal.getName())
-        .map(ResponseEntity::ok)
-        .orElseGet(() -> ResponseEntity.notFound().build());
+    return ResponseEntity.ok(platformStaffService.update(id, req, principal.getName()));
   }
 }

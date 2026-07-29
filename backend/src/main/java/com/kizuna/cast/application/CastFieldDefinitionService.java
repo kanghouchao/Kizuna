@@ -6,6 +6,7 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.util.List;
@@ -70,7 +71,7 @@ public class CastFieldDefinitionService {
     CastFieldDefinition definition =
         repository
             .findById(id)
-            .orElseThrow(() -> new ServiceException("カスタムフィールド定義が見つかりません: " + id));
+            .orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません: " + id));
     definition.apply(mapper.toPatch(request));
     return mapper.toResponse(repository.save(definition));
   }
@@ -79,7 +80,7 @@ public class CastFieldDefinitionService {
   @Transactional
   public void delete(String id) {
     if (!repository.existsById(id)) {
-      throw new ServiceException("カスタムフィールド定義が見つかりません: " + id);
+      throw new NotFoundException("カスタムフィールド定義が見つかりません: " + id);
     }
     repository.deleteById(id);
   }

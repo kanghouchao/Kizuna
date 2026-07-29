@@ -14,6 +14,7 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionPatch;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -153,7 +154,7 @@ class CastFieldDefinitionServiceTest {
     when(repository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.update("missing", new CastFieldDefinitionUpdateRequest()))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("見つかりません");
   }
 
@@ -171,7 +172,7 @@ class CastFieldDefinitionServiceTest {
     when(repository.existsById("missing")).thenReturn(false);
 
     assertThatThrownBy(() -> service.delete("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("見つかりません");
 
     verify(repository, never()).deleteById(any());

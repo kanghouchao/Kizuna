@@ -6,7 +6,7 @@ import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScoped;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -86,7 +86,7 @@ public class CustomerService {
     return customerRepository
         .findById(id)
         .map(customerMapper::toResponse)
-        .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
+        .orElseThrow(() -> new NotFoundException("顧客が見つかりません: " + id));
   }
 
   @StoreScoped
@@ -103,7 +103,7 @@ public class CustomerService {
     Customer customer =
         customerRepository
             .findById(id)
-            .orElseThrow(() -> new ServiceException("顧客が見つかりません: " + id));
+            .orElseThrow(() -> new NotFoundException("顧客が見つかりません: " + id));
 
     customer.apply(customerMapper.toPatch(request));
 
@@ -114,7 +114,7 @@ public class CustomerService {
   @Transactional
   public void delete(String id) {
     if (!customerRepository.existsById(id)) {
-      throw new ServiceException("顧客が見つかりません: " + id);
+      throw new NotFoundException("顧客が見つかりません: " + id);
     }
     customerRepository.deleteById(id);
   }

@@ -1,5 +1,6 @@
 package com.kizuna.user.application;
 
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
@@ -22,7 +23,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -119,59 +119,59 @@ public class PlatformStaffService {
     return toResponse(save(user), roleNames);
   }
 
-  /**
-   * 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。
-   *
-   * <p>対象の本人種別がスタッフ以外（CAST/MEMBER）なら不可視として空を返す（list/update と同じ扱い）。
-   */
+  /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
-  public Optional<PlatformStaffResponse> get(Long id) {
-    return repository
-        .findById(id)
-        .filter(user -> user.getUserType() == UserType.STAFF)
-        .map(user -> toResponse(user, roleNamesOf(user.getRoleIds())));
+  public PlatformStaffResponse get(Long id) {
+    PlatformUser user = requireStaff(id);
+    return toResponse(user, roleNamesOf(user.getRoleIds()));
   }
 
   @Transactional
-  public Optional<PlatformStaffResponse> update(
-      Long id, PlatformStaffUpdateRequest req, String actorEmail) {
+  public PlatformStaffResponse update(Long id, PlatformStaffUpdateRequest req, String actorEmail) {
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
+    PlatformUser user = requireStaff(id);
+    // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
+    // ため、応答で往復させた version を明示比対して 409 で拒否する。
+    if (!user.getVersion().equals(req.getVersion())) {
+      throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
+    }
+    // 自分自身を停止すると自らのセッションも即時失効し、以後の操作ができなくなる（サポート経路がない自己ロックアウト）ため拒否する。
+    if (Boolean.FALSE.equals(req.getEnabled()) && user.getEmail().equals(actorEmail)) {
+      throw new SelfStopNotAllowedException("自分自身を停止することはできません");
+    }
+    user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+    // enabled の遷移（null=現状維持）。停止は行を残し、過去の実行主体の記録を保持する。
+    if (Boolean.FALSE.equals(req.getEnabled()) && user.getEnabled()) {
+      user.stop();
+    }
+    if (Boolean.TRUE.equals(req.getEnabled()) && !user.getEnabled()) {
+      user.resume();
+    }
+    // 失効の即時反映は「本リクエストが停止/再開を明示的に要求したか」で判定する（現在状態との差分ではない）。
+    // AFTER_COMMIT の Redis 書き込みが失敗して 500 になっても、最新 version を取り直して同じ停止要求を
+    // 再送すれば失効が書き直されるようにするための冪等化（差分語義だと再送時には既に enabled=false の
+    // ためイベントが発行されず、resume→stop 以外に復旧手段が無くなる）。version は楽観ロックで
+    // commit 済みの更新ぶん進んでいるため、再送には GET の取り直しが要る点に注意。
+    if (Boolean.FALSE.equals(req.getEnabled())) {
+      eventPublisher.publishEvent(new PlatformUserStopped(user.getEmail()));
+    }
+    if (Boolean.TRUE.equals(req.getEnabled())) {
+      eventPublisher.publishEvent(new PlatformUserResumed(user.getEmail()));
+    }
+    return toResponse(save(user), roleNames);
+  }
+
+  /**
+   * スタッフ管理の対象行を取り出す。
+   *
+   * <p>本人種別がスタッフ以外（CAST/MEMBER）の行は、存在しても本 API の対象外として「見つからない」に倒す（list/create と同じ扱い）。 種別違いと不在を呼出側から
+   * 区別できないようにするため、両者は同一の応答になる。
+   */
+  private PlatformUser requireStaff(Long id) {
     return repository
         .findById(id)
-        // 対象の本人種別がスタッフ以外（CAST/MEMBER）なら不可視として空を返す（list/create と同じ扱い）。
         .filter(user -> user.getUserType() == UserType.STAFF)
-        .map(
-            user -> {
-              // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
-              // ため、応答で往復させた version を明示比対して 409 で拒否する。
-              if (!user.getVersion().equals(req.getVersion())) {
-                throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
-              }
-              // 自分自身を停止すると自らのセッションも即時失効し、以後の操作ができなくなる（サポート経路がない自己ロックアウト）ため拒否する。
-              if (Boolean.FALSE.equals(req.getEnabled()) && user.getEmail().equals(actorEmail)) {
-                throw new SelfStopNotAllowedException("自分自身を停止することはできません");
-              }
-              user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
-              // enabled の遷移（null=現状維持）。停止は行を残し、過去の実行主体の記録を保持する。
-              if (Boolean.FALSE.equals(req.getEnabled()) && user.getEnabled()) {
-                user.stop();
-              }
-              if (Boolean.TRUE.equals(req.getEnabled()) && !user.getEnabled()) {
-                user.resume();
-              }
-              // 失効の即時反映は「本リクエストが停止/再開を明示的に要求したか」で判定する（現在状態との差分ではない）。
-              // AFTER_COMMIT の Redis 書き込みが失敗して 500 になっても、最新 version を取り直して同じ停止要求を
-              // 再送すれば失効が書き直されるようにするための冪等化（差分語義だと再送時には既に enabled=false の
-              // ためイベントが発行されず、resume→stop 以外に復旧手段が無くなる）。version は楽観ロックで
-              // commit 済みの更新ぶん進んでいるため、再送には GET の取り直しが要る点に注意。
-              if (Boolean.FALSE.equals(req.getEnabled())) {
-                eventPublisher.publishEvent(new PlatformUserStopped(user.getEmail()));
-              }
-              if (Boolean.TRUE.equals(req.getEnabled())) {
-                eventPublisher.publishEvent(new PlatformUserResumed(user.getEmail()));
-              }
-              return toResponse(save(user), roleNames);
-            });
+        .orElseThrow(() -> new NotFoundException("スタッフが見つかりません: " + id));
   }
 
   /** 指定 id のロールが全て実在することを検証し、id→名称の対応を返す（応答組立にも使う）。 */

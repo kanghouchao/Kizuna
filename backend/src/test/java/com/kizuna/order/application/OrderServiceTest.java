@@ -24,6 +24,7 @@ import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.PermissionCode;
@@ -139,7 +140,7 @@ class OrderServiceTest {
     when(orderRepository.findViewById("o2")).thenReturn(Optional.empty());
 
     assertThat(service.get("o1").getId()).isEqualTo("o1");
-    assertThatThrownBy(() -> service.get("o2")).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> service.get("o2")).isInstanceOf(NotFoundException.class);
   }
 
   @Test
@@ -216,7 +217,7 @@ class OrderServiceTest {
             Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
     assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
   }
@@ -235,7 +236,7 @@ class OrderServiceTest {
         .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
 
     assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
   }
@@ -264,7 +265,7 @@ class OrderServiceTest {
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
 
     assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
   }
@@ -284,7 +285,7 @@ class OrderServiceTest {
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(stopped));
 
     assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
   }
@@ -409,7 +410,7 @@ class OrderServiceTest {
     req.setCastId("none");
     req.setReceptionistId(2L);
 
-    assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(NotFoundException.class);
   }
 
   @Test
@@ -428,7 +429,7 @@ class OrderServiceTest {
     req.setReceptionistId(2L);
 
     assertThatThrownBy(() -> service.update("o1", req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
   }
@@ -448,7 +449,7 @@ class OrderServiceTest {
     req.setReceptionistId(2L);
 
     assertThatThrownBy(() -> service.update("o1", req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
   }
@@ -463,7 +464,7 @@ class OrderServiceTest {
   @Test
   void deleteThrowsWhenMissing() {
     when(orderRepository.existsById("nope")).thenReturn(false);
-    assertThatThrownBy(() -> service.delete("nope")).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> service.delete("nope")).isInstanceOf(NotFoundException.class);
   }
 
   /** {@link #authorizedReceptionist()} を id・表示名だけ差し替えて複製する（一覧テストで複数件を区別するため）。 */

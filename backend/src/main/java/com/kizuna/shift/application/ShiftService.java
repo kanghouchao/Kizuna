@@ -4,6 +4,7 @@ import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
@@ -87,7 +88,7 @@ public class ShiftService {
     }
     validateStatus(request.getStatus());
     if (!castService.existsForCurrentStore(request.getCastId())) {
-      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
+      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
 
     // store_id は StoreScopeStampListener が @PrePersist で採番する
@@ -99,11 +100,11 @@ public class ShiftService {
   @Transactional
   public ShiftResponse update(String id, ShiftUpdateRequest request) {
     Shift shift =
-        shiftRepository.findById(id).orElseThrow(() -> new ServiceException("シフトが見つかりません: " + id));
+        shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
 
     validateStatus(request.getStatus());
     if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
-      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
+      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
 
     // 部分更新のマージ結果（実効の開始・終了）で判定する。片方だけ来て既存値と一致する穴を塞ぐ。
@@ -124,7 +125,7 @@ public class ShiftService {
   @Transactional
   public void delete(String id) {
     if (!shiftRepository.existsById(id)) {
-      throw new ServiceException("シフトが見つかりません: " + id);
+      throw new NotFoundException("シフトが見つかりません: " + id);
     }
     shiftRepository.deleteById(id);
   }

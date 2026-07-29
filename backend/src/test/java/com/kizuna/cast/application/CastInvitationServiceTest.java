@@ -15,7 +15,7 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.NotFoundException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -74,7 +74,7 @@ class CastInvitationServiceTest {
     when(castRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> castInvitationService.issue("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }

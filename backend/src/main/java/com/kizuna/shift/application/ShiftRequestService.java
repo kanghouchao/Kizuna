@@ -1,5 +1,6 @@
 package com.kizuna.shift.application;
 
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
@@ -68,7 +69,7 @@ public class ShiftRequestService {
   private ShiftRequest findOwnRequest(String id) {
     return shiftRequestRepository
         .findById(id)
-        .orElseThrow(() -> new ServiceException("出勤希望が見つかりません: " + id));
+        .orElseThrow(() -> new NotFoundException("出勤希望が見つかりません: " + id));
   }
 
   private ShiftRequestStatus parseStatus(String status) {

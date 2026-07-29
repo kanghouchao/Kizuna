@@ -11,6 +11,7 @@ import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.util.List;
@@ -51,7 +52,7 @@ public class CastService {
   @Transactional(readOnly = true)
   public CastResponse get(String id) {
     Cast cast =
-        castRepository.findById(id).orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
+        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + id));
     CastInvitationStatus status = castInvitationService.deriveStatuses(List.of(cast)).get(id);
     return castMapper.toResponse(cast, status);
   }
@@ -78,7 +79,7 @@ public class CastService {
   @Transactional
   public CastResponse update(String id, CastUpdateRequest request) {
     Cast cast =
-        castRepository.findById(id).orElseThrow(() -> new ServiceException("キャストが見つかりません: " + id));
+        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + id));
 
     CastPatch patch = castMapper.toPatch(request);
     if (patch.customFields() != null) {
@@ -111,7 +112,7 @@ public class CastService {
   @Transactional
   public void delete(String id) {
     if (!castRepository.existsById(id)) {
-      throw new ServiceException("キャストが見つかりません: " + id);
+      throw new NotFoundException("キャストが見つかりません: " + id);
     }
     castRepository.deleteById(id);
   }

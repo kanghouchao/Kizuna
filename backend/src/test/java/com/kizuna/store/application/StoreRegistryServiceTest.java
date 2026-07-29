@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
@@ -60,6 +62,23 @@ class StoreRegistryServiceTest {
   }
 
   @Test
+  void create_duplicateDomain_rejectedBeforeInsert() {
+    // 重複判定は一意制約違反の捕捉ではなく事前照会で行う（制約違反は競合に敗れた場合の兜底）。
+    StoreCreateDTO req = new StoreCreateDTO();
+    req.setName("T2");
+    req.setDomain("taken.example.com");
+    when(storeRepository.findByDomain("taken.example.com"))
+        .thenReturn(Optional.of(createStore(9L, "既存", "taken.example.com", "x@y.com")));
+
+    assertThatThrownBy(() -> storeRegistryService.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("既に登録されています");
+
+    verify(storeRepository, never()).save(any());
+    verify(storeProfileRepository, never()).save(any());
+  }
+
+  @Test
   void list_handlesNullSearch() {
     Page<Store> page = new PageImpl<>(List.of());
     when(storeRepository.findByNameContainingIgnoreCaseOrDomainContainingIgnoreCase(
@@ -74,19 +93,19 @@ class StoreRegistryServiceTest {
     Store t = createStore(1L, "Store1", "store1.com", "a@b.com");
     when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
 
-    Optional<StoreVO> result = storeRegistryService.getById("1");
+    StoreVO result = storeRegistryService.getById("1");
 
-    assertThat(result).isPresent();
-    assertThat(result.get().getName()).isEqualTo("Store1");
-    assertThat(result.get().getDomain()).isEqualTo("store1.com");
-    assertThat(result.get().getCreatedAt()).isEqualTo(t.getCreatedAt());
+    assertThat(result.getName()).isEqualTo("Store1");
+    assertThat(result.getDomain()).isEqualTo("store1.com");
+    assertThat(result.getCreatedAt()).isEqualTo(t.getCreatedAt());
   }
 
   @Test
-  void getById_returnsEmptyWhenNotFound() {
+  void getById_throwsNotFoundWhenAbsent() {
     when(storeRepository.findById(99L)).thenReturn(Optional.empty());
 
-    assertThat(storeRegistryService.getById("99")).isEmpty();
+    assertThatThrownBy(() -> storeRegistryService.getById("99"))
+        .isInstanceOf(NotFoundException.class);
   }
 
   @Test
@@ -136,7 +155,7 @@ class StoreRegistryServiceTest {
     req.setName("New");
 
     assertThatThrownBy(() -> storeRegistryService.update("99", req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("店舗が見つかりません");
   }
 

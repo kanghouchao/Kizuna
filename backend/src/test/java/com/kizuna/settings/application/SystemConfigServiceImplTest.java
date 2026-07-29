@@ -14,6 +14,7 @@ import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.List;
 import java.util.Optional;
@@ -184,7 +185,7 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.findByConfigKey(key)).thenReturn(Optional.empty());
 
     // 実行・検証
-    assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+    assertThrows(NotFoundException.class, () -> systemConfigService.updateConfig(request));
   }
 
   @Test
