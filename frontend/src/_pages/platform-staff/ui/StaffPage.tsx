@@ -146,11 +146,7 @@ export default function StaffPage() {
           </TableHeader>
           <TableBody>
             {staff.map(member => (
-              <TableRow
-                key={member.id}
-                className="cursor-pointer"
-                onClick={() => setEditingStaff(member)}
-              >
+              <TableRow key={member.id}>
                 <TableCell className="font-medium text-foreground">{member.display_name}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {roleSetLabel(member.roles)}
@@ -180,10 +176,7 @@ export default function StaffPage() {
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    onClick={e => {
-                      e.stopPropagation();
-                      setEditingStaff(member);
-                    }}
+                    onClick={() => setEditingStaff(member)}
                   >
                     編集
                   </Button>

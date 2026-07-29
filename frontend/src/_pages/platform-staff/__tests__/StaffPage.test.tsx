@@ -87,21 +87,22 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByText('停止中')).toBeInTheDocument();
   });
 
-  it('行クリックで対象スタッフの編集モーダルが開くこと', async () => {
-    render(<StaffPage />);
-
-    fireEvent.click(await screen.findByText('鈴木花子'));
-
-    expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
-  });
-
-  it('行内の編集ボタンでも対象スタッフの編集モーダルが開くこと', async () => {
+  // 編集の導線は行内のボタンのみ（行クリックは廃止。マウス専用の導線を残さない）
+  it('行内の編集ボタンで対象スタッフの編集モーダルが開くこと', async () => {
     render(<StaffPage />);
     await screen.findByText('山田太郎');
 
     fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
 
     expect(screen.getByText('編集モーダル:山田太郎')).toBeInTheDocument();
+  });
+
+  it('行そのものをクリックしても編集モーダルは開かないこと', async () => {
+    render(<StaffPage />);
+
+    fireEvent.click(await screen.findByText('鈴木花子'));
+
+    expect(screen.queryByText('編集モーダル:鈴木花子')).not.toBeInTheDocument();
   });
 
   it('スタッフを追加ボタンで作成モーダルが開くこと', async () => {
@@ -122,7 +123,8 @@ describe('スタッフ一覧ページ', () => {
     );
 
     render(<StaffPage />);
-    fireEvent.click(await screen.findByText('鈴木花子'));
+    await screen.findByText('鈴木花子');
+    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[1]);
     expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
 
     // 再取得後の頁には対象が居ない
@@ -137,7 +139,8 @@ describe('スタッフ一覧ページ', () => {
     mockedStaffApi.get.mockRejectedValue(new Error('not found'));
 
     render(<StaffPage />);
-    fireEvent.click(await screen.findByText('鈴木花子'));
+    await screen.findByText('鈴木花子');
+    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[1]);
 
     mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
     fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));

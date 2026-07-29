@@ -80,7 +80,7 @@ describe('カスタムフィールド定義の管理ページ', () => {
     expect(mockedToast.success).toHaveBeenCalledWith('フィールドを削除しました');
   });
 
-  it('削除ボタンのクリックは行クリックへ伝播せず編集モーダルを開かない', async () => {
+  it('削除ボタンのクリックは編集モーダルを開かない', async () => {
     render(<CastFieldsPage />);
     await screen.findByText('blood_type');
 
@@ -89,13 +89,23 @@ describe('カスタムフィールド定義の管理ページ', () => {
     expect(screen.queryByText('フィールドを編集')).not.toBeInTheDocument();
   });
 
-  it('行クリックで対象定義の編集モーダルが開く', async () => {
+  // 編集の導線は行内のボタンのみ（行クリックは廃止。マウス専用の導線を残さない）
+  it('編集ボタンで対象定義の編集モーダルが開く', async () => {
+    render(<CastFieldsPage />);
+    await screen.findByText('hobby');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[1]);
+
+    expect(await screen.findByText('フィールドを編集')).toBeInTheDocument();
+    expect(screen.getByLabelText('label')).toHaveValue('趣味');
+  });
+
+  it('行そのものをクリックしても編集モーダルは開かないこと', async () => {
     render(<CastFieldsPage />);
 
     fireEvent.click(await screen.findByText('hobby'));
 
-    expect(await screen.findByText('フィールドを編集')).toBeInTheDocument();
-    expect(screen.getByLabelText('label')).toHaveValue('趣味');
+    expect(screen.queryByText('フィールドを編集')).not.toBeInTheDocument();
   });
 
   it('フィールドを追加ボタンで作成モーダルが開く', async () => {
