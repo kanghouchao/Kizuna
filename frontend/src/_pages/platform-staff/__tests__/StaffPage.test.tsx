@@ -13,8 +13,24 @@ jest.mock('@/features/staff-management', () => {
   return {
     StaffCreateModal: ({ open }: { open: boolean }) =>
       open ? React.createElement('div', null, '作成モーダル表示中') : null,
-    StaffEditModal: ({ open, staff }: { open: boolean; staff: { display_name: string } | null }) =>
-      open ? React.createElement('div', null, `編集モーダル:${staff?.display_name ?? ''}`) : null,
+    StaffEditModal: ({
+      open,
+      staff,
+      onUpdated,
+    }: {
+      open: boolean;
+      staff: { display_name: string } | null;
+      onUpdated: () => void;
+    }) =>
+      open
+        ? React.createElement(
+            'div',
+            null,
+            `編集モーダル:${staff?.display_name ?? ''}`,
+            // 409 で本体が呼ぶ一覧再取得を、テストから起こせるようにする
+            React.createElement('button', { onClick: onUpdated }, '競合再取得')
+          )
+        : null,
     roleSetLabel: () => 'ロールラベル',
     storeSetLabel: () => '担当店舗ラベル',
   };
@@ -95,6 +111,32 @@ describe('スタッフ一覧ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
 
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
+  });
+
+  // 409 の再取得は「最新の内容を確認してください」と言うための導線。対象が現在ページから
+  // 外れても（本人の改名で検索から外れる・他の追加で次ページへずれる）モーダルは閉じない。
+  it('再取得で対象が現在ページから外れても編集モーダルは閉じないこと', async () => {
+    render(<StaffPage />);
+    fireEvent.click(await screen.findByText('鈴木花子'));
+    expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
+
+    mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
+    fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
+
+    await waitFor(() => expect(mockedStaffApi.list).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
+  });
+
+  it('再取得で対象が現在ページに居れば最新値へ差し替わること', async () => {
+    render(<StaffPage />);
+    fireEvent.click(await screen.findByText('鈴木花子'));
+
+    mockedStaffApi.list.mockResolvedValue(
+      paginated([staff({ id: 2, display_name: '鈴木花子（改名後）' })])
+    );
+    fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
+
+    expect(await screen.findByText('編集モーダル:鈴木花子（改名後）')).toBeInTheDocument();
   });
 
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {

@@ -1,8 +1,13 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { PlatformStore, platformAuthApi, platformStaffApi } from '@/entities/user';
+import { useEffect, useRef, useState } from 'react';
+import {
+  PlatformStaffResponse,
+  PlatformStore,
+  platformAuthApi,
+  platformStaffApi,
+} from '@/entities/user';
 import {
   StaffCreateModal,
   StaffEditModal,
@@ -54,10 +59,19 @@ export default function StaffPage() {
     list.search();
   };
   const [createOpen, setCreateOpen] = useState(false);
-  // 編集対象は id で保持し、staff オブジェクトは現在の一覧から導出する。
-  // これにより再取得がそのままモーダル内容の最新化になる（409 リフレッシュ）。
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const editingStaff = staff.find(member => member.id === editingId) ?? null;
+  // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
+  // 対象がそのページから外れた瞬間（本人が PUT /platform/me で改名して検索から外れる、
+  // 他の管理者の追加で行が次ページへずれる等）にモーダルが黙って閉じ、
+  // 「最新の内容を確認してください」と言いながら内容を見せない状態になる。
+  const [editingStaff, setEditingStaff] = useState<PlatformStaffResponse | null>(null);
+  // 再取得した頁に対象が居れば最新値へ差し替える（これが 409 リフレッシュの本体）。
+  // 居なければ直前の値を保つ — 版が古いままなので再試行は再び 409 になるが、
+  // 競合を伝えたうえで利用者が閉じるか取り直すかを選べる。
+  useEffect(() => {
+    setEditingStaff(current =>
+      current ? (staff.find(member => member.id === current.id) ?? current) : current
+    );
+  }, [staff]);
 
   return (
     <>
@@ -123,7 +137,7 @@ export default function StaffPage() {
               <TableRow
                 key={member.id}
                 className="cursor-pointer"
-                onClick={() => setEditingId(member.id)}
+                onClick={() => setEditingStaff(member)}
               >
                 <TableCell className="font-medium text-foreground">{member.display_name}</TableCell>
                 <TableCell className="text-muted-foreground">
@@ -156,7 +170,7 @@ export default function StaffPage() {
                     className="text-primary-strong"
                     onClick={e => {
                       e.stopPropagation();
-                      setEditingId(member.id);
+                      setEditingStaff(member);
                     }}
                   >
                     編集
@@ -175,9 +189,9 @@ export default function StaffPage() {
         onCreated={list.reload}
       />
       <StaffEditModal
-        open={editingId !== null}
+        open={editingStaff !== null}
         staff={editingStaff}
-        onClose={() => setEditingId(null)}
+        onClose={() => setEditingStaff(null)}
         onUpdated={list.reload}
       />
     </>
