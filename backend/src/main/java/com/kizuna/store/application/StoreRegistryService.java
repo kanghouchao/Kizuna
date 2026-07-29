@@ -73,6 +73,7 @@ public class StoreRegistryService {
   public void update(String id, StoreUpdateDTO req) {
     var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
     store.setName(req.getName());
+    store.setEmail(req.getEmail());
     storeRepository.save(store);
   }
 

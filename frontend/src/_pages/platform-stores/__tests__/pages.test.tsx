@@ -261,6 +261,35 @@ describe('店舗管理 3 画面の挙動', () => {
     );
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/stores'));
   });
+
+  // 上のケースは name を変えて email が素通りすることしか見ていない。
+  // 編集した email が要求に載ることは、保存が反映されるための前提として別に固定する。
+  it('編集は email だけの変更でも新しい email を送信すること', async () => {
+    mockedApi.getById.mockResolvedValue(
+      store({
+        id: '1',
+        name: 'デルタ店',
+        email: 'delta@example.com',
+        domain: 'delta.example.com',
+      })
+    );
+    mockedApi.update.mockResolvedValue(store({}));
+
+    render(<StoreEditPage />);
+
+    const emailInput = (await screen.findByLabelText(/連絡用メール/)) as HTMLInputElement;
+    await waitFor(() => expect(emailInput.value).toBe('delta@example.com'));
+
+    fireEvent.change(emailInput, { target: { value: 'delta-new@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() =>
+      expect(mockedApi.update).toHaveBeenCalledWith('1', {
+        name: 'デルタ店',
+        email: 'delta-new@example.com',
+      })
+    );
+  });
 });
 
 describe('店舗一覧ページ固有の要素', () => {

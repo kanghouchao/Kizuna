@@ -34,6 +34,8 @@ public class StoreCreateDTO {
   @Pattern(regexp = DOMAIN_PATTERN, message = "domain must be a hostname")
   private String domain;
 
+  // 長さ上限は列定義（VARCHAR(128)）に合わせる。超過を通すと保存時の制約違反が 500 になる。
   @NotBlank(message = "email is required")
+  @Size(max = 128, message = "email is too long")
   private String email;
 }

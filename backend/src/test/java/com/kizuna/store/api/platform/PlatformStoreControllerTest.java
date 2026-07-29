@@ -2,8 +2,13 @@ package com.kizuna.store.api.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.settings.application.SystemConfigService;
@@ -23,12 +28,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** 呼出側の {@code ?sort=} 上書きで一意な副キー id が消えないことの単体テスト（offset ページングの安定性）。 */
+/** 平台店舗 API のうち、ハンドラ層で閉じている約束（ページングの全順序・要求本文の検査）の単体テスト。 */
 @WebMvcTest(PlatformStoreController.class)
 @Import({PlatformStoreControllerTest.MethodSecurityConfig.class, StoreContext.class})
 class PlatformStoreControllerTest {
@@ -59,5 +65,22 @@ class PlatformStoreControllerTest {
     mockMvc.perform(get("/platform/stores?sort=name")).andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
+  }
+
+  // 更新は全項目の置換。必須項目を欠く要求を通すと既存値が null で潰れるため、
+  // ハンドラ引数の検査（@Valid）が効いていることを固定する。
+  @Test
+  @DisplayName("PUT /platform/stores/{id} は email を欠く要求を検査で弾き、サービスへ渡さないこと")
+  @WithMockUser(authorities = "PERM_STORE_MANAGE")
+  void updateRejectsRequestMissingEmailBeforeService() throws Exception {
+    mockMvc
+        .perform(
+            put("/platform/stores/1")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"店舗\"}"))
+        .andExpect(status().isBadRequest());
+
+    verify(storeRegistryService, never()).update(anyString(), any());
   }
 }
