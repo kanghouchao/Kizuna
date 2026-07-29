@@ -11,6 +11,7 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -395,6 +396,55 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(none.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(none.getBody().path("total_elements").asLong()).isZero();
+  }
+
+  // 呼出側が ?sort= で既定値（表示名 + id）を上書きしても、id が副キーとして補われることで
+  // 表示名が重複する行の間でもページ境界を跨いだ取りこぼし・重複が起きないこと。
+  @Test
+  @DisplayName("スタッフ一覧は表示名が重複しても sort 上書き時に取りこぼし・重複なくページングできること")
+  void staffListPagesWithoutGapsOrDuplicatesWhenSortIsOverridden() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    String duplicateName = "staff-it-duplicate-displayname-" + UUID.randomUUID();
+    long dupId1 = createStaffWithDisplayName(duplicateName, "staff-it-dup1-");
+    long dupId2 = createStaffWithDisplayName(duplicateName, "staff-it-dup2-");
+
+    ResponseEntity<JsonNode> page0 =
+        rest.exchange(
+            "/platform/staff?search=" + duplicateName + "&sort=displayName&size=1&page=0",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            JsonNode.class);
+    ResponseEntity<JsonNode> page1 =
+        rest.exchange(
+            "/platform/staff?search=" + duplicateName + "&sort=displayName&size=1&page=1",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            JsonNode.class);
+    assertThat(page0.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(page1.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    long id0 = page0.getBody().path("content").get(0).path("id").asLong();
+    long id1 = page1.getBody().path("content").get(0).path("id").asLong();
+    assertThat(Set.of(id0, id1))
+        .as("id 副キーが保たれ、1 件ずつの取得で両方の対象が重複なく揃うこと")
+        .isEqualTo(Set.of(dupId1, dupId2));
+  }
+
+  /** 表示名を指定してスタッフを作成し（重複表示名でのページング検証用）、id を返す。 */
+  private long createStaffWithDisplayName(String displayName, String emailPrefix) {
+    return platformUserRepository
+        .save(
+            PlatformUser.builder()
+                .email(emailPrefix + UUID.randomUUID() + "@kizuna.test")
+                .password(passwordEncoder.encode(PASSWORD))
+                .displayName(displayName)
+                .enabled(true)
+                .userType(UserType.STAFF)
+                .roleIds(roleIdsOf("店長"))
+                .storeScopeType(StoreScopeType.ALL_STORES)
+                .storeIds(Set.of())
+                .build())
+        .getId();
   }
 
   // 一覧の現在ページに居ない対象でも最新の版を取り直せる経路（競合後の再試行に要る）。
