@@ -2,7 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: seed-v0100-002-menus
       author: kanghouchao
-      # 統合メニューの正典 17 行（2 階層厳守・全ノード permission 非 null）。
+      # 統合メニューの正典 16 行（2 階層厳守・全ノード permission 非 null）。
       # 親→子の順で挿入し自己参照 FK（fk_t_menus_parent）を満たす。
       preConditions:
         - dbms:
@@ -49,6 +49,16 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
+              - column: { name: id, value: platform-roles }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: ロール管理 }
+              - column: { name: path, value: /platform/roles }
+              - column: { name: icon, value: KeyRoundIcon }
+              - column: { name: permission, value: STAFF_MANAGE }
+              - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
               - column: { name: id, value: platform-settings }
               - column: { name: label, value: 設定 }
               - column: { name: permission, value: PLATFORM_MENU_VIEW }
@@ -64,23 +74,8 @@ databaseChangeLog:
               - column: { name: permission, value: SYSTEM_CONFIG_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
         # --- 店舗コンソール ---
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-main }
-              - column: { name: label, value: メイン }
-              - column: { name: permission, value: STORE_MENU_VIEW }
-              - column: { name: sort_order, valueNumeric: 110 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-dashboard }
-              - column: { name: parent_id, value: store-main }
-              - column: { name: label, value: ダッシュボード }
-              - column: { name: path, value: /store/dashboard }
-              - column: { name: icon, value: HouseIcon }
-              - column: { name: permission, value: STORE_MENU_VIEW }
-              - column: { name: sort_order, valueNumeric: 1 }
+        # 店舗側は業務の節から始める。着地先はメニュー先頭の業務画面が担うため、
+        # 遷移先を持つ子のいない見出しは置かない。
         - insert:
             tableName: t_menus
             columns:
