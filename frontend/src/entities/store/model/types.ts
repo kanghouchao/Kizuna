@@ -24,7 +24,4 @@ export interface UpdateStoreRequest {
 // 店舗統計データ
 export interface StoreStats {
   total: number;
-  active: number;
-  inactive: number;
-  pending: number;
 }

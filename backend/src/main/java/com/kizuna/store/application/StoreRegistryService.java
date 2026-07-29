@@ -75,9 +75,7 @@ public class StoreRegistryService {
 
   @Transactional(readOnly = true)
   public StoreStatusVO stats() {
-    long total = storeRepository.count();
-    // TODO: active/inactive/pending はまだモデル化されていない
-    return new StoreStatusVO(total, total, 0, 0);
+    return new StoreStatusVO(storeRepository.count());
   }
 
   private Long parseId(String id) {

@@ -160,7 +160,6 @@ class StoreRegistryServiceTest {
     StoreStatusVO result = storeRegistryService.stats();
 
     assertThat(result.total()).isEqualTo(5L);
-    assertThat(result.active()).isEqualTo(5L);
   }
 
   private Store createStore(Long id, String name, String domain, String email) {
