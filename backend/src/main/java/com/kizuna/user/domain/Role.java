@@ -13,6 +13,7 @@ import java.util.Set;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 /**
  * ロール集約（RBAC）。権限（{@link Permission}）の束であり、担当店舗集合は持たない — 見える範囲はユーザー側の StoreScope が決める。ユーザーへの授与は
@@ -36,9 +37,12 @@ public class Role extends BaseEntity {
   @Column(name = "is_system", nullable = false)
   private Boolean systemRole = false;
 
+  // EAGER ElementCollection は既定ではロール 1 行ごとに個別 SELECT を発行する。一覧・ログイン等の
+  // 複数ロール取得経路で行数分の副問い合わせが積み上がらないよう、@BatchSize で IN 句によるまとめ取得に切り替える。
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(name = "t_role_permissions", joinColumns = @JoinColumn(name = "role_id"))
   @Column(name = "permission_id", nullable = false)
+  @BatchSize(size = 25)
   private Set<Long> permissionIds = new HashSet<>();
 
   @Builder
