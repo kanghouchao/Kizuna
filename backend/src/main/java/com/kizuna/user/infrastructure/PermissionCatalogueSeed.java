@@ -5,8 +5,10 @@ import com.kizuna.user.domain.SystemRole;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import liquibase.change.custom.CustomTaskChange;
 import liquibase.database.Database;
@@ -95,8 +97,16 @@ public class PermissionCatalogueSeed implements CustomTaskChange {
    * 宣言された平台既定ロールの行を揃える。ロール名の正本も {@link SystemRole} 側にあるため、欠けている行はここで作る — 別の changeset
    * に任せると、毎回走る本播種のほうが先に動いて「まだ存在しないロール」で止まってしまう。
    *
-   * <p>同名の行が利用者自作ロール（{@code is_system = FALSE}）として既にある場合だけは落とす。既定ロールとして扱えば利用者のロールを奪い、扱わなければ授与が 0
+   * <p>落とす場合が 2 つある。
+   *
+   * <p>1 つは、同名の行が利用者自作ロール（{@code is_system = FALSE}）として既にある場合。既定ロールとして扱えば利用者のロールを奪い、扱わなければ授与が 0
    * 行で黙って抜けるため、人の判断が要る。
+   *
+   * <p>もう 1 つは、行を新規に作ったうえで宣言に無い既定ロールの行が残っている場合 — 改名や廃止の形である。名称は {@code t_user_roles}
+   * の参照が繋がっている自然キーなので、新しい名前の行を足すだけでは利用者は旧行に取り残され、授与の増減もその行に届かない。行の移行は明示的な changeset に属する。
+   *
+   * <p>新規作成が無い（{@code inserted ==
+   * 0}）ときの宣言に無い行は許す。新しい版が足したロールが、旧版へ巻き戻した実体から見えているだけの状態であり、ここで落とすと巻き戻しが起動不能になる。
    */
   private static int ensureSystemRoles(JdbcConnection connection)
       throws DatabaseException, SQLException, CustomChangeException {
@@ -110,17 +120,26 @@ public class PermissionCatalogueSeed implements CustomTaskChange {
     }
 
     Set<SystemRole> missing = EnumSet.allOf(SystemRole.class);
+    List<String> undeclared = new ArrayList<>();
     try (PreparedStatement statement = connection.prepareStatement(SELECT_SYSTEM_ROLE_NAMES);
         ResultSet rows = statement.executeQuery()) {
       while (rows.next()) {
         String name = rows.getString(1);
-        missing.removeIf(role -> role.getRoleName().equals(name));
+        if (!missing.removeIf(role -> role.getRoleName().equals(name))) {
+          undeclared.add(name);
+        }
       }
     }
     if (!missing.isEmpty()) {
       throw new CustomChangeException(
           "同名の利用者自作ロールがあるため平台既定ロールを用意できません: "
               + missing.stream().map(SystemRole::getRoleName).toList());
+    }
+    if (inserted > 0 && !undeclared.isEmpty()) {
+      throw new CustomChangeException(
+          "宣言に無い既定ロールの行が残っています: "
+              + undeclared
+              + "。改名・廃止は既存行の移行 changeset で行ってください（新しい名前の行を足すだけでは利用者が旧行に取り残されます）");
     }
     return inserted;
   }
