@@ -397,6 +397,30 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     assertThat(none.getBody().path("total_elements").asLong()).isZero();
   }
 
+  // "staff-it-n_nhq" は _ をワイルドカードとして扱うと staff-it-nonhq に一致してしまう。
+  // 検索語は字面として照合されるべきなので 0 件が正。
+  @Test
+  @DisplayName("検索語中の LIKE メタ文字は字面として扱われ、ワイルドカードにならないこと")
+  void staffSearchTreatsLikeMetacharactersAsLiterals() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+
+    ResponseEntity<JsonNode> underscore =
+        rest.exchange(
+            "/platform/staff?search=staff-it-n_nhq",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            JsonNode.class);
+    assertThat(underscore.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(underscore.getBody().path("total_elements").asLong()).isZero();
+
+    ResponseEntity<JsonNode> percent =
+        rest.exchange(
+            "/platform/staff?search=staff-it-%25nonhq",
+            HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
+    assertThat(percent.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(percent.getBody().path("total_elements").asLong()).isZero();
+  }
+
   @Test
   @DisplayName("兼務(HQ管理者+店長の複数束)のスタッフは中央端点と店舗端点の両方へ到達できること")
   void multiRoleStaffReachesBothConsoles() {
