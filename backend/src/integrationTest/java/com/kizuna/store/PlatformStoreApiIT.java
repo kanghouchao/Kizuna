@@ -117,6 +117,27 @@ class PlatformStoreApiIT {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
+  // ドメインは Host ヘッダによる店舗文脈の解決キー。ブラウザは Host を小文字で送るのに
+  // 照合は大小を区別するため、大文字を呑むと誰も到達できない店舗ができる。
+  @Test
+  @DisplayName("POST /platform/stores は大文字を含むドメインを 400 で拒むこと")
+  void createStoreRejectsUppercaseDomain() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(platformToken(HQ_EMAIL));
+    String body =
+        String.format(
+            "{\"name\": \"店舗作成テスト\","
+                + " \"domain\": \"Store-Create-IT-%s.Kizuna.test\","
+                + " \"email\": \"store-create-it@kizuna.test\"}",
+            UUID.randomUUID());
+
+    ResponseEntity<String> res =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
   @Test
   @DisplayName("GET /platform/stores/lookup?domain= は未認証で 200 と店舗情報を返すこと（受入基準3）")
   void lookupByDomainIsPublic() {
