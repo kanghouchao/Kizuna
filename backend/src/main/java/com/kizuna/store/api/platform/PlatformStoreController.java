@@ -1,6 +1,5 @@
 package com.kizuna.store.api.platform;
 
-import com.kizuna.shared.web.PageableSupport;
 import com.kizuna.store.api.dto.PlatformStoreResponse;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
@@ -46,8 +45,7 @@ public class PlatformStoreController {
     return ResponseEntity.ok(platformStoreService.listAuthorizedStores());
   }
 
-  // offset ページングはページ境界の安定に全順序を要するため、既定の並びに一意な副キー id を添える。
-  // 呼出側が ?sort= で既定値を上書きしても副キーが消えないよう、その並びに id を補う。
+  // この一覧は副キー id も降順で揃える。補完で付く id は昇順のため、既定の並びに明示している。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<Page<StoreVO>> list(
@@ -56,8 +54,7 @@ public class PlatformStoreController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(
-        storeRegistryService.list(search, PageableSupport.ensureTiebreaker(pageable, "id")));
+    return ResponseEntity.ok(storeRegistryService.list(search, pageable));
   }
 
   @GetMapping("/{id}")

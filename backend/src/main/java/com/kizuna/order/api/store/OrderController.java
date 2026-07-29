@@ -5,7 +5,6 @@ import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.application.OrderService;
-import com.kizuna.shared.web.PageableSupport;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -31,14 +30,12 @@ public class OrderController {
 
   private final OrderService orderService;
 
-  // offset ページングはページ境界の安定に全順序を要するため、並びに一意な副キー id を補う。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Page<OrderResponse>> list(
       @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(
-        orderService.list(customerId, PageableSupport.ensureTiebreaker(pageable, "id")));
+    return ResponseEntity.ok(orderService.list(customerId, pageable));
   }
 
   @GetMapping("/{id}")

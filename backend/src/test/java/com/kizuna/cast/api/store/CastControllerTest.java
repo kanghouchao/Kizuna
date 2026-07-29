@@ -64,4 +64,24 @@ class CastControllerTest {
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
   }
+
+  @Test
+  @DisplayName("空白だけの検索語は「指定なし」として service へ渡ること")
+  @WithMockUser(authorities = "PERM_CAST_MANAGE")
+  void listPassesBlankSearchAsNull() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
+    Page<CastResponse> empty = new PageImpl<>(List.of());
+    when(castService.list(searchCaptor.capture(), any())).thenReturn(empty);
+
+    mockMvc
+        .perform(
+            get("/store/casts")
+                .param("search", "  ")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
+
+    assertThat(searchCaptor.getValue()).isNull();
+  }
 }

@@ -30,6 +30,7 @@ public class StoreRegistryService {
 
   @Transactional(readOnly = true)
   public Page<StoreVO> list(String search, Pageable pageable) {
+    // 派生クエリの Containing は null を渡せないため、絞り込み無し（null）は空パターンで表す。
     String term = search == null ? "" : search;
     return storeRepository
         .findByNameContainingIgnoreCaseOrDomainContainingIgnoreCase(term, term, pageable)
