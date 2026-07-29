@@ -14,7 +14,7 @@ let originalCustomTexts: Record<string, string> | null = null;
 let snapshotCaptured = false;
 let testValue = '';
 // ルート移設（#413）で店舗管理画面 URL に storeId が必須になった。ログイン着地先の
-// /store/{id}/dashboard から読み取り、以降の管理画面遷移で使う（seed id をハードコードしない）。
+// ログイン後の着地 URL /store/{id}/... から読み取り、以降の管理画面遷移で使う（seed id をハードコードしない）。
 let storeId = '';
 
 Given('店舗 {string} の管理画面にログインしている', async ({ page }, _store: string) => {

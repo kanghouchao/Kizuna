@@ -74,20 +74,13 @@ Then('中央ダッシュボードへ遷移する', async ({ page }) => {
   await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 15000 });
 });
 
-Then('店舗ダッシュボードへ遷移する', async ({ page }) => {
-  // ルート移設（#413）でログイン後の店舗ダッシュボードは /store/{storeId}/dashboard になる。
-  await expect(page).toHaveURL(/\/store\/\d+\/dashboard\/?$/, { timeout: 15000 });
-});
-
-Then('店舗選択画面が表示される', async ({ page }) => {
-  // ログイン後の店舗コンソール着地は /store/select 一本化（#428）。複数店舗ユーザーはここで選ぶ。
-  await expect(page).toHaveURL(/\/store\/select(\?|$)/, { timeout: 15000 });
-  await expect(page.getByRole('heading', { name: '店舗を選択', exact: true })).toBeVisible();
-});
-
-When('店舗選択画面で {string} を選ぶ', async ({ page }, storeName: string) => {
-  // 店舗選択画面の選択肢は素の button（Header の店舗切替 Menu とは別要素）。
-  await page.getByRole('button', { name: storeName, exact: true }).click();
+Then('店舗業務画面へ遷移する', async ({ page }) => {
+  // 店舗コンソールの着地先は /store/entry がメニューから解決する。どの画面になるかは
+  // 権限とメニュー順で変わるため、特定ページを固定せず「店舗文脈が確立された URL」だけを断言する
+  //（ここに /orders 等を焼き込むと、種子の sort_order 変更だけで理由の見えない赤になる）。
+  await expect(page).toHaveURL(/\/store\/\d+\//, { timeout: 15000 });
+  // 中継点に留まっていないこと（解決に失敗すると entry のままになる）。
+  await expect(page).not.toHaveURL(/\/store\/entry/);
 });
 
 Then(
