@@ -38,9 +38,11 @@ export default function RolesPage() {
   // 「閉じている / 新規 / 既存の編集」を 1 つの状態で表す。
   // 編集対象は id で保持し、role オブジェクトは現在の一覧から導出する。
   // これにより refetch がそのままモーダル内容の最新化になる（409 リフレッシュ）。
+  // 導出元は絞り込み前の allRoles。roles から引くと、409 の再取得で他の管理者による改名が
+  // 入った瞬間に絞り込みから外れ、最新値を見せるはずのモーダルが黙って閉じてしまう。
   const [formTarget, setFormTarget] = useState<'closed' | 'create' | number>('closed');
   const editingRole =
-    typeof formTarget === 'number' ? (roles.find(role => role.id === formTarget) ?? null) : null;
+    typeof formTarget === 'number' ? (allRoles.find(role => role.id === formTarget) ?? null) : null;
   const formOpen = formTarget === 'create' || editingRole !== null;
   const [deleteTarget, setDeleteTarget] = useState<RoleResponse | null>(null);
 

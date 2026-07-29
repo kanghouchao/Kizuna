@@ -42,6 +42,9 @@ public class PlatformStaffService {
 
   private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_t_users_email";
 
+  /** LIKE パターンのエスケープ文字。検索語中のメタ文字を字面へ戻すために使う。 */
+  private static final char LIKE_ESCAPE = '\\';
+
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
@@ -69,14 +72,27 @@ public class PlatformStaffService {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
       if (search != null) {
-        String pattern = "%" + search.toLowerCase(Locale.ROOT) + "%";
+        String pattern = "%" + escapeLike(search.toLowerCase(Locale.ROOT)) + "%";
         predicates.add(
             cb.or(
-                cb.like(cb.lower(root.get("displayName")), pattern),
-                cb.like(cb.lower(root.get("email")), pattern)));
+                cb.like(cb.lower(root.get("displayName")), pattern, LIKE_ESCAPE),
+                cb.like(cb.lower(root.get("email")), pattern, LIKE_ESCAPE)));
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };
+  }
+
+  /**
+   * 検索語中の LIKE メタ文字を字面へ戻す。
+   *
+   * <p>エスケープしないと {@code _} が 1 文字ワイルドカードとして働き、メールに {@code _} を含む検索（{@code a_b}）が {@code acb}
+   * のような別人まで拾う。エスケープ文字自身を先に二重化しないと、末尾の {@code \} が後続の {@code %} を打ち消す。
+   */
+  private static String escapeLike(String value) {
+    return value
+        .replace(String.valueOf(LIKE_ESCAPE), String.valueOf(LIKE_ESCAPE) + LIKE_ESCAPE)
+        .replace("%", LIKE_ESCAPE + "%")
+        .replace("_", LIKE_ESCAPE + "_");
   }
 
   private static String blankToNull(String value) {
