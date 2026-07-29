@@ -101,6 +101,26 @@ describe('routeGuard', () => {
     expect(res).not.toBeNull();
   });
 
+  it('redirects a retired id-bearing store path (with token) to /store/entry', () => {
+    // /store/{id}/dashboard は本 PR 以前の正規の店舗着地 URL でブックマークに残るが、
+    // 数値id配下はレガシー判定の対象外なので、廃止済み判定で拾わないと素の 404 になる。
+    const req = createRequest('/store/5/dashboard', true);
+    const res = handleRouteProtection(req, 'store');
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/store/entry' })
+    );
+    expect(res).not.toBeNull();
+  });
+
+  it('does not treat a live id-bearing store path as retired', () => {
+    const req = createRequest('/store/5/orders', true);
+    const res = handleRouteProtection(req, 'store');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
   it('redirects to /platform/login when accessing /cast without token', () => {
     const req = createRequest('/cast/schedule', false);
     const res = handleRouteProtection(req, 'platform');

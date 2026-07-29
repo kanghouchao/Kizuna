@@ -111,6 +111,22 @@ describe('Sidebar', () => {
     );
   });
 
+  it('メニュー取得が失敗したときの店舗コンソール導線に storeId を埋めない', async () => {
+    // 障害時に出る唯一の導線なので、/store/{id}/entry へ変換されると 404 になり退路が消える。
+    mockPathname = '/store/5/orders';
+    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'platform-role' ? 'store' : undefined
+    );
+    mockedGetMenus.mockRejectedValue(new Error('boom'));
+
+    render(<Sidebar />);
+
+    expect(await screen.findByRole('link', { name: '店舗コンソール' })).toHaveAttribute(
+      'href',
+      '/store/entry'
+    );
+  });
+
   // 現在地の項目だけが他と異なる見えを持つ、という関係だけを見る。
   // 具体的なクラス名に依存しないので配色の作り替えを跨いでも意味が変わらない。
   it('現在地の項目だけが他項目と異なる見えになる', async () => {

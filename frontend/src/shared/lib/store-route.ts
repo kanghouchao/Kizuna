@@ -1,13 +1,14 @@
 const STORE_ID_PATTERN = /^\/store\/(\d+)(?:\/|$)/;
-// /store/entry（およびその配下）は storeId を含まない静的ルート。
-const STORE_ENTRY_PATTERN = /^\/store\/entry(?:\/|$)/;
+// /store/entry（およびその配下・クエリ付き）は storeId を含まない静的ルート。
+const STORE_ENTRY_PATTERN = /^\/store\/entry(?:[/?]|$)/;
 // storeId 移設（/store/... → /store/[storeId]/...）以前の id 無し店舗パス（例 /store/orders）。
 // /store/entry 自体と数値id配下（/store/5/...）は対象外 — entry を除外しないと入口ルート自身が
 // レガシー判定に掛かり、守衛が entry へ差し戻す先も entry になって無限リダイレクトになる。
 const LEGACY_STORE_PATH_PATTERN = /^\/store\/(?!entry\b)(?!\d+(\/|$))/;
-// 廃止済みの店舗ルート。レガシー判定には掛かるが遷移先が既に無いため、
-// storeId を埋めると実在しない /store/{id}/select・/store/{id}/dashboard になる。
-const RETIRED_STORE_PATH_PATTERN = /^\/store\/(select|dashboard)(?:\/|$)/;
+// 廃止済みの店舗ルート。id 無し（/store/dashboard）は id 付きへ解決すると実在しない画面を指し、
+// id 付き（/store/5/dashboard・移設後の正規 URL だったためブックマークに残る）はレガシー判定が
+// 数値 id 配下を除外するので素の 404 になる。どちらも入口へ収容し、遷移先は捨てる。
+const RETIRED_STORE_PATH_PATTERN = /^\/store\/(?:\d+\/)?(select|dashboard)(?:\/|$)/;
 
 export function getStoreIdFromPath(pathname: string): string | undefined {
   return STORE_ID_PATTERN.exec(pathname)?.[1];
@@ -43,6 +44,11 @@ export function storeEntryPath(next?: string): string {
  */
 export function resolveStoreHref(itemPath: string, storeId: string | undefined): string {
   if (!itemPath.startsWith('/store')) {
+    return itemPath;
+  }
+  // 入口ルートは storeId を持たない静的ルート。埋めると実在しない /store/{id}/entry になる。
+  // ここを抜くと、メニュー障害時にサイドバーが出す唯一の店舗コンソール導線が 404 になる。
+  if (STORE_ENTRY_PATTERN.test(itemPath)) {
     return itemPath;
   }
   if (storeId) {

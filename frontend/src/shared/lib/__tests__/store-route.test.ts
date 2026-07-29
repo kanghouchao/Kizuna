@@ -94,6 +94,15 @@ describe('store-route', () => {
         '/store/entry?next=%2Fstore%2Forders'
       );
     });
+
+    // 入口ルートは storeId を持たない静的ルート。ここでidを埋めると、メニュー障害時に
+    // サイドバーが出す唯一の店舗コンソール導線が /store/{id}/entry になって 404 になる。
+    it('入口ルートにはstoreIdを埋めない', () => {
+      expect(resolveStoreHref('/store/entry', '2')).toBe('/store/entry');
+      expect(resolveStoreHref('/store/entry?next=%2Fstore%2Forders', '2')).toBe(
+        '/store/entry?next=%2Fstore%2Forders'
+      );
+    });
   });
 
   describe('isLegacyStorePath', () => {
@@ -134,12 +143,19 @@ describe('store-route', () => {
       expect(isRetiredStorePath('/store/dashboard/')).toBe(true);
     });
 
+    // 移設後の正規 URL だったためブックマークに残る。レガシー判定は数値id配下を除外するので、
+    // ここで拾わないと守衛に収容されず素の 404 になる。
+    it('数値id付きの旧ダッシュボードもtrue', () => {
+      expect(isRetiredStorePath('/store/5/dashboard')).toBe(true);
+      expect(isRetiredStorePath('/store/5/dashboard/')).toBe(true);
+    });
+
     it('接頭辞が一致するだけの現役pathはfalse', () => {
       expect(isRetiredStorePath('/store/selections')).toBe(false);
       expect(isRetiredStorePath('/store/orders')).toBe(false);
     });
 
-    it('数値id配下はfalse（現役の店舗ルート）', () => {
+    it('現役の数値id配下はfalse', () => {
       expect(isRetiredStorePath('/store/5/orders')).toBe(false);
     });
   });
