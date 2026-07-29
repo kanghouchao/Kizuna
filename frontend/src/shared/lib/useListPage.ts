@@ -6,19 +6,40 @@ import { PageResult } from '@/shared/api';
 
 const EMPTY_PAGE: PageResult<never> = { rows: [], page: 0, pageCount: 0, total: 0 };
 
+interface ListPageState<T, C> extends PageResult<T> {
+  isLoading: boolean;
+  /** 検索条件を適用して 1 ページ目から取り直す */
+  search: (criteria: C) => Promise<void>;
+  onPageChange: (page: number) => Promise<void>;
+  reload: () => Promise<void>;
+}
+
 /**
- * ListPage 向けの取得ライフサイクル（page state・失敗トースト・順不同レスポンス守衛）。
- * fetcher は毎レンダー最新のクロージャを参照するため、検索条件の state は useManagedList 同様に
- * 呼び出し側がそのまま閉じ込めてよい。hook が持つのはページ番号（0 起点）だけ。
+ * ListPage 向けの取得ライフサイクル（page・適用済み検索条件・失敗トースト・順不同レスポンス守衛）。
+ * 検索条件は fetcher の引数として渡す。呼び出し側の state を fetcher のクロージャから読ませると、
+ * 条件を更新した同一ハンドラ内で再取得したとき再レンダー前の古い値で取得してしまうため、
+ * 「どの条件で取得するか」は hook が持つ。検索条件を持たない一覧は C を省略してよい。
  */
 export function useListPage<T>(
   fetcher: (page: number) => Promise<PageResult<T>>,
   errorMessage: string
-) {
+): ListPageState<T, void>;
+export function useListPage<T, C>(
+  fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
+  errorMessage: string,
+  initialCriteria: C
+): ListPageState<T, C>;
+export function useListPage<T, C>(
+  fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
+  errorMessage: string,
+  initialCriteria?: C
+): ListPageState<T, C> {
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
   // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する
   const requestIdRef = useRef(0);
+  // 適用済みの検索条件。ページ送りと再取得はこれをそのまま使う
+  const criteriaRef = useRef(initialCriteria as C);
   const [pageResult, setPageResult] = useState<PageResult<T>>(EMPTY_PAGE);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -27,7 +48,7 @@ export function useListPage<T>(
       const requestId = ++requestIdRef.current;
       setIsLoading(true);
       try {
-        const result = await fetcherRef.current(page);
+        const result = await fetcherRef.current(page, criteriaRef.current);
         if (requestId === requestIdRef.current) setPageResult(result);
       } catch {
         if (requestId === requestIdRef.current) toast.error(errorMessage);
@@ -47,11 +68,14 @@ export function useListPage<T>(
     };
   }, [load]);
 
-  // 検索条件が変わったときの再取得は 1 ページ目に戻す。
-  // fetcher クロージャは直近のレンダーの値を参照するため、検索条件の state を更新した
-  // 同一ハンドラ内で続けて呼ぶと再レンダー前の古い条件で取得してしまう
-  // （useManagedList の refetch と同じ制約）。state 更新の反映後（次のレンダー以降）に呼ぶこと。
-  const search = useCallback(() => load(0), [load]);
+  // 検索条件を適用して 1 ページ目から取り直す
+  const search = useCallback(
+    (criteria: C) => {
+      criteriaRef.current = criteria;
+      return load(0);
+    },
+    [load]
+  );
   const onPageChange = useCallback((page: number) => load(page), [load]);
   // 削除・発行など一覧を書き換える操作の後始末。現在のページをそのまま取り直す
   const reload = useCallback(() => load(pageResult.page), [load, pageResult.page]);

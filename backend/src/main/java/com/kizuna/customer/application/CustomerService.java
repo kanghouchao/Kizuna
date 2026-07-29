@@ -70,7 +70,7 @@ public class CustomerService {
     return customerRepository
         .findById(id)
         .map(customerMapper::toResponse)
-        .orElseThrow(() -> new NotFoundException("顧客が見つかりません: " + id));
+        .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
   }
 
   @StoreScoped
@@ -87,7 +87,7 @@ public class CustomerService {
     Customer customer =
         customerRepository
             .findById(id)
-            .orElseThrow(() -> new NotFoundException("顧客が見つかりません: " + id));
+            .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
 
     customer.apply(customerMapper.toPatch(request));
 
@@ -98,7 +98,7 @@ public class CustomerService {
   @Transactional
   public void delete(String id) {
     if (!customerRepository.existsById(id)) {
-      throw new NotFoundException("顧客が見つかりません: " + id);
+      throw new NotFoundException("顧客が見つかりません");
     }
     customerRepository.deleteById(id);
   }

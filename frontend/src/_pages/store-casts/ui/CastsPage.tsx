@@ -4,13 +4,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon, SettingsIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import { storePath, useListPage } from '@/shared/lib';
+import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
-import { toast } from 'react-hot-toast';
 import {
   Badge,
   Button,
@@ -33,7 +32,6 @@ export default function CastListPage() {
   const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<CastResponse | null>(null);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）
   const [canInvite, setCanInvite] = useState(false);
   const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
@@ -48,28 +46,20 @@ export default function CastListPage() {
         // 取得失敗時は導線を出さない（fail-closed）。操作自体はサーバ側が拒否する。
       });
   }, []);
-  // 適用済みの検索語。取得は検索の送信・ページ送り・再取得のいずれからも走るため、
-  // 入力中の state を fetcher が読むと、送信していない語がページ送りに紛れ込む。
-  const appliedSearch = useRef('');
-  const list = useListPage(
-    page =>
+  const list = useListPage<CastResponse, string>(
+    (page, appliedSearch) =>
       castApi.list({
         page,
         size: PAGE_SIZE,
         // display_order は既定値 0 のため一意でない。offset ページングの境界を確定させるには
         // 一意な副キーが要る（sort=prop1,prop2,direction は Spring Data の複数キー形式）
         sort: 'displayOrder,id,asc',
-        search: appliedSearch.current || undefined,
+        search: appliedSearch || undefined,
       }),
-    'キャスト一覧の取得に失敗しました'
+    'キャスト一覧の取得に失敗しました',
+    ''
   );
   const casts = list.rows;
-
-  /** 入力中の検索語を適用して 1 ページ目から取り直す */
-  const handleSearch = () => {
-    appliedSearch.current = search;
-    list.search();
-  };
 
   /** 招待発行成功時: モーダル表示と一覧の再取得を行う（isLoading に連動して行がアンマウントされても、
    *  モーダル state はページ層が持つためモーダルは表示され続ける） */
@@ -79,16 +69,12 @@ export default function CastListPage() {
   };
 
   /** キャストを削除する */
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await castApi.delete(deleteTarget.id);
-      toast.success('キャストを削除しました');
-      void list.reload();
-    } catch {
-      toast.error('キャストの削除に失敗しました');
-    }
-  };
+  const deletion = useDeleteAction<CastResponse>({
+    remove: cast => castApi.delete(cast.id),
+    successMessage: 'キャストを削除しました',
+    errorMessage: 'キャストの削除に失敗しました',
+    onDeleted: list.reload,
+  });
 
   /** ステータスの表示ラベルと配色を返す */
   const statusLabel = (status: string) => {
@@ -127,7 +113,7 @@ export default function CastListPage() {
           </>
         }
         search={{
-          onSearch: handleSearch,
+          onSearch: () => void list.search(search),
           content: (
             <>
               <div className="flex-1 relative">
@@ -221,7 +207,7 @@ export default function CastListPage() {
                           <SquarePenIcon />
                         </Link>
                       </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => setDeleteTarget(cast)}>
+                      <Button variant="ghost" size="icon-sm" onClick={() => deletion.ask(cast)}>
                         <Trash2Icon />
                       </Button>
                     </div>
@@ -245,10 +231,10 @@ export default function CastListPage() {
         onClose={() => setIssuedInvitation(null)}
       />
       <ConfirmDialog
-        open={deleteTarget !== null}
-        title={deleteTarget ? `「${deleteTarget.name}」を削除しますか？` : ''}
-        onConfirm={() => void handleDelete()}
-        onClose={() => setDeleteTarget(null)}
+        open={deletion.target !== null}
+        title={deletion.target ? `「${deletion.target.name}」を削除しますか？` : ''}
+        onConfirm={() => void deletion.confirm()}
+        onClose={deletion.cancel}
       />
     </>
   );

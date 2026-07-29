@@ -2,11 +2,10 @@
 
 import Link from 'next/link';
 import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CustomerResponse, customerApi } from '@/entities/customer';
-import { toast } from 'react-hot-toast';
-import { storePath, useListPage } from '@/shared/lib';
+import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -24,6 +23,13 @@ import {
 /** 一覧 1 ページあたりの件数 */
 const PAGE_SIZE = 20;
 
+/** 一覧の絞り込み条件（送信で確定した値） */
+interface CustomerCriteria {
+  search: string;
+  rank: string;
+  classification: string;
+}
+
 /** 顧客一覧ページ */
 export default function CustomersPage() {
   const params = useParams();
@@ -31,43 +37,30 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [rank, setRank] = useState('');
   const [classification, setClassification] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState<CustomerResponse | null>(null);
 
-  // 適用済みの絞り込み条件。取得は検索の送信・ページ送り・再取得のいずれからも走るため、
-  // 入力中の state を fetcher が読むと、送信していない条件がページ送りに紛れ込む。
-  const applied = useRef({ search: '', rank: '', classification: '' });
-  const list = useListPage(
-    page =>
+  const list = useListPage<CustomerResponse, CustomerCriteria>(
+    (page, criteria) =>
       customerApi.list({
         page,
         size: PAGE_SIZE,
         // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
         // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
         sort: 'createdAt,id,desc',
-        search: applied.current.search || undefined,
-        rank: applied.current.rank || undefined,
-        classification: applied.current.classification || undefined,
+        search: criteria.search || undefined,
+        rank: criteria.rank || undefined,
+        classification: criteria.classification || undefined,
       }),
-    '顧客一覧の取得に失敗しました'
+    '顧客一覧の取得に失敗しました',
+    { search: '', rank: '', classification: '' }
   );
   const customers = list.rows;
 
-  /** 入力中の絞り込み条件を適用して 1 ページ目から取り直す */
-  const handleSearch = () => {
-    applied.current = { search, rank, classification };
-    list.search();
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await customerApi.delete(deleteTarget.id);
-      toast.success('顧客を削除しました');
-      void list.reload();
-    } catch {
-      toast.error('顧客の削除に失敗しました');
-    }
-  };
+  const deletion = useDeleteAction<CustomerResponse>({
+    remove: customer => customerApi.delete(customer.id),
+    successMessage: '顧客を削除しました',
+    errorMessage: '顧客の削除に失敗しました',
+    onDeleted: list.reload,
+  });
 
   return (
     <>
@@ -83,7 +76,7 @@ export default function CustomersPage() {
           </Button>
         }
         search={{
-          onSearch: handleSearch,
+          onSearch: () => void list.search({ search, rank, classification }),
           content: (
             <>
               <div className="flex-1 relative">
@@ -166,11 +159,7 @@ export default function CustomersPage() {
                         <SquarePenIcon />
                       </Link>
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setDeleteTarget(customer)}
-                    >
+                    <Button variant="ghost" size="icon-sm" onClick={() => deletion.ask(customer)}>
                       <Trash2Icon />
                     </Button>
                   </div>
@@ -183,10 +172,10 @@ export default function CustomersPage() {
 
       {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <ConfirmDialog
-        open={deleteTarget !== null}
-        title={deleteTarget ? `「${deleteTarget.name}」を削除しますか？` : ''}
-        onConfirm={() => void handleDelete()}
-        onClose={() => setDeleteTarget(null)}
+        open={deletion.target !== null}
+        title={deletion.target ? `「${deletion.target.name}」を削除しますか？` : ''}
+        onConfirm={() => void deletion.confirm()}
+        onClose={deletion.cancel}
       />
     </>
   );
