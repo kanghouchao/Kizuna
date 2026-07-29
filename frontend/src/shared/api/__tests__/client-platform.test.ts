@@ -59,8 +59,8 @@ describe('apiClient platform branch', () => {
     expect(headers['X-Store-ID']).toBe('2');
   });
 
-  it('does not inject store headers when the current path has no storeId (/store/select)', async () => {
-    window.history.pushState({}, '', '/store/select');
+  it('does not inject store headers when the current path has no storeId (/store/entry)', async () => {
+    window.history.pushState({}, '', '/store/entry');
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
       if (key === 'platform-role') return 'platform';

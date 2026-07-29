@@ -9,3 +9,13 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+/**
+ * 楽観ロック競合（409）か。version を往復する編集フォームが、競合を「保存失敗」一般と
+ * 区別して一覧の再取得へ倒すために使う。再取得しないと編集対象が古い version を抱えたままになり、
+ * 再試行も閉じ直しも同じ 409 を繰り返す。
+ */
+export function isConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('response' in error)) return false;
+  return (error as { response?: { status?: number } }).response?.status === 409;
+}

@@ -34,15 +34,15 @@ export default function CastListPage() {
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CastResponse | null>(null);
-  // 能力による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）
+  // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）
   const [canInvite, setCanInvite] = useState(false);
   const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
   useEffect(() => {
     platformAuthApi
       .me()
       .then(me => {
-        setCanInvite(me.capabilities.includes('CAST_INVITE'));
-        setCanManageFieldDefs(me.capabilities.includes('CAST_FIELD_DEF_MANAGE'));
+        setCanInvite(me.permissions.includes('CAST_INVITE'));
+        setCanManageFieldDefs(me.permissions.includes('CAST_FIELD_DEF_MANAGE'));
       })
       .catch(() => {
         // 取得失敗時は導線を出さない（fail-closed）。操作自体はサーバ側が拒否する。

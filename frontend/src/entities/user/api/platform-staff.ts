@@ -1,10 +1,12 @@
 import { apiClient } from '@/shared/api';
 import {
-  CapabilityBundleResponse,
-  GrantHistoryEntryResponse,
+  PermissionResponse,
   PlatformStaffCreateRequest,
   PlatformStaffResponse,
   PlatformStaffUpdateRequest,
+  RoleCreateRequest,
+  RoleResponse,
+  RoleUpdateRequest,
 } from '../model/types';
 
 export const platformStaffApi = {
@@ -20,12 +22,26 @@ export const platformStaffApi = {
     const response = await apiClient.put(`/platform/staff/${id}`, data);
     return response.data;
   },
-  bundles: async (): Promise<CapabilityBundleResponse[]> => {
-    const response = await apiClient.get('/platform/capability-bundles');
+};
+
+export const platformRoleApi = {
+  list: async (): Promise<RoleResponse[]> => {
+    const response = await apiClient.get('/platform/roles');
     return response.data;
   },
-  grantHistory: async (id: number): Promise<GrantHistoryEntryResponse[]> => {
-    const response = await apiClient.get(`/platform/staff/${id}/grant-history`);
+  create: async (data: RoleCreateRequest): Promise<RoleResponse> => {
+    const response = await apiClient.post('/platform/roles', data);
+    return response.data;
+  },
+  update: async (id: number, data: RoleUpdateRequest): Promise<RoleResponse> => {
+    const response = await apiClient.put(`/platform/roles/${id}`, data);
+    return response.data;
+  },
+  remove: async (id: number): Promise<void> => {
+    await apiClient.delete(`/platform/roles/${id}`);
+  },
+  permissions: async (): Promise<PermissionResponse[]> => {
+    const response = await apiClient.get('/platform/permissions');
     return response.data;
   },
 };

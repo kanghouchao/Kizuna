@@ -10,8 +10,8 @@ import {
 } from '@/entities/user';
 import {
   StaffCreateModal,
-  StaffEditDrawer,
-  bundleSetLabel,
+  StaffEditModal,
+  roleSetLabel,
   storeSetLabel,
 } from '@/features/staff-management';
 import { useManagedList } from '@/shared/lib';
@@ -27,7 +27,7 @@ import {
   TableRow,
 } from '@/shared/ui';
 
-/** スタッフ一覧ページ。一覧内モーダル=新規作成、ドロワー=編集。 */
+/** スタッフ一覧ページ。一覧内モーダルで新規作成・編集を行う。 */
 export default function StaffPage() {
   const {
     items: staff,
@@ -43,7 +43,7 @@ export default function StaffPage() {
   );
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は id で保持し、staff オブジェクトは現在の一覧から導出する。
-  // これにより refetch がそのままドロワー内容の最新化になる（409 リフレッシュ）。
+  // これにより refetch がそのままモーダル内容の最新化になる（409 リフレッシュ）。
   const [editingId, setEditingId] = useState<number | null>(null);
   const editingStaff = staff.find(member => member.id === editingId) ?? null;
 
@@ -51,7 +51,7 @@ export default function StaffPage() {
     <>
       <ListPage
         title="スタッフ管理"
-        description="権限束・担当店舗・精算範囲の付与と編集ができます。"
+        description="ロール・担当店舗の付与と編集ができます。"
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <PlusIcon />
@@ -65,7 +65,7 @@ export default function StaffPage() {
           <TableHeader>
             <TableRow>
               <TableHead>氏名</TableHead>
-              <TableHead>権限束</TableHead>
+              <TableHead>ロール</TableHead>
               <TableHead>状態</TableHead>
               <TableHead>担当店舗</TableHead>
               <TableHead className="text-right">アクション</TableHead>
@@ -80,7 +80,7 @@ export default function StaffPage() {
               >
                 <TableCell className="font-medium text-foreground">{member.display_name}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {bundleSetLabel(member.bundles)}
+                  {roleSetLabel(member.roles)}
                 </TableCell>
                 <TableCell>
                   {member.enabled ? (
@@ -121,13 +121,13 @@ export default function StaffPage() {
         </Table>
       </ListPage>
 
-      {/* モーダル・ドロワーは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
+      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <StaffCreateModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={refetch}
       />
-      <StaffEditDrawer
+      <StaffEditModal
         open={editingId !== null}
         staff={editingStaff}
         onClose={() => setEditingId(null)}

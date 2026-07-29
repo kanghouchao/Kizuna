@@ -13,8 +13,9 @@ export interface LoginResponse {
 // 本人種別（バックエンド user/domain/UserType.java と対応）
 export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
 
-// 能力（バックエンド user/domain/Capability.java と対応）
-export type PlatformCapability =
+// 権限コード（バックエンド user/domain/PermissionCode.java と対応）。
+// ワイヤ上は接頭辞なしの素の enum 名で、PERM_ 形式は JWT の authorities 内部だけに存在する。
+export type PlatformPermission =
   | 'STORE_MANAGE'
   | 'STAFF_MANAGE'
   | 'SYSTEM_CONFIG_MANAGE'
@@ -32,7 +33,8 @@ export type PlatformCapability =
   | 'STORE_PROFILE_MANAGE'
   | 'STORE_MENU_VIEW';
 
-// ログイン後の着地先（サーバ側が能力目録から導出する — /me の console）
+// ログイン後の着地先（サーバ側が権限目録から導出する — /me の console）。
+// 小文字 3 値。権限目録（/platform/permissions）の console は大文字 3 値の別型（PermissionConsole）。
 export type PlatformConsole = 'platform' | 'store' | 'none';
 
 // 平台ユーザーの店舗作用域種別
@@ -49,9 +51,9 @@ export interface PlatformMeResponse {
   email: string;
   display_name: string;
   user_type: PlatformUserType;
-  capabilities: PlatformCapability[];
+  permissions: PlatformPermission[];
   console: PlatformConsole;
-  // 店舗文脈（X-Store-ID）を確立できるか。JWT storeBridge claim と同源でサーバ側が能力目録から導出する。
+  // 店舗文脈（X-Store-ID）を確立できるか。JWT storeBridge claim と同源でサーバ側が権限目録から導出する。
   store_bridge: boolean;
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
@@ -68,30 +70,58 @@ export interface PlatformStore {
   name: string;
 }
 
-// 能力束への参照（id と名称）
-export interface CapabilityBundleRef {
-  id: number;
-  name: string;
+// 権限目録（/platform/permissions）の所属コンソール。大文字 3 値で、
+// /me の console（小文字 3 値の PlatformConsole）とはキー名が同じでも値域が別物。
+export type PermissionConsole = 'PLATFORM' | 'STORE' | 'SHARED';
+
+// 権限目録の1件（ロール編集 UI の選択肢）
+export interface PermissionResponse {
+  code: PlatformPermission;
+  console: PermissionConsole;
 }
 
-// 能力束一覧の1件（授与 UI の選択肢）
-export interface CapabilityBundleResponse {
+// ロールへの参照（スタッフ応答の埋め込み）。
+// name はサーバの non_null 方針でキーごと欠落しうるため任意扱いにする。
+export interface RoleRef {
   id: number;
-  name: string;
-  capabilities: PlatformCapability[];
+  name?: string;
 }
 
-// スタッフ（能力束×店舗集合×精算範囲）の応答
+// ロール一覧の1件
+export interface RoleResponse {
+  id: number;
+  name: string;
+  // 平台既定ロール。改名・権限変更・削除がいずれも拒否される。
+  system: boolean;
+  permissions: PlatformPermission[];
+  // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
+  version: number;
+}
+
+// ロール新規作成リクエスト
+export interface RoleCreateRequest {
+  name: string;
+  permissions: PlatformPermission[];
+}
+
+// ロール更新リクエスト
+export interface RoleUpdateRequest {
+  name: string;
+  permissions: PlatformPermission[];
+  // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
+  version: number;
+}
+
+// スタッフ（ロール×店舗集合）の応答。
+// リクエストは role_ids（id の配列）なのに応答は roles（id と名称の対）という非対称に注意。
 export interface PlatformStaffResponse {
   id: number;
   email: string;
   display_name: string;
   enabled: boolean;
-  bundles: CapabilityBundleRef[];
+  roles: RoleRef[];
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
-  settlement_scope_type: PlatformStoreScopeType | null;
-  settlement_store_ids: number[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
 }
@@ -101,33 +131,17 @@ export interface PlatformStaffCreateRequest {
   email: string;
   password: string;
   display_name: string;
-  bundle_ids: number[];
+  role_ids: number[];
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
-  settlement_scope_type?: PlatformStoreScopeType | null;
-  settlement_store_ids?: number[];
 }
 
 // スタッフ授権編集リクエスト（enabled: 未指定=現状維持、false=停止、true=再開）
 export interface PlatformStaffUpdateRequest {
-  bundle_ids: number[];
+  role_ids: number[];
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
-  settlement_scope_type?: PlatformStoreScopeType | null;
-  settlement_store_ids?: number[];
   enabled?: boolean;
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;
-}
-
-// 付与履歴の操作種別
-export type GrantAction = 'GRANT' | 'CHANGE' | 'STOP' | 'RESUME';
-
-// 付与履歴の1件
-export interface GrantHistoryEntryResponse {
-  id: number;
-  actor_email: string;
-  action: GrantAction;
-  detail: string;
-  created_at: string;
 }

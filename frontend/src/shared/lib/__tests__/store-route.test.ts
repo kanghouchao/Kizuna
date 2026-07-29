@@ -4,7 +4,7 @@ import {
   replaceStoreIdInPath,
   resolveStoreHref,
   storePath,
-  storeSelectPath,
+  storeEntryPath,
 } from '../store-route';
 
 describe('store-route', () => {
@@ -25,8 +25,8 @@ describe('store-route', () => {
       expect(getStoreIdFromPath('/store/abc')).toBeUndefined();
     });
 
-    it('/store/selectはundefinedを返す', () => {
-      expect(getStoreIdFromPath('/store/select')).toBeUndefined();
+    it('/store/entryはundefinedを返す', () => {
+      expect(getStoreIdFromPath('/store/entry')).toBeUndefined();
     });
 
     it('/store単体はundefinedを返す', () => {
@@ -47,14 +47,15 @@ describe('store-route', () => {
       expect(replaceStoreIdInPath('/store/orders', 456)).toBe('/store/456/orders');
     });
 
-    it('store以外のpathにはstoreId付きdashboardへフォールバックする', () => {
-      expect(replaceStoreIdInPath('/platform/dashboard', 456)).toBe('/store/456/dashboard');
+    it('store以外のpathからは入口ルートへフォールバックする', () => {
+      // 着地先はメニュー由来のため、店舗スコープ外からの切替は入口ルートに委ねる。
+      expect(replaceStoreIdInPath('/platform/dashboard', 456)).toBe('/store/entry');
     });
 
-    it('/store/selectは店舗sub-pathではなくstoreId付きdashboardへフォールバックする', () => {
-      // /store/select は storeId を含まない静的ルート。sub-path 保存だと実在しない
-      // /store/456/select を生むため dashboard へ振り分ける。
-      expect(replaceStoreIdInPath('/store/select', 456)).toBe('/store/456/dashboard');
+    it('/store/entryは店舗sub-pathとして扱わず入口ルートのままにする', () => {
+      // /store/entry は storeId を含まない静的ルート。sub-path 保存だと実在しない
+      // /store/456/entry を生む。
+      expect(replaceStoreIdInPath('/store/entry', 456)).toBe('/store/entry');
     });
   });
 
@@ -68,13 +69,13 @@ describe('store-route', () => {
     });
   });
 
-  describe('storeSelectPath', () => {
-    it('nextなしは店舗選択ルートを返す', () => {
-      expect(storeSelectPath()).toBe('/store/select');
+  describe('storeEntryPath', () => {
+    it('nextなしは入口ルートを返す', () => {
+      expect(storeEntryPath()).toBe('/store/entry');
     });
 
     it('nextありはencodeされたnextクエリ付きで返す', () => {
-      expect(storeSelectPath('/store/orders')).toBe('/store/select?next=%2Fstore%2Forders');
+      expect(storeEntryPath('/store/orders')).toBe('/store/entry?next=%2Fstore%2Forders');
     });
   });
 
@@ -87,9 +88,9 @@ describe('store-route', () => {
       expect(resolveStoreHref('/store/orders', '2')).toBe('/store/2/orders');
     });
 
-    it('storeId未確定時は店舗選択ルート（next保存）へ誘導する', () => {
+    it('storeId未確定時は入口ルート（next保存）へ誘導する', () => {
       expect(resolveStoreHref('/store/orders', undefined)).toBe(
-        '/store/select?next=%2Fstore%2Forders'
+        '/store/entry?next=%2Fstore%2Forders'
       );
     });
   });
@@ -99,8 +100,15 @@ describe('store-route', () => {
       expect(isLegacyStorePath('/store/orders')).toBe(true);
     });
 
-    it('/store/selectはfalse', () => {
-      expect(isLegacyStorePath('/store/select')).toBe(false);
+    // 入口ルート自身がレガシー判定に掛かると、守衛の差し戻し先も入口になって
+    // 無限リダイレクトになる。この負向断言がその唯一の守りなので消さないこと。
+    it('/store/entry 自身はレガシー扱いしない（自己リダイレクト循環の防止）', () => {
+      expect(isLegacyStorePath('/store/entry')).toBe(false);
+      expect(isLegacyStorePath('/store/entry/')).toBe(false);
+    });
+
+    it('entry を接頭辞に持つだけの別pathはレガシー扱いする', () => {
+      expect(isLegacyStorePath('/store/entrypoint')).toBe(true);
     });
 
     it('数値id配下はfalse', () => {

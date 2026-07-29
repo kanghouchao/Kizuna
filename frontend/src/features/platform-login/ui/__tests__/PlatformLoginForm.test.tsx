@@ -33,7 +33,7 @@ function meResponse(overrides: Partial<PlatformMeResponse>): PlatformMeResponse 
     email: 'user@kizuna.test',
     display_name: '本人',
     user_type: 'STAFF',
-    capabilities: [],
+    permissions: [],
     console: 'none',
     store_bridge: false,
     store_scope_type: 'ALL_STORES',

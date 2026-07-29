@@ -1,4 +1,4 @@
-import { platformStaffApi } from '@/entities/user';
+import { platformRoleApi, platformStaffApi } from '@/entities/user';
 import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
@@ -7,6 +7,7 @@ jest.mock('@/shared/api/client', () => ({
     get: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
     post: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
     put: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
+    delete: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
   },
 }));
 
@@ -20,15 +21,20 @@ describe('platformStaffApi', () => {
       email: 'staff@example.com',
       password: 'pass1234',
       display_name: '新規スタッフ',
-      bundle_ids: [2],
+      role_ids: [2],
       store_scope_type: 'SPECIFIC_STORES',
       store_ids: [1],
     });
     expect(res).toEqual({ ok: true, url: '/platform/staff' });
+    // 授権はロール id の配列で送る（応答側の roles: {id,name}[] とは非対称）
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/platform/staff',
+      expect.objectContaining({ role_ids: [2] })
+    );
   });
   it('update は /platform/staff/:id を PUT し version を往復する', async () => {
     const res = await platformStaffApi.update(1, {
-      bundle_ids: [1, 2],
+      role_ids: [1, 2],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
       enabled: false,
@@ -41,12 +47,43 @@ describe('platformStaffApi', () => {
       expect.objectContaining({ version: 7 })
     );
   });
-  it('bundles は /platform/capability-bundles を GET する', async () => {
-    const res = await platformStaffApi.bundles();
-    expect(res).toEqual({ ok: true, url: '/platform/capability-bundles' });
+});
+
+describe('platformRoleApi', () => {
+  it('list は /platform/roles を GET する', async () => {
+    const res = await platformRoleApi.list();
+    expect(res).toEqual({ ok: true, url: '/platform/roles' });
   });
-  it('grantHistory は /platform/staff/:id/grant-history を GET する', async () => {
-    const res = await platformStaffApi.grantHistory(3);
-    expect(res).toEqual({ ok: true, url: '/platform/staff/3/grant-history' });
+  it('create は /platform/roles を POST する', async () => {
+    const res = await platformRoleApi.create({
+      name: '受付担当',
+      permissions: ['ORDER_MANAGE'],
+    });
+    expect(res).toEqual({ ok: true, url: '/platform/roles' });
+    // 権限コードは接頭辞なしの素の enum 名で送る（PERM_ は JWT authorities 内部だけの形式）
+    expect(apiClient.post).toHaveBeenCalledWith('/platform/roles', {
+      name: '受付担当',
+      permissions: ['ORDER_MANAGE'],
+    });
+  });
+  it('update は /platform/roles/:id を PUT し version を往復する', async () => {
+    const res = await platformRoleApi.update(5, {
+      name: '受付担当',
+      permissions: ['ORDER_MANAGE', 'CUSTOMER_MANAGE'],
+      version: 3,
+    });
+    expect(res).toEqual({ ok: true, url: '/platform/roles/5' });
+    expect(apiClient.put).toHaveBeenCalledWith(
+      '/platform/roles/5',
+      expect.objectContaining({ version: 3 })
+    );
+  });
+  it('remove は /platform/roles/:id を DELETE する', async () => {
+    await platformRoleApi.remove(5);
+    expect(apiClient.delete).toHaveBeenCalledWith('/platform/roles/5');
+  });
+  it('permissions は /platform/permissions を GET する', async () => {
+    const res = await platformRoleApi.permissions();
+    expect(res).toEqual({ ok: true, url: '/platform/permissions' });
   });
 });

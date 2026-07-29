@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import type { PlatformStaffResponse } from '@/entities/user';
-import { platformAuthApi, platformStaffApi } from '@/entities/user';
-import { StaffEditDrawer } from '../StaffEditDrawer';
+import { platformAuthApi, platformRoleApi, platformStaffApi } from '@/entities/user';
+import { StaffEditModal } from '../StaffEditModal';
 
 jest.mock('@/entities/user', () => ({
   platformAuthApi: { stores: jest.fn() },
-  platformStaffApi: { bundles: jest.fn(), grantHistory: jest.fn(), update: jest.fn() },
+  platformRoleApi: { list: jest.fn() },
+  platformStaffApi: { update: jest.fn() },
 }));
 
 jest.mock('react-hot-toast', () => ({
@@ -15,6 +16,7 @@ jest.mock('react-hot-toast', () => ({
 
 const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
 const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
+const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 
 const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResponse => ({
@@ -22,57 +24,54 @@ const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResp
   email: 'staff@example.com',
   display_name: '山田太郎',
   enabled: true,
-  bundles: [{ id: 3, name: '店長' }],
+  roles: [{ id: 3, name: '店長' }],
   store_scope_type: 'ALL_STORES',
   store_ids: [],
-  settlement_scope_type: null,
-  settlement_store_ids: [],
   version: 7,
   ...override,
 });
 
-const renderDrawer = (props: Partial<React.ComponentProps<typeof StaffEditDrawer>> = {}) => {
+const renderModal = (props: Partial<React.ComponentProps<typeof StaffEditModal>> = {}) => {
   const onClose = jest.fn();
   const onUpdated = jest.fn();
   render(
-    <StaffEditDrawer open staff={staff()} onClose={onClose} onUpdated={onUpdated} {...props} />
+    <StaffEditModal open staff={staff()} onClose={onClose} onUpdated={onUpdated} {...props} />
   );
   return { onClose, onUpdated };
 };
 
-describe('スタッフ授権編集ドロワー', () => {
+describe('スタッフ授権編集モーダル', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
-    mockedStaffApi.bundles.mockResolvedValue([
-      { id: 3, name: '店長', capabilities: [] },
-      { id: 4, name: '経理', capabilities: [] },
+    mockedRoleApi.list.mockResolvedValue([
+      { id: 3, name: '店長', system: true, permissions: [], version: 0 },
+      { id: 4, name: '経理', system: false, permissions: [], version: 0 },
     ]);
-    mockedStaffApi.grantHistory.mockResolvedValue([]);
     mockedStaffApi.update.mockResolvedValue({} as never);
   });
 
   it('閉じているときは何も描画しない', () => {
-    renderDrawer({ open: false });
+    renderModal({ open: false });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('編集対象が null のときは開いていても描画しない', () => {
-    renderDrawer({ staff: null });
+    renderModal({ staff: null });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('開くと対象スタッフ名の見出しを表示する', async () => {
-    renderDrawer();
+    renderModal();
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('山田太郎 の権限を編集')).toBeInTheDocument();
   });
 
   it('保存は楽観ロックの version を含む現在値をそのまま送信する', async () => {
-    renderDrawer();
+    renderModal();
     await screen.findByRole('dialog');
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
@@ -80,18 +79,16 @@ describe('スタッフ授権編集ドロワー', () => {
     await waitFor(() => expect(mockedStaffApi.update).toHaveBeenCalledTimes(1));
     expect(mockedStaffApi.update.mock.calls[0][0]).toBe(42);
     expect(mockedStaffApi.update.mock.calls[0][1]).toEqual({
-      bundle_ids: [3],
+      role_ids: [3],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
-      settlement_scope_type: null,
-      settlement_store_ids: [],
       enabled: true,
       version: 7,
     });
   });
 
   it('状態を停止へ切り替えると enabled=false で送信する', async () => {
-    renderDrawer();
+    renderModal();
     await screen.findByRole('dialog');
 
     fireEvent.click(screen.getByLabelText('停止'));
@@ -101,20 +98,20 @@ describe('スタッフ授権編集ドロワー', () => {
     expect(mockedStaffApi.update.mock.calls[0][1]).toMatchObject({ enabled: false });
   });
 
-  it('権限束の選択を全て外すと更新 API を呼ばず警告する', async () => {
-    renderDrawer({ staff: staff({ bundles: [] }) });
+  it('ロールの選択を全て外すと更新 API を呼ばず警告する', async () => {
+    renderModal({ staff: staff({ roles: [] }) });
     await screen.findByRole('dialog');
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('権限束を 1 つ以上選択してください')
+      expect(mockedToast.error).toHaveBeenCalledWith('ロールを 1 つ以上選択してください')
     );
     expect(mockedStaffApi.update).not.toHaveBeenCalled();
   });
 
   it('保存成功で完了トーストを出し onUpdated と onClose を呼ぶ', async () => {
-    const { onClose, onUpdated } = renderDrawer();
+    const { onClose, onUpdated } = renderModal();
     await screen.findByRole('dialog');
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
@@ -124,9 +121,9 @@ describe('スタッフ授権編集ドロワー', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('409 は固定文言で警告し一覧を再取得したままドロワーを閉じない', async () => {
+  it('409 は固定文言で警告し一覧を再取得したままモーダルを閉じない', async () => {
     mockedStaffApi.update.mockRejectedValue({ response: { status: 409 } });
-    const { onClose, onUpdated } = renderDrawer();
+    const { onClose, onUpdated } = renderModal();
     await screen.findByRole('dialog');
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
@@ -143,7 +140,7 @@ describe('スタッフ授権編集ドロワー', () => {
 
   it('409 以外の失敗は onUpdated を呼ばない', async () => {
     mockedStaffApi.update.mockRejectedValue({ response: { status: 400 } });
-    const { onClose, onUpdated } = renderDrawer();
+    const { onClose, onUpdated } = renderModal();
     await screen.findByRole('dialog');
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
@@ -157,7 +154,7 @@ describe('スタッフ授権編集ドロワー', () => {
   });
 
   it('キャンセルは更新せず閉じる', async () => {
-    const { onClose } = renderDrawer();
+    const { onClose } = renderModal();
     await screen.findByRole('dialog');
 
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
@@ -167,31 +164,11 @@ describe('スタッフ授権編集ドロワー', () => {
   });
 
   it('Escape で閉じる', async () => {
-    const { onClose } = renderDrawer();
+    const { onClose } = renderModal();
     await screen.findByRole('dialog');
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-  });
-
-  it('付与履歴が空なら不在メッセージを表示する', async () => {
-    renderDrawer();
-
-    expect(await screen.findByText('履歴はありません')).toBeInTheDocument();
-  });
-
-  it('付与履歴があれば操作種別を日本語ラベルで表示する', async () => {
-    mockedStaffApi.grantHistory.mockResolvedValue([
-      {
-        id: 1,
-        action: 'GRANT',
-        actor_email: 'admin@example.com',
-        created_at: '2026-07-01T00:00:00Z',
-      },
-    ] as never);
-    renderDrawer();
-
-    expect(await screen.findByText('付与')).toBeInTheDocument();
   });
 });

@@ -31,6 +31,7 @@ import {
   getStoreIdFromPath,
   isStoreConsole,
   resolveStoreHref,
+  storeEntryPath,
 } from '@/shared/lib';
 
 // キーはメニュー API（seed データ）が返す icon 文字列との wire 契約。
@@ -108,8 +109,8 @@ export function Sidebar() {
             name: 'メイン',
             items: [
               {
-                name: 'ダッシュボード',
-                href: isStore ? '/store/dashboard' : '/platform/dashboard',
+                name: isStore ? '店舗コンソール' : 'ダッシュボード',
+                href: isStore ? storeEntryPath() : '/platform/dashboard',
                 icon: HouseIcon,
               },
             ],

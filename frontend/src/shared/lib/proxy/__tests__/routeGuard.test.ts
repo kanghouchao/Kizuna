@@ -80,21 +80,21 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
-  it('allows access to /store/select with token (no legacy redirect)', () => {
-    const req = createRequest('/store/select', true);
+  it('allows access to /store/entry with token (no legacy redirect)', () => {
+    const req = createRequest('/store/entry', true);
     const res = handleRouteProtection(req, 'store');
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
   });
 
-  it('redirects a legacy id-less /store path (with token) to /store/select preserving next', () => {
+  it('redirects a legacy id-less /store path (with token) to /store/entry preserving next', () => {
     const req = createRequest('/store/orders', true);
     const res = handleRouteProtection(req, 'store');
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
       expect.objectContaining({
-        pathname: '/store/select',
+        pathname: '/store/entry',
         search: '?next=%2Fstore%2Forders',
       })
     );
@@ -136,22 +136,22 @@ describe('routeGuard', () => {
   });
 
   describe('console/area alignment', () => {
-    it('redirects a store-console session on /platform/* to /store/select', () => {
+    it('redirects a store-console session on /platform/* to /store/entry', () => {
       const req = createRequest('/platform/dashboard', true, { 'platform-role': 'store' });
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/store/select' })
+        expect.objectContaining({ pathname: '/store/entry' })
       );
       expect(res).not.toBeNull();
     });
 
-    it('redirects a store-console session on /cast/* to /store/select', () => {
+    it('redirects a store-console session on /cast/* to /store/entry', () => {
       const req = createRequest('/cast/schedule', true, { 'platform-role': 'store' });
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/store/select' })
+        expect.objectContaining({ pathname: '/store/entry' })
       );
       expect(res).not.toBeNull();
     });
@@ -263,7 +263,7 @@ describe('routeGuard', () => {
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/store/select' })
+        expect.objectContaining({ pathname: '/store/entry' })
       );
       expect(res).not.toBeNull();
     });

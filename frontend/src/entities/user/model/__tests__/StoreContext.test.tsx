@@ -36,7 +36,7 @@ const meResponse = (
   email: 'staff@example.com',
   display_name: 'スタッフ',
   user_type: 'STAFF',
-  capabilities: [],
+  permissions: [],
   console: 'store',
   store_bridge,
   store_scope_type,
@@ -174,7 +174,9 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       expect(mockPush).toHaveBeenCalledWith('/store/2/orders');
     });
 
-    it('店舗スコープ外からの切替は /store/{id}/dashboard へ push する', async () => {
+    it('店舗スコープ外からの切替は入口ルートへ push する', async () => {
+      // 着地先はメニュー由来のため、ここでは決められない。入口が解決する。
+      // 選択した店舗は push の前に書かれる cookie が伝えるので、入口はそれを拾う。
       mockPathname = '/platform/dashboard';
 
       const { result } = renderHook(() => useStoreContext(), { wrapper });
@@ -182,7 +184,8 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
 
       result.current.switchStore(2);
 
-      expect(mockPush).toHaveBeenCalledWith('/store/2/dashboard');
+      expect(mockedSetPlatformStore).toHaveBeenCalledWith(2);
+      expect(mockPush).toHaveBeenCalledWith('/store/entry');
     });
 
     it('前回選択 cookie と同じ店舗でも pathStoreId 未確定なら push が発火する', async () => {
@@ -197,7 +200,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
 
       result.current.switchStore(1);
 
-      expect(mockPush).toHaveBeenCalledWith('/store/1/dashboard');
+      expect(mockPush).toHaveBeenCalledWith('/store/entry');
     });
 
     it('現在地の pathStoreId と同一店舗への切替は no-op（push しない）', async () => {

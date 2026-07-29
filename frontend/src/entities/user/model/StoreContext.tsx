@@ -14,7 +14,7 @@ import { PlatformStore } from './types';
 
 /**
  * 店舗コンテキスト（現在店舗・授権店舗・切替・ログイン後着地の授権店舗解決）を一手に担う deep module。
- * 両コンソール layout に1つだけ搭載し、Header / StoreSelectPage が共有状態を消費する。
+ * 両コンソール layout に1つだけ搭載し、Header / StoreEntryPage が共有状態を消費する。
  * me()+stores() は provider で1回のみ呼ばれる（消費者ごとの重複取得を無くす）。
  */
 interface StoreContextValue {

@@ -34,13 +34,13 @@ jest.mock('@/entities/cast', () => {
 const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
 const mockedMe = platformAuthApi.me as jest.MockedFunction<typeof platformAuthApi.me>;
 
-/** 指定能力を持つ /me 応答を返すヘルパ（UI 出し分けは能力ベース）。 */
-function meWith(capabilities: PlatformMeResponse['capabilities']): PlatformMeResponse {
+/** 指定権限を持つ /me 応答を返すヘルパ（UI 出し分けは権限ベース）。 */
+function meWith(permissions: PlatformMeResponse['permissions']): PlatformMeResponse {
   return {
     email: 'staff@kizuna.test',
     display_name: '店舗スタッフ',
     user_type: 'STAFF',
-    capabilities,
+    permissions,
     console: 'store',
     store_bridge: true,
     store_scope_type: 'SPECIFIC_STORES',

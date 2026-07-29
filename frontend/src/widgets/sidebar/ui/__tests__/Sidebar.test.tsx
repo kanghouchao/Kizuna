@@ -80,7 +80,7 @@ describe('Sidebar', () => {
   });
 
   it('path に storeId が無くても前回選択 cookie から店舗リンクを解決する', async () => {
-    mockPathname = '/store/select';
+    mockPathname = '/store/entry';
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'platform-role') return 'platform';
       if (key === 'platform-store-id') return '3';
@@ -96,8 +96,8 @@ describe('Sidebar', () => {
     );
   });
 
-  it('path にも cookie にも storeId が無ければ店舗選択画面へ誘導する', async () => {
-    mockPathname = '/store/select';
+  it('path にも cookie にも storeId が無ければ店舗入口画面へ誘導する', async () => {
+    mockPathname = '/store/entry';
     (Cookies.get as jest.Mock).mockImplementation((key: string) =>
       key === 'platform-role' ? 'platform' : undefined
     );
@@ -107,7 +107,7 @@ describe('Sidebar', () => {
 
     expect(await screen.findByRole('link', { name: '受注一覧' })).toHaveAttribute(
       'href',
-      '/store/select?next=%2Fstore%2Forders'
+      '/store/entry?next=%2Fstore%2Forders'
     );
   });
 
