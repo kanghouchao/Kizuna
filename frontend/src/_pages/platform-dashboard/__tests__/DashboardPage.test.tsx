@@ -1,23 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { PageResult } from '@/shared/api';
-import { Store, platformStoreApi } from '@/entities/store';
+import { render, screen } from '@testing-library/react';
+import { platformStoreApi } from '@/entities/store';
 import DashboardPage from '../ui/DashboardPage';
-
-const mockPush = jest.fn();
 
 jest.mock('@/entities/store', () => ({
   platformStoreApi: {
     getStats: jest.fn(),
-    getList: jest.fn(),
   },
 }));
 
 jest.mock('@/entities/user', () => ({
   useAuth: () => ({ logout: jest.fn() }),
-}));
-
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('react-hot-toast', () => ({
@@ -27,45 +19,35 @@ jest.mock('react-hot-toast', () => ({
 
 const mockedApi = platformStoreApi as jest.Mocked<typeof platformStoreApi>;
 
-const store = (override: Partial<Store>): Store => ({
-  id: '1',
-  name: 'アルファ店',
-  email: 'alpha@example.com',
-  domain: 'alpha.example.com',
-  created_at: '2026-01-01T00:00:00Z',
-  ...override,
-});
-
-const paginated = (rows: Store[]): PageResult<Store> => ({
-  rows,
-  page: 0,
-  pageCount: 1,
-  total: rows.length,
-});
-
 describe('プラットフォームダッシュボード', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedApi.getStats.mockResolvedValue({ total: 12, active: 7, inactive: 3, pending: 2 });
-    mockedApi.getList.mockResolvedValue(paginated([store({ name: 'アルファ店' })]));
+    mockedApi.getStats.mockResolvedValue({ total: 12 });
   });
 
-  it('統計値と直近追加店舗を表示すること', async () => {
+  it('総店舗数を表示すること', async () => {
     render(<DashboardPage />);
 
-    expect(await screen.findByText('12')).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('アルファ店')).toBeInTheDocument();
-    expect(mockedApi.getList).toHaveBeenCalledWith({ page: 0, size: 5 });
+    expect(await screen.findByText('総店舗数')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
   });
 
-  it('店舗追加ボタンで作成画面へ遷移すること', async () => {
+  it('未モデル化の店舗状態は統計として表示しないこと', async () => {
     render(<DashboardPage />);
+    await screen.findByText('総店舗数');
 
-    fireEvent.click(await screen.findByRole('button', { name: '店舗追加' }));
+    expect(screen.queryByText('審査待ち')).not.toBeInTheDocument();
+    expect(screen.queryByText('有効店舗')).not.toBeInTheDocument();
+    expect(screen.queryByText('無効店舗')).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/stores/create'));
+  it('店舗一覧と店舗作成の導線は持たないこと', async () => {
+    render(<DashboardPage />);
+    await screen.findByText('総店舗数');
+
+    expect(screen.queryByText('最近追加された店舗')).not.toBeInTheDocument();
+    expect(screen.queryByText('店舗作成')).not.toBeInTheDocument();
+    expect(screen.queryByText('店舗管理')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
