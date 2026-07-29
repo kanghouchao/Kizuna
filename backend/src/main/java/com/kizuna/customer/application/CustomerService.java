@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,8 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerService {
 
-  /** LIKE パターンのエスケープ文字。検索語中のメタ文字を字面へ戻すために使う。 */
-  private static final char LIKE_ESCAPE = '\\';
+  /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
+  private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   private final CustomerRepository customerRepository;
   private final CustomerMapper customerMapper;
@@ -32,8 +33,7 @@ public class CustomerService {
   @Transactional(readOnly = true)
   public Page<CustomerResponse> list(
       String search, String rank, String classification, Pageable pageable) {
-    Specification<Customer> spec =
-        searchSpec(blankToNull(search), blankToNull(rank), blankToNull(classification));
+    Specification<Customer> spec = searchSpec(search, rank, classification);
     return customerRepository.findAll(spec, pageable).map(customerMapper::toResponse);
   }
 
@@ -46,12 +46,13 @@ public class CustomerService {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       if (search != null) {
-        String pattern = "%" + escapeLike(search.toLowerCase()) + "%";
+        char escape = LIKE_ESCAPE.getEscapeCharacter();
+        String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase()) + "%";
         predicates.add(
             cb.or(
-                cb.like(cb.lower(root.get("name")), pattern, LIKE_ESCAPE),
-                cb.like(root.get("phoneNumber"), "%" + escapeLike(search) + "%", LIKE_ESCAPE),
-                cb.like(cb.lower(root.get("lineId")), pattern, LIKE_ESCAPE)));
+                cb.like(cb.lower(root.get("name")), pattern, escape),
+                cb.like(root.get("phoneNumber"), "%" + LIKE_ESCAPE.escape(search) + "%", escape),
+                cb.like(cb.lower(root.get("lineId")), pattern, escape)));
       }
       if (rank != null) {
         predicates.add(cb.equal(root.get("rank"), rank));
@@ -61,23 +62,6 @@ public class CustomerService {
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };
-  }
-
-  private static String blankToNull(String value) {
-    return (value == null || value.isBlank()) ? null : value;
-  }
-
-  /**
-   * 検索語中の LIKE メタ文字を字面へ戻す。
-   *
-   * <p>エスケープしないと {@code _} が 1 文字ワイルドカードとして働き、{@code a_b} の検索が {@code acb} のような別人まで拾う。エスケープ文字自身を先に
-   * 二重化しないと、末尾の {@code \} が後続の {@code %} を打ち消す。
-   */
-  private static String escapeLike(String value) {
-    return value
-        .replace(String.valueOf(LIKE_ESCAPE), String.valueOf(LIKE_ESCAPE) + LIKE_ESCAPE)
-        .replace("%", LIKE_ESCAPE + "%")
-        .replace("_", LIKE_ESCAPE + "_");
   }
 
   @StoreScoped

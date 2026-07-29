@@ -4,7 +4,6 @@ import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
-import com.kizuna.shared.web.PageableSupport;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,7 +28,6 @@ public class CustomerController {
 
   private final CustomerService customerService;
 
-  // offset ページングはページ境界の安定に全順序を要するため、並びに一意な副キー id を補う。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Page<CustomerResponse>> list(
@@ -37,9 +35,7 @@ public class CustomerController {
       @RequestParam(required = false) String rank,
       @RequestParam(required = false) String classification,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(
-        customerService.list(
-            search, rank, classification, PageableSupport.ensureTiebreaker(pageable, "id")));
+    return ResponseEntity.ok(customerService.list(search, rank, classification, pageable));
   }
 
   @GetMapping("/{id}")

@@ -31,6 +31,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,8 +43,8 @@ public class PlatformStaffService {
 
   private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_t_users_email";
 
-  /** LIKE パターンのエスケープ文字。検索語中のメタ文字を字面へ戻すために使う。 */
-  private static final char LIKE_ESCAPE = '\\';
+  /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
+  private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
@@ -52,7 +53,7 @@ public class PlatformStaffService {
 
   @Transactional(readOnly = true)
   public Page<PlatformStaffResponse> list(String search, Pageable pageable) {
-    Page<PlatformUser> staff = repository.findAll(staffSpec(blankToNull(search)), pageable);
+    Page<PlatformUser> staff = repository.findAll(staffSpec(search), pageable);
     Set<Long> allRoleIds =
         staff.getContent().stream()
             .flatMap(user -> user.getRoleIds().stream())
@@ -72,31 +73,15 @@ public class PlatformStaffService {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
       if (search != null) {
-        String pattern = "%" + escapeLike(search.toLowerCase(Locale.ROOT)) + "%";
+        char escape = LIKE_ESCAPE.getEscapeCharacter();
+        String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
         predicates.add(
             cb.or(
-                cb.like(cb.lower(root.get("displayName")), pattern, LIKE_ESCAPE),
-                cb.like(cb.lower(root.get("email")), pattern, LIKE_ESCAPE)));
+                cb.like(cb.lower(root.get("displayName")), pattern, escape),
+                cb.like(cb.lower(root.get("email")), pattern, escape)));
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };
-  }
-
-  /**
-   * 検索語中の LIKE メタ文字を字面へ戻す。
-   *
-   * <p>エスケープしないと {@code _} が 1 文字ワイルドカードとして働き、メールに {@code _} を含む検索（{@code a_b}）が {@code acb}
-   * のような別人まで拾う。エスケープ文字自身を先に二重化しないと、末尾の {@code \} が後続の {@code %} を打ち消す。
-   */
-  private static String escapeLike(String value) {
-    return value
-        .replace(String.valueOf(LIKE_ESCAPE), String.valueOf(LIKE_ESCAPE) + LIKE_ESCAPE)
-        .replace("%", LIKE_ESCAPE + "%")
-        .replace("_", LIKE_ESCAPE + "_");
-  }
-
-  private static String blankToNull(String value) {
-    return value == null || value.isBlank() ? null : value.trim();
   }
 
   @Transactional

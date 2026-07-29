@@ -7,7 +7,6 @@ import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
-import com.kizuna.shared.web.PageableSupport;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -36,14 +35,12 @@ public class CastController {
   private final CastService castService;
   private final CastInvitationService castInvitationService;
 
-  // offset ページングはページ境界の安定に全順序を要するため、並びに一意な副キー id を補う。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<Page<CastResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(
-        castService.list(search, PageableSupport.ensureTiebreaker(pageable, "id")));
+    return ResponseEntity.ok(castService.list(search, pageable));
   }
 
   @GetMapping("/{id}")

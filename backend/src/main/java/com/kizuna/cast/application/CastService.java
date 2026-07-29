@@ -40,7 +40,7 @@ public class CastService {
   @Transactional(readOnly = true)
   public Page<CastResponse> list(String search, Pageable pageable) {
     Page<Cast> page =
-        search != null && !search.isEmpty()
+        search != null
             ? castRepository.findByNameContainingIgnoreCase(search, pageable)
             : castRepository.findAll(pageable);
     Map<String, CastInvitationStatus> statuses =

@@ -67,7 +67,7 @@ class CustomerServiceTest {
         .thenReturn(page);
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
-    Page<CustomerResponse> result = customerService.list("", " ", null, PageRequest.of(0, 10));
+    Page<CustomerResponse> result = customerService.list(null, null, null, PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("All");
   }
