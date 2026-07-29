@@ -1,7 +1,9 @@
 package com.kizuna.shared.storescope;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.shared.exception.ServiceException;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -77,10 +80,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "42");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -92,10 +93,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "abc");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -135,10 +134,8 @@ class StoreIdInterceptorTest {
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, handlerMethod("required"));
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, handlerMethod("required")))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -148,10 +145,8 @@ class StoreIdInterceptorTest {
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -164,10 +159,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "2");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -179,10 +172,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "99999999999999999999");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(400);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(ServiceException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -234,10 +225,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "2");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -262,10 +251,8 @@ class StoreIdInterceptorTest {
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, handlerMethod("required"));
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, handlerMethod("required")))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -290,10 +277,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -306,10 +291,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -324,10 +307,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
@@ -360,10 +341,8 @@ class StoreIdInterceptorTest {
     request.addHeader("X-Store-ID", "1");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(403);
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(AccessDeniedException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 

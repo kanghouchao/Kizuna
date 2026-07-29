@@ -1,9 +1,11 @@
 package com.kizuna.store.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.exception.ServiceUnavailableException;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,17 +24,15 @@ class MaintenanceModeInterceptorTest {
   @InjectMocks private MaintenanceModeInterceptor interceptor;
 
   @Test
-  @DisplayName("メンテナンスモード中はリクエストを 503 で拒否すること")
-  void preHandle_maintenanceOn() throws Exception {
+  @DisplayName("メンテナンスモード中はリクエストを 503 の例外で拒否すること")
+  void preHandle_maintenanceOn() {
     when(systemConfigService.getConfigValue("maintenance_mode")).thenReturn(Optional.of("true"));
     MockHttpServletRequest request = new MockHttpServletRequest("GET", "/store/orders");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
-    boolean result = interceptor.preHandle(request, response, new Object());
-
-    assertThat(result).isFalse();
-    assertThat(response.getStatus()).isEqualTo(503);
-    assertThat(response.getContentAsString()).contains("メンテナンス中");
+    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+        .isInstanceOf(ServiceUnavailableException.class)
+        .hasMessageContaining("メンテナンス中");
   }
 
   @Test

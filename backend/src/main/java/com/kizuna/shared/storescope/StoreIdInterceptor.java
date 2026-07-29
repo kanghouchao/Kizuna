@@ -1,5 +1,6 @@
 package com.kizuna.shared.storescope;
 
+import com.kizuna.shared.exception.ServiceException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
@@ -7,6 +8,7 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -14,6 +16,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+/**
+ * 拒否は例外送出で表明し、応答の成形は {@link com.kizuna.shared.exception.CommonExceptionHandler} へ委ねる — ここでは
+ * response へ直接書かない。同じ status を返す経路が複数のワイヤ形を持つと、呼出側が応答体の形を一つに決められなくなるため。
+ */
 @Log4j2
 @Component
 @AllArgsConstructor
@@ -51,18 +57,15 @@ public class StoreIdInterceptor implements HandlerInterceptor {
         // 店舗ヘッダを名乗るのは詐称として 403 で拒否する。授権スコープ検証より前に弾き、
         // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立の漏れを塞ぐ。
         if (!Boolean.TRUE.equals(claims.getClaimAsBoolean(CLAIM_STORE_BRIDGE))) {
-          response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-          return false;
+          throw new AccessDeniedException("店舗コンソールの権限がありません");
         }
         Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
         if (headerValue == null) {
           // 全桁数字だが long 範囲外。
-          response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-          return false;
+          throw new ServiceException("店舗 ID の形式が正しくありません");
         }
         if (!scope.authorizes(headerValue)) {
-          response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-          return false;
+          throw new AccessDeniedException("この店舗の権限がありません");
         }
         this.storeContext.setStoreId(headerValue);
         return true;
@@ -73,8 +76,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する。詐称ヘッダが無ければ下の
       // @StoreOptional 判定に委ね、プラットフォームの正当な素通り（例: /files/upload の platform 保存）を保つ。
       if (claimsStoreHeaderPresent) {
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        return false;
+        throw new AccessDeniedException("店舗文脈を名乗る権限がありません");
       }
     } else if (claimsStoreHeaderPresent
         && StringUtils.isNumeric(request.getHeader(HEADER_STORE_ID))) {
@@ -82,8 +84,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
       if (headerValue == null) {
         // 全桁数字だが long 範囲外。
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        return false;
+        throw new ServiceException("店舗 ID の形式が正しくありません");
       }
       this.storeContext.setStoreId(headerValue);
       return true;
@@ -95,8 +96,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
         && handlerMethod.hasMethodAnnotation(StoreOptional.class)) {
       return true;
     }
-    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-    return false;
+    throw new AccessDeniedException("店舗文脈が解決できません");
   }
 
   /**
