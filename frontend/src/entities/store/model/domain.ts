@@ -1,0 +1,13 @@
+/** ホスト名の形（ラベルを . で連ねた形）。`/` `:` `@` を含む値は通さない。 */
+const HOSTNAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
+
+/**
+ * 店舗ドメインがホスト名の形をしているか。
+ *
+ * リンクとして描画する前に必ず通すこと。`正規.example@攻撃者.example` のような値は
+ * プロトコル相対 URL の中で前半が userinfo と解釈され、別ホストへの導線になる。
+ * 保存の手前でも同じ形を検査しているが、それ以前に入った行は検査を経ていない。
+ */
+export function isStoreDomain(domain: string): boolean {
+  return HOSTNAME.test(domain);
+}

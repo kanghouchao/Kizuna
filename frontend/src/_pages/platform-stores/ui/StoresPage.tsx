@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { ExternalLinkIcon, PlusIcon, SquarePenIcon, StoreIcon, Trash2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Store, platformStoreApi } from '@/entities/store';
+import { Store, isStoreDomain, platformStoreApi } from '@/entities/store';
 import { useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -134,16 +134,22 @@ export default function StoresPage() {
                 <TableCell className="font-medium text-foreground">{store.name}</TableCell>
                 <TableCell>
                   {/* 店舗サイトは店舗ドメインの別ホストで配信されるため、
-                      現在のスキームを引き継ぐプロトコル相対 URL で別タブへ開く */}
-                  <a
-                    href={`//${store.domain}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-primary-strong hover:underline"
-                  >
-                    {store.domain}
-                    <ExternalLinkIcon className="h-3.5 w-3.5" />
-                  </a>
+                      現在のスキームを引き継ぐプロトコル相対 URL で別タブへ開く。
+                      ホスト名の形でない値はリンクにしない（`正規.example@攻撃者.example` の
+                      ような行は前半が userinfo と解釈され、別ホストへの導線になる） */}
+                  {isStoreDomain(store.domain) ? (
+                    <a
+                      href={`//${store.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary-strong hover:underline"
+                    >
+                      {store.domain}
+                      <ExternalLinkIcon className="h-3.5 w-3.5" />
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">{store.domain}</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(store.created_at).toLocaleDateString('ja-JP')}

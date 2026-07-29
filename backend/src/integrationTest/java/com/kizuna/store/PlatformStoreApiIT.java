@@ -96,6 +96,27 @@ class PlatformStoreApiIT {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
   }
 
+  // ドメインは管理画面で店舗サイトへのリンクとして描画される。`/` `:` `@` を通すと
+  // `正規.example@攻撃者.example` が別ホストへの導線になるため、保存の手前で閉じる。
+  @Test
+  @DisplayName("POST /platform/stores はホスト名の形でないドメインを 400 で拒むこと")
+  void createStoreRejectsNonHostnameDomain() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(platformToken(HQ_EMAIL));
+    String body =
+        String.format(
+            "{\"name\": \"店舗作成テスト\","
+                + " \"domain\": \"store-create-it-%s.kizuna.test@evil.example\","
+                + " \"email\": \"store-create-it@kizuna.test\"}",
+            UUID.randomUUID());
+
+    ResponseEntity<String> res =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
   @Test
   @DisplayName("GET /platform/stores/lookup?domain= は未認証で 200 と店舗情報を返すこと（受入基準3）")
   void lookupByDomainIsPublic() {
