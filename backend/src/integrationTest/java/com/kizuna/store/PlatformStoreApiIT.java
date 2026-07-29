@@ -213,6 +213,47 @@ class PlatformStoreApiIT {
     assertThat(body.has("current_page")).as("Laravel 風封筒の current_page キーが消えていること").isFalse();
   }
 
+  // findByNameContainingIgnoreCase 系の派生クエリは Spring Data JPA が _ % を既定でエスケープする
+  // （EscapeCharacter.DEFAULT）。手書き like への置き換えでこの保証を失わないよう固定する。
+  @Test
+  @DisplayName("GET /platform/stores の検索語中の LIKE メタ文字は字面として扱われ、ワイルドカードにならないこと")
+  void searchTreatsLikeMetacharactersAsLiterals() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(platformToken(HQ_EMAIL));
+    String uniqueSuffix = UUID.randomUUID().toString();
+    String name = "store-it-likeesc-acb-" + uniqueSuffix;
+    String body =
+        String.format(
+            "{\"name\": \"%s\","
+                + " \"domain\": \"store-it-likeesc-%s.kizuna.test\","
+                + " \"email\": \"store-it-likeesc@kizuna.test\"}",
+            name, uniqueSuffix);
+
+    ResponseEntity<Void> created =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+    String wildcardSearch = name.replace("acb", "a_b");
+    ResponseEntity<JsonNode> underscore =
+        rest.exchange(
+            "/platform/stores?search=" + wildcardSearch,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
+            JsonNode.class);
+    assertThat(underscore.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(underscore.getBody().path("total_elements").asLong()).isZero();
+
+    ResponseEntity<JsonNode> literal =
+        rest.exchange(
+            "/platform/stores?search=" + name,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
+            JsonNode.class);
+    assertThat(literal.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(literal.getBody().path("total_elements").asLong()).isEqualTo(1);
+  }
+
   @Test
   @DisplayName("GET /platform/stores/me は店長トークンで 200 と授権店舗(1,2)のみを返すこと（受入基準3）")
   void meReturnsAuthorizedStoresOnly() {

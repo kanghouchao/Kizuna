@@ -22,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerService {
 
+  /** LIKE パターンのエスケープ文字。検索語中のメタ文字を字面へ戻すために使う。 */
+  private static final char LIKE_ESCAPE = '\\';
+
   private final CustomerRepository customerRepository;
   private final CustomerMapper customerMapper;
 
@@ -43,12 +46,12 @@ public class CustomerService {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       if (search != null) {
-        String pattern = "%" + search.toLowerCase() + "%";
+        String pattern = "%" + escapeLike(search.toLowerCase()) + "%";
         predicates.add(
             cb.or(
-                cb.like(cb.lower(root.get("name")), pattern),
-                cb.like(root.get("phoneNumber"), "%" + search + "%"),
-                cb.like(cb.lower(root.get("lineId")), pattern)));
+                cb.like(cb.lower(root.get("name")), pattern, LIKE_ESCAPE),
+                cb.like(root.get("phoneNumber"), "%" + escapeLike(search) + "%", LIKE_ESCAPE),
+                cb.like(cb.lower(root.get("lineId")), pattern, LIKE_ESCAPE)));
       }
       if (rank != null) {
         predicates.add(cb.equal(root.get("rank"), rank));
@@ -62,6 +65,19 @@ public class CustomerService {
 
   private static String blankToNull(String value) {
     return (value == null || value.isBlank()) ? null : value;
+  }
+
+  /**
+   * 検索語中の LIKE メタ文字を字面へ戻す。
+   *
+   * <p>エスケープしないと {@code _} が 1 文字ワイルドカードとして働き、{@code a_b} の検索が {@code acb} のような別人まで拾う。エスケープ文字自身を先に
+   * 二重化しないと、末尾の {@code \} が後続の {@code %} を打ち消す。
+   */
+  private static String escapeLike(String value) {
+    return value
+        .replace(String.valueOf(LIKE_ESCAPE), String.valueOf(LIKE_ESCAPE) + LIKE_ESCAPE)
+        .replace("%", LIKE_ESCAPE + "%")
+        .replace("_", LIKE_ESCAPE + "_");
   }
 
   @StoreScoped
