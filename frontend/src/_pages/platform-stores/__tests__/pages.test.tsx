@@ -8,6 +8,8 @@ import StoreEditPage from '../ui/StoreEditPage';
 const mockPush = jest.fn();
 
 jest.mock('@/entities/store', () => ({
+  // ドメイン形式の判定は本物を使う（リンク化の可否そのものを検証したいため）
+  ...jest.requireActual('@/entities/store'),
   platformStoreApi: {
     getList: jest.fn(),
     getById: jest.fn(),
@@ -79,6 +81,19 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(link).toHaveAttribute('href', '//alpha.example.com');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  // 保存の手前でも形を検査しているが、それ以前に入った行は検査を経ていない。
+  // `正規.example@攻撃者.example` は前半が userinfo と解釈され別ホストへ飛ぶ。
+  it('ホスト名の形でないドメインはリンクにしないこと', async () => {
+    mockedApi.getList.mockResolvedValue(
+      paginated([store({ id: '1', domain: 'alpha.example.com@evil.example' })])
+    );
+
+    render(<StoresPage />);
+
+    expect(await screen.findByText('alpha.example.com@evil.example')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {

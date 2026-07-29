@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Loader2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { CreateStoreRequest, platformStoreApi } from '@/entities/store';
+import { CreateStoreRequest, isStoreDomain, platformStoreApi } from '@/entities/store';
 import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
 import toast from 'react-hot-toast';
 
@@ -28,8 +28,7 @@ export default function CreateStorePage() {
     if (!formData.domain.trim()) {
       newErrors.domain = 'ドメインは必須です';
     } else {
-      const domainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
-      if (!domainRegex.test(formData.domain)) {
+      if (!isStoreDomain(formData.domain)) {
         newErrors.domain = 'ドメイン形式が正しくありません';
       }
 
