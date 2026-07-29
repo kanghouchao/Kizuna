@@ -1,4 +1,4 @@
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { StoreContextProvider, useStoreContext } from '../StoreContext';
 import { platformAuthApi } from '../../api/platform';
 import { isPlatformSession, getPlatformStoreId, setPlatformStore } from '@/shared/lib';
@@ -95,14 +95,41 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       expect(mockedStores).not.toHaveBeenCalled();
     });
 
-    it('me() が失敗したときは空一覧・storeBridge=false を返す', async () => {
+    it('me() が失敗したときは値を確定させず loadFailed を立てる', async () => {
+      // 空一覧・storeBridge=false へ畳むと、通信障害が「授権店舗ゼロ」や「店舗コンソール資格なし」
+      // という授権の答えに化け、入口がセッションを破棄したり平台側へ送り出したりする。
       mockedMe.mockRejectedValue(new Error('500'));
 
       const { result } = renderHook(() => useStoreContext(), { wrapper });
 
-      await waitFor(() => expect(result.current.stores).toEqual([]));
-      expect(result.current.storeBridge).toBe(false);
+      await waitFor(() => expect(result.current.loadFailed).toBe(true));
+      expect(result.current.stores).toBeNull();
+      expect(result.current.storeBridge).toBeNull();
       expect(mockedStores).not.toHaveBeenCalled();
+    });
+
+    it('stores() が失敗したときも値を確定させず loadFailed を立てる', async () => {
+      mockedMe.mockResolvedValue(meResponse(true));
+      mockedStores.mockRejectedValue(new Error('500'));
+
+      const { result } = renderHook(() => useStoreContext(), { wrapper });
+
+      await waitFor(() => expect(result.current.loadFailed).toBe(true));
+      expect(result.current.stores).toBeNull();
+    });
+
+    it('reload は取得をやり直し、成功すれば loadFailed が下りる', async () => {
+      mockedMe.mockRejectedValueOnce(new Error('500'));
+      mockedMe.mockResolvedValue(meResponse(true));
+      mockedStores.mockResolvedValue([{ id: 1, name: '店舗A' }]);
+
+      const { result } = renderHook(() => useStoreContext(), { wrapper });
+      await waitFor(() => expect(result.current.loadFailed).toBe(true));
+
+      act(() => result.current.reload());
+
+      await waitFor(() => expect(result.current.stores).toEqual([{ id: 1, name: '店舗A' }]));
+      expect(result.current.loadFailed).toBe(false);
     });
 
     it('1つの provider 配下で複数の consumer が描画されても me() は1回だけ呼ばれる', async () => {

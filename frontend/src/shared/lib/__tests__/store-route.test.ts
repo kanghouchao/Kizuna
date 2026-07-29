@@ -1,6 +1,7 @@
 import {
   getStoreIdFromPath,
   isLegacyStorePath,
+  isRetiredStorePath,
   replaceStoreIdInPath,
   resolveStoreHref,
   storePath,
@@ -122,6 +123,24 @@ describe('store-route', () => {
 
     it('/platform配下はfalse', () => {
       expect(isLegacyStorePath('/platform/dashboard')).toBe(false);
+    });
+  });
+
+  describe('isRetiredStorePath', () => {
+    // 廃止済みルートを next として復元すると /store/{id}/select 等へ解決して 404 になる。
+    it('廃止済みの店舗選択・店舗ダッシュボードはtrue', () => {
+      expect(isRetiredStorePath('/store/select')).toBe(true);
+      expect(isRetiredStorePath('/store/dashboard')).toBe(true);
+      expect(isRetiredStorePath('/store/dashboard/')).toBe(true);
+    });
+
+    it('接頭辞が一致するだけの現役pathはfalse', () => {
+      expect(isRetiredStorePath('/store/selections')).toBe(false);
+      expect(isRetiredStorePath('/store/orders')).toBe(false);
+    });
+
+    it('数値id配下はfalse（現役の店舗ルート）', () => {
+      expect(isRetiredStorePath('/store/5/orders')).toBe(false);
     });
   });
 });

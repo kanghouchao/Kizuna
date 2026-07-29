@@ -24,6 +24,13 @@ interface StoreContextValue {
   storeBridge: boolean | null;
   /** 表示に用いる現在店舗 id。pathname 由来を最優先し、無ければ前回選択 cookie。 */
   currentStoreId: string | undefined;
+  /**
+   * 取得そのものが失敗した（通信断・5xx）。true の間 stores / storeBridge は null のままで、
+   * 「資格が無い」「店舗が無い」という授権の答えとは区別される。
+   */
+  loadFailed: boolean;
+  /** 失敗した取得をやり直す。 */
+  reload: () => void;
   /** 店舗を切り替える（前回選択 cookie 更新 + 現在地の storeId 差し替え遷移）。 */
   switchStore: (id: number) => void;
 }
@@ -45,6 +52,8 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
   // null = 読み込み中、[] = 到達資格のある店舗なし、非空 = 授権店舗一覧。
   const [stores, setStores] = useState<PlatformStore[] | null>(null);
   const [storeBridge, setStoreBridge] = useState<boolean | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   // cookie 由来の「前回選択した店舗」ヒント。document 依存で SSR-unsafe なため mount 時のみ読む。
   // store-scoped ページ外（platform 側）に居るときだけ表示に使う fallback 専用の役割。
   const [lastUsedStoreId, setLastUsedStoreId] = useState<string | undefined>(undefined);
@@ -70,18 +79,25 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
           setStores(await platformAuthApi.stores());
         } catch (error) {
           console.error('Failed to fetch stores', error);
-          setStores([]);
+          setLoadFailed(true);
         }
       },
       reason => {
-        // me() 失敗はセッション異常（401 は apiClient が再ログインへ誘導）。ここでは空一覧・資格なし扱い。
+        // 取得失敗を空一覧・資格なしへ畳んではいけない。畳むと通信障害が「授権店舗ゼロ」
+        // （入口がセッションを破棄する）や「店舗コンソール資格なし」（入口が平台側へ送り、
+        // 守衛が店舗 cookie の利用者を入口へ弾き返す）に化ける。値は未確定のまま旗だけ立てる。
         console.error('Failed to fetch me', reason);
-        setStoreBridge(false);
-        setStores([]);
+        setLoadFailed(true);
       }
     );
-    // mount 時に一度だけ解決する純データ取得。
-  }, []);
+  }, [loadAttempt]);
+
+  const reload = () => {
+    setLoadFailed(false);
+    setStores(null);
+    setStoreBridge(null);
+    setLoadAttempt(count => count + 1);
+  };
 
   // 表示する店舗は pathname 由来の storeId を最優先し、無ければ cookie ヒントに fallback する。
   // usePathname() は hydration-safe なため毎レンダー再計算でき、店舗切替後の pathname 変化にラベルが追随する。
@@ -95,13 +111,15 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
     if (String(id) !== pathStoreId) {
       setPlatformStore(id);
       // 現在地に storeId を差し替えて遷移する（フルリロードはしない）。
-      // store-scoped ページ外に居れば /store/{id}/dashboard へ。
+      // store-scoped ページ外に居れば入口ルートへ送り、着地先はそちらが解決する。
       router.push(replaceStoreIdInPath(pathname, id));
     }
   };
 
   return (
-    <StoreContext.Provider value={{ stores, storeBridge, currentStoreId, switchStore }}>
+    <StoreContext.Provider
+      value={{ stores, storeBridge, currentStoreId, loadFailed, reload, switchStore }}
+    >
       {children}
     </StoreContext.Provider>
   );
