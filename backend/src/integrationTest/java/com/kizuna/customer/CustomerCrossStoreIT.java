@@ -67,4 +67,30 @@ class CustomerCrossStoreIT extends CrossStoreTestSupport {
     // 重要なのは 200 でデータが漏れないこと
     assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
+
+  // "customer-it-likeesc-a_b" は _ をワイルドカードとして扱うと customer-it-likeesc-acb に一致してしまう。
+  // 検索語は字面として照合されるべきなので 0 件が正。
+  @Test
+  @DisplayName("検索語中の LIKE メタ文字は字面として扱われ、ワイルドカードにならないこと")
+  void searchTreatsLikeMetacharactersAsLiterals() {
+    createCustomerAs(STORE_A, "customer-it-likeesc-acb");
+
+    ResponseEntity<JsonNode> underscore =
+        rest.exchange(
+            "/store/customers?search=customer-it-likeesc-a_b",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(underscore.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(underscore.getBody().path("total_elements").asLong()).isZero();
+
+    ResponseEntity<JsonNode> literal =
+        rest.exchange(
+            "/store/customers?search=customer-it-likeesc-acb",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(literal.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(literal.getBody().path("total_elements").asLong()).isGreaterThanOrEqualTo(1);
+  }
 }
