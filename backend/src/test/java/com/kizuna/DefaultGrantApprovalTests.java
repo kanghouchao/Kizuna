@@ -23,25 +23,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.SystemRole;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 平台既定ロールへ与えると承認済みの授権（既定授権の承認台帳）を、コード側宣言（{@link PermissionCode#getDefaultRoles()}）が満たしていることを機械検証する。
+ * 平台既定ロールへ与える授権の承認台帳と、コード側宣言（{@link PermissionCode#getDefaultRoles()}）が一致していることを機械検証する。
  *
- * <p>既定ロールの授与は宣言の写像として毎回取り直されるため、宣言から権限を取り下げると、それだけで稼働中の DB からも授権が消える。承認済みの授権を落とすのは製品判断なので、
- * 「うっかり」では通らないよう本台帳との照合を 1 段挟む。取り下げが意図したものであれば、宣言と同じ PR で下の台帳を書き換える。
+ * <p>既定ロールの授与は宣言の写像として毎回取り直されるため、宣言をいじるだけで稼働中の DB の授権が増減する。増減はいずれも製品判断なので、「うっかり」では通らないよう 本台帳との照合を 1
+ * 段挟む。授与先を増やす・新しい権限に既定授与を付ける・逆に取り下げる、いずれも宣言と同じ PR で下の台帳を書き換える。
+ *
+ * <p>包含ではなく完全一致で照合する。台帳に載っていない授与を通してしまうと、後から誤ってそれを落としても台帳に無いので検出できず、守れる範囲が「台帳を書いた時点の授権」に 縮んでしまう。
  *
  * <p>台帳をここに置くのは、これが Liquibase の適用済み changeset ではなく本テストの資産だからである。播種の YAML を書き換えて済ませようとすると checksum
  * 検証に落ちて既存 DB が起動しなくなるため、承認の記録は移行履歴から独立させる。
- *
- * <p>逆に宣言を増やす変更（新しい権限、既存権限の授与先追加）は播種がそのまま追随できるため、本テストは通す。
  */
 class DefaultGrantApprovalTests {
 
-  /** 既定授権の承認台帳。権限ごとに、その権限を持たせると承認済みの平台既定ロールを並べる。 */
+  /** 既定授権の承認台帳。権限ごとに、その権限を持たせると承認済みの平台既定ロールを並べる（既定授与が無い権限は載せない）。 */
   private static final Map<PermissionCode, Set<SystemRole>> APPROVED_DEFAULT_GRANTS =
       Map.ofEntries(
           Map.entry(STORE_MANAGE, Set.of(HQ_ADMIN)),
@@ -62,11 +64,14 @@ class DefaultGrantApprovalTests {
           Map.entry(STORE_MENU_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)));
 
   @Test
-  @DisplayName("承認済みの既定授権がコード側宣言に含まれること")
-  void approvedDefaultGrantsAreDeclared() {
-    APPROVED_DEFAULT_GRANTS.forEach(
-        (code, approved) ->
-            assertThat(code.getDefaultRoles()).as("%s の既定ロール", code).containsAll(approved));
+  @DisplayName("コード側宣言の既定授与が承認台帳と完全に一致すること")
+  void declaredDefaultGrantsMatchApprovalLedger() {
+    Map<PermissionCode, Set<SystemRole>> declared =
+        Arrays.stream(PermissionCode.values())
+            .filter(code -> !code.getDefaultRoles().isEmpty())
+            .collect(Collectors.toMap(code -> code, PermissionCode::getDefaultRoles));
+
+    assertThat(declared).as("権限ごとの既定ロール").isEqualTo(APPROVED_DEFAULT_GRANTS);
   }
 
   @Test
