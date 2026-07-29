@@ -9,7 +9,7 @@ import {
   clearPlatformSession,
   getApiErrorMessage,
   startPlatformSession,
-  storeSelectPath,
+  storeEntryPath,
 } from '@/shared/lib';
 
 /** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する。 */
@@ -38,11 +38,10 @@ export default function PlatformLoginForm() {
       }
 
       if (destination === 'store') {
-        // 着地方針（1店舗=自動転送 / N店舗=選択画面 / 0店舗=案内表示）は StoreSelectPage 一箇所に集約する。
-        // ログインフォームは無条件に選択画面へ渡し、stores[0] 無条件遷移（複数店舗ユーザーが選択画面へ
-        // 到達できない矛盾）を解消する。
+        // 着地方針（授権店舗の選択とメニュー由来の着地先解決）は StoreEntryPage 一箇所に集約する。
+        // ログインフォームは無条件に入口へ渡し、店舗の解決には関与しない。
         startPlatformSession(me.console, expires_at);
-        router.push(storeSelectPath());
+        router.push(storeEntryPath());
         return;
       }
 

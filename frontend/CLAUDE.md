@@ -15,6 +15,8 @@ frontend/src/
 │                 #   based on the cookie-resolved store, so it cannot be a thin shell.
 ├── _app/         # App initialization such as providers (named _app because `app` collides with Next's reserved name)
 ├── _pages/       # Page slices, named with a scope prefix: platform-* / store-* plus cast-invite, cast-portal, store-site
+│                 #   store-entry is the store console's invisible entry point: it resolves the store and the
+│                 #   menu-derived landing page, then redirects. It has no UI and no route of its own to link to.
 ├── widgets/      # Composite UI such as sidebar, header
 ├── features/     # Slices per user action: platform-login, staff-management, ...
 ├── entities/     # Mirror of the backend domain modules:
@@ -36,7 +38,7 @@ Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice),
   - Shared section components live in `templates/_sections/` (an underscore dir, never a template key); each template dir holds only its `theme.css` and page layouts.
   - Template text-slot metadata lives in `entities/store-profile` (`getTemplateMeta`) because both store-site and store-settings consume it.
 - **Store context is a single seam**: `entities/user`'s `StoreContextProvider` / `useStoreContext` (mounted in both console layouts, `src/app/(admin)/platform/layout.tsx` and `src/app/(admin)/store/layout.tsx`) resolves the _current user's switchable stores_ **once** — `me()` always, then `stores()` only when `me().store_bridge` is true (otherwise the list is empty by design). Consume that through `useStoreContext()`; do not re-fetch it per component. The administrative **catalog** is a different question and stays a direct `platformAuthApi.stores()` call (staff management's pickers and drawers), because an HQ admin with `store_bridge=false` has an empty switchable list yet still assigns every store.
-- **Store path assembly lives only in `shared/lib/store-route`** (`storePath` / `storeSelectPath` / `resolveStoreHref` / `replaceStoreIdInPath`). The negative invariant test `src/__tests__/store-path-invariants.test.ts` fs-scans `src/` and rejects the `/store/${...}` template-literal form; it does not catch concatenation or an interpolated base, so treat it as a backstop, not a proof.
+- **Store path assembly lives only in `shared/lib/store-route`** (`storePath` / `storeEntryPath` / `resolveStoreHref` / `replaceStoreIdInPath`). The negative invariant test `src/__tests__/store-path-invariants.test.ts` fs-scans `src/` and rejects the `/store/${...}` template-literal form; it does not catch concatenation or an interpolated base, so treat it as a backstop, not a proof.
 - **alias**: `@/*` → `./src/*` (configured in both tsconfig and jest).
 
 ## Code Conventions

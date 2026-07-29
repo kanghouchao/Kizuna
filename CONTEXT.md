@@ -40,7 +40,7 @@ _Avoid_: 読み・書きを同一機構と混同すること（読みは集合�
 _Avoid_: 能力束・Capability（旧称）、ロールへの店舗の紐付け
 
 **店舗コンテキスト（Store Context）**:
-フロントエンドの「現在店舗・授権店舗・店舗切替・店舗リンク生成・ログイン後着地の授権店舗解決」を一手に担う seam（`entities/user` の StoreContextProvider / useStoreContext）。provider は platform / store 両コンソールの layout に搭載され、`me()` + `stores()` は provider で 1 回のみ取得する。店舗パス組立の知識は `shared/lib/store-route`（storePath / storeSelectPath / resolveStoreHref / replaceStoreIdInPath）へ集約し、各所での裸テンプレート字面を禁じる。ログイン後の着地方針（1 店舗 = 自動転送 / N 店舗 = 選択画面 / 0 店舗 = 案内表示）は店舗選択ページ一箇所に集約する（#428）。
+フロントエンドの「現在店舗・授権店舗・店舗切替・店舗リンク生成・ログイン後着地の授権店舗解決」を一手に担う seam（`entities/user` の StoreContextProvider / useStoreContext）。provider は platform / store 両コンソールの layout に搭載され、`me()` + `stores()` は provider で 1 回のみ取得する。店舗パス組立の知識は `shared/lib/store-route`（storePath / storeEntryPath / resolveStoreHref / replaceStoreIdInPath）へ集約し、各所での裸テンプレート字面を禁じる。店舗コンソールへの着地は入口ルート `/store/entry`（`_pages/store-entry`）一箇所に集約する。入口は UI を持たず、授権店舗（前回選択 cookie を優先、無ければ先頭）とメニュー由来の遷移先を解決して差し替え遷移する。着地先をメニューから引くのは、権限を絞ったロールでも必ず自分が到達できる画面に着かせるためで、固定の着地先は権限次第で拒否される。
 _Avoid_: 各コンポーネントでの me()/stores() 個別取得、店舗パスの手組み
 
 ### 店舗運営

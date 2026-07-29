@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { loadTemplatePage } from '@/_pages/store-site';
 import { PlatformConsole, resolvePlatformDestination } from '@/entities/user';
-import { storePath, storeSelectPath } from '@/shared/lib';
+import { storeEntryPath } from '@/shared/lib';
 
 /**
  * ページメタデータの生成
@@ -57,8 +57,9 @@ export default async function Home() {
       redirect('/platform/dashboard/');
     }
     if (destination === 'store') {
-      const storeId = cookieStore.get('platform-store-id')?.value;
-      redirect(storeId ? storePath(storeId, '/dashboard/') : storeSelectPath());
+      // 着地先はメニュー由来のため server 側では決められない。入口ルートに委ねる
+      // （前回選択の店舗も入口が cookie から拾う）。
+      redirect(storeEntryPath());
     }
   }
 

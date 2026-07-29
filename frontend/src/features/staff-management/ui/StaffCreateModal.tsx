@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
-  CapabilityBundleResponse,
   PlatformStoreScopeType,
+  RoleResponse,
+  platformRoleApi,
   platformStaffApi,
 } from '@/entities/user';
 import { getApiErrorMessage, useManagedList } from '@/shared/lib';
 import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
-import { BundlePicker } from './BundlePicker';
-import { SettlementScopePicker } from './SettlementScopePicker';
+import { RolePicker } from './RolePicker';
 import { StoreSetPicker } from './StoreSetPicker';
 
 interface StaffCreateModalProps {
@@ -27,7 +27,7 @@ interface StaffCreateFormValues {
   display_name: string;
 }
 
-/** スタッフの新規作成モーダル（メール・初期パスワード・氏名・権限束・担当店舗・任意の精算範囲）。 */
+/** スタッフの新規作成モーダル（メール・初期パスワード・氏名・ロール・担当店舗）。 */
 export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalProps) {
   const {
     register,
@@ -35,41 +35,33 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
     reset,
     formState: { isSubmitting },
   } = useForm<StaffCreateFormValues>();
-  const [bundleIds, setBundleIds] = useState<number[]>([]);
+  const [roleIds, setRoleIds] = useState<number[]>([]);
   const [storeScopeType, setStoreScopeType] = useState<PlatformStoreScopeType>('ALL_STORES');
   const [storeIds, setStoreIds] = useState<number[]>([]);
-  const [settlementScopeType, setSettlementScopeType] = useState<PlatformStoreScopeType | null>(
-    null
-  );
-  const [settlementStoreIds, setSettlementStoreIds] = useState<number[]>([]);
-  const { items: bundles, isLoading: bundlesLoading } = useManagedList<CapabilityBundleResponse>(
-    () => platformStaffApi.bundles(),
-    '権限束一覧の取得に失敗しました'
+  const { items: roles, isLoading: rolesLoading } = useManagedList<RoleResponse>(
+    () => platformRoleApi.list(),
+    'ロール一覧の取得に失敗しました'
   );
 
   useEffect(() => {
     if (!open) return;
     reset({ email: '', password: '', display_name: '' });
-    setBundleIds([]);
+    setRoleIds([]);
     setStoreScopeType('ALL_STORES');
     setStoreIds([]);
-    setSettlementScopeType(null);
-    setSettlementStoreIds([]);
   }, [open, reset]);
 
   const submit = async (values: StaffCreateFormValues) => {
-    if (bundleIds.length === 0) {
-      toast.error('権限束を 1 つ以上選択してください');
+    if (roleIds.length === 0) {
+      toast.error('ロールを 1 つ以上選択してください');
       return;
     }
     try {
       await platformStaffApi.create({
         ...values,
-        bundle_ids: bundleIds,
+        role_ids: roleIds,
         store_scope_type: storeScopeType,
         store_ids: storeIds,
-        settlement_scope_type: settlementScopeType,
-        settlement_store_ids: settlementStoreIds,
       });
       toast.success('スタッフを追加しました');
       onCreated();
@@ -115,11 +107,11 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
               {...register('display_name', { required: true })}
             />
           </div>
-          <BundlePicker
-            bundles={bundles}
-            isLoading={bundlesLoading}
-            bundleIds={bundleIds}
-            onChange={setBundleIds}
+          <RolePicker
+            roles={roles}
+            isLoading={rolesLoading}
+            roleIds={roleIds}
+            onChange={setRoleIds}
           />
           <StoreSetPicker
             storeScopeType={storeScopeType}
@@ -127,14 +119,6 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
             onChange={next => {
               setStoreScopeType(next.storeScopeType);
               setStoreIds(next.storeIds);
-            }}
-          />
-          <SettlementScopePicker
-            scopeType={settlementScopeType}
-            storeIds={settlementStoreIds}
-            onChange={next => {
-              setSettlementScopeType(next.scopeType);
-              setSettlementStoreIds(next.storeIds);
             }}
           />
           <div className="flex justify-end gap-3 border-t pt-4">

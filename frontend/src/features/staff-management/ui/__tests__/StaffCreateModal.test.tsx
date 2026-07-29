@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
-import { platformAuthApi, platformStaffApi } from '@/entities/user';
+import { platformAuthApi, platformRoleApi, platformStaffApi } from '@/entities/user';
 import { StaffCreateModal } from '../StaffCreateModal';
 
 jest.mock('@/entities/user', () => ({
   platformAuthApi: { stores: jest.fn() },
-  platformStaffApi: { bundles: jest.fn(), create: jest.fn() },
+  platformRoleApi: { list: jest.fn() },
+  platformStaffApi: { create: jest.fn() },
 }));
 
 jest.mock('react-hot-toast', () => ({
@@ -14,6 +15,7 @@ jest.mock('react-hot-toast', () => ({
 
 const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
 const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
+const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 
 const fillBasics = () => {
@@ -28,9 +30,9 @@ describe('スタッフ新規作成モーダル', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
-    mockedStaffApi.bundles.mockResolvedValue([
-      { id: 3, name: '店長', capabilities: [] },
-      { id: 4, name: '経理', capabilities: [] },
+    mockedRoleApi.list.mockResolvedValue([
+      { id: 3, name: '店長', system: true, permissions: [], version: 0 },
+      { id: 4, name: '経理', system: false, permissions: [], version: 0 },
     ]);
     mockedStaffApi.create.mockResolvedValue({} as never);
   });
@@ -54,11 +56,9 @@ describe('スタッフ新規作成モーダル', () => {
       email: 'new@example.com',
       password: 'secret',
       display_name: '佐藤次郎',
-      bundle_ids: [3],
+      role_ids: [3],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
-      settlement_scope_type: null,
-      settlement_store_ids: [],
     });
   });
 
@@ -79,25 +79,7 @@ describe('スタッフ新規作成モーダル', () => {
     });
   });
 
-  it('精算範囲は指定店舗を選ぶと scope と店舗 id が載る', async () => {
-    render(<StaffCreateModal open onClose={jest.fn()} onCreated={jest.fn()} />);
-    await screen.findByLabelText('店長');
-
-    fillBasics();
-    fireEvent.click(screen.getByLabelText('店長'));
-    fireEvent.click(screen.getByLabelText('指定店舗'));
-    const storeCheckboxes = await screen.findAllByLabelText('店舗A');
-    fireEvent.click(storeCheckboxes[storeCheckboxes.length - 1]);
-    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
-
-    await waitFor(() => expect(mockedStaffApi.create).toHaveBeenCalledTimes(1));
-    expect(mockedStaffApi.create.mock.calls[0][0]).toMatchObject({
-      settlement_scope_type: 'SPECIFIC_STORES',
-      settlement_store_ids: [9],
-    });
-  });
-
-  it('権限束が未選択なら作成 API を呼ばず警告する', async () => {
+  it('ロールが未選択なら作成 API を呼ばず警告する', async () => {
     render(<StaffCreateModal open onClose={jest.fn()} onCreated={jest.fn()} />);
     await screen.findByLabelText('店長');
 
@@ -105,7 +87,7 @@ describe('スタッフ新規作成モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('権限束を 1 つ以上選択してください')
+      expect(mockedToast.error).toHaveBeenCalledWith('ロールを 1 つ以上選択してください')
     );
     expect(mockedStaffApi.create).not.toHaveBeenCalled();
   });
@@ -117,7 +99,7 @@ describe('スタッフ新規作成モーダル', () => {
     fireEvent.click(screen.getByLabelText('店長'));
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
-    await waitFor(() => expect(mockedStaffApi.bundles).toHaveBeenCalled());
+    await waitFor(() => expect(mockedRoleApi.list).toHaveBeenCalled());
     expect(mockedStaffApi.create).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isLegacyStorePath, storeSelectPath } from '../store-route';
+import { isLegacyStorePath, storeEntryPath } from '../store-route';
 import { consoleAreaOfPath, isPublicPlatformPath, isSharedPlatformPath } from '../app-area';
 
 // コンソール別の入場可能エリアとホーム。/me の console（サーバ側が能力目録から導出）を
@@ -8,7 +8,7 @@ import { consoleAreaOfPath, isPublicPlatformPath, isSharedPlatformPath } from '.
 // — データはバックエンドが能力ベースで fail-closed に拒否する。
 const CONSOLE_AREAS: Record<string, { allowed: readonly string[]; home: string }> = {
   platform: { allowed: ['platform', 'store'], home: '/platform/dashboard' },
-  store: { allowed: ['store'], home: storeSelectPath() },
+  store: { allowed: ['store'], home: storeEntryPath() },
   cast: { allowed: ['cast'], home: '/cast/schedule' },
 };
 
@@ -67,13 +67,13 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
 
   // 4. Legacy id-less store URL handling
   // id 無しの店舗 URL（例 /store/orders、ブックマーク・共有リンクに残りうる）は
-  // /store/[storeId]/... にも /store/select にもマッチせず 404 になる。
-  // トークン保持者に限り店舗選択画面へ誘導し、選択後に元の遷移先（next）へ復帰させる。
-  // 数値id配下（/store/5/...）と /store/select 自体は対象外。トークン無しは上の分岐で処理済みのため
+  // /store/[storeId]/... にも /store/entry にもマッチせず 404 になる。
+  // トークン保持者に限り店舗コンソールの入口へ誘導し、解決後に元の遷移先（next）へ復帰させる。
+  // 数値id配下（/store/5/...）と /store/entry 自体は対象外。トークン無しは上の分岐で処理済みのため
   // hasToken を明示条件にする（トークン無しはルートへ戻す既存挙動を維持する）。
   // レガシー判定の正規表現は store-route（店舗パス知識の唯一 module）へ集約済み。
   if (hasToken && isLegacyStorePath(path)) {
-    return NextResponse.redirect(new URL(storeSelectPath(path), request.url));
+    return NextResponse.redirect(new URL(storeEntryPath(path), request.url));
   }
 
   return null; // No redirection needed

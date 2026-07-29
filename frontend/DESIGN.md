@@ -285,7 +285,7 @@ Primitives come from `@/shared/ui` (the barrel over the vendored shadcn componen
 - **Buttons**: `Button`. `default` = primary CTA, `outline` = secondary, `ghost` + `size="icon-sm"` = in-row actions, `destructive` = delete. Render links with `asChild` wrapping the anchor.
 - **Form controls**: `Input` / `Textarea` / `Select` / `Checkbox` / `Switch` / `RadioGroup` / `Label`, wired per the form pattern below.
 - **Modal (centered dialog)**: `Dialog` (`DialogContent` / `DialogHeader` / `DialogTitle` / `DialogFooter`). Tall forms add `max-h-[calc(100vh-2rem)] overflow-y-auto` on the content so the modal scrolls internally instead of overflowing the viewport (precedent: `StaffCreateModal`). Precedent for the plain case: `ShiftFormModal`.
-- **Drawer (side-slide dialog)**: `Sheet` with `side="right"` for record-scoped edit forms opened from a list row. Never re-create a drawer by re-positioning `DialogContent`.
+- **Drawer (side-slide dialog)**: there is none. A record-scoped edit form opened from a list row is a centred `Dialog` like every other modal (precedent: `StaffEditModal`). Do not add a side-slide surface — the console has one modal idiom and a second one reads as a different application.
 - **Confirm dialog (destructive confirmation)**: `ConfirmDialog` — controlled `open` + `title` (optionally `description`), with a destructive action button (`confirmLabel`, default 削除する) and a キャンセル cancel. Never call `window.confirm`, and never rebuild the pattern from `AlertDialog` parts in a page. Precedent: `CastFieldsPage`.
 - **Combobox (searchable select)**: `Popover` + `Command` (`CommandInput` / `CommandList` / `CommandEmpty` / `CommandItem`).
 - **Destructive menu item**: do not use the vendored `DropdownMenuItem`'s own `variant="destructive"` — it keeps the default red as the text over its tinted focus fill (`text-destructive` on `bg-destructive/10`), which measures **3.99 in light mode** (dark passes at 4.58 over its `/20` fill). Spell the colours out on the consumer instead: `className="text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong"` — certified by the `bg-destructive/10` + `text-destructive-strong` row (8.42 / 5.39). The primitive itself stays as generated; this rule binds the call sites. Precedent: the logout item in `widgets/header`.
@@ -310,7 +310,7 @@ A bare interactive element does not inherit the primitives' focus ring, so it ha
 
 **The shell is a component, not a set of class strings to copy: `ListPage` from `@/widgets/list-page`.** It owns the outer spacing, the heading block, the search card, the table card wrapper, the loading / empty branches and the pagination control. A list page passes `title / description / actions / search / state / emptyMessage` and supplies its own table markup as `children` — nothing above the table is the page's to write, and a `space-y-6` or `text-2xl` surviving in a list page file means the shell was re-derived rather than composed.
 
-The six record-list pages are `store-customers` / `store-casts` / `store-orders` / `platform-staff` / `platform-stores` / `store-cast-fields`. Every other admin page — the form pages, the two settings consoles, `store-shifts` and `store-select` — still hand-writes its own heading markup, and for those the heading block alone is available as `PageHeader` (`@/widgets/page-header`; no page composes it today). Widening it to them is a separate question and is not authority to convert one in passing.
+The seven record-list pages are `store-customers` / `store-casts` / `store-orders` / `platform-staff` / `platform-roles` / `platform-stores` / `store-cast-fields`. Every other admin page — the form pages, the two settings consoles and `store-shifts` — still hand-writes its own heading markup, and for those the heading block alone is available as `PageHeader` (`@/widgets/page-header`; no page composes it today). Widening it to them is a separate question and is not authority to convert one in passing.
 
 **The page heading is `text-2xl` at every breakpoint** — no `sm:text-3xl` step, no `font-semibold` variant. `ListPage` enforces that for the six; a hand-written heading elsewhere follows the same rule.
 
@@ -404,7 +404,7 @@ Permanently out of scope, and the only exemptions:
 
 - the storefront (`_pages/store-site/**`) — its own token world;
 - the auth screens: `AuthLayout`, everything it wraps, and `shared/ui/auth-layout.tsx` itself — also its own token world;
-- the vendored shadcn primitives, kept exactly as generated (`badge.tsx` and `button.tsx` carry `text-white`; `dialog.tsx` and `sheet.tsx` carry `bg-black/50`).
+- the vendored shadcn primitives, kept exactly as generated (`badge.tsx` and `button.tsx` carry `text-white`; `dialog.tsx` carries `bg-black/50`).
 
 Everything else that still matches the grep — the unconverted slices, `widgets/header`, the `app/` route shells — is **pending, not exempt**. A partially converted file counts as matching: `store-orders/ui/OrderForm.tsx` is otherwise migrated yet still carries one `hover:bg-blue-50`.
 
@@ -412,10 +412,10 @@ Everything else that still matches the grep — the unconverted slices, `widgets
 
 `src/shared/ui` holds two kinds of file, and only one of them is frozen.
 
-- **Vendored shadcn primitives** — `alert-dialog` / `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `sheet` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
+- **Vendored shadcn primitives** — `alert-dialog` / `button` / `card` / `dialog` / `select` / `form` / `table` / `badge` / `popover` / `command` / `skeleton` / `tabs` / `dropdown-menu` / `checkbox` / `switch` / `radio-group` / `input` / `label` / `textarea`. Kept exactly as generated; per-screen deviation goes in the consumer's `className`, never here.
 - **Kizuna-authored components** — `image-upload.tsx`, `auth-layout.tsx`, `theme-provider.tsx`, `confirm-dialog.tsx`. Hand-written, so they obey the token rules like any other admin file. `auth-layout.tsx` is the exception noted above: it belongs to the auth world.
 
-Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 20 vendored files carry it and none of the four hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 6 of the 20, and `cva` from 17 of the 20, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written four carry none of the markers, and either import application code a generator would never emit (`@/shared/api`, `react-hot-toast`, `next-themes`) or, as `confirm-dialog.tsx` does, compose sibling primitives through relative imports where the generator emits the `@/shared/ui` alias. `git log --follow` settles any remaining doubt.
+Tell them apart by the generator's fingerprint rather than by guessing. The one reliable single test is **`data-slot`**: all 19 vendored files carry it and none of the four hand-written ones do. The other markers are only suggestive — a `radix-ui` import is absent from 6 of the 19, and `cva` from 16 of the 19, so "some of these, not all" is the honest reading and neither is usable alone. The negative direction is what holds: the hand-written four carry none of the markers, and either import application code a generator would never emit (`@/shared/api`, `react-hot-toast`, `next-themes`) or, as `confirm-dialog.tsx` does, compose sibling primitives through relative imports where the generator emits the `@/shared/ui` alias. `git log --follow` settles any remaining doubt.
 
 Editing a hand-written one is still a shared-file change, so it goes through the contract below rather than through a slice PR.
 
