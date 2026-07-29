@@ -1,13 +1,12 @@
 package com.kizuna.store.infrastructure;
 
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -19,8 +18,9 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * com.kizuna.shared.storescope.StoreScopeExecutor} と同一の判定経路にする。
  *
  * <p>JWT の授権店舗集合は次回ログインまで陳旧化しうるため、存在しない storeId が文脈に載ることがある。純 FK 兜底だと制約違反が 500 に逃げてしまうため、 本インターセプタが
- * 400 の保証点となり、{@link com.kizuna.shared.exception.CommonExceptionHandler} と同じ {@code error} キーの JSON
- * ボディを返す（同一パッケージの {@code MaintenanceModeInterceptor} の先例に倣う）。
+ * 400 の保証点となる。応答の成形は {@link ServiceException} を送出して {@link
+ * com.kizuna.shared.exception.CommonExceptionHandler} へ委ね、ここでは response へ直接書かない — 同じ status
+ * を返す経路が複数のワイヤ形を持つと、 呼出側が応答体の形を一つに決められなくなるため。
  *
  * <p>店舗文脈が無い（{@code @StoreOptional} の素通り）場合は検証対象外として許可する。
  */
@@ -38,11 +38,7 @@ public class StoreExistenceInterceptor implements HandlerInterceptor {
       @NonNull Object handler)
       throws Exception {
     if (storeContext.hasStoreId() && !storeExistenceCheck.exists(storeContext.getStoreId())) {
-      response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-      response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-      response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-      response.getWriter().write("{\"error\":\"店舗が見つかりません\"}");
-      return false;
+      throw new ServiceException("店舗が見つかりません");
     }
     return true;
   }

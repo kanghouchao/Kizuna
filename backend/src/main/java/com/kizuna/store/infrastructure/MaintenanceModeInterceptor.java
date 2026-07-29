@@ -1,16 +1,20 @@
 package com.kizuna.store.infrastructure;
 
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.exception.ServiceUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-/** メンテナンスモード中に店舗向けリクエストを 503 で拒否するインターセプタ。 */
+/**
+ * メンテナンスモード中に店舗向けリクエストを 503 で拒否するインターセプタ。
+ *
+ * <p>応答の成形は {@link ServiceUnavailableException} を送出して {@link
+ * com.kizuna.shared.exception.CommonExceptionHandler} へ委ね、ここでは response へ直接書かない。
+ */
 @Component
 @RequiredArgsConstructor
 public class MaintenanceModeInterceptor implements HandlerInterceptor {
@@ -33,10 +37,6 @@ public class MaintenanceModeInterceptor implements HandlerInterceptor {
     if (!maintenance) {
       return true;
     }
-    response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-    response.getWriter().write("{\"error\":\"メンテナンス中です。しばらくしてから再度お試しください\"}");
-    return false;
+    throw new ServiceUnavailableException("メンテナンス中です。しばらくしてから再度お試しください");
   }
 }
