@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.PlatformOrderCreateRequest;
 import com.kizuna.order.api.dto.PlatformOrderResponse;
 import com.kizuna.order.application.PlatformOrderService;
+import com.kizuna.shared.web.PageableSupport;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,11 +28,13 @@ public class PlatformOrderController {
 
   private final PlatformOrderService platformOrderService;
 
+  // offset ページングはページ境界の安定に全順序を要するため、並びに一意な副キー id を補う。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_SET_MANAGE')")
   public ResponseEntity<Page<PlatformOrderResponse>> list(
       @PageableDefault(sort = "businessDate", direction = Sort.Direction.DESC) Pageable pageable) {
-    return ResponseEntity.ok(platformOrderService.list(pageable));
+    return ResponseEntity.ok(
+        platformOrderService.list(PageableSupport.ensureTiebreaker(pageable, "id")));
   }
 
   @PostMapping
