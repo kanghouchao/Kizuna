@@ -20,9 +20,11 @@ public class StoreCreateDTO {
    *
    * <p>大文字を受け付けないのは、この値が Host ヘッダによる店舗文脈の解決キーだから。ブラウザは Host を小文字で送るのに照合は大小を区別するため、{@code
    * Shop.Example.com} を保存すると誰も到達できない店舗ができる。正規化して呑まずに拒むことで、その取り違えを保存時に表面化させる。
+   *
+   * <p>各ラベルは DNS の上限に合わせ 63 文字以下に制限する。64 文字以上のラベルは名前解決できず、到達不能な店舗が保存できてしまう。
    */
   private static final String DOMAIN_PATTERN =
-      "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$";
+      "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$";
 
   @NotBlank(message = "name is required")
   private String name;

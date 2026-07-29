@@ -138,6 +138,51 @@ class PlatformStoreApiIT {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
+  // DNS のラベル上限は 63 文字。64 文字以上のラベルは名前解決できず、全体長の Size(max=128) だけでは
+  // 到達不能な店舗の保存を防げないため、ラベル単位でも境界を閉じる。
+  @Test
+  @DisplayName("POST /platform/stores は 64 文字のラベルを含むドメインを 400 で拒むこと")
+  void createStoreRejectsDomainWithOverlongLabel() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(platformToken(HQ_EMAIL));
+    String overlongLabel = "a".repeat(64);
+    String body =
+        String.format(
+            "{\"name\": \"店舗作成テスト\","
+                + " \"domain\": \"%s.kizuna.test\","
+                + " \"email\": \"store-create-it@kizuna.test\"}",
+            overlongLabel);
+
+    ResponseEntity<String> res =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  // 上の境界の反対側: 63 文字ちょうどのラベルは解決可能なので通ること（正規表現の off-by-one を防ぐ）。
+  @Test
+  @DisplayName("POST /platform/stores は 63 文字のラベルを含むドメインを受け付けること")
+  void createStoreAcceptsDomainWithMaxLengthLabel() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(platformToken(HQ_EMAIL));
+    // UUID 由来の断片で一意化しつつ、末尾を 'a' で埋めて 63 文字ちょうどにする
+    String unique = UUID.randomUUID().toString().replace("-", "");
+    String maxLabel = (unique + "a".repeat(63)).substring(0, 63);
+    String body =
+        String.format(
+            "{\"name\": \"店舗作成テスト\","
+                + " \"domain\": \"%s.kizuna.test\","
+                + " \"email\": \"store-create-it@kizuna.test\"}",
+            maxLabel);
+
+    ResponseEntity<Void> res =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+  }
+
   @Test
   @DisplayName("GET /platform/stores/lookup?domain= は未認証で 200 と店舗情報を返すこと（受入基準3）")
   void lookupByDomainIsPublic() {
