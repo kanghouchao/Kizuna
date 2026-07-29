@@ -10,6 +10,7 @@ import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
@@ -109,7 +110,7 @@ class ShiftServiceTest {
     when(castService.existsForCurrentStore("c1")).thenReturn(false);
 
     assertThatThrownBy(() -> shiftService.create(req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
 
@@ -139,7 +140,7 @@ class ShiftServiceTest {
     when(shiftRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftService.update("missing", new ShiftUpdateRequest()))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("シフトが見つかりません");
   }
 
@@ -154,7 +155,7 @@ class ShiftServiceTest {
     req.setCastId("foreign");
 
     assertThatThrownBy(() -> shiftService.update("s1", req))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
 
@@ -224,7 +225,7 @@ class ShiftServiceTest {
     when(shiftRepository.existsById("missing")).thenReturn(false);
 
     assertThatThrownBy(() -> shiftService.delete("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("シフトが見つかりません");
   }
 

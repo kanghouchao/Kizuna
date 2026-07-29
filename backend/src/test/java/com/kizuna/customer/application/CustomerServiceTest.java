@@ -13,7 +13,7 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.NotFoundException;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -91,7 +91,7 @@ class CustomerServiceTest {
     when(customerRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> customerService.get("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
 
@@ -152,7 +152,7 @@ class CustomerServiceTest {
     when(customerRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> customerService.update("missing", new CustomerUpdateRequest()))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
 
@@ -168,7 +168,7 @@ class CustomerServiceTest {
     when(customerRepository.existsById("missing")).thenReturn(false);
 
     assertThatThrownBy(() -> customerService.delete("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
 }

@@ -254,7 +254,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
                 shiftBody(foreignCastId, "2026-07-12", "18:00:00", "23:00:00"),
                 storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     // 作成されていないこと（区間 GET に当該 cast_id のシフトが現れない）。
     // 実 DB は実行間で残留し得るため件数一致ではなく「含まない」で判定する。
@@ -288,7 +288,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>("{\"cast_id\": \"" + foreignCastId + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(put.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(put.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     // データ不変: cast_id は自店のキャストのまま
     JsonNode found = findInRange(STORE_A, "from=2026-07-13&to=2026-07-13", shiftId);

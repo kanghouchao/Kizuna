@@ -8,6 +8,7 @@ import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -146,11 +147,11 @@ public class CastInvitationAcceptanceService {
   private CastInvitation findByToken(String token) {
     return castInvitationRepository
         .findByToken(token)
-        .orElseThrow(() -> new ServiceException("招待が見つかりません"));
+        .orElseThrow(() -> new NotFoundException("招待が見つかりません"));
   }
 
   private Cast requireCast(String castId) {
-    return castRepository.findById(castId).orElseThrow(() -> new ServiceException("キャストが見つかりません"));
+    return castRepository.findById(castId).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
   }
 
   private String storeName(Long storeId) {

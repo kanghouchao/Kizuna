@@ -7,7 +7,7 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
@@ -35,7 +35,7 @@ public class CastInvitationService {
 
   /**
    * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 storeFilter により他店舗の档案は見えず
-   * ServiceException となる（越権はインターセプタが先に 403）。
+   * NotFoundException となる（越権はインターセプタが先に 403）。
    *
    * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
    * status = 'PENDING'}）が DB レベルで保証する。 これにより店長の二重クリック等で issue() が並行しても、複数の有効トークンが同時に発行される事態を塞ぐ
@@ -53,7 +53,7 @@ public class CastInvitationService {
     Cast cast =
         castRepository
             .findById(castId)
-            .orElseThrow(() -> new ServiceException("キャストが見つかりません: " + castId));
+            .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
     if (cast.getPlatformUserId() != null) {
       throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }

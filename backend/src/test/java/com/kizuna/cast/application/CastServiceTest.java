@@ -20,6 +20,7 @@ import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.List;
 import java.util.Map;
@@ -116,7 +117,7 @@ class CastServiceTest {
     when(castRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> castService.get("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
 
@@ -244,7 +245,7 @@ class CastServiceTest {
     when(castRepository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> castService.update("missing", new CastUpdateRequest()))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
 
@@ -260,7 +261,7 @@ class CastServiceTest {
     when(castRepository.existsById("missing")).thenReturn(false);
 
     assertThatThrownBy(() -> castService.delete("missing"))
-        .isInstanceOf(ServiceException.class)
+        .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
 

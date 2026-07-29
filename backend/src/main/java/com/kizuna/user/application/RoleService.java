@@ -1,5 +1,6 @@
 package com.kizuna.user.application;
 
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
@@ -14,7 +15,6 @@ import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -63,31 +63,22 @@ public class RoleService {
   }
 
   @Transactional
-  public Optional<RoleResponse> update(Long id, RoleUpdateRequest req) {
+  public RoleResponse update(Long id, RoleUpdateRequest req) {
     Map<Long, String> codesById = requirePermissions(req.getPermissions());
-    return roleRepository
-        .findById(id)
-        .map(
-            role -> {
-              // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
-              // ため、応答で往復させた version を明示比対して 409 で拒否する。
-              if (!role.getVersion().equals(req.getVersion())) {
-                throw new StaleRoleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
-              }
-              role.rename(req.getName());
-              role.replacePermissions(codesById.keySet());
-              return toResponse(save(role), codesById);
-            });
+    Role role = roleRepository.findById(id).orElseThrow(() -> notFound(id));
+    // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
+    // ため、応答で往復させた version を明示比対して 409 で拒否する。
+    if (!role.getVersion().equals(req.getVersion())) {
+      throw new StaleRoleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
+    }
+    role.rename(req.getName());
+    role.replacePermissions(codesById.keySet());
+    return toResponse(save(role), codesById);
   }
 
-  /** 削除する。対象が存在しなければ false（呼び出し側が 404 にする）。 */
   @Transactional
-  public boolean delete(Long id) {
-    Optional<Role> found = roleRepository.findById(id);
-    if (found.isEmpty()) {
-      return false;
-    }
-    Role role = found.get();
+  public void delete(Long id) {
+    Role role = roleRepository.findById(id).orElseThrow(() -> notFound(id));
     if (Boolean.TRUE.equals(role.getSystemRole())) {
       throw new SystemRoleImmutableException("平台既定ロールは削除できません");
     }
@@ -102,7 +93,10 @@ public class RoleService {
     } catch (DataIntegrityViolationException ex) {
       throw new RoleInUseException("授与中のロールは削除できません");
     }
-    return true;
+  }
+
+  private static NotFoundException notFound(Long id) {
+    return new NotFoundException("ロールが見つかりません: " + id);
   }
 
   /** 指定コードが全て権限目録に実在することを検証し、id→コードの対応を返す（応答組立にも使う）。 */

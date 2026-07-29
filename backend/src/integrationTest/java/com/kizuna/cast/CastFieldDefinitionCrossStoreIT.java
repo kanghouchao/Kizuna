@@ -28,7 +28,7 @@ import tools.jackson.databind.JsonNode;
  * （弱い「所有者不一致」ではなく他店舗の値・ラベルが本文に一切現れないことを断言）。
  *
  * <p>定義 CRUD は {@code ROLE_STORE_MANAGER} 限定のため、店舗{1,2} 授権の店長シードユーザー tanaka.hanako を使う。 tanaka
- * は両店舗に授権されるため、越境は「インターセプタのスコープ拒否 403」ではなく「storeFilter による不可視化 → 400（見つからない）」として現れる。純粋なヘッダ詐称 403
+ * は両店舗に授権されるため、越境は「インターセプタのスコープ拒否 403」ではなく「storeFilter による不可視化 → 404（見つからない）」として現れる。純粋なヘッダ詐称 403
  * は基底クラスの yamada（店舗{1} 授権）で別途固定する。
  */
 class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
@@ -110,7 +110,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("他店舗の定義は storeFilter で不可視化され、GET一覧に現れず PUT/DELETE も 400 になること")
+  @DisplayName("他店舗の定義は storeFilter で不可視化され、GET一覧に現れず PUT/DELETE も 404 になること")
   void foreignStoreDefinitionIsInvisibleAndUnmutable() {
     String keyA = "blood_type_" + nonce;
     String idA = createDefinitionAs(STORE_A, keyA, "血液型A", true);
@@ -139,14 +139,14 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
     assertThat(listB.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(listB.getBody()).contains(keyB).contains(labelB);
 
-    // 変更不可: store A 文脈で store B の定義を PUT/DELETE すると不可視で 400
+    // 変更不可: store A 文脈で store B の定義を PUT/DELETE すると不可視で 404（不在と区別がつかない）
     ResponseEntity<JsonNode> putForeign =
         rest.exchange(
             "/store/casts/fields/" + idB,
             HttpMethod.PUT,
             new HttpEntity<>("{\"label\": \"改ざん\"}", managerHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(putForeign.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(putForeign.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     ResponseEntity<JsonNode> deleteForeign =
         rest.exchange(
@@ -154,7 +154,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
             HttpMethod.DELETE,
             new HttpEntity<>(managerHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(deleteForeign.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(deleteForeign.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     // データ不変: store B からは idB の定義がなお見える（改ざん・削除されていない）
     ResponseEntity<String> listBAfter =
@@ -165,7 +165,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
             String.class);
     assertThat(listBAfter.getBody()).contains(labelB);
 
-    // 正向対照: store A は自店舗の定義を更新できる（400 がバリデーション起因でない証明）
+    // 正向対照: store A は自店舗の定義を更新できる（404 がバリデーション起因でない証明）
     ResponseEntity<JsonNode> putOwn =
         rest.exchange(
             "/store/casts/fields/" + idA,
@@ -251,7 +251,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("他店舗を詐称したヘッダは定義エンドポイントでも 403 で拒否され、本文を返さないこと")
+  @DisplayName("他店舗を詐称したヘッダは定義エンドポイントでも 403 で拒否され、他店舗のデータを一切返さないこと")
   void spoofedForeignStoreHeaderIsRejected() {
     // 基底クラスの yamada（店舗{1} 授権）で X-Store-ID: 2 を詐称 → インターセプタのスコープ検証が 403 で弾く。
     ResponseEntity<String> spoofed =
@@ -261,6 +261,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_B)),
             String.class);
     assertThat(spoofed.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-    assertThat(spoofed.getBody()).as("拒否時は本文を返さない").isNullOrEmpty();
+    // 拒否応答は CommonExceptionHandler の固定文言のみ。定義行（key / label）が一つでも混じれば漏洩。
+    assertThat(spoofed.getBody()).contains("アクセス権限がありません").doesNotContain("\"key\"", "\"label\"");
   }
 }

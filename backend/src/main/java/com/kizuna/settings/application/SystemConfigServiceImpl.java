@@ -5,6 +5,7 @@ import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.List;
 import java.util.Optional;
@@ -46,7 +47,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     SystemConfig config =
         systemConfigRepository
             .findByConfigKey(request.getConfigKey())
-            .orElseThrow(() -> new ServiceException("設定キーが見つかりません: " + request.getConfigKey()));
+            .orElseThrow(() -> new NotFoundException("設定キーが見つかりません: " + request.getConfigKey()));
 
     validateValue(config, request.getConfigValue());
     systemConfigMapper.updateEntityFromRequest(request, config);

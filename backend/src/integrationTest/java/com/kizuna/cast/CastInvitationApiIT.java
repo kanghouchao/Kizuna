@@ -213,7 +213,7 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("他店舗の档案 ID を自店文脈から発行しても 400 で拒否され、他店舗のデータが不変であること")
+  @DisplayName("他店舗の档案 ID を自店文脈から発行しても 404 で拒否され、他店舗のデータが不変であること")
   void crossStoreIssueIsRejectedAndForeignDataUnchanged() {
     // リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。
     Cast foreignCast = Cast.builder().name("他店舗機密キャスト").build();
@@ -223,7 +223,7 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
     // tanaka の授権店舗(店舗1)文脈から、他店舗の档案 ID を発行しようとする。
     ResponseEntity<JsonNode> res = issueInvitation(foreignCastId, STORE_A, managerToken);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     // 他店舗の档案には招待が一切作られていない（実データ断言）。
     assertThat(castInvitationRepository.findByCastIdIn(List.of(foreignCastId))).isEmpty();
     // 他店舗の档案の紐づけも変わっていない。

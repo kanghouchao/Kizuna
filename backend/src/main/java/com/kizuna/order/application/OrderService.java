@@ -11,6 +11,7 @@ import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
@@ -65,7 +66,7 @@ public class OrderService {
 
     // 関連 ID の割り当て（存在確認のうえ）
     if (!castRepository.existsById(request.getCastId())) {
-      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
+      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
     order.assignCast(request.getCastId());
     validateReceptionist(request.getReceptionistId());
@@ -79,7 +80,7 @@ public class OrderService {
   @Transactional
   public OrderResponse update(String id, OrderUpdateRequest request) {
     Order order =
-        orderRepository.findById(id).orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
     // 非nullフィールドのみをドメインの部分更新コマンドとして適用
     order.apply(orderMapper.toPatch(request));
@@ -88,7 +89,7 @@ public class OrderService {
     validateReceptionist(request.getReceptionistId());
     order.assignReceptionist(request.getReceptionistId());
     if (!castRepository.existsById(request.getCastId())) {
-      throw new ServiceException("キャストが見つかりません: " + request.getCastId());
+      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
     order.assignCast(request.getCastId());
 
@@ -105,7 +106,7 @@ public class OrderService {
     return orderRepository
         .findViewById(id)
         .map(orderMapper::toResponse)
-        .orElseThrow(() -> new ServiceException("注文が見つかりません: " + id));
+        .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
   }
 
   private OrderStatus parseStatus(String raw) {
@@ -123,7 +124,7 @@ public class OrderService {
     platformUserRepository
         .findById(receptionistId)
         .filter(user -> isEligibleReceptionist(user, storeId, orderManageRoleIds))
-        .orElseThrow(() -> new ServiceException("受付担当者が見つかりません: " + receptionistId));
+        .orElseThrow(() -> new NotFoundException("受付担当者が見つかりません: " + receptionistId));
   }
 
   /**
@@ -168,7 +169,7 @@ public class OrderService {
   @Transactional
   public void delete(String id) {
     if (!orderRepository.existsById(id)) {
-      throw new ServiceException("注文が見つかりません: " + id);
+      throw new NotFoundException("注文が見つかりません: " + id);
     }
     orderRepository.deleteById(id);
   }
@@ -176,7 +177,7 @@ public class OrderService {
   private void handleCustomerLinking(OrderCreateRequest req, Order order) {
     if (req.getCustomerId() != null && !req.getCustomerId().isEmpty()) {
       if (!customerRepository.existsById(req.getCustomerId())) {
-        throw new ServiceException("顧客が見つかりません: " + req.getCustomerId());
+        throw new NotFoundException("顧客が見つかりません: " + req.getCustomerId());
       }
       order.linkCustomer(req.getCustomerId());
     } else if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {

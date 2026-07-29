@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
@@ -153,22 +154,21 @@ class RoleServiceTest {
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
-    Optional<RoleResponse> res =
-        service.update(7L, updateRequest("受付リーダー", Set.of("CUSTOMER_MANAGE"), 0L));
+    RoleResponse res = service.update(7L, updateRequest("受付リーダー", Set.of("CUSTOMER_MANAGE"), 0L));
 
     assertThat(existing.getName()).isEqualTo("受付リーダー");
     assertThat(existing.getPermissionIds()).containsExactly(CUSTOMER_MANAGE_ID);
-    assertThat(res).isPresent();
-    assertThat(res.get().permissions()).containsExactly("CUSTOMER_MANAGE");
+    assertThat(res.permissions()).containsExactly("CUSTOMER_MANAGE");
   }
 
   @Test
-  void update_unknownId_returnsEmpty() {
+  void update_unknownId_throwsNotFound() {
     when(permissionRepository.findByCodeIn(Set.of("ORDER_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE)));
     when(roleRepository.findById(404L)).thenReturn(Optional.empty());
 
-    assertThat(service.update(404L, updateRequest("受付", Set.of("ORDER_MANAGE"), 0L))).isEmpty();
+    assertThatThrownBy(() -> service.update(404L, updateRequest("受付", Set.of("ORDER_MANAGE"), 0L)))
+        .isInstanceOf(NotFoundException.class);
   }
 
   @Test
@@ -201,10 +201,10 @@ class RoleServiceTest {
   }
 
   @Test
-  void delete_unknownId_returnsFalse() {
+  void delete_unknownId_throwsNotFound() {
     when(roleRepository.findById(404L)).thenReturn(Optional.empty());
 
-    assertThat(service.delete(404L)).isFalse();
+    assertThatThrownBy(() -> service.delete(404L)).isInstanceOf(NotFoundException.class);
     verify(roleRepository, never()).delete(any());
   }
 
@@ -214,7 +214,8 @@ class RoleServiceTest {
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
     when(platformUserRepository.existsByRoleId(7L)).thenReturn(false);
 
-    assertThat(service.delete(7L)).isTrue();
+    service.delete(7L);
+
     verify(roleRepository).delete(existing);
   }
 

@@ -1,6 +1,6 @@
 package com.kizuna.storeprofile.application;
 
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
@@ -27,7 +27,7 @@ public class StoreProfileService {
     StoreProfile config =
         storeProfileRepository
             .findByStoreId(storeId)
-            .orElseThrow(() -> new ServiceException("店舗設定が見つかりません"));
+            .orElseThrow(() -> new NotFoundException("店舗設定が見つかりません"));
     return storeProfileMapper.toResponse(config);
   }
 
@@ -38,7 +38,7 @@ public class StoreProfileService {
     StoreProfile config =
         storeProfileRepository
             .findByStoreId(storeId)
-            .orElseThrow(() -> new ServiceException("店舗設定が見つかりません"));
+            .orElseThrow(() -> new NotFoundException("店舗設定が見つかりません"));
     storeProfileMapper.updateEntityFromRequest(request, config);
     return storeProfileMapper.toResponse(storeProfileRepository.saveAndFlush(config));
   }
