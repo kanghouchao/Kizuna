@@ -183,6 +183,88 @@ class PlatformStoreApiIT {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
   }
 
+  // 編集画面は name と email を送る。更新 DTO が受け取らない項目は
+  // fail-on-unknown-properties: false により黙って捨てられ、成功応答だけが返る。
+  // 読み戻しは storeByDomain キャッシュを経ない /{id}（編集画面が実際に読む経路）で行う。
+  @Test
+  @DisplayName("PUT /platform/stores/{id} は email だけの変更を永続化すること")
+  void updateStorePersistsEmail() {
+    String hq = platformToken(HQ_EMAIL);
+    String unique = UUID.randomUUID().toString();
+    String name = "store-it-update-email-" + unique;
+    String id =
+        createStore(
+            hq, name, "store-it-update-email-" + unique + ".kizuna.test", "before@kizuna.test");
+
+    HttpHeaders headers = bearer(hq);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    String body = String.format("{\"name\": \"%s\", \"email\": \"after@kizuna.test\"}", name);
+    ResponseEntity<Void> updated =
+        rest.exchange(
+            "/platform/stores/" + id, HttpMethod.PUT, new HttpEntity<>(body, headers), Void.class);
+    assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+    ResponseEntity<JsonNode> reloaded =
+        rest.exchange(
+            "/platform/stores/" + id, HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
+    assertThat(reloaded.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(reloaded.getBody().path("email").asString()).isEqualTo("after@kizuna.test");
+    assertThat(reloaded.getBody().path("name").asString()).as("name は据え置きのまま").isEqualTo(name);
+  }
+
+  // email を伴わない更新要求で email が null に上書きされないこと。
+  // PUT は全項目の置換であり、必須項目の欠落は保存の手前で拒む。
+  @Test
+  @DisplayName("PUT /platform/stores/{id} は email を欠く要求を 400 で拒むこと")
+  void updateStoreRejectsMissingEmail() {
+    String hq = platformToken(HQ_EMAIL);
+    String unique = UUID.randomUUID().toString();
+    String name = "store-it-update-noemail-" + unique;
+    String id =
+        createStore(
+            hq, name, "store-it-update-noemail-" + unique + ".kizuna.test", "keep@kizuna.test");
+
+    HttpHeaders headers = bearer(hq);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/platform/stores/" + id,
+            HttpMethod.PUT,
+            new HttpEntity<>(String.format("{\"name\": \"%s\"}", name), headers),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<JsonNode> reloaded =
+        rest.exchange(
+            "/platform/stores/" + id, HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
+    assertThat(reloaded.getBody().path("email").asString())
+        .as("拒まれた要求で既存の email が消えないこと")
+        .isEqualTo("keep@kizuna.test");
+  }
+
+  /** 店舗を作成し、その id を返す。POST は 204 で本文を返さないため、一意な name で検索して引く。 */
+  private String createStore(String token, String name, String domain, String email) {
+    HttpHeaders headers = bearer(token);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    String body =
+        String.format(
+            "{\"name\": \"%s\", \"domain\": \"%s\", \"email\": \"%s\"}", name, domain, email);
+    ResponseEntity<Void> created =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
+    assertThat(created.getStatusCode()).as("前提: 店舗が作成されること").isEqualTo(HttpStatus.NO_CONTENT);
+
+    ResponseEntity<JsonNode> found =
+        rest.exchange(
+            "/platform/stores?search=" + name,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(token)),
+            JsonNode.class);
+    assertThat(found.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(found.getBody().path("content").size()).as("前提: 作成した店舗が一意に引けること").isEqualTo(1);
+    return found.getBody().path("content").get(0).path("id").asString();
+  }
+
   @Test
   @DisplayName("GET /platform/stores/lookup?domain= は未認証で 200 と店舗情報を返すこと（受入基準3）")
   void lookupByDomainIsPublic() {

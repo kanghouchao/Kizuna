@@ -87,7 +87,8 @@ public class PlatformStoreController {
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
-  public ResponseEntity<Void> update(@PathVariable String id, @RequestBody StoreUpdateDTO store) {
+  public ResponseEntity<Void> update(
+      @PathVariable String id, @Valid @RequestBody StoreUpdateDTO store) {
     storeRegistryService.update(id, store);
     return ResponseEntity.noContent().build();
   }

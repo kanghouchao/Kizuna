@@ -140,10 +140,28 @@ class StoreRegistryServiceTest {
 
     StoreUpdateDTO req = new StoreUpdateDTO();
     req.setName("New");
+    req.setEmail("o@o.com");
 
     storeRegistryService.update("1", req);
 
     assertThat(t.getName()).isEqualTo("New");
+    verify(storeRepository).save(t);
+  }
+
+  // 編集画面は name と email を送る。email が取り込まれなければ、成功応答だけ返って値が変わらない。
+  @Test
+  void update_modifiesEmail() {
+    Store t = createStore(1L, "Old", "old.com", "before@example.com");
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
+
+    StoreUpdateDTO req = new StoreUpdateDTO();
+    req.setName("Old");
+    req.setEmail("after@example.com");
+
+    storeRegistryService.update("1", req);
+
+    assertThat(t.getEmail()).isEqualTo("after@example.com");
+    assertThat(t.getName()).as("name は据え置きのまま").isEqualTo("Old");
     verify(storeRepository).save(t);
   }
 
@@ -153,6 +171,7 @@ class StoreRegistryServiceTest {
 
     StoreUpdateDTO req = new StoreUpdateDTO();
     req.setName("New");
+    req.setEmail("n@n.com");
 
     assertThatThrownBy(() -> storeRegistryService.update("99", req))
         .isInstanceOf(NotFoundException.class)
