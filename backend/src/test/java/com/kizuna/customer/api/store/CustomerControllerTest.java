@@ -83,4 +83,24 @@ class CustomerControllerTest {
 
     assertThat(searchCaptor.getValue()).isEqualTo("yamada");
   }
+
+  @Test
+  @DisplayName("全角スペースだけの検索語も「指定なし」として service へ渡ること")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void listPassesIdeographicSpaceOnlySearchAsNull() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
+    Page<CustomerResponse> empty = new PageImpl<>(List.of());
+    when(customerService.list(searchCaptor.capture(), any(), any(), any())).thenReturn(empty);
+
+    mockMvc
+        .perform(
+            get("/store/customers")
+                .param("search", "　　")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
+
+    assertThat(searchCaptor.getValue()).isNull();
+  }
 }
