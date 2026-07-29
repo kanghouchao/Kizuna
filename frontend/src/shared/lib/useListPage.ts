@@ -6,7 +6,7 @@ import { PageResult } from '@/shared/api';
 
 const EMPTY_PAGE: PageResult<never> = { rows: [], page: 0, pageCount: 0, total: 0 };
 
-interface ListPageState<T, C> extends PageResult<T> {
+interface ListPageResult<T, C> extends PageResult<T> {
   isLoading: boolean;
   /** 検索条件を適用して 1 ページ目から取り直す */
   search: (criteria: C) => Promise<void>;
@@ -23,17 +23,17 @@ interface ListPageState<T, C> extends PageResult<T> {
 export function useListPage<T>(
   fetcher: (page: number) => Promise<PageResult<T>>,
   errorMessage: string
-): ListPageState<T, void>;
+): ListPageResult<T, void>;
 export function useListPage<T, C>(
   fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
   errorMessage: string,
   initialCriteria: C
-): ListPageState<T, C>;
+): ListPageResult<T, C>;
 export function useListPage<T, C>(
   fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
   errorMessage: string,
   initialCriteria?: C
-): ListPageState<T, C> {
+): ListPageResult<T, C> {
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
   // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する

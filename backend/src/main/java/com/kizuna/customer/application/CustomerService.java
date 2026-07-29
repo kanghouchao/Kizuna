@@ -85,9 +85,7 @@ public class CustomerService {
   @Transactional
   public CustomerResponse update(String id, CustomerUpdateRequest request) {
     Customer customer =
-        customerRepository
-            .findById(id)
-            .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+        customerRepository.findById(id).orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
 
     customer.apply(customerMapper.toPatch(request));
 
