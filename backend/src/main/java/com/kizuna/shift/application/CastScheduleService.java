@@ -2,6 +2,7 @@ package com.kizuna.shift.application;
 
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.api.dto.CastScheduleResponse;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -38,7 +39,7 @@ public class CastScheduleService {
     Long userId =
         platformUserRepository
             .findByEmail(email)
-            .orElseThrow(() -> new ServiceException("ユーザーが見つかりません"))
+            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
             .getId();
     List<String> castIds = castRepository.findIdsByPlatformUserId(userId);
     if (castIds.isEmpty()) {

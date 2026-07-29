@@ -66,6 +66,17 @@ class CommonExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("StaleSessionException は 401 で、内部 message ではなく再ログインを促す固定文言を返す")
+  void staleSessionReturns401() {
+    ResponseEntity<Map<String, Object>> response =
+        handler.handle(new StaleSessionException("認証セッションの主体が存在しません"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).containsEntry("error", "セッションが無効です。再度ログインしてください");
+    assertThat(response.getBody()).doesNotContainValue("認証セッションの主体が存在しません");
+  }
+
+  @Test
   @DisplayName("ServiceUnavailableException は 503")
   void serviceUnavailableReturns503() {
     ResponseEntity<Map<String, Object>> response =

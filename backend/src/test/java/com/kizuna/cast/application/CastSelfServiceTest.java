@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.cast.domain.CastStoreView;
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.List;
@@ -47,8 +47,8 @@ class CastSelfServiceTest {
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.myStores(EMAIL))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("ユーザーが見つかりません");
+        .isInstanceOf(StaleSessionException.class)
+        .hasMessageContaining("認証セッションの主体が存在しません");
 
     verifyNoInteractions(castRepository);
   }

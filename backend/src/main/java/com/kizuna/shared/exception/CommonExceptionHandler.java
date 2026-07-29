@@ -159,6 +159,15 @@ public class CommonExceptionHandler {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
   }
 
+  /** 記録は error 級。到達すれば不変量が壊れており、通常のセッション期限切れに紛れて調査されないことを防ぐ。 */
+  @ExceptionHandler(StaleSessionException.class)
+  public ResponseEntity<Map<String, Object>> handle(StaleSessionException ex) {
+    log.error(ex.getMessage());
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", "セッションが無効です。再度ログインしてください");
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+  }
+
   @ExceptionHandler(ServiceUnavailableException.class)
   public ResponseEntity<Map<String, Object>> handle(ServiceUnavailableException ex) {
     log.warn(ex.getMessage());

@@ -2,7 +2,7 @@ package com.kizuna.cast.application;
 
 import com.kizuna.cast.api.dto.CastStoreResponse;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ public class CastSelfService {
     Long userId =
         platformUserRepository
             .findByEmail(email)
-            .orElseThrow(() -> new ServiceException("ユーザーが見つかりません"))
+            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
             .getId();
     return castRepository.findStoresByPlatformUserId(userId).stream()
         .map(view -> new CastStoreResponse(view.getStoreId(), view.getStoreName()))
