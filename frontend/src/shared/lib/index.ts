@@ -16,6 +16,7 @@ export {
   getStoreIdFromPath,
   isLegacyStorePath,
   isRetiredStorePath,
+  isStoreEntryPath,
   replaceStoreIdInPath,
   resolveStoreHref,
   storePath,

@@ -8,6 +8,7 @@ import { useAuth, useStoreContext } from '@/entities/user';
 import {
   getPlatformStoreId,
   isRetiredStorePath,
+  isStoreEntryPath,
   resolveStoreHref,
   setPlatformStore,
 } from '@/shared/lib';
@@ -29,13 +30,14 @@ function firstStorePath(menus: MenuVO[]): string | undefined {
  * クエリ next（店舗スコープの遷移先テンプレート）を読む。
  * next は利用者が任意に書ける値なので、店舗スコープの相対パス以外は捨てる。
  * '//evil.example' や 'https://…' をそのまま遷移先にすると外部サイトへの誘導になる。
- * 退役ルートも捨てる — 解決すると実在しない画面へ飛ばして 404 になるため、
- * next 無しとして扱い、メニュー由来の着地先へ回す。
+ * 入口ルート自身と退役ルートも捨てる。前者は自分自身への遷移で解決済みの画面に留まり、
+ * 後者は実在しない画面へ飛ばして 404 になる。どちらも next 無しとして扱い、
+ * メニュー由来の着地先へ回す。
  */
 function readNext(): string | undefined {
   const raw = new URLSearchParams(window.location.search).get('next');
   if (!raw || !raw.startsWith('/store') || raw.startsWith('//')) return undefined;
-  if (isRetiredStorePath(raw)) return undefined;
+  if (isStoreEntryPath(raw) || isRetiredStorePath(raw)) return undefined;
   return raw;
 }
 

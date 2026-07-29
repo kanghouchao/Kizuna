@@ -182,6 +182,24 @@ describe('店舗コンソール入口', () => {
     expect(mockedMenuApi.getMenus).not.toHaveBeenCalled();
   });
 
+  it('入口ルート自身は next として受け付けずメニュー由来の着地先へ回す', async () => {
+    // 受け付けると自分自身へ遷移し、解決済みの旗が立っているので読み込み中のまま止まる。
+    window.history.pushState({}, '', '/store/entry?next=%2Fstore%2Fentry');
+
+    render(<StoreEntryPage />);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/5/orders'));
+  });
+
+  it('入口ルート配下も next として受け付けない', async () => {
+    // /store/entry/foo は実在せず、storeId も埋まらないので解決すると 404 になる。
+    window.history.pushState({}, '', '/store/entry?next=%2Fstore%2Fentry%2Ffoo');
+
+    render(<StoreEntryPage />);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/5/orders'));
+  });
+
   it('廃止済みルートは next として復元せずメニュー由来の着地先へ回す', async () => {
     // 復元すると実在しない /store/5/select へ飛ばして 404 になる。
     window.history.pushState({}, '', '/store/entry?next=%2Fstore%2Fselect');
