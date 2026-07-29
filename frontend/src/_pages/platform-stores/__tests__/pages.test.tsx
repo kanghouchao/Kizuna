@@ -17,10 +17,6 @@ jest.mock('@/entities/store', () => ({
   },
 }));
 
-jest.mock('@/entities/user', () => ({
-  useAuth: () => ({ logout: jest.fn() }),
-}));
-
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useParams: () => ({ id: '1' }),
@@ -68,6 +64,21 @@ describe('店舗管理 3 画面の挙動', () => {
 
     expect(await screen.findByText('アルファ店')).toBeInTheDocument();
     expect(screen.getByText('ベータ店')).toBeInTheDocument();
+  });
+
+  // ドメインは店舗サイトへの導線。別ホストのため管理コンソールを閉じずに別タブで開く。
+  it('一覧はドメインを別タブで開く店舗サイトのリンクとして表示すること', async () => {
+    mockedApi.getList.mockResolvedValue(
+      paginated([store({ id: '1', domain: 'alpha.example.com' })])
+    );
+
+    render(<StoresPage />);
+
+    const link = await screen.findByRole('link', { name: /alpha\.example\.com/ });
+    // プロトコル相対 URL。開発は http、本番は https と、現在のスキームを引き継ぐ
+    expect(link).toHaveAttribute('href', '//alpha.example.com');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
