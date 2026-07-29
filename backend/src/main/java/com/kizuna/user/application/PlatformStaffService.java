@@ -119,6 +119,19 @@ public class PlatformStaffService {
     return toResponse(save(user), roleNames);
   }
 
+  /**
+   * 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。
+   *
+   * <p>対象の本人種別がスタッフ以外（CAST/MEMBER）なら不可視として空を返す（list/update と同じ扱い）。
+   */
+  @Transactional(readOnly = true)
+  public Optional<PlatformStaffResponse> get(Long id) {
+    return repository
+        .findById(id)
+        .filter(user -> user.getUserType() == UserType.STAFF)
+        .map(user -> toResponse(user, roleNamesOf(user.getRoleIds())));
+  }
+
   @Transactional
   public Optional<PlatformStaffResponse> update(
       Long id, PlatformStaffUpdateRequest req, String actorEmail) {

@@ -25,6 +25,10 @@ describe('platformStaffApi', () => {
       params: { page: 1, size: 10, search: '山田' },
     });
   });
+  it('get は /platform/staff/{id} を GET する', async () => {
+    const res = await platformStaffApi.get(7);
+    expect(res).toEqual({ ok: true, url: '/platform/staff/7' });
+  });
   it('create は /platform/staff を POST する', async () => {
     const res = await platformStaffApi.create({
       email: 'staff@example.com',
