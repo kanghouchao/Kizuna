@@ -38,6 +38,15 @@ public class PlatformStaffController {
     return ResponseEntity.ok(platformStaffService.list(search, pageable));
   }
 
+  @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
+  public ResponseEntity<PlatformStaffResponse> get(@PathVariable Long id) {
+    return platformStaffService
+        .get(id)
+        .map(ResponseEntity::ok)
+        .orElseGet(() -> ResponseEntity.notFound().build());
+  }
+
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> create(

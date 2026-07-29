@@ -1,7 +1,7 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   PlatformStaffResponse,
   PlatformStore,
@@ -64,14 +64,26 @@ export default function StaffPage() {
   // 他の管理者の追加で行が次ページへずれる等）にモーダルが黙って閉じ、
   // 「最新の内容を確認してください」と言いながら内容を見せない状態になる。
   const [editingStaff, setEditingStaff] = useState<PlatformStaffResponse | null>(null);
-  // 再取得した頁に対象が居れば最新値へ差し替える（これが 409 リフレッシュの本体）。
-  // 居なければ直前の値を保つ — 版が古いままなので再試行は再び 409 になるが、
-  // 競合を伝えたうえで利用者が閉じるか取り直すかを選べる。
-  useEffect(() => {
-    setEditingStaff(current =>
-      current ? (staff.find(member => member.id === current.id) ?? current) : current
-    );
-  }, [staff]);
+
+  /**
+   * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
+   *
+   * 競合（409）でモーダルが開いたままのとき、最新の版を渡せて初めて再試行が通る。
+   * 一覧の現在ページから導出すると対象が頁の外にいる場合に古い版のままとなり、
+   * 再試行が 409 を繰り返すため、頁とは無関係な id 取得で最新化する。
+   */
+  const handleEditUpdated = () => {
+    void list.reload();
+    const target = editingStaff;
+    if (!target) return;
+    void platformStaffApi
+      .get(target.id)
+      // 成功保存の直後は onClose と競合するため、まだ同じ対象を開いているときだけ差し替える
+      .then(fresh => setEditingStaff(current => (current?.id === fresh.id ? fresh : current)))
+      .catch(() => {
+        // 取り直せない（削除済み等）ときは古い値のまま。利用者は閉じて一覧から確認できる
+      });
+  };
 
   return (
     <>
@@ -192,7 +204,7 @@ export default function StaffPage() {
         open={editingStaff !== null}
         staff={editingStaff}
         onClose={() => setEditingStaff(null)}
-        onUpdated={list.reload}
+        onUpdated={handleEditUpdated}
       />
     </>
   );

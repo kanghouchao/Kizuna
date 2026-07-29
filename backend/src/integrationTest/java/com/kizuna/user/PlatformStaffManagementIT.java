@@ -397,6 +397,42 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     assertThat(none.getBody().path("total_elements").asLong()).isZero();
   }
 
+  // 一覧の現在ページに居ない対象でも最新の版を取り直せる経路（競合後の再試行に要る）。
+  // 一覧・作成と同じく CAST/MEMBER は不可視のため 404。
+  @Test
+  @DisplayName("GET /platform/staff/{id} は STAFF を返し、CAST は 404 になること")
+  void getStaffByIdReturnsStaffAndHidesCast() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    long staffId = platformUserRepository.findByEmail(NON_HQ_EMAIL).orElseThrow().getId();
+    long castId = platformUserRepository.findByEmail(CAST_CANARY_EMAIL).orElseThrow().getId();
+
+    ResponseEntity<JsonNode> found =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            JsonNode.class);
+    assertThat(found.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(found.getBody().path("email").asString()).isEqualTo(NON_HQ_EMAIL);
+    assertThat(found.getBody().path("version").isNumber()).isTrue();
+
+    ResponseEntity<String> cast =
+        rest.exchange(
+            "/platform/staff/" + castId,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            String.class);
+    assertThat(cast.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    ResponseEntity<String> forbidden =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(NON_HQ_EMAIL, PASSWORD))),
+            String.class);
+    assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
   // "staff-it-n_nhq" は _ をワイルドカードとして扱うと staff-it-nonhq に一致してしまう。
   // 検索語は字面として照合されるべきなので 0 件が正。
   @Test

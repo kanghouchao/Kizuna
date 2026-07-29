@@ -21,6 +21,11 @@ export const platformStaffApi = {
     });
     return fromSpringPage(response.data);
   },
+  /** 1 件取得。競合後に一覧の現在ページへ居ない対象の最新版を取り直すために使う。 */
+  get: async (id: number): Promise<PlatformStaffResponse> => {
+    const response = await apiClient.get(`/platform/staff/${id}`);
+    return response.data;
+  },
   create: async (data: PlatformStaffCreateRequest): Promise<PlatformStaffResponse> => {
     const response = await apiClient.post('/platform/staff', data);
     return response.data;

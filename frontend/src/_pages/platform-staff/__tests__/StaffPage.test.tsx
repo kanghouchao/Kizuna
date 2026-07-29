@@ -4,7 +4,7 @@ import { PlatformStaffResponse, platformAuthApi, platformStaffApi } from '@/enti
 import StaffPage from '../ui/StaffPage';
 
 jest.mock('@/entities/user', () => ({
-  platformStaffApi: { list: jest.fn() },
+  platformStaffApi: { list: jest.fn(), get: jest.fn() },
   platformAuthApi: { stores: jest.fn() },
 }));
 
@@ -114,29 +114,36 @@ describe('スタッフ一覧ページ', () => {
   });
 
   // 409 の再取得は「最新の内容を確認してください」と言うための導線。対象が現在ページから
-  // 外れても（本人の改名で検索から外れる・他の追加で次ページへずれる）モーダルは閉じない。
-  it('再取得で対象が現在ページから外れても編集モーダルは閉じないこと', async () => {
+  // 外れても（本人の改名で検索から外れる・他の追加で次ページへずれる）モーダルは閉じず、
+  // 版が古いまま再試行が 409 を繰り返さないよう id で最新値を取り直す。
+  it('再取得で対象が現在ページから外れても、id で最新値を取り直してモーダルを開いたままにすること', async () => {
+    mockedStaffApi.get.mockResolvedValue(
+      staff({ id: 2, display_name: '鈴木花子（改名後）', version: 3 })
+    );
+
     render(<StaffPage />);
     fireEvent.click(await screen.findByText('鈴木花子'));
     expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
+
+    // 再取得後の頁には対象が居ない
+    mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
+    fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
+
+    expect(await screen.findByText('編集モーダル:鈴木花子（改名後）')).toBeInTheDocument();
+    expect(mockedStaffApi.get).toHaveBeenCalledWith(2);
+  });
+
+  it('対象を取り直せなくてもモーダルは閉じないこと', async () => {
+    mockedStaffApi.get.mockRejectedValue(new Error('not found'));
+
+    render(<StaffPage />);
+    fireEvent.click(await screen.findByText('鈴木花子'));
 
     mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
     fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
 
-    await waitFor(() => expect(mockedStaffApi.list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockedStaffApi.get).toHaveBeenCalledWith(2));
     expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
-  });
-
-  it('再取得で対象が現在ページに居れば最新値へ差し替わること', async () => {
-    render(<StaffPage />);
-    fireEvent.click(await screen.findByText('鈴木花子'));
-
-    mockedStaffApi.list.mockResolvedValue(
-      paginated([staff({ id: 2, display_name: '鈴木花子（改名後）' })])
-    );
-    fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
-
-    expect(await screen.findByText('編集モーダル:鈴木花子（改名後）')).toBeInTheDocument();
   });
 
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
