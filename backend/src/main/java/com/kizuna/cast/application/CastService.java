@@ -52,7 +52,7 @@ public class CastService {
   @Transactional(readOnly = true)
   public CastResponse get(String id) {
     Cast cast =
-        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + id));
+        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
     CastInvitationStatus status = castInvitationService.deriveStatuses(List.of(cast)).get(id);
     return castMapper.toResponse(cast, status);
   }
@@ -79,7 +79,7 @@ public class CastService {
   @Transactional
   public CastResponse update(String id, CastUpdateRequest request) {
     Cast cast =
-        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + id));
+        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
 
     CastPatch patch = castMapper.toPatch(request);
     if (patch.customFields() != null) {
@@ -112,7 +112,7 @@ public class CastService {
   @Transactional
   public void delete(String id) {
     if (!castRepository.existsById(id)) {
-      throw new NotFoundException("キャストが見つかりません: " + id);
+      throw new NotFoundException("キャストが見つかりません");
     }
     castRepository.deleteById(id);
   }

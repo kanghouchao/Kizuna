@@ -3,6 +3,7 @@ export { default as redirectToLogin } from './navigation';
 export { getApiErrorMessage, isConflict } from './apiError';
 export { useManagedList } from './useManagedList';
 export { useListPage } from './useListPage';
+export { useDeleteAction } from './useDeleteAction';
 export {
   clearPlatformSession,
   getPlatformConsole,

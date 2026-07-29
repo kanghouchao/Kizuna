@@ -2,9 +2,8 @@
 
 import { PlusIcon } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { RoleResponse, platformRoleApi } from '@/entities/user';
-import { getApiErrorMessage, useManagedList } from '@/shared/lib';
+import { useDeleteAction, useManagedList } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -44,19 +43,13 @@ export default function RolesPage() {
   const editingRole =
     typeof formTarget === 'number' ? (allRoles.find(role => role.id === formTarget) ?? null) : null;
   const formOpen = formTarget === 'create' || editingRole !== null;
-  const [deleteTarget, setDeleteTarget] = useState<RoleResponse | null>(null);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await platformRoleApi.remove(deleteTarget.id);
-      toast.success('ロールを削除しました');
-      void refetch();
-    } catch (error) {
-      // 授与中のロール削除は 409、平台既定ロールは 400。文言はサーバ側が持つ。
-      toast.error(getApiErrorMessage(error, 'ロールの削除に失敗しました'));
-    }
-  };
+  // 授与中のロール削除は 409、平台既定ロールは 400。文言はサーバ側が持つ。
+  const deletion = useDeleteAction<RoleResponse>({
+    remove: role => platformRoleApi.remove(role.id),
+    successMessage: 'ロールを削除しました',
+    errorMessage: 'ロールの削除に失敗しました',
+    onDeleted: refetch,
+  });
 
   return (
     <>
@@ -158,7 +151,7 @@ export default function RolesPage() {
                     size="sm"
                     className="text-destructive-strong"
                     disabled={role.system}
-                    onClick={() => setDeleteTarget(role)}
+                    onClick={() => deletion.ask(role)}
                   >
                     削除
                   </Button>
@@ -177,11 +170,11 @@ export default function RolesPage() {
         onSaved={refetch}
       />
       <ConfirmDialog
-        open={deleteTarget !== null}
-        title={`${deleteTarget?.name ?? ''} を削除しますか？`}
+        open={deletion.target !== null}
+        title={`${deletion.target?.name ?? ''} を削除しますか？`}
         description="このロールを付与されているスタッフがいる場合は削除できません。"
-        onConfirm={handleDelete}
-        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void deletion.confirm()}
+        onClose={deletion.cancel}
       />
     </>
   );

@@ -26,7 +26,9 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
+  // 作成・編集は既定 export、削除（useDeleteAction）は名前付き export を使う
   default: { success: jest.fn(), error: jest.fn() },
+  toast: { success: jest.fn(), error: jest.fn() },
 }));
 
 const mockedApi = platformStoreApi as jest.Mocked<typeof platformStoreApi>;

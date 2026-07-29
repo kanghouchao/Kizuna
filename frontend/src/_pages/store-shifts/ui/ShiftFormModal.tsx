@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
+import { getApiErrorMessage } from '@/shared/lib';
 import {
   Button,
   ConfirmDialog,
@@ -132,8 +133,8 @@ export function ShiftFormModal({
       toast.success('シフトを削除しました');
       onSaved();
       onClose();
-    } catch {
-      toast.error('シフトの削除に失敗しました');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'シフトの削除に失敗しました'));
     }
   };
 

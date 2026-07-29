@@ -71,7 +71,7 @@ public class CastFieldDefinitionService {
     CastFieldDefinition definition =
         repository
             .findById(id)
-            .orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません: " + id));
+            .orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
     definition.apply(mapper.toPatch(request));
     return mapper.toResponse(repository.save(definition));
   }
@@ -80,7 +80,7 @@ public class CastFieldDefinitionService {
   @Transactional
   public void delete(String id) {
     if (!repository.existsById(id)) {
-      throw new NotFoundException("カスタムフィールド定義が見つかりません: " + id);
+      throw new NotFoundException("カスタムフィールド定義が見つかりません");
     }
     repository.deleteById(id);
   }

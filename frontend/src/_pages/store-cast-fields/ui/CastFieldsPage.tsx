@@ -3,7 +3,7 @@
 import { PlusIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
-import { useManagedList } from '@/shared/lib';
+import { useDeleteAction, useManagedList } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -16,7 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
-import { toast } from 'react-hot-toast';
 import { CastFieldCreateModal } from './CastFieldCreateModal';
 import { CastFieldEditModal } from './CastFieldEditModal';
 
@@ -32,18 +31,12 @@ export default function CastFieldsPage() {
   );
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CastFieldDefinitionResponse | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<CastFieldDefinitionResponse | null>(null);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await castFieldDefinitionApi.delete(deleteTarget.id);
-      toast.success('フィールドを削除しました');
-      void refetch();
-    } catch {
-      toast.error('フィールドの削除に失敗しました');
-    }
-  };
+  const deletion = useDeleteAction<CastFieldDefinitionResponse>({
+    remove: definition => castFieldDefinitionApi.delete(definition.id),
+    successMessage: 'フィールドを削除しました',
+    errorMessage: 'フィールドの削除に失敗しました',
+    onDeleted: refetch,
+  });
 
   return (
     <>
@@ -106,7 +99,7 @@ export default function CastFieldsPage() {
                       variant="ghost"
                       size="icon-sm"
                       aria-label="削除"
-                      onClick={() => setDeleteTarget(definition)}
+                      onClick={() => deletion.ask(definition)}
                     >
                       <Trash2Icon />
                     </Button>
@@ -131,10 +124,10 @@ export default function CastFieldsPage() {
         onUpdated={refetch}
       />
       <ConfirmDialog
-        open={deleteTarget !== null}
-        title={deleteTarget ? `「${deleteTarget.label}」を削除しますか？` : ''}
-        onConfirm={() => void handleDelete()}
-        onClose={() => setDeleteTarget(null)}
+        open={deletion.target !== null}
+        title={deletion.target ? `「${deletion.target.label}」を削除しますか？` : ''}
+        onConfirm={() => void deletion.confirm()}
+        onClose={deletion.cancel}
       />
     </>
   );
