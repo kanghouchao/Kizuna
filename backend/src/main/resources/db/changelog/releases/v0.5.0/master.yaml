@@ -1,0 +1,6 @@
+# v0.5.0 = 権限目録と平台既定ロールへの授与をコード側宣言（PermissionCode）からの播種へ移す。
+# 構成は v0.1.0 と同じ platform / store / seed の 3 層のうち seed のみ。
+databaseChangeLog:
+  - include:
+      file: seed/01-permission-catalogue.yaml
+      relativeToChangelogFile: true

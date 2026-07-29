@@ -1,66 +1,71 @@
 package com.kizuna.user.domain;
 
+import java.util.Set;
 import lombok.Getter;
 
 /**
  * 機能権限コードの目録。授権モデル「ロール × 担当店舗集合」の権限次元を表す。
  *
- * <p>権限は端点から静的に参照されるためデプロイと生命周期を共にするコード定義とし、DB の t_permissions 行は本 enum
- * の播種済み写像である（追加はコード変更と播種を伴う）。ロールは DB データとして自由に増減できる。
+ * <p>権限は端点から静的に参照されるためデプロイと生命周期を共にするコード定義とし、DB の t_permissions 行と平台既定ロールへの授与は本 enum
+ * の宣言から播種が導出する（追加はここへ成員を足すだけで足り、目録行や既定授与の手書きは要らない）。利用者自作のロールは DB データとして自由に増減できる。
  *
  * <p>各権限の javadoc に操作単位（閲覧・登録・更新・確定・公開・出力 等）を明示する。SecurityContext への発行は {@link
  * Authorities#permission(String)}（{@code PERM_} 接頭辞）を経由する。
+ *
+ * <p>{@code defaultRoles} は既定で授与する平台既定ロールの列挙で、省略は「どの既定ロールにも与えない」を意味する — 新しい権限が黙って既存ロールへ流れ込まないための
+ * fail-closed である。播種は授与を取り消さないため、既に播種済みの権限について宣言を減らす変更には明示的な移行 changeset を要する。
  */
 @Getter
 public enum PermissionCode {
 
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
-  STORE_MANAGE(Console.PLATFORM),
+  STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
   /** 社内アカウント・権限の閲覧・付与・変更・停止とロールの管理（PlatformStaffController / RoleController）。 */
-  STAFF_MANAGE(Console.PLATFORM),
+  STAFF_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
   /** 共通設定の閲覧・更新（PlatformConfigController）。 */
-  SYSTEM_CONFIG_MANAGE(Console.PLATFORM),
+  SYSTEM_CONFIG_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
   /** プラットフォームコンソールメニューの標識権限。 */
-  PLATFORM_MENU_VIEW(Console.PLATFORM),
+  PLATFORM_MENU_VIEW(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
   /** プラットフォーム共有領域への資産アップロード（登録・出力 — FileUploadController の platform 保存経路）。 */
-  PLATFORM_ASSET_MANAGE(Console.PLATFORM),
+  PLATFORM_ASSET_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
   /** 授権店舗一覧の閲覧（PlatformStoreController）。 */
-  STORE_VIEW(Console.SHARED),
+  STORE_VIEW(Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** 授権店舗集合を跨ぐ受注の閲覧と、明示単一店舗指定での登録（PlatformOrderController）。 */
-  ORDER_SET_MANAGE(Console.SHARED),
+  ORDER_SET_MANAGE(
+      Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
-  ORDER_MANAGE(Console.STORE),
+  ORDER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** 顧客の閲覧・登録・更新・削除（CustomerController）。 */
-  CUSTOMER_MANAGE(Console.STORE),
+  CUSTOMER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** 出勤（シフト）の閲覧・登録・更新（ShiftController）。 */
-  SHIFT_MANAGE(Console.STORE),
+  SHIFT_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** 在籍キャストの閲覧・登録・更新・削除（CastController）。 */
-  CAST_MANAGE(Console.STORE),
+  CAST_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** キャスト招待の発行（確定系操作 — CastController の招待端点）。 */
-  CAST_INVITE(Console.STORE),
+  CAST_INVITE(Console.STORE, SystemRole.STORE_MANAGER),
 
   /** キャストカスタム項目定義の閲覧（CastFieldDefinitionController）。 */
-  CAST_FIELD_DEF_VIEW(Console.STORE),
+  CAST_FIELD_DEF_VIEW(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** キャストカスタム項目定義の登録・更新・削除（CastFieldDefinitionController）。 */
-  CAST_FIELD_DEF_MANAGE(Console.STORE),
+  CAST_FIELD_DEF_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
 
   /** 店舗公開プロフィールの閲覧・更新・公開（StoreProfileController）。 */
-  STORE_PROFILE_MANAGE(Console.STORE),
+  STORE_PROFILE_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** 店舗コンソールメニューの標識権限。 */
-  STORE_MENU_VIEW(Console.STORE);
+  STORE_MENU_VIEW(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF);
 
   /** 権限が属するコンソール。ログイン後の着地先導出と店舗文脈ブリッジ（storeBridge claim）の判定に用いる。 */
   public enum Console {
@@ -74,8 +79,11 @@ public enum PermissionCode {
 
   private final Console console;
 
-  PermissionCode(Console console) {
+  private final Set<SystemRole> defaultRoles;
+
+  PermissionCode(Console console, SystemRole... defaultRoles) {
     this.console = console;
+    this.defaultRoles = Set.of(defaultRoles);
   }
 
   /** SecurityContext 上の authority 表現（例: PERM_ORDER_MANAGE）を返す。 */
