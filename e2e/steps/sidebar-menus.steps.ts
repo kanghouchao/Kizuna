@@ -3,7 +3,7 @@ import { createBdd } from 'playwright-bdd';
 
 const { Then, When } = createBdd();
 
-// ログイン系ステップ（統一ログイン画面を開く / メール...でログインする / 中央・店舗ダッシュボードへ遷移する）
+// ログイン系ステップ（統一ログイン画面を開く / メール...でログインする / 中央ダッシュボード・店舗業務画面へ遷移する）
 // は platform-login.steps.ts の定義を再利用する（playwright-bdd は steps/**/*.ts を横断解決するため
 // 同一ステップ文言の再定義は不要）。
 

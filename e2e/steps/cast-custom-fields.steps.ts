@@ -25,7 +25,7 @@ let createdFieldLabel = '';
 let currentCastId = '';
 let currentCastName = '';
 // ルート移設（#413）で店舗管理画面 URL に storeId が必須になった。ログイン着地先の
-// /store/{id}/dashboard から読み取り、以降の管理画面遷移で使う（seed id をハードコードしない）。
+// ログイン後の着地 URL /store/{id}/... から読み取り、以降の管理画面遷移で使う（seed id をハードコードしない）。
 // 公開詳細ページ（/casts/{id}）遷移後は URL に店舗文脈が残らないため、現在 URL からの都度解決ではなく
 // ログイン時に確定した値を保持する。
 let storeId = '';
