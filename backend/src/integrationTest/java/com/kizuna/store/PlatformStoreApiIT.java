@@ -381,6 +381,54 @@ class PlatformStoreApiIT {
     assertThat(literal.getBody().path("total_elements").asLong()).isEqualTo(1);
   }
 
+  // /lookup は @Cacheable("storeByDomain") 経由。更新でキャッシュを失効させないと、未認証で叩ける
+  // 公開照会が古い StoreVO を返し続ける（frontend の middleware が店舗解決に使う経路）。
+  // StoreVO は name と email を含むため、更新できる項目はいずれも陳腐化する。
+  @Test
+  @DisplayName("PUT /platform/stores/{id} の後、GET /platform/stores/lookup が更新後の値を返すこと")
+  void updateInvalidatesDomainLookupCache() {
+    String hq = platformToken(HQ_EMAIL);
+    String unique = UUID.randomUUID().toString();
+    String originalName = "store-it-cache-evict-" + unique;
+    String domain = "store-it-cache-evict-" + unique + ".kizuna.test";
+    String id = createStore(hq, originalName, domain, "before@kizuna.test");
+
+    // 更新前に一度引いてキャッシュへ載せる（これを省くと失効の有無を判定できない）
+    ResponseEntity<JsonNode> beforeUpdate =
+        rest.exchange(
+            "/platform/stores/lookup?domain=" + domain,
+            HttpMethod.GET,
+            HttpEntity.EMPTY,
+            JsonNode.class);
+    assertThat(beforeUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(beforeUpdate.getBody().path("name").asString()).isEqualTo(originalName);
+    assertThat(beforeUpdate.getBody().path("email").asString()).isEqualTo("before@kizuna.test");
+
+    HttpHeaders headers = bearer(hq);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    String updatedName = originalName + "-updated";
+    String body =
+        String.format("{\"name\": \"%s\", \"email\": \"after@kizuna.test\"}", updatedName);
+    ResponseEntity<Void> updated =
+        rest.exchange(
+            "/platform/stores/" + id, HttpMethod.PUT, new HttpEntity<>(body, headers), Void.class);
+    assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+    ResponseEntity<JsonNode> afterUpdate =
+        rest.exchange(
+            "/platform/stores/lookup?domain=" + domain,
+            HttpMethod.GET,
+            HttpEntity.EMPTY,
+            JsonNode.class);
+    assertThat(afterUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(afterUpdate.getBody().path("name").asString())
+        .as("公開照会が更新後の店舗名を返すこと")
+        .isEqualTo(updatedName);
+    assertThat(afterUpdate.getBody().path("email").asString())
+        .as("公開照会が更新後の email を返すこと")
+        .isEqualTo("after@kizuna.test");
+  }
+
   @Test
   @DisplayName("GET /platform/stores/me は店長トークンで 200 と授権店舗(1,2)のみを返すこと（受入基準3）")
   void meReturnsAuthorizedStoresOnly() {

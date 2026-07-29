@@ -69,7 +69,10 @@ public class StoreRegistryService {
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
   }
 
+  // storeByDomain のキーは domain。だが注釈の式から見えるのは引数の id と戻り値（void）だけで、
+  // domain はメソッド本体のローカルにしか現れずキーとして書けない。delete と同じ全件失効に揃える。
   @Transactional
+  @CacheEvict(value = "storeByDomain", allEntries = true)
   public void update(String id, StoreUpdateDTO req) {
     var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
     store.setName(req.getName());
