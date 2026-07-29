@@ -110,6 +110,22 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  // 上の境界の反対側: 63 文字ちょうどのラベルは解決可能なので、正しくリンク化されること
+  // （正規表現が過度に厳しくなっていないことの確認）。
+  it('ラベルが 63 文字ちょうどのドメインはリンクにすること', async () => {
+    const maxLabel = 'a'.repeat(63);
+    mockedApi.getList.mockResolvedValue(
+      paginated([store({ id: '1', domain: `${maxLabel}.example.com` })])
+    );
+
+    render(<StoresPage />);
+
+    const link = await screen.findByRole('link', {
+      name: new RegExp(`${maxLabel}\\.example\\.com`),
+    });
+    expect(link).toHaveAttribute('href', `//${maxLabel}.example.com`);
+  });
+
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
     render(<StoresPage />);
     await waitFor(() => expect(mockedApi.getList).toHaveBeenCalled());
