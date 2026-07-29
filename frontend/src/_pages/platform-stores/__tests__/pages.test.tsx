@@ -96,6 +96,20 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  // DNS のラベル上限は 63 文字。64 文字以上のラベルは名前解決できず到達不能になるため、
+  // 有効なリンクとして描画してはならない。
+  it('ラベルが 64 文字以上のドメインはリンクにしないこと', async () => {
+    const overlongLabel = 'a'.repeat(64);
+    mockedApi.getList.mockResolvedValue(
+      paginated([store({ id: '1', domain: `${overlongLabel}.example.com` })])
+    );
+
+    render(<StoresPage />);
+
+    expect(await screen.findByText(`${overlongLabel}.example.com`)).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
     render(<StoresPage />);
     await waitFor(() => expect(mockedApi.getList).toHaveBeenCalled());
