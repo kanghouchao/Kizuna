@@ -63,4 +63,49 @@ class StoreProfileRoundtripIT extends CrossStoreTestSupport {
     assertThat(reget.getBody().path("catch_copy").asString()).isEqualTo(unique);
     assertThat(reget.getBody().path("id").asString()).as("id は更新後も不変であること").isEqualTo(id);
   }
+
+  /**
+   * jsonb コレクション（sns_links・partner_links）を含む更新経路を固定する。
+   *
+   * <p>要素型が Serializable でないと hypersistence-utils の深いコピーが実行時に失敗し 500 になる。空配列では深いコピーが走らないため、 要素が 1
+   * 件以上あるペイロードでなければこの経路は検証できない。
+   */
+  @Test
+  @DisplayName("/store/config は要素を持つ sns_links・partner_links を含む PUT を永続化できること")
+  void configPutPersistsNonEmptyJsonbCollections() {
+    String label = "IT_sns_" + System.nanoTime();
+    String partner = "IT_partner_" + System.nanoTime();
+    String body =
+        """
+        {"sns_links": [{"platform": "x", "url": "https://example.com/sns", "label": "%s"}],
+         "partner_links": [{"name": "%s", "url": "https://example.com/partner", "logo_url": ""}]}
+        """
+            .formatted(label, partner);
+
+    ResponseEntity<JsonNode> put =
+        rest.exchange(
+            "/store/config",
+            HttpMethod.PUT,
+            new HttpEntity<>(body, storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(put.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(put.getBody().path("sns_links").path(0).path("label").asString()).isEqualTo(label);
+    assertThat(put.getBody().path("partner_links").path(0).path("name").asString())
+        .isEqualTo(partner);
+
+    ResponseEntity<JsonNode> reget =
+        rest.exchange(
+            "/store/config",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(reget.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode snsLink = reget.getBody().path("sns_links").path(0);
+    assertThat(snsLink.path("platform").asString()).isEqualTo("x");
+    assertThat(snsLink.path("url").asString()).isEqualTo("https://example.com/sns");
+    assertThat(snsLink.path("label").asString()).isEqualTo(label);
+    JsonNode partnerLink = reget.getBody().path("partner_links").path(0);
+    assertThat(partnerLink.path("name").asString()).isEqualTo(partner);
+    assertThat(partnerLink.path("url").asString()).isEqualTo("https://example.com/partner");
+  }
 }
