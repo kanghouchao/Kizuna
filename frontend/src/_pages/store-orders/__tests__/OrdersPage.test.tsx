@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
 import { orderApi } from '@/entities/order';
+import { castApi } from '@/entities/cast';
 
 jest.mock('@/entities/order', () => ({
   orderApi: {
@@ -17,6 +18,8 @@ jest.mock('@/entities/cast', () => ({
     list: jest.fn(),
   },
 }));
+
+const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
@@ -138,11 +141,21 @@ describe('店側オーダー画面の描画', () => {
   it('新規登録はバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
     mockedOrderApi.create.mockResolvedValue({});
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
+    mockedCastApi.list.mockResolvedValue({
+      rows: [{ id: 'cast-1', name: '花子' }],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
 
     render(<CreateOrderPage />);
-    // 受付はサーバ側が @NotNull。選ばないと送信自体が止まる。
+    // 受付・キャストはサーバ側が @NotNull / @NotBlank。選ばないと送信自体が止まる。
     fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付/ }), { key: 'ArrowDown' });
     fireEvent.click(await screen.findByRole('option', { name: '受付花子' }));
+    fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
+      target: { value: '花' },
+    });
+    fireEvent.click(await screen.findByRole('option', { name: /花子/ }));
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
 
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
@@ -155,6 +168,7 @@ describe('店側オーダー画面の描画', () => {
     expect(body).toHaveProperty('discount_name', '');
     // 受付は Java 側が Long。文字列ではなく数値で送る。
     expect(body).toHaveProperty('receptionist_id', 7);
+    expect(body).toHaveProperty('cast_id', 'cast-1');
     expect(body).not.toHaveProperty('store_name');
     expect(body).not.toHaveProperty('storeName');
     expect(body).not.toHaveProperty('businessDate');

@@ -25,7 +25,10 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 
 function renderForm() {
   const onSubmit = jest.fn<void, [OrderFormData]>();
-  const view = render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+  // キャストもサーバ側が @NotBlank。ここでの主題ではないため初期値で満たしておく。
+  const view = render(
+    <OrderForm initialData={{ castId: 'cast-1' }} onSubmit={onSubmit} isSubmitting={false} />
+  );
   return { ...view, onSubmit };
 }
 
@@ -52,6 +55,10 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   beforeEach(() => {
     jest.clearAllMocks();
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
+    (castApi as jest.Mocked<typeof castApi>).get.mockResolvedValue({
+      id: 'cast-1',
+      name: '花子',
+    });
   });
 
   it('受付以外を未操作のまま送ると既定値が型ごとそのまま送られること', async () => {
@@ -165,7 +172,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
 
   /** 入力→デバウンス経過→候補描画までを進める。 */
   const openSuggestions = async () => {
-    fireEvent.change(screen.getByRole('combobox', { name: 'キャスト' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
       target: { value: '花' },
     });
     await act(async () => {
@@ -182,7 +189,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     await openSuggestions();
     fireEvent.click(screen.getByRole('option', { name: /花子/ }));
 
-    expect(screen.getByRole('combobox', { name: 'キャスト' })).toHaveValue('花子');
+    expect(screen.getByRole('combobox', { name: /キャスト/ })).toHaveValue('花子');
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
     await act(async () => {
       jest.advanceTimersByTime(0);
@@ -191,7 +198,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     expect(onSubmit.mock.calls[0][0].castId).toBe('cast-1');
   });
 
-  it('候補選択後に名前を打ち直すと castId は空へ戻ること', async () => {
+  it('候補選択後に名前を打ち直すと castId が空へ戻り送信されないこと', async () => {
     const onSubmit = jest.fn<void, [OrderFormData]>();
     render(
       <OrderForm initialData={{ receptionistId: '7' }} onSubmit={onSubmit} isSubmitting={false} />
@@ -199,7 +206,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
 
     await openSuggestions();
     fireEvent.click(screen.getByRole('option', { name: /花子/ }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'キャスト' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
       target: { value: '別の人' },
     });
 
@@ -207,7 +214,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     await act(async () => {
       jest.advanceTimersByTime(0);
     });
-    expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit.mock.calls[0][0].castId).toBe('');
+    // キャストは @NotBlank。候補から選び直されるまで送信を止める。
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
