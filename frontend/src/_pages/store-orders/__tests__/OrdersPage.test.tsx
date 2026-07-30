@@ -7,6 +7,7 @@ jest.mock('@/entities/order', () => ({
   orderApi: {
     list: jest.fn(),
     create: jest.fn(),
+    listReceptionists: jest.fn(),
   },
 }));
 
@@ -24,13 +25,14 @@ jest.mock('next/navigation', () => ({
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 
-describe('店側オーダー画面と API JSON（snake_case）の整合', () => {
+describe('店側オーダー画面の描画', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('一覧はバックエンドが実際に返す snake_case のフィールドを表示すること', async () => {
-    // バックエンドは Jackson グローバル SNAKE_CASE（既知の実レスポンス形）
+  // fixture は手書きであり、バックエンドの実応答を見ているわけではない。
+  // 型（Order）との照合だけが機械的な担保で、それは as never を外すことで効いている。
+  it('一覧は各行の項目を表示すること', async () => {
     mockedOrderApi.list.mockResolvedValue({
       rows: [
         {
@@ -50,7 +52,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
       page: 0,
       pageCount: 1,
       total: 1,
-    } as never);
+    });
 
     render(<OrderListPage />);
 
@@ -80,7 +82,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
       page: 0,
       pageCount: 1,
       total: 1,
-    } as never);
+    });
 
     render(<OrderListPage />);
     await screen.findByText('2026-07-03');
@@ -100,7 +102,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
           id: '8',
           business_date: '2026-07-04',
           customer_name: '鈴木花子',
-          cast_name: null,
+          // 未指名はキーごと応答から消える（null は来ない）
           course_minutes: 90,
           extension_minutes: 0,
           option_codes: [],
@@ -113,7 +115,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
       page: 0,
       pageCount: 1,
       total: 1,
-    } as never);
+    });
 
     render(<OrderListPage />);
 
@@ -126,7 +128,7 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
       page: 0,
       pageCount: 0,
       total: 0,
-    } as never);
+    });
 
     render(<OrderListPage />);
 
@@ -134,9 +136,13 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
   });
 
   it('新規登録はバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
-    mockedOrderApi.create.mockResolvedValue({} as never);
+    mockedOrderApi.create.mockResolvedValue({});
+    mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
 
     render(<CreateOrderPage />);
+    // 受付はサーバ側が @NotNull。選ばないと送信自体が止まる。
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: '受付' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: '受付花子' }));
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
 
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
@@ -147,8 +153,8 @@ describe('店側オーダー画面と API JSON（snake_case）の整合', () => 
     expect(body).toHaveProperty('classification', 'ーー');
     expect(body).toHaveProperty('has_pet', false);
     expect(body).toHaveProperty('discount_name', '');
-    // 受付未選択は '' のまま → マッピングで undefined になり送信時に欠落する
-    expect(body).toHaveProperty('receptionist_id', undefined);
+    // 受付は Java 側が Long。文字列ではなく数値で送る。
+    expect(body).toHaveProperty('receptionist_id', 7);
     expect(body).not.toHaveProperty('store_name');
     expect(body).not.toHaveProperty('storeName');
     expect(body).not.toHaveProperty('businessDate');
@@ -163,7 +169,7 @@ describe('オーダー一覧ページ固有の要素', () => {
       page: 0,
       pageCount: 0,
       total: 0,
-    } as never);
+    });
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
@@ -192,7 +198,7 @@ describe('オーダー一覧のページ送り', () => {
       page: 0,
       pageCount: 6,
       total: 120,
-    } as never);
+    });
 
     render(<OrderListPage />);
     await screen.findByText('2026-07-03');

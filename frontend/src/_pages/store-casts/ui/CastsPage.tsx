@@ -39,8 +39,8 @@ export default function CastListPage() {
     platformAuthApi
       .me()
       .then(me => {
-        setCanInvite(me.permissions.includes('CAST_INVITE'));
-        setCanManageFieldDefs(me.permissions.includes('CAST_FIELD_DEF_MANAGE'));
+        setCanInvite(me.permissions?.includes('CAST_INVITE') ?? false);
+        setCanManageFieldDefs(me.permissions?.includes('CAST_FIELD_DEF_MANAGE') ?? false);
       })
       .catch(() => {
         // 取得失敗時は導線を出さない（fail-closed）。操作自体はサーバ側が拒否する。
@@ -70,21 +70,21 @@ export default function CastListPage() {
 
   /** キャストを削除する */
   const deletion = useDeleteAction<CastResponse>({
-    remove: cast => castApi.delete(cast.id),
+    remove: cast => castApi.delete(cast.id ?? ''),
     successMessage: 'キャストを削除しました',
     errorMessage: 'キャストの削除に失敗しました',
     onDeleted: list.reload,
   });
 
   /** ステータスの表示ラベルと配色を返す */
-  const statusLabel = (status: string) => {
+  const statusLabel = (status: string | undefined) => {
     switch (status) {
       case 'ACTIVE':
         return { text: '有効', color: 'bg-success/10 text-success-strong' };
       case 'INACTIVE':
         return { text: '無効', color: 'bg-muted text-foreground' };
       default:
-        return { text: status, color: 'bg-muted text-foreground' };
+        return { text: status ?? '', color: 'bg-muted text-foreground' };
     }
   };
 
@@ -161,7 +161,7 @@ export default function CastListPage() {
                       {cast.photo_url ? (
                         <Image
                           src={cast.photo_url}
-                          alt={cast.name}
+                          alt={cast.name ?? ''}
                           fill
                           className="object-cover"
                           sizes="40px"

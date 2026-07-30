@@ -7,11 +7,11 @@ interface ScheduleSectionProps {
 }
 
 /** "HH:mm(:ss)" → "HH:mm" 表示。 */
-const formatTime = (t: string) => t.slice(0, 5);
+const formatTime = (t: string | undefined) => (t ?? '').slice(0, 5);
 
 /** 終了時刻の表示。00:00 終了は跨夜の連続表記として 24:00 と表示する。 */
-const formatEndTime = (t: string) => {
-  const hm = t.slice(0, 5);
+const formatEndTime = (t: string | undefined) => {
+  const hm = (t ?? '').slice(0, 5);
   return hm === '00:00' ? '24:00' : hm;
 };
 
@@ -66,7 +66,7 @@ export default function ScheduleSection({ shifts }: ScheduleSectionProps) {
                 {shift.cast_photo_url ? (
                   <Image
                     src={shift.cast_photo_url}
-                    alt={shift.cast_name}
+                    alt={shift.cast_name ?? ''}
                     fill
                     className="object-cover transition-transform duration-700 group-hover/card:scale-105"
                     sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"

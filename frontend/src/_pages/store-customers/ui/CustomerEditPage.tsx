@@ -127,8 +127,8 @@ export default function CustomerEditPage() {
                   <TableCell className="text-foreground">{order.business_date}</TableCell>
                   <TableCell className="text-muted-foreground">{order.cast_name || '-'}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {order.course_minutes}分
-                    {order.extension_minutes > 0 && ` (+延長${order.extension_minutes}分)`}
+                    {order.course_minutes != null ? `${order.course_minutes}分` : '-'}
+                    {(order.extension_minutes ?? 0) > 0 && ` (+延長${order.extension_minutes}分)`}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{order.used_points}</TableCell>
                   <TableCell className="text-muted-foreground">{order.status}</TableCell>

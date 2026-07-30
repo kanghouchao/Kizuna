@@ -48,7 +48,9 @@ spring:
       datetime:
         write-dates-as-timestamps: false
     deserialization:
-      fail-on-unknown-properties: false
+      # DTO に無い項目を黙って捨てず 400 にする。捨てられた項目は画面上に何も現れず、
+      # 保存は成功して値だけが入らないため、寛容にしておくと目視でも検知できない。
+      fail-on-unknown-properties: true
   cache:
     type: redis
     redis:

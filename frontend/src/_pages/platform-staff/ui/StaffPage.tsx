@@ -70,7 +70,7 @@ export default function StaffPage() {
     const target = editingStaff;
     if (!target) return;
     void platformStaffApi
-      .get(target.id)
+      .get(target.id ?? 0)
       // 成功保存の直後は onClose と競合するため、まだ同じ対象を開いているときだけ差し替える
       .then(fresh => setEditingStaff(current => (current?.id === fresh.id ? fresh : current)))
       .catch(() => {

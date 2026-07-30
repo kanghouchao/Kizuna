@@ -51,16 +51,20 @@ export function StoreSetPicker({ storeScopeType, storeIds, onChange }: StoreSetP
             {isLoading ? (
               <p className="text-sm text-muted-foreground">読み込み中...</p>
             ) : (
-              stores.map(store => (
-                <Label key={store.id} className="font-normal">
-                  <input
-                    type="checkbox"
-                    checked={storeIds.includes(store.id)}
-                    onChange={() => toggleStore(store.id)}
-                  />
-                  {store.name}
-                </Label>
-              ))
+              stores.map(store => {
+                const id = store.id;
+                if (id === undefined) return null;
+                return (
+                  <Label key={id} className="font-normal">
+                    <input
+                      type="checkbox"
+                      checked={storeIds.includes(id)}
+                      onChange={() => toggleStore(id)}
+                    />
+                    {store.name}
+                  </Label>
+                );
+              })
             )}
           </div>
         )}

@@ -17,7 +17,8 @@ export interface Page<T> {
 
 // ファイルアップロードレスポンス
 export interface FileUploadResponse {
-  url: string;
-  original_name: string;
+  url?: string;
+  original_name?: string;
+  // Java 側が primitive の long のため、キーは必ず応答に含まれる
   size: number;
 }

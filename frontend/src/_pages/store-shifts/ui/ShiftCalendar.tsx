@@ -26,10 +26,11 @@ export function ShiftCalendar({
 }: ShiftCalendarProps) {
   const byDate = new Map<string, { total: number; confirmed: number }>();
   for (const s of shifts) {
-    const agg = byDate.get(s.work_date) ?? { total: 0, confirmed: 0 };
+    const workDate = s.work_date ?? '';
+    const agg = byDate.get(workDate) ?? { total: 0, confirmed: 0 };
     agg.total += 1;
     if (s.status === 'CONFIRMED') agg.confirmed += 1;
-    byDate.set(s.work_date, agg);
+    byDate.set(workDate, agg);
   }
 
   const days = monthGrid(month);

@@ -33,7 +33,7 @@ export default async function ClassicCastDetailPage({ castId }: ClassicCastDetai
       <AgeGate storeName={storeName} />
       <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
       <main className="grow">
-        <PageHero title={cast.name} />
+        <PageHero title={cast.name ?? ''} />
         <CastDetailSection cast={cast} />
       </main>
       <Footer

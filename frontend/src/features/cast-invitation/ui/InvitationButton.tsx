@@ -12,8 +12,8 @@ export interface IssuedInvitation {
 }
 
 interface InvitationButtonProps {
-  castId: string;
-  status: CastInvitationStatus;
+  castId: string | undefined;
+  status: CastInvitationStatus | undefined;
   /**
    * 発行成功後に呼ばれる。モーダル表示は呼び出し元（ページ層）の責務 ——
    * 一覧の再取得（onIssued 内で行われる想定）は isLoading を伴い、それに連動して
@@ -31,8 +31,8 @@ export function InvitationButton({ castId, status, onIssued }: InvitationButtonP
   const handleIssue = async () => {
     setIssuing(true);
     try {
-      const response = await castApi.issueInvitation(castId);
-      onIssued({ token: response.token, expiresAt: response.expires_at });
+      const response = await castApi.issueInvitation(castId ?? '');
+      onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' });
     } catch (error) {
       toast.error(getApiErrorMessage(error, '招待の発行に失敗しました'));
     } finally {

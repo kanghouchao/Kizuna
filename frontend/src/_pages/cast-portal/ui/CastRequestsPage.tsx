@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
   CastShiftRequestItem,
+  ShiftRequestStatus,
   CastStoreItem,
   ShiftRequestCreateRequest,
   shiftApi,
@@ -38,13 +39,13 @@ interface RequestFormValues {
   note: string;
 }
 
-const STATUS_LABELS: Record<CastShiftRequestItem['status'], string> = {
+const STATUS_LABELS: Record<ShiftRequestStatus, string> = {
   PENDING: '受付済み',
   APPROVED: '確定済み',
   DECLINED: '却下',
 };
 
-const STATUS_PILL_CLASS: Record<CastShiftRequestItem['status'], string> = {
+const STATUS_PILL_CLASS: Record<ShiftRequestStatus, string> = {
   PENDING: 'border-transparent bg-warning/10 text-warning-strong',
   APPROVED: 'border-transparent bg-success/10 text-success-strong',
   DECLINED: 'border-transparent bg-destructive/10 text-destructive-strong',
@@ -248,12 +249,15 @@ export function CastRequestsPage() {
                   <CardContent className="px-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground">{item.store_name}</span>
-                      <Badge variant="outline" className={STATUS_PILL_CLASS[item.status]}>
-                        {STATUS_LABELS[item.status]}
+                      <Badge
+                        variant="outline"
+                        className={item.status && STATUS_PILL_CLASS[item.status]}
+                      >
+                        {item.status && STATUS_LABELS[item.status]}
                       </Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {item.work_date} {item.start_time.slice(0, 5)}–{item.end_time.slice(0, 5)}
+                      {item.work_date} {item.start_time?.slice(0, 5)}–{item.end_time?.slice(0, 5)}
                     </p>
                     {item.note && <p className="mt-1 text-xs text-muted-foreground">{item.note}</p>}
                   </CardContent>

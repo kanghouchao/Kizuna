@@ -26,16 +26,16 @@ export function RolePicker({ roles, isLoading, roleIds, onChange }: RolePickerPr
         {isLoading ? (
           <p className="text-sm text-muted-foreground">読み込み中...</p>
         ) : (
-          roles.map(role => (
-            <Label key={role.id} className="font-normal">
-              <input
-                type="checkbox"
-                checked={roleIds.includes(role.id)}
-                onChange={() => toggle(role.id)}
-              />
-              {role.name}
-            </Label>
-          ))
+          roles.map(role => {
+            const id = role.id;
+            if (id === undefined) return null;
+            return (
+              <Label key={id} className="font-normal">
+                <input type="checkbox" checked={roleIds.includes(id)} onChange={() => toggle(id)} />
+                {role.name}
+              </Label>
+            );
+          })
         )}
       </div>
       <p className="mt-1 text-xs text-muted-foreground">

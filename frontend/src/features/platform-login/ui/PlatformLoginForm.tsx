@@ -26,13 +26,14 @@ export default function PlatformLoginForm() {
     try {
       const { token, expires_at } = await platformAuthApi.login(data);
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
-      Cookies.set('token', token, { expires: new Date(expires_at) });
+      Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
 
       const me = await platformAuthApi.me();
-      const destination = resolvePlatformDestination(me.console);
+      const activeConsole = me.console ?? 'none';
+      const destination = resolvePlatformDestination(activeConsole);
 
       if (destination === 'platform') {
-        startPlatformSession(me.console, expires_at);
+        startPlatformSession(activeConsole, expires_at);
         router.push('/platform/dashboard/');
         return;
       }
@@ -40,7 +41,7 @@ export default function PlatformLoginForm() {
       if (destination === 'store') {
         // 着地方針（授権店舗の選択とメニュー由来の着地先解決）は StoreEntryPage 一箇所に集約する。
         // ログインフォームは無条件に入口へ渡し、店舗の解決には関与しない。
-        startPlatformSession(me.console, expires_at);
+        startPlatformSession(activeConsole, expires_at);
         router.push(storeEntryPath());
         return;
       }

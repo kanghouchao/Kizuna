@@ -45,15 +45,15 @@ export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditMod
 
   useEffect(() => {
     if (!open || !staff) return;
-    setRoleIds(staff.roles.map(role => role.id));
-    setStoreScopeType(staff.store_scope_type);
-    setStoreIds(staff.store_ids);
+    setRoleIds((staff.roles ?? []).flatMap(role => (role.id === undefined ? [] : [role.id])));
+    setStoreScopeType(staff.store_scope_type ?? 'ALL_STORES');
+    setStoreIds(staff.store_ids ?? []);
     setEnabled(staff.enabled);
   }, [open, staff]);
 
   const summary = useMemo(() => {
     const scopeLabel = storeSetLabel(storeScopeType, storeIds, stores);
-    const selectedRoles = roles.filter(role => roleIds.includes(role.id));
+    const selectedRoles = roles.filter(role => role.id !== undefined && roleIds.includes(role.id));
     return `${staff?.display_name ?? ''}さんは ${roleSetLabel(selectedRoles)} として ${scopeLabel} のデータにアクセスできます`;
   }, [roles, roleIds, storeScopeType, storeIds, stores, staff]);
 
@@ -65,7 +65,7 @@ export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditMod
     }
     setIsSubmitting(true);
     try {
-      await platformStaffApi.update(staff.id, {
+      await platformStaffApi.update(staff.id ?? 0, {
         role_ids: roleIds,
         store_scope_type: storeScopeType,
         store_ids: storeIds,

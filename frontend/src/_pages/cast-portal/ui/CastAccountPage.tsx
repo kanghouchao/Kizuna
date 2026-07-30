@@ -14,7 +14,7 @@ export function CastAccountPage() {
     platformAuthApi
       .me()
       .then(me => {
-        if (!cancelled) setDisplayName(me.display_name);
+        if (!cancelled) setDisplayName(me.display_name ?? null);
       })
       .catch(() => {
         // シェルが mount 時に本人確認済みのため通常は到達しない。表示名は未取得のまま留める。

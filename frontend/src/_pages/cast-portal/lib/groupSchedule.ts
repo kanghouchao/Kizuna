@@ -9,11 +9,12 @@ export interface ScheduleDayGroup {
 export function groupByWorkDate(items: CastScheduleItem[]): ScheduleDayGroup[] {
   const byDate = new Map<string, CastScheduleItem[]>();
   for (const item of items) {
-    const bucket = byDate.get(item.work_date);
+    const workDate = item.work_date ?? '';
+    const bucket = byDate.get(workDate);
     if (bucket) {
       bucket.push(item);
     } else {
-      byDate.set(item.work_date, [item]);
+      byDate.set(workDate, [item]);
     }
   }
   return [...byDate.entries()]

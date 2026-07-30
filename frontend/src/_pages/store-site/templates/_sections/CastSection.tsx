@@ -4,17 +4,7 @@ import { useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-
-interface Cast {
-  id: string;
-  name: string;
-  photo_url?: string;
-  age?: number;
-  height?: number;
-  bust?: number;
-  waist?: number;
-  hip?: number;
-}
+import { Cast } from '../../model/types';
 
 interface CastSectionProps {
   casts?: Cast[];
@@ -101,7 +91,7 @@ export default function CastSection({ casts }: CastSectionProps) {
                   {cast.photo_url ? (
                     <Image
                       src={cast.photo_url}
-                      alt={cast.name}
+                      alt={cast.name ?? ''}
                       fill
                       className="object-cover transition-transform duration-700 group-hover/card:scale-105"
                       sizes="(max-width: 640px) 144px, (max-width: 768px) 160px, 192px"

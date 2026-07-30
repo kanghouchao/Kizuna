@@ -26,8 +26,8 @@ export default function AccountPage() {
     const fetchMe = async () => {
       try {
         const me = await platformAuthApi.me();
-        setNickname(me.display_name);
-        setEmail(me.email);
+        setNickname(me.display_name ?? '');
+        setEmail(me.email ?? '');
       } catch {
         toast.error('アカウント情報の取得に失敗しました');
       } finally {
@@ -42,7 +42,7 @@ export default function AccountPage() {
     setIsSubmitting(true);
     try {
       const me = await platformAuthApi.updateMe({ display_name: nickname });
-      setNickname(me.display_name);
+      setNickname(me.display_name ?? '');
       toast.success('プロフィールを更新しました');
     } catch {
       toast.error('プロフィールの更新に失敗しました');

@@ -31,12 +31,12 @@ export function weekDates(start: Date): Date[] {
 }
 
 /** 'HH:mm:ss' 等 → 'HH:mm' 表示。 */
-export function formatTime(time: string): string {
-  return time.slice(0, 5);
+export function formatTime(time: string | undefined): string {
+  return (time ?? '').slice(0, 5);
 }
 
 /** 終了時刻の表示。00:00 終了は跨夜の連続表記として 24:00 と表示する。 */
-export function formatEndTime(time: string): string {
-  const hm = time.slice(0, 5);
+export function formatEndTime(time: string | undefined): string {
+  const hm = (time ?? '').slice(0, 5);
   return hm === '00:00' ? '24:00' : hm;
 }

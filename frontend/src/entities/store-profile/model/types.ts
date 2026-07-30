@@ -1,25 +1,25 @@
 // SNSリンク
 export interface SnsLink {
-  platform: string;
-  url: string;
+  platform?: string;
+  url?: string;
   label?: string;
 }
 
 // パートナーリンク
 export interface PartnerLink {
-  name: string;
-  url: string;
+  name?: string;
+  url?: string;
   logo_url?: string;
 }
 
 // 店舗サイト設定レスポンス
 export interface StoreProfileResponse {
-  id: string;
-  template_key: string;
+  id?: string;
+  template_key?: string;
   logo_url?: string;
   banner_url?: string;
   mv_url?: string;
-  mv_type: string;
+  mv_type?: string;
   description?: string;
   catch_copy?: string;
   address?: string;
@@ -27,10 +27,10 @@ export interface StoreProfileResponse {
   business_hours?: string;
   pricing_description?: string;
   custom_texts?: Record<string, string>;
-  sns_links: SnsLink[];
-  partner_links: PartnerLink[];
-  created_at: string;
-  updated_at: string;
+  sns_links?: SnsLink[];
+  partner_links?: PartnerLink[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 // 店舗サイト設定更新リクエスト
