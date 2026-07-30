@@ -141,7 +141,7 @@ describe('店側オーダー画面の描画', () => {
 
     render(<CreateOrderPage />);
     // 受付はサーバ側が @NotNull。選ばないと送信自体が止まる。
-    fireEvent.keyDown(await screen.findByRole('combobox', { name: '受付' }), { key: 'ArrowDown' });
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付/ }), { key: 'ArrowDown' });
     fireEvent.click(await screen.findByRole('option', { name: '受付花子' }));
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
 
