@@ -86,7 +86,7 @@ export default function Footer({ storeName, partnerLinks, snsLinks }: FooterProp
                     className="text-[color-mix(in_srgb,var(--storefront-fg)_25%,transparent)] hover:text-[color-mix(in_srgb,var(--storefront-accent)_70%,transparent)] transition-colors duration-200"
                     aria-label={item.platform}
                   >
-                    {getSnsIcon(item.platform ?? '')}
+                    {getSnsIcon(item.platform)}
                   </a>
                 ))}
               </div>

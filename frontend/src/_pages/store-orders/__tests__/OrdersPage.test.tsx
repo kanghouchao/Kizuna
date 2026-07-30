@@ -34,7 +34,7 @@ describe('店側オーダー画面の描画', () => {
   });
 
   // fixture は手書きであり、バックエンドの実応答を見ているわけではない。
-  // 型（Order）との照合だけが機械的な担保で、それは as never を外すことで効いている。
+  // 機械的な担保は fixture と Order 型の照合だけで、それは tsc の側で効く（jest は型検査しない）。
   it('一覧は各行の項目を表示すること', async () => {
     mockedOrderApi.list.mockResolvedValue({
       rows: [

@@ -1,14 +1,15 @@
-// SNSリンク
+// SNSリンク。更新リクエストの入れ子でもあり、Java 側は platform・url とも @NotBlank。
+// 同じ型を請求と応答の双方で使うため、厳しい側（請求）の必須性を採る。
 export interface SnsLink {
-  platform?: string;
-  url?: string;
+  platform: string;
+  url: string;
   label?: string;
 }
 
-// パートナーリンク
+// パートナーリンク。更新リクエストの入れ子でもあり、Java 側は name・url とも @NotBlank。
 export interface PartnerLink {
-  name?: string;
-  url?: string;
+  name: string;
+  url: string;
   logo_url?: string;
 }
 
