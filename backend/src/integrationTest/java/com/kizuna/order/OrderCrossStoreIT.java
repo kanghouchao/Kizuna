@@ -46,6 +46,17 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
         + "\"}";
   }
 
+  /** 更新の要求体。OrderUpdateRequest は営業日を持たないため、作成の体をそのまま流用できない。 */
+  private String orderUpdateBody(String castId, String remarks) {
+    return "{\"receptionist_id\": "
+        + SEED_RECEPTIONIST_ID
+        + ", \"cast_id\": \""
+        + castId
+        + "\", \"remarks\": \""
+        + remarks
+        + "\"}";
+  }
+
   private String createOrderAs(long storeId, String castId) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
@@ -94,7 +105,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + controlId,
             HttpMethod.PUT,
-            new HttpEntity<>(orderBody(castId, "対照・更新後"), storeHeaders(STORE_A)),
+            new HttpEntity<>(orderUpdateBody(castId, "対照・更新後"), storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(ownUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -104,7 +115,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId,
             HttpMethod.PUT,
-            new HttpEntity<>(orderBody(castId, "改ざん"), storeHeaders(STORE_B)),
+            new HttpEntity<>(orderUpdateBody(castId, "改ざん"), storeHeaders(STORE_B)),
             JsonNode.class);
     assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
