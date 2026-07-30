@@ -112,7 +112,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
       try {
         const cast = await castApi.get(initialData.castId);
         skipNextSearchRef.current = true;
-        setCastNameInput(cast.name);
+        setCastNameInput(cast.name ?? '');
       } catch {
         toast.error('キャスト名の取得に失敗しました');
       }
@@ -156,8 +156,8 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
 
   const handleCastSelect = (cast: CastResponse) => {
     skipNextSearchRef.current = true;
-    setCastNameInput(cast.name);
-    setValue('castId', cast.id, { shouldValidate: true, shouldDirty: true });
+    setCastNameInput(cast.name ?? '');
+    setValue('castId', cast.id ?? '', { shouldValidate: true, shouldDirty: true });
     setIsCastOpen(false);
   };
 
@@ -181,6 +181,8 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
               <FormField
                 control={control}
                 name="receptionistId"
+                // 受付はサーバ側が @NotNull。未選択のまま送ると 400 になるため送信前に止める
+                rules={{ required: true }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>受付</FormLabel>
@@ -195,11 +197,15 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                       </FormControl>
                       <SelectContent>
                         <SelectItem value={SELECT_NONE}>－－－</SelectItem>
-                        {receptionistOptions.map(option => (
-                          <SelectItem key={option.id} value={String(option.id)}>
-                            {option.display_name}
-                          </SelectItem>
-                        ))}
+                        {receptionistOptions.map(option => {
+                          const id = option.id;
+                          if (id === undefined) return null;
+                          return (
+                            <SelectItem key={id} value={String(id)}>
+                              {option.display_name}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </FormItem>

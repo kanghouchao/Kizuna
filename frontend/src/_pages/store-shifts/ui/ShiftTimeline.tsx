@@ -29,8 +29,8 @@ export function ShiftTimeline({
   onAddShift,
   onEditShift,
 }: ShiftTimelineProps) {
-  const castName = (id: string) => casts.find(c => c.id === id)?.name ?? '不明';
-  const fmt = (t: string) => t.slice(0, 5);
+  const castName = (id: string | undefined) => casts.find(c => c.id === id)?.name ?? '不明';
+  const fmt = (t: string | undefined) => (t ?? '').slice(0, 5);
   const hourLabel = (min: number) => `${String(Math.floor((min % 1440) / 60)).padStart(2, '0')}:00`;
 
   const spans = shifts.map(s => shiftSpan(s.start_time, s.end_time));

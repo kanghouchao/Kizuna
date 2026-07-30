@@ -17,13 +17,13 @@ export const platformStoreApi = {
     const response = await apiClient.get(`/platform/stores/${id}`);
     return response.data;
   },
-  create: async (data: CreateStoreRequest): Promise<Store> => {
-    const response = await apiClient.post('/platform/stores', data);
-    return response.data;
+  /** 端点は 204 No Content。body は返らない。 */
+  create: async (data: CreateStoreRequest): Promise<void> => {
+    await apiClient.post('/platform/stores', data);
   },
-  update: async (id: string, data: UpdateStoreRequest): Promise<Store> => {
-    const response = await apiClient.put(`/platform/stores/${id}`, data);
-    return response.data;
+  /** 端点は 204 No Content。body は返らない。 */
+  update: async (id: string, data: UpdateStoreRequest): Promise<void> => {
+    await apiClient.put(`/platform/stores/${id}`, data);
   },
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/platform/stores/${id}`);

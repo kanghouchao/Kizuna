@@ -46,7 +46,7 @@ export default function CastInvitePage() {
   }, [token]);
 
   const handleAccepted = (response: CastAcceptanceResponse) => {
-    setStoreName(response.store_name);
+    setStoreName(response.store_name ?? '');
     setStage('done');
   };
 
@@ -87,7 +87,7 @@ export default function CastInvitePage() {
       <AuthLayout title="新規登録" subtitle={`${detail.store_name}のキャストとして登録します`}>
         <RegisterForm
           token={token}
-          initialDisplayName={detail.cast_name}
+          initialDisplayName={detail.cast_name ?? ''}
           onSuccess={handleAccepted}
           onBack={() => setStage('choose')}
         />
@@ -118,7 +118,8 @@ export default function CastInvitePage() {
       <div className="space-y-6">
         <p className="text-sm text-[#4a4540]">出勤希望の提出とスケジュールの確認ができます。</p>
         <p className="text-xs text-[#9a958e]">
-          有効期限: {new Date(detail.expires_at).toLocaleString('ja-JP')}
+          有効期限:{' '}
+          {detail.expires_at ? new Date(detail.expires_at).toLocaleString('ja-JP') : '不明'}
         </p>
         <div className="space-y-3">
           <button type="button" onClick={() => setStage('register')} className="auth-btn">

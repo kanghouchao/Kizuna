@@ -1,7 +1,7 @@
 // 顧客（Customer）レスポンス
 export interface CustomerResponse {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   phone_number?: string;
   phone_number2?: string;
   address?: string;

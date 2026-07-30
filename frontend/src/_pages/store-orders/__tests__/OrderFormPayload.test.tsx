@@ -35,6 +35,11 @@ async function submitAndGetBody(onSubmit: jest.Mock) {
   return onSubmit.mock.calls[0][0] as OrderFormData;
 }
 
+/** 受付はサーバ側が @NotNull。送信まで進めるテストは先に選んでおく。 */
+async function selectReceptionist() {
+  await pickOption('受付', '受付花子');
+}
+
 /** キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）。 */
 async function pickOption(comboboxName: string, optionName: string) {
   fireEvent.keyDown(await screen.findByRole('combobox', { name: comboboxName }), {
@@ -49,14 +54,14 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
   });
 
-  it('未操作の既定値が型ごとそのまま送られること', async () => {
+  it('受付以外を未操作のまま送ると既定値が型ごとそのまま送られること', async () => {
     const { onSubmit } = renderForm();
     // 受付一覧の解決を待ってから送信する（非同期の setState が入るため）
     await waitFor(() => expect(mockedOrderApi.listReceptionists).toHaveBeenCalled());
+    await selectReceptionist();
 
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.receptionistId).toBe('');
     expect(body.classification).toBe('ーー');
     expect(body.hasPet).toBe(false);
     expect(body.courseMinutes).toBe(60);
@@ -73,19 +78,22 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     expect(body.receptionistId).toBe('7');
   });
 
-  it('受付を未選択へ戻すと番兵ではなく空文字で送られること', async () => {
+  it('受付を未選択へ戻すと送信されないこと', async () => {
     const { onSubmit } = renderForm();
 
     await pickOption('受付', '受付花子');
     await pickOption('受付', '－－－');
-    const body = await submitAndGetBody(onSubmit);
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
 
-    expect(body.receptionistId).toBe('');
+    // 受付は @NotNull。未選択のまま送ると 400 になるため、フォーム側で止める。
+    await waitFor(() => expect(screen.getByRole('button', { name: '登録する' })).toBeEnabled());
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('区分の選択がそのままの文字列で送られること', async () => {
     const { onSubmit } = renderForm();
 
+    await selectReceptionist();
     await pickOption('区分', 'ラブホ');
     const body = await submitAndGetBody(onSubmit);
 
@@ -95,6 +103,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   it('ペット有無が文字列ではなく真偽値へ復元されて送られること', async () => {
     const { onSubmit } = renderForm();
 
+    await selectReceptionist();
     await pickOption('ペット有無', 'あり');
     const body = await submitAndGetBody(onSubmit);
 
@@ -105,6 +114,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   it('コース分が文字列ではなく数値へ復元されて送られること', async () => {
     const { onSubmit } = renderForm();
 
+    await selectReceptionist();
     await pickOption('ｺｰｽ(分)', '120');
     const body = await submitAndGetBody(onSubmit);
 
@@ -115,6 +125,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   it('割引の選択と解除が番兵を経て文字列・空文字で送られること', async () => {
     const { onSubmit } = renderForm();
 
+    await selectReceptionist();
     await pickOption('割引', '一番最初割');
     const body = await submitAndGetBody(onSubmit);
 
@@ -124,6 +135,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   it('割引を「なし」へ戻すと番兵ではなく空文字で送られること', async () => {
     const { onSubmit } = renderForm();
 
+    await selectReceptionist();
     await pickOption('割引', '一番最初割');
     await pickOption('割引', 'なし');
     const body = await submitAndGetBody(onSubmit);
@@ -138,7 +150,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    mockedOrderApi.listReceptionists.mockResolvedValue([]);
+    mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
     mockedCastApi.list.mockResolvedValue({
       rows: [{ id: 'cast-1', name: '花子' }],
       page: 0,
@@ -163,7 +175,9 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
 
   it('候補を選ぶと castId がその id で送られること', async () => {
     const onSubmit = jest.fn<void, [OrderFormData]>();
-    render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+    render(
+      <OrderForm initialData={{ receptionistId: '7' }} onSubmit={onSubmit} isSubmitting={false} />
+    );
 
     await openSuggestions();
     fireEvent.click(screen.getByRole('option', { name: /花子/ }));
@@ -179,7 +193,9 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
 
   it('候補選択後に名前を打ち直すと castId は空へ戻ること', async () => {
     const onSubmit = jest.fn<void, [OrderFormData]>();
-    render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+    render(
+      <OrderForm initialData={{ receptionistId: '7' }} onSubmit={onSubmit} isSubmitting={false} />
+    );
 
     await openSuggestions();
     fireEvent.click(screen.getByRole('option', { name: /花子/ }));

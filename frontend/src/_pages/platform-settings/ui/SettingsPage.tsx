@@ -52,7 +52,7 @@ export default function SystemSettingsPage() {
   const handleToggle = async (config: SystemConfigResponse) => {
     setSaving(true);
     try {
-      await saveConfig(config.config_key, config.config_value === 'true' ? 'false' : 'true');
+      await saveConfig(config.config_key ?? '', config.config_value === 'true' ? 'false' : 'true');
     } catch (error) {
       console.error('設定の更新に失敗しました', error);
       toast.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
@@ -62,7 +62,7 @@ export default function SystemSettingsPage() {
   };
 
   const handleEdit = (config: SystemConfigResponse) => {
-    setEditingKey(config.config_key);
+    setEditingKey(config.config_key ?? null);
     // 秘匿設定は現在値を取得できないため空欄から入力する
     setEditValue(config.secret ? '' : config.config_value || '');
   };

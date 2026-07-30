@@ -42,9 +42,10 @@ function groupByConsole(
 ): { key: string; label: string; items: PermissionResponse[] }[] {
   const buckets = new Map<string, PermissionResponse[]>();
   for (const entry of catalog) {
-    const bucket = buckets.get(entry.console);
+    const consoleKey = entry.console ?? '';
+    const bucket = buckets.get(consoleKey);
     if (bucket) bucket.push(entry);
-    else buckets.set(entry.console, [entry]);
+    else buckets.set(consoleKey, [entry]);
   }
   const rank = (key: string) => {
     const index = CONSOLE_ORDER.indexOf(key as PermissionConsole);
@@ -92,7 +93,7 @@ export function RoleFormModal({ open, onClose, editing, onSaved }: RoleFormModal
     }
     try {
       if (editing) {
-        await platformRoleApi.update(editing.id, {
+        await platformRoleApi.update(editing.id ?? 0, {
           name: values.name,
           permissions,
           // 楽観ロック用バージョン（応答の version をそのまま往復する）
@@ -158,16 +159,20 @@ export function RoleFormModal({ open, onClose, editing, onSaved }: RoleFormModal
                         {group.label}
                       </p>
                       <div className="space-y-1">
-                        {group.items.map(entry => (
-                          <Label key={entry.code} className="font-normal">
-                            <input
-                              type="checkbox"
-                              checked={permissions.includes(entry.code)}
-                              onChange={() => toggle(entry.code)}
-                            />
-                            {entry.code}
-                          </Label>
-                        ))}
+                        {group.items.map(entry => {
+                          const code = entry.code;
+                          if (code === undefined) return null;
+                          return (
+                            <Label key={code} className="font-normal">
+                              <input
+                                type="checkbox"
+                                checked={permissions.includes(code)}
+                                onChange={() => toggle(code)}
+                              />
+                              {code}
+                            </Label>
+                          );
+                        })}
                       </div>
                     </div>
                   );

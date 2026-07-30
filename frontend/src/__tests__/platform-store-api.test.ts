@@ -33,14 +33,15 @@ describe('platform store api wrappers', () => {
     expect(byId).toEqual({ id: '2' });
     expect(mockGet).toHaveBeenCalledWith('/platform/stores/2');
 
-    mockPost.mockResolvedValueOnce({ data: { id: '3' } });
+    // 作成・更新の端点は 204 No Content。body は返らない。
+    mockPost.mockResolvedValueOnce({});
     const created = await platformStoreApi.create({ name: 't' } as any);
-    expect(created).toEqual({ id: '3' });
+    expect(created).toBeUndefined();
     expect(mockPost).toHaveBeenCalledWith('/platform/stores', { name: 't' });
 
-    mockPut.mockResolvedValueOnce({ data: { id: '3', name: 'u' } });
+    mockPut.mockResolvedValueOnce({});
     const updated = await platformStoreApi.update('3', { name: 'u' } as any);
-    expect(updated).toEqual({ id: '3', name: 'u' });
+    expect(updated).toBeUndefined();
     expect(mockPut).toHaveBeenCalledWith('/platform/stores/3', { name: 'u' });
 
     mockDelete.mockResolvedValueOnce({});

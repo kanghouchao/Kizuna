@@ -74,7 +74,9 @@ export default function OrderListPage() {
                   {order.cast_name || 'フリー'}
                 </Badge>
               </TableCell>
-              <TableCell className="text-muted-foreground">{order.course_minutes} 分</TableCell>
+              <TableCell className="text-muted-foreground">
+                {order.course_minutes != null ? `${order.course_minutes} 分` : '-'}
+              </TableCell>
               <TableCell>
                 <Badge
                   variant="outline"

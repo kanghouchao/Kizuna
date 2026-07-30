@@ -47,7 +47,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
       // 招待を開く前に別ロールで平台にログイン済みだった場合、旧セッションの platform-role/platform-store-id が
       // 残ったままだと apiClient やルート遷移が旧ロールの文脈を CAST の token に対して使ってしまう。
       clearPlatformSession();
-      Cookies.set('token', authToken, { expires: new Date(expires_at) });
+      Cookies.set('token', authToken ?? '', { expires: new Date(expires_at) });
       newTokenWritten = true;
       const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
       // 受諾はここで完了し、ポータルセッションは開始しない。一時的に張った CAST token を

@@ -5,8 +5,8 @@ import { PartnerLink, SnsLink } from '@/entities/store-profile';
  * キャスト情報
  */
 export interface Cast {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -31,7 +31,7 @@ export interface SiteConfig {
   pricing_description?: string;
   custom_texts?: Record<string, string>;
   mv_url?: string;
-  mv_type: 'image' | 'video';
+  mv_type?: 'image' | 'video';
   sns_links?: SnsLink[];
   partner_links?: PartnerLink[];
 }
@@ -48,9 +48,9 @@ export interface StorefrontData {
  * 公開出勤表のシフト情報
  */
 export interface PublicShift {
-  cast_id: string;
-  cast_name: string;
+  cast_id?: string;
+  cast_name?: string;
   cast_photo_url?: string;
-  start_time: string;
-  end_time: string;
+  start_time?: string;
+  end_time?: string;
 }

@@ -31,8 +31,8 @@ export default function EditStorePage() {
         const t = res as unknown as Store;
         setStore(t);
         setFormData({
-          name: t.name,
-          email: t.email,
+          name: t.name ?? '',
+          email: t.email ?? '',
         });
       } catch (e) {
         console.error('Error loading store:', e);
@@ -66,7 +66,7 @@ export default function EditStorePage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await platformStoreApi.update(store.id, formData);
+      await platformStoreApi.update(store.id ?? '', formData);
       toast.success('店舗情報を更新しました');
       router.push('/platform/stores');
     } catch (err: any) {

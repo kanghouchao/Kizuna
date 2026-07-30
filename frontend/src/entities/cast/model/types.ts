@@ -3,9 +3,9 @@ export type CastInvitationStatus = 'NOT_INVITED' | 'INVITED' | 'EXPIRED' | 'LINK
 
 // キャスト（Cast）レスポンス
 export interface CastResponse {
-  id: string;
-  name: string;
-  status: string;
+  id?: string;
+  name?: string;
+  status?: string;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -14,25 +14,26 @@ export interface CastResponse {
   waist?: number;
   hip?: number;
   display_order?: number;
-  invitation_status: CastInvitationStatus;
+  // 作成・更新の応答では招待状態を載せないため、一覧・詳細以外では欠落する
+  invitation_status?: CastInvitationStatus;
   custom_fields?: Record<string, string>;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // 公開カスタムフィールド1件（表示順どおりに整形済み）
 export interface CastCustomFieldView {
-  key: string;
-  label: string;
-  value: string;
+  key?: string;
+  label?: string;
+  value?: string;
 }
 
 // 公開キャスト詳細レスポンス（GET /store/casts/public）。管理用 CastResponse と異なり
 // invitation_status を持たず、custom_fields は公開・生存・値ありの定義のみを表示順に整形した配列。
 export interface CastPublicResponse {
-  id: string;
-  name: string;
-  status: string;
+  id?: string;
+  name?: string;
+  status?: string;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -41,9 +42,9 @@ export interface CastPublicResponse {
   waist?: number;
   hip?: number;
   display_order?: number;
-  custom_fields: CastCustomFieldView[];
-  created_at: string;
-  updated_at: string;
+  custom_fields?: CastCustomFieldView[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 // キャスト作成リクエスト
@@ -78,13 +79,13 @@ export interface CastUpdateRequest {
 
 // カスタムフィールド定義レスポンス
 export interface CastFieldDefinitionResponse {
-  id: string;
-  key: string;
-  label: string;
-  display_order: number;
-  is_public: boolean;
-  created_at: string;
-  updated_at: string;
+  id?: string;
+  key?: string;
+  label?: string;
+  display_order?: number;
+  is_public?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // カスタムフィールド定義作成リクエスト（key は不変のため作成時のみ指定）
@@ -103,8 +104,8 @@ export interface CastFieldDefinitionUpdateRequest {
 
 // キャスト招待発行レスポンス
 export interface CastInvitationIssueResponse {
-  token: string;
-  expires_at: string;
+  token?: string;
+  expires_at?: string;
 }
 
 // 招待照会（公開ランディング）の受諾可否状態
@@ -112,10 +113,10 @@ export type CastInvitationViewStatus = 'VALID' | 'EXPIRED' | 'USED';
 
 // 招待照会（公開ランディング）レスポンス
 export interface CastInvitationDetailResponse {
-  store_name: string;
-  cast_name: string;
-  status: CastInvitationViewStatus;
-  expires_at: string;
+  store_name?: string;
+  cast_name?: string;
+  status?: CastInvitationViewStatus;
+  expires_at?: string;
 }
 
 // 招待の新規登録受諾リクエスト
@@ -127,5 +128,5 @@ export interface CastInvitationAcceptRequest {
 
 // 招待受諾の完了応答
 export interface CastAcceptanceResponse {
-  store_name: string;
+  store_name?: string;
 }

@@ -36,7 +36,7 @@ export default function CastGrid({ casts }: CastGridProps) {
                   {cast.photo_url ? (
                     <Image
                       src={cast.photo_url}
-                      alt={cast.name}
+                      alt={cast.name ?? ''}
                       fill
                       className="object-cover transition-transform duration-700 group-hover/card:scale-105"
                       sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"

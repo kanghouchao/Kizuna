@@ -30,13 +30,16 @@ export function monthGrid(month: Date): { date: Date; inMonth: boolean }[] {
 }
 
 /** 'HH:mm:ss' または 'HH:mm' を深夜 0 時からの分に変換する。 */
-export function timeToMinutes(time: string): number {
-  const [h, m] = time.split(':');
+export function timeToMinutes(time: string | undefined): number {
+  const [h, m] = (time ?? '').split(':');
   return Number(h) * 60 + Number(m);
 }
 
 /** シフトの [開始分, 終了分]。終了 <= 開始 は翌日にまたがる勤務として +1440 する。 */
-export function shiftSpan(startTime: string, endTime: string): { start: number; end: number } {
+export function shiftSpan(
+  startTime: string | undefined,
+  endTime: string | undefined
+): { start: number; end: number } {
   const start = timeToMinutes(startTime);
   let end = timeToMinutes(endTime);
   if (end <= start) end += 24 * 60;

@@ -41,7 +41,7 @@ export default function ImageUpload({
     try {
       setIsUploading(true);
       const response = await fileApi.upload(file, bucket);
-      onChange(response.url);
+      onChange(response.url ?? '');
       toast.success('画像をアップロードしました');
     } catch {
       toast.error('画像のアップロードに失敗しました');

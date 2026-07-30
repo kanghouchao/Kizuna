@@ -1,11 +1,10 @@
 // 店舗
 export interface Store {
-  id: string;
-  name: string;
-  email: string;
-  domain: string;
-  created_at: string;
-  updated_at?: string;
+  id?: string;
+  name?: string;
+  email?: string;
+  domain?: string;
+  created_at?: string;
 }
 
 // 店舗作成リクエスト
@@ -23,5 +22,6 @@ export interface UpdateStoreRequest {
 
 // 店舗統計データ
 export interface StoreStats {
+  // Java 側が primitive の long のため、キーは必ず応答に含まれる
   total: number;
 }

@@ -1,7 +1,7 @@
 import { CastInvitationStatus } from './types';
 
 /** 招待状態の表示ラベルと配色（DESIGN.md Status pill の tint レシピ）を返す。 */
-export function castInvitationStatusLabel(status: CastInvitationStatus): {
+export function castInvitationStatusLabel(status: CastInvitationStatus | undefined): {
   text: string;
   color: string;
 } {

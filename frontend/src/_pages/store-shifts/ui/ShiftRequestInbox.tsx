@@ -18,7 +18,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const castName = (castId: string) => casts.find(c => c.id === castId)?.name ?? castId;
+  const castName = (castId: string | undefined) => casts.find(c => c.id === castId)?.name ?? castId;
 
   const load = () => {
     setLoading(true);
@@ -77,7 +77,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
           <div>
             <p className="text-sm font-medium text-foreground">{castName(request.cast_id)}</p>
             <p className="text-sm text-muted-foreground">
-              {request.work_date} {request.start_time.slice(0, 5)}–{request.end_time.slice(0, 5)}
+              {request.work_date} {request.start_time?.slice(0, 5)}–{request.end_time?.slice(0, 5)}
             </p>
             {request.note && <p className="mt-1 text-xs text-muted-foreground">{request.note}</p>}
           </div>
@@ -86,7 +86,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => decline(request.id)}
+              onClick={() => decline(request.id ?? '')}
               disabled={processingId === request.id}
             >
               辞退
@@ -94,7 +94,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
             <Button
               type="button"
               size="sm"
-              onClick={() => approve(request.id)}
+              onClick={() => approve(request.id ?? '')}
               disabled={processingId === request.id}
             >
               承認

@@ -200,7 +200,7 @@ describe('店舗管理 3 画面の挙動', () => {
   });
 
   it('新規作成は name/domain/email を送信し一覧へ遷移すること', async () => {
-    mockedApi.create.mockResolvedValue(store({}));
+    mockedApi.create.mockResolvedValue(undefined);
 
     render(<StoreCreatePage />);
     fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
@@ -242,7 +242,7 @@ describe('店舗管理 3 画面の挙動', () => {
         domain: 'delta.example.com',
       })
     );
-    mockedApi.update.mockResolvedValue(store({}));
+    mockedApi.update.mockResolvedValue(undefined);
 
     render(<StoreEditPage />);
 
@@ -273,7 +273,7 @@ describe('店舗管理 3 画面の挙動', () => {
         domain: 'delta.example.com',
       })
     );
-    mockedApi.update.mockResolvedValue(store({}));
+    mockedApi.update.mockResolvedValue(undefined);
 
     render(<StoreEditPage />);
 

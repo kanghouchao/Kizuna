@@ -17,7 +17,7 @@ export default function CreateOrderPage() {
     setIsSubmitting(true);
     try {
       const request: OrderCreateRequest = {
-        receptionist_id: data.receptionistId || undefined,
+        receptionist_id: Number(data.receptionistId),
         business_date: data.businessDate,
         arrival_scheduled_start_time: data.arrivalStartTime
           ? `${data.arrivalStartTime}:00`

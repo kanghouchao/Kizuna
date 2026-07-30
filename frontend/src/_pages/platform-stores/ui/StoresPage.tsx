@@ -37,7 +37,7 @@ export default function StoresPage() {
   const stores = list.rows;
 
   const deletion = useDeleteAction<Store>({
-    remove: store => platformStoreApi.delete(store.id),
+    remove: store => platformStoreApi.delete(store.id ?? ''),
     successMessage: '店舗を削除しました',
     errorMessage: '店舗の削除に失敗しました',
     onDeleted: list.reload,
@@ -122,7 +122,7 @@ export default function StoresPage() {
                       現在のスキームを引き継ぐプロトコル相対 URL で別タブへ開く。
                       ホスト名の形でない値はリンクにしない（`正規.example@攻撃者.example` の
                       ような行は前半が userinfo と解釈され、別ホストへの導線になる） */}
-                  {isStoreDomain(store.domain) ? (
+                  {isStoreDomain(store.domain ?? '') ? (
                     <a
                       href={`//${store.domain}`}
                       target="_blank"
@@ -137,7 +137,7 @@ export default function StoresPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {new Date(store.created_at).toLocaleDateString('ja-JP')}
+                  {store.created_at ? new Date(store.created_at).toLocaleDateString('ja-JP') : ''}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">

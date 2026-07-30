@@ -31,7 +31,7 @@ export default function RolesPage() {
   // 使うため分頁できない）。絞り込みは取得済みの配列に対して行い、送信で確定させる。
   const [appliedSearch, setAppliedSearch] = useState('');
   const roles = appliedSearch
-    ? allRoles.filter(role => role.name.toLowerCase().includes(appliedSearch.toLowerCase()))
+    ? allRoles.filter(role => (role.name ?? '').toLowerCase().includes(appliedSearch.toLowerCase()))
     : allRoles;
   // フォームは 1 つだけ開く。新規と編集で実体を分けると権限目録の取得が二重に走るため、
   // 「閉じている / 新規 / 既存の編集」を 1 つの状態で表す。
@@ -45,7 +45,7 @@ export default function RolesPage() {
   const formOpen = formTarget === 'create' || editingRole !== null;
   // 授与中のロール削除は 409、平台既定ロールは 400。文言はサーバ側が持つ。
   const deletion = useDeleteAction<RoleResponse>({
-    remove: role => platformRoleApi.remove(role.id),
+    remove: role => platformRoleApi.remove(role.id ?? 0),
     successMessage: 'ロールを削除しました',
     errorMessage: 'ロールの削除に失敗しました',
     onDeleted: refetch,
@@ -116,7 +116,7 @@ export default function RolesPage() {
               <TableRow key={role.id}>
                 <TableCell className="font-medium text-foreground">{role.name}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {role.permissions.length} 件
+                  {role.permissions?.length ?? 0} 件
                 </TableCell>
                 <TableCell>
                   {role.system ? (
@@ -142,7 +142,7 @@ export default function RolesPage() {
                     size="sm"
                     className="text-primary-strong"
                     disabled={role.system}
-                    onClick={() => setFormTarget(role.id)}
+                    onClick={() => setFormTarget(role.id ?? 0)}
                   >
                     編集
                   </Button>

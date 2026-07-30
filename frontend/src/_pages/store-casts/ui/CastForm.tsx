@@ -216,26 +216,27 @@ export function CastForm({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {definitions.map(definition => (
-                    <div key={definition.key} className="grid gap-2">
-                      <Label htmlFor={`cast-custom-field-${definition.key}`}>
-                        {definition.label}
-                      </Label>
-                      <Input
-                        id={`cast-custom-field-${definition.key}`}
-                        type="text"
-                        // 自身が所有するキーのみ初期値に採用する。プレーンオブジェクトの
-                        // ブラケットアクセスは 'constructor' 等の継承プロパティを拾うため hasOwn で防ぐ。
-                        defaultValue={
-                          existingCustomFields &&
-                          Object.hasOwn(existingCustomFields, definition.key)
-                            ? existingCustomFields[definition.key]
-                            : ''
-                        }
-                        {...register(`custom_fields.${definition.key}`)}
-                      />
-                    </div>
-                  ))}
+                  {definitions.map(definition => {
+                    const key = definition.key;
+                    if (key === undefined) return null;
+                    return (
+                      <div key={key} className="grid gap-2">
+                        <Label htmlFor={`cast-custom-field-${key}`}>{definition.label}</Label>
+                        <Input
+                          id={`cast-custom-field-${key}`}
+                          type="text"
+                          // 自身が所有するキーのみ初期値に採用する。プレーンオブジェクトの
+                          // ブラケットアクセスは 'constructor' 等の継承プロパティを拾うため hasOwn で防ぐ。
+                          defaultValue={
+                            existingCustomFields && Object.hasOwn(existingCustomFields, key)
+                              ? existingCustomFields[key]
+                              : ''
+                          }
+                          {...register(`custom_fields.${key}`)}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

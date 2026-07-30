@@ -58,11 +58,15 @@ export function Header() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-56">
-              {stores.map(store => (
-                <DropdownMenuItem key={store.id} onSelect={() => switchStore(store.id)}>
-                  {store.name}
-                </DropdownMenuItem>
-              ))}
+              {stores.map(store => {
+                const id = store.id;
+                if (id === undefined) return null;
+                return (
+                  <DropdownMenuItem key={id} onSelect={() => switchStore(id)}>
+                    {store.name}
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

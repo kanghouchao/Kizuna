@@ -6,7 +6,8 @@ export interface PasswordChangeRequest {
 
 // 認証レスポンス
 export interface LoginResponse {
-  token: string;
+  token?: string;
+  // Java 側が primitive の long のため、キーは必ず応答に含まれる
   expires_at: number;
 }
 
@@ -48,15 +49,16 @@ export interface PlatformLoginRequest {
 
 // 平台 /me レスポンス
 export interface PlatformMeResponse {
-  email: string;
-  display_name: string;
-  user_type: PlatformUserType;
-  permissions: PlatformPermission[];
-  console: PlatformConsole;
+  email?: string;
+  display_name?: string;
+  user_type?: PlatformUserType;
+  permissions?: PlatformPermission[];
+  console?: PlatformConsole;
   // 店舗文脈（X-Store-ID）を確立できるか。JWT storeBridge claim と同源でサーバ側が権限目録から導出する。
+  // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
   store_bridge: boolean;
-  store_scope_type: PlatformStoreScopeType;
-  store_ids: number[];
+  store_scope_type?: PlatformStoreScopeType;
+  store_ids?: number[];
 }
 
 // 平台自己プロフィール更新リクエスト
@@ -66,8 +68,8 @@ export interface PlatformMeUpdateRequest {
 
 // 平台の授権店舗一覧の1件
 export interface PlatformStore {
-  id: number;
-  name: string;
+  id?: number;
+  name?: string;
 }
 
 // 権限目録（/platform/permissions）の所属コンソール。大文字 3 値で、
@@ -76,24 +78,25 @@ export type PermissionConsole = 'PLATFORM' | 'STORE' | 'SHARED';
 
 // 権限目録の1件（ロール編集 UI の選択肢）
 export interface PermissionResponse {
-  code: PlatformPermission;
-  console: PermissionConsole;
+  code?: PlatformPermission;
+  console?: PermissionConsole;
 }
 
 // ロールへの参照（スタッフ応答の埋め込み）。
 // name はサーバの non_null 方針でキーごと欠落しうるため任意扱いにする。
 export interface RoleRef {
-  id: number;
+  id?: number;
   name?: string;
 }
 
 // ロール一覧の1件
 export interface RoleResponse {
-  id: number;
-  name: string;
+  id?: number;
+  name?: string;
   // 平台既定ロール。改名・権限変更・削除がいずれも拒否される。
+  // system と version は Java 側が primitive のため、キーは必ず応答に含まれる。
   system: boolean;
-  permissions: PlatformPermission[];
+  permissions?: PlatformPermission[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
 }
@@ -115,13 +118,14 @@ export interface RoleUpdateRequest {
 // スタッフ（ロール×店舗集合）の応答。
 // リクエストは role_ids（id の配列）なのに応答は roles（id と名称の対）という非対称に注意。
 export interface PlatformStaffResponse {
-  id: number;
-  email: string;
-  display_name: string;
+  id?: number;
+  email?: string;
+  display_name?: string;
+  // enabled と version は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
-  roles: RoleRef[];
-  store_scope_type: PlatformStoreScopeType;
-  store_ids: number[];
+  roles?: RoleRef[];
+  store_scope_type?: PlatformStoreScopeType;
+  store_ids?: number[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
 }
@@ -133,14 +137,16 @@ export interface PlatformStaffCreateRequest {
   display_name: string;
   role_ids: number[];
   store_scope_type: PlatformStoreScopeType;
-  store_ids: number[];
+  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
+  store_ids?: number[];
 }
 
 // スタッフ授権編集リクエスト（enabled: 未指定=現状維持、false=停止、true=再開）
 export interface PlatformStaffUpdateRequest {
   role_ids: number[];
   store_scope_type: PlatformStoreScopeType;
-  store_ids: number[];
+  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
+  store_ids?: number[];
   enabled?: boolean;
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;

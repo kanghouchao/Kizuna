@@ -86,11 +86,11 @@ export function ShiftFormModal({
     if (!open) return;
     if (editing) {
       reset({
-        cast_id: editing.cast_id,
-        work_date: editing.work_date,
-        start_time: editing.start_time.slice(0, 5),
-        end_time: editing.end_time.slice(0, 5),
-        status: editing.status,
+        cast_id: editing.cast_id ?? '',
+        work_date: editing.work_date ?? '',
+        start_time: (editing.start_time ?? '').slice(0, 5),
+        end_time: (editing.end_time ?? '').slice(0, 5),
+        status: editing.status ?? '',
       });
     } else {
       reset({
@@ -113,7 +113,7 @@ export function ShiftFormModal({
     };
     try {
       if (editing) {
-        await shiftApi.update(editing.id, payload);
+        await shiftApi.update(editing.id ?? '', payload);
         toast.success('シフトを更新しました');
       } else {
         await shiftApi.create(payload);
@@ -129,7 +129,7 @@ export function ShiftFormModal({
   const handleDelete = async () => {
     if (!editing) return;
     try {
-      await shiftApi.delete(editing.id);
+      await shiftApi.delete(editing.id ?? '');
       toast.success('シフトを削除しました');
       onSaved();
       onClose();
@@ -176,7 +176,7 @@ export function ShiftFormModal({
                         <SelectItem value={SELECT_NONE}>キャストが未登録です</SelectItem>
                       )}
                       {casts.map(c => (
-                        <SelectItem key={c.id} value={c.id}>
+                        <SelectItem key={c.id} value={c.id ?? ''}>
                           {c.name}
                         </SelectItem>
                       ))}
