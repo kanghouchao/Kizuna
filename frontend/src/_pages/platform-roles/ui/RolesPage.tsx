@@ -141,8 +141,9 @@ export default function RolesPage() {
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    disabled={role.system}
-                    onClick={() => setFormTarget(role.id ?? 0)}
+                    // id が無ければ編集対象を特定できず、押しても何も起きない状態になるため無効化する
+                    disabled={role.system || role.id === undefined}
+                    onClick={() => role.id !== undefined && setFormTarget(role.id)}
                   >
                     編集
                   </Button>
