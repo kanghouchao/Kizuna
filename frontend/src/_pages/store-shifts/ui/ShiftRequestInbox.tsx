@@ -18,7 +18,9 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const castName = (castId: string | undefined) => casts.find(c => c.id === castId)?.name ?? castId;
+  // castId が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
+  const castName = (castId: string | undefined) =>
+    (castId === undefined ? undefined : casts.find(c => c.id === castId)?.name) ?? castId;
 
   const load = () => {
     setLoading(true);

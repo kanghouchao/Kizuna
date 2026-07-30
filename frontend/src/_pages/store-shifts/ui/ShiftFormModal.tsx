@@ -175,11 +175,15 @@ export function ShiftFormModal({
                       {casts.length === 0 && (
                         <SelectItem value={SELECT_NONE}>キャストが未登録です</SelectItem>
                       )}
-                      {casts.map(c => (
-                        <SelectItem key={c.id} value={c.id ?? ''}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
+                      {casts.map(c => {
+                        const id = c.id;
+                        if (id === undefined) return null;
+                        return (
+                          <SelectItem key={id} value={id}>
+                            {c.name}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </FormItem>

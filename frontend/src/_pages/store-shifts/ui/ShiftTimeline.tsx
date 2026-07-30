@@ -29,7 +29,9 @@ export function ShiftTimeline({
   onAddShift,
   onEditShift,
 }: ShiftTimelineProps) {
-  const castName = (id: string | undefined) => casts.find(c => c.id === id)?.name ?? '不明';
+  // id が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
+  const castName = (id: string | undefined) =>
+    (id === undefined ? undefined : casts.find(c => c.id === id)?.name) ?? '不明';
   const fmt = (t: string | undefined) => (t ?? '').slice(0, 5);
   const hourLabel = (min: number) => `${String(Math.floor((min % 1440) / 60)).padStart(2, '0')}:00`;
 
