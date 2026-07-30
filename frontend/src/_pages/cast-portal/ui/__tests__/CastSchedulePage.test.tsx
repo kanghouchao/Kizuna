@@ -3,10 +3,11 @@ import { CastSchedulePage } from '../CastSchedulePage';
 import { shiftApi } from '@/entities/shift';
 
 jest.mock('@/entities/shift', () => ({
-  shiftApi: { mySchedule: jest.fn() },
+  shiftApi: { mySchedule: jest.fn(), submitShiftChange: jest.fn() },
 }));
 
 const mockedMySchedule = shiftApi.mySchedule as jest.Mock;
+const mockedSubmitShiftChange = shiftApi.submitShiftChange as jest.Mock;
 
 function daysBetween(fromStr: string, toStr: string): number {
   const from = new Date(fromStr);
@@ -73,6 +74,39 @@ describe('CastSchedulePage', () => {
     expect(screen.getByText('18:00–20:00')).toBeInTheDocument();
     expect(screen.getByText('店舗B')).toBeInTheDocument();
     expect(screen.getByText('10:00–12:00')).toBeInTheDocument();
+  });
+
+  it('確定シフトから変更申請を提出する', async () => {
+    mockedMySchedule.mockResolvedValue([
+      {
+        id: 's1',
+        work_date: '2999-07-20',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+        status: 'CONFIRMED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+    mockedSubmitShiftChange.mockResolvedValue({ id: 'sr1', kind: 'CHANGE', status: 'PENDING' });
+
+    render(<CastSchedulePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '変更申請' }));
+    fireEvent.change(screen.getByLabelText('変更後の開始'), { target: { value: '19:00' } });
+    fireEvent.change(screen.getByLabelText('変更後の終了'), { target: { value: '21:30' } });
+    fireEvent.change(screen.getByLabelText('備考'), { target: { value: '開始を遅らせたい' } });
+    fireEvent.click(screen.getByRole('button', { name: '変更を申請する' }));
+
+    await waitFor(() =>
+      expect(mockedSubmitShiftChange).toHaveBeenCalledWith({
+        target_shift_id: 's1',
+        work_date: '2999-07-20',
+        start_time: '19:00:00',
+        end_time: '21:30:00',
+        note: '開始を遅らせたい',
+      })
+    );
   });
 
   it('次週ボタンで7日後の範囲を再取得する', async () => {

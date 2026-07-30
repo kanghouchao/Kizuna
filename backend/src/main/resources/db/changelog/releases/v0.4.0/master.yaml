@@ -1,6 +1,9 @@
-# v0.4.0 = Order の店舗帰属を store_id に一本化する。
+# v0.4.0 = Order の店舗帰属を store_id に一本化し、出勤希望に変更申請の種別を足す。
 # 構成は v0.1.0 / v0.2.0 / v0.3.0 と同じ platform / store / seed の 3 層のうち store のみ。
 databaseChangeLog:
   - include:
       file: store/01-order-drop-store-name.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: store/02-shift-request-change.yaml
       relativeToChangelogFile: true

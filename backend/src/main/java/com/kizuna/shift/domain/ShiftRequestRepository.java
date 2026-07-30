@@ -18,8 +18,9 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
   @Query(
       """
       select r.id as id, r.workDate as workDate, r.startTime as startTime, r.endTime as endTime,
-             r.note as note, r.status as status, r.storeId as storeId, st.name as storeName,
-             r.createdAt as createdAt
+             r.note as note, r.status as status, r.kind as kind, r.storeId as storeId,
+             r.targetShiftId as targetShiftId, r.decidedBy as decidedBy, r.decidedAt as decidedAt,
+             st.name as storeName, r.createdAt as createdAt
       from ShiftRequest r join com.kizuna.store.domain.Store st on st.id = r.storeId
       where r.castId in :castIds
       order by r.createdAt desc

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
@@ -176,6 +177,48 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
         "/platform/me/shift-requests", new HttpEntity<>(body, bearer(token)), JsonNode.class);
   }
 
+  private String changeBody(
+      String targetShiftId, String workDate, String start, String end, String note) {
+    return "{\"target_shift_id\": \""
+        + targetShiftId
+        + "\", \"work_date\": \""
+        + workDate
+        + "\", \"start_time\": \""
+        + start
+        + "\", \"end_time\": \""
+        + end
+        + "\", \"note\": \""
+        + note
+        + "\"}";
+  }
+
+  private ResponseEntity<JsonNode> submitChange(String token, String body) {
+    return rest.postForEntity(
+        "/platform/me/shift-requests/changes",
+        new HttpEntity<>(body, bearer(token)),
+        JsonNode.class);
+  }
+
+  /** 対象シフトをリポジトリ直挿しで用意する（テストスレッドは storeFilter を経由しない）。 */
+  private Shift saveShift(String castId, long storeId, LocalDate workDate, String status) {
+    return saveShift(castId, storeId, workDate, status, true);
+  }
+
+  private Shift saveShift(
+      String castId, long storeId, LocalDate workDate, String status, boolean publicVisible) {
+    Shift shift =
+        Shift.builder()
+            .castId(castId)
+            .workDate(workDate)
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status(status)
+            .publicVisible(publicVisible)
+            .build();
+    shift.setStoreId(storeId);
+    return shiftRepository.save(shift);
+  }
+
   private ResponseEntity<JsonNode> getHistory(String token) {
     return rest.exchange(
         "/platform/me/shift-requests",
@@ -339,9 +382,13 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> approved = approve(STORE_A, id);
     assertThat(approved.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(approved.getBody().path("status").asString()).isEqualTo("APPROVED");
+    assertThat(approved.getBody().path("decided_by").asString())
+        .isEqualTo("yamada.jiro@kizuna.test");
+    assertThat(approved.getBody().path("decided_at").asString()).isNotBlank();
 
     ShiftRequest reloaded = shiftRequestRepository.findById(id).orElseThrow();
     assertThat(reloaded.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
+    assertThat(reloaded.getTargetShiftId()).isNotBlank();
 
     // 本人スケジュール（cast_id 単層自限）に確定シフトとして反映される。
     ResponseEntity<JsonNode> schedule =
@@ -379,6 +426,21 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
       }
     }
     assertThat(publicHasIt).as("公開出勤表に確定シフトが反映されること").isTrue();
+
+    ResponseEntity<JsonNode> hidden =
+        rest.exchange(
+            "/store/shifts/" + reloaded.getTargetShiftId(),
+            HttpMethod.PUT,
+            new HttpEntity<>("{\"public_visible\": false}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(hidden.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(hidden.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(hidden.getBody().path("public_visible").asBoolean()).isFalse();
+
+    ResponseEntity<String> publicAfterHide =
+        rest.exchange(
+            "/store/shifts/public", HttpMethod.GET, new HttpEntity<>(publicHeaders), String.class);
+    assertThat(publicAfterHide.getBody()).doesNotContain(myCastId);
   }
 
   @Test
@@ -541,6 +603,218 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
         submit(castToken, submitBody(STORE_A, yesterday, "18:00:00", "20:00:00", "境界確認"));
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  // ---- 確定シフトの変更申請（#330） ----
+
+  @Test
+  @DisplayName("確定済みシフトへの変更申請が受理され、履歴に変更申請(CHANGE)の受付済みとして現れること")
+  void submitChange_onConfirmedShift_isAcceptedAndAppearsInHistoryAsChange() {
+    Shift target = saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 1), "CONFIRMED");
+
+    ResponseEntity<JsonNode> created =
+        submitChange(
+            castToken, changeBody(target.getId(), tomorrow(), "20:00:00", "23:30:00", "遅めに変更したい"));
+
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(created.getBody().path("kind").asString()).isEqualTo("CHANGE");
+    assertThat(created.getBody().path("status").asString()).isEqualTo("PENDING");
+    // 店舗は本文で名乗らず、対象シフトの帰属から導出される。
+    assertThat(created.getBody().path("store_id").asLong()).isEqualTo(STORE_A);
+
+    String id = created.getBody().path("id").asString();
+    ResponseEntity<JsonNode> history = getHistory(castToken);
+    assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode item = null;
+    for (JsonNode node : history.getBody()) {
+      if (id.equals(node.path("id").asString())) {
+        item = node;
+      }
+    }
+    assertThat(item).as("提出履歴に変更申請が現れること").isNotNull();
+    assertThat(item.path("kind").asString()).isEqualTo("CHANGE");
+    assertThat(item.path("status").asString()).isEqualTo("PENDING");
+  }
+
+  @Test
+  @DisplayName("確定済みでないシフトへの変更申請は 400 で拒否され、行が増えないこと")
+  void submitChange_onTentativeShift_isRejected() {
+    Shift tentative = saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 2), "TENTATIVE");
+    long before = shiftRequestRepository.count();
+
+    ResponseEntity<JsonNode> res =
+        submitChange(
+            castToken,
+            changeBody(tentative.getId(), tomorrow(), "20:00:00", "23:00:00", "仮シフトへの申請"));
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(shiftRequestRepository.count()).isEqualTo(before);
+  }
+
+  @Test
+  @DisplayName("他キャストの確定シフトへの変更申請は 404 で拒否され、行が増えないこと")
+  void submitChange_onAnotherCastShift_isRejected() {
+    String otherCastId = createCast(STORE_A, "変更申請IT別キャスト", null);
+    Shift foreign = saveShift(otherCastId, STORE_A, LocalDate.of(2999, 6, 3), "CONFIRMED");
+    long before = shiftRequestRepository.count();
+
+    ResponseEntity<JsonNode> res =
+        submitChange(
+            castToken, changeBody(foreign.getId(), tomorrow(), "20:00:00", "23:00:00", "他人のシフト"));
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(shiftRequestRepository.count()).isEqualTo(before);
+  }
+
+  @Test
+  @DisplayName("変更申請の承認で対象シフトが同一行のまま更新され、申請が持たない属性は保たれること")
+  void approveChange_updatesTargetShiftInPlaceAndPreservesUnrelatedAttributes() {
+    Shift target = saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 4), "CONFIRMED", false);
+    long shiftCountBefore = shiftRepository.count();
+
+    ResponseEntity<JsonNode> created =
+        submitChange(
+            castToken, changeBody(target.getId(), "2999-06-05", "20:00:00", "23:30:00", "変更承認確認"));
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String id = created.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> approved = approve(STORE_A, id);
+
+    assertThat(approved.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(approved.getBody().path("status").asString()).isEqualTo("APPROVED");
+    assertThat(approved.getBody().path("kind").asString()).isEqualTo("CHANGE");
+
+    Shift reloaded = shiftRepository.findById(target.getId()).orElseThrow();
+    assertThat(reloaded.getWorkDate()).isEqualTo(LocalDate.of(2999, 6, 5));
+    assertThat(reloaded.getStartTime()).isEqualTo(LocalTime.of(20, 0));
+    assertThat(reloaded.getEndTime()).isEqualTo(LocalTime.of(23, 30));
+    // 更新であって作り直しではないため、申請が持たない属性は元のまま残る。
+    assertThat(reloaded.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(reloaded.getCastId()).isEqualTo(myCastId);
+    assertThat(reloaded.getStoreId()).isEqualTo(STORE_A);
+    assertThat(reloaded.isPublicVisible()).as("変更承認後も公開可否が保持されること").isFalse();
+    assertThat(shiftRepository.count()).as("変更承認でシフトが増えないこと").isEqualTo(shiftCountBefore);
+  }
+
+  @Test
+  @DisplayName("変更申請の謝絶で元の確定シフトが維持されること")
+  void declineChange_leavesOriginalShiftIntact() {
+    Shift target = saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 6), "CONFIRMED");
+
+    ResponseEntity<JsonNode> created =
+        submitChange(
+            castToken, changeBody(target.getId(), "2999-06-07", "10:00:00", "12:00:00", "謝絶確認"));
+    String id = created.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> declined = decline(STORE_A, id);
+
+    assertThat(declined.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(declined.getBody().path("status").asString()).isEqualTo("DECLINED");
+    Shift reloaded = shiftRepository.findById(target.getId()).orElseThrow();
+    assertThat(reloaded.getWorkDate()).isEqualTo(LocalDate.of(2999, 6, 6));
+    assertThat(reloaded.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(reloaded.getEndTime()).isEqualTo(LocalTime.of(23, 0));
+  }
+
+  @Test
+  @DisplayName("店舗 inbox が新規希望と変更申請を種別で区別し、変更申請には変更前の値が添うこと")
+  void storeInbox_distinguishesKindAndCarriesCurrentShiftValues() {
+    Shift target = saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 8), "CONFIRMED");
+    String newNote = "inbox種別_新規_" + UUID.randomUUID();
+    String changeNote = "inbox種別_変更_" + UUID.randomUUID();
+
+    ResponseEntity<JsonNode> newRequest =
+        submit(castToken, submitBody(STORE_A, tomorrow(), "18:00:00", "23:00:00", newNote));
+    assertThat(newRequest.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    ResponseEntity<JsonNode> changeRequest =
+        submitChange(
+            castToken,
+            changeBody(target.getId(), "2999-06-09", "21:00:00", "23:30:00", changeNote));
+    assertThat(changeRequest.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<JsonNode> inbox =
+        rest.exchange(
+            "/store/shift-requests?status=PENDING",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+
+    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode newNode = null;
+    JsonNode changeNode = null;
+    for (JsonNode node : inbox.getBody()) {
+      if (newNote.equals(node.path("note").asString())) {
+        newNode = node;
+      }
+      if (changeNote.equals(node.path("note").asString())) {
+        changeNode = node;
+      }
+    }
+    assertThat(newNode).isNotNull();
+    assertThat(newNode.path("kind").asString()).isEqualTo("NEW");
+    assertThat(newNode.has("current_work_date")).as("新規希望に変更前は無い").isFalse();
+
+    assertThat(changeNode).isNotNull();
+    assertThat(changeNode.path("kind").asString()).isEqualTo("CHANGE");
+    assertThat(changeNode.path("target_shift_id").asString()).isEqualTo(target.getId());
+    // 申請された値（変更後）と対象シフトの現在値（変更前）が並ぶ。
+    assertThat(changeNode.path("work_date").asString()).isEqualTo("2999-06-09");
+    assertThat(changeNode.path("current_work_date").asString()).isEqualTo("2999-06-08");
+    assertThat(changeNode.path("current_start_time").asString()).isEqualTo("18:00:00");
+  }
+
+  @Test
+  @DisplayName("本人スケジュールが変更申請の対象に使えるシフト id を返すこと")
+  void mySchedule_exposesShiftId() {
+    saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 10), "CONFIRMED");
+
+    ResponseEntity<JsonNode> schedule =
+        rest.exchange(
+            "/platform/me/schedule?from=2999-06-10&to=2999-06-10",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(castToken)),
+            JsonNode.class);
+
+    assertThat(schedule.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(schedule.getBody()).isNotEmpty();
+    for (JsonNode node : schedule.getBody()) {
+      assertThat(node.path("id").asString()).as("シフト id が露出すること").isNotBlank();
+    }
+  }
+
+  @Test
+  @DisplayName("当日実績が予定と別に記録され、店舗・キャスト双方から照会できること")
+  void actualAttendance_isRecordedSeparatelyAndQueryable() {
+    Shift target = saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 11), "CONFIRMED");
+
+    ResponseEntity<JsonNode> recorded =
+        rest.exchange(
+            "/store/shifts/" + target.getId() + "/actual",
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                "{\"start_time\": \"18:05:00\", \"end_time\": \"23:10:00\"}",
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+
+    assertThat(recorded.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(recorded.getBody().path("start_time").asString()).isEqualTo("18:00:00");
+    assertThat(recorded.getBody().path("end_time").asString()).isEqualTo("23:00:00");
+    assertThat(recorded.getBody().path("attendance_confirmed").asBoolean()).isTrue();
+    assertThat(recorded.getBody().path("actual_start_time").asString()).isEqualTo("18:05:00");
+    assertThat(recorded.getBody().path("actual_end_time").asString()).isEqualTo("23:10:00");
+    assertThat(recorded.getBody().path("actual_recorded_by").asString())
+        .isEqualTo("yamada.jiro@kizuna.test");
+    assertThat(recorded.getBody().path("actual_recorded_at").asString()).isNotBlank();
+
+    ResponseEntity<JsonNode> schedule =
+        rest.exchange(
+            "/platform/me/schedule?from=2999-06-11&to=2999-06-11",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(castToken)),
+            JsonNode.class);
+    assertThat(schedule.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(schedule.getBody().get(0).path("actual_start_time").asString())
+        .isEqualTo("18:05:00");
   }
 
   @Test

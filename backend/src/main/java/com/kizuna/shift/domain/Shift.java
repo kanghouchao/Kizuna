@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,6 +39,33 @@ public class Shift extends StoreScopedEntity {
   @Column(name = "status", nullable = false, length = 20)
   private String status;
 
+  /** 承認状態とは独立した公開可否。既存挙動を保つため既定は公開可。 */
+  @Column(name = "public_visible", nullable = false)
+  @Builder.Default
+  private boolean publicVisible = true;
+
+  @Column(name = "approved_by", length = 255)
+  private String approvedBy;
+
+  @Column(name = "approved_at")
+  private OffsetDateTime approvedAt;
+
+  @Column(name = "attendance_confirmed", nullable = false)
+  @Builder.Default
+  private boolean attendanceConfirmed = false;
+
+  @Column(name = "actual_start_time")
+  private LocalTime actualStartTime;
+
+  @Column(name = "actual_end_time")
+  private LocalTime actualEndTime;
+
+  @Column(name = "actual_recorded_by", length = 255)
+  private String actualRecordedBy;
+
+  @Column(name = "actual_recorded_at")
+  private OffsetDateTime actualRecordedAt;
+
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(ShiftPatch patch) {
     if (patch.castId() != null) {
@@ -55,6 +83,23 @@ public class Shift extends StoreScopedEntity {
     if (patch.status() != null) {
       this.status = patch.status();
     }
+    if (patch.publicVisible() != null) {
+      this.publicVisible = patch.publicVisible();
+    }
+  }
+
+  public void markApproved(String actor) {
+    this.approvedBy = actor;
+    this.approvedAt = OffsetDateTime.now();
+  }
+
+  /** 予定を変更せず、当日実績だけを記録する。 */
+  public void recordActual(LocalTime startTime, LocalTime endTime, String actor) {
+    this.attendanceConfirmed = true;
+    this.actualStartTime = startTime;
+    this.actualEndTime = endTime;
+    this.actualRecordedBy = actor;
+    this.actualRecordedAt = OffsetDateTime.now();
   }
 
   @Override
@@ -71,6 +116,8 @@ public class Shift extends StoreScopedEntity {
         + endTime
         + ", status="
         + status
+        + ", publicVisible="
+        + publicVisible
         + ")";
   }
 }

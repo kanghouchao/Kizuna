@@ -23,6 +23,14 @@ public interface CastShiftRequestView {
 
   ShiftRequestStatus getStatus();
 
+  ShiftRequestKind getKind();
+
+  String getTargetShiftId();
+
+  String getDecidedBy();
+
+  OffsetDateTime getDecidedAt();
+
   Long getStoreId();
 
   String getStoreName();

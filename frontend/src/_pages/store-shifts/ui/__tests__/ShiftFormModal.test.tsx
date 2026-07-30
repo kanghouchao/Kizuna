@@ -8,6 +8,7 @@ jest.mock('@/entities/shift', () => ({
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    recordActual: jest.fn(),
   },
 }));
 
@@ -18,6 +19,7 @@ jest.mock('react-hot-toast', () => ({
 const mockedCreate = shiftApi.create as jest.Mock;
 const mockedUpdate = shiftApi.update as jest.Mock;
 const mockedDelete = shiftApi.delete as jest.Mock;
+const mockedRecordActual = shiftApi.recordActual as jest.Mock;
 
 const cast = (id: string, name: string): CastResponse => ({
   id,
@@ -37,6 +39,7 @@ const EDITING: ShiftResponse = {
   start_time: '19:30:00',
   end_time: '01:00:00',
   status: 'CONFIRMED',
+  public_visible: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -102,6 +105,7 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
     mockedCreate.mockResolvedValue({});
     mockedUpdate.mockResolvedValue({});
     mockedDelete.mockResolvedValue(undefined);
+    mockedRecordActual.mockResolvedValue({});
   });
 
   it('新規作成の既定値が先頭キャスト・未確定・秒付き時刻で送られること', async () => {
@@ -117,11 +121,13 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
       start_time: '18:00:00',
       end_time: '23:00:00',
       status: 'TENTATIVE',
+      public_visible: true,
     });
     // キー集合そのものが移行で増減しないことを固定する
     expect(Object.keys(payload).sort()).toEqual([
       'cast_id',
       'end_time',
+      'public_visible',
       'start_time',
       'status',
       'work_date',
@@ -175,6 +181,7 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
       start_time: '19:30:00',
       end_time: '01:00:00',
       status: 'CONFIRMED',
+      public_visible: true,
     });
     expect(mockedCreate).not.toHaveBeenCalled();
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
@@ -201,6 +208,36 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
 
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate.mock.calls[0][1].cast_id).toBe('cast-1');
+  });
+
+  it('公開可否だけを切り替えて保存できること', async () => {
+    renderModal({ editing: EDITING });
+
+    const checkbox = await screen.findByRole('checkbox', { name: '公開出勤表に表示する' });
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    submit();
+
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][1].public_visible).toBe(false);
+  });
+
+  it('当日実績は予定と別の API へ送ること', async () => {
+    renderModal({ editing: EDITING });
+
+    fireEvent.change(await screen.findByLabelText('実績開始'), {
+      target: { value: '19:35' },
+    });
+    fireEvent.change(screen.getByLabelText('実績終了'), { target: { value: '01:10' } });
+    fireEvent.click(screen.getByRole('button', { name: '実績を記録' }));
+
+    await waitFor(() =>
+      expect(mockedRecordActual).toHaveBeenCalledWith('shift-1', {
+        start_time: '19:35:00',
+        end_time: '01:10:00',
+      })
+    );
+    expect(mockedUpdate).not.toHaveBeenCalled();
   });
 
   it('一覧に無いキャストを編集しても別のキャストが表示されないこと', async () => {

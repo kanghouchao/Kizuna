@@ -20,6 +20,10 @@ public class CastShiftRequestResponse {
   private LocalTime endTime;
   private String note;
   private String status;
+  private String kind;
+  private String targetShiftId;
+  private String decidedBy;
+  private OffsetDateTime decidedAt;
   private Long storeId;
   private String storeName;
   private OffsetDateTime createdAt;

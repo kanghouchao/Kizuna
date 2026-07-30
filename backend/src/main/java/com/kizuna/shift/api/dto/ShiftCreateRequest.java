@@ -13,4 +13,5 @@ public class ShiftCreateRequest {
   @NotNull private LocalTime startTime;
   @NotNull private LocalTime endTime;
   private String status;
+  private Boolean publicVisible;
 }

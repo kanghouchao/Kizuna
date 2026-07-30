@@ -1,6 +1,7 @@
 package com.kizuna.shift.api.platform;
 
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
+import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestResponse;
 import com.kizuna.shift.application.CastShiftRequestService;
@@ -31,6 +32,15 @@ public class PlatformShiftRequestController {
       Principal principal, @Valid @RequestBody ShiftRequestCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(castShiftRequestService.submit(principal.getName(), request));
+  }
+
+  /** 確定済みシフトへの変更申請。対象店舗は対象シフトから導出するため、本文に店舗は含めない。 */
+  @PostMapping("/changes")
+  @PreAuthorize("hasRole('CAST')")
+  public ResponseEntity<ShiftRequestResponse> submitChange(
+      Principal principal, @Valid @RequestBody ShiftChangeRequestCreateRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(castShiftRequestService.submitChange(principal.getName(), request));
   }
 
   @GetMapping

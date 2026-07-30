@@ -12,6 +12,14 @@ public interface ShiftMapper {
   ShiftResponse toResponse(Shift shift);
 
   @Mapping(target = "status", defaultValue = "TENTATIVE")
+  @Mapping(target = "publicVisible", defaultValue = "true")
+  @Mapping(target = "approvedBy", ignore = true)
+  @Mapping(target = "approvedAt", ignore = true)
+  @Mapping(target = "attendanceConfirmed", ignore = true)
+  @Mapping(target = "actualStartTime", ignore = true)
+  @Mapping(target = "actualEndTime", ignore = true)
+  @Mapping(target = "actualRecordedBy", ignore = true)
+  @Mapping(target = "actualRecordedAt", ignore = true)
   Shift toEntity(ShiftCreateRequest request);
 
   /** 更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */

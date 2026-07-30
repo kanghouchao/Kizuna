@@ -32,6 +32,7 @@ interface ShiftFormValues {
   start_time: string;
   end_time: string;
   status: string;
+  public_visible: boolean;
 }
 
 interface ShiftFormModalProps {
@@ -71,6 +72,7 @@ export function ShiftFormModal({
       start_time: '',
       end_time: '',
       status: 'TENTATIVE',
+      public_visible: true,
     },
   });
   const {
@@ -81,6 +83,9 @@ export function ShiftFormModal({
     formState: { isSubmitting },
   } = form;
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [actualStartTime, setActualStartTime] = useState('');
+  const [actualEndTime, setActualEndTime] = useState('');
+  const [recordingActual, setRecordingActual] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -91,7 +96,10 @@ export function ShiftFormModal({
         start_time: (editing.start_time ?? '').slice(0, 5),
         end_time: (editing.end_time ?? '').slice(0, 5),
         status: editing.status ?? '',
+        public_visible: editing.public_visible ?? true,
       });
+      setActualStartTime((editing.actual_start_time ?? '').slice(0, 5));
+      setActualEndTime((editing.actual_end_time ?? '').slice(0, 5));
     } else {
       reset({
         cast_id: casts[0]?.id ?? '',
@@ -99,6 +107,7 @@ export function ShiftFormModal({
         start_time: '18:00',
         end_time: '23:00',
         status: 'TENTATIVE',
+        public_visible: true,
       });
     }
   }, [open, editing, defaultDate, casts, reset]);
@@ -110,6 +119,7 @@ export function ShiftFormModal({
       start_time: `${values.start_time}:00`,
       end_time: `${values.end_time}:00`,
       status: values.status,
+      public_visible: values.public_visible,
     };
     try {
       if (editing) {
@@ -123,6 +133,23 @@ export function ShiftFormModal({
       onClose();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'シフトの保存に失敗しました'));
+    }
+  };
+
+  const recordActual = async () => {
+    if (!editing || !actualStartTime || !actualEndTime) return;
+    setRecordingActual(true);
+    try {
+      await shiftApi.recordActual(editing.id ?? '', {
+        start_time: `${actualStartTime}:00`,
+        end_time: `${actualEndTime}:00`,
+      });
+      toast.success('当日実績を記録しました');
+      onSaved();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, '当日実績の記録に失敗しました'));
+    } finally {
+      setRecordingActual(false);
     }
   };
 
@@ -233,6 +260,43 @@ export function ShiftFormModal({
                 </FormItem>
               )}
             />
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input type="checkbox" {...register('public_visible')} />
+              公開出勤表に表示する
+            </label>
+            {editing && (
+              <div className="space-y-3 border-t pt-4">
+                <p className="text-sm font-medium text-foreground">当日実績</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="actual_start_time">実績開始</Label>
+                    <Input
+                      id="actual_start_time"
+                      type="time"
+                      value={actualStartTime}
+                      onChange={event => setActualStartTime(event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="actual_end_time">実績終了</Label>
+                    <Input
+                      id="actual_end_time"
+                      type="time"
+                      value={actualEndTime}
+                      onChange={event => setActualEndTime(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!actualStartTime || !actualEndTime || recordingActual}
+                  onClick={() => void recordActual()}
+                >
+                  {recordingActual ? '記録中...' : '実績を記録'}
+                </Button>
+              </div>
+            )}
             <div className="flex items-center justify-between border-t pt-4">
               <div>
                 {editing && (

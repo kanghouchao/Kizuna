@@ -1,12 +1,14 @@
 package com.kizuna.shift.api.store;
 
 import com.kizuna.shift.api.dto.PublicShiftResponse;
+import com.kizuna.shift.api.dto.ShiftActualRequest;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.application.ShiftService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +52,15 @@ public class ShiftController {
   public ResponseEntity<ShiftResponse> update(
       @PathVariable String id, @Valid @RequestBody ShiftUpdateRequest request) {
     return ResponseEntity.ok(shiftService.update(id, request));
+  }
+
+  @PutMapping("/{id}/actual")
+  @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
+  public ResponseEntity<ShiftResponse> recordActual(
+      Principal principal,
+      @PathVariable String id,
+      @Valid @RequestBody ShiftActualRequest request) {
+    return ResponseEntity.ok(shiftService.recordActual(id, request, principal.getName()));
   }
 
   @DeleteMapping("/{id}")

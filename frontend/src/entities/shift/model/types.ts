@@ -6,6 +6,14 @@ export interface ShiftResponse {
   start_time?: string;
   end_time?: string;
   status?: string;
+  public_visible?: boolean;
+  approved_by?: string;
+  approved_at?: string;
+  attendance_confirmed?: boolean;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  actual_recorded_by?: string;
+  actual_recorded_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -17,6 +25,7 @@ export interface ShiftCreateRequest {
   start_time: string;
   end_time: string;
   status?: string;
+  public_visible?: boolean;
 }
 
 // シフト更新リクエスト
@@ -26,20 +35,28 @@ export interface ShiftUpdateRequest {
   start_time?: string;
   end_time?: string;
   status?: string;
+  public_visible?: boolean;
 }
 
 // 本人（キャスト）ポータル週間スケジュールの1件（GET /platform/me/schedule）。店舗名を内联する。
 export interface CastScheduleItem {
+  id?: string;
   work_date?: string;
   start_time?: string;
   end_time?: string;
   status?: string;
+  attendance_confirmed?: boolean;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  actual_recorded_by?: string;
+  actual_recorded_at?: string;
   store_id?: number;
   store_name?: string;
 }
 
 // 出勤希望のステータス。PENDING=受付済み/APPROVED=確定済み/DECLINED=却下。
 export type ShiftRequestStatus = 'PENDING' | 'APPROVED' | 'DECLINED';
+export type ShiftRequestKind = 'NEW' | 'CHANGE';
 
 // 出勤希望の提出リクエスト（本人・cast）。work_date は 'yyyy-MM-dd'、時刻は 'HH:mm:ss'。
 export interface ShiftRequestCreateRequest {
@@ -48,6 +65,19 @@ export interface ShiftRequestCreateRequest {
   start_time: string;
   end_time: string;
   note?: string;
+}
+
+export interface ShiftChangeRequestCreateRequest {
+  target_shift_id: string;
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  note?: string;
+}
+
+export interface ShiftActualRequest {
+  start_time: string;
+  end_time: string;
 }
 
 // 出勤希望提出の応答（本人ポータル）。
@@ -60,6 +90,10 @@ export interface ShiftRequestResponse {
   // 未入力はキーごと応答から消えるため undefined であって null ではない
   note?: string;
   status?: ShiftRequestStatus;
+  kind?: ShiftRequestKind;
+  target_shift_id?: string;
+  decided_by?: string;
+  decided_at?: string;
   created_at?: string;
 }
 
@@ -71,6 +105,10 @@ export interface CastShiftRequestItem {
   end_time?: string;
   note?: string;
   status?: ShiftRequestStatus;
+  kind?: ShiftRequestKind;
+  target_shift_id?: string;
+  decided_by?: string;
+  decided_at?: string;
   store_id?: number;
   store_name?: string;
   created_at?: string;
@@ -91,4 +129,11 @@ export interface StoreShiftRequestItem {
   end_time?: string;
   note?: string;
   status?: ShiftRequestStatus;
+  kind?: ShiftRequestKind;
+  target_shift_id?: string;
+  decided_by?: string;
+  decided_at?: string;
+  current_work_date?: string;
+  current_start_time?: string;
+  current_end_time?: string;
 }

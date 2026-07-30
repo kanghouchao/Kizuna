@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
-import { Button } from '@/shared/ui';
+import { Badge, Button } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
   casts: CastResponse[];
@@ -77,10 +77,27 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
           className="flex items-center justify-between rounded-[10px] border bg-card p-4 shadow-sm"
         >
           <div>
-            <p className="text-sm font-medium text-foreground">{castName(request.cast_id)}</p>
-            <p className="text-sm text-muted-foreground">
-              {request.work_date} {request.start_time?.slice(0, 5)}–{request.end_time?.slice(0, 5)}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-foreground">{castName(request.cast_id)}</p>
+              <Badge variant="outline">{request.kind === 'CHANGE' ? '変更申請' : '新規希望'}</Badge>
+            </div>
+            {request.kind === 'CHANGE' ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {request.current_work_date} {request.current_start_time?.slice(0, 5)}–
+                  {request.current_end_time?.slice(0, 5)}
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  {request.work_date} {request.start_time?.slice(0, 5)}–
+                  {request.end_time?.slice(0, 5)}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {request.work_date} {request.start_time?.slice(0, 5)}–
+                {request.end_time?.slice(0, 5)}
+              </p>
+            )}
             {request.note && <p className="mt-1 text-xs text-muted-foreground">{request.note}</p>}
           </div>
           <div className="flex gap-2">
@@ -91,7 +108,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
               onClick={() => decline(request.id ?? '')}
               disabled={processingId === request.id}
             >
-              辞退
+              {request.kind === 'CHANGE' ? '謝絶' : '辞退'}
             </Button>
             <Button
               type="button"
@@ -99,7 +116,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
               onClick={() => approve(request.id ?? '')}
               disabled={processingId === request.id}
             >
-              承認
+              {request.kind === 'CHANGE' ? '承認してシフト更新' : '承認'}
             </Button>
           </div>
         </li>

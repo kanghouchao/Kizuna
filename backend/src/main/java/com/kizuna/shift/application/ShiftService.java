@@ -6,8 +6,10 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
+import com.kizuna.shift.api.dto.ShiftActualRequest;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.api.dto.ShiftResponse;
@@ -19,6 +21,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -37,6 +40,7 @@ public class ShiftService {
   private final CastService castService;
   private final CastRepository castRepository;
   private final AppProperties appProperties;
+  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -57,7 +61,8 @@ public class ShiftService {
   public List<PublicShiftResponse> listPublicToday() {
     LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
     List<Shift> shifts =
-        shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(today, "CONFIRMED");
+        shiftRepository.findByWorkDateAndStatusAndPublicVisibleTrueOrderByStartTimeAsc(
+            today, "CONFIRMED");
     if (shifts.isEmpty()) {
       return List.of();
     }
@@ -118,6 +123,24 @@ public class ShiftService {
 
     shift.apply(shiftMapper.toPatch(request));
 
+    return shiftMapper.toResponse(shiftRepository.save(shift));
+  }
+
+  @StoreScoped
+  @Transactional
+  public ShiftResponse recordActual(String id, ShiftActualRequest request, String actor) {
+    if (request.getStartTime().equals(request.getEndTime())) {
+      throw new ServiceException("実績の開始時刻と終了時刻が同一です");
+    }
+    Shift shift =
+        shiftRepository
+            .findById(id)
+            .filter(found -> Objects.equals(found.getStoreId(), storeContext.getStoreId()))
+            .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
+    if (!"CONFIRMED".equals(shift.getStatus())) {
+      throw new ServiceException("確定済みのシフトにのみ当日実績を記録できます");
+    }
+    shift.recordActual(request.getStartTime(), request.getEndTime(), actor);
     return shiftMapper.toResponse(shiftRepository.save(shift));
   }
 

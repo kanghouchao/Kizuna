@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 
 class ShiftTest {
@@ -22,7 +23,7 @@ class ShiftTest {
   void apply_updatesOnlyNonNullFields() {
     Shift shift = baseShift();
 
-    shift.apply(new ShiftPatch(null, null, null, LocalTime.of(1, 0), "CONFIRMED"));
+    shift.apply(new ShiftPatch(null, null, null, LocalTime.of(1, 0), "CONFIRMED", null));
 
     // null のフィールドは変更されない
     assertThat(shift.getCastId()).isEqualTo("c1");
@@ -39,25 +40,48 @@ class ShiftTest {
 
     shift.apply(
         new ShiftPatch(
-            "c2", LocalDate.of(2026, 7, 9), LocalTime.of(19, 0), LocalTime.of(2, 0), "CONFIRMED"));
+            "c2",
+            LocalDate.of(2026, 7, 9),
+            LocalTime.of(19, 0),
+            LocalTime.of(2, 0),
+            "CONFIRMED",
+            false));
 
     assertThat(shift.getCastId()).isEqualTo("c2");
     assertThat(shift.getWorkDate()).isEqualTo(LocalDate.of(2026, 7, 9));
     assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(19, 0));
     assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(2, 0));
     assertThat(shift.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(shift.isPublicVisible()).isFalse();
   }
 
   @Test
   void apply_withEmptyPatch_changesNothing() {
     Shift shift = baseShift();
 
-    shift.apply(new ShiftPatch(null, null, null, null, null));
+    shift.apply(new ShiftPatch(null, null, null, null, null, null));
 
     assertThat(shift.getCastId()).isEqualTo("c1");
     assertThat(shift.getWorkDate()).isEqualTo(LocalDate.of(2026, 7, 8));
     assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
     assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(23, 0));
     assertThat(shift.getStatus()).isEqualTo("TENTATIVE");
+    assertThat(shift.isPublicVisible()).isTrue();
+  }
+
+  @Test
+  void recordActual_keepsPlannedTimesAndTracksRecorder() {
+    Shift shift = baseShift();
+    OffsetDateTime before = OffsetDateTime.now();
+
+    shift.recordActual(LocalTime.of(18, 5), LocalTime.of(23, 10), "staff@kizuna.test");
+
+    assertThat(shift.isAttendanceConfirmed()).isTrue();
+    assertThat(shift.getActualStartTime()).isEqualTo(LocalTime.of(18, 5));
+    assertThat(shift.getActualEndTime()).isEqualTo(LocalTime.of(23, 10));
+    assertThat(shift.getActualRecordedBy()).isEqualTo("staff@kizuna.test");
+    assertThat(shift.getActualRecordedAt()).isAfterOrEqualTo(before);
+    assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(23, 0));
   }
 }

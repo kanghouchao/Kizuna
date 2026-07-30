@@ -21,5 +21,9 @@ public class ShiftRequestResponse {
   private LocalTime endTime;
   private String note;
   private String status;
+  private String kind;
+  private String targetShiftId;
+  private String decidedBy;
+  private OffsetDateTime decidedAt;
   private OffsetDateTime createdAt;
 }

@@ -2,6 +2,7 @@ package com.kizuna.shift.domain;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 
 /**
  * 本人（キャスト）ポータル週間スケジュールの読み側 projection。
@@ -10,6 +11,9 @@ import java.time.LocalTime;
  */
 public interface CastScheduleView {
 
+  /** シフト id。本人が確定済みシフトを指して変更申請を出すために必要。 */
+  String getId();
+
   LocalDate getWorkDate();
 
   LocalTime getStartTime();
@@ -17,6 +21,16 @@ public interface CastScheduleView {
   LocalTime getEndTime();
 
   String getStatus();
+
+  boolean isAttendanceConfirmed();
+
+  LocalTime getActualStartTime();
+
+  LocalTime getActualEndTime();
+
+  String getActualRecordedBy();
+
+  OffsetDateTime getActualRecordedAt();
 
   Long getStoreId();
 

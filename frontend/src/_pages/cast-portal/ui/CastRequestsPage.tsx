@@ -51,6 +51,12 @@ const STATUS_PILL_CLASS: Record<ShiftRequestStatus, string> = {
   DECLINED: 'border-transparent bg-destructive/10 text-destructive-strong',
 };
 
+const CHANGE_STATUS_LABELS: Record<ShiftRequestStatus, string> = {
+  PENDING: '変更受付済み',
+  APPROVED: '変更承認済み',
+  DECLINED: '謝絶',
+};
+
 /** 本日の 'yyyy-MM-dd' を返す（過去日拒否の下限。当日の出勤希望は許容する）。 */
 function todayStr(): string {
   return toDateStr(new Date());
@@ -249,12 +255,20 @@ export function CastRequestsPage() {
                   <CardContent className="px-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground">{item.store_name}</span>
-                      <Badge
-                        variant="outline"
-                        className={item.status && STATUS_PILL_CLASS[item.status]}
-                      >
-                        {item.status && STATUS_LABELS[item.status]}
-                      </Badge>
+                      <div className="flex gap-1">
+                        <Badge variant="outline">
+                          {item.kind === 'CHANGE' ? '変更申請' : '新規希望'}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className={item.status && STATUS_PILL_CLASS[item.status]}
+                        >
+                          {item.status &&
+                            (item.kind === 'CHANGE'
+                              ? CHANGE_STATUS_LABELS[item.status]
+                              : STATUS_LABELS[item.status])}
+                        </Badge>
+                      </div>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {item.work_date} {item.start_time?.slice(0, 5)}–{item.end_time?.slice(0, 5)}

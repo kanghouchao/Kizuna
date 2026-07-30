@@ -3,6 +3,7 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,7 +13,9 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
+import com.kizuna.shift.api.dto.ShiftActualRequest;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.api.dto.ShiftResponse;
@@ -40,6 +43,7 @@ class ShiftServiceTest {
   @Mock private CastService castService;
   @Mock private CastRepository castRepository;
   @Mock private AppProperties appProperties;
+  @Mock private StoreContext storeContext;
 
   @InjectMocks private ShiftService shiftService;
 
@@ -124,7 +128,8 @@ class ShiftServiceTest {
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setStatus("CONFIRMED");
-    when(shiftMapper.toPatch(req)).thenReturn(new ShiftPatch(null, null, null, null, "CONFIRMED"));
+    when(shiftMapper.toPatch(req))
+        .thenReturn(new ShiftPatch(null, null, null, null, "CONFIRMED", null));
 
     ShiftResponse resp = new ShiftResponse();
     resp.setStatus("CONFIRMED");
@@ -214,6 +219,111 @@ class ShiftServiceTest {
   }
 
   @Test
+  void update_changesPublicationWithoutChangingConfirmationOrPlannedTimes() {
+    Shift shift =
+        Shift.builder()
+            .castId("c1")
+            .workDate(LocalDate.of(2026, 7, 8))
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status("CONFIRMED")
+            .publicVisible(true)
+            .build();
+    shift.setId("s1");
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(shiftRepository.save(shift)).thenReturn(shift);
+
+    ShiftUpdateRequest request = new ShiftUpdateRequest();
+    request.setPublicVisible(false);
+    when(shiftMapper.toPatch(request))
+        .thenReturn(new ShiftPatch(null, null, null, null, null, false));
+    when(shiftMapper.toResponse(shift)).thenReturn(new ShiftResponse());
+
+    shiftService.update("s1", request);
+
+    assertThat(shift.isPublicVisible()).isFalse();
+    assertThat(shift.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(23, 0));
+  }
+
+  @Test
+  void recordActual_tracksActualTimesAndActorWithoutChangingPlan() {
+    Shift shift =
+        Shift.builder()
+            .castId("c1")
+            .workDate(LocalDate.of(2026, 7, 8))
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status("CONFIRMED")
+            .build();
+    shift.setId("s1");
+    shift.setStoreId(1L);
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(storeContext.getStoreId()).thenReturn(1L);
+    when(shiftRepository.save(shift)).thenReturn(shift);
+    when(shiftMapper.toResponse(shift)).thenReturn(new ShiftResponse());
+    ShiftActualRequest request = new ShiftActualRequest();
+    request.setStartTime(LocalTime.of(18, 5));
+    request.setEndTime(LocalTime.of(23, 10));
+
+    shiftService.recordActual("s1", request, "staff@kizuna.test");
+
+    assertThat(shift.isAttendanceConfirmed()).isTrue();
+    assertThat(shift.getActualStartTime()).isEqualTo(LocalTime.of(18, 5));
+    assertThat(shift.getActualEndTime()).isEqualTo(LocalTime.of(23, 10));
+    assertThat(shift.getActualRecordedBy()).isEqualTo("staff@kizuna.test");
+    assertThat(shift.getActualRecordedAt()).isNotNull();
+    assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(23, 0));
+  }
+
+  @Test
+  void recordActual_rejectsTentativeShift() {
+    Shift shift =
+        Shift.builder()
+            .castId("c1")
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status("TENTATIVE")
+            .build();
+    shift.setId("s1");
+    shift.setStoreId(1L);
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(storeContext.getStoreId()).thenReturn(1L);
+    ShiftActualRequest request = new ShiftActualRequest();
+    request.setStartTime(LocalTime.of(18, 5));
+    request.setEndTime(LocalTime.of(23, 10));
+
+    assertThatThrownBy(() -> shiftService.recordActual("s1", request, "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("確定済み");
+  }
+
+  @Test
+  void recordActual_rejectsShiftFromAnotherStoreEvenWhenDirectIdLoadFindsIt() {
+    Shift shift =
+        Shift.builder()
+            .castId("c1")
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status("CONFIRMED")
+            .build();
+    shift.setId("s1");
+    shift.setStoreId(2L);
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(storeContext.getStoreId()).thenReturn(1L);
+    ShiftActualRequest request = new ShiftActualRequest();
+    request.setStartTime(LocalTime.of(18, 5));
+    request.setEndTime(LocalTime.of(23, 10));
+
+    assertThatThrownBy(() -> shiftService.recordActual("s1", request, "staff@kizuna.test"))
+        .isInstanceOf(NotFoundException.class);
+
+    verify(shiftRepository, never()).save(any());
+  }
+
+  @Test
   void delete_removes() {
     when(shiftRepository.existsById("s1")).thenReturn(true);
     shiftService.delete("s1");
@@ -250,7 +360,8 @@ class ShiftServiceTest {
             .startTime(LocalTime.of(21, 0))
             .endTime(LocalTime.of(23, 0))
             .build();
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublicVisibleTrueOrderByStartTimeAsc(
+            any(), any()))
         .thenReturn(List.of(first, second));
     when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
         .thenReturn(List.of(activeCast("cA", "キャストA", "urlA"), activeCast("cB", "キャストB", "urlB")));
@@ -272,7 +383,8 @@ class ShiftServiceTest {
   void listPublicToday_queriesTodayInConfiguredTimezoneWithConfirmedStatus() {
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     LocalDate expectedToday = LocalDate.now(ZoneId.of("Asia/Tokyo"));
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublicVisibleTrueOrderByStartTimeAsc(
+            any(), any()))
         .thenReturn(List.of());
 
     shiftService.listPublicToday();
@@ -280,7 +392,8 @@ class ShiftServiceTest {
     ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
     ArgumentCaptor<String> statusCaptor = ArgumentCaptor.forClass(String.class);
     verify(shiftRepository)
-        .findByWorkDateAndStatusOrderByStartTimeAsc(dateCaptor.capture(), statusCaptor.capture());
+        .findByWorkDateAndStatusAndPublicVisibleTrueOrderByStartTimeAsc(
+            dateCaptor.capture(), statusCaptor.capture());
     assertThat(dateCaptor.getValue()).isEqualTo(expectedToday);
     assertThat(statusCaptor.getValue()).isEqualTo("CONFIRMED");
   }
@@ -300,7 +413,8 @@ class ShiftServiceTest {
             .startTime(LocalTime.of(19, 0))
             .endTime(LocalTime.of(21, 0))
             .build();
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublicVisibleTrueOrderByStartTimeAsc(
+            any(), any()))
         .thenReturn(List.of(active, orphan));
     when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
         .thenReturn(List.of(activeCast("cA", "キャストA", "urlA")));
@@ -314,7 +428,8 @@ class ShiftServiceTest {
   @Test
   void listPublicToday_returnsEmptyWhenNoConfirmedShifts() {
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublicVisibleTrueOrderByStartTimeAsc(
+            any(), any()))
         .thenReturn(List.of());
 
     assertThat(shiftService.listPublicToday()).isEmpty();

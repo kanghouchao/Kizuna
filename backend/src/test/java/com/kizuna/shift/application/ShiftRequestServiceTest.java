@@ -14,6 +14,7 @@ import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
+import com.kizuna.shift.domain.ShiftRequestKind;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestStateException;
 import com.kizuna.shift.domain.ShiftRequestStatus;
@@ -30,6 +31,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ShiftRequestServiceTest {
+
+  private static final String STAFF = "staff@kizuna.test";
 
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private ShiftRepository shiftRepository;
@@ -86,7 +89,7 @@ class ShiftRequestServiceTest {
   void approve_throwsWhenNotFound() {
     when(shiftRequestRepository.findById("missing")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftRequestService.approve("missing"))
+    assertThatThrownBy(() -> shiftRequestService.approve("missing", STAFF))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("出勤希望が見つかりません");
 
@@ -101,7 +104,15 @@ class ShiftRequestServiceTest {
     when(shiftRequestMapper.toStoreResponse(request))
         .thenReturn(StoreShiftRequestResponse.builder().id("sr1").status("APPROVED").build());
 
-    StoreShiftRequestResponse result = shiftRequestService.approve("sr1");
+    when(shiftRepository.save(any()))
+        .thenAnswer(
+            invocation -> {
+              Shift shift = invocation.getArgument(0);
+              shift.setId("s1");
+              return shift;
+            });
+
+    StoreShiftRequestResponse result = shiftRequestService.approve("sr1", STAFF);
 
     assertThat(result.getStatus()).isEqualTo("APPROVED");
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
@@ -114,15 +125,20 @@ class ShiftRequestServiceTest {
     assertThat(shift.getStartTime()).isEqualTo(request.getStartTime());
     assertThat(shift.getEndTime()).isEqualTo(request.getEndTime());
     assertThat(shift.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(shift.getApprovedBy()).isEqualTo(STAFF);
+    assertThat(shift.getApprovedAt()).isNotNull();
+    assertThat(request.getTargetShiftId()).isEqualTo("s1");
+    assertThat(request.getDecidedBy()).isEqualTo(STAFF);
+    assertThat(request.getDecidedAt()).isNotNull();
   }
 
   @Test
   void approve_whenAlreadyProcessed_throwsStateExceptionAndCreatesNoShift() {
     ShiftRequest request = pendingRequest();
-    request.approve();
+    request.approve(STAFF);
     when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
 
-    assertThatThrownBy(() -> shiftRequestService.approve("sr1"))
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", STAFF))
         .isInstanceOf(ShiftRequestStateException.class);
 
     verify(shiftRepository, never()).save(any());
@@ -137,10 +153,12 @@ class ShiftRequestServiceTest {
     when(shiftRequestMapper.toStoreResponse(request))
         .thenReturn(StoreShiftRequestResponse.builder().id("sr1").status("DECLINED").build());
 
-    StoreShiftRequestResponse result = shiftRequestService.decline("sr1");
+    StoreShiftRequestResponse result = shiftRequestService.decline("sr1", STAFF);
 
     assertThat(result.getStatus()).isEqualTo("DECLINED");
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
+    assertThat(request.getDecidedBy()).isEqualTo(STAFF);
+    assertThat(request.getDecidedAt()).isNotNull();
     verify(shiftRepository, never()).save(any());
   }
 
@@ -148,8 +166,134 @@ class ShiftRequestServiceTest {
   void decline_throwsWhenNotFound() {
     when(shiftRequestRepository.findById("missing")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftRequestService.decline("missing"))
+    assertThatThrownBy(() -> shiftRequestService.decline("missing", STAFF))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("出勤希望が見つかりません");
+  }
+
+  // ---- 変更申請（kind=CHANGE） ----
+
+  private ShiftRequest pendingChangeRequest() {
+    ShiftRequest request =
+        ShiftRequest.builder()
+            .castId("c1")
+            .kind(ShiftRequestKind.CHANGE)
+            .targetShiftId("s1")
+            .workDate(LocalDate.of(2999, 8, 2))
+            .startTime(LocalTime.of(19, 0))
+            .endTime(LocalTime.of(22, 0))
+            .build();
+    request.setId("sr1");
+    request.setStoreId(1L);
+    return request;
+  }
+
+  private Shift targetShift() {
+    Shift shift =
+        Shift.builder()
+            .castId("c1")
+            .workDate(LocalDate.of(2999, 8, 1))
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status("CONFIRMED")
+            .publicVisible(false)
+            .build();
+    shift.setId("s1");
+    shift.setStoreId(1L);
+    return shift;
+  }
+
+  @Test
+  void approveChange_updatesTargetShiftInPlaceWithoutCreatingANewOne() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift target = targetShift();
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRequestRepository.save(request)).thenReturn(request);
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(target));
+    when(shiftRepository.findAllById(List.of("s1"))).thenReturn(List.of(target));
+    when(shiftRequestMapper.toStoreResponse(request))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").status("APPROVED").build());
+
+    StoreShiftRequestResponse result = shiftRequestService.approve("sr1", STAFF);
+
+    assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
+    // 既存の行が更新される（新規作成ではない）ので、シフト側だけが持つ属性は申請の外側で保たれる。
+    verify(shiftRepository).save(target);
+    assertThat(target.getWorkDate()).isEqualTo(LocalDate.of(2999, 8, 2));
+    assertThat(target.getStartTime()).isEqualTo(LocalTime.of(19, 0));
+    assertThat(target.getEndTime()).isEqualTo(LocalTime.of(22, 0));
+    assertThat(target.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(target.getCastId()).isEqualTo("c1");
+    assertThat(target.isPublicVisible()).isFalse();
+    // 応答には変更後の対象シフトの現在値が添う。
+    assertThat(result.getCurrentStartTime()).isEqualTo(LocalTime.of(19, 0));
+  }
+
+  @Test
+  void approveChange_whenTargetShiftBelongsToAnotherStore_isRejectedAndLeavesItUntouched() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift foreign = targetShift();
+    foreign.setStoreId(2L);
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(foreign));
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", STAFF))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("変更対象のシフトが見つかりません");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+    assertThat(foreign.getWorkDate()).isEqualTo(LocalDate.of(2999, 8, 1));
+  }
+
+  @Test
+  void approveChange_whenTargetShiftIsGone_isRejected() {
+    ShiftRequest request = pendingChangeRequest();
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("s1")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", STAFF))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("変更対象のシフトが見つかりません");
+
+    verify(shiftRequestRepository, never()).save(any());
+  }
+
+  @Test
+  void declineChange_leavesTargetShiftUnchanged() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift target = targetShift();
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRequestRepository.save(request)).thenReturn(request);
+    when(shiftRepository.findAllById(List.of("s1"))).thenReturn(List.of(target));
+    when(shiftRequestMapper.toStoreResponse(request))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").status("DECLINED").build());
+
+    StoreShiftRequestResponse result = shiftRequestService.decline("sr1", STAFF);
+
+    assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
+    verify(shiftRepository, never()).save(any());
+    assertThat(target.getWorkDate()).isEqualTo(LocalDate.of(2999, 8, 1));
+    assertThat(target.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(target.getEndTime()).isEqualTo(LocalTime.of(23, 0));
+    // 謝絶の応答でも、元のシフトの現在値が変更前のまま添う。
+    assertThat(result.getCurrentStartTime()).isEqualTo(LocalTime.of(18, 0));
+  }
+
+  @Test
+  void list_attachesCurrentShiftValuesToChangeRequests() {
+    ShiftRequest request = pendingChangeRequest();
+    when(shiftRequestRepository.findByStatusOrderByCreatedAtAsc(ShiftRequestStatus.PENDING))
+        .thenReturn(List.of(request));
+    when(shiftRepository.findAllById(List.of("s1"))).thenReturn(List.of(targetShift()));
+    when(shiftRequestMapper.toStoreResponse(request))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").kind("CHANGE").build());
+
+    List<StoreShiftRequestResponse> result = shiftRequestService.list("PENDING");
+
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getCurrentWorkDate()).isEqualTo(LocalDate.of(2999, 8, 1));
+    assertThat(result.get(0).getCurrentStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(result.get(0).getCurrentEndTime()).isEqualTo(LocalTime.of(23, 0));
   }
 }

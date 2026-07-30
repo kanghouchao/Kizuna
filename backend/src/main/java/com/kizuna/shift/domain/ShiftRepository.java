@@ -12,7 +12,8 @@ public interface ShiftRepository
 
   List<Shift> findByWorkDateBetween(LocalDate from, LocalDate to);
 
-  List<Shift> findByWorkDateAndStatusOrderByStartTimeAsc(LocalDate workDate, String status);
+  List<Shift> findByWorkDateAndStatusAndPublicVisibleTrueOrderByStartTimeAsc(
+      LocalDate workDate, String status);
 
   /**
    * 本人（cast_id 集合、跨店）の週間確定シフトを店名内联で返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか 存在しないため、cast_id
@@ -20,8 +21,11 @@ public interface ShiftRepository
    */
   @Query(
       """
-      select s.workDate as workDate, s.startTime as startTime, s.endTime as endTime,
-             s.status as status, s.storeId as storeId, st.name as storeName
+      select s.id as id, s.workDate as workDate, s.startTime as startTime, s.endTime as endTime,
+             s.status as status, s.attendanceConfirmed as attendanceConfirmed,
+             s.actualStartTime as actualStartTime, s.actualEndTime as actualEndTime,
+             s.actualRecordedBy as actualRecordedBy, s.actualRecordedAt as actualRecordedAt,
+             s.storeId as storeId, st.name as storeName
       from Shift s join com.kizuna.store.domain.Store st on st.id = s.storeId
       where s.castId in :castIds and s.status = 'CONFIRMED'
         and s.workDate between :from and :to

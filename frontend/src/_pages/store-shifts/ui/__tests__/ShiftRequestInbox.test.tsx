@@ -64,6 +64,30 @@ describe('ShiftRequestInbox', () => {
     expect(mockedList).toHaveBeenCalledWith({ status: 'PENDING' });
   });
 
+  it('変更申請は種別と変更前後を表示し、承認操作の意味を区別する', async () => {
+    mockedList.mockResolvedValue([
+      {
+        ...REQUEST,
+        kind: 'CHANGE',
+        target_shift_id: 's1',
+        work_date: '2026-08-02',
+        start_time: '19:00:00',
+        end_time: '23:30:00',
+        current_work_date: '2026-08-01',
+        current_start_time: '18:00:00',
+        current_end_time: '23:00:00',
+      },
+    ]);
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
+
+    expect(await screen.findByText('変更申請')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-01 18:00–23:00')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-02 19:00–23:30')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '承認してシフト更新' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
+  });
+
   it('承認すると一覧とシフトを再取得すること', async () => {
     mockedList.mockResolvedValue([REQUEST]);
     mockedApprove.mockResolvedValue({ ...REQUEST, status: 'APPROVED' });

@@ -11,4 +11,5 @@ public class ShiftUpdateRequest {
   private LocalTime startTime;
   private LocalTime endTime;
   private String status;
+  private Boolean publicVisible;
 }

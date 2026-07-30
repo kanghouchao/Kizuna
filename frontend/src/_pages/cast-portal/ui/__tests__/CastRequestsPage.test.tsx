@@ -145,6 +145,37 @@ describe('CastRequestsPage', () => {
     expect(screen.getByText('却下')).toBeInTheDocument();
   });
 
+  it('変更申請の結果は変更承認済み・謝絶として区別して表示すること', async () => {
+    mockedMyShiftRequests.mockResolvedValue([
+      {
+        id: 'sr-change-approved',
+        kind: 'CHANGE',
+        work_date: '2026-08-02',
+        start_time: '19:00:00',
+        end_time: '23:00:00',
+        status: 'APPROVED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+      {
+        id: 'sr-change-declined',
+        kind: 'CHANGE',
+        work_date: '2026-08-03',
+        start_time: '19:00:00',
+        end_time: '23:00:00',
+        status: 'DECLINED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+
+    render(<CastRequestsPage />);
+
+    expect(await screen.findByText('変更承認済み')).toBeInTheDocument();
+    expect(screen.getByText('謝絶')).toBeInTheDocument();
+    expect(screen.getAllByText('変更申請')).toHaveLength(2);
+  });
+
   it('取得に失敗した場合はエラー文言を表示すること', async () => {
     mockedMyShiftRequests.mockRejectedValue(new Error('network error'));
 

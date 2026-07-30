@@ -1,0 +1,82 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0400-002-shift-request-change
+      author: kanghouchao
+      # 確定済みシフトへの変更申請を、新規希望と同じ t_shift_requests の状態系列で扱う。
+      # 種別（kind）と対象シフト（target_shift_id）を足すのみで、別テーブルには分けない。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_shift_requests
+            columns:
+              - column:
+                  name: kind
+                  type: VARCHAR(20)
+                  defaultValue: NEW
+                  constraints:
+                    nullable: false
+                  remarks: 種別（NEW=新規希望/CHANGE=確定済みシフトへの変更申請）
+              - column:
+                  name: target_shift_id
+                  type: VARCHAR(64)
+                  remarks: 同一正本系列の確定シフト（CHANGE は申請時、NEW は承認時に設定）
+              - column:
+                  name: decided_by
+                  type: VARCHAR(255)
+                  remarks: 承認・謝絶の実行主体
+              - column:
+                  name: decided_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 承認・謝絶の実行日時
+        - addColumn:
+            tableName: t_shifts
+            columns:
+              - column:
+                  name: public_visible
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+                  remarks: 承認状態とは独立した公開可否
+              - column:
+                  name: approved_by
+                  type: VARCHAR(255)
+                  remarks: 希望を承認して確定した実行主体
+              - column:
+                  name: approved_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 希望を承認して確定した日時
+              - column:
+                  name: attendance_confirmed
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+                  remarks: 当日実績が記録済みか
+              - column:
+                  name: actual_start_time
+                  type: TIME
+                  remarks: 実際の開始時刻
+              - column:
+                  name: actual_end_time
+                  type: TIME
+                  remarks: 実際の終了時刻
+              - column:
+                  name: actual_recorded_by
+                  type: VARCHAR(255)
+                  remarks: 当日実績の記録主体
+              - column:
+                  name: actual_recorded_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 当日実績の記録日時
+        # シフトが削除されても申請の履歴（キャストへ返す結果状態）は残す必要があるため CASCADE ではなく SET NULL。
+        # 対象を失った申請の承認は、アプリケーション側が対象不在として拒否する。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_shift_requests_target_shift
+            baseTableName: t_shift_requests
+            baseColumnNames: target_shift_id
+            referencedTableName: t_shifts
+            referencedColumnNames: id
+            onDelete: SET NULL
