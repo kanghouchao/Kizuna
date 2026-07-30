@@ -85,7 +85,13 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
       ...initialData,
     },
   });
-  const { register, handleSubmit, setValue, control } = form;
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    control,
+    formState: { errors },
+  } = form;
 
   const [castNameInput, setCastNameInput] = useState('');
   const [castOptions, setCastOptions] = useState<CastResponse[]>([]);
@@ -183,7 +189,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                 control={control}
                 name="receptionistId"
                 // 受付はサーバ側が @NotNull。未選択のまま送ると 400 になるため送信前に止める
-                rules={{ required: true }}
+                rules={{ required: '受付を選択してください' }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>受付 *</FormLabel>
@@ -318,7 +324,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="relative grid gap-2">
-                <Label htmlFor="castName">キャスト</Label>
+                <Label htmlFor="castName">キャスト *</Label>
                 <Input
                   id="castName"
                   type="text"
@@ -331,7 +337,11 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                   aria-controls="cast-suggestions"
                   autoComplete="off"
                 />
-                <input type="hidden" {...register('castId')} />
+                {/* キャストはサーバ側が @NotBlank。候補から選ばないと 400 になるため送信前に止める */}
+                <input
+                  type="hidden"
+                  {...register('castId', { required: 'キャストを候補から選択してください' })}
+                />
                 {isCastOpen && (
                   <div
                     id="cast-suggestions"
@@ -362,6 +372,9 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                       </ul>
                     )}
                   </div>
+                )}
+                {errors.castId && (
+                  <p className="text-sm text-destructive">{errors.castId.message}</p>
                 )}
               </div>
               <FormField
