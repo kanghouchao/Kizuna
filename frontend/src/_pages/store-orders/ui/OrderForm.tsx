@@ -17,6 +17,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
   Input,
   Label,
   Select,
@@ -185,7 +186,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                 rules={{ required: true }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>受付</FormLabel>
+                    <FormLabel>受付 *</FormLabel>
                     <Select
                       value={field.value ? field.value : SELECT_NONE}
                       onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
@@ -208,6 +209,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                         })}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

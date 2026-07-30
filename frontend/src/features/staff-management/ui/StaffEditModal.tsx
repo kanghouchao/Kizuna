@@ -46,7 +46,9 @@ export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditMod
   useEffect(() => {
     if (!open || !staff) return;
     setRoleIds((staff.roles ?? []).flatMap(role => (role.id === undefined ? [] : [role.id])));
-    setStoreScopeType(staff.store_scope_type ?? 'ALL_STORES');
+    // 欠落時は全店舗ではなく個別店舗（storeIds 空 = どの店舗にも及ばない）へ倒す。
+    // 既定を全店舗にすると、保存操作がそのまま作用域の拡大になる。
+    setStoreScopeType(staff.store_scope_type ?? 'SPECIFIC_STORES');
     setStoreIds(staff.store_ids ?? []);
     setEnabled(staff.enabled);
   }, [open, staff]);
