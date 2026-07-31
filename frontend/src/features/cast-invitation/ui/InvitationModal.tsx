@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
 
@@ -14,12 +15,19 @@ interface InvitationModalProps {
 
 /** 招待発行モーダル（リンク+コピー+有効期限+跨店注記のみ。LINE送信ボタンは付けない。裁定10）。 */
 export function InvitationModal({ open, link, expiresAt, onClose }: InvitationModalProps) {
+  const linkInputRef = useRef<HTMLInputElement>(null);
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(link);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        linkInputRef.current?.select();
+        if (!document.execCommand('copy')) throw new Error('copy failed');
+      }
       toast.success('リンクをコピーしました');
     } catch {
-      toast.error('リンクのコピーに失敗しました');
+      toast.error('リンクをコピーできませんでした。招待リンクを選択して手動でコピーしてください。');
     }
   };
 
@@ -42,6 +50,7 @@ export function InvitationModal({ open, link, expiresAt, onClose }: InvitationMo
           <div className="grid gap-1">
             <Label htmlFor="cast-invitation-link">招待リンク</Label>
             <Input
+              ref={linkInputRef}
               id="cast-invitation-link"
               type="text"
               readOnly

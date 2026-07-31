@@ -8,6 +8,7 @@ jest.mock('react-hot-toast', () => ({
 
 const mockedToast = toast as jest.Mocked<typeof toast>;
 const writeText = jest.fn();
+const execCommand = jest.fn();
 
 const LINK = 'https://store.example.com/cast/invite/abc';
 
@@ -19,6 +20,11 @@ describe('キャスト招待リンクのモーダル', () => {
       configurable: true,
       value: { writeText },
     });
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: execCommand,
+    });
+    execCommand.mockReturnValue(true);
   });
 
   it('閉じているときは何も描画しない', () => {
@@ -44,6 +50,22 @@ describe('キャスト招待リンクのモーダル', () => {
     expect(mockedToast.success).toHaveBeenCalledWith('リンクをコピーしました');
   });
 
+  it('Clipboard API が使えない場合は入力欄を選択してコピーする', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: undefined,
+    });
+    render(<InvitationModal open link={LINK} expiresAt={null} onClose={jest.fn()} />);
+    const input = screen.getByLabelText('招待リンク') as HTMLInputElement;
+    const select = jest.spyOn(input, 'select');
+
+    fireEvent.click(screen.getByRole('button', { name: 'コピー' }));
+
+    await waitFor(() => expect(execCommand).toHaveBeenCalledWith('copy'));
+    expect(select).toHaveBeenCalled();
+    expect(mockedToast.success).toHaveBeenCalledWith('リンクをコピーしました');
+  });
+
   it('コピー失敗は失敗トーストを出す', async () => {
     writeText.mockRejectedValue(new Error('denied'));
     render(<InvitationModal open link={LINK} expiresAt={null} onClose={jest.fn()} />);
@@ -51,7 +73,9 @@ describe('キャスト招待リンクのモーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: 'コピー' }));
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('リンクのコピーに失敗しました')
+      expect(mockedToast.error).toHaveBeenCalledWith(
+        'リンクをコピーできませんでした。招待リンクを選択して手動でコピーしてください。'
+      )
     );
   });
 
