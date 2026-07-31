@@ -152,6 +152,12 @@ export function CastSchedulePage() {
                           </Button>
                         )}
                       </div>
+                      {item.attendance_confirmed && (
+                        <p className="mt-1 text-right text-xs text-success-strong">
+                          実績記録済み {formatTime(item.actual_start_time)}–
+                          {formatEndTime(item.actual_end_time)}
+                        </p>
+                      )}
                       {change && change.id === item.id && (
                         <form className="mt-3 grid gap-3" onSubmit={submitChange}>
                           <div className="grid gap-1">

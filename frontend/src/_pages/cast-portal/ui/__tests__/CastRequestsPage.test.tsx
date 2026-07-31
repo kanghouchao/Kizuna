@@ -176,6 +176,31 @@ describe('CastRequestsPage', () => {
     expect(screen.getAllByText('変更申請')).toHaveLength(2);
   });
 
+  it('処理済みの履歴に判断者と判断日時を表示すること', async () => {
+    const decidedAt = '2026-07-31T02:18:29Z';
+    mockedMyShiftRequests.mockResolvedValue([
+      {
+        id: 'sr-approved',
+        kind: 'CHANGE',
+        work_date: '2026-08-02',
+        start_time: '19:00:00',
+        end_time: '23:00:00',
+        status: 'APPROVED',
+        decided_by: 'staff@kizuna.test',
+        decided_at: decidedAt,
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+
+    render(<CastRequestsPage />);
+
+    expect(await screen.findByText('判断者: staff@kizuna.test')).toBeInTheDocument();
+    expect(
+      screen.getByText(`判断日時: ${new Date(decidedAt).toLocaleString('ja-JP')}`)
+    ).toBeInTheDocument();
+  });
+
   it('取得に失敗した場合はエラー文言を表示すること', async () => {
     mockedMyShiftRequests.mockRejectedValue(new Error('network error'));
 

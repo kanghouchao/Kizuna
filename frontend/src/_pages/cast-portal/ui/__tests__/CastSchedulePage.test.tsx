@@ -76,6 +76,28 @@ describe('CastSchedulePage', () => {
     expect(screen.getByText('10:00–12:00')).toBeInTheDocument();
   });
 
+  it('記録済みの当日実績を予定時間と分けて表示する', async () => {
+    mockedMySchedule.mockResolvedValue([
+      {
+        id: 's1',
+        work_date: '2026-07-20',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+        status: 'CONFIRMED',
+        attendance_confirmed: true,
+        actual_start_time: '18:05:00',
+        actual_end_time: '20:10:00',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+
+    render(<CastSchedulePage />);
+
+    expect(await screen.findByText('18:00–20:00')).toBeInTheDocument();
+    expect(screen.getByText('実績記録済み 18:05–20:10')).toBeInTheDocument();
+  });
+
   it('確定シフトから変更申請を提出する', async () => {
     mockedMySchedule.mockResolvedValue([
       {

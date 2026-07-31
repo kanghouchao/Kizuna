@@ -274,6 +274,12 @@ export function CastRequestsPage() {
                       {item.work_date} {item.start_time?.slice(0, 5)}–{item.end_time?.slice(0, 5)}
                     </p>
                     {item.note && <p className="mt-1 text-xs text-muted-foreground">{item.note}</p>}
+                    {item.status !== 'PENDING' && item.decided_by && item.decided_at && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <p>判断者: {item.decided_by}</p>
+                        <p>判断日時: {new Date(item.decided_at).toLocaleString('ja-JP')}</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </li>

@@ -223,7 +223,7 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
   });
 
   it('当日実績は予定と別の API へ送ること', async () => {
-    renderModal({ editing: EDITING });
+    renderModal({ editing: { ...EDITING, work_date: '2000-08-02' } });
 
     fireEvent.change(await screen.findByLabelText('実績開始'), {
       target: { value: '19:35' },
@@ -238,6 +238,21 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
       })
     );
     expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ ...EDITING, work_date: '2999-08-02' }, '未来のシフトには実績を記録できません'],
+    [
+      { ...EDITING, work_date: '2000-08-02', status: 'TENTATIVE' },
+      '未確定のシフトには実績を記録できません',
+    ],
+  ])('記録できないシフトでは実績入力を無効にすること', async (editing, message) => {
+    renderModal({ editing });
+
+    expect(await screen.findByLabelText('実績開始')).toBeDisabled();
+    expect(screen.getByLabelText('実績終了')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '実績を記録' })).toBeDisabled();
+    expect(screen.getByText(message)).toBeInTheDocument();
   });
 
   it('一覧に無いキャストを編集しても別のキャストが表示されないこと', async () => {

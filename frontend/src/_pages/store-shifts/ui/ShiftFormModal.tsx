@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui';
+import { toDateStr } from '../lib/datetime';
 
 interface ShiftFormValues {
   cast_id: string;
@@ -86,6 +87,12 @@ export function ShiftFormModal({
   const [actualStartTime, setActualStartTime] = useState('');
   const [actualEndTime, setActualEndTime] = useState('');
   const [recordingActual, setRecordingActual] = useState(false);
+  const actualUnavailableMessage =
+    editing?.status !== 'CONFIRMED'
+      ? '未確定のシフトには実績を記録できません'
+      : (editing.work_date ?? '') > toDateStr(new Date())
+        ? '未来のシフトには実績を記録できません'
+        : null;
 
   useEffect(() => {
     if (!open) return;
@@ -274,6 +281,7 @@ export function ShiftFormModal({
                       id="actual_start_time"
                       type="time"
                       value={actualStartTime}
+                      disabled={actualUnavailableMessage !== null}
                       onChange={event => setActualStartTime(event.target.value)}
                     />
                   </div>
@@ -283,14 +291,23 @@ export function ShiftFormModal({
                       id="actual_end_time"
                       type="time"
                       value={actualEndTime}
+                      disabled={actualUnavailableMessage !== null}
                       onChange={event => setActualEndTime(event.target.value)}
                     />
                   </div>
                 </div>
+                {actualUnavailableMessage && (
+                  <p className="text-xs text-muted-foreground">{actualUnavailableMessage}</p>
+                )}
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!actualStartTime || !actualEndTime || recordingActual}
+                  disabled={
+                    actualUnavailableMessage !== null ||
+                    !actualStartTime ||
+                    !actualEndTime ||
+                    recordingActual
+                  }
                   onClick={() => void recordActual()}
                 >
                   {recordingActual ? '記録中...' : '実績を記録'}

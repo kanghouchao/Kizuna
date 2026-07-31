@@ -283,6 +283,25 @@ class ShiftRequestServiceTest {
   }
 
   @Test
+  void approveChange_whenTargetShiftHasActual_isRejectedAndLeavesItUntouched() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift target = targetShift();
+    target.recordActual(LocalTime.of(18, 5), LocalTime.of(23, 10), STAFF);
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(target));
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", STAFF))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("実績記録済み");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+    assertThat(target.getWorkDate()).isEqualTo(LocalDate.of(2999, 8, 1));
+    assertThat(target.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(target.getEndTime()).isEqualTo(LocalTime.of(23, 0));
+  }
+
+  @Test
   void approveChange_whenTargetShiftIsGone_isRejected() {
     ShiftRequest request = pendingChangeRequest();
     when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));

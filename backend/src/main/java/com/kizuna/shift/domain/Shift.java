@@ -1,5 +1,6 @@
 package com.kizuna.shift.domain;
 
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -7,6 +8,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -68,6 +70,12 @@ public class Shift extends StoreScopedEntity {
 
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(ShiftPatch patch) {
+    if (attendanceConfirmed
+        && ((patch.workDate() != null && !Objects.equals(patch.workDate(), workDate))
+            || (patch.startTime() != null && !Objects.equals(patch.startTime(), startTime))
+            || (patch.endTime() != null && !Objects.equals(patch.endTime(), endTime)))) {
+      throw new ServiceException("実績記録済みのシフトは予定日時を変更できません");
+    }
     if (patch.castId() != null) {
       this.castId = patch.castId();
     }
