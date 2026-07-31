@@ -189,13 +189,17 @@ class ShiftRequestServiceTest {
   }
 
   private Shift targetShift() {
+    return targetShift("c1", "CONFIRMED");
+  }
+
+  private Shift targetShift(String castId, String status) {
     Shift shift =
         Shift.builder()
-            .castId("c1")
+            .castId(castId)
             .workDate(LocalDate.of(2999, 8, 1))
             .startTime(LocalTime.of(18, 0))
             .endTime(LocalTime.of(23, 0))
-            .status("CONFIRMED")
+            .status(status)
             .publicVisible(false)
             .build();
     shift.setId("s1");
@@ -244,6 +248,38 @@ class ShiftRequestServiceTest {
     verify(shiftRepository, never()).save(any());
     verify(shiftRequestRepository, never()).save(any());
     assertThat(foreign.getWorkDate()).isEqualTo(LocalDate.of(2999, 8, 1));
+  }
+
+  @Test
+  void approveChange_whenTargetShiftWasReassigned_isRejectedAndLeavesItUntouched() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift reassigned = targetShift("c2", "CONFIRMED");
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(reassigned));
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", STAFF))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("変更対象のシフトが見つかりません");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+    assertThat(reassigned.getWorkDate()).isEqualTo(LocalDate.of(2999, 8, 1));
+  }
+
+  @Test
+  void approveChange_whenTargetShiftIsNoLongerConfirmed_isRejectedAndLeavesItUntouched() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift tentative = targetShift("c1", "TENTATIVE");
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(tentative));
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", STAFF))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("確定済み");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+    assertThat(tentative.getWorkDate()).isEqualTo(LocalDate.of(2999, 8, 1));
   }
 
   @Test

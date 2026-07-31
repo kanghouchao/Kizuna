@@ -85,17 +85,21 @@ public class ShiftRequestService {
   /**
    * 変更申請の対象シフトを更新する。
    *
-   * <p>対象は @StoreScoped の storeFilter 下で引くが、id 検索はフィルタを迂回し得るため、店舗帰属を申請と突き合わせて明示的に 確認する —
-   * 他店のシフトを指した申請 id で越境更新されないことを、フィルタの適用有無に依存せず保証する。 対象が既に削除されている場合（FK は SET
-   * NULL）は更新すべき正本が無いため拒否する。
+   * <p>対象は @StoreScoped の storeFilter 下で引くが、店舗・キャスト帰属を申請と突き合わせて明示的に確認する。申請後に対象が別キャストへ
+   * 付け替えられた場合や、確定済みでなくなった場合も古い申請を適用しない。対象が既に削除されている場合（FK は SET NULL）は更新すべき正本が 無いため拒否する。
    */
   private void updateTargetShift(ShiftRequest request) {
     Shift target =
         request.getTargetShiftId() == null
             ? null
             : shiftRepository.findById(request.getTargetShiftId()).orElse(null);
-    if (target == null || !request.getStoreId().equals(target.getStoreId())) {
+    if (target == null
+        || !Objects.equals(request.getStoreId(), target.getStoreId())
+        || !Objects.equals(request.getCastId(), target.getCastId())) {
       throw new NotFoundException("変更対象のシフトが見つかりません");
+    }
+    if (!"CONFIRMED".equals(target.getStatus())) {
+      throw new ServiceException("変更対象のシフトは確定済みではありません");
     }
     target.apply(request.toShiftPatch());
     shiftRepository.save(target);

@@ -107,6 +107,11 @@ public class ShiftService {
     Shift shift =
         shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
 
+    if (shift.isAttendanceConfirmed()
+        && request.getCastId() != null
+        && !Objects.equals(request.getCastId(), shift.getCastId())) {
+      throw new ServiceException("実績記録済みのシフトはキャストを変更できません");
+    }
     validateStatus(request.getStatus());
     if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
@@ -139,6 +144,10 @@ public class ShiftService {
             .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
     if (!"CONFIRMED".equals(shift.getStatus())) {
       throw new ServiceException("確定済みのシフトにのみ当日実績を記録できます");
+    }
+    LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    if (shift.getWorkDate().isAfter(today)) {
+      throw new ServiceException("未来のシフトには当日実績を記録できません");
     }
     shift.recordActual(request.getStartTime(), request.getEndTime(), actor);
     return shiftMapper.toResponse(shiftRepository.save(shift));

@@ -785,7 +785,8 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("当日実績が予定と別に記録され、店舗・キャスト双方から照会できること")
   void actualAttendance_isRecordedSeparatelyAndQueryable() {
-    Shift target = saveShift(myCastId, STORE_A, LocalDate.of(2999, 6, 11), "CONFIRMED");
+    String workDate = today();
+    Shift target = saveShift(myCastId, STORE_A, LocalDate.parse(workDate), "CONFIRMED", false);
 
     ResponseEntity<JsonNode> recorded =
         rest.exchange(
@@ -808,7 +809,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> schedule =
         rest.exchange(
-            "/platform/me/schedule?from=2999-06-11&to=2999-06-11",
+            "/platform/me/schedule?from=" + workDate + "&to=" + workDate,
             HttpMethod.GET,
             new HttpEntity<>(bearer(castToken)),
             JsonNode.class);
