@@ -88,6 +88,24 @@ describe('ShiftRequestInbox', () => {
     expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
   });
 
+  it('対象シフトが削除済みの変更申請は謝絶のみ操作できる', async () => {
+    mockedList.mockResolvedValue([
+      {
+        ...REQUEST,
+        kind: 'CHANGE',
+        work_date: '2026-08-02',
+        start_time: '19:00:00',
+        end_time: '23:30:00',
+      },
+    ]);
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
+
+    expect(await screen.findByText('対象シフトは削除されました')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '承認してシフト更新' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
+  });
+
   it('承認すると一覧とシフトを再取得すること', async () => {
     mockedList.mockResolvedValue([REQUEST]);
     mockedApprove.mockResolvedValue({ ...REQUEST, status: 'APPROVED' });

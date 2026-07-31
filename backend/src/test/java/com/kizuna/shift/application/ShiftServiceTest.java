@@ -273,6 +273,31 @@ class ShiftServiceTest {
   }
 
   @Test
+  void update_rejectsStatusDowngradeAfterActualWasRecorded() {
+    Shift shift =
+        Shift.builder()
+            .castId("c1")
+            .workDate(LocalDate.of(2026, 7, 8))
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status("CONFIRMED")
+            .build();
+    shift.setId("s1");
+    shift.recordActual(LocalTime.of(18, 5), LocalTime.of(23, 10), "staff@kizuna.test");
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+
+    ShiftUpdateRequest request = new ShiftUpdateRequest();
+    request.setStatus("TENTATIVE");
+
+    assertThatThrownBy(() -> shiftService.update("s1", request))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("実績記録済み");
+
+    verify(shiftRepository, never()).save(any());
+    assertThat(shift.getStatus()).isEqualTo("CONFIRMED");
+  }
+
+  @Test
   void recordActual_tracksActualTimesAndActorWithoutChangingPlan() {
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     Shift shift =

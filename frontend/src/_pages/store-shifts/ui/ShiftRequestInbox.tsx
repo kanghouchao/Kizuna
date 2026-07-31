@@ -81,7 +81,9 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
               <p className="text-sm font-medium text-foreground">{castName(request.cast_id)}</p>
               <Badge variant="outline">{request.kind === 'CHANGE' ? '変更申請' : '新規希望'}</Badge>
             </div>
-            {request.kind === 'CHANGE' ? (
+            {request.kind === 'CHANGE' && !request.target_shift_id ? (
+              <p className="text-sm text-destructive-strong">対象シフトは削除されました</p>
+            ) : request.kind === 'CHANGE' ? (
               <>
                 <p className="text-sm text-muted-foreground">
                   {request.current_work_date} {request.current_start_time?.slice(0, 5)}–
@@ -110,14 +112,16 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
             >
               {request.kind === 'CHANGE' ? '謝絶' : '辞退'}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => approve(request.id ?? '')}
-              disabled={processingId === request.id}
-            >
-              {request.kind === 'CHANGE' ? '承認してシフト更新' : '承認'}
-            </Button>
+            {(request.kind !== 'CHANGE' || request.target_shift_id) && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => approve(request.id ?? '')}
+                disabled={processingId === request.id}
+              >
+                {request.kind === 'CHANGE' ? '承認してシフト更新' : '承認'}
+              </Button>
+            )}
           </div>
         </li>
       ))}

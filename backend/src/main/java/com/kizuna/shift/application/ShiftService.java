@@ -112,6 +112,9 @@ public class ShiftService {
         && !Objects.equals(request.getCastId(), shift.getCastId())) {
       throw new ServiceException("実績記録済みのシフトはキャストを変更できません");
     }
+    if (shift.isAttendanceConfirmed() && "TENTATIVE".equals(request.getStatus())) {
+      throw new ServiceException("実績記録済みのシフトは未確定に戻せません");
+    }
     validateStatus(request.getStatus());
     if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
