@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestStatus;
+import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -132,6 +134,39 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
             .build();
     request.setStoreId(storeId);
     return shiftRequestRepository.save(request).getId();
+  }
+
+  /** 確定（CONFIRMED）シフトをリポジトリ直挿で用意する（変更申請の対象）。 */
+  private Shift saveShift(String castId, long storeId, String status) {
+    Shift shift =
+        Shift.builder()
+            .castId(castId)
+            .workDate(LocalDate.of(2999, 6, 1))
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status(status)
+            .build();
+    shift.setStoreId(storeId);
+    return shiftRepository.save(shift);
+  }
+
+  private String changeBody(String shiftId, String workDate, String start, String end) {
+    return "{\"shift_id\": \""
+        + shiftId
+        + "\", \"work_date\": \""
+        + workDate
+        + "\", \"start_time\": \""
+        + start
+        + "\", \"end_time\": \""
+        + end
+        + "\"}";
+  }
+
+  private ResponseEntity<JsonNode> submitChange(String token, String body) {
+    return rest.postForEntity(
+        "/platform/me/shift-requests/changes",
+        new HttpEntity<>(body, bearer(token)),
+        JsonNode.class);
   }
 
   private String platformToken(String email, String password) {
@@ -450,6 +485,140 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     headers.set("X-Store-ID", String.valueOf(storeId));
     headers.setBearerAuth(token);
     return headers;
+  }
+
+  @Test
+  @DisplayName("確定シフトへの変更申請が提出でき、履歴に種別 CHANGE の受付済みとして現れること")
+  void submitChange_onOwnConfirmedShift_succeedsAndAppearsInHistoryAsChange() {
+    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+
+    ResponseEntity<JsonNode> created =
+        submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
+
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(created.getBody().path("type").asString()).isEqualTo("CHANGE");
+    assertThat(created.getBody().path("shift_id").asString()).isEqualTo(shift.getId());
+    assertThat(created.getBody().path("status").asString()).isEqualTo("PENDING");
+    String id = created.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> history = getHistory(castToken);
+    assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
+    boolean found = false;
+    for (JsonNode node : history.getBody()) {
+      if (id.equals(node.path("id").asString())) {
+        found = true;
+        assertThat(node.path("type").asString()).as("履歴に種別が現れること").isEqualTo("CHANGE");
+      }
+    }
+    assertThat(found).isTrue();
+  }
+
+  @Test
+  @DisplayName("未確定(TENTATIVE)シフトへの変更申請は 400 で拒否されること")
+  void submitChange_onTentativeShift_isRejected() {
+    Shift shift = saveShift(myCastId, STORE_A, "TENTATIVE");
+    long before = shiftRequestRepository.count();
+
+    ResponseEntity<JsonNode> res =
+        submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(shiftRequestRepository.count()).isEqualTo(before);
+  }
+
+  @Test
+  @DisplayName("他キャストのシフトへの変更申請は拒否され、行が増えないこと(本人自限)")
+  void submitChange_onOtherCastsShift_isRejected() {
+    String otherCast = createCast(STORE_A, "変更申請IT他人", null);
+    Shift shift = saveShift(otherCast, STORE_A, "CONFIRMED");
+    long before = shiftRequestRepository.count();
+
+    ResponseEntity<JsonNode> res =
+        submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
+
+    assertThat(res.getStatusCode().is4xxClientError()).isTrue();
+    assertThat(shiftRequestRepository.count()).isEqualTo(before);
+  }
+
+  @Test
+  @DisplayName("店舗 inbox で変更申請が種別 CHANGE と対象シフトの現行日時つきで区別表示されること")
+  void storeInbox_distinguishesChangeRequestsWithCurrentShiftValues() {
+    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    ResponseEntity<JsonNode> created =
+        submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
+    String id = created.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> inbox =
+        rest.exchange(
+            "/store/shift-requests?status=PENDING",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+    boolean found = false;
+    for (JsonNode node : inbox.getBody()) {
+      if (id.equals(node.path("id").asString())) {
+        found = true;
+        assertThat(node.path("type").asString()).isEqualTo("CHANGE");
+        assertThat(node.path("current_work_date").asString())
+            .as("対象シフトの現行日時が内联されること")
+            .isEqualTo(shift.getWorkDate().toString());
+        assertThat(node.path("current_start_time").asString()).isEqualTo("18:00:00");
+        assertThat(node.path("current_end_time").asString()).isEqualTo("23:00:00");
+      }
+    }
+    assertThat(found).as("inbox に変更申請が現れること").isTrue();
+  }
+
+  @Test
+  @DisplayName("変更申請の承認で対象シフトの日時が更新され、status は保持され、新規シフトは作成されないこと")
+  void approveChange_updatesTargetShiftPreservingStatusWithoutCreatingNewShift() {
+    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    String requestedDate = tomorrow();
+    ResponseEntity<JsonNode> created =
+        submitChange(castToken, changeBody(shift.getId(), requestedDate, "19:00:00", "22:00:00"));
+    String id = created.getBody().path("id").asString();
+    long shiftCountBefore = shiftRepository.count();
+
+    ResponseEntity<JsonNode> approved = approve(STORE_A, id);
+
+    assertThat(approved.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(approved.getBody().path("status").asString()).isEqualTo("APPROVED");
+    assertThat(shiftRepository.count()).as("変更申請の承認では新規シフトを作成しないこと").isEqualTo(shiftCountBefore);
+
+    Shift reloaded = shiftRepository.findById(shift.getId()).orElseThrow();
+    assertThat(reloaded.getWorkDate()).isEqualTo(LocalDate.parse(requestedDate));
+    assertThat(reloaded.getStartTime()).isEqualTo(LocalTime.of(19, 0));
+    assertThat(reloaded.getEndTime()).isEqualTo(LocalTime.of(22, 0));
+    assertThat(reloaded.getStatus()).as("承認と独立した軸（status）が保持されること").isEqualTo("CONFIRMED");
+    assertThat(reloaded.getCastId()).isEqualTo(myCastId);
+
+    ShiftRequest request = shiftRequestRepository.findById(id).orElseThrow();
+    assertThat(request.getType()).isEqualTo(ShiftRequestType.CHANGE);
+    assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
+  }
+
+  @Test
+  @DisplayName("変更申請の謝絶で対象シフトが元のまま維持されること")
+  void declineChange_keepsTargetShiftUntouched() {
+    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    ResponseEntity<JsonNode> created =
+        submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
+    String id = created.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> declined = decline(STORE_A, id);
+
+    assertThat(declined.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(declined.getBody().path("status").asString()).isEqualTo("DECLINED");
+
+    Shift reloaded = shiftRepository.findById(shift.getId()).orElseThrow();
+    assertThat(reloaded.getWorkDate()).as("謝絶では元の確定シフトが維持されること").isEqualTo(shift.getWorkDate());
+    assertThat(reloaded.getStartTime()).isEqualTo(shift.getStartTime());
+    assertThat(reloaded.getEndTime()).isEqualTo(shift.getEndTime());
+    assertThat(reloaded.getStatus()).isEqualTo("CONFIRMED");
+
+    ShiftRequest request = shiftRequestRepository.findById(id).orElseThrow();
+    assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
   }
 
   @Test

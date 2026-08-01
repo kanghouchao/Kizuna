@@ -15,9 +15,9 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
 
 /**
- * 出勤希望集約。キャストが所属店舗を指定して提出する勤務希望。
+ * 出勤希望集約。キャストが所属店舗を指定して提出する勤務希望（新規希望・確定シフトへの変更申請の両種別）。
  *
- * <p>承認で確定（CONFIRMED）Shift を新規作成する。希望自体は Shift へ変化せず、申請の履歴として残る。
+ * <p>NEW の承認で確定（CONFIRMED）Shift を新規作成し、CHANGE の承認で対象 Shift の日時を更新する。 希望自体は Shift へ変化せず、申請の履歴として残る。
  */
 @Entity
 @Table(name = "t_shift_requests")
@@ -44,6 +44,15 @@ public class ShiftRequest extends StoreScopedEntity {
 
   @Column(name = "note", length = 500)
   private String note;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "request_type", nullable = false, length = 20)
+  @Builder.Default
+  private ShiftRequestType type = ShiftRequestType.NEW;
+
+  /** 変更申請（CHANGE）の対象シフト id。NEW では null。 */
+  @Column(name = "shift_id", length = 64)
+  private String shiftId;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 20)
@@ -80,6 +89,10 @@ public class ShiftRequest extends StoreScopedEntity {
         + startTime
         + ", endTime="
         + endTime
+        + ", type="
+        + type
+        + ", shiftId="
+        + shiftId
         + ", status="
         + status
         + ")";

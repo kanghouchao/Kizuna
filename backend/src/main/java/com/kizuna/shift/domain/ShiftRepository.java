@@ -20,7 +20,7 @@ public interface ShiftRepository
    */
   @Query(
       """
-      select s.workDate as workDate, s.startTime as startTime, s.endTime as endTime,
+      select s.id as id, s.workDate as workDate, s.startTime as startTime, s.endTime as endTime,
              s.status as status, s.storeId as storeId, st.name as storeName
       from Shift s join com.kizuna.store.domain.Store st on st.id = s.storeId
       where s.castId in :castIds and s.status = 'CONFIRMED'

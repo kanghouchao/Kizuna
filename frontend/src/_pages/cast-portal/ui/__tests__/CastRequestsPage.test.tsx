@@ -145,6 +145,41 @@ describe('CastRequestsPage', () => {
     expect(screen.getByText('却下')).toBeInTheDocument();
   });
 
+  it('変更申請の履歴は種別バッジと専用の状態文言(変更承認済み/謝絶)で表示すること', async () => {
+    mockedMyShiftRequests.mockResolvedValue([
+      {
+        id: 'sr4',
+        work_date: '2026-08-04',
+        start_time: '19:00:00',
+        end_time: '22:00:00',
+        type: 'CHANGE',
+        status: 'APPROVED',
+        store_id: 1,
+        store_name: '店舗A',
+        created_at: '2026-07-23T00:00:00Z',
+      },
+      {
+        id: 'sr5',
+        work_date: '2026-08-05',
+        start_time: '19:00:00',
+        end_time: '22:00:00',
+        type: 'CHANGE',
+        status: 'DECLINED',
+        store_id: 1,
+        store_name: '店舗A',
+        created_at: '2026-07-24T00:00:00Z',
+      },
+    ]);
+
+    render(<CastRequestsPage />);
+
+    expect(await screen.findByText('変更承認済み')).toBeInTheDocument();
+    expect(screen.getByText('謝絶')).toBeInTheDocument();
+    expect(screen.getAllByText('変更申請')).toHaveLength(2);
+    expect(screen.queryByText('確定済み')).not.toBeInTheDocument();
+    expect(screen.queryByText('却下')).not.toBeInTheDocument();
+  });
+
   it('取得に失敗した場合はエラー文言を表示すること', async () => {
     mockedMyShiftRequests.mockRejectedValue(new Error('network error'));
 

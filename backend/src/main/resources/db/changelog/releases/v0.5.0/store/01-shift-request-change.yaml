@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0500-001-shift-request-change
+      author: kanghouchao
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_shift_requests
+            columns:
+              - column:
+                  name: request_type
+                  type: VARCHAR(20)
+                  defaultValue: NEW
+                  constraints:
+                    nullable: false
+                  remarks: 種別（NEW=新規希望/CHANGE=確定シフトへの変更申請）
+              - column:
+                  name: shift_id
+                  type: VARCHAR(64)
+                  remarks: 変更申請（CHANGE）の対象シフト id。NEW では NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_shift_requests_shift
+            baseTableName: t_shift_requests
+            baseColumnNames: shift_id
+            referencedTableName: t_shifts
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - createIndex:
+            indexName: idx_t_shift_requests_shift
+            tableName: t_shift_requests
+            columns:
+              - column:
+                  name: shift_id

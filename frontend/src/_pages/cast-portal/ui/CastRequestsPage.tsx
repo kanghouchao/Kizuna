@@ -45,11 +45,23 @@ const STATUS_LABELS: Record<ShiftRequestStatus, string> = {
   DECLINED: '却下',
 };
 
+// 変更申請（type=CHANGE）は結果の意味が異なるため専用の状態文言を使う。
+const CHANGE_STATUS_LABELS: Record<ShiftRequestStatus, string> = {
+  PENDING: '変更申請中',
+  APPROVED: '変更承認済み',
+  DECLINED: '謝絶',
+};
+
 const STATUS_PILL_CLASS: Record<ShiftRequestStatus, string> = {
   PENDING: 'border-transparent bg-warning/10 text-warning-strong',
   APPROVED: 'border-transparent bg-success/10 text-success-strong',
   DECLINED: 'border-transparent bg-destructive/10 text-destructive-strong',
 };
+
+function statusLabel(item: CastShiftRequestItem): string | undefined {
+  if (!item.status) return undefined;
+  return item.type === 'CHANGE' ? CHANGE_STATUS_LABELS[item.status] : STATUS_LABELS[item.status];
+}
 
 /** 本日の 'yyyy-MM-dd' を返す（過去日拒否の下限。当日の出勤希望は許容する）。 */
 function todayStr(): string {
@@ -248,12 +260,24 @@ export function CastRequestsPage() {
                 <Card className="py-3">
                   <CardContent className="px-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">{item.store_name}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">
+                          {item.store_name}
+                        </span>
+                        {item.type === 'CHANGE' && (
+                          <Badge
+                            variant="outline"
+                            className="border-transparent bg-primary/10 text-primary-strong"
+                          >
+                            変更申請
+                          </Badge>
+                        )}
+                      </span>
                       <Badge
                         variant="outline"
                         className={item.status && STATUS_PILL_CLASS[item.status]}
                       >
-                        {item.status && STATUS_LABELS[item.status]}
+                        {statusLabel(item)}
                       </Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">

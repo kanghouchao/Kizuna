@@ -4,15 +4,17 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
-import { Button } from '@/shared/ui';
+import { Badge, Button } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
   casts: CastResponse[];
-  /** 承認成功後に呼ばれる（確定シフトが新規作成されるため、シフト一覧の再取得に使う）。 */
+  /** 承認成功後に呼ばれる（シフトが新規作成・更新されるため、シフト一覧の再取得に使う）。 */
   onApproved: () => void;
 }
 
-/** 出勤希望 inbox。受付済み(PENDING)のみを表示する — 処理済みの閲覧は cast 側履歴の責務。 */
+/**
+ * 出勤希望 inbox。受付済み(PENDING)のみを表示する — 処理済みの閲覧は cast 側履歴の責務。 新規希望（NEW）と確定シフトへの変更申請（CHANGE）を種別表示し、変更申請は現行→申請の日時を併記する。
+ */
 export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps) {
   const [requests, setRequests] = useState<StoreShiftRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,39 +73,62 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
 
   return (
     <ul className="space-y-3">
-      {requests.map(request => (
-        <li
-          key={request.id}
-          className="flex items-center justify-between rounded-[10px] border bg-card p-4 shadow-sm"
-        >
-          <div>
-            <p className="text-sm font-medium text-foreground">{castName(request.cast_id)}</p>
-            <p className="text-sm text-muted-foreground">
-              {request.work_date} {request.start_time?.slice(0, 5)}–{request.end_time?.slice(0, 5)}
-            </p>
-            {request.note && <p className="mt-1 text-xs text-muted-foreground">{request.note}</p>}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => decline(request.id ?? '')}
-              disabled={processingId === request.id}
-            >
-              辞退
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => approve(request.id ?? '')}
-              disabled={processingId === request.id}
-            >
-              承認
-            </Button>
-          </div>
-        </li>
-      ))}
+      {requests.map(request => {
+        const isChange = request.type === 'CHANGE';
+        return (
+          <li
+            key={request.id}
+            className="flex items-center justify-between rounded-[10px] border bg-card p-4 shadow-sm"
+          >
+            <div>
+              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                {castName(request.cast_id)}
+                <Badge
+                  variant="outline"
+                  className={
+                    isChange
+                      ? 'border-transparent bg-primary/10 text-primary-strong'
+                      : 'border-transparent bg-muted text-muted-foreground'
+                  }
+                >
+                  {isChange ? '変更申請' : '新規希望'}
+                </Badge>
+              </p>
+              {isChange && request.current_work_date && (
+                <p className="text-xs text-muted-foreground">
+                  現行: {request.current_work_date} {request.current_start_time?.slice(0, 5)}–
+                  {request.current_end_time?.slice(0, 5)}
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                {isChange ? '申請: ' : ''}
+                {request.work_date} {request.start_time?.slice(0, 5)}–
+                {request.end_time?.slice(0, 5)}
+              </p>
+              {request.note && <p className="mt-1 text-xs text-muted-foreground">{request.note}</p>}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => decline(request.id ?? '')}
+                disabled={processingId === request.id}
+              >
+                {isChange ? '謝絶' : '辞退'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => approve(request.id ?? '')}
+                disabled={processingId === request.id}
+              >
+                {isChange ? '承認してシフト更新' : '承認'}
+              </Button>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

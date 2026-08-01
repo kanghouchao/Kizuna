@@ -19,6 +19,7 @@ public class CastShiftRequestResponse {
   private LocalTime startTime;
   private LocalTime endTime;
   private String note;
+  private String type;
   private String status;
   private Long storeId;
   private String storeName;

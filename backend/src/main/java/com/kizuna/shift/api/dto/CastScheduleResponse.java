@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CastScheduleResponse {
+  private String id;
   private LocalDate workDate;
   private LocalTime startTime;
   private LocalTime endTime;

@@ -3,10 +3,15 @@ import { CastSchedulePage } from '../CastSchedulePage';
 import { shiftApi } from '@/entities/shift';
 
 jest.mock('@/entities/shift', () => ({
-  shiftApi: { mySchedule: jest.fn() },
+  shiftApi: { mySchedule: jest.fn(), submitShiftChangeRequest: jest.fn() },
+}));
+
+jest.mock('react-hot-toast', () => ({
+  toast: { success: jest.fn(), error: jest.fn() },
 }));
 
 const mockedMySchedule = shiftApi.mySchedule as jest.Mock;
+const mockedSubmitChange = shiftApi.submitShiftChangeRequest as jest.Mock;
 
 function daysBetween(fromStr: string, toStr: string): number {
   const from = new Date(fromStr);
@@ -87,6 +92,79 @@ describe('CastSchedulePage', () => {
     await waitFor(() => expect(mockedMySchedule).toHaveBeenCalledTimes(2));
     const secondFrom = mockedMySchedule.mock.calls[1][0].from;
     expect(daysBetween(firstFrom, secondFrom)).toBe(7);
+  });
+
+  it('変更申請ボタンでモーダルが開き、現行の日時が初期値に入ること', async () => {
+    mockedMySchedule.mockResolvedValue([
+      {
+        id: 'sh1',
+        work_date: '2999-07-20',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+        status: 'CONFIRMED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+
+    render(<CastSchedulePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '変更申請' }));
+
+    expect(await screen.findByText('シフトの変更申請')).toBeInTheDocument();
+    expect(screen.getByLabelText('日付')).toHaveValue('2999-07-20');
+    expect(screen.getByLabelText('開始')).toHaveValue('18:00');
+    expect(screen.getByLabelText('終了')).toHaveValue('20:00');
+  });
+
+  it('変更申請の提出で shift_id と秒付き時刻の payload を送ること', async () => {
+    mockedMySchedule.mockResolvedValue([
+      {
+        id: 'sh1',
+        work_date: '2999-07-20',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+        status: 'CONFIRMED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+    mockedSubmitChange.mockResolvedValue({ id: 'sr2', type: 'CHANGE', status: 'PENDING' });
+
+    render(<CastSchedulePage />);
+    fireEvent.click(await screen.findByRole('button', { name: '変更申請' }));
+    await screen.findByText('シフトの変更申請');
+
+    fireEvent.change(screen.getByLabelText('開始'), { target: { value: '19:00' } });
+    fireEvent.click(screen.getByRole('button', { name: '変更を申請する' }));
+
+    await waitFor(() =>
+      expect(mockedSubmitChange).toHaveBeenCalledWith({
+        shift_id: 'sh1',
+        work_date: '2999-07-20',
+        start_time: '19:00:00',
+        end_time: '20:00:00',
+        note: undefined,
+      })
+    );
+  });
+
+  it('id を持たないシフトには変更申請ボタンを出さないこと', async () => {
+    mockedMySchedule.mockResolvedValue([
+      {
+        work_date: '2999-07-20',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+        status: 'CONFIRMED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+
+    render(<CastSchedulePage />);
+
+    expect(await screen.findByText('店舗A')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '変更申請' })).not.toBeInTheDocument();
   });
 
   it('前週ボタンで7日前の範囲を再取得する', async () => {
