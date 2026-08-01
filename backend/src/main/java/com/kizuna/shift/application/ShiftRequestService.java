@@ -82,9 +82,13 @@ public class ShiftRequestService {
           shiftRepository
               .findById(request.getShiftId())
               .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + request.getShiftId()));
-      // 確定済みであることは提出時だけでなく適用時にも要求する（提出後に未確定へ編集されたシフトを上書きしない）。
+      // 確定済み・申請者本人のシフトであることは提出時だけでなく適用時にも要求する
+      // （提出後に未確定へ編集された・別キャストへ付け替えられたシフトを上書きしない）。
       if (!"CONFIRMED".equals(target.getStatus())) {
         throw new ServiceException("確定済みでないシフトには変更を適用できません");
+      }
+      if (!request.getCastId().equals(target.getCastId())) {
+        throw new ServiceException("対象のシフトは別のキャストに変更されています");
       }
       target.apply(
           new ShiftPatch(

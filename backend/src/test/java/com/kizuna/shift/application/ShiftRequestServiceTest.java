@@ -188,6 +188,23 @@ class ShiftRequestServiceTest {
   }
 
   @Test
+  void approve_changeRequest_rejectsWhenTargetShiftReassignedToAnotherCast() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift target = confirmedShift();
+    target.apply(new ShiftPatch("other-cast", null, null, null, null));
+    when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("別のキャストに変更されています");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+    assertThat(target.getStartTime()).as("対象シフトが書き換えられないこと").isEqualTo(LocalTime.of(18, 0));
+  }
+
+  @Test
   void approve_changeRequest_rejectsWhenTargetShiftAlreadyDeleted() {
     // 対象シフト削除で FK（SET NULL）により shift_id が null に落ちた変更申請
     ShiftRequest request =
