@@ -74,6 +74,8 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
   } = useForm<RoleFormValues>({ defaultValues: { name: '' } });
   const [permissions, setPermissions] = useState<PlatformPermission[]>([]);
   const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
+  // 初回の詳細取得に失敗したときの再試行導線用。閉じて開き直す以外の回復手段を残す。
+  const [detailLoadFailed, setDetailLoadFailed] = useState(false);
   const { items: catalog, isLoading: catalogLoading } = useManagedList<PermissionResponse>(
     () => platformRoleApi.permissions(),
     '権限目録の取得に失敗しました'
@@ -83,6 +85,7 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
   // 初期化し直す（version 固着で再試行が同じ 409 を繰り返さないように）。
   const reloadEditingRole = useCallback(async () => {
     if (editingId === null) return;
+    setDetailLoadFailed(false);
     try {
       const role = await platformRoleApi.get(editingId);
       setEditingRole(role);
@@ -90,6 +93,7 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
       setPermissions(role.permissions ?? []);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'ロール情報の取得に失敗しました'));
+      setDetailLoadFailed(true);
     }
   }, [editingId, reset]);
 
@@ -174,7 +178,16 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
           </div>
           <div>
             <span className="mb-1 block text-sm font-medium text-foreground">権限</span>
-            {catalogLoading || editingLoading ? (
+            {/* 初回の詳細取得失敗は「読み込み中」に固着させず、ダイアログ内で再試行できるようにする
+                （409 後の取り直し失敗は editingRole が残るためここには来ない — フォームはそのまま使える） */}
+            {editingLoading && detailLoadFailed ? (
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-sm text-destructive-strong">ロール情報の取得に失敗しました</p>
+                <Button type="button" variant="outline" onClick={() => void reloadEditingRole()}>
+                  再試行
+                </Button>
+              </div>
+            ) : catalogLoading || editingLoading ? (
               <p className="text-sm text-muted-foreground">読み込み中...</p>
             ) : (
               <div className="space-y-4 rounded-md border p-3">

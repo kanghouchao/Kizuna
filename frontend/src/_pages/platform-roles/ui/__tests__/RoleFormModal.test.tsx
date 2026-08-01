@@ -58,6 +58,22 @@ describe('ロール編集モーダル', () => {
     expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
   });
 
+  it('詳細取得に失敗したら読み込み中に固着せず、再試行で回復できる', async () => {
+    // 失敗のまま「読み込み中...」を出し続けると、閉じて開き直す以外の回復手段が無くなる
+    mockedRoleApi.get.mockRejectedValueOnce({ response: { status: 500 } });
+    renderModal();
+
+    expect(await screen.findByText('ロール情報の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByLabelText('ORDER_MANAGE')).toBeChecked();
+    expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
+    expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+  });
+
   it('権限目録を console ごとに見出し付きで並べる', async () => {
     renderModal();
 
