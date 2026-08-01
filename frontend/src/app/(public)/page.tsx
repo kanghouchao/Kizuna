@@ -41,7 +41,7 @@ export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  // 平台セッションがあれば、コンソール値に応じて自動遷移する（cookie 値は platform/store/cast）
+  // 平台セッションがあれば、コンソール値に応じて自動遷移する（cookie 値は platform/store/cast/member）
   const platformConsole = cookieStore.get('platform-role')?.value;
   if (platformConsole) {
     const platformToken = cookieStore.get('token')?.value;
@@ -51,6 +51,9 @@ export default async function Home() {
     }
     if (platformConsole === 'cast') {
       redirect('/cast/schedule/');
+    }
+    if (platformConsole === 'member') {
+      redirect('/member/');
     }
     const destination = resolvePlatformDestination(platformConsole as PlatformConsole);
     if (destination === 'platform') {
