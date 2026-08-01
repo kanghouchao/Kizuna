@@ -14,10 +14,6 @@ export default function StoreProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadConfig();
-  }, []);
-
   const loadConfig = async () => {
     try {
       const data = await storeProfileApi.get();
@@ -28,6 +24,10 @@ export default function StoreProfilePage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
 
   const handleSubmit = async (data: StoreProfileUpdateRequest) => {
     setIsSubmitting(true);

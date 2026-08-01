@@ -10,7 +10,10 @@ import { toast } from 'react-hot-toast';
  */
 export function useManagedList<T>(fetcher: () => Promise<T[]>, errorMessage: string) {
   const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
+  // レンダー中の ref 書き込みは不可のため、コミット後に最新のクロージャへ差し替える
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  });
   // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する
   const requestIdRef = useRef(0);
   const [items, setItems] = useState<T[]>([]);

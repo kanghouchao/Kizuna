@@ -21,10 +21,6 @@ export default function SystemSettingsPage() {
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchConfigs();
-  }, []);
-
   const fetchConfigs = async () => {
     try {
       const data = await systemConfigService.getAllConfigs();
@@ -36,6 +32,10 @@ export default function SystemSettingsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchConfigs();
+  }, []);
 
   const saveConfig = async (configKey: string, configValue: string) => {
     const request: SystemConfigUpdateRequest = {
