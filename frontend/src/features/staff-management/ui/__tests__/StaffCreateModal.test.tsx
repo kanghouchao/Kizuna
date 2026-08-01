@@ -31,8 +31,8 @@ describe('スタッフ新規作成モーダル', () => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
     mockedRoleApi.list.mockResolvedValue([
-      { id: 3, name: '店長', system: true, permissions: [], version: 0 },
-      { id: 4, name: '経理', system: false, permissions: [], version: 0 },
+      { id: 3, name: '店長', system: true, permission_count: 0 },
+      { id: 4, name: '経理', system: false, permission_count: 0 },
     ]);
     mockedStaffApi.create.mockResolvedValue({} as never);
   });

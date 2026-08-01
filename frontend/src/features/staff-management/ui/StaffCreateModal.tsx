@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
   PlatformStoreScopeType,
-  RoleResponse,
+  RoleSummaryResponse,
   platformRoleApi,
   platformStaffApi,
 } from '@/entities/user';
@@ -38,7 +38,7 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
   const [roleIds, setRoleIds] = useState<number[]>([]);
   const [storeScopeType, setStoreScopeType] = useState<PlatformStoreScopeType>('ALL_STORES');
   const [storeIds, setStoreIds] = useState<number[]>([]);
-  const { items: roles, isLoading: rolesLoading } = useManagedList<RoleResponse>(
+  const { items: roles, isLoading: rolesLoading } = useManagedList<RoleSummaryResponse>(
     () => platformRoleApi.list(),
     'ロール一覧の取得に失敗しました'
   );

@@ -89,7 +89,17 @@ export interface RoleRef {
   name?: string;
 }
 
-// ロール一覧の1件
+// ロール一覧の1件（要約）。権限は個数のみで、コードの列挙は詳細（RoleResponse）が持つ。
+export interface RoleSummaryResponse {
+  id?: number;
+  name?: string;
+  // 平台既定ロール。改名・権限変更・削除がいずれも拒否される。
+  // system と permission_count は Java 側が primitive のため、キーは必ず応答に含まれる。
+  system: boolean;
+  permission_count: number;
+}
+
+// ロール詳細（GET /platform/roles/{id} と作成・更新の応答）
 export interface RoleResponse {
   id?: number;
   name?: string;

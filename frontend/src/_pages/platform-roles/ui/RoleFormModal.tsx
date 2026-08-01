@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
@@ -18,10 +18,9 @@ interface RoleFormValues {
 }
 
 interface RoleFormModalProps {
-  open: boolean;
   onClose: () => void;
-  /** 編集対象。null なら新規作成。 */
-  editing: RoleResponse | null;
+  /** 編集対象のロール id。null なら新規作成。 */
+  editingId: number | null;
   /** 保存成功後に呼ばれる（一覧の再取得用）。 */
   onSaved: () => void;
 }
@@ -60,25 +59,46 @@ function groupByConsole(
     }));
 }
 
-/** ロールの新規作成・編集モーダル（名称 + 権限の複数選択）。 */
-export function RoleFormModal({ open, onClose, editing, onSaved }: RoleFormModalProps) {
+/**
+ * ロールの新規作成・編集モーダル（名称 + 権限の複数選択）。
+ * 開いたときだけ mount される前提。一覧は権限個数までの要約しか持たないため、編集フォームの
+ * 中身（権限コードと楽観ロック用 version）は mount 時に id で個別取得する。権限目録の取得も
+ * mount 時 = 開いた時点に遅延される。
+ */
+export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProps) {
   const {
     register,
     handleSubmit,
     reset,
     formState: { isSubmitting },
-  } = useForm<RoleFormValues>();
+  } = useForm<RoleFormValues>({ defaultValues: { name: '' } });
   const [permissions, setPermissions] = useState<PlatformPermission[]>([]);
+  const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
   const { items: catalog, isLoading: catalogLoading } = useManagedList<PermissionResponse>(
     () => platformRoleApi.permissions(),
     '権限目録の取得に失敗しました'
   );
 
+  // 編集対象の詳細取得。409 の後にも呼び、最新の name / permissions / version でフォームを
+  // 初期化し直す（version 固着で再試行が同じ 409 を繰り返さないように）。
+  const reloadEditingRole = useCallback(async () => {
+    if (editingId === null) return;
+    try {
+      const role = await platformRoleApi.get(editingId);
+      setEditingRole(role);
+      reset({ name: role.name ?? '' });
+      setPermissions(role.permissions ?? []);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'ロール情報の取得に失敗しました'));
+    }
+  }, [editingId, reset]);
+
   useEffect(() => {
-    if (!open) return;
-    reset({ name: editing?.name ?? '' });
-    setPermissions(editing?.permissions ?? []);
-  }, [open, editing, reset]);
+    void reloadEditingRole();
+  }, [reloadEditingRole]);
+
+  // 編集モードで詳細が未着のうちは保存させない（version 無しで送る事故を防ぐ）
+  const editingLoading = editingId !== null && editingRole === null;
 
   const toggle = (code: PlatformPermission) => {
     setPermissions(current =>
@@ -92,12 +112,13 @@ export function RoleFormModal({ open, onClose, editing, onSaved }: RoleFormModal
       return;
     }
     try {
-      if (editing) {
-        await platformRoleApi.update(editing.id ?? 0, {
+      if (editingId !== null) {
+        if (editingRole === null) return;
+        await platformRoleApi.update(editingId, {
           name: values.name,
           permissions,
-          // 楽観ロック用バージョン（応答の version をそのまま往復する）
-          version: editing.version,
+          // 楽観ロック用バージョン（詳細応答の version をそのまま往復する）
+          version: editingRole.version,
         });
         toast.success('ロールを更新しました');
       } else {
@@ -108,22 +129,27 @@ export function RoleFormModal({ open, onClose, editing, onSaved }: RoleFormModal
       onClose();
     } catch (error) {
       if (isConflict(error)) {
-        // 楽観ロック競合。ここで再取得しないと editing が古い version を抱えたままになり、
-        // 再試行はもちろん閉じて開き直しても同じ 409 を繰り返す（一覧から導出しているため）。
-        // 一覧を取り直すと editing prop が入れ替わり useEffect が最新値で再初期化する。
+        // 楽観ロック競合。詳細を取り直さないと古い version を抱えたままになり、
+        // 再試行が同じ 409 を繰り返す。一覧側も権限数・名称が変わりうるので再取得する。
         toast.error('他の管理者が更新しました。最新の内容を確認してください');
         onSaved();
+        void reloadEditingRole();
       } else {
         toast.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
       }
     }
   };
 
-  const title = editing ? `${editing.name} を編集` : 'ロールを追加';
+  const title =
+    editingId !== null
+      ? editingRole !== null
+        ? `${editingRole.name} を編集`
+        : 'ロールを編集'
+      : 'ロールを追加';
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={next => {
         if (!next) onClose();
       }}
@@ -148,7 +174,7 @@ export function RoleFormModal({ open, onClose, editing, onSaved }: RoleFormModal
           </div>
           <div>
             <span className="mb-1 block text-sm font-medium text-foreground">権限</span>
-            {catalogLoading ? (
+            {catalogLoading || editingLoading ? (
               <p className="text-sm text-muted-foreground">読み込み中...</p>
             ) : (
               <div className="space-y-4 rounded-md border p-3">
@@ -184,7 +210,7 @@ export function RoleFormModal({ open, onClose, editing, onSaved }: RoleFormModal
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || editingLoading}>
               {isSubmitting ? '保存中...' : '保存する'}
             </Button>
           </div>
