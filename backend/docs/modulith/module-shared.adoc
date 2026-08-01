@@ -21,6 +21,8 @@ _Others_
 * `c.k.s.storescope.StoreScopeExecutor`
 * `c.k.s.storescope.StoreSetFilterEnable`
 * `c.k.s.web.RequestCorrelationFilter`
+* `c.k.s.web.RequestParameterTrimmingAdvice`
+* `c.k.s.web.WebBindingConfig`
 |Properties
 |* `app.domain` -- `java.lang.String`
 * `app.jwt.expiration` -- `java.lang.Long`

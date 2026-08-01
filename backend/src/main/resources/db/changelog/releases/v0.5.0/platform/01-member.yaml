@@ -1,0 +1,67 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0500-001-member-schema
+      author: kanghouchao
+      # 会員（Member）。プラットフォーム層の会員身分で、店舗 CRM 台帳（Customer）とは別概念。
+      # PlatformUser（user_type=MEMBER）と 1 対 1 で対応し、来店時に提示する一意の会員コードを持つ。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_members
+            remarks: 会員（プラットフォーム層の会員身分。店舗 CRM の顧客とは別概念）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_members
+              - column:
+                  name: member_code
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_members_member_code
+                  remarks: 来店時に提示する一意の会員コード（数字 12 桁）
+              - column:
+                  name: platform_user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_members_platform_user
+                  remarks: 会員本人のプラットフォームユーザー（user_type=MEMBER、1 対 1）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_members_user
+            baseTableName: t_members
+            baseColumnNames: platform_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: t_members

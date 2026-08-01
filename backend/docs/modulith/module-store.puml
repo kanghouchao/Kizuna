@@ -25,8 +25,8 @@ System_Boundary("Application_boundary", "Application", $tags="") {
 
 }
 
-Rel(Application.Application.Storeprofile, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Settings, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Application.Application.Storeprofile, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Store, Application.Application.Storeprofile, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Store, Application.Application.Settings, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Store, Application.Application.Shared, "uses", $techn="", $tags="", $link="")

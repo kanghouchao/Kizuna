@@ -54,7 +54,13 @@ export default function PlatformLoginForm() {
         return;
       }
 
-      // MEMBER 等: ポータル未提供
+      if (me.user_type === 'MEMBER') {
+        startPlatformSession('member', expires_at);
+        router.push('/member/');
+        return;
+      }
+
+      // 想定外の user_type: 着地先が無いためセッションを破棄する
       Cookies.remove('token');
       clearPlatformSession();
       toast.error('この利用者種別のポータルは準備中です');

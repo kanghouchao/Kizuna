@@ -14,13 +14,13 @@ frontend/src/
 │                 #   Exception: the root route `/` (app/(public)/page.tsx) dispatches templates dynamically
 │                 #   based on the cookie-resolved store, so it cannot be a thin shell.
 ├── _app/         # App initialization such as providers (named _app because `app` collides with Next's reserved name)
-├── _pages/       # Page slices, named with a scope prefix: platform-* / store-* plus cast-invite, cast-portal, store-site
+├── _pages/       # Page slices, named with a scope prefix: platform-* / store-* plus cast-invite, cast-portal, member-register, member-portal, store-site
 │                 #   store-entry is the store console's invisible entry point: it resolves the store and the
 │                 #   menu-derived landing page, then redirects. It has no UI and no route of its own to link to.
 ├── widgets/      # Composite UI such as sidebar, header
 ├── features/     # Slices per user action: platform-login, staff-management, ...
 ├── entities/     # Mirror of the backend domain modules:
-│                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift
+│                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift, member
 │                 #   each slice = model (types) / api (requests) / index (public API)
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (shadcn/ui barrel + hand-written generics)
 ```

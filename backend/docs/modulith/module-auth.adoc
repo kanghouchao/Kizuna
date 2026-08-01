@@ -4,7 +4,8 @@
 |`com.kizuna.auth`
 |Bean references
 |* `c.k.u.domain.PlatformUserRepository` (in User)
-* `c.k.u.domain.CapabilityBundleRepository` (in User)
+* `c.k.u.domain.RoleRepository` (in User)
+* `c.k.u.domain.PermissionRepository` (in User)
 * `c.k.s.config.AppProperties` (in Shared)
 |Events listened to
 |* `c.k.u.domain.PlatformUserResumed` 
