@@ -116,9 +116,7 @@ describe('ロール編集モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(mockedRoleApi.update).toHaveBeenCalledTimes(2));
-    expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(
-      expect.objectContaining({ version: 4 })
-    );
+    expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(expect.objectContaining({ version: 4 }));
   });
 
   it('権限目録を console ごとに見出し付きで並べる', async () => {

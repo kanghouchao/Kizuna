@@ -174,7 +174,9 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
         <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
           {title}
         </DialogTitle>
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+        {/* submit は取り直し（requestIdRef を読む）へ繋がるため、handleSubmit の適用を
+            イベント時まで遅らせる — 描画中の適用は react-hooks/refs が ref 読みとして拒む */}
+        <form onSubmit={event => void handleSubmit(submit)(event)} className="space-y-4 px-6 py-5">
           <div className="grid gap-1">
             <Label htmlFor="role-name">ロール名</Label>
             <Input
