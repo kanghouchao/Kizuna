@@ -19,14 +19,14 @@ databaseChangeLog:
               - column:
                   name: shift_id
                   type: VARCHAR(64)
-                  remarks: 変更申請（CHANGE）の対象シフト id。NEW では NULL
+                  remarks: 変更申請（CHANGE）の対象シフト id。NEW では NULL。対象シフト削除時も申請は履歴として残すため SET NULL
         - addForeignKeyConstraint:
             constraintName: fk_t_shift_requests_shift
             baseTableName: t_shift_requests
             baseColumnNames: shift_id
             referencedTableName: t_shifts
             referencedColumnNames: id
-            onDelete: CASCADE
+            onDelete: SET NULL
         - createIndex:
             indexName: idx_t_shift_requests_shift
             tableName: t_shift_requests

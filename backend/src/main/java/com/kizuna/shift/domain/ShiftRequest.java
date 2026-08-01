@@ -50,7 +50,7 @@ public class ShiftRequest extends StoreScopedEntity {
   @Builder.Default
   private ShiftRequestType type = ShiftRequestType.NEW;
 
-  /** 変更申請（CHANGE）の対象シフト id。NEW では null。 */
+  /** 変更申請（CHANGE）の対象シフト id。NEW では null。対象シフトが削除されると DB 側で null に落ち、申請は履歴として残る。 */
   @Column(name = "shift_id", length = 64)
   private String shiftId;
 

@@ -88,7 +88,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
                   className={
                     isChange
                       ? 'border-transparent bg-primary/10 text-primary-strong'
-                      : 'border-transparent bg-muted text-muted-foreground'
+                      : 'border-transparent bg-muted text-foreground'
                   }
                 >
                   {isChange ? '変更申請' : '新規希望'}

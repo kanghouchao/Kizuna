@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastScheduleItem, ShiftChangeRequestCreateRequest, shiftApi } from '@/entities/shift';
 import { Button, Dialog, DialogContent, DialogTitle, Input, Label, Textarea } from '@/shared/ui';
-import { toDateStr } from '../lib/week';
+import { formatEndTime, formatTime, toDateStr } from '../lib/week';
 
 interface ChangeFormValues {
   work_date: string;
@@ -79,8 +79,8 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
         <DialogTitle className="border-b px-6 py-4">シフトの変更申請</DialogTitle>
         <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
           <p className="text-xs text-muted-foreground">
-            現行: {item?.work_date} {(item?.start_time ?? '').slice(0, 5)}–
-            {(item?.end_time ?? '').slice(0, 5)}（{item?.store_name}）
+            現行: {item?.work_date} {formatTime(item?.start_time)}–{formatEndTime(item?.end_time)}（
+            {item?.store_name}）
           </p>
           <div className="grid gap-2">
             <Label htmlFor="change-work-date">日付</Label>

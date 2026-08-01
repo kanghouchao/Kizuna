@@ -74,10 +74,18 @@ public class ShiftRequestService {
     request.approve();
 
     if (request.getType() == ShiftRequestType.CHANGE) {
+      // 対象シフトが削除されると FK（SET NULL）で参照が落ちる。申請は履歴として残るが、適用先が無いため承認はできない。
+      if (request.getShiftId() == null) {
+        throw new ServiceException("対象のシフトは既に削除されています");
+      }
       Shift target =
           shiftRepository
               .findById(request.getShiftId())
               .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + request.getShiftId()));
+      // 確定済みであることは提出時だけでなく適用時にも要求する（提出後に未確定へ編集されたシフトを上書きしない）。
+      if (!"CONFIRMED".equals(target.getStatus())) {
+        throw new ServiceException("確定済みでないシフトには変更を適用できません");
+      }
       target.apply(
           new ShiftPatch(
               null, request.getWorkDate(), request.getStartTime(), request.getEndTime(), null));

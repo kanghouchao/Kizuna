@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -9,7 +10,7 @@ import lombok.Data;
 /** 確定シフトへの変更申請の提出リクエスト（本人・cast）。対象シフトは shift_id で指定し、店舗はシフトから導出する。 */
 @Data
 public class ShiftChangeRequestCreateRequest {
-  @NotNull private String shiftId;
+  @NotBlank private String shiftId;
   @NotNull private LocalDate workDate;
   @NotNull private LocalTime startTime;
   @NotNull private LocalTime endTime;

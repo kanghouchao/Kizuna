@@ -622,6 +622,28 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("対象シフトが削除されても変更申請は履歴に残り(SET NULL)、承認は 400・謝絶は可能なこと")
+  void deletedTargetShift_keepsChangeRequestHistoryAndBlocksApproval() {
+    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    ResponseEntity<JsonNode> created =
+        submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
+    String id = created.getBody().path("id").asString();
+
+    shiftRepository.deleteById(shift.getId());
+
+    ResponseEntity<JsonNode> history = getHistory(castToken);
+    assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(historyContainsId(history.getBody(), id)).as("シフト削除後も申請が履歴に残ること").isTrue();
+
+    ResponseEntity<JsonNode> approved = approve(STORE_A, id);
+    assertThat(approved.getStatusCode()).as("適用先が無い承認は拒否されること").isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<JsonNode> declined = decline(STORE_A, id);
+    assertThat(declined.getStatusCode()).as("謝絶は可能なこと").isEqualTo(HttpStatus.OK);
+    assertThat(declined.getBody().path("status").asString()).isEqualTo("DECLINED");
+  }
+
+  @Test
   @DisplayName("処理済みの出勤希望への再処理は 400 で拒否されること(二重処理)")
   void reprocessingAlreadyDecidedRequest_isRejected() {
     ResponseEntity<JsonNode> created =
