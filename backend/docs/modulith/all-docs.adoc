@@ -5,6 +5,10 @@ plantuml::components.puml[,,format=svg]
 plantuml::module-shared.puml[,,format=svg]
 include::module-shared.adoc[]
 
+== Customer
+plantuml::module-customer.puml[,,format=svg]
+include::module-customer.adoc[]
+
 == Settings
 plantuml::module-settings.puml[,,format=svg]
 include::module-settings.adoc[]
@@ -20,6 +24,10 @@ include::module-user.adoc[]
 == Auth
 plantuml::module-auth.puml[,,format=svg]
 include::module-auth.adoc[]
+
+== Member
+plantuml::module-member.puml[,,format=svg]
+include::module-member.adoc[]
 
 == Menu
 plantuml::module-menu.puml[,,format=svg]
@@ -40,10 +48,6 @@ include::module-store.adoc[]
 == Cast
 plantuml::module-cast.puml[,,format=svg]
 include::module-cast.adoc[]
-
-== Customer
-plantuml::module-customer.puml[,,format=svg]
-include::module-customer.adoc[]
 
 == Order
 plantuml::module-order.puml[,,format=svg]

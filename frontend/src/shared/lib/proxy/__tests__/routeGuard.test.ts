@@ -139,6 +139,32 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
+  it('redirects to /platform/login when accessing /member without token', () => {
+    const req = createRequest('/member', false);
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/platform/login' })
+    );
+    expect(res).not.toBeNull();
+  });
+
+  it('allows access to /member with token', () => {
+    const req = createRequest('/member', true);
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
+  it('allows access to /platform/register without token (public route)', () => {
+    const req = createRequest('/platform/register', false);
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
   it('does not redirect the public /casts route without token', () => {
     const req = createRequest('/casts', false);
     const res = handleRouteProtection(req, 'store');
@@ -202,6 +228,44 @@ describe('routeGuard', () => {
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/platform/dashboard' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('redirects a member-console session on /platform/* to /member', () => {
+      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'member' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/member' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('redirects a member-console session on /store/* to /member', () => {
+      const req = createRequest('/store/5/orders', true, { 'platform-role': 'member' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/member' })
+      );
+      expect(res).not.toBeNull();
+    });
+
+    it('allows a member-console session on /member', () => {
+      const req = createRequest('/member', true, { 'platform-role': 'member' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    });
+
+    it('redirects a cast-console session on /member/* to /cast/schedule', () => {
+      const req = createRequest('/member', true, { 'platform-role': 'cast' });
+      const res = handleRouteProtection(req, 'platform');
+
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/cast/schedule' })
       );
       expect(res).not.toBeNull();
     });

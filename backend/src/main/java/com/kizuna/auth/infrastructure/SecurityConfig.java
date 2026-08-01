@@ -36,6 +36,8 @@ public class SecurityConfig {
     PathPatternRequestMatcher.withDefaults().matcher("/files/upload"),
     // 匿名 POST の招待新規登録受諾（Bearer なしのため Bearer 免除に該当しない）。既存受諾(/existing)は Bearer 付きで既存免除に該当する。
     PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*/acceptance"),
+    // 匿名 POST の会員自助登録（同上: Bearer なしのため Bearer 免除に該当しない）。
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/members"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
       return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");

@@ -1,0 +1,5 @@
+# v0.5.0 = 会員（Member）集約の新設。platform 層のみ。
+databaseChangeLog:
+  - include:
+      file: platform/01-member.yaml
+      relativeToChangelogFile: true

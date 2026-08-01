@@ -1,0 +1,7 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.member`
+|Bean references
+|* `c.k.u.domain.PlatformUserRepository` (in User)
+|===

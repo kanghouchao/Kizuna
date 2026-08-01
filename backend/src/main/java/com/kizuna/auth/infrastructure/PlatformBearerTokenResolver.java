@@ -27,6 +27,8 @@ public class PlatformBearerTokenResolver implements BearerTokenResolver {
     // /acceptance/existing は ROLE_CAST を要求するため対象外（別 matcher で拾われない）。
     PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*"),
     PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*/acceptance"),
+    // 会員の自助登録（POST）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/members"),
     PathPatternRequestMatcher.withDefaults().matcher("/platform/stores/lookup"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/config/public"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/casts/public"),
