@@ -35,7 +35,10 @@ export function useListPage<T, C>(
   initialCriteria?: C
 ): ListPageResult<T, C> {
   const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
+  // レンダー中の ref 書き込みは不可のため、コミット後に最新のクロージャへ差し替える
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  });
   // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する
   const requestIdRef = useRef(0);
   // 適用済みの検索条件。ページ送りと再取得はこれをそのまま使う
