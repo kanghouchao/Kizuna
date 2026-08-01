@@ -1,6 +1,10 @@
-/** セッション不要の platform ルート（ログインフォーム・招待受諾）。ルート守衛が参照する。 */
+/** セッション不要の platform ルート（ログインフォーム・招待受諾・会員登録）。ルート守衛が参照する。 */
 export function isPublicPlatformPath(path: string): boolean {
-  return path.startsWith('/platform/login') || path.startsWith('/platform/invite');
+  return (
+    path.startsWith('/platform/login') ||
+    path.startsWith('/platform/invite') ||
+    path.startsWith('/platform/register')
+  );
 }
 
 /**
@@ -13,9 +17,10 @@ export function isSharedPlatformPath(path: string): boolean {
 }
 
 /** 認証済みコンソールの URL エリア。公開ストアフロント（/casts 等）は cast に含めない。 */
-export function consoleAreaOfPath(path: string): 'platform' | 'store' | 'cast' | null {
+export function consoleAreaOfPath(path: string): 'platform' | 'store' | 'cast' | 'member' | null {
   if (path.startsWith('/platform')) return 'platform';
   if (path.startsWith('/store')) return 'store';
   if (path === '/cast' || path.startsWith('/cast/')) return 'cast';
+  if (path === '/member' || path.startsWith('/member/')) return 'member';
   return null;
 }

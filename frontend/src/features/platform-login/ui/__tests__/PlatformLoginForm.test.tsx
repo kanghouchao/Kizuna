@@ -77,16 +77,14 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     expect(mockedToastError).not.toHaveBeenCalled();
   });
 
-  it('user_type=MEMBER は準備中トーストのままセッションを破棄する（現状維持）', async () => {
+  it('user_type=MEMBER は member セッションを開始し /member/ へ遷移する', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
 
     await submitLoginForm();
 
-    await waitFor(() =>
-      expect(mockedToastError).toHaveBeenCalledWith('この利用者種別のポータルは準備中です')
-    );
-    expect(mockPush).not.toHaveBeenCalled();
-    expect(Cookies.get('token')).toBeUndefined();
-    expect(Cookies.get('platform-role')).toBeUndefined();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
+    expect(Cookies.get('platform-role')).toBe('member');
+    expect(Cookies.get('token')).toBe('jwt-token');
+    expect(mockedToastError).not.toHaveBeenCalled();
   });
 });

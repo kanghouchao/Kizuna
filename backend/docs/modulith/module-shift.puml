@@ -28,9 +28,9 @@ System_Boundary("Application_boundary", "Application", $tags="") {
 Rel(Application.Application.Shift, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Shift, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Shift, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Cast, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Cast, Application.Application.User, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

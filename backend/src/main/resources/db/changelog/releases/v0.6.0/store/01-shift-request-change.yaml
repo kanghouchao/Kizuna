@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: store-v0500-001-shift-request-change
+      id: store-v0600-001-shift-request-change
       author: kanghouchao
       preConditions:
         - dbms:

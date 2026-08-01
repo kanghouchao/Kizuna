@@ -82,6 +82,35 @@ class PlatformUserTest {
   }
 
   @Test
+  @DisplayName("MEMBER は SPECIFIC_STORES + 空集合で構築でき、どの店舗も授権しない（登録時点で紐づけ店舗なし）")
+  void memberWithEmptySpecificStoresBuildsAndAuthorizesNothing() {
+    PlatformUser user =
+        staffBuilder()
+            .userType(UserType.MEMBER)
+            .roleIds(Set.of())
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of())
+            .build();
+
+    assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
+    assertThat(user.authorizes(1L)).isFalse();
+  }
+
+  @Test
+  @DisplayName("MEMBER に ALL_STORES を授権できない（authorizes が無条件 true になる fail-open を塞ぐ）")
+  void memberWithAllStoresThrows() {
+    assertThatThrownBy(
+            () ->
+                staffBuilder()
+                    .userType(UserType.MEMBER)
+                    .roleIds(Set.of())
+                    .storeScopeType(StoreScopeType.ALL_STORES)
+                    .storeIds(Set.of())
+                    .build())
+        .isInstanceOf(InvalidStoreScopeException.class);
+  }
+
+  @Test
   @DisplayName("CAST はロールなしで構築できる")
   void castWithoutRolesBuilds() {
     PlatformUser user =

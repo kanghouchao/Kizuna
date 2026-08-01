@@ -10,6 +10,7 @@ const CONSOLE_AREAS: Record<string, { allowed: readonly string[]; home: string }
   platform: { allowed: ['platform', 'store'], home: '/platform/dashboard' },
   store: { allowed: ['store'], home: storeEntryPath() },
   cast: { allowed: ['cast'], home: '/cast/schedule' },
+  member: { allowed: ['member'], home: '/member' },
 };
 
 export function handleRouteProtection(request: NextRequest, role: 'platform' | 'store') {
@@ -43,6 +44,14 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 公開ストアフロントの /casts・/casts/:id を巻き込まないため厳密一致＋/cast/ 配下に限定する。
   if ((path === '/cast' || path.startsWith('/cast/')) && !hasToken) {
     console.error('🔒 Unauthorized access to /cast, redirecting to login');
+    return NextResponse.redirect(new URL('/platform/login', request.url));
+  }
+
+  // 2.6. Member Portal Route Protection
+  // /member/** は会員ポータル専用の認証済み領域。入口は /platform/login（キャストと同様、
+  // 専用ログイン画面は無い）。厳密一致＋/member/ 配下に限定するのも同じ理由。
+  if ((path === '/member' || path.startsWith('/member/')) && !hasToken) {
+    console.error('🔒 Unauthorized access to /member, redirecting to login');
     return NextResponse.redirect(new URL('/platform/login', request.url));
   }
 

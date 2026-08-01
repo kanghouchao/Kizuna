@@ -93,4 +93,15 @@ describe('apiClient 401/403 interceptor', () => {
     expect(clearPlatformSessionMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
   });
+
+  it('does nothing on 403 when the platform-role cookie holds the member session value (会員の正当な 403 はセッションを壊さない)', async () => {
+    platformConsoleValue = 'member';
+    const removeSpy = jest.spyOn(Cookies, 'remove');
+
+    await withRejectingAdapter(403, () => apiClient.get('/platform/staff'));
+
+    expect(removeSpy).not.toHaveBeenCalledWith('token');
+    expect(clearPlatformSessionMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
 });
