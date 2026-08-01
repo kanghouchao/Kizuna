@@ -13,10 +13,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Task
-        uses: arduino/setup-task@v2
+        uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -33,7 +33,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # docs-only 判定で HEAD^1（ベース側の親）との diff を取るため 2 世代必要
           fetch-depth: 2
@@ -59,14 +59,14 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.diff.outputs.docs_only != 'true'
-        uses: docker/setup-buildx-action@v4.0.0
+        uses: docker/setup-buildx-action@v4.2.0
         with:
           driver-opts: |
             image=moby/buildkit:latest
             network=host
 
       - name: Set up Task
-        uses: arduino/setup-task@v2
+        uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -99,7 +99,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # docs-only 判定で HEAD^1（ベース側の親）との diff を取るため 2 世代必要
           fetch-depth: 2
@@ -125,14 +125,14 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.diff.outputs.docs_only != 'true'
-        uses: docker/setup-buildx-action@v4.0.0
+        uses: docker/setup-buildx-action@v4.2.0
         with:
           driver-opts: |
             image=moby/buildkit:latest
             network=host
 
       - name: Set up Task
-        uses: arduino/setup-task@v2
+        uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
