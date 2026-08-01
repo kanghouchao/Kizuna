@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import type { PermissionResponse, RoleResponse } from '@/entities/user';
 import { platformRoleApi } from '@/entities/user';
@@ -72,6 +72,53 @@ describe('ロール編集モーダル', () => {
     expect(await screen.findByLabelText('ORDER_MANAGE')).toBeChecked();
     expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
     expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+  });
+
+  it('詳細が届くまで名称入力を無効化する（到着時の reset が入力を上書きしないように）', async () => {
+    let resolveGet: (r: RoleResponse) => void = () => {};
+    mockedRoleApi.get.mockImplementationOnce(
+      () =>
+        new Promise<RoleResponse>(resolve => {
+          resolveGet = resolve;
+        })
+    );
+    renderModal();
+
+    expect(screen.getByLabelText('ロール名')).toBeDisabled();
+
+    await act(async () => resolveGet(role()));
+
+    expect(screen.getByLabelText('ロール名')).toBeEnabled();
+    expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
+  });
+
+  it('409 の取り直し中は保存を無効化し、完了後は新しい version で送る', async () => {
+    // 取り直し完了前に保存が押せると、陳腐な version の再送で同じ 409 を繰り返す
+    mockedRoleApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+    let resolveReload: (r: RoleResponse) => void = () => {};
+    mockedRoleApi.get.mockResolvedValueOnce(role()).mockImplementationOnce(
+      () =>
+        new Promise<RoleResponse>(resolve => {
+          resolveReload = resolve;
+        })
+    );
+    renderModal();
+    await screen.findByLabelText('ORDER_MANAGE');
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedRoleApi.get).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
+
+    await act(async () => resolveReload(role({ version: 4 })));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedRoleApi.update).toHaveBeenCalledTimes(2));
+    expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(
+      expect.objectContaining({ version: 4 })
+    );
   });
 
   it('権限目録を console ごとに見出し付きで並べる', async () => {

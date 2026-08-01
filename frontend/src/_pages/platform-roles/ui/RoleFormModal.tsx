@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
@@ -81,17 +81,25 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
     '権限目録の取得に失敗しました'
   );
 
+  // 再試行の連打などで取得が並行しても、最新のリクエストだけがフォームを更新する
+  const requestIdRef = useRef(0);
+
   // 編集対象の詳細取得。409 の後にも呼び、最新の name / permissions / version でフォームを
-  // 初期化し直す（version 固着で再試行が同じ 409 を繰り返さないように）。
+  // 初期化し直す（version 固着で再試行が同じ 409 を繰り返さないように）。取り直し中は
+  // editingRole を空にして保存を止める — 残したままだと完了前の再送が陳腐な version で走る。
   const reloadEditingRole = useCallback(async () => {
     if (editingId === null) return;
+    const requestId = ++requestIdRef.current;
+    setEditingRole(null);
     setDetailLoadFailed(false);
     try {
       const role = await platformRoleApi.get(editingId);
+      if (requestId !== requestIdRef.current) return;
       setEditingRole(role);
       reset({ name: role.name ?? '' });
       setPermissions(role.permissions ?? []);
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       toast.error(getApiErrorMessage(error, 'ロール情報の取得に失敗しました'));
       setDetailLoadFailed(true);
     }
@@ -173,13 +181,15 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
               id="role-name"
               type="text"
               maxLength={100}
+              // 詳細が届く前に入力させると、到着時の reset が入力を黙って上書きする
+              disabled={editingLoading}
               {...register('name', { required: true })}
             />
           </div>
           <div>
             <span className="mb-1 block text-sm font-medium text-foreground">権限</span>
-            {/* 初回の詳細取得失敗は「読み込み中」に固着させず、ダイアログ内で再試行できるようにする
-                （409 後の取り直し失敗は editingRole が残るためここには来ない — フォームはそのまま使える） */}
+            {/* 詳細取得の失敗（初回・409 後の取り直しとも）は「読み込み中」に固着させず、
+                ダイアログ内で再試行できるようにする */}
             {editingLoading && detailLoadFailed ? (
               <div className="space-y-2 rounded-md border p-3">
                 <p className="text-sm text-destructive-strong">ロール情報の取得に失敗しました</p>
