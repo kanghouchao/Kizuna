@@ -106,6 +106,19 @@ class PlatformMemberRegistrationIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("列長(255)を超えるメールアドレスでの登録は 400 で拒否され、副作用がないこと")
+  void tooLongEmailRegistrationIsRejected() {
+    // @Email は形式のみ検証し長さを制限しない。t_users.email は VARCHAR(255) のため、
+    // @Size が無いと列長超過が生の DB エラー(500)になる。
+    String email = "a".repeat(250) + "@kizuna.test";
+
+    ResponseEntity<JsonNode> res = register(email, PASSWORD, "長メール花子");
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
   @DisplayName("列長(150)を超える表示名での登録は 400 で拒否され、副作用がないこと")
   void tooLongDisplayNameRegistrationIsRejected() {
     String email = uniqueEmail("member-longname");
