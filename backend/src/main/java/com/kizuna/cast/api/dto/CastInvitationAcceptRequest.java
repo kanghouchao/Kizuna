@@ -11,6 +11,7 @@ public class CastInvitationAcceptRequest {
 
   @NotBlank(message = "email is required")
   @Email(message = "email format is invalid")
+  @Size(max = 255)
   private String email;
 
   @NotBlank(message = "password is required")

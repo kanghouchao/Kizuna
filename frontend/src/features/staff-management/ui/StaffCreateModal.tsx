@@ -89,7 +89,12 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
         <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
           <div className="grid gap-1">
             <Label htmlFor="staff-email">メールアドレス</Label>
-            <Input id="staff-email" type="email" {...register('email', { required: true })} />
+            <Input
+              id="staff-email"
+              type="email"
+              maxLength={255}
+              {...register('email', { required: true })}
+            />
           </div>
           <div className="grid gap-1">
             <Label htmlFor="staff-password">初期パスワード</Label>
