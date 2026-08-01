@@ -57,9 +57,30 @@ public class ShiftRequestService {
                 response.setCurrentStartTime(target.getStartTime());
                 response.setCurrentEndTime(target.getEndTime());
               }
+              if (request.getType() == ShiftRequestType.CHANGE) {
+                response.setApprovable(changeApplicable(request, target));
+              }
               return response;
             })
         .toList();
+  }
+
+  /**
+   * 変更申請が今も適用可能か（対象シフトが存在し、確定済み・申請者本人・申請時点の時間帯のまま）。 approve の各守衛と同じ条件の要約で、inbox
+   * が承認不能な申請に承認操作を出さないために使う。
+   */
+  private boolean changeApplicable(ShiftRequest request, Shift target) {
+    return target != null
+        && "CONFIRMED".equals(target.getStatus())
+        && request.getCastId().equals(target.getCastId())
+        && slotUnchanged(request, target);
+  }
+
+  /** 対象シフトの時間帯が申請時点（original_*）から変わっていないこと。 */
+  private boolean slotUnchanged(ShiftRequest request, Shift target) {
+    return Objects.equals(target.getWorkDate(), request.getOriginalWorkDate())
+        && Objects.equals(target.getStartTime(), request.getOriginalStartTime())
+        && Objects.equals(target.getEndTime(), request.getOriginalEndTime());
   }
 
   /**
@@ -82,13 +103,16 @@ public class ShiftRequestService {
           shiftRepository
               .findById(request.getShiftId())
               .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + request.getShiftId()));
-      // 確定済み・申請者本人のシフトであることは提出時だけでなく適用時にも要求する
-      // （提出後に未確定へ編集された・別キャストへ付け替えられたシフトを上書きしない）。
+      // 確定済み・申請者本人・申請時点のままのシフトであることは提出時だけでなく適用時にも要求する
+      // （提出後に未確定へ編集された・別キャストへ付け替えられた・時間帯を変更されたシフトを上書きしない）。
       if (!"CONFIRMED".equals(target.getStatus())) {
         throw new ServiceException("確定済みでないシフトには変更を適用できません");
       }
       if (!request.getCastId().equals(target.getCastId())) {
         throw new ServiceException("対象のシフトは別のキャストに変更されています");
+      }
+      if (!slotUnchanged(request, target)) {
+        throw new ServiceException("対象のシフトは申請後に変更されています");
       }
       target.apply(
           new ShiftPatch(

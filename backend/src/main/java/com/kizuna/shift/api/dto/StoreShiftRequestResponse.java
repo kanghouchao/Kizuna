@@ -30,4 +30,7 @@ public class StoreShiftRequestResponse {
   private LocalDate currentWorkDate;
   private LocalTime currentStartTime;
   private LocalTime currentEndTime;
+
+  /** 変更申請が今も適用可能か（対象シフトの削除・編集で承認できなくなっていないか）。NEW では null。 */
+  private Boolean approvable;
 }

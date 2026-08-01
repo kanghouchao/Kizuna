@@ -284,6 +284,11 @@ class CastShiftRequestServiceTest {
     assertThat(saved.getType()).isEqualTo(ShiftRequestType.CHANGE);
     assertThat(saved.getShiftId()).isEqualTo("sh1");
     assertThat(saved.getCastId()).isEqualTo("cast-1");
+    assertThat(saved.getOriginalWorkDate())
+        .as("申請時点の対象シフトの時間帯が控えられること")
+        .isEqualTo(LocalDate.of(2999, 8, 1));
+    assertThat(saved.getOriginalStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(saved.getOriginalEndTime()).isEqualTo(LocalTime.of(23, 0));
     assertThat(saved.getStoreId()).as("店舗はシフトから導出されること").isEqualTo(7L);
     assertThat(saved.getWorkDate()).isEqualTo(req.getWorkDate());
     assertThat(saved.getStartTime()).isEqualTo(req.getStartTime());

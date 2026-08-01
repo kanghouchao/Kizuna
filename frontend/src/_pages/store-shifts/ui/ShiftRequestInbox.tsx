@@ -75,6 +75,8 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
     <ul className="space-y-3">
       {requests.map(request => {
         const isChange = request.type === 'CHANGE';
+        // 対象シフトの削除・編集で承認がサーバ側で必ず拒否される変更申請には、承認操作を出さない（謝絶のみ）。
+        const unapprovable = isChange && request.approvable === false;
         return (
           <li
             key={request.id}
@@ -106,6 +108,11 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
                 {request.end_time?.slice(0, 5)}
               </p>
               {request.note && <p className="mt-1 text-xs text-muted-foreground">{request.note}</p>}
+              {unapprovable && (
+                <p className="mt-1 text-xs text-destructive-strong">
+                  対象のシフトが削除または変更されたため承認できません（謝絶のみ可能）
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <Button
@@ -117,14 +124,16 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
               >
                 {isChange ? '謝絶' : '辞退'}
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => approve(request.id ?? '')}
-                disabled={processingId === request.id}
-              >
-                {isChange ? '承認してシフト更新' : '承認'}
-              </Button>
+              {!unapprovable && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => approve(request.id ?? '')}
+                  disabled={processingId === request.id}
+                >
+                  {isChange ? '承認してシフト更新' : '承認'}
+                </Button>
+              )}
             </div>
           </li>
         );

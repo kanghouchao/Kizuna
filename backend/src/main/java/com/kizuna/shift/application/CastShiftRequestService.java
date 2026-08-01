@@ -89,6 +89,10 @@ public class CastShiftRequestService {
             .castId(shift.getCastId())
             .type(ShiftRequestType.CHANGE)
             .shiftId(shift.getId())
+            // 申請時点の対象シフトの時間帯を控える。承認時にここから変わっていれば適用を拒む（陳腐化した申請で店舗編集を上書きしない）。
+            .originalWorkDate(shift.getWorkDate())
+            .originalStartTime(shift.getStartTime())
+            .originalEndTime(shift.getEndTime())
             .workDate(request.getWorkDate())
             .startTime(request.getStartTime())
             .endTime(request.getEndTime())

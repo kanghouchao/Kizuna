@@ -52,11 +52,15 @@ class ShiftRequestServiceTest {
   }
 
   private ShiftRequest pendingChangeRequest() {
+    // original_* は confirmedShift() の時間帯と一致させる（申請時点の対象シフトの控え）
     ShiftRequest request =
         ShiftRequest.builder()
             .castId("c1")
             .type(ShiftRequestType.CHANGE)
             .shiftId("sh1")
+            .originalWorkDate(LocalDate.of(2999, 8, 1))
+            .originalStartTime(LocalTime.of(18, 0))
+            .originalEndTime(LocalTime.of(23, 0))
             .workDate(LocalDate.of(2999, 8, 2))
             .startTime(LocalTime.of(19, 0))
             .endTime(LocalTime.of(22, 0))
@@ -188,6 +192,39 @@ class ShiftRequestServiceTest {
   }
 
   @Test
+  void approve_changeRequest_rejectsWhenTargetSlotEditedAfterSubmission() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift target = confirmedShift();
+    // 申請後に店舗がシフト編集で時間帯を動かした状態
+    target.apply(new ShiftPatch(null, null, LocalTime.of(20, 0), null, null));
+    when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("申請後に変更されています");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+  }
+
+  @Test
+  void list_marksChangeRequestUnapprovableWhenTargetDriftedOrMissing() {
+    ShiftRequest drifted = pendingChangeRequest();
+    Shift editedTarget = confirmedShift();
+    editedTarget.apply(new ShiftPatch(null, null, LocalTime.of(20, 0), null, null));
+    when(shiftRequestRepository.findAllByOrderByCreatedAtAsc()).thenReturn(List.of(drifted));
+    when(shiftRepository.findAllById(List.of("sh1"))).thenReturn(List.of(editedTarget));
+    when(shiftRequestMapper.toStoreResponse(drifted))
+        .thenReturn(
+            StoreShiftRequestResponse.builder().id("sr2").type("CHANGE").shiftId("sh1").build());
+
+    List<StoreShiftRequestResponse> result = shiftRequestService.list(null);
+
+    assertThat(result.get(0).getApprovable()).isFalse();
+  }
+
+  @Test
   void approve_changeRequest_rejectsWhenTargetShiftReassignedToAnotherCast() {
     ShiftRequest request = pendingChangeRequest();
     Shift target = confirmedShift();
@@ -274,10 +311,12 @@ class ShiftRequestServiceTest {
     assertThat(result).hasSize(2);
     StoreShiftRequestResponse newRow = result.get(0);
     assertThat(newRow.getCurrentWorkDate()).isNull();
+    assertThat(newRow.getApprovable()).as("NEW には適用可否を付けない").isNull();
     StoreShiftRequestResponse changeRow = result.get(1);
     assertThat(changeRow.getCurrentWorkDate()).isEqualTo(target.getWorkDate());
     assertThat(changeRow.getCurrentStartTime()).isEqualTo(target.getStartTime());
     assertThat(changeRow.getCurrentEndTime()).isEqualTo(target.getEndTime());
+    assertThat(changeRow.getApprovable()).as("対象が申請時点のままなら適用可能").isTrue();
   }
 
   @Test

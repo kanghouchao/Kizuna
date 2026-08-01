@@ -54,6 +54,18 @@ public class ShiftRequest extends StoreScopedEntity {
   @Column(name = "shift_id", length = 64)
   private String shiftId;
 
+  /** 変更申請時点の対象シフト勤務日。申請後に対象シフトが編集されたことの検知に使う（NEW では null）。 */
+  @Column(name = "original_work_date")
+  private LocalDate originalWorkDate;
+
+  /** 変更申請時点の対象シフト開始時刻（NEW では null）。 */
+  @Column(name = "original_start_time")
+  private LocalTime originalStartTime;
+
+  /** 変更申請時点の対象シフト終了時刻（NEW では null）。 */
+  @Column(name = "original_end_time")
+  private LocalTime originalEndTime;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 20)
   @Builder.Default

@@ -6,6 +6,7 @@ import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
+import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
@@ -619,6 +620,40 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
     ShiftRequest request = shiftRequestRepository.findById(id).orElseThrow();
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
+  }
+
+  @Test
+  @DisplayName("申請後に対象シフトが編集されたら承認は 400 で拒否され、inbox が承認不能(approvable=false)を示すこと")
+  void editedTargetShiftAfterSubmission_blocksApprovalAndMarksUnapprovable() {
+    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    ResponseEntity<JsonNode> created =
+        submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
+    String id = created.getBody().path("id").asString();
+
+    // 店舗編集を模して対象シフトの時間帯を動かす
+    Shift target = shiftRepository.findById(shift.getId()).orElseThrow();
+    target.apply(new ShiftPatch(null, null, LocalTime.of(20, 0), null, null));
+    shiftRepository.save(target);
+
+    ResponseEntity<JsonNode> approved = approve(STORE_A, id);
+    assertThat(approved.getStatusCode()).as("陳腐化した申請の承認は拒否されること").isEqualTo(HttpStatus.BAD_REQUEST);
+    Shift reloaded = shiftRepository.findById(shift.getId()).orElseThrow();
+    assertThat(reloaded.getStartTime()).as("店舗編集後の時間帯が上書きされないこと").isEqualTo(LocalTime.of(20, 0));
+
+    ResponseEntity<JsonNode> inbox =
+        rest.exchange(
+            "/store/shift-requests?status=PENDING",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    boolean found = false;
+    for (JsonNode node : inbox.getBody()) {
+      if (id.equals(node.path("id").asString())) {
+        found = true;
+        assertThat(node.path("approvable").asBoolean(true)).as("inbox が承認不能を示すこと").isFalse();
+      }
+    }
+    assertThat(found).isTrue();
   }
 
   @Test
