@@ -4,6 +4,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
+import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionRepository;
@@ -19,7 +20,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,15 +39,24 @@ public class RoleService {
   private final PermissionRepository permissionRepository;
   private final PlatformUserRepository platformUserRepository;
 
+  /** 一覧は権限の個数だけを返す要約。権限コードの列挙が要るのは編集時のみで、それは {@link #get(Long)} が担う。 */
   @Transactional(readOnly = true)
-  public List<RoleResponse> list() {
-    List<Role> roles = roleRepository.findAll(Sort.by("name"));
-    Set<Long> permissionIds =
-        roles.stream()
-            .flatMap(role -> role.getPermissionIds().stream())
-            .collect(Collectors.toSet());
-    Map<Long, String> codesById = codesById(permissionIds);
-    return roles.stream().map(role -> toResponse(role, codesById)).toList();
+  public List<RoleSummaryResponse> list() {
+    return roleRepository.findAllSummaries().stream()
+        .map(
+            summary ->
+                new RoleSummaryResponse(
+                    summary.getId(),
+                    summary.getName(),
+                    Boolean.TRUE.equals(summary.getSystemRole()),
+                    summary.getPermissionCount()))
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public RoleResponse get(Long id) {
+    Role role = roleRepository.findById(id).orElseThrow(() -> notFound(id));
+    return toResponse(role, codesById(role.getPermissionIds()));
   }
 
   @Transactional

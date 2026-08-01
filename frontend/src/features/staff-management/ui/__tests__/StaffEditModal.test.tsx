@@ -45,8 +45,8 @@ describe('スタッフ授権編集モーダル', () => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
     mockedRoleApi.list.mockResolvedValue([
-      { id: 3, name: '店長', system: true, permissions: [], version: 0 },
-      { id: 4, name: '経理', system: false, permissions: [], version: 0 },
+      { id: 3, name: '店長', system: true, permission_count: 0 },
+      { id: 4, name: '経理', system: false, permission_count: 0 },
     ]);
     mockedStaffApi.update.mockResolvedValue({} as never);
   });

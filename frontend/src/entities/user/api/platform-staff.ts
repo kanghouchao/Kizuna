@@ -6,6 +6,7 @@ import {
   PlatformStaffUpdateRequest,
   RoleCreateRequest,
   RoleResponse,
+  RoleSummaryResponse,
   RoleUpdateRequest,
 } from '../model/types';
 
@@ -37,8 +38,13 @@ export const platformStaffApi = {
 };
 
 export const platformRoleApi = {
-  list: async (): Promise<RoleResponse[]> => {
+  /** 一覧は権限個数までの要約。編集フォームが要る権限コードの列挙は get で個別に取得する。 */
+  list: async (): Promise<RoleSummaryResponse[]> => {
     const response = await apiClient.get('/platform/roles');
+    return response.data;
+  },
+  get: async (id: number): Promise<RoleResponse> => {
+    const response = await apiClient.get(`/platform/roles/${id}`);
     return response.data;
   },
   create: async (data: RoleCreateRequest): Promise<RoleResponse> => {

@@ -2,6 +2,7 @@ package com.kizuna.user.api.platform;
 
 import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
+import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.application.RoleService;
 import jakarta.validation.Valid;
@@ -26,10 +27,17 @@ public class RoleController {
 
   private final RoleService roleService;
 
+  /** 一覧は権限個数までの要約。編集フォームが要る権限コードの列挙は {@link #get(Long)} で個別に取得する。 */
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
-  public ResponseEntity<List<RoleResponse>> list() {
+  public ResponseEntity<List<RoleSummaryResponse>> list() {
     return ResponseEntity.ok(roleService.list());
+  }
+
+  @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
+  public ResponseEntity<RoleResponse> get(@PathVariable Long id) {
+    return ResponseEntity.ok(roleService.get(id));
   }
 
   @PostMapping

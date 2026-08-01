@@ -739,11 +739,15 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   void roleListingRequiresStaffManage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
-    ResponseEntity<String> roles =
+    ResponseEntity<JsonNode> roles =
         rest.exchange(
-            "/platform/roles", HttpMethod.GET, new HttpEntity<>(bearer(hq)), String.class);
+            "/platform/roles", HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
     assertThat(roles.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(roles.getBody()).contains("HQ管理者").contains("店長").contains("店舗スタッフ");
+    assertThat(roles.getBody().toString()).contains("HQ管理者").contains("店長").contains("店舗スタッフ");
+    // 一覧は要約のみ：権限は個数で返し、コードの列挙（permissions）は詳細取得に委ねる。
+    JsonNode firstRole = roles.getBody().get(0);
+    assertThat(firstRole.path("permission_count").asLong()).isPositive();
+    assertThat(firstRole.has("permissions")).isFalse();
 
     String nonHq = platformToken(NON_HQ_EMAIL, PASSWORD);
     ResponseEntity<String> forbidden =
@@ -782,6 +786,17 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     long roleId = created.getBody().path("id").asLong();
     assertThat(created.getBody().path("system").asBoolean()).isFalse();
     assertThat(created.getBody().path("permissions").get(0).asString()).isEqualTo("ORDER_MANAGE");
+
+    // 詳細は編集フォーム向けに権限コードの列挙と version を返す。
+    ResponseEntity<JsonNode> detail =
+        rest.exchange(
+            "/platform/roles/" + roleId,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            JsonNode.class);
+    assertThat(detail.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(detail.getBody().path("permissions").get(0).asString()).isEqualTo("ORDER_MANAGE");
+    assertThat(detail.getBody().has("version")).isTrue();
 
     // 存在しない権限コードは 400。
     ResponseEntity<String> unknownPermission =

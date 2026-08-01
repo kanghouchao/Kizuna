@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import type { PermissionResponse, RoleResponse } from '@/entities/user';
 import { platformRoleApi } from '@/entities/user';
@@ -6,7 +6,7 @@ import { RoleFormModal } from '../RoleFormModal';
 
 jest.mock('@/entities/user', () => ({
   platformRoleApi: {
-    list: jest.fn(),
+    get: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     permissions: jest.fn(),
@@ -32,7 +32,7 @@ const role = (override: Partial<RoleResponse> = {}): RoleResponse => ({
 const renderModal = (props: Partial<React.ComponentProps<typeof RoleFormModal>> = {}) => {
   const onClose = jest.fn();
   const onSaved = jest.fn();
-  render(<RoleFormModal open editing={role()} onClose={onClose} onSaved={onSaved} {...props} />);
+  render(<RoleFormModal editingId={5} onClose={onClose} onSaved={onSaved} {...props} />);
   return { onClose, onSaved };
 };
 
@@ -44,8 +44,79 @@ describe('ロール編集モーダル', () => {
       { code: 'CUSTOMER_MANAGE', console: 'STORE' },
       { code: 'STAFF_MANAGE', console: 'PLATFORM' },
     ]);
+    mockedRoleApi.get.mockResolvedValue(role());
     mockedRoleApi.update.mockResolvedValue({} as never);
     mockedRoleApi.create.mockResolvedValue({} as never);
+  });
+
+  // 一覧は権限個数までの要約しか持たないため、編集の中身は id での個別取得が正
+  it('編集は詳細を id で取得してフォームを初期化する', async () => {
+    renderModal();
+
+    expect(await screen.findByLabelText('ORDER_MANAGE')).toBeChecked();
+    expect(mockedRoleApi.get).toHaveBeenCalledWith(5);
+    expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
+  });
+
+  it('詳細取得に失敗したら読み込み中に固着せず、再試行で回復できる', async () => {
+    // 失敗のまま「読み込み中...」を出し続けると、閉じて開き直す以外の回復手段が無くなる
+    mockedRoleApi.get.mockRejectedValueOnce({ response: { status: 500 } });
+    renderModal();
+
+    expect(await screen.findByText('ロール情報の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByLabelText('ORDER_MANAGE')).toBeChecked();
+    expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
+    expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+  });
+
+  it('詳細が届くまで名称入力を無効化する（到着時の reset が入力を上書きしないように）', async () => {
+    let resolveGet: (r: RoleResponse) => void = () => {};
+    mockedRoleApi.get.mockImplementationOnce(
+      () =>
+        new Promise<RoleResponse>(resolve => {
+          resolveGet = resolve;
+        })
+    );
+    renderModal();
+
+    expect(screen.getByLabelText('ロール名')).toBeDisabled();
+
+    await act(async () => resolveGet(role()));
+
+    expect(screen.getByLabelText('ロール名')).toBeEnabled();
+    expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
+  });
+
+  it('409 の取り直し中は保存を無効化し、完了後は新しい version で送る', async () => {
+    // 取り直し完了前に保存が押せると、陳腐な version の再送で同じ 409 を繰り返す
+    mockedRoleApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+    let resolveReload: (r: RoleResponse) => void = () => {};
+    mockedRoleApi.get.mockResolvedValueOnce(role()).mockImplementationOnce(
+      () =>
+        new Promise<RoleResponse>(resolve => {
+          resolveReload = resolve;
+        })
+    );
+    renderModal();
+    await screen.findByLabelText('ORDER_MANAGE');
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedRoleApi.get).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
+
+    await act(async () => resolveReload(role({ version: 4 })));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedRoleApi.update).toHaveBeenCalledTimes(2));
+    expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(expect.objectContaining({ version: 4 }));
   });
 
   it('権限目録を console ごとに見出し付きで並べる', async () => {
@@ -72,7 +143,7 @@ describe('ロール編集モーダル', () => {
     expect(screen.getByText('BILLING')).toBeInTheDocument();
   });
 
-  it('編集保存は楽観ロックの version を往復する', async () => {
+  it('編集保存は詳細応答の version を往復する', async () => {
     renderModal();
     await screen.findByLabelText('ORDER_MANAGE');
 
@@ -87,8 +158,8 @@ describe('ロール編集モーダル', () => {
     });
   });
 
-  it('新規作成は version を送らない', async () => {
-    renderModal({ editing: null });
+  it('新規作成は詳細を取得せず、version も送らない', async () => {
+    renderModal({ editingId: null });
     await screen.findByLabelText('ORDER_MANAGE');
 
     fireEvent.change(screen.getByLabelText('ロール名'), { target: { value: '新ロール' } });
@@ -100,6 +171,7 @@ describe('ロール編集モーダル', () => {
       name: '新ロール',
       permissions: ['CUSTOMER_MANAGE'],
     });
+    expect(mockedRoleApi.get).not.toHaveBeenCalled();
   });
 
   it('権限を全て外すと保存 API を呼ばず警告する', async () => {
@@ -115,8 +187,8 @@ describe('ロール編集モーダル', () => {
     expect(mockedRoleApi.update).not.toHaveBeenCalled();
   });
 
-  it('409 は一覧を再取得してモーダルを開いたままにする（version 固着で詰まないこと）', async () => {
-    // 再取得しないと editing が古い version を抱えたままになり、再試行も開き直しも同じ 409 を繰り返す。
+  it('409 は詳細と一覧を取り直してモーダルを開いたままにする（version 固着で詰まないこと）', async () => {
+    // 詳細を取り直さないと古い version を抱えたままになり、再試行が同じ 409 を繰り返す。
     mockedRoleApi.update.mockRejectedValue({ response: { status: 409 } });
     const { onClose, onSaved } = renderModal();
     await screen.findByLabelText('ORDER_MANAGE');
@@ -129,6 +201,7 @@ describe('ロール編集モーダル', () => {
       )
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockedRoleApi.get).toHaveBeenCalledTimes(2));
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });

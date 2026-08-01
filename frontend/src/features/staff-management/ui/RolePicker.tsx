@@ -1,10 +1,10 @@
 'use client';
 
-import { RoleResponse } from '@/entities/user';
+import { RoleSummaryResponse } from '@/entities/user';
 import { Label } from '@/shared/ui';
 
 interface RolePickerProps {
-  roles: RoleResponse[];
+  roles: RoleSummaryResponse[];
   isLoading: boolean;
   roleIds: number[];
   onChange: (roleIds: number[]) => void;

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { RoleResponse, platformRoleApi } from '@/entities/user';
+import { RoleSummaryResponse, platformRoleApi } from '@/entities/user';
 import RolesPage from '../ui/RolesPage';
 
 jest.mock('@/entities/user', () => ({
@@ -9,8 +9,8 @@ jest.mock('@/entities/user', () => ({
 jest.mock('../ui/RoleFormModal', () => {
   const React = require('react');
   return {
-    RoleFormModal: ({ open }: { open: boolean }) =>
-      open ? React.createElement('div', null, 'ロールモーダル表示中') : null,
+    // 実体は開いたときだけ mount される。mock はマーカーだけ出す。
+    RoleFormModal: () => React.createElement('div', null, 'ロールモーダル表示中'),
   };
 });
 
@@ -20,12 +20,11 @@ jest.mock('react-hot-toast', () => ({
 
 const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
 
-const role = (override: Partial<RoleResponse>): RoleResponse => ({
+const role = (override: Partial<RoleSummaryResponse>): RoleSummaryResponse => ({
   id: 1,
   name: '店長',
-  permissions: [],
+  permission_count: 3,
   system: false,
-  version: 0,
   ...override,
 });
 
@@ -34,8 +33,27 @@ describe('ロール一覧ページ', () => {
     jest.clearAllMocks();
     mockedRoleApi.list.mockResolvedValue([
       role({ id: 1, name: '店長' }),
-      role({ id: 2, name: '受付担当' }),
+      role({ id: 2, name: '受付担当', permission_count: 1 }),
     ]);
+  });
+
+  // 一覧は権限個数までの要約で描画する（権限コードの列挙は編集モーダルが個別取得する）
+  it('権限数は一覧応答の permission_count をそのまま表示すること', async () => {
+    render(<RolesPage />);
+    await screen.findByText('店長');
+
+    expect(screen.getByText('3 件')).toBeInTheDocument();
+    expect(screen.getByText('1 件')).toBeInTheDocument();
+  });
+
+  it('モーダルは開くまで mount しないこと（権限目録の先読みを防ぐ）', async () => {
+    render(<RolesPage />);
+    await screen.findByText('店長');
+
+    expect(screen.queryByText('ロールモーダル表示中')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'ロールを追加' }));
+    expect(screen.getByText('ロールモーダル表示中')).toBeInTheDocument();
   });
 
   // ロールは全量取得のため絞り込みは取得済み配列に対して行う。再取得は走らない。

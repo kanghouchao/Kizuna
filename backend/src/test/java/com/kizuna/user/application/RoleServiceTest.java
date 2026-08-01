@@ -12,6 +12,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
+import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
@@ -20,6 +21,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
 import java.util.List;
@@ -33,7 +35,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -79,22 +80,67 @@ class RoleServiceTest {
     return req;
   }
 
+  private RoleSummary summary(long id, String name, boolean systemRole, long permissionCount) {
+    return new RoleSummary() {
+      @Override
+      public Long getId() {
+        return id;
+      }
+
+      @Override
+      public String getName() {
+        return name;
+      }
+
+      @Override
+      public Boolean getSystemRole() {
+        return systemRole;
+      }
+
+      @Override
+      public long getPermissionCount() {
+        return permissionCount;
+      }
+    };
+  }
+
   @Test
-  void list_resolvesPermissionCodesSorted() {
-    when(roleRepository.findAll(Sort.by("name")))
-        .thenReturn(List.of(role(1L, "受付", false, Set.of(ORDER_MANAGE_ID, CUSTOMER_MANAGE_ID))));
+  void list_returnsSummariesWithoutTouchingPermissionCatalog() {
+    when(roleRepository.findAllSummaries()).thenReturn(List.of(summary(1L, "受付", false, 2L)));
+
+    List<RoleSummaryResponse> res = service.list();
+
+    assertThat(res).hasSize(1);
+    assertThat(res.get(0).name()).isEqualTo("受付");
+    assertThat(res.get(0).system()).isFalse();
+    assertThat(res.get(0).permissionCount()).isEqualTo(2L);
+    // 一覧は件数集計だけで完結する — 権限目録の解決（編集時の詳細取得の仕事）が混ざらないこと
+    verify(permissionRepository, never()).findAllById(any());
+  }
+
+  @Test
+  void get_resolvesPermissionCodesSorted() {
+    when(roleRepository.findById(1L))
+        .thenReturn(
+            Optional.of(role(1L, "受付", false, Set.of(ORDER_MANAGE_ID, CUSTOMER_MANAGE_ID))));
     when(permissionRepository.findAllById(Set.of(ORDER_MANAGE_ID, CUSTOMER_MANAGE_ID)))
         .thenReturn(
             List.of(
                 permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE),
                 permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
 
-    List<RoleResponse> res = service.list();
+    RoleResponse res = service.get(1L);
 
-    assertThat(res).hasSize(1);
-    assertThat(res.get(0).name()).isEqualTo("受付");
-    assertThat(res.get(0).system()).isFalse();
-    assertThat(res.get(0).permissions()).containsExactly("CUSTOMER_MANAGE", "ORDER_MANAGE");
+    assertThat(res.name()).isEqualTo("受付");
+    assertThat(res.system()).isFalse();
+    assertThat(res.permissions()).containsExactly("CUSTOMER_MANAGE", "ORDER_MANAGE");
+  }
+
+  @Test
+  void get_unknownId_throwsNotFound() {
+    when(roleRepository.findById(404L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.get(404L)).isInstanceOf(NotFoundException.class);
   }
 
   @Test

@@ -6,7 +6,7 @@ import {
   PlatformStaffResponse,
   PlatformStore,
   PlatformStoreScopeType,
-  RoleResponse,
+  RoleSummaryResponse,
   platformAuthApi,
   platformRoleApi,
   platformStaffApi,
@@ -38,7 +38,7 @@ export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditMod
     () => platformAuthApi.stores(),
     '店舗一覧の取得に失敗しました'
   );
-  const { items: roles, isLoading: rolesLoading } = useManagedList<RoleResponse>(
+  const { items: roles, isLoading: rolesLoading } = useManagedList<RoleSummaryResponse>(
     () => platformRoleApi.list(),
     'ロール一覧の取得に失敗しました'
   );

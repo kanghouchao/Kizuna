@@ -67,6 +67,10 @@ describe('platformRoleApi', () => {
     const res = await platformRoleApi.list();
     expect(res).toEqual({ ok: true, url: '/platform/roles' });
   });
+  it('get は /platform/roles/{id} を GET する', async () => {
+    const res = await platformRoleApi.get(5);
+    expect(res).toEqual({ ok: true, url: '/platform/roles/5' });
+  });
   it('create は /platform/roles を POST する', async () => {
     const res = await platformRoleApi.create({
       name: '受付担当',
