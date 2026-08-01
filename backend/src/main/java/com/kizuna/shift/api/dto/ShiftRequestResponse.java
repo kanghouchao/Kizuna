@@ -20,6 +20,8 @@ public class ShiftRequestResponse {
   private LocalTime startTime;
   private LocalTime endTime;
   private String note;
+  private String type;
+  private String shiftId;
   private String status;
   private OffsetDateTime createdAt;
 }

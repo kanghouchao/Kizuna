@@ -52,6 +52,16 @@ describe('shiftApi', () => {
       })
     ).toEqual({ ok: true, url: '/platform/me/shift-requests' });
   });
+  it('submitShiftChangeRequest は /platform/me/shift-requests/changes を POST する', async () => {
+    expect(
+      await shiftApi.submitShiftChangeRequest({
+        shift_id: 'sh1',
+        work_date: '2026-07-24',
+        start_time: '19:00:00',
+        end_time: '22:00:00',
+      })
+    ).toEqual({ ok: true, url: '/platform/me/shift-requests/changes' });
+  });
   it('myShiftRequests は /platform/me/shift-requests を GET する', async () => {
     expect(await shiftApi.myShiftRequests()).toEqual({
       ok: true,

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { CastScheduleItem, shiftApi } from '@/entities/shift';
 import { Badge, Button, Card, CardContent } from '@/shared/ui';
 import { groupByWorkDate } from '../lib/groupSchedule';
+import { ShiftChangeRequestModal } from './ShiftChangeRequestModal';
 import {
   formatEndTime,
   formatTime,
@@ -27,6 +28,7 @@ export function CastSchedulePage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => weekStart(new Date()));
   const [items, setItems] = useState<CastScheduleItem[] | null>(null);
   const [hasError, setHasError] = useState(false);
+  const [changeTarget, setChangeTarget] = useState<CastScheduleItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +89,7 @@ export function CastSchedulePage() {
                 <ul className="space-y-2">
                   {group.items.map(item => (
                     <li
-                      key={`${item.store_id}-${item.start_time}-${item.end_time}`}
+                      key={item.id ?? `${item.store_id}-${item.start_time}-${item.end_time}`}
                       className="flex items-center justify-between text-sm text-muted-foreground"
                     >
                       <Badge
@@ -96,8 +98,18 @@ export function CastSchedulePage() {
                       >
                         {item.store_name}
                       </Badge>
-                      <span>
+                      <span className="flex items-center gap-2">
                         {formatTime(item.start_time)}–{formatEndTime(item.end_time)}
+                        {item.id && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setChangeTarget(item)}
+                          >
+                            変更申請
+                          </Button>
+                        )}
                       </span>
                     </li>
                   ))}
@@ -107,6 +119,9 @@ export function CastSchedulePage() {
           ))}
         </div>
       )}
+
+      {/* 提出は履歴（希望提出ページ）側に現れるだけでスケジュール自体は変わらないため、成功後の再取得は不要。 */}
+      <ShiftChangeRequestModal item={changeTarget} onClose={() => setChangeTarget(null)} />
     </div>
   );
 }

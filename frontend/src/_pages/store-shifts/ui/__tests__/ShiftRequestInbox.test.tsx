@@ -40,6 +40,21 @@ const REQUEST = {
   status: 'PENDING' as const,
 };
 
+const CHANGE_REQUEST = {
+  id: 'sr2',
+  cast_id: 'cast-1',
+  work_date: '2026-08-02',
+  start_time: '19:00:00',
+  end_time: '22:00:00',
+  type: 'CHANGE' as const,
+  shift_id: 'sh1',
+  status: 'PENDING' as const,
+  current_work_date: '2026-08-01',
+  current_start_time: '18:00:00',
+  current_end_time: '23:00:00',
+  approvable: true,
+};
+
 describe('ShiftRequestInbox', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -62,6 +77,46 @@ describe('ShiftRequestInbox', () => {
     expect(screen.getByText('2026-08-01 18:00–23:00')).toBeInTheDocument();
     expect(screen.getByText('よろしくお願いします')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith({ status: 'PENDING' });
+  });
+
+  it('種別を区別表示する: 新規希望はそのまま、変更申請は現行→申請の日時と専用ボタン文言', async () => {
+    mockedList.mockResolvedValue([REQUEST, CHANGE_REQUEST]);
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
+
+    expect(await screen.findByText('新規希望')).toBeInTheDocument();
+    expect(screen.getByText('変更申請')).toBeInTheDocument();
+    expect(screen.getByText('現行: 2026-08-01 18:00–23:00')).toBeInTheDocument();
+    expect(screen.getByText('申請: 2026-08-02 19:00–22:00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '承認してシフト更新' })).toBeInTheDocument();
+  });
+
+  it('承認不能(approvable=false)の変更申請は承認ボタンを出さず、失効の説明と謝絶のみ表示する', async () => {
+    mockedList.mockResolvedValue([{ ...CHANGE_REQUEST, approvable: false }]);
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
+
+    expect(await screen.findByText('変更申請')).toBeInTheDocument();
+    expect(
+      screen.getByText('対象のシフトが削除または変更されたため承認できません（謝絶のみ可能）')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '承認してシフト更新' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
+  });
+
+  it('変更申請の承認は同じ承認 API を呼び、シフト再取得コールバックが走ること', async () => {
+    mockedList.mockResolvedValue([CHANGE_REQUEST]);
+    mockedApprove.mockResolvedValue({ ...CHANGE_REQUEST, status: 'APPROVED' });
+    const onApproved = jest.fn();
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={onApproved} />);
+    await screen.findByText('変更申請');
+
+    fireEvent.click(screen.getByRole('button', { name: '承認してシフト更新' }));
+
+    await waitFor(() => expect(mockedApprove).toHaveBeenCalledWith('sr2'));
+    await waitFor(() => expect(onApproved).toHaveBeenCalledTimes(1));
   });
 
   it('承認すると一覧とシフトを再取得すること', async () => {

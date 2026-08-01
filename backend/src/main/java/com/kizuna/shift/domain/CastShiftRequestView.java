@@ -21,6 +21,8 @@ public interface CastShiftRequestView {
 
   String getNote();
 
+  ShiftRequestType getType();
+
   ShiftRequestStatus getStatus();
 
   Long getStoreId();

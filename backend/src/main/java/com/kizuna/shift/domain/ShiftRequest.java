@@ -15,9 +15,9 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
 
 /**
- * 出勤希望集約。キャストが所属店舗を指定して提出する勤務希望。
+ * 出勤希望集約。キャストが所属店舗を指定して提出する勤務希望（新規希望・確定シフトへの変更申請の両種別）。
  *
- * <p>承認で確定（CONFIRMED）Shift を新規作成する。希望自体は Shift へ変化せず、申請の履歴として残る。
+ * <p>NEW の承認で確定（CONFIRMED）Shift を新規作成し、CHANGE の承認で対象 Shift の日時を更新する。 希望自体は Shift へ変化せず、申請の履歴として残る。
  */
 @Entity
 @Table(name = "t_shift_requests")
@@ -44,6 +44,27 @@ public class ShiftRequest extends StoreScopedEntity {
 
   @Column(name = "note", length = 500)
   private String note;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "request_type", nullable = false, length = 20)
+  @Builder.Default
+  private ShiftRequestType type = ShiftRequestType.NEW;
+
+  /** 変更申請（CHANGE）の対象シフト id。NEW では null。対象シフトが削除されると DB 側で null に落ち、申請は履歴として残る。 */
+  @Column(name = "shift_id", length = 64)
+  private String shiftId;
+
+  /** 変更申請時点の対象シフト勤務日。申請後に対象シフトが編集されたことの検知に使う（NEW では null）。 */
+  @Column(name = "original_work_date")
+  private LocalDate originalWorkDate;
+
+  /** 変更申請時点の対象シフト開始時刻（NEW では null）。 */
+  @Column(name = "original_start_time")
+  private LocalTime originalStartTime;
+
+  /** 変更申請時点の対象シフト終了時刻（NEW では null）。 */
+  @Column(name = "original_end_time")
+  private LocalTime originalEndTime;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 20)
@@ -80,6 +101,10 @@ public class ShiftRequest extends StoreScopedEntity {
         + startTime
         + ", endTime="
         + endTime
+        + ", type="
+        + type
+        + ", shiftId="
+        + shiftId
         + ", status="
         + status
         + ")";

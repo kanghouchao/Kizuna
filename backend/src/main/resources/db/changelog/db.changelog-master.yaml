@@ -14,6 +14,9 @@ databaseChangeLog:
   - include:
       file: releases/v0.5.0/master.yaml
       relativeToChangelogFile: true
+  - include:
+      file: releases/v0.6.0/master.yaml
+      relativeToChangelogFile: true
   # reconcile/ は版に属さない恒久的な写像取り直しで、必ず全 release の後に置く（毎回実行されるため、
   # ロールの改名など release 側の移行より先に走ると、移行前の状態を見て齟齬と判定してしまう）。
   # 新しい release の include は必ずこの include より前に足すこと。

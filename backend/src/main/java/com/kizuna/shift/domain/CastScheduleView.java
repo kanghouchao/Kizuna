@@ -10,6 +10,8 @@ import java.time.LocalTime;
  */
 public interface CastScheduleView {
 
+  String getId();
+
   LocalDate getWorkDate();
 
   LocalTime getStartTime();

@@ -11,15 +11,20 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
+import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.ShiftRequestResponse;
 import com.kizuna.shift.domain.CastShiftRequestView;
+import com.kizuna.shift.domain.Shift;
+import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
+import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
@@ -39,6 +44,7 @@ class CastShiftRequestServiceTest {
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private CastRepository castRepository;
   @Mock private ShiftRequestRepository shiftRequestRepository;
+  @Mock private ShiftRepository shiftRepository;
   @Mock private ShiftRequestMapper shiftRequestMapper;
   @Mock private AppProperties appProperties;
 
@@ -157,6 +163,136 @@ class CastShiftRequestServiceTest {
     ArgumentCaptor<ShiftRequest> captor = ArgumentCaptor.forClass(ShiftRequest.class);
     verify(shiftRequestRepository).save(captor.capture());
     assertThat(captor.getValue().getCastId()).isEqualTo("cast-old");
+  }
+
+  private ShiftChangeRequestCreateRequest validChangeRequest() {
+    ShiftChangeRequestCreateRequest req = new ShiftChangeRequestCreateRequest();
+    req.setShiftId("sh1");
+    req.setWorkDate(LocalDate.of(2999, 8, 2));
+    req.setStartTime(LocalTime.of(19, 0));
+    req.setEndTime(LocalTime.of(23, 0));
+    return req;
+  }
+
+  private Shift shiftOf(String castId, String status) {
+    Shift shift =
+        Shift.builder()
+            .castId(castId)
+            .workDate(LocalDate.of(2999, 8, 1))
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status(status)
+            .build();
+    shift.setId("sh1");
+    shift.setStoreId(7L);
+    return shift;
+  }
+
+  @Test
+  void submitChange_rejectsWhenStartEqualsEnd() {
+    ShiftChangeRequestCreateRequest req = validChangeRequest();
+    req.setStartTime(LocalTime.of(20, 0));
+    req.setEndTime(LocalTime.of(20, 0));
+
+    assertThatThrownBy(() -> service.submitChange(EMAIL, req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("開始時刻と終了時刻");
+
+    verifyNoInteractions(platformUserRepository, shiftRepository, shiftRequestRepository);
+  }
+
+  @Test
+  void submitChange_rejectsWhenWorkDateBeforeToday() {
+    ShiftChangeRequestCreateRequest req = validChangeRequest();
+    req.setWorkDate(LocalDate.of(2000, 1, 1));
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+
+    assertThatThrownBy(() -> service.submitChange(EMAIL, req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("本日以降");
+
+    verifyNoInteractions(platformUserRepository, shiftRepository, shiftRequestRepository);
+  }
+
+  @Test
+  void submitChange_throwsWhenShiftMissing() {
+    ShiftChangeRequestCreateRequest req = validChangeRequest();
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    PlatformUser user = userWithId(42L);
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
+    when(shiftRepository.findById("sh1")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.submitChange(EMAIL, req))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("対象のシフトが見つかりません");
+
+    verifyNoInteractions(shiftRequestRepository);
+  }
+
+  @Test
+  void submitChange_throwsWhenShiftBelongsToAnotherCast() {
+    ShiftChangeRequestCreateRequest req = validChangeRequest();
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    PlatformUser user = userWithId(42L);
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
+    when(shiftRepository.findById("sh1"))
+        .thenReturn(Optional.of(shiftOf("other-cast", "CONFIRMED")));
+
+    assertThatThrownBy(() -> service.submitChange(EMAIL, req))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("対象のシフトが見つかりません");
+
+    verifyNoInteractions(shiftRequestRepository);
+  }
+
+  @Test
+  void submitChange_rejectsWhenShiftNotConfirmed() {
+    ShiftChangeRequestCreateRequest req = validChangeRequest();
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    PlatformUser user = userWithId(42L);
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
+    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(shiftOf("cast-1", "TENTATIVE")));
+
+    assertThatThrownBy(() -> service.submitChange(EMAIL, req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("確定済みのシフトのみ");
+
+    verifyNoInteractions(shiftRequestRepository);
+  }
+
+  @Test
+  void submitChange_savesChangeTypedRequestDerivedFromShift() {
+    ShiftChangeRequestCreateRequest req = validChangeRequest();
+    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    PlatformUser user = userWithId(42L);
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
+    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(shiftOf("cast-1", "CONFIRMED")));
+    when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+    when(shiftRequestMapper.toResponse(any()))
+        .thenReturn(ShiftRequestResponse.builder().id("sr2").build());
+
+    ShiftRequestResponse result = service.submitChange(EMAIL, req);
+
+    assertThat(result.getId()).isEqualTo("sr2");
+    ArgumentCaptor<ShiftRequest> captor = ArgumentCaptor.forClass(ShiftRequest.class);
+    verify(shiftRequestRepository).save(captor.capture());
+    ShiftRequest saved = captor.getValue();
+    assertThat(saved.getType()).isEqualTo(ShiftRequestType.CHANGE);
+    assertThat(saved.getShiftId()).isEqualTo("sh1");
+    assertThat(saved.getCastId()).isEqualTo("cast-1");
+    assertThat(saved.getOriginalWorkDate())
+        .as("申請時点の対象シフトの時間帯が控えられること")
+        .isEqualTo(LocalDate.of(2999, 8, 1));
+    assertThat(saved.getOriginalStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(saved.getOriginalEndTime()).isEqualTo(LocalTime.of(23, 0));
+    assertThat(saved.getStoreId()).as("店舗はシフトから導出されること").isEqualTo(7L);
+    assertThat(saved.getWorkDate()).isEqualTo(req.getWorkDate());
+    assertThat(saved.getStartTime()).isEqualTo(req.getStartTime());
+    assertThat(saved.getEndTime()).isEqualTo(req.getEndTime());
   }
 
   @Test

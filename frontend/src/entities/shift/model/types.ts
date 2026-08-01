@@ -30,6 +30,7 @@ export interface ShiftUpdateRequest {
 
 // 本人（キャスト）ポータル週間スケジュールの1件（GET /platform/me/schedule）。店舗名を内联する。
 export interface CastScheduleItem {
+  id?: string;
   work_date?: string;
   start_time?: string;
   end_time?: string;
@@ -41,9 +42,21 @@ export interface CastScheduleItem {
 // 出勤希望のステータス。PENDING=受付済み/APPROVED=確定済み/DECLINED=却下。
 export type ShiftRequestStatus = 'PENDING' | 'APPROVED' | 'DECLINED';
 
+// 出勤希望の種別。NEW=新規希望/CHANGE=確定シフトへの変更申請。
+export type ShiftRequestType = 'NEW' | 'CHANGE';
+
 // 出勤希望の提出リクエスト（本人・cast）。work_date は 'yyyy-MM-dd'、時刻は 'HH:mm:ss'。
 export interface ShiftRequestCreateRequest {
   store_id: number;
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  note?: string;
+}
+
+// 確定シフトへの変更申請の提出リクエスト（本人・cast）。対象は shift_id で指定し、店舗はサーバ側でシフトから導出する。
+export interface ShiftChangeRequestCreateRequest {
+  shift_id: string;
   work_date: string;
   start_time: string;
   end_time: string;
@@ -59,6 +72,8 @@ export interface ShiftRequestResponse {
   end_time?: string;
   // 未入力はキーごと応答から消えるため undefined であって null ではない
   note?: string;
+  type?: ShiftRequestType;
+  shift_id?: string;
   status?: ShiftRequestStatus;
   created_at?: string;
 }
@@ -70,6 +85,7 @@ export interface CastShiftRequestItem {
   start_time?: string;
   end_time?: string;
   note?: string;
+  type?: ShiftRequestType;
   status?: ShiftRequestStatus;
   store_id?: number;
   store_name?: string;
@@ -83,6 +99,7 @@ export interface CastStoreItem {
 }
 
 // 店舗側 inbox の出勤希望1件（GET /store/shift-requests）。
+// 変更申請（type=CHANGE）は対象シフトの現行日時（current_*）と適用可否（approvable）を内联する（NEW では null）。
 export interface StoreShiftRequestItem {
   id?: string;
   cast_id?: string;
@@ -90,5 +107,11 @@ export interface StoreShiftRequestItem {
   start_time?: string;
   end_time?: string;
   note?: string;
+  type?: ShiftRequestType;
+  shift_id?: string;
   status?: ShiftRequestStatus;
+  current_work_date?: string;
+  current_start_time?: string;
+  current_end_time?: string;
+  approvable?: boolean;
 }

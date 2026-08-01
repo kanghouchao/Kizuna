@@ -3,6 +3,7 @@ import {
   CastScheduleItem,
   CastShiftRequestItem,
   CastStoreItem,
+  ShiftChangeRequestCreateRequest,
   ShiftCreateRequest,
   ShiftRequestCreateRequest,
   ShiftRequestResponse,
@@ -39,6 +40,13 @@ export const shiftApi = {
   /** 出勤希望を提出する（本人・cast）。 */
   submitShiftRequest: async (data: ShiftRequestCreateRequest): Promise<ShiftRequestResponse> => {
     const response = await apiClient.post('/platform/me/shift-requests', data);
+    return response.data;
+  },
+  /** 確定シフトへの変更申請を提出する（本人・cast）。 */
+  submitShiftChangeRequest: async (
+    data: ShiftChangeRequestCreateRequest
+  ): Promise<ShiftRequestResponse> => {
+    const response = await apiClient.post('/platform/me/shift-requests/changes', data);
     return response.data;
   },
   /** 本人（キャスト）の出勤希望履歴を取得する（全所属店横断・全量・新しい順）。 */
