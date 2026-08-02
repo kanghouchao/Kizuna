@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.settings.application.SmtpSettings;
@@ -44,6 +45,17 @@ class MailServiceTests {
 
     service.send("to@example.com", "件名", "本文");
     // 例外が出なければ成功
+  }
+
+  @Test
+  @DisplayName("SMTP 設定の読み取りが例外でも send は例外を外へ出さず、送信クライアントにも触れないこと")
+  void send_settingsReadFailureIsLoggedNotThrown() {
+    when(systemConfigService.smtpSettings())
+        .thenThrow(new IllegalStateException("Cannot serialize value"));
+
+    service.send("to@example.com", "件名", "本文");
+
+    verifyNoInteractions(mailSenderProvider, mailSender);
   }
 
   @Test
