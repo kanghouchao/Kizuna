@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: seed-v0700-001-line-configs
+      author: kanghouchao
+      # LINE ログインのチャネル資格情報。SMTP と同じく「未設定（空文字）＝環境変数フォールバック」が既定で、
+      # 値を入れると DB 側が優先される（環境変数は LINE_CHANNEL_ID / LINE_CHANNEL_SECRET）。
+      # 双方とも空なら LINE ログインは無効（GET /platform/line/config が enabled=false を返す）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "line_channel_id" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "LINE" }
+              - column: { name: description, value: "LINEログインチャネルID" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "line_channel_secret" }
+              - column: { name: config_value, value: "" }
+              - column: { name: category, value: "LINE" }
+              - column: { name: description, value: "LINEログインチャネルシークレット" }
+              - column: { name: secret, valueBoolean: true }
+      rollback:
+        - delete:
+            tableName: t_system_configs
+            where: config_key in ('line_channel_id', 'line_channel_secret')

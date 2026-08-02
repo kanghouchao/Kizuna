@@ -235,4 +235,26 @@ class PlatformUserTest {
 
     assertThat(user.getPassword()).isEqualTo("new-encoded-hash");
   }
+
+  @Test
+  @DisplayName("未連携の身分は linkLine で LINE ユーザー ID を持つ")
+  void linkLineSetsLineUserId() {
+    PlatformUser user = staffBuilder().build();
+    assertThat(user.getLineUserId()).isNull();
+
+    user.linkLine("U-line-1");
+
+    assertThat(user.getLineUserId()).isEqualTo("U-line-1");
+  }
+
+  @Test
+  @DisplayName("連携済みの身分への再連携は 409 相当のドメイン例外（付け替えを許すと連携先を無断で移せる）")
+  void linkLineOnAlreadyLinkedUserThrows() {
+    PlatformUser user = staffBuilder().build();
+    user.linkLine("U-line-1");
+
+    assertThatThrownBy(() -> user.linkLine("U-line-2"))
+        .isInstanceOf(LineAlreadyLinkedException.class);
+    assertThat(user.getLineUserId()).isEqualTo("U-line-1");
+  }
 }

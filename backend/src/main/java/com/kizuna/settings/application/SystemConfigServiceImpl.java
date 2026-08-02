@@ -83,6 +83,13 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         rawValue("smtp_from"));
   }
 
+  /** LINE チャネル資格情報は都度読む（キャッシュしない）。参照するのは LINE 端点だけで頻度が低く、 管理画面での差し替えを次の要求から効かせられる。 */
+  @Override
+  @Transactional(readOnly = true)
+  public LineChannelSettings lineChannelSettings() {
+    return new LineChannelSettings(rawValue("line_channel_id"), rawValue("line_channel_secret"));
+  }
+
   /** キャッシュプロキシを経由しない内部読み取り（smtpSettings 自体がキャッシュされる）。 */
   private String rawValue(String configKey) {
     return systemConfigRepository

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { platformAuthApi, useAuth } from '@/entities/user';
+import { LineLinkSection } from '@/features/line-auth';
 import { Button, Card, CardContent } from '@/shared/ui';
 
 /** アカウントタブ。表示名とログアウトのみの最小画面。 */
@@ -25,7 +26,7 @@ export function CastAccountPage() {
   }, []);
 
   return (
-    <div className="p-4">
+    <div className="space-y-4 p-4">
       <Card>
         <CardContent>
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -39,6 +40,7 @@ export function CastAccountPage() {
           </Button>
         </CardContent>
       </Card>
+      <LineLinkSection />
     </div>
   );
 }

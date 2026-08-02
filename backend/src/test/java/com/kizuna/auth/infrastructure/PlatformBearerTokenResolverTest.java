@@ -25,6 +25,10 @@ class PlatformBearerTokenResolverTest {
         "/platform/login",
         "/platform/cast-invitations/abc123",
         "/platform/cast-invitations/abc123/acceptance",
+        "/platform/members",
+        "/platform/line/config",
+        "/platform/line/login",
+        "/platform/line/register",
         "/platform/stores/lookup",
         "/store/config/public",
         "/store/casts/public",
@@ -50,6 +54,14 @@ class PlatformBearerTokenResolverTest {
   @DisplayName("保護端点では従来どおり Bearer を解決すること(免除が保護端点まで漏れていないこと)")
   void resolvesTokenForProtectedEndpoint() {
     MockHttpServletRequest request = requestWithBearer("GET", "/platform/me");
+
+    assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
+  }
+
+  @Test
+  @DisplayName("LINE 連携(/platform/me/line)は免除対象でなく Bearer を解決すること(免除すると常に匿名となり連携先を特定できない)")
+  void resolvesTokenForLineLink() {
+    MockHttpServletRequest request = requestWithBearer("POST", "/platform/me/line");
 
     assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
   }

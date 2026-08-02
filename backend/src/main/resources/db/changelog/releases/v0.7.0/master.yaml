@@ -1,0 +1,8 @@
+# v0.7.0 = LINE ログイン（プラットフォーム認証手段）の追加。platform 層と seed 層。
+databaseChangeLog:
+  - include:
+      file: platform/01-line-login.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: seed/01-line-configs.yaml
+      relativeToChangelogFile: true

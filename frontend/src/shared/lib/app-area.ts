@@ -1,9 +1,15 @@
-/** セッション不要の platform ルート（ログインフォーム・招待受諾・会員登録）。ルート守衛が参照する。 */
+/**
+ * セッション不要の platform ルート（ログインフォーム・招待受諾・会員登録・LINE コールバック）。
+ * ルート守衛が参照する。LINE コールバックは未ログインのログイン/登録経路が通るため公開扱いが必須で、
+ * 連携経路（ログイン済み）でも会員・キャストのコンソールから /platform/* へ到達するため
+ * コンソール整合ガードの対象外である必要がある。
+ */
 export function isPublicPlatformPath(path: string): boolean {
   return (
     path.startsWith('/platform/login') ||
     path.startsWith('/platform/invite') ||
-    path.startsWith('/platform/register')
+    path.startsWith('/platform/register') ||
+    path.startsWith('/platform/line/callback')
   );
 }
 

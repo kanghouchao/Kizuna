@@ -60,6 +60,17 @@ public class PlatformAuthService {
     // principal は認証成功時に自作 UserDetails が保持する PlatformUser（二次クエリを避ける）。
     PlatformUser user = ((PlatformUserDetails) authentication.getPrincipal()).getPlatformUser();
 
+    return issueTokenFor(user);
+  }
+
+  /**
+   * 認証済みの身分に対してトークンを発行する。パスワードログインと LINE ログインの双方から呼ばれ、 認証手段が変わっても claim の内容が一致することを構造的に保証する（認証手段ごとに
+   * claim を組み立てると、片方だけ 権限が欠ける・過剰になる齟齬が静かに生まれる）。
+   *
+   * <p>呼び出し側は本人性の確認（パスワード照合・LINE の id_token 検証）を済ませていること。
+   */
+  @Transactional(readOnly = true)
+  public Token issueTokenFor(PlatformUser user) {
     Set<PermissionCode> permissions = permissionsOf(user);
     Map<String, Object> claims = new HashMap<>();
     claims.put("authorities", buildAuthorities(user, permissions));
@@ -116,7 +127,8 @@ public class PlatformAuthService {
         consoleOf(user, permissions),
         hasStoreConsole(permissions),
         user.getStoreScopeType().name(),
-        user.getStoreIds().stream().sorted().toList());
+        user.getStoreIds().stream().sorted().toList(),
+        user.getLineUserId() != null);
   }
 
   /**

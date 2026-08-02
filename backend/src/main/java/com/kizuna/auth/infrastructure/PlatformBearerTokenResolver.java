@@ -29,6 +29,11 @@ public class PlatformBearerTokenResolver implements BearerTokenResolver {
     PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*/acceptance"),
     // 会員の自助登録（POST）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。
     PathPatternRequestMatcher.withDefaults().matcher("/platform/members"),
+    // LINE ログインの公開端点（設定照会・ログイン・登録確定）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。
+    // 連携（/platform/me/line）は認証必須のため対象外 — 免除すると Bearer が解決されず、常に匿名として 401 になる。
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/line/config"),
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/line/login"),
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/line/register"),
     PathPatternRequestMatcher.withDefaults().matcher("/platform/stores/lookup"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/config/public"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/casts/public"),

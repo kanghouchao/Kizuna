@@ -17,4 +17,7 @@ public interface SystemConfigService {
 
   /** SMTP 設定の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
   SmtpSettings smtpSettings();
+
+  /** LINE ログインチャネル資格情報の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
+  LineChannelSettings lineChannelSettings();
 }

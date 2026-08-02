@@ -65,6 +65,22 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
+  it('allows access to /platform/line/callback without token (public route)', () => {
+    const req = createRequest('/platform/line/callback', false);
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
+  it('allows a member-console session on /platform/line/callback (link flow)', () => {
+    const req = createRequest('/platform/line/callback', true, { 'platform-role': 'member' });
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
   it('redirects to / when accessing /store without token', () => {
     const req = createRequest('/store/orders', false);
     const res = handleRouteProtection(req, 'store');

@@ -38,6 +38,7 @@ function meResponse(overrides: Partial<PlatformMeResponse>): PlatformMeResponse 
     store_bridge: false,
     store_scope_type: 'ALL_STORES',
     store_ids: [],
+    line_linked: false,
     ...overrides,
   };
 }

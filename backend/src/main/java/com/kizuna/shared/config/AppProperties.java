@@ -25,6 +25,9 @@ public class AppProperties {
   /** app.upload.* */
   private Upload upload = new Upload();
 
+  /** app.line.* */
+  private Line line = new Line();
+
   @Getter
   @Setter
   public static class Jwt {
@@ -43,6 +46,19 @@ public class AppProperties {
     private long maxFileSize = 10485760;
     private List<String> allowedTypes =
         List.of("image/jpeg", "image/png", "image/gif", "image/webp");
+  }
+
+  /**
+   * LINE ログインの設定。チャネル資格情報はシステム設定（DB）が優先で、未設定のときだけここ（環境変数）へフォールバックする。
+   *
+   * <p>{@code apiBaseUrl} は LINE プラットフォーム API の基底 URL。統合テストがスタブサーバーへ差し替えるための可変点で、 運用では既定値のまま使う。
+   */
+  @Getter
+  @Setter
+  public static class Line {
+    private String apiBaseUrl = "https://api.line.me";
+    private String channelId;
+    private String channelSecret;
   }
 
   public enum Scheme {

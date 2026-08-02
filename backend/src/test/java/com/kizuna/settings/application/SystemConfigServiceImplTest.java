@@ -222,6 +222,28 @@ class SystemConfigServiceImplTest {
     assertThat(smtp.hasFrom()).isFalse();
   }
 
+  @Test
+  void lineChannelSettings_buildsTypedSnapshotFromKeys() {
+    when(systemConfigRepository.findByConfigKey("line_channel_id"))
+        .thenReturn(Optional.of(config("line_channel_id", "2000000000")));
+    when(systemConfigRepository.findByConfigKey("line_channel_secret"))
+        .thenReturn(Optional.of(config("line_channel_secret", "test-placeholder-secret")));
+
+    LineChannelSettings line = systemConfigService.lineChannelSettings();
+
+    assertThat(line.configured()).isTrue();
+    assertThat(line.channelId()).isEqualTo("2000000000");
+    assertThat(line.channelSecret()).isEqualTo("test-placeholder-secret");
+  }
+
+  @Test
+  void lineChannelSettings_notConfiguredWhenUnset() {
+    when(systemConfigRepository.findByConfigKey(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(Optional.empty());
+
+    assertThat(systemConfigService.lineChannelSettings().configured()).isFalse();
+  }
+
   private SystemConfig config(String key, String value) {
     return SystemConfig.builder().configKey(key).configValue(value).build();
   }

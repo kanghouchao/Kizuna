@@ -13,6 +13,7 @@ import com.kizuna.member.api.dto.MemberRegistrationRequest;
 import com.kizuna.member.api.dto.MemberRegistrationResponse;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -113,6 +114,90 @@ class MemberRegistrationServiceTest {
     assertThatThrownBy(() -> service.register(request())).isInstanceOf(ServiceException.class);
 
     verify(memberRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("LINE 登録は MEMBER 身分に LINE ユーザー ID を持たせ、推測不能な乱数パスワードで作成する")
+  void registerWithLineCreatesMemberIdentityWithLineUserId() {
+    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(false);
+    when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+    ArgumentCaptor<PlatformUser> userCaptor = ArgumentCaptor.forClass(PlatformUser.class);
+    when(platformUserRepository.saveAndFlush(userCaptor.capture())).thenReturn(savedUser(10L));
+    when(memberRepository.existsByMemberCode(anyString())).thenReturn(false);
+    ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
+    when(memberRepository.save(memberCaptor.capture()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    service.registerWithLine("member@example.com", "会員 花子", "U-line-1");
+
+    PlatformUser user = userCaptor.getValue();
+    assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
+    assertThat(user.getLineUserId()).isEqualTo("U-line-1");
+    assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(user.getStoreIds()).isEmpty();
+    assertThat(memberCaptor.getValue().getMemberCode()).matches("\\d{12}");
+    // 平文パスワードは利用者が知り得ない乱数（パスワードログイン経路を持たせない）。
+    ArgumentCaptor<String> rawPassword = ArgumentCaptor.forClass(String.class);
+    verify(passwordEncoder).encode(rawPassword.capture());
+    assertThat(rawPassword.getValue()).hasSizeGreaterThanOrEqualTo(32);
+  }
+
+  @Test
+  @DisplayName("LINE 登録の重複 email は 409 系例外で拒否する（入力形式の誤りと区別する）")
+  void registerWithLineRejectsDuplicateEmailWithConflict() {
+    when(platformUserRepository.findByEmail("member@example.com"))
+        .thenReturn(Optional.of(savedUser(10L)));
+
+    assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
+        .isInstanceOf(ConflictException.class);
+
+    verify(platformUserRepository, never()).saveAndFlush(any());
+    verify(memberRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("既に連携済みの LINE ユーザー ID での登録は 409 系例外で拒否する")
+  void registerWithLineRejectsAlreadyLinkedLineUser() {
+    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(true);
+
+    assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
+        .isInstanceOf(ConflictException.class);
+
+    verify(platformUserRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  @DisplayName("並行 LINE 登録の LINE ユーザー ID 一意制約違反は 409 系例外へ写像する（生の 500 にしない）")
+  void registerWithLineMapsLineUserConstraintViolationToConflict() {
+    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(false);
+    when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+    when(platformUserRepository.saveAndFlush(any()))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_t_users_line_user_id\""));
+
+    assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
+        .isInstanceOf(ConflictException.class);
+
+    verify(memberRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("並行 LINE 登録の email 一意制約違反も 409 系例外へ写像する")
+  void registerWithLineMapsEmailConstraintViolationToConflict() {
+    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(false);
+    when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+    when(platformUserRepository.saveAndFlush(any()))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_t_users_email\""));
+
+    assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
+        .isInstanceOf(ConflictException.class);
   }
 
   @Test

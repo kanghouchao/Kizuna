@@ -48,6 +48,13 @@ public class PlatformUser extends BaseEntity {
   @Column(name = "display_name", nullable = false, length = 150)
   private String displayName;
 
+  /**
+   * 連携済み LINE ユーザー ID（未連携は null）。LINE ログインはこの値だけを同一性の根拠にし、メール一致による自動連携は行わない （LINE
+   * 側の検証済みメールが既存アカウントと一致しても、それだけでは本人性の証明にならないため）。
+   */
+  @Column(name = "line_user_id", length = 64)
+  private String lineUserId;
+
   @Column(nullable = false)
   private Boolean enabled = true;
 
@@ -83,7 +90,8 @@ public class PlatformUser extends BaseEntity {
       UserType userType,
       Set<Long> roleIds,
       StoreScopeType storeScopeType,
-      Set<Long> storeIds) {
+      Set<Long> storeIds,
+      String lineUserId) {
     Set<Long> roles = roleIds == null ? Set.of() : roleIds;
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(userType, roles);
@@ -91,6 +99,7 @@ public class PlatformUser extends BaseEntity {
     this.email = email == null ? null : email.toLowerCase(Locale.ROOT);
     this.password = password;
     this.displayName = displayName;
+    this.lineUserId = lineUserId;
     this.enabled = enabled;
     this.userType = userType;
     this.roleIds = new HashSet<>(roles);
@@ -130,6 +139,18 @@ public class PlatformUser extends BaseEntity {
   /** 表示名を更新する（自己プロフィール更新用。不変条件なし）。 */
   public void updateDisplayName(String displayName) {
     this.displayName = displayName;
+  }
+
+  /**
+   * LINE アカウントを連携する。連携は 1 身分につき 1 度きりで、解除も付け替えも提供しない。
+   *
+   * @throws LineAlreadyLinkedException 既に別の LINE アカウントを連携済みの場合
+   */
+  public void linkLine(String lineUserId) {
+    if (this.lineUserId != null) {
+      throw new LineAlreadyLinkedException("このアカウントは既に LINE と連携済みです");
+    }
+    this.lineUserId = lineUserId;
   }
 
   /** エンコード済みパスワードで置き換える（呼び出し側で符号化済みであること）。 */

@@ -12,6 +12,8 @@ import java.util.List;
  * <p>{@code storeBridge} は店舗文脈（X-Store-ID）を確立できるか。JWT の {@code storeBridge} claim を設定するのと同一の私有
  * {@code PlatformAuthService.hasStoreConsole()} から導出する — {@code console}
  * と同一原則で、フロントエンドに権限→コンソールの対応表を複製させない。
+ *
+ * <p>{@code lineLinked} は LINE アカウントを連携済みか。LINE ユーザー ID 自体は本人にも返さない（連携の有無だけが 画面の分岐に必要な情報）。
  */
 public record PlatformMeResponse(
     String email,
@@ -21,4 +23,5 @@ public record PlatformMeResponse(
     String console,
     boolean storeBridge,
     String storeScopeType,
-    List<Long> storeIds) {}
+    List<Long> storeIds,
+    boolean lineLinked) {}
