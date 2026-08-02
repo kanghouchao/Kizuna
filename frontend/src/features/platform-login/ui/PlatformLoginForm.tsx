@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 import { platformAuthApi, PlatformLoginRequest, resolvePlatformDestination } from '@/entities/user';
+import { clearMeCache } from '@/shared/api';
 import {
   clearPlatformSession,
   getApiErrorMessage,
@@ -22,7 +23,10 @@ export default function PlatformLoginForm() {
   } = useForm<PlatformLoginRequest>({ defaultValues: { email: '', password: '' } });
 
   const onSubmit = async (data: PlatformLoginRequest) => {
+    // 前セッションの token と一緒に me キャッシュも消す。ここでログインが失敗すると
+    // token を失った端末に前利用者の個人情報だけが残るため
     Cookies.remove('token');
+    clearMeCache();
     try {
       const { token, expires_at } = await platformAuthApi.login(data);
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
@@ -60,8 +64,10 @@ export default function PlatformLoginForm() {
         return;
       }
 
-      // 想定外の user_type: 着地先が無いためセッションを破棄する
+      // 想定外の user_type: 着地先が無いためセッションを破棄する（直前の me() が
+      // キャッシュした個人情報も一緒に消す）
       Cookies.remove('token');
+      clearMeCache();
       clearPlatformSession();
       toast.error('この利用者種別のポータルは準備中です');
     } catch (error) {

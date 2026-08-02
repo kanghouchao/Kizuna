@@ -87,4 +87,20 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     expect(Cookies.get('token')).toBe('jwt-token');
     expect(mockedToastError).not.toHaveBeenCalled();
   });
+
+  // 想定外の user_type はセッションを破棄する。token だけでなく me キャッシュも消さないと、
+  // ログイン不能の端末に本人の個人情報（氏名・権限・担当店舗）だけが残る
+  it('想定外の user_type はセッションと me キャッシュの両方を破棄する', async () => {
+    mockedAuthApi.me.mockResolvedValue(
+      meResponse({ user_type: 'UNKNOWN' as never, console: 'none' })
+    );
+    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockedToastError).toHaveBeenCalled());
+    expect(Cookies.get('token')).toBeUndefined();
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 });
