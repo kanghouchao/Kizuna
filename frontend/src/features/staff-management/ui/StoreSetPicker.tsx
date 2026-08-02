@@ -1,22 +1,28 @@
 'use client';
 
-import { PlatformStore, PlatformStoreScopeType, platformAuthApi } from '@/entities/user';
-import { useManagedList } from '@/shared/lib';
-import { Label } from '@/shared/ui';
+import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
+import { Button, Label } from '@/shared/ui';
 
 interface StoreSetPickerProps {
+  /** 店舗目録。取得は呼び出し元（一覧ページ）が 1 回だけ行い、ここでは取得しない。 */
+  stores: PlatformStore[];
+  isLoading: boolean;
+  /** 目録の取り直し。取得失敗が続いた場合の手動回復導線（空の SPECIFIC_STORES はサーバが 400 で拒む）。 */
+  onReload: () => void;
   storeScopeType: PlatformStoreScopeType;
   storeIds: number[];
   onChange: (next: { storeScopeType: PlatformStoreScopeType; storeIds: number[] }) => void;
 }
 
 /** 「全店舗」ラジオ+個別店舗チェックボックスの2択で店舗集合を編集する共通部品。 */
-export function StoreSetPicker({ storeScopeType, storeIds, onChange }: StoreSetPickerProps) {
-  const { items: stores, isLoading } = useManagedList<PlatformStore>(
-    () => platformAuthApi.stores(),
-    '店舗一覧の取得に失敗しました'
-  );
-
+export function StoreSetPicker({
+  stores,
+  isLoading,
+  onReload,
+  storeScopeType,
+  storeIds,
+  onChange,
+}: StoreSetPickerProps) {
   const toggleStore = (id: number) => {
     const nextIds = storeIds.includes(id)
       ? storeIds.filter(storeId => storeId !== id)
@@ -50,6 +56,15 @@ export function StoreSetPicker({ storeScopeType, storeIds, onChange }: StoreSetP
           <div className="ml-6 space-y-1 rounded-md border p-3">
             {isLoading ? (
               <p className="text-sm text-muted-foreground">読み込み中...</p>
+            ) : stores.length === 0 ? (
+              // 空のままでは選べる店舗が無く、SPECIFIC_STORES の空提出はサーバが拒む。
+              // 自動再試行が尽きても閉じ直さずに回復できる手動導線を残す
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">店舗の選択肢がありません。</p>
+                <Button type="button" variant="outline" size="sm" onClick={onReload}>
+                  再読み込み
+                </Button>
+              </div>
             ) : (
               stores.map(store => {
                 const id = store.id;

@@ -1,22 +1,17 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CastListPage from '../ui/CastsPage';
 import { CastResponse, castApi } from '@/entities/cast';
-import { platformAuthApi, PlatformMeResponse } from '@/entities/user';
+import { TokenClaims, readTokenClaims } from '@/shared/lib';
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ storeId: '1' }),
 }));
 
-jest.mock('@/entities/user', () => {
-  const actual = jest.requireActual('@/entities/user');
-  return {
-    ...actual,
-    platformAuthApi: {
-      ...actual.platformAuthApi,
-      me: jest.fn(),
-    },
-  };
-});
+// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
+}));
 
 jest.mock('@/entities/cast', () => {
   const actual = jest.requireActual('@/entities/cast');
@@ -32,19 +27,14 @@ jest.mock('@/entities/cast', () => {
 });
 
 const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
-const mockedMe = platformAuthApi.me as jest.MockedFunction<typeof platformAuthApi.me>;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
-/** 指定権限を持つ /me 応答を返すヘルパ（UI 出し分けは権限ベース）。 */
-function meWith(permissions: PlatformMeResponse['permissions']): PlatformMeResponse {
+/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
+function claimsWith(permissions: string[]): TokenClaims {
   return {
-    email: 'staff@kizuna.test',
-    display_name: '店舗スタッフ',
-    user_type: 'STAFF',
-    permissions,
-    console: 'store',
-    store_bridge: true,
-    store_scope_type: 'SPECIFIC_STORES',
-    store_ids: [1],
+    authorities: permissions.map(permission => `PERM_${permission}`),
+    userType: 'STAFF',
+    storeBridge: true,
   };
 }
 
@@ -67,7 +57,7 @@ const toPage = (rows: CastResponse[]) => ({
 describe('招待発行モーダルが一覧の再取得中もアンマウントされない', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE', 'CAST_INVITE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
   });
 
   it('発行成功直後、一覧の再取得が isLoading=true を経ても発行成功モーダルが表示され続けること', async () => {
@@ -110,7 +100,7 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
   });
 
   it('CAST_INVITE 能力があれば行内に「招待を発行」ボタンが表示されること', async () => {
-    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE', 'CAST_INVITE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -119,7 +109,7 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
   });
 
   it('CAST_INVITE 能力が無ければ「招待を発行」ボタンが表示されず、招待状態バッジは表示されること', async () => {
-    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -137,7 +127,7 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力があれば定義管理ページ(/store/casts/fields)への入口リンクが表示されること', async () => {
-    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE', 'CAST_FIELD_DEF_MANAGE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_FIELD_DEF_MANAGE']));
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -147,7 +137,7 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力が無ければ定義管理ページへの入口リンクが表示されないこと', async () => {
-    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -160,7 +150,7 @@ describe('キャスト一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedCastApi.list.mockResolvedValue(toPage([]));
-    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
@@ -179,7 +169,7 @@ describe('キャスト一覧ページ固有の要素', () => {
 describe('キャスト一覧のページ送りと検索', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedMe.mockResolvedValue(meWith(['CAST_MANAGE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
   });
 
   // 1 ページ 20 件で、101 人目以降にもページ送りで到達できることを固定する

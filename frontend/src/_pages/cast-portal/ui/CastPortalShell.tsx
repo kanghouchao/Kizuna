@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CalendarDaysIcon, CircleUserRoundIcon, ClipboardListIcon } from 'lucide-react';
-import { platformAuthApi } from '@/entities/user';
-import { redirectToLogin } from '@/shared/lib';
+import { readTokenClaims, redirectToLogin } from '@/shared/lib';
 
 interface CastPortalShellProps {
   children: React.ReactNode;
@@ -19,31 +18,20 @@ const TABS = [
 
 /**
  * キャストポータルの共通シェル。モバイル優先の下タブバー構成で、桌面向け Sidebar shell とは別系統。
- * mount 時に本人確認（GET /platform/me）を行い、CAST 以外（未認証含む）はログイン画面へ差し戻す
- * （fail-closed）。ルーティングはサーバ側の @PreAuthorize と独立した UI 側の防御線。
+ * mount 時に token claim の userType で本人確認し、CAST 以外（未認証・壊れた token 含む）は
+ * ログイン画面へ差し戻す（fail-closed）。失効・偽造はここでは見えないが、最初の API 呼び出しの
+ * サーバ検証（401）が最終防衛線。ルーティングはサーバ側の @PreAuthorize と独立した UI 側の防御線。
  */
 export function CastPortalShell({ children }: CastPortalShellProps) {
   const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    platformAuthApi
-      .me()
-      .then(me => {
-        if (cancelled) return;
-        if (me.user_type !== 'CAST') {
-          redirectToLogin();
-          return;
-        }
-        setAuthorized(true);
-      })
-      .catch(() => {
-        if (!cancelled) redirectToLogin();
-      });
-    return () => {
-      cancelled = true;
-    };
+    if (readTokenClaims()?.userType !== 'CAST') {
+      redirectToLogin();
+      return;
+    }
+    setAuthorized(true);
   }, []);
 
   if (!authorized) {

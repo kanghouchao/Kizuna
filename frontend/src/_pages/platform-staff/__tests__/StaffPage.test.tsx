@@ -8,29 +8,25 @@ jest.mock('@/entities/user', () => ({
   platformAuthApi: { stores: jest.fn() },
 }));
 
+// モーダルは開くまで mount されないため、mock は mount = 表示として描画する
 jest.mock('@/features/staff-management', () => {
   const React = require('react');
   return {
-    StaffCreateModal: ({ open }: { open: boolean }) =>
-      open ? React.createElement('div', null, '作成モーダル表示中') : null,
+    StaffCreateModal: () => React.createElement('div', null, '作成モーダル表示中'),
     StaffEditModal: ({
-      open,
       staff,
       onUpdated,
     }: {
-      open: boolean;
-      staff: { display_name: string } | null;
+      staff: { display_name: string };
       onUpdated: () => void;
     }) =>
-      open
-        ? React.createElement(
-            'div',
-            null,
-            `編集モーダル:${staff?.display_name ?? ''}`,
-            // 409 で本体が呼ぶ一覧再取得を、テストから起こせるようにする
-            React.createElement('button', { onClick: onUpdated }, '競合再取得')
-          )
-        : null,
+      React.createElement(
+        'div',
+        null,
+        `編集モーダル:${staff.display_name}`,
+        // 409 で本体が呼ぶ一覧再取得を、テストから起こせるようにする
+        React.createElement('button', { onClick: onUpdated }, '競合再取得')
+      ),
     roleSetLabel: () => 'ロールラベル',
     storeSetLabel: () => '担当店舗ラベル',
   };
@@ -111,6 +107,55 @@ describe('スタッフ一覧ページ', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
 
+    expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
+  });
+
+  // 他管理者の店舗追加・削除に追随するため、目録が取得済みでも開くたびに取り直す
+  it('目録が取得済みでも、モーダルを開くたびに取り直すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+  });
+
+  // 店舗目録の取得をページ 1 回に束ねたため、初回取得の失敗はモーダルを開く時点で取り直す
+  // （回復経路が無いと個別店舗の選択肢が空のまま提出できてしまう）
+  it('店舗目録の取得に失敗していても、モーダルを開く時点で取り直すこと', async () => {
+    mockedAuthApi.stores.mockRejectedValueOnce(new Error('network'));
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
+  });
+
+  // 開いた瞬間はまだ読み込み中で、その後に失敗が確定する時序でも取り直す
+  it('モーダルを開いた後に店舗目録の取得失敗が確定しても、取り直すこと', async () => {
+    let rejectFirst!: (reason: Error) => void;
+    mockedAuthApi.stores.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectFirst = reject;
+        })
+    );
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1);
+
+    rejectFirst(new Error('network'));
+
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
   });
 

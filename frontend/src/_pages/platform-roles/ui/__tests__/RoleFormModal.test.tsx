@@ -174,6 +174,21 @@ describe('ロール編集モーダル', () => {
     expect(mockedRoleApi.get).not.toHaveBeenCalled();
   });
 
+  // 閉じると unmount で isSubmitting が消え、開き直した複製から二重送信できてしまうため、
+  // 送信中はキャンセルも Escape も閉じない
+  it('送信中は閉じられない', async () => {
+    mockedRoleApi.update.mockImplementationOnce(() => new Promise(() => {}));
+    const { onClose } = renderModal();
+    await screen.findByLabelText('ORDER_MANAGE');
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await screen.findByRole('button', { name: '保存中...' });
+
+    expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('権限を全て外すと保存 API を呼ばず警告する', async () => {
     renderModal();
     await screen.findByLabelText('ORDER_MANAGE');

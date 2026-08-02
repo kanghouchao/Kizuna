@@ -1,7 +1,7 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   PlatformStaffResponse,
   PlatformStore,
@@ -46,10 +46,12 @@ export default function StaffPage() {
     ''
   );
   const staff = list.rows;
-  const { items: stores } = useManagedList<PlatformStore>(
-    () => platformAuthApi.stores(),
-    '店舗一覧の取得に失敗しました'
-  );
+  // 店舗目録はページで 1 回だけ取得し、一覧の担当店舗ラベルとモーダル（担当店舗の選択・要約）で共有する
+  const {
+    items: stores,
+    isLoading: storesLoading,
+    refetch: refetchStores,
+  } = useManagedList<PlatformStore>(() => platformAuthApi.stores(), '店舗一覧の取得に失敗しました');
 
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
@@ -57,6 +59,33 @@ export default function StaffPage() {
   // 他の管理者の追加で行が次ページへずれる等）にモーダルが黙って閉じ、
   // 「最新の内容を確認してください」と言いながら内容を見せない状態になる。
   const [editingStaff, setEditingStaff] = useState<PlatformStaffResponse | null>(null);
+
+  // モーダルを開くたびに目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
+  // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
+  // 確定する時序では、settle 後の空を検知して 1 回だけ取り直す（失敗が続く環境で無限に
+  // 叩かない — それ以降の回復は StoreSetPicker の再読み込み導線が担う）。
+  const modalOpen = createOpen || editingStaff !== null;
+  const prevModalOpenRef = useRef(false);
+  const storesRetriedRef = useRef(false);
+  useEffect(() => {
+    const justOpened = modalOpen && !prevModalOpenRef.current;
+    prevModalOpenRef.current = modalOpen;
+    if (justOpened) {
+      if (storesLoading) {
+        // まだ読み込み中: settle 後の空にそなえて自動再試行の権利を残す
+        storesRetriedRef.current = false;
+      } else {
+        // 開幕の取り直し自体を 1 回目と数え、直後に空で settle しても連打しない
+        storesRetriedRef.current = true;
+        void refetchStores();
+      }
+      return;
+    }
+    if (modalOpen && !storesLoading && stores.length === 0 && !storesRetriedRef.current) {
+      storesRetriedRef.current = true;
+      void refetchStores();
+    }
+  }, [modalOpen, storesLoading, stores.length, refetchStores]);
 
   /**
    * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
@@ -180,18 +209,27 @@ export default function StaffPage() {
         </Table>
       </ListPage>
 
-      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
-      <StaffCreateModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={list.reload}
-      />
-      <StaffEditModal
-        open={editingStaff !== null}
-        staff={editingStaff}
-        onClose={() => setEditingStaff(null)}
-        onUpdated={handleEditUpdated}
-      />
+      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
+          開くまで mount しないことで、ロール目録の取得を必要になった時点まで遅延させる */}
+      {createOpen && (
+        <StaffCreateModal
+          stores={stores}
+          storesLoading={storesLoading}
+          onReloadStores={() => void refetchStores()}
+          onClose={() => setCreateOpen(false)}
+          onCreated={list.reload}
+        />
+      )}
+      {editingStaff !== null && (
+        <StaffEditModal
+          staff={editingStaff}
+          stores={stores}
+          storesLoading={storesLoading}
+          onReloadStores={() => void refetchStores()}
+          onClose={() => setEditingStaff(null)}
+          onUpdated={handleEditUpdated}
+        />
+      )}
     </>
   );
 }

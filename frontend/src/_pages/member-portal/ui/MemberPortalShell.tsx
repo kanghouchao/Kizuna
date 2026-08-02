@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { platformAuthApi } from '@/entities/user';
-import { redirectToLogin } from '@/shared/lib';
+import { readTokenClaims, redirectToLogin } from '@/shared/lib';
 
 interface MemberPortalShellProps {
   children: React.ReactNode;
@@ -10,30 +9,19 @@ interface MemberPortalShellProps {
 
 /**
  * 会員ポータルの共通シェル。モバイル優先の単画面構成（現状はホームのみ）で、桌面向け Sidebar shell とは別系統。
- * mount 時に本人確認（GET /platform/me）を行い、MEMBER 以外（未認証含む）はログイン画面へ差し戻す
- * （fail-closed）。ルーティングはサーバ側の @PreAuthorize と独立した UI 側の防御線。
+ * mount 時に token claim の userType で本人確認し、MEMBER 以外（未認証・壊れた token 含む）は
+ * ログイン画面へ差し戻す（fail-closed）。失効・偽造はここでは見えないが、最初の API 呼び出しの
+ * サーバ検証（401）が最終防衛線。ルーティングはサーバ側の @PreAuthorize と独立した UI 側の防御線。
  */
 export function MemberPortalShell({ children }: MemberPortalShellProps) {
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    platformAuthApi
-      .me()
-      .then(me => {
-        if (cancelled) return;
-        if (me.user_type !== 'MEMBER') {
-          redirectToLogin();
-          return;
-        }
-        setAuthorized(true);
-      })
-      .catch(() => {
-        if (!cancelled) redirectToLogin();
-      });
-    return () => {
-      cancelled = true;
-    };
+    if (readTokenClaims()?.userType !== 'MEMBER') {
+      redirectToLogin();
+      return;
+    }
+    setAuthorized(true);
   }, []);
 
   if (!authorized) {

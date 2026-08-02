@@ -25,3 +25,5 @@ export {
 } from './store-route';
 export { cn } from './utils';
 export { isPublicPlatformPath } from './app-area';
+export { hasPermission, readTokenClaims } from './token-claims';
+export type { TokenClaims } from './token-claims';

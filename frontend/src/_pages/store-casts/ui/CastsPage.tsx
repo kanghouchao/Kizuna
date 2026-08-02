@@ -6,9 +6,14 @@ import { useParams } from 'next/navigation';
 import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon, SettingsIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
-import { platformAuthApi } from '@/entities/user';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
+import {
+  hasPermission,
+  readTokenClaims,
+  storePath,
+  useDeleteAction,
+  useListPage,
+} from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -32,19 +37,14 @@ export default function CastListPage() {
   const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
-  // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）
+  // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
+  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
   const [canInvite, setCanInvite] = useState(false);
   const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
   useEffect(() => {
-    platformAuthApi
-      .me()
-      .then(me => {
-        setCanInvite(me.permissions?.includes('CAST_INVITE') ?? false);
-        setCanManageFieldDefs(me.permissions?.includes('CAST_FIELD_DEF_MANAGE') ?? false);
-      })
-      .catch(() => {
-        // 取得失敗時は導線を出さない（fail-closed）。操作自体はサーバ側が拒否する。
-      });
+    const claims = readTokenClaims();
+    setCanInvite(hasPermission(claims, 'CAST_INVITE'));
+    setCanManageFieldDefs(hasPermission(claims, 'CAST_FIELD_DEF_MANAGE'));
   }, []);
   const list = useListPage<CastResponse, string>(
     (page, criteria) =>
