@@ -110,6 +110,19 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
   });
 
+  // 他管理者の店舗追加・削除に追随するため、目録が取得済みでも開くたびに取り直す
+  it('目録が取得済みでも、モーダルを開くたびに取り直すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+  });
+
   // 店舗目録の取得をページ 1 回に束ねたため、初回取得の失敗はモーダルを開く時点で取り直す
   // （回復経路が無いと個別店舗の選択肢が空のまま提出できてしまう）
   it('店舗目録の取得に失敗していても、モーダルを開く時点で取り直すこと', async () => {

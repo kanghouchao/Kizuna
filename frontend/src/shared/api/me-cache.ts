@@ -72,6 +72,19 @@ export function currentMeSeq(): number {
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
 }
 
+/**
+ * 序数の増加（read-modify-write）をタブ間で直列化する。localStorage 単独では原子的な
+ * 増加ができず、併走する bump が交錯すると序数が逆行し得る。Web Locks は secure context
+ * 限定のため、http の開発環境では素通し（交錯の窓は残るが、本番 https では閉じる）。
+ */
+async function withSeqLock<T>(fn: () => T): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (locks?.request) {
+    return locks.request('platform-me-seq', async () => fn());
+  }
+  return fn();
+}
+
 /** 序数を 1 進めて返す。変異だけが呼ぶ。書けない環境でも呼び出し元の in-memory 控えには使える。 */
 function bumpMeSeq(): number {
   const next = currentMeSeq() + 1;
@@ -142,24 +155,38 @@ export function writeCachedMe(token: string, me: unknown, asOfSeq: number): void
  * 並行変異（別タブの updateMe・遅延中の GET）との順序をクライアントでは正しく決められない
  * ため、「この序数より古い応答は陳腐」という失効標だけを残す。
  */
-export function markMeCacheStale(token: string): void {
-  const seq = bumpMeSeq();
-  // 保存に失敗しても同一タブ内の遅延 GET は弾けるよう、in-memory の控えは必ず立てる
-  lastMutationSeq = seq;
-  if (typeof window === 'undefined') return;
-  try {
-    // 指紋ごとに独立の key へ 1 回の setItem で書く（read-modify-write を作らない）
-    window.localStorage.setItem(ME_STALE_PREFIX + tokenFingerprint(token), JSON.stringify(seq));
-    // 上限を超えたら古い標（小さい序数）から捨てる。掃除は古い標にしか触れないため、
-    // 直前に書かれた標（最大級の序数）を消すことはない
-    const entries = listStaleKeys()
-      .map(key => [key, readStaleSeq(key.slice(ME_STALE_PREFIX.length))] as const)
-      .sort(([, a], [, b]) => b - a);
-    for (const [key] of entries.slice(MAX_STALE_ENTRIES)) {
-      removeKey(key);
+export async function markMeCacheStale(token: string): Promise<void> {
+  await withSeqLock(() => {
+    const seq = bumpMeSeq();
+    // 保存に失敗しても同一タブ内の遅延 GET は弾けるよう、in-memory の控えは必ず立てる
+    lastMutationSeq = seq;
+    if (typeof window === 'undefined') return;
+    try {
+      // 指紋ごとに独立の key へ 1 回の setItem で書く（read-modify-write を作らない）
+      window.localStorage.setItem(ME_STALE_PREFIX + tokenFingerprint(token), JSON.stringify(seq));
+      // 上限を超えたら古い標（小さい序数）から捨てる。掃除は古い標にしか触れないため、
+      // 直前に書かれた標（最大級の序数）を消すことはない
+      const entries = listStaleKeys()
+        .map(key => [key, readStaleSeq(key.slice(ME_STALE_PREFIX.length))] as const)
+        .sort(([, a], [, b]) => b - a);
+      for (const [key] of entries.slice(MAX_STALE_ENTRIES)) {
+        removeKey(key);
+      }
+    } catch {
+      // 失効標すら書けないなら、陳腐な応答が残らないよう本体を消して読みをサーバへ倒す
+      removeKey(ME_CACHE_KEY);
     }
-  } catch {
-    // 失効標すら書けないなら、陳腐な応答が残らないよう本体を消して読みをサーバへ倒す
+  });
+}
+
+/**
+ * token の記録だけを捨てる（失効標・他 token の記録には触れない）。GET の書き込みが
+ * logout・token 差し替えと交錯したときの自己取り消し用 — clearMeCache はセッション破棄用で、
+ * 全指紋の失効標まで消してしまうためここでは使わない。
+ */
+export function discardCachedMe(token: string): void {
+  const record = readJson<MeCacheRecord>(ME_CACHE_KEY);
+  if (record?.fingerprint === tokenFingerprint(token)) {
     removeKey(ME_CACHE_KEY);
   }
 }

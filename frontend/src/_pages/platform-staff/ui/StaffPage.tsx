@@ -60,17 +60,27 @@ export default function StaffPage() {
   // 「最新の内容を確認してください」と言いながら内容を見せない状態になる。
   const [editingStaff, setEditingStaff] = useState<PlatformStaffResponse | null>(null);
 
-  // 取得失敗後の回復経路。モーダルごとの再取得をページ 1 回に束ねたため、目録が空のまま
-  // モーダルを開くと個別店舗の選択肢が無いままになる。「モーダルが開いていて、取得が済んでいて、
-  // 目録が空」なら取り直す。開く時点の判定ではなく効果にするのは、開いた瞬間はまだ読み込み中で
-  // その後に失敗が確定する時序も拾うため。再試行は開くたびに 1 回だけ（失敗が続く環境で
-  // 無限に叩かない。目録が本当に 0 件の環境でも 1 リクエスト増えるだけで無害）。
+  // モーダルを開くたびに目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
+  // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
+  // 確定する時序では、settle 後の空を検知して 1 回だけ取り直す（失敗が続く環境で無限に
+  // 叩かない — それ以降の回復は StoreSetPicker の再読み込み導線が担う）。
   const modalOpen = createOpen || editingStaff !== null;
+  const prevModalOpenRef = useRef(false);
   const storesRetriedRef = useRef(false);
   useEffect(() => {
-    storesRetriedRef.current = false;
-  }, [modalOpen]);
-  useEffect(() => {
+    const justOpened = modalOpen && !prevModalOpenRef.current;
+    prevModalOpenRef.current = modalOpen;
+    if (justOpened) {
+      if (storesLoading) {
+        // まだ読み込み中: settle 後の空にそなえて自動再試行の権利を残す
+        storesRetriedRef.current = false;
+      } else {
+        // 開幕の取り直し自体を 1 回目と数え、直後に空で settle しても連打しない
+        storesRetriedRef.current = true;
+        void refetchStores();
+      }
+      return;
+    }
     if (modalOpen && !storesLoading && stores.length === 0 && !storesRetriedRef.current) {
       storesRetriedRef.current = true;
       void refetchStores();

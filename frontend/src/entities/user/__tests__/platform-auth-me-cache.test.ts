@@ -294,6 +294,29 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(2);
   });
 
+  it('書き込み直後の自己取り消しは自分の記録だけで、他 token の失効標を巻き込まない', async () => {
+    client.put.mockResolvedValue({ data: me('b') });
+    (mockedCookies.get as jest.Mock).mockReturnValue('token-b');
+    await platformAuthApi.updateMe({ display_name: 'b' });
+    expect(
+      Object.keys(window.localStorage).filter(key => key.startsWith('platform-me-stale.'))
+    ).toHaveLength(1);
+
+    // token-a の me() が書き込み直後に token 消失と交錯する（3 回目の読みで消えている）
+    let readCount = 0;
+    (mockedCookies.get as jest.Mock).mockImplementation(() => {
+      readCount += 1;
+      return readCount >= 3 ? undefined : 'token-a';
+    });
+    await platformAuthApi.me();
+
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+    // token-b の失効標は残る（セッション破棄級の clearMeCache を使っていない）
+    expect(
+      Object.keys(window.localStorage).filter(key => key.startsWith('platform-me-stale.'))
+    ).toHaveLength(1);
+  });
+
   it('書き込みの直後に logout と交錯していたら（token 消失）自分の書き込みを取り消す', async () => {
     // me() は token を3回読む: 入口・書き込み前・書き込み後。3回目だけ logout 後の状況にする
     let readCount = 0;

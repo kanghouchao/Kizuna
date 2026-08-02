@@ -3,6 +3,7 @@ export { fileApi } from './file';
 export {
   clearMeCache,
   currentMeSeq,
+  discardCachedMe,
   markMeCacheStale,
   readCachedMe,
   writeCachedMe,

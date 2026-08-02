@@ -3,6 +3,7 @@ import {
   apiClient,
   clearMeCache,
   currentMeSeq,
+  discardCachedMe,
   markMeCacheStale,
   readCachedMe,
   writeCachedMe,
@@ -68,7 +69,9 @@ export const platformAuthApi = {
         // 弾かれるため、ここでの事前検査は要らない。
         if (Cookies.get('token') === token) {
           writeCachedMe(token, response.data, asOfSeq);
-          if (Cookies.get('token') !== token) clearMeCache();
+          // 自己取り消しはこの token の記録だけに留める。clearMeCache（セッション破棄用）だと
+          // 全指紋の失効標まで消し、併走する別 token の変異の標を失わせてしまう
+          if (Cookies.get('token') !== token) discardCachedMe(token);
         }
         return response.data as PlatformMeResponse;
       });
@@ -91,7 +94,7 @@ export const platformAuthApi = {
     // 代償は 1 回の再取得のみ）。Authorization も捕まえた token で明示束縛し、変異と失効標が
     // 常に同じセッションを指すようにする。
     const token = Cookies.get('token');
-    if (token) markMeCacheStale(token);
+    if (token) await markMeCacheStale(token);
     try {
       const response = await apiClient.put(
         '/platform/me',
@@ -102,7 +105,7 @@ export const platformAuthApi = {
       );
       return response.data;
     } finally {
-      if (token) markMeCacheStale(token);
+      if (token) await markMeCacheStale(token);
     }
   },
   stores: async (): Promise<PlatformStore[]> => {

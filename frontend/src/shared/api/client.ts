@@ -83,10 +83,13 @@ apiClient.interceptors.response.use(
       if ((error.config as any)?.skipAuthRedirect) {
         return Promise.reject(error);
       }
-      // 要求が明示的に束縛した token（expectedToken）が現在の cookie と異なるなら、
-      // 既に別セッションへ移行済み。陳腐な要求の 401 で新しいセッションを壊さない
+      // 要求が明示的に束縛した token（expectedToken）と異なる「非空の」token が現在の
+      // cookie にあるなら、既に別セッションへ移行済み。陳腐な要求の 401 で新しいセッションを
+      // 壊さない。cookie が無い（失効・除去済み）場合は移行の証拠ではないので、通常どおり
+      // 後始末（キャッシュ破棄・ログインへの誘導）を行う
       const expectedToken = (error.config as any)?.expectedToken;
-      if (expectedToken && Cookies.get('token') !== expectedToken) {
+      const currentToken = Cookies.get('token');
+      if (expectedToken && currentToken && currentToken !== expectedToken) {
         return Promise.reject(error);
       }
       Cookies.remove('token');

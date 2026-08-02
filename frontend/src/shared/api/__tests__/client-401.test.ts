@@ -77,6 +77,21 @@ describe('apiClient 401/403 interceptor', () => {
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
+  // cookie が既に無い（失効・除去済み）のは「別セッションへ移行した証拠」ではないため、
+  // expectedToken 付きの要求でも通常どおり後始末する（放置すると失効利用者のキャッシュが残り、
+  // 画面は読み込み失敗のまま座礁する）
+  it('tears down on 401 when the cookie is already gone even if expectedToken is set', async () => {
+    (Cookies.get as jest.Mock).mockReturnValue(undefined);
+    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
+
+    await withRejectingAdapter(401, () =>
+      apiClient.get('/platform/me', { expectedToken: 'expired-token' } as never)
+    );
+
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+    expect(redirectMock).toHaveBeenCalled();
+  });
+
   it('tears down the session on 401 when expectedToken matches the current cookie', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
