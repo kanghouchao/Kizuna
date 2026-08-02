@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
+  PlatformStore,
   PlatformStoreScopeType,
   RoleSummaryResponse,
   platformRoleApi,
@@ -15,7 +16,9 @@ import { RolePicker } from './RolePicker';
 import { StoreSetPicker } from './StoreSetPicker';
 
 interface StaffCreateModalProps {
-  open: boolean;
+  /** 店舗目録（一覧ページが取得済みのものを共有する）。 */
+  stores: PlatformStore[];
+  storesLoading: boolean;
   onClose: () => void;
   /** 作成成功後に呼ばれる（一覧の再取得用）。 */
   onCreated: () => void;
@@ -27,14 +30,23 @@ interface StaffCreateFormValues {
   display_name: string;
 }
 
-/** スタッフの新規作成モーダル（メール・初期パスワード・氏名・ロール・担当店舗）。 */
-export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalProps) {
+/**
+ * スタッフの新規作成モーダル（メール・初期パスワード・氏名・ロール・担当店舗）。
+ * 開いたときだけ mount される前提。ロール目録の取得は mount 時 = 開いた時点に遅延される。
+ */
+export function StaffCreateModal({
+  stores,
+  storesLoading,
+  onClose,
+  onCreated,
+}: StaffCreateModalProps) {
   const {
     register,
     handleSubmit,
-    reset,
     formState: { isSubmitting },
-  } = useForm<StaffCreateFormValues>();
+  } = useForm<StaffCreateFormValues>({
+    defaultValues: { email: '', password: '', display_name: '' },
+  });
   const [roleIds, setRoleIds] = useState<number[]>([]);
   const [storeScopeType, setStoreScopeType] = useState<PlatformStoreScopeType>('ALL_STORES');
   const [storeIds, setStoreIds] = useState<number[]>([]);
@@ -42,14 +54,6 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
     () => platformRoleApi.list(),
     'ロール一覧の取得に失敗しました'
   );
-
-  useEffect(() => {
-    if (!open) return;
-    reset({ email: '', password: '', display_name: '' });
-    setRoleIds([]);
-    setStoreScopeType('ALL_STORES');
-    setStoreIds([]);
-  }, [open, reset]);
 
   const submit = async (values: StaffCreateFormValues) => {
     if (roleIds.length === 0) {
@@ -73,7 +77,7 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={next => {
         if (!next) onClose();
       }}
@@ -119,6 +123,8 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
             onChange={setRoleIds}
           />
           <StoreSetPicker
+            stores={stores}
+            isLoading={storesLoading}
             storeScopeType={storeScopeType}
             storeIds={storeIds}
             onChange={next => {

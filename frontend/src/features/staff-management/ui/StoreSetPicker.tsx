@@ -1,22 +1,25 @@
 'use client';
 
-import { PlatformStore, PlatformStoreScopeType, platformAuthApi } from '@/entities/user';
-import { useManagedList } from '@/shared/lib';
+import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
 import { Label } from '@/shared/ui';
 
 interface StoreSetPickerProps {
+  /** 店舗目録。取得は呼び出し元（一覧ページ）が 1 回だけ行い、ここでは取得しない。 */
+  stores: PlatformStore[];
+  isLoading: boolean;
   storeScopeType: PlatformStoreScopeType;
   storeIds: number[];
   onChange: (next: { storeScopeType: PlatformStoreScopeType; storeIds: number[] }) => void;
 }
 
 /** 「全店舗」ラジオ+個別店舗チェックボックスの2択で店舗集合を編集する共通部品。 */
-export function StoreSetPicker({ storeScopeType, storeIds, onChange }: StoreSetPickerProps) {
-  const { items: stores, isLoading } = useManagedList<PlatformStore>(
-    () => platformAuthApi.stores(),
-    '店舗一覧の取得に失敗しました'
-  );
-
+export function StoreSetPicker({
+  stores,
+  isLoading,
+  storeScopeType,
+  storeIds,
+  onChange,
+}: StoreSetPickerProps) {
   const toggleStore = (id: number) => {
     const nextIds = storeIds.includes(id)
       ? storeIds.filter(storeId => storeId !== id)

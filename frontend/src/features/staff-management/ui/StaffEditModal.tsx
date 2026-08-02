@@ -7,7 +7,6 @@ import {
   PlatformStore,
   PlatformStoreScopeType,
   RoleSummaryResponse,
-  platformAuthApi,
   platformRoleApi,
   platformStaffApi,
 } from '@/entities/user';
@@ -19,48 +18,53 @@ import { RolePicker } from './RolePicker';
 import { StoreSetPicker } from './StoreSetPicker';
 
 interface StaffEditModalProps {
-  open: boolean;
+  /** 編集対象。409 の再取得で差し替わると、フォームは最新値で再初期化される。 */
+  staff: PlatformStaffResponse;
+  /** 店舗目録（一覧ページが取得済みのものを共有する）。 */
+  stores: PlatformStore[];
+  storesLoading: boolean;
   onClose: () => void;
-  /** 編集対象。null なら何も表示しない。 */
-  staff: PlatformStaffResponse | null;
   /** 更新成功後に呼ばれる（一覧の再取得用）。 */
   onUpdated: () => void;
 }
 
-/** スタッフの授権編集モーダル（ロール・店舗集合・停止/再開。「この設定の結果」要約付き）。 */
-export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditModalProps) {
+/**
+ * スタッフの授権編集モーダル（ロール・店舗集合・停止/再開。「この設定の結果」要約付き）。
+ * 開いたときだけ mount される前提。ロール目録の取得は mount 時 = 開いた時点に遅延される。
+ */
+export function StaffEditModal({
+  staff,
+  stores,
+  storesLoading,
+  onClose,
+  onUpdated,
+}: StaffEditModalProps) {
   const [roleIds, setRoleIds] = useState<number[]>([]);
   const [storeScopeType, setStoreScopeType] = useState<PlatformStoreScopeType>('ALL_STORES');
   const [storeIds, setStoreIds] = useState<number[]>([]);
   const [enabled, setEnabled] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { items: stores } = useManagedList<PlatformStore>(
-    () => platformAuthApi.stores(),
-    '店舗一覧の取得に失敗しました'
-  );
   const { items: roles, isLoading: rolesLoading } = useManagedList<RoleSummaryResponse>(
     () => platformRoleApi.list(),
     'ロール一覧の取得に失敗しました'
   );
 
   useEffect(() => {
-    if (!open || !staff) return;
     setRoleIds((staff.roles ?? []).flatMap(role => (role.id === undefined ? [] : [role.id])));
     // 欠落時は全店舗ではなく個別店舗（storeIds 空 = どの店舗にも及ばない）へ倒す。
     // 既定を全店舗にすると、保存操作がそのまま作用域の拡大になる。
     setStoreScopeType(staff.store_scope_type ?? 'SPECIFIC_STORES');
     setStoreIds(staff.store_ids ?? []);
     setEnabled(staff.enabled);
-  }, [open, staff]);
+  }, [staff]);
 
   const summary = useMemo(() => {
     const scopeLabel = storeSetLabel(storeScopeType, storeIds, stores);
     const selectedRoles = roles.filter(role => role.id !== undefined && roleIds.includes(role.id));
-    return `${staff?.display_name ?? ''}さんは ${roleSetLabel(selectedRoles)} として ${scopeLabel} のデータにアクセスできます`;
+    return `${staff.display_name ?? ''}さんは ${roleSetLabel(selectedRoles)} として ${scopeLabel} のデータにアクセスできます`;
   }, [roles, roleIds, storeScopeType, storeIds, stores, staff]);
 
   const submit = async () => {
-    if (!staff) return;
     if (roleIds.length === 0) {
       toast.error('ロールを 1 つ以上選択してください');
       return;
@@ -94,7 +98,7 @@ export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditMod
 
   return (
     <Dialog
-      open={open && staff !== null}
+      open
       onOpenChange={next => {
         if (!next) onClose();
       }}
@@ -105,7 +109,7 @@ export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditMod
         className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
       >
         <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
-          {staff?.display_name} の権限を編集
+          {staff.display_name} の権限を編集
         </DialogTitle>
         <div className="space-y-4 px-6 py-5">
           <RolePicker
@@ -115,6 +119,8 @@ export function StaffEditModal({ open, onClose, staff, onUpdated }: StaffEditMod
             onChange={setRoleIds}
           />
           <StoreSetPicker
+            stores={stores}
+            isLoading={storesLoading}
             storeScopeType={storeScopeType}
             storeIds={storeIds}
             onChange={next => {

@@ -46,7 +46,8 @@ export default function StaffPage() {
     ''
   );
   const staff = list.rows;
-  const { items: stores } = useManagedList<PlatformStore>(
+  // 店舗目録はページで 1 回だけ取得し、一覧の担当店舗ラベルとモーダル（担当店舗の選択・要約）で共有する
+  const { items: stores, isLoading: storesLoading } = useManagedList<PlatformStore>(
     () => platformAuthApi.stores(),
     '店舗一覧の取得に失敗しました'
   );
@@ -180,18 +181,25 @@ export default function StaffPage() {
         </Table>
       </ListPage>
 
-      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
-      <StaffCreateModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={list.reload}
-      />
-      <StaffEditModal
-        open={editingStaff !== null}
-        staff={editingStaff}
-        onClose={() => setEditingStaff(null)}
-        onUpdated={handleEditUpdated}
-      />
+      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
+          開くまで mount しないことで、ロール目録の取得を必要になった時点まで遅延させる */}
+      {createOpen && (
+        <StaffCreateModal
+          stores={stores}
+          storesLoading={storesLoading}
+          onClose={() => setCreateOpen(false)}
+          onCreated={list.reload}
+        />
+      )}
+      {editingStaff !== null && (
+        <StaffEditModal
+          staff={editingStaff}
+          stores={stores}
+          storesLoading={storesLoading}
+          onClose={() => setEditingStaff(null)}
+          onUpdated={handleEditUpdated}
+        />
+      )}
     </>
   );
 }

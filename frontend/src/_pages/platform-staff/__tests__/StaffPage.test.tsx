@@ -8,29 +8,25 @@ jest.mock('@/entities/user', () => ({
   platformAuthApi: { stores: jest.fn() },
 }));
 
+// モーダルは開くまで mount されないため、mock は mount = 表示として描画する
 jest.mock('@/features/staff-management', () => {
   const React = require('react');
   return {
-    StaffCreateModal: ({ open }: { open: boolean }) =>
-      open ? React.createElement('div', null, '作成モーダル表示中') : null,
+    StaffCreateModal: () => React.createElement('div', null, '作成モーダル表示中'),
     StaffEditModal: ({
-      open,
       staff,
       onUpdated,
     }: {
-      open: boolean;
-      staff: { display_name: string } | null;
+      staff: { display_name: string };
       onUpdated: () => void;
     }) =>
-      open
-        ? React.createElement(
-            'div',
-            null,
-            `編集モーダル:${staff?.display_name ?? ''}`,
-            // 409 で本体が呼ぶ一覧再取得を、テストから起こせるようにする
-            React.createElement('button', { onClick: onUpdated }, '競合再取得')
-          )
-        : null,
+      React.createElement(
+        'div',
+        null,
+        `編集モーダル:${staff.display_name}`,
+        // 409 で本体が呼ぶ一覧再取得を、テストから起こせるようにする
+        React.createElement('button', { onClick: onUpdated }, '競合再取得')
+      ),
     roleSetLabel: () => 'ロールラベル',
     storeSetLabel: () => '担当店舗ラベル',
   };

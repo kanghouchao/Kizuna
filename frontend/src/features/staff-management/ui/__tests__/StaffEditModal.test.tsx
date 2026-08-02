@@ -1,11 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import type { PlatformStaffResponse } from '@/entities/user';
-import { platformAuthApi, platformRoleApi, platformStaffApi } from '@/entities/user';
+import { platformRoleApi, platformStaffApi } from '@/entities/user';
 import { StaffEditModal } from '../StaffEditModal';
 
 jest.mock('@/entities/user', () => ({
-  platformAuthApi: { stores: jest.fn() },
   platformRoleApi: { list: jest.fn() },
   platformStaffApi: { update: jest.fn() },
 }));
@@ -14,7 +13,6 @@ jest.mock('react-hot-toast', () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
 
-const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
 const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
 const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
@@ -35,7 +33,14 @@ const renderModal = (props: Partial<React.ComponentProps<typeof StaffEditModal>>
   const onClose = jest.fn();
   const onUpdated = jest.fn();
   render(
-    <StaffEditModal open staff={staff()} onClose={onClose} onUpdated={onUpdated} {...props} />
+    <StaffEditModal
+      staff={staff()}
+      stores={[]}
+      storesLoading={false}
+      onClose={onClose}
+      onUpdated={onUpdated}
+      {...props}
+    />
   );
   return { onClose, onUpdated };
 };
@@ -43,24 +48,11 @@ const renderModal = (props: Partial<React.ComponentProps<typeof StaffEditModal>>
 describe('スタッフ授権編集モーダル', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedAuthApi.stores.mockResolvedValue([]);
     mockedRoleApi.list.mockResolvedValue([
       { id: 3, name: '店長', system: true, permission_count: 0 },
       { id: 4, name: '経理', system: false, permission_count: 0 },
     ]);
     mockedStaffApi.update.mockResolvedValue({} as never);
-  });
-
-  it('閉じているときは何も描画しない', () => {
-    renderModal({ open: false });
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('編集対象が null のときは開いていても描画しない', () => {
-    renderModal({ staff: null });
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('開くと対象スタッフ名の見出しを表示する', async () => {
