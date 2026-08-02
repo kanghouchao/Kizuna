@@ -53,9 +53,13 @@ export const platformAuthApi = {
     const asOfSeq = currentMeSeq();
     // Authorization は捕まえた token で明示的に束縛する。cookie 任せにすると、リクエスト組立の
     // 時点までに別タブが token を差し替えた場合、別人の応答をこの token の鍵で保存してしまう
-    //（interceptor は明示ヘッダを上書きしない）。
+    //（interceptor は明示ヘッダを上書きしない）。expectedToken は 401 時の後始末用 — 既に別
+    // セッションへ移行済みなら、この陳腐な要求の 401 で新しいセッションを壊させない。
     const request = apiClient
-      .get('/platform/me', { headers: { Authorization: `Bearer ${token}` } })
+      .get('/platform/me', {
+        headers: { Authorization: `Bearer ${token}` },
+        expectedToken: token,
+      } as any)
       .then(response => {
         // 応答待ちの間に logout（キャッシュ破棄 + token 除去）が走った場合に書き戻すと、
         // ログアウト後の共有端末に個人情報が残る。今も同じ token のときだけ書き、書き込みの
@@ -82,12 +86,24 @@ export const platformAuthApi = {
     // cookie が別 token に替わっていても（招待受諾の一時 token 等）無条件に記してよい——
     // 記さないと、元の token が後から復元されたとき変異前のキャッシュが生き返る。
     // 発送前にも記すのは、サーバ側で変異が確定してから応答が戻るまでの間に他所の me() が
-    // 変異前のキャッシュを掴まないため（PUT が失敗した場合の代償は 1 回の再取得のみ）。
+    // 変異前のキャッシュを掴まないため。後標は finally で記す — 応答が失われても（timeout・
+    // 通信断）変異はサーバで確定し得るため、成否を問わず残す（失敗が確定していた場合の
+    // 代償は 1 回の再取得のみ）。Authorization も捕まえた token で明示束縛し、変異と失効標が
+    // 常に同じセッションを指すようにする。
     const token = Cookies.get('token');
     if (token) markMeCacheStale(token);
-    const response = await apiClient.put('/platform/me', data);
-    if (token) markMeCacheStale(token);
-    return response.data;
+    try {
+      const response = await apiClient.put(
+        '/platform/me',
+        data,
+        token
+          ? ({ headers: { Authorization: `Bearer ${token}` }, expectedToken: token } as any)
+          : undefined
+      );
+      return response.data;
+    } finally {
+      if (token) markMeCacheStale(token);
+    }
   },
   stores: async (): Promise<PlatformStore[]> => {
     const response = await apiClient.get('/platform/stores/me');

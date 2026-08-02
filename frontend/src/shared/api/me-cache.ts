@@ -3,16 +3,17 @@
 // apiClient の強制退場（401・旧形式 cookie の 403）でも破棄できるようにするため
 //（FSD の依存は下向きのみで、shared から entities は呼べない）。
 //
-// 記録は 3 つの key に分かれる:
+// 記録は 3 種の key に分かれる:
 // - ME_CACHE_KEY: 応答本体（GET の継続だけが書く）
-// - ME_STALE_KEY: 失効標（変異 updateMe だけが書く。指紋 → 変異序数の写像）
+// - ME_STALE_PREFIX + 指紋: 失効標（変異 updateMe だけが書く。指紋ごとに独立の key —
+//   1 つの写像に束ねると read-modify-write になり、別タブの変異と交錯して片方の標が失われる）
 // - ME_SEQ_KEY:  単調増加の序数（新旧の裁定に使う。壁時計は時刻補正・VM 復帰で逆行し得るため
 //                順序付けに使わない）
 // localStorage には検査と書き込みを跨ぐ原子性が無く、「新しい書き込みが無いか確認してから書く」
 // 方式は別タブの変異と交錯し得る。key を分けると GET の書き込みは失効標に触れられず、
 // 鮮度の裁定は読み取り側（失効標の序数 vs 応答の as-of 序数の比較）で常に成立する。
 const ME_CACHE_KEY = 'platform-me-cache';
-const ME_STALE_KEY = 'platform-me-stale';
+const ME_STALE_PREFIX = 'platform-me-stale.';
 const ME_SEQ_KEY = 'platform-me-seq';
 
 // 鍵には token そのものではなく一方向の指紋を保存する。token を保存すると、cookie の除去だけで
@@ -37,13 +38,6 @@ interface MeCacheRecord {
   /** GET 発送時点の序数。これより大きい序数の失効標があれば陳腐。 */
   asOfSeq?: number;
 }
-
-/**
- * 指紋 → 変異序数。その序数より小さい as-of を持つ応答は陳腐。
- * 単一枠だと別 token の変異（招待受諾の一時 token 等）が他の指紋の失効標を
- * 上書きしてしまうため、指紋ごとに保持する。
- */
-type MeStaleMap = Record<string, number>;
 
 /** 失効標の保持上限。トークンは寿命が短く、古い標から捨てても実害は無い。 */
 const MAX_STALE_ENTRIES = 8;
@@ -90,15 +84,25 @@ function bumpMeSeq(): number {
   return next;
 }
 
-function readStaleMap(): MeStaleMap {
-  const raw = readJson<Record<string, unknown>>(ME_STALE_KEY);
-  if (!raw) return {};
-  // 値が数値の項目だけを失効標として扱う（壊れた保存値への防御）
-  const map: MeStaleMap = {};
-  for (const [fingerprint, seq] of Object.entries(raw)) {
-    if (typeof seq === 'number') map[fingerprint] = seq;
+/** 指紋の失効標（変異序数）。無ければ 0。 */
+function readStaleSeq(fingerprint: string): number {
+  const raw = readJson<unknown>(ME_STALE_PREFIX + fingerprint);
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+}
+
+/** 失効標の key を全て列挙する（掃除・破棄用）。 */
+function listStaleKeys(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key?.startsWith(ME_STALE_PREFIX)) keys.push(key);
+    }
+    return keys;
+  } catch {
+    return [];
   }
-  return map;
 }
 
 /** token に対応する新鮮な応答を返す。as-of より大きい序数の失効標がある記録は陳腐として扱わない。 */
@@ -107,7 +111,7 @@ export function readCachedMe(token: string): unknown | null {
   if (record?.fingerprint !== tokenFingerprint(token) || record.me === undefined) return null;
   const asOfSeq = record.asOfSeq ?? 0;
   if (lastMutationSeq > asOfSeq) return null;
-  if ((readStaleMap()[record.fingerprint] ?? 0) > asOfSeq) return null;
+  if (readStaleSeq(record.fingerprint) > asOfSeq) return null;
   return record.me;
 }
 
@@ -144,13 +148,16 @@ export function markMeCacheStale(token: string): void {
   lastMutationSeq = seq;
   if (typeof window === 'undefined') return;
   try {
-    const map = readStaleMap();
-    map[tokenFingerprint(token)] = seq;
-    // 上限を超えたら古い標から捨てる（無限に増やさない）
-    const entries = Object.entries(map)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, MAX_STALE_ENTRIES);
-    window.localStorage.setItem(ME_STALE_KEY, JSON.stringify(Object.fromEntries(entries)));
+    // 指紋ごとに独立の key へ 1 回の setItem で書く（read-modify-write を作らない）
+    window.localStorage.setItem(ME_STALE_PREFIX + tokenFingerprint(token), JSON.stringify(seq));
+    // 上限を超えたら古い標（小さい序数）から捨てる。掃除は古い標にしか触れないため、
+    // 直前に書かれた標（最大級の序数）を消すことはない
+    const entries = listStaleKeys()
+      .map(key => [key, readStaleSeq(key.slice(ME_STALE_PREFIX.length))] as const)
+      .sort(([, a], [, b]) => b - a);
+    for (const [key] of entries.slice(MAX_STALE_ENTRIES)) {
+      removeKey(key);
+    }
   } catch {
     // 失効標すら書けないなら、陳腐な応答が残らないよう本体を消して読みをサーバへ倒す
     removeKey(ME_CACHE_KEY);
@@ -163,5 +170,7 @@ export function clearMeCache(): void {
   // 序数（ME_SEQ_KEY）は破棄しない — 消すと他タブの in-flight な記録との大小関係が壊れる
   lastMutationSeq = 0;
   removeKey(ME_CACHE_KEY);
-  removeKey(ME_STALE_KEY);
+  for (const key of listStaleKeys()) {
+    removeKey(key);
+  }
 }

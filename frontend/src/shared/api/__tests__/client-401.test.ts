@@ -64,6 +64,30 @@ describe('apiClient 401/403 interceptor', () => {
     expect(redirectMock).toHaveBeenCalled();
   });
 
+  // me キャッシュの要求は expectedToken で束縛される。既に別セッションへ移行済みなら、
+  // 陳腐な要求の 401 で新しいセッションを壊してはならない
+  it('does not tear down the session on 401 when expectedToken no longer matches the cookie', async () => {
+    const removeSpy = jest.spyOn(Cookies, 'remove');
+
+    await withRejectingAdapter(401, () =>
+      apiClient.get('/platform/me', { expectedToken: 'old-token' } as never)
+    );
+
+    expect(removeSpy).not.toHaveBeenCalledWith('token');
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('tears down the session on 401 when expectedToken matches the current cookie', async () => {
+    const removeSpy = jest.spyOn(Cookies, 'remove');
+
+    await withRejectingAdapter(401, () =>
+      apiClient.get('/platform/me', { expectedToken: 'tkn' } as never)
+    );
+
+    expect(removeSpy).toHaveBeenCalledWith('token');
+    expect(redirectMock).toHaveBeenCalled();
+  });
+
   it('does not clear token or redirect on 401 when the request config sets skipAuthRedirect (招待受諾のインラインログインはグローバル401処理をバイパスする必要がある)', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
 

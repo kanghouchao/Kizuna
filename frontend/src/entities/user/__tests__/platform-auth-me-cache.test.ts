@@ -77,7 +77,49 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
 
     expect(client.get).toHaveBeenCalledWith('/platform/me', {
       headers: { Authorization: 'Bearer token-a' },
+      expectedToken: 'token-a',
     });
+  });
+
+  it('updateMe も捕まえた token を Authorization に明示束縛する（変異と失効標が同じセッションを指す）', async () => {
+    client.put.mockResolvedValue({ data: me('改名後') });
+
+    await platformAuthApi.updateMe({ display_name: '改名後' });
+
+    expect(client.put).toHaveBeenCalledWith(
+      '/platform/me',
+      { display_name: '改名後' },
+      { headers: { Authorization: 'Bearer token-a' }, expectedToken: 'token-a' }
+    );
+  });
+
+  it('PUT の応答が失われても（timeout）、変異中に取得された変異前の応答が生き残らない', async () => {
+    await platformAuthApi.me();
+    client.put.mockImplementationOnce(async () => {
+      // 変異の応答待ち中に並行 me() が変異前の値を読み、前標と同じ序数でキャッシュする
+      client.get.mockResolvedValueOnce({ data: me('変異前') });
+      await platformAuthApi.me();
+      throw new Error('timeout');
+    });
+
+    await expect(platformAuthApi.updateMe({ display_name: '改名後' })).rejects.toThrow('timeout');
+
+    // finally の後標が「変異前」を陳腐化し、次の me() はサーバへ取りに行く
+    client.get.mockResolvedValue({ data: me('改名後') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('改名後'));
+    expect(client.get).toHaveBeenCalledTimes(3);
+  });
+
+  it('失効標は指紋ごとに独立した key に置かれ、別指紋の標を巻き込まない', async () => {
+    client.put.mockResolvedValue({ data: me('x') });
+    await platformAuthApi.updateMe({ display_name: 'x' });
+    (mockedCookies.get as jest.Mock).mockReturnValue('token-b');
+    await platformAuthApi.updateMe({ display_name: 'y' });
+
+    const staleKeys = Object.keys(window.localStorage).filter(key =>
+      key.startsWith('platform-me-stale.')
+    );
+    expect(staleKeys).toHaveLength(2);
   });
 
   it('updateMe の応答待ち中も変異前キャッシュを配信しない（発送前の失効標）', async () => {
