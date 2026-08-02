@@ -73,7 +73,9 @@ export const platformAuthApi = {
     if (cached) return cached;
     if (inflightMe?.token === token) return inflightMe.request;
     const request = apiClient.get('/platform/me').then(response => {
-      writeCachedMe(token, response.data);
+      // 応答待ちの間に logout（キャッシュ破棄 + token 除去）が走った場合に書き戻すと、
+      // ログアウト後の共有端末に個人情報が残る。今も同じ token のときだけ書く。
+      if (Cookies.get('token') === token) writeCachedMe(token, response.data);
       return response.data as PlatformMeResponse;
     });
     inflightMe = { token, request };

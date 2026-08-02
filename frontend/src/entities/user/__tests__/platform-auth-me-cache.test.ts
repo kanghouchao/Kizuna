@@ -106,6 +106,19 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(2);
   });
 
+  it('応答待ちの間に logout が走ったら（token 除去済み）キャッシュへ書き戻さない', async () => {
+    client.get.mockImplementation(async () => {
+      // GET /platform/me の応答待ちの間に logout がキャッシュ破棄と token 除去を終えた状況
+      clearMeCache();
+      (mockedCookies.get as jest.Mock).mockReturnValue(undefined);
+      return { data: me('山田') };
+    });
+
+    await platformAuthApi.me();
+
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+  });
+
   it('clearMeCache は storage が塞がれていても投げない（logout の後続処理を止めない）', () => {
     const removeSpy = jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
       throw new Error('storage blocked');
