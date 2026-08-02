@@ -71,12 +71,13 @@ export const platformAuthApi = {
   },
   updateMe: async (data: PlatformMeUpdateRequest): Promise<PlatformMeResponse> => {
     // 変異の応答をキャッシュへ書き戻すと、同一 token の並行変異（別タブの updateMe・遅延中の
-    // GET）との順序をクライアントでは正しく決められない。失効印だけを残し、次の me() に
-    // サーバから取り直させる。token は発送前に捕まえ、応答後も同一のときだけ印を書く
-    //（待機中に別タブで再ログインした場合、新しい利用者の枠に印を残さない）。
+    // GET）との順序をクライアントでは正しく決められない。失効標だけを残し、次の me() に
+    // サーバから取り直させる。標は発送時に捕まえた token の指紋作用域なので、応答時点で
+    // cookie が別 token に替わっていても（招待受諾の一時 token 等）無条件に記してよい——
+    // 記さないと、元の token が後から復元されたとき変異前のキャッシュが生き返る。
     const token = Cookies.get('token');
     const response = await apiClient.put('/platform/me', data);
-    if (token && Cookies.get('token') === token) markMeCacheStale(token);
+    if (token) markMeCacheStale(token);
     return response.data;
   },
   stores: async (): Promise<PlatformStore[]> => {

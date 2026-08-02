@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
 import { PlatformLoginRequest, platformAuthApi } from '@/entities/user';
+import { clearMeCache } from '@/shared/api';
 import {
   clearPlatformSession,
   getApiErrorMessage,
@@ -52,7 +53,11 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
       const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
       // 受諾はここで完了し、ポータルセッションは開始しない。一時的に張った CAST token を
       // 残すと token 単独の存在チェックで platform/store コンソールへ誤って通されるため必ず消去する。
+      // 旧セッションもここで放棄が確定する（復元しない）ので、旧利用者の me キャッシュも
+      // 一緒に消し、共有端末に個人情報を残さない。失敗時の復元経路では消さない
+      //（復元されたセッションのキャッシュはまだ有効なため）。
       Cookies.remove('token');
+      clearMeCache();
       onSuccess(response);
     } catch (error) {
       // login 自体が失敗した場合は新 token を書き込んでいないため、既存セッションの token には触れない

@@ -99,6 +99,22 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(1);
   });
 
+  it('待機中に一時 token へ替わっていても、元 token の失効標は残る（復元後に変異前キャッシュが生き返らない）', async () => {
+    await platformAuthApi.me();
+    client.put.mockImplementation(async () => {
+      // 別タブ（招待受諾）が一時 token を設置した状況で PUT が完了する
+      (mockedCookies.get as jest.Mock).mockReturnValue('token-b');
+      return { data: me('改名後') };
+    });
+    await platformAuthApi.updateMe({ display_name: '改名後' });
+
+    // 受諾失敗により元の token が復元された。変異前のキャッシュを配信してはならない
+    (mockedCookies.get as jest.Mock).mockReturnValue('token-a');
+    client.get.mockResolvedValue({ data: me('改名後') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('改名後'));
+    expect(client.get).toHaveBeenCalledTimes(2);
+  });
+
   it('clearMeCache（ログアウト）後は取り直す', async () => {
     await platformAuthApi.me();
 
