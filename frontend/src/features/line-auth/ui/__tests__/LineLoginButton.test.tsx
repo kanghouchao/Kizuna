@@ -37,6 +37,18 @@ describe('LineLoginButton', () => {
     expect(await screen.findByRole('button', { name: 'LINEでログイン' })).toBeInTheDocument();
   });
 
+  it('店舗ドメイン上（role=store cookie）では設定を照会せず何も描画しない', async () => {
+    document.cookie = 'x-mw-role=store';
+    try {
+      render(<LineLoginButton />);
+
+      await waitFor(() => expect(mockedConfig).not.toHaveBeenCalled());
+      expect(screen.queryByRole('button', { name: 'LINEでログイン' })).not.toBeInTheDocument();
+    } finally {
+      document.cookie = 'x-mw-role=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
+  });
+
   it('公開設定が無効なら何も描画しない', async () => {
     mockedConfig.mockResolvedValue({ enabled: false });
 

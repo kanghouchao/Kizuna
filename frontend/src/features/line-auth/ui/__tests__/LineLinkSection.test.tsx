@@ -63,14 +63,28 @@ describe('LineLinkSection', () => {
     expect(screen.queryByRole('button', { name: 'LINEを連携する' })).not.toBeInTheDocument();
   });
 
-  it('押下で連携意図の認可を開始する', async () => {
+  it('押下で発起主体つきの連携意図の認可を開始する', async () => {
     mockedMe.mockResolvedValue(meResponse(false));
     mockedStart.mockResolvedValue(undefined);
 
     render(<LineLinkSection />);
     fireEvent.click(await screen.findByRole('button', { name: 'LINEを連携する' }));
 
-    await waitFor(() => expect(mockedStart).toHaveBeenCalledWith('channel-1', 'link'));
+    await waitFor(() =>
+      expect(mockedStart).toHaveBeenCalledWith('channel-1', 'link', 'user@kizuna.test')
+    );
+  });
+
+  it('店舗ドメイン上（role=store cookie）ではブロックごと描画しない', async () => {
+    document.cookie = 'x-mw-role=store';
+    try {
+      render(<LineLinkSection />);
+
+      await waitFor(() => expect(mockedConfig).not.toHaveBeenCalled());
+      expect(screen.queryByText('LINE連携')).not.toBeInTheDocument();
+    } finally {
+      document.cookie = 'x-mw-role=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
   });
 
   it('公開設定が無効ならブロックごと描画しない', async () => {

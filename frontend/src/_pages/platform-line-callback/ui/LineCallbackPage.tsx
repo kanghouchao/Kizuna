@@ -5,12 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { toast } from 'react-hot-toast';
-import { LineAuthorizationRequest, platformLineApi } from '@/entities/user';
+import { LineAuthorizationRequest, platformAuthApi, platformLineApi } from '@/entities/user';
 import { completePlatformLogin } from '@/features/platform-login';
 import {
   consumeLineAuthorization,
   getApiErrorMessage,
-  isConflict,
   lineCallbackRedirectUri,
   startPlatformSession,
 } from '@/shared/lib';
@@ -64,22 +63,29 @@ export default function LineCallbackPage() {
         fail('この利用者種別のポータルは準備中です', 'login');
         return;
       }
-      router.push(completion.path);
+      // 消費済みのコールバック URL を履歴に残さない（戻るで再実行するとエラー画面になるだけのため）
+      router.replace(completion.path);
     };
 
-    const runLink = async (request: LineAuthorizationRequest) => {
-      try {
-        await platformLineApi.link(request);
-      } catch (error) {
+    const runLink = async (request: LineAuthorizationRequest, subject: string | undefined) => {
+      // 発起主体と現在のログインが一致するときだけ連携する。外部認可の往復中に別アカウントへ
+      // 切り替わっていた場合、そのまま送ると意図しないアカウントに LINE が恒久的に付く（解除は未提供）。
+      const me = await platformAuthApi.me();
+      if (!subject || me.email !== subject) {
         fail(
-          isConflict(error)
-            ? 'このLINEアカウントは既に別のアカウントで利用されています'
-            : getApiErrorMessage(error, 'LINE連携に失敗しました'),
+          'LINE連携を開始したアカウントと現在のログインが一致しません。アカウント設定からやり直してください',
           'settings'
         );
         return;
       }
-      router.push('/platform/settings/account');
+      try {
+        await platformLineApi.link(request);
+      } catch (error) {
+        // 409 には「本人が連携済み」「他の身分が連携済み」の二つの原因があり、区別はサーバーの文言が正
+        fail(getApiErrorMessage(error, 'LINE連携に失敗しました'), 'settings');
+        return;
+      }
+      router.replace('/platform/settings/account');
     };
 
     const run = async () => {
@@ -107,7 +113,7 @@ export default function LineCallbackPage() {
 
       try {
         if (authorization.intent === 'link') {
-          await runLink(request);
+          await runLink(request, authorization.subject);
           return;
         }
         await runLogin(request);
@@ -129,7 +135,8 @@ export default function LineCallbackPage() {
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
       Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
       startPlatformSession('member', expires_at);
-      router.push('/member/');
+      // 消費済みのコールバック URL と使用済みフォームを履歴に残さない
+      router.replace('/member/');
     } catch (error) {
       toast.error(getApiErrorMessage(error, '会員登録に失敗しました'));
     }

@@ -28,6 +28,7 @@ export { isPublicPlatformPath } from './app-area';
 export {
   LINE_AUTHORIZE_ENDPOINT,
   consumeLineAuthorization,
+  isLinePlatformHost,
   lineCallbackRedirectUri,
   prepareLineAuthorization,
   startLineAuthorization,

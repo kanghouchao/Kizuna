@@ -1,11 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
 import LineCallbackPage from '../ui/LineCallbackPage';
-import { platformLineApi } from '@/entities/user';
+import { platformAuthApi, platformLineApi } from '@/entities/user';
 import { completePlatformLogin } from '@/features/platform-login';
 
 const mockPush = jest.fn();
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
+const mockReplace = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+}));
 
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
@@ -16,6 +19,7 @@ jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
     ...actual,
+    platformAuthApi: { ...actual.platformAuthApi, me: jest.fn() },
     platformLineApi: {
       config: jest.fn(),
       login: jest.fn(),
@@ -30,12 +34,16 @@ jest.mock('@/features/platform-login', () => ({
 }));
 
 const mockedLineApi = platformLineApi as jest.Mocked<typeof platformLineApi>;
+const mockedMe = platformAuthApi.me as jest.Mock;
 const mockedComplete = completePlatformLogin as jest.MockedFunction<typeof completePlatformLogin>;
 
 const STORAGE_KEY = 'kizuna-line-oauth';
 const REDIRECT_URI = 'http://localhost/platform/line/callback';
 
-function arriveAt(query: string, stored?: { state: string; verifier: string; intent: string }) {
+function arriveAt(
+  query: string,
+  stored?: { state: string; verifier: string; intent: string; subject?: string }
+) {
   if (stored) {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   }
@@ -72,7 +80,8 @@ describe('LineCallbackPage', () => {
           code_verifier: 'v1',
         })
       );
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
+      // 消費済みのコールバック URL を履歴に残さないため replace で遷移する
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/'));
       // 保存値は一度きりの消費
       expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
     });
@@ -119,7 +128,7 @@ describe('LineCallbackPage', () => {
           email: 'member@kizuna.test',
         })
       );
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/'));
       expect(Cookies.get('token')).toBe('jwt-token');
       expect(Cookies.get('platform-role')).toBe('member');
     });
@@ -160,8 +169,14 @@ describe('LineCallbackPage', () => {
   });
 
   describe('連携意図', () => {
-    it('本人の LINE 連携を要求し、アカウント設定へ戻す', async () => {
-      arriveAt('?code=auth-code&state=s2', { state: 's2', verifier: 'v2', intent: 'link' });
+    it('発起主体と現在のログインが一致すれば連携を要求し、アカウント設定へ戻す', async () => {
+      arriveAt('?code=auth-code&state=s2', {
+        state: 's2',
+        verifier: 'v2',
+        intent: 'link',
+        subject: 'me@kizuna.test',
+      });
+      mockedMe.mockResolvedValue({ email: 'me@kizuna.test' });
       mockedLineApi.link.mockResolvedValue(undefined);
 
       render(<LineCallbackPage />);
@@ -173,24 +188,52 @@ describe('LineCallbackPage', () => {
           code_verifier: 'v2',
         })
       );
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/settings/account'));
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/platform/settings/account'));
       expect(mockedLineApi.login).not.toHaveBeenCalled();
     });
 
-    it('409 は連携済みの案内を出し、アカウント設定への戻り導線を示す', async () => {
-      arriveAt('?code=auth-code&state=s2', { state: 's2', verifier: 'v2', intent: 'link' });
-      mockedLineApi.link.mockRejectedValue({ response: { status: 409 } });
+    it('外部認可の往復中に別アカウントへ切り替わっていたら連携を送らない', async () => {
+      arriveAt('?code=auth-code&state=s2', {
+        state: 's2',
+        verifier: 'v2',
+        intent: 'link',
+        subject: 'me@kizuna.test',
+      });
+      mockedMe.mockResolvedValue({ email: 'other@kizuna.test' });
 
       render(<LineCallbackPage />);
 
       expect(
-        await screen.findByText('このLINEアカウントは既に別のアカウントで利用されています')
+        await screen.findByText(
+          'LINE連携を開始したアカウントと現在のログインが一致しません。アカウント設定からやり直してください'
+        )
+      ).toBeInTheDocument();
+      expect(mockedLineApi.link).not.toHaveBeenCalled();
+    });
+
+    it('409 はサーバーの文言を表示し、アカウント設定への戻り導線を示す', async () => {
+      arriveAt('?code=auth-code&state=s2', {
+        state: 's2',
+        verifier: 'v2',
+        intent: 'link',
+        subject: 'me@kizuna.test',
+      });
+      mockedMe.mockResolvedValue({ email: 'me@kizuna.test' });
+      // 「本人が連携済み」と「他の身分が連携済み」はサーバーが文言で区別する
+      mockedLineApi.link.mockRejectedValue({
+        response: { status: 409, data: { error: 'このアカウントは既に LINE と連携済みです' } },
+      });
+
+      render(<LineCallbackPage />);
+
+      expect(
+        await screen.findByText('このアカウントは既に LINE と連携済みです')
       ).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'アカウント設定へ戻る' })).toHaveAttribute(
         'href',
         '/platform/settings/account'
       );
-      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
     });
   });
 
