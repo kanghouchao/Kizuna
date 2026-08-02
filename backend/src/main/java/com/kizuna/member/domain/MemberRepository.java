@@ -7,5 +7,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
   Optional<Member> findByPlatformUserId(Long platformUserId);
 
+  Optional<Member> findByMemberCode(String memberCode);
+
   boolean existsByMemberCode(String memberCode);
 }

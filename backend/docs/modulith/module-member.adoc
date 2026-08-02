@@ -5,6 +5,7 @@
 |Spring components
 |_Services_
 
+* `c.k.m.application.MemberLookupService`
 * `c.k.m.application.MemberRegistrationService`
 * `c.k.m.application.MemberSelfService`
 |Bean references

@@ -5,12 +5,17 @@ import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScoped;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +32,7 @@ public class CustomerService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   private final CustomerRepository customerRepository;
+  private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMapper customerMapper;
 
   @StoreScoped
@@ -34,7 +40,21 @@ public class CustomerService {
   public Page<CustomerResponse> list(
       String search, String rank, String classification, Pageable pageable) {
     Specification<Customer> spec = searchSpec(search, rank, classification);
-    return customerRepository.findAll(spec, pageable).map(customerMapper::toResponse);
+    Page<Customer> page = customerRepository.findAll(spec, pageable);
+    // 会員紐づけは本ページ分だけを 1 回で引く（行ごとの追加問い合わせを作らない）。
+    List<String> ids = page.getContent().stream().map(Customer::getId).toList();
+    Map<String, String> activeCodes =
+        ids.isEmpty()
+            ? Map.of()
+            : customerMemberLinkRepository
+                .findByCustomerIdInAndStatus(ids, LinkStatus.ACTIVE)
+                .stream()
+                .collect(
+                    Collectors.toMap(
+                        CustomerMemberLink::getCustomerId, CustomerMemberLink::getMemberCode));
+    return page.map(
+        customer ->
+            withMemberLink(customerMapper.toResponse(customer), activeCodes.get(customer.getId())));
   }
 
   /**
@@ -70,6 +90,7 @@ public class CustomerService {
     return customerRepository
         .findById(id)
         .map(customerMapper::toResponse)
+        .map(response -> withMemberLink(response, activeMemberCodeOf(id)))
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
   }
 
@@ -78,7 +99,8 @@ public class CustomerService {
   public CustomerResponse create(CustomerCreateRequest request) {
     // store_id は StoreScopeStampListener が @PrePersist で採番する
     Customer customer = customerMapper.toEntity(request);
-    return customerMapper.toResponse(customerRepository.save(customer));
+    // 作成直後の顧客は定義上まだ会員と紐づいていない
+    return withMemberLink(customerMapper.toResponse(customerRepository.save(customer)), null);
   }
 
   @StoreScoped
@@ -89,7 +111,8 @@ public class CustomerService {
 
     customer.apply(customerMapper.toPatch(request));
 
-    return customerMapper.toResponse(customerRepository.save(customer));
+    return withMemberLink(
+        customerMapper.toResponse(customerRepository.save(customer)), activeMemberCodeOf(id));
   }
 
   @StoreScoped
@@ -99,5 +122,19 @@ public class CustomerService {
       throw new NotFoundException("顧客が見つかりません");
     }
     customerRepository.deleteById(id);
+  }
+
+  private String activeMemberCodeOf(String customerId) {
+    return customerMemberLinkRepository
+        .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
+        .map(CustomerMemberLink::getMemberCode)
+        .orElse(null);
+  }
+
+  /** 会員紐づけの投影を載せる。memberLinked は関連状態の有無そのものなので、常に真偽値が入る。 */
+  private static CustomerResponse withMemberLink(CustomerResponse response, String memberCode) {
+    response.setMemberLinked(memberCode != null);
+    response.setLinkedMemberCode(memberCode);
+    return response;
   }
 }

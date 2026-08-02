@@ -11,11 +11,16 @@ import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.NotFoundException;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
@@ -31,6 +36,7 @@ import org.springframework.data.jpa.domain.Specification;
 class CustomerServiceTest {
 
   @Mock private CustomerRepository customerRepository;
+  @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMapper customerMapper;
 
   @InjectMocks private CustomerService customerService;
@@ -154,6 +160,74 @@ class CustomerServiceTest {
     assertThatThrownBy(() -> customerService.update("missing", new CustomerUpdateRequest()))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
+  }
+
+  @Test
+  @DisplayName("一覧は本ページ分の紐づけを 1 回で引き、紐づけ済みだけに会員コードを載せること")
+  void list_decoratesMemberLink() {
+    Customer linked = new Customer();
+    linked.setId("c1");
+    Customer unlinked = new Customer();
+    unlinked.setId("c2");
+    Page<Customer> page = new PageImpl<>(List.of(linked, unlinked));
+
+    CustomerResponse linkedResponse = new CustomerResponse();
+    linkedResponse.setId("c1");
+    CustomerResponse unlinkedResponse = new CustomerResponse();
+    unlinkedResponse.setId("c2");
+
+    when(customerRepository.findAll(
+            ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
+        .thenReturn(page);
+    when(customerMapper.toResponse(linked)).thenReturn(linkedResponse);
+    when(customerMapper.toResponse(unlinked)).thenReturn(unlinkedResponse);
+    when(customerMemberLinkRepository.findByCustomerIdInAndStatus(
+            List.of("c1", "c2"), LinkStatus.ACTIVE))
+        .thenReturn(List.of(activeLink("c1", "123456789012")));
+
+    List<CustomerResponse> result =
+        customerService.list(null, null, null, PageRequest.of(0, 10)).getContent();
+
+    assertThat(result.get(0).getMemberLinked()).isTrue();
+    assertThat(result.get(0).getLinkedMemberCode()).isEqualTo("123456789012");
+    assertThat(result.get(1).getMemberLinked()).isFalse();
+    assertThat(result.get(1).getLinkedMemberCode()).isNull();
+    verify(customerMemberLinkRepository).findByCustomerIdInAndStatus(any(), any());
+  }
+
+  @Test
+  @DisplayName("詳細は紐づけ済みなら会員コードを載せ、未紐づけでも member_linked が真偽値になること")
+  void get_decoratesMemberLink() {
+    Customer c = new Customer();
+    c.setId("c1");
+    CustomerResponse resp = new CustomerResponse();
+    resp.setId("c1");
+
+    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerMapper.toResponse(c)).thenReturn(resp);
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("c1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.of(activeLink("c1", "123456789012")));
+
+    CustomerResponse linked = customerService.get("c1");
+    assertThat(linked.getMemberLinked()).isTrue();
+    assertThat(linked.getLinkedMemberCode()).isEqualTo("123456789012");
+
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("c1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+
+    CustomerResponse unlinked = customerService.get("c1");
+    assertThat(unlinked.getMemberLinked()).isFalse();
+    assertThat(unlinked.getLinkedMemberCode()).isNull();
+  }
+
+  private static CustomerMemberLink activeLink(String customerId, String memberCode) {
+    return CustomerMemberLink.builder()
+        .customerId(customerId)
+        .memberId(7L)
+        .memberCode(memberCode)
+        .linkedBy(1L)
+        .linkedAt(OffsetDateTime.parse("2026-07-01T10:00:00+09:00"))
+        .build();
   }
 
   @Test

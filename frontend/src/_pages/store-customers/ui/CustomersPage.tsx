@@ -123,6 +123,7 @@ export default function CustomersPage() {
               <TableHead>ランク</TableHead>
               <TableHead>区分</TableHead>
               <TableHead>ポイント</TableHead>
+              <TableHead>会員</TableHead>
               <TableHead>NG</TableHead>
               <TableHead className="text-right">アクション</TableHead>
             </TableRow>
@@ -140,6 +141,18 @@ export default function CustomersPage() {
                   {customer.classification || '-'}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{customer.points ?? 0}</TableCell>
+                <TableCell>
+                  {customer.member_linked ? (
+                    <Badge
+                      variant="outline"
+                      className="border-transparent bg-success/10 text-success-strong"
+                    >
+                      紐づけ済み
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">未紐づけ</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   {customer.ng_type ? (
                     <Badge
