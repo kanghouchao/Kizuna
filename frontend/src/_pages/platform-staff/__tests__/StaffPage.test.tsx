@@ -300,6 +300,54 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByLabelText('スタッフを検索')).toHaveValue('');
   });
 
+  // 絞り込みで 0 件のときに「登録されていません」と言うと、他店舗に居るスタッフの存在を否定してしまう
+  it('店舗で絞り込んで 0 件のときは「該当なし」の文言を出すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    mockedStaffApi.list.mockResolvedValue(paginated([]));
+    await pickStore('店舗A');
+
+    expect(await screen.findByText('該当するスタッフが見つかりません')).toBeInTheDocument();
+  });
+
+  // 選択中の店舗が取り直した目録から消える（他管理者の削除）と、トリガー表示が空白のまま
+  // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す
+  it('取り直した目録から選択中の店舗が消えたら、すべての店舗へ戻して取り直すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([
+      { id: 9, name: '店舗A' },
+      { id: 10, name: '店舗B' },
+    ]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+    await pickStore('店舗A');
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 9 }))
+    );
+
+    // モーダルを開くと目録を取り直す既存挙動を使い、店舗A が消えた目録を届ける
+    mockedAuthApi.stores.mockResolvedValue([{ id: 10, name: '店舗B' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: undefined,
+        storeId: undefined,
+      })
+    );
+    expect(screen.getByRole('combobox', { name: '店舗で絞り込む' })).toHaveTextContent(
+      'すべての店舗'
+    );
+  });
+
   it('ページ番号のクリックで該当ページを取得すること', async () => {
     mockedStaffApi.list.mockImplementation(({ page }) =>
       Promise.resolve(

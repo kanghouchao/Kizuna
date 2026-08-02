@@ -99,6 +99,16 @@ export default function StaffPage() {
     }
   }, [modalOpen, storesLoading, stores.length, refetchStores]);
 
+  // 取り直した目録から選択中の店舗が消えたら（他管理者の削除）、トリガー表示が空白のまま
+  // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す。
+  // 取得失敗は既存目録を保つ（useManagedList）ので、失敗でここが誤発火することはない。
+  useEffect(() => {
+    if (storeFilter === ALL_STORES || storesLoading) return;
+    if (stores.some(store => String(store.id) === storeFilter)) return;
+    setStoreFilter(ALL_STORES);
+    void list.search({ search: searchTerm, storeId: undefined });
+  }, [stores, storesLoading, storeFilter, searchTerm, list]);
+
   /**
    * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
    *
@@ -190,7 +200,10 @@ export default function StaffPage() {
         }}
         state={list}
         emptyMessage={
-          searchTerm ? '該当するスタッフが見つかりません' : 'スタッフが登録されていません'
+          // 店舗の絞り込み中も「登録なし」ではなく「該当なし」（他店舗にはスタッフが居る可能性がある）
+          searchTerm || storeId !== undefined
+            ? '該当するスタッフが見つかりません'
+            : 'スタッフが登録されていません'
         }
       >
         <Table>
