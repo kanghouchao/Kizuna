@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0700-001-user-line-user-id
+      author: kanghouchao
+      # LINE 連携済みプラットフォームユーザーの LINE ユーザー ID。身分表は t_users のまま拡張し、
+      # 別の同一性テーブルは設けない。NULL 許容（未連携）だが、値を持つ行は一意
+      # （1 つの LINE アカウントが複数の身分に結び付くと、なりすまし経路になるため）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_users
+            columns:
+              - column:
+                  name: line_user_id
+                  type: VARCHAR(64)
+                  remarks: 連携済み LINE ユーザー ID（未連携は NULL。値を持つ行は一意）
+        - addUniqueConstraint:
+            constraintName: uq_t_users_line_user_id
+            tableName: t_users
+            columnNames: line_user_id
+      rollback:
+        - dropUniqueConstraint:
+            constraintName: uq_t_users_line_user_id
+            tableName: t_users
+        - dropColumn:
+            tableName: t_users
+            columnName: line_user_id

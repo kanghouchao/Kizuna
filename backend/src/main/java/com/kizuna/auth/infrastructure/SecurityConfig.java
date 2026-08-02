@@ -38,6 +38,9 @@ public class SecurityConfig {
     PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*/acceptance"),
     // 匿名 POST の会員自助登録（同上: Bearer なしのため Bearer 免除に該当しない）。
     PathPatternRequestMatcher.withDefaults().matcher("/platform/members"),
+    // 匿名 POST の LINE ログインと LINE 登録確定（同上）。連携(/platform/me/line)は Bearer 付きで既存免除に該当する。
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/line/login"),
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/line/register"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
       return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");

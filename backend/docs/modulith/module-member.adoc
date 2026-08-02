@@ -2,6 +2,11 @@
 |===
 |Base package
 |`com.kizuna.member`
+|Spring components
+|_Services_
+
+* `c.k.m.application.MemberRegistrationService`
+* `c.k.m.application.MemberSelfService`
 |Bean references
 |* `c.k.u.domain.PlatformUserRepository` (in User)
 |===

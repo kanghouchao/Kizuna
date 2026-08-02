@@ -5,12 +5,14 @@ import com.kizuna.member.api.dto.MemberRegistrationResponse;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberCodes;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberRegistrationService {
 
   private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_t_users_email";
+  private static final String LINE_USER_UNIQUE_CONSTRAINT = "uq_t_users_line_user_id";
   private static final String DUPLICATE_EMAIL_MESSAGE = "このメールアドレスは既に登録されています。ログインしてご利用ください";
+  private static final String DUPLICATE_LINE_USER_MESSAGE = "この LINE アカウントは既に別の身分と連携済みです";
 
   /** 会員コード発行の再試行上限。数字 12 桁空間では衝突は実質発生せず、上限到達は乱数源の異常を意味する。 */
   private static final int CODE_ISSUE_ATTEMPTS = 5;
@@ -65,6 +69,48 @@ public class MemberRegistrationService {
     return new MemberRegistrationResponse(member.getMemberCode());
   }
 
+  /**
+   * LINE 認証で確定した身分の会員登録。パスワードは推測不能な乱数を符号化して置く — LINE のみで登録した会員は
+   * パスワードログインの経路を持たない（本人が忘れて困る値ではなく、空を許さない 列を埋めるための値）。
+   *
+   * <p>重複は 409 で返す（{@link #register} の 400 と異なる）。LINE 登録は前端が既存アカウントとの衝突を検出して 案内へ分岐する必要があり、入力形式の誤り
+   * （400）と区別できなければならない。
+   *
+   * @param lineUserId LINE が検証した LINE ユーザー ID
+   * @return 作成された会員身分のプラットフォームユーザー
+   */
+  @Transactional
+  public PlatformUser registerWithLine(String email, String displayName, String lineUserId) {
+    if (platformUserRepository.findByEmail(email.toLowerCase(Locale.ROOT)).isPresent()) {
+      throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
+    }
+    if (platformUserRepository.existsByLineUserId(lineUserId)) {
+      throw new ConflictException(DUPLICATE_LINE_USER_MESSAGE);
+    }
+    PlatformUser user =
+        saveLineUser(
+            PlatformUser.builder()
+                .email(email)
+                .password(passwordEncoder.encode(randomPassword()))
+                .displayName(displayName)
+                .enabled(true)
+                .userType(UserType.MEMBER)
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of())
+                .lineUserId(lineUserId)
+                .build());
+    memberRepository.save(
+        Member.builder().memberCode(issueCode()).platformUserId(user.getId()).build());
+    return user;
+  }
+
+  /** パスワードログインを成立させないための乱数パスワード（符号化前の平文はどこにも残さない）。 */
+  private String randomPassword() {
+    byte[] bytes = new byte[32];
+    random.nextBytes(bytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+  }
+
   /** 一意の会員コードを発行する。事前の存在チェックで衝突を避け、上限到達は例外（並行登録との厳密な競合は DB の一意制約が最終防衛線として 409 で顕在化する）。 */
   private String issueCode() {
     for (int attempt = 0; attempt < CODE_ISSUE_ATTEMPTS; attempt++) {
@@ -87,6 +133,25 @@ public class MemberRegistrationService {
       String cause = ex.getMostSpecificCause().getMessage();
       if (cause != null && cause.contains(EMAIL_UNIQUE_CONSTRAINT)) {
         throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
+      }
+      throw ex;
+    }
+  }
+
+  /**
+   * LINE 登録の保存。事前チェックを擦り抜けた並行登録を、email・LINE ユーザー ID いずれの一意制約違反も 409 へ写像する
+   * （どちらも「先に確定した別要求と衝突した」であり、要求自体の形式は正しい）。
+   */
+  private PlatformUser saveLineUser(PlatformUser user) {
+    try {
+      return platformUserRepository.saveAndFlush(user);
+    } catch (DataIntegrityViolationException ex) {
+      String cause = ex.getMostSpecificCause().getMessage();
+      if (cause != null && cause.contains(EMAIL_UNIQUE_CONSTRAINT)) {
+        throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
+      }
+      if (cause != null && cause.contains(LINE_USER_UNIQUE_CONSTRAINT)) {
+        throw new ConflictException(DUPLICATE_LINE_USER_MESSAGE);
       }
       throw ex;
     }

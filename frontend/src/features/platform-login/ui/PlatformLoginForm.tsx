@@ -4,13 +4,9 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
-import { platformAuthApi, PlatformLoginRequest, resolvePlatformDestination } from '@/entities/user';
-import {
-  clearPlatformSession,
-  getApiErrorMessage,
-  startPlatformSession,
-  storeEntryPath,
-} from '@/shared/lib';
+import { platformAuthApi, PlatformLoginRequest } from '@/entities/user';
+import { getApiErrorMessage } from '@/shared/lib';
+import { completePlatformLogin } from '../model/completePlatformLogin';
 
 /** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する。 */
 export default function PlatformLoginForm() {
@@ -24,46 +20,12 @@ export default function PlatformLoginForm() {
   const onSubmit = async (data: PlatformLoginRequest) => {
     Cookies.remove('token');
     try {
-      const { token, expires_at } = await platformAuthApi.login(data);
-      // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
-      Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
-
-      const me = await platformAuthApi.me();
-      const activeConsole = me.console ?? 'none';
-      const destination = resolvePlatformDestination(activeConsole);
-
-      if (destination === 'platform') {
-        startPlatformSession(activeConsole, expires_at);
-        router.push('/platform/dashboard/');
+      const completion = await completePlatformLogin(await platformAuthApi.login(data));
+      if (completion.status === 'unsupported') {
+        toast.error('この利用者種別のポータルは準備中です');
         return;
       }
-
-      if (destination === 'store') {
-        // 着地方針（授権店舗の選択とメニュー由来の着地先解決）は StoreEntryPage 一箇所に集約する。
-        // ログインフォームは無条件に入口へ渡し、店舗の解決には関与しない。
-        startPlatformSession(activeConsole, expires_at);
-        router.push(storeEntryPath());
-        return;
-      }
-
-      // destination='unsupported'（console='none' — CAST または MEMBER）。両者は console だけでは
-      // 区別できないため、既に取得済みの user_type で分岐する。
-      if (me.user_type === 'CAST') {
-        startPlatformSession('cast', expires_at);
-        router.push('/cast/schedule/');
-        return;
-      }
-
-      if (me.user_type === 'MEMBER') {
-        startPlatformSession('member', expires_at);
-        router.push('/member/');
-        return;
-      }
-
-      // 想定外の user_type: 着地先が無いためセッションを破棄する
-      Cookies.remove('token');
-      clearPlatformSession();
-      toast.error('この利用者種別のポータルは準備中です');
+      router.push(completion.path);
     } catch (error) {
       console.error('Platform login failed:', error);
       toast.error(

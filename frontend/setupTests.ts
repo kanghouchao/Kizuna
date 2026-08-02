@@ -1,4 +1,20 @@
 import '@testing-library/jest-dom';
+import { webcrypto } from 'crypto';
+import { TextEncoder } from 'util';
+
+// jsdom の Crypto は getRandomValues のみで SubtleCrypto を持たず、TextEncoder も公開しない。
+// PKCE の code_challenge（SHA-256）を検証できるよう Node の実装を補う。
+if (!globalThis.crypto) {
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
+} else if (!globalThis.crypto.subtle) {
+  Object.defineProperty(globalThis.crypto, 'subtle', {
+    value: webcrypto.subtle,
+    configurable: true,
+  });
+}
+if (!globalThis.TextEncoder) {
+  Object.defineProperty(globalThis, 'TextEncoder', { value: TextEncoder, configurable: true });
+}
 
 // Radix のプリミティブは要素の採寸に ResizeObserver を使う（フォーム内 Checkbox が
 // 描画する hidden な BubbleInput など）。jsdom には未実装のため、全テスト共通の

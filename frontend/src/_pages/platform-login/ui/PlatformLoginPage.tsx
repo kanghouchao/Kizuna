@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { LineLoginButton } from '@/features/line-auth';
 import { PlatformLoginForm } from '@/features/platform-login';
 import { AuthLayout } from '@/shared/ui';
 
@@ -12,6 +13,8 @@ export default function PlatformLoginPage() {
   return (
     <AuthLayout title="統一ログイン" subtitle="メールアドレスとパスワードでログインしてください">
       <PlatformLoginForm />
+      {/* LINE ログインの入口（公開設定が無効なら何も描画されない） */}
+      <LineLoginButton />
       {/* 新規会員登録の入口（登録入口から生まれる身分は会員のみ） */}
       <p className="mt-6 text-center text-xs text-[#9a958e]">
         はじめての方は{' '}

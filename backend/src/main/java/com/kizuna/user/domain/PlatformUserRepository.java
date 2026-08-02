@@ -13,6 +13,12 @@ public interface PlatformUserRepository
     extends JpaRepository<PlatformUser, Long>, JpaSpecificationExecutor<PlatformUser> {
   Optional<PlatformUser> findByEmail(String email);
 
+  /** 連携済み LINE ユーザー ID で身分を引く。LINE ログインが同一性の根拠にする唯一の経路。 */
+  Optional<PlatformUser> findByLineUserId(String lineUserId);
+
+  /** 指定 LINE ユーザー ID が既に別の身分へ連携済みか（連携要求の事前検証）。 */
+  boolean existsByLineUserId(String lineUserId);
+
   /**
    * 指定した本人種別で、現店舗を授権する（ALL_STORES または個別授権店舗集合に含む）有効なユーザーを表示名昇順で取得する。店舗スコープの絞り込みを DB
    * 層で行うことで、無関係な他店舗ユーザーの ElementCollection（ロール・店舗集合）を読み込まずに済む。

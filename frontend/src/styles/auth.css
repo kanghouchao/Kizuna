@@ -312,6 +312,36 @@
   cursor: not-allowed;
 }
 
+/* LINE ログイン。ブランドガイドラインの指定色を用いる */
+.auth-btn--line {
+  background: #06c755;
+}
+
+.auth-btn--line:hover:not(:disabled) {
+  box-shadow:
+    0 8px 30px rgba(6, 199, 85, 0.28),
+    0 2px 8px rgba(6, 199, 85, 0.2);
+}
+
+/* ========== 区切り線（文言を中央に挟む） ========== */
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #9a958e;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e1dc;
+}
+
 /* ========== スタガードアニメーション ========== */
 
 .auth-stagger > * {

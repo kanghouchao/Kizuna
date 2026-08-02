@@ -59,6 +59,8 @@ export interface PlatformMeResponse {
   store_bridge: boolean;
   store_scope_type?: PlatformStoreScopeType;
   store_ids?: number[];
+  // LINE アカウントと連携済みか。Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
+  line_linked: boolean;
 }
 
 // 平台自己プロフィール更新リクエスト
@@ -160,4 +162,31 @@ export interface PlatformStaffUpdateRequest {
   enabled?: boolean;
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;
+}
+
+// LINE ログインの公開設定。enabled=false のとき入口自体を描画しない。
+export interface LineConfigResponse {
+  // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
+  enabled: boolean;
+  channel_id?: string;
+}
+
+// LINE 認可コードの引き換え要求（ログインと連携で同形）。
+// redirect_uri は認可要求時と同一値でなければならない。
+export interface LineAuthorizationRequest {
+  code: string;
+  redirect_uri: string;
+  code_verifier: string;
+}
+
+// LINE ログインの応答。未登録の LINE ユーザーには token ではなく登録チケットが返る。
+export type LineLoginResponse =
+  | ({ registered: true } & LoginResponse)
+  | { registered: false; registration_ticket?: string; display_name?: string };
+
+// LINE 経由の会員登録要求（登録チケットと入力 2 項目。同意チェックは画面側の関門で送信しない）
+export interface LineRegisterRequest {
+  registration_ticket: string;
+  display_name: string;
+  email: string;
 }

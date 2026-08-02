@@ -1,5 +1,6 @@
 export * from './model/types';
 export { platformAuthApi } from './api/platform';
+export { platformLineApi } from './api/line';
 export { platformStaffApi, platformRoleApi } from './api/platform-staff';
 export { resolvePlatformDestination } from './model/platformRouting';
 export type { PlatformDestination } from './model/platformRouting';

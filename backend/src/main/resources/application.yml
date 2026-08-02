@@ -117,6 +117,12 @@ app:
   jwt:
     expiration: ${APP_JWT_EXPIRATION_MS:3600000}
     secret: ${APP_JWT_SECRET}
+  line:
+    # LINE プラットフォーム API の基底 URL。統合テストのスタブ差し替え用の可変点で、運用では既定のまま。
+    api-base-url: ${LINE_API_BASE_URL:https://api.line.me}
+    # チャネル資格情報はシステム設定（t_system_configs）が優先。両方が空なら LINE ログインは無効。
+    channel-id: ${LINE_CHANNEL_ID:}
+    channel-secret: ${LINE_CHANNEL_SECRET:}
   upload:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     bucket: ${MINIO_BUCKET:uploads}
