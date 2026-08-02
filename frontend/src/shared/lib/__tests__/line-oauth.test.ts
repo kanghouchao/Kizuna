@@ -1,6 +1,7 @@
 import {
   LINE_AUTHORIZE_ENDPOINT,
   consumeLineAuthorization,
+  isLinePlatformHost,
   lineCallbackRedirectUri,
   prepareLineAuthorization,
   startLineAuthorization,
@@ -83,6 +84,19 @@ describe('line-oauth', () => {
     });
   });
 
+  describe('isLinePlatformHost', () => {
+    it('店舗ドメイン（proxy が立てる role=store cookie）でのみ false', () => {
+      expect(isLinePlatformHost()).toBe(true);
+      document.cookie = 'x-mw-role=store';
+      try {
+        expect(isLinePlatformHost()).toBe(false);
+      } finally {
+        document.cookie = 'x-mw-role=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      }
+      expect(isLinePlatformHost()).toBe(true);
+    });
+  });
+
   describe('consumeLineAuthorization', () => {
     it('state が一致すれば code_verifier と意図を返し、保存値を破棄する', async () => {
       await prepareLineAuthorization('channel-1', 'link');
@@ -96,6 +110,13 @@ describe('line-oauth', () => {
       // 認可要求 1 回に対して引き換えは 1 回きり
       expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
       expect(consumeLineAuthorization(stored.state)).toBeNull();
+    });
+
+    it('発起主体つきで保存した場合は消費時に返す（連携意図の本人束縛）', async () => {
+      await prepareLineAuthorization('channel-1', 'link', 'me@kizuna.test');
+      const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) as string);
+
+      expect(consumeLineAuthorization(stored.state)?.subject).toBe('me@kizuna.test');
     });
 
     it('state が食い違う場合は null（保存値も破棄する）', async () => {

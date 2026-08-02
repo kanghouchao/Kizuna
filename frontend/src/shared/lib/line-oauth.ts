@@ -1,3 +1,5 @@
+import Cookies from 'js-cookie';
+
 /** LINE の認可エンドポイント（認可コードフロー + PKCE）。 */
 export const LINE_AUTHORIZE_ENDPOINT = 'https://access.line.me/oauth2/v2.1/authorize';
 
@@ -14,6 +16,16 @@ interface LineAuthorizationRecord {
   state: string;
   verifier: string;
   intent: LineOauthIntent;
+  /** 連携意図の発起主体（メールアドレス）。外部認可の往復中に別アカウントへ切り替わった場合の誤連携を拒むための束縛。 */
+  subject?: string;
+}
+
+/**
+ * この host で LINE 入口を出してよいか。コールバック URL はチャネルに登録した平台 origin だけが有効なため、
+ * 店舗ドメイン（公開専用、proxy が role=store の cookie を立てる）では入口ごと出さない。
+ */
+export function isLinePlatformHost(): boolean {
+  return Cookies.get('x-mw-role') !== 'store';
 }
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -43,7 +55,8 @@ export function lineCallbackRedirectUri(): string {
  */
 export async function prepareLineAuthorization(
   channelId: string,
-  intent: LineOauthIntent
+  intent: LineOauthIntent,
+  subject?: string
 ): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) {
@@ -55,7 +68,7 @@ export async function prepareLineAuthorization(
   const digest = await subtle.digest('SHA-256', new TextEncoder().encode(verifier));
   const challenge = toBase64Url(new Uint8Array(digest));
 
-  const record: LineAuthorizationRecord = { state, verifier, intent };
+  const record: LineAuthorizationRecord = { state, verifier, intent, subject };
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(record));
 
   const params = new URLSearchParams({
@@ -73,9 +86,10 @@ export async function prepareLineAuthorization(
 /** 認可 URL を組み立てて LINE へ遷移する。 */
 export async function startLineAuthorization(
   channelId: string,
-  intent: LineOauthIntent
+  intent: LineOauthIntent,
+  subject?: string
 ): Promise<void> {
-  const url = await prepareLineAuthorization(channelId, intent);
+  const url = await prepareLineAuthorization(channelId, intent, subject);
   window.location.assign(url);
 }
 
@@ -102,5 +116,10 @@ export function consumeLineAuthorization(state: string | null): LineAuthorizatio
   if (record.intent !== 'login' && record.intent !== 'link') return null;
   if (record.state !== state) return null;
 
-  return { state: record.state, verifier: record.verifier, intent: record.intent };
+  return {
+    state: record.state,
+    verifier: record.verifier,
+    intent: record.intent,
+    subject: typeof record.subject === 'string' ? record.subject : undefined,
+  };
 }

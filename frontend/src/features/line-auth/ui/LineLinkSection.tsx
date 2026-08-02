@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { platformAuthApi, platformLineApi } from '@/entities/user';
-import { startLineAuthorization } from '@/shared/lib';
+import { isLinePlatformHost, startLineAuthorization } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -21,13 +21,17 @@ import {
 export function LineLinkSection() {
   const [channelId, setChannelId] = useState('');
   const [linked, setLinked] = useState(false);
+  const [subject, setSubject] = useState('');
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
+    // 店舗ドメイン上ではコールバック URL がチャネル登録の平台 origin と食い違い認可が成立しないため、入口を出さない
+    if (!isLinePlatformHost()) return;
     const load = async () => {
       try {
         const [config, me] = await Promise.all([platformLineApi.config(), platformAuthApi.me()]);
         setLinked(me.line_linked);
+        setSubject(me.email ?? '');
         if (config.enabled && config.channel_id) {
           setChannelId(config.channel_id);
         }
@@ -43,7 +47,8 @@ export function LineLinkSection() {
   const start = async () => {
     setIsRedirecting(true);
     try {
-      await startLineAuthorization(channelId, 'link');
+      // 発起主体を認可記録に束縛し、外部認可の往復中に別アカウントへ切り替わった場合の誤連携を防ぐ
+      await startLineAuthorization(channelId, 'link', subject);
     } catch {
       // PKCE の生成には SubtleCrypto が要り、安全な接続でないと利用できない
       setIsRedirecting(false);

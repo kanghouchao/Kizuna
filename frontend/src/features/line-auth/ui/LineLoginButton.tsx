@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { platformLineApi } from '@/entities/user';
-import { startLineAuthorization } from '@/shared/lib';
+import { isLinePlatformHost, startLineAuthorization } from '@/shared/lib';
 
 /**
  * 統一ログイン画面の LINE ログイン入口。
@@ -15,6 +15,8 @@ export function LineLoginButton() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
+    // 店舗ドメイン上ではコールバック URL がチャネル登録の平台 origin と食い違い認可が成立しないため、入口を出さない
+    if (!isLinePlatformHost()) return;
     const load = async () => {
       try {
         const config = await platformLineApi.config();

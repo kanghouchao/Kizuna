@@ -99,7 +99,8 @@ public class MemberRegistrationService {
                 .storeIds(Set.of())
                 .lineUserId(lineUserId)
                 .build());
-    memberRepository.save(
+    // flush まで行い、会員行の制約違反も呼び出し元が登録チケットを消費する前に顕在化させる
+    memberRepository.saveAndFlush(
         Member.builder().memberCode(issueCode()).platformUserId(user.getId()).build());
     return user;
   }

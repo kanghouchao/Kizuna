@@ -126,7 +126,7 @@ class MemberRegistrationServiceTest {
     when(platformUserRepository.saveAndFlush(userCaptor.capture())).thenReturn(savedUser(10L));
     when(memberRepository.existsByMemberCode(anyString())).thenReturn(false);
     ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
-    when(memberRepository.save(memberCaptor.capture()))
+    when(memberRepository.saveAndFlush(memberCaptor.capture()))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
     service.registerWithLine("member@example.com", "会員 花子", "U-line-1");
