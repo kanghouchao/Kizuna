@@ -281,6 +281,30 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("列長(255)を超えるメールでの作成は email 由来の 400 で拒否され、副作用がないこと")
+  void tooLongEmailCreateIsRejected() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    // t_users.email は VARCHAR(255)。@Email は形式のみで長さを見ないため、@Size が無いと列長違反が
+    // 保存時の DataIntegrityViolationException 変換に吸われ「指定された店舗が存在しません」へ誤帰属する。
+    // ローカル部は @Email の上限 64 文字、ドメインはラベル 63 文字以内で組み、形式は合法のまま 255 字を超える。
+    String label = "a".repeat(63);
+    String email = "b".repeat(64) + "@" + label + "." + label + "." + label + ".kizuna.test";
+
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("details").has("email"))
+        .as("列長超過は email 由来の検証エラーとして返ること（店舗エラーへの誤帰属でないこと）")
+        .isTrue();
+    assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
   @DisplayName("存在しない能力束 id での作成は 400 で拒否")
   void unknownRoleRejected() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);

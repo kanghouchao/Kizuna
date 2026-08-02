@@ -167,6 +167,24 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("列長(255)を超えるメールでの新規登録受諾は 400 で拒否され、副作用がないこと")
+  void tooLongEmailRegistrationIsRejected() {
+    String castId = createCast(STORE_A, "長すぎメール受諾テスト");
+    String token = issue(castId, STORE_A);
+    // t_users.email は VARCHAR(255)。@Email は形式のみで長さを見ないため、@Size が無いと列長超過の生 DB エラー(500)になる。
+    // ローカル部は @Email の上限 64 文字、ドメインはラベル 63 文字以内で組み、形式は合法のまま 255 字を超える。
+    String label = "a".repeat(63);
+    String email = "b".repeat(64) + "@" + label + "." + label + "." + label + ".kizuna.test";
+    long before = platformUserRepository.count();
+
+    ResponseEntity<JsonNode> res = acceptNewUser(token, email, "password1234", "花子");
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.count()).isEqualTo(before);
+    assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
   @DisplayName("既存 CAST アカウントの受諾で所属店舗が追加され、档案に紐づくこと")
   void existingCastAcceptanceAddsStoreAndLinks() {
     PlatformUser castUser = ensureExistingCastUser();
