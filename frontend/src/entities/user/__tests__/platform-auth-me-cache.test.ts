@@ -165,11 +165,24 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     resolveGet({ data: me('古い名前') });
     await pending;
 
-    // in-memory の変異控えが遅延応答の書き戻しを弾く。キャッシュは空のまま、次はサーバへ
-    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+    // in-memory の変異控えが遅延応答の配信を弾く。次の me() はサーバへ取りに行く
     client.get.mockResolvedValue({ data: me('新しい名前') });
     await expect(platformAuthApi.me()).resolves.toEqual(me('新しい名前'));
     expect(client.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('書き込みの直後に logout と交錯していたら（token 消失）自分の書き込みを取り消す', async () => {
+    // me() は token を3回読む: 入口・書き込み前・書き込み後。3回目だけ logout 後の状況にする
+    let readCount = 0;
+    (mockedCookies.get as jest.Mock).mockImplementation(() => {
+      readCount += 1;
+      return readCount >= 3 ? undefined : 'token-a';
+    });
+
+    await platformAuthApi.me();
+
+    // 書き込み後の再確認が logout の破棄を打ち消したことを検知し、自分の記録を消す
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
   });
 
   it('保存値に token そのものを含めない（cookie 除去後の localStorage から JWT を回収させない）', async () => {

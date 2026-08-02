@@ -2,7 +2,6 @@ import Cookies from 'js-cookie';
 import {
   apiClient,
   clearMeCache,
-  hasNewerWrite,
   markMeCacheStale,
   readCachedMe,
   writeCachedMe,
@@ -53,11 +52,13 @@ export const platformAuthApi = {
     const startedAt = Date.now();
     const request = apiClient.get('/platform/me').then(response => {
       // 応答待ちの間に logout（キャッシュ破棄 + token 除去）が走った場合に書き戻すと、
-      // ログアウト後の共有端末に個人情報が残る。今も同じ token のときだけ書く。
-      // 加えて、待機中に同一 token の新しい書き込み（別タブの updateMe 等）が済んでいたら
-      // 上書きしない。cookie は全タブ共有のため token 照合では同 token の順序を守れない。
-      if (Cookies.get('token') === token && !hasNewerWrite(token, startedAt)) {
-        writeCachedMe(token, response.data);
+      // ログアウト後の共有端末に個人情報が残る。今も同じ token のときだけ書き、書き込みの
+      // 直後にもう一度確認して、書き込みと交錯した logout の破棄を打ち消さない。
+      // 別タブの変異（updateMe）との交錯は失効標（別 key）に対する読み取り側の裁定で
+      // 弾かれるため、ここでの事前検査は要らない。
+      if (Cookies.get('token') === token) {
+        writeCachedMe(token, response.data, startedAt);
+        if (Cookies.get('token') !== token) clearMeCache();
       }
       return response.data as PlatformMeResponse;
     });
