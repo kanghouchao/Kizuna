@@ -41,7 +41,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
   @Override
   @Transactional
-  // smtpSettings のような集約キャッシュも確実に無効化するため全消去（設定更新は低頻度の管理操作）
+  // どのキーが更新されても確実に無効化するため全消去（設定更新は低頻度の管理操作）
   @CacheEvict(value = "systemConfigValues", allEntries = true)
   public SystemConfigResponse updateConfig(SystemConfigUpdateRequest request) {
     SystemConfig config =
@@ -62,9 +62,13 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     return systemConfigRepository.findByConfigKey(configKey).map(SystemConfig::getConfigValue);
   }
 
+  /**
+   * SMTP 設定は都度読む（キャッシュしない）。キャッシュ値の既定シリアライザは JDK 直列化で、{@code Serializable} でない record
+   * を載せようとすると読み取り自体が例外になる（{@code getConfigValue} が動くのは Spring が Optional を解いて String
+   * を保存するため）。送信は低頻度で、都度読みなら管理画面での差し替えも次の送信から効く。
+   */
   @Override
   @Transactional(readOnly = true)
-  @Cacheable(value = "systemConfigValues", key = "'smtp:settings'")
   public SmtpSettings smtpSettings() {
     int port = 25;
     String rawPort = rawValue("smtp_port");
@@ -90,7 +94,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     return new LineChannelSettings(rawValue("line_channel_id"), rawValue("line_channel_secret"));
   }
 
-  /** キャッシュプロキシを経由しない内部読み取り（smtpSettings 自体がキャッシュされる）。 */
+  /** {@code getConfigValue} のキャッシュを経由しない内部読み取り（設定スナップショットは都度 DB から組み立てる）。 */
   private String rawValue(String configKey) {
     return systemConfigRepository
         .findByConfigKey(configKey)

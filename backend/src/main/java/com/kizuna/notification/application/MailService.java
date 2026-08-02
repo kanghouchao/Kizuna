@@ -21,14 +21,23 @@ public class MailService {
   private final ObjectProvider<JavaMailSender> mailSenderProvider;
 
   public void send(String to, String subject, String body) {
+    // 送信は呼び出し元の業務を止めない（例外を外へ出さない）。ただし「設定が読めない」と「送信に失敗した」は
+    // 別の故障であり、握り潰すと SMTP を設定してもメールが出ない静かな故障になるため、ログで区別する。
+    SmtpSettings smtp;
+    JavaMailSender sender;
     try {
-      SmtpSettings smtp = systemConfigService.smtpSettings();
-      JavaMailSender sender = resolveSender(smtp);
-      if (sender == null) {
-        // フォールバック: メール設定がなくてもシステムが動作するようログ出力のみ行う
-        log.info("[MAIL-FALLBACK] to={} subject={} body={} ", to, subject, body);
-        return;
-      }
+      smtp = systemConfigService.smtpSettings();
+      sender = resolveSender(smtp);
+    } catch (Exception e) {
+      log.error("SMTP 設定の読み取りに失敗したためメールを送信できません to={}", to, e);
+      return;
+    }
+    if (sender == null) {
+      // フォールバック: メール設定がなくてもシステムが動作するようログ出力のみ行う
+      log.info("[MAIL-FALLBACK] to={} subject={} body={} ", to, subject, body);
+      return;
+    }
+    try {
       SimpleMailMessage msg = new SimpleMailMessage();
       if (smtp.hasFrom()) {
         msg.setFrom(smtp.from());
@@ -38,7 +47,7 @@ public class MailService {
       msg.setText(body);
       sender.send(msg);
     } catch (Exception e) {
-      log.error("メール送信に失敗しました to={}: {}", to, e.getMessage());
+      log.error("メール送信に失敗しました to={}", to, e);
     }
   }
 
@@ -47,7 +56,7 @@ public class MailService {
     if (!smtp.configured()) {
       return mailSenderProvider.getIfAvailable();
     }
-    // ponytail: 設定は smtpSettings() 側でキャッシュ済み。送信クライアントの器の生成は軽量なので送信毎で足りる
+    // 送信クライアントの器の生成は軽量なので送信毎の組み立てで足りる（送信は低頻度）
     JavaMailSenderImpl impl = new JavaMailSenderImpl();
     impl.setHost(smtp.host());
     impl.setPort(smtp.port());
