@@ -115,6 +115,38 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(2);
   });
 
+  it('失効標は指紋ごとに保持され、別 token の変異で消えない（別タブ相当の新モジュールで検証）', async () => {
+    // token-b の GET が遅延している間に updateMe(B)、続いて一時 token-a の updateMe(A) が走る
+    (mockedCookies.get as jest.Mock).mockReturnValue('token-b');
+    let resolveGet!: (value: { data: unknown }) => void;
+    client.get.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveGet = resolve;
+        })
+    );
+    const pending = platformAuthApi.me();
+    client.put.mockResolvedValue({ data: me('B改名後') });
+    await platformAuthApi.updateMe({ display_name: 'B改名後' });
+    (mockedCookies.get as jest.Mock).mockReturnValue('token-a');
+    // A の失効標が B の失効標を消してはならない（単一枠だとここで B の標が失われる）
+    await platformAuthApi.updateMe({ display_name: 'A側' });
+    (mockedCookies.get as jest.Mock).mockReturnValue('token-b');
+    resolveGet({ data: me('B旧') });
+    await pending;
+
+    // 別タブ相当: in-memory の変異控えを持たない新しいモジュールから読む
+    let freshApi!: typeof platformAuthApi;
+    jest.isolateModules(() => {
+      freshApi = (require('../api/platform') as { platformAuthApi: typeof platformAuthApi })
+        .platformAuthApi;
+    });
+    client.get.mockResolvedValue({ data: me('B改名後') });
+    await expect(freshApi.me()).resolves.toEqual(me('B改名後'));
+    // 陳腐な B旧（遅延応答の書き込み）は配信されず、サーバから取り直している
+    expect(client.get).toHaveBeenCalledTimes(2);
+  });
+
   it('clearMeCache（ログアウト）後は取り直す', async () => {
     await platformAuthApi.me();
 

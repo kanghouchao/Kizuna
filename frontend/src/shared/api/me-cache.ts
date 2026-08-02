@@ -35,11 +35,15 @@ interface MeCacheRecord {
   asOf?: number;
 }
 
-interface MeStaleRecord {
-  fingerprint?: string;
-  /** 変異が完了した時刻（epoch millis）。これ以前の as-of を持つ応答は陳腐。 */
-  at?: number;
-}
+/**
+ * 指紋 → 変異完了時刻（epoch millis）。その時刻以前の as-of を持つ応答は陳腐。
+ * 単一枠だと別 token の変異（招待受諾の一時 token 等）が他の指紋の失効標を
+ * 上書きしてしまうため、指紋ごとに保持する。
+ */
+type MeStaleMap = Record<string, number>;
+
+/** 失効標の保持上限。トークンは寿命が短く、古い標から捨てても実害は無い。 */
+const MAX_STALE_ENTRIES = 8;
 
 // storage へ書けなかった変異の控え。同一タブ内では persistence が失敗しても
 // 「この時刻より古い応答は陳腐」という裁定を残す。
@@ -65,14 +69,24 @@ function removeKey(key: string): void {
   }
 }
 
+function readStaleMap(): MeStaleMap {
+  const raw = readJson<Record<string, unknown>>(ME_STALE_KEY);
+  if (!raw) return {};
+  // 値が数値の項目だけを失効標として扱う（壊れた保存値への防御）
+  const map: MeStaleMap = {};
+  for (const [fingerprint, at] of Object.entries(raw)) {
+    if (typeof at === 'number') map[fingerprint] = at;
+  }
+  return map;
+}
+
 /** token に対応する新鮮な応答を返す。失効標より古い as-of の記録は陳腐として扱わない。 */
 export function readCachedMe(token: string): unknown | null {
   const record = readJson<MeCacheRecord>(ME_CACHE_KEY);
   if (record?.fingerprint !== tokenFingerprint(token) || record.me === undefined) return null;
   const asOf = record.asOf ?? 0;
   if (lastMutationAt >= asOf) return null;
-  const stale = readJson<MeStaleRecord>(ME_STALE_KEY);
-  if (stale?.fingerprint === record.fingerprint && (stale.at ?? 0) >= asOf) return null;
+  if ((readStaleMap()[record.fingerprint] ?? 0) >= asOf) return null;
   return record.me;
 }
 
@@ -108,13 +122,13 @@ export function markMeCacheStale(token: string): void {
   lastMutationAt = Date.now();
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(
-      ME_STALE_KEY,
-      JSON.stringify({
-        fingerprint: tokenFingerprint(token),
-        at: Date.now(),
-      } satisfies MeStaleRecord)
-    );
+    const map = readStaleMap();
+    map[tokenFingerprint(token)] = Date.now();
+    // 上限を超えたら古い標から捨てる（無限に増やさない）
+    const entries = Object.entries(map)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, MAX_STALE_ENTRIES);
+    window.localStorage.setItem(ME_STALE_KEY, JSON.stringify(Object.fromEntries(entries)));
   } catch {
     // 失効標すら書けないなら、陳腐な応答が残らないよう本体を消して読みをサーバへ倒す
     removeKey(ME_CACHE_KEY);

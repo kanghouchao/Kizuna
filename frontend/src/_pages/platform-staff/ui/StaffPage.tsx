@@ -205,6 +205,7 @@ export default function StaffPage() {
         <StaffCreateModal
           stores={stores}
           storesLoading={storesLoading}
+          onReloadStores={() => void refetchStores()}
           onClose={() => setCreateOpen(false)}
           onCreated={list.reload}
         />
@@ -214,6 +215,7 @@ export default function StaffPage() {
           staff={editingStaff}
           stores={stores}
           storesLoading={storesLoading}
+          onReloadStores={() => void refetchStores()}
           onClose={() => setEditingStaff(null)}
           onUpdated={handleEditUpdated}
         />

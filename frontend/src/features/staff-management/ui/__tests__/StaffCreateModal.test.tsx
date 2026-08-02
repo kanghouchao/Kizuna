@@ -21,16 +21,18 @@ const stores = [{ id: 9, name: '店舗A' }];
 const renderModal = (props: Partial<React.ComponentProps<typeof StaffCreateModal>> = {}) => {
   const onClose = jest.fn();
   const onCreated = jest.fn();
+  const onReloadStores = jest.fn();
   render(
     <StaffCreateModal
       stores={stores}
       storesLoading={false}
+      onReloadStores={onReloadStores}
       onClose={onClose}
       onCreated={onCreated}
       {...props}
     />
   );
-  return { onClose, onCreated };
+  return { onClose, onCreated, onReloadStores };
 };
 
 const fillBasics = () => {
@@ -139,6 +141,18 @@ describe('スタッフ新規作成モーダル', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockedStaffApi.create).not.toHaveBeenCalled();
+  });
+
+  // 自動再試行が尽きても、モーダルを閉じ直さずに目録を取り直せる導線を残す
+  // （空の SPECIFIC_STORES はサーバが 400 で拒むため、空のままでは正しい提出ができない）
+  it('店舗目録が空のとき、個別店舗の欄に再読み込み導線を出す', async () => {
+    const { onReloadStores } = renderModal({ stores: [] });
+    await screen.findByLabelText('店長');
+
+    fireEvent.click(screen.getByLabelText('個別店舗'));
+    fireEvent.click(await screen.findByRole('button', { name: '再読み込み' }));
+
+    expect(onReloadStores).toHaveBeenCalledTimes(1);
   });
 
   // 閉じると unmount で isSubmitting が消え、開き直した複製から二重送信できてしまうため、

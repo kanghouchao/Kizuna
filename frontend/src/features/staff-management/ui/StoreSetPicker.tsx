@@ -1,12 +1,14 @@
 'use client';
 
 import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
-import { Label } from '@/shared/ui';
+import { Button, Label } from '@/shared/ui';
 
 interface StoreSetPickerProps {
   /** 店舗目録。取得は呼び出し元（一覧ページ）が 1 回だけ行い、ここでは取得しない。 */
   stores: PlatformStore[];
   isLoading: boolean;
+  /** 目録の取り直し。取得失敗が続いた場合の手動回復導線（空の SPECIFIC_STORES はサーバが 400 で拒む）。 */
+  onReload: () => void;
   storeScopeType: PlatformStoreScopeType;
   storeIds: number[];
   onChange: (next: { storeScopeType: PlatformStoreScopeType; storeIds: number[] }) => void;
@@ -16,6 +18,7 @@ interface StoreSetPickerProps {
 export function StoreSetPicker({
   stores,
   isLoading,
+  onReload,
   storeScopeType,
   storeIds,
   onChange,
@@ -53,6 +56,15 @@ export function StoreSetPicker({
           <div className="ml-6 space-y-1 rounded-md border p-3">
             {isLoading ? (
               <p className="text-sm text-muted-foreground">読み込み中...</p>
+            ) : stores.length === 0 ? (
+              // 空のままでは選べる店舗が無く、SPECIFIC_STORES の空提出はサーバが拒む。
+              // 自動再試行が尽きても閉じ直さずに回復できる手動導線を残す
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">店舗の選択肢がありません。</p>
+                <Button type="button" variant="outline" size="sm" onClick={onReload}>
+                  再読み込み
+                </Button>
+              </div>
             ) : (
               stores.map(store => {
                 const id = store.id;

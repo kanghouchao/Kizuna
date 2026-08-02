@@ -23,6 +23,8 @@ interface StaffEditModalProps {
   /** 店舗目録（一覧ページが取得済みのものを共有する）。 */
   stores: PlatformStore[];
   storesLoading: boolean;
+  /** 店舗目録の取り直し（取得失敗からの手動回復導線）。 */
+  onReloadStores: () => void;
   onClose: () => void;
   /** 更新成功後に呼ばれる（一覧の再取得用）。 */
   onUpdated: () => void;
@@ -36,6 +38,7 @@ export function StaffEditModal({
   staff,
   stores,
   storesLoading,
+  onReloadStores,
   onClose,
   onUpdated,
 }: StaffEditModalProps) {
@@ -123,6 +126,7 @@ export function StaffEditModal({
           <StoreSetPicker
             stores={stores}
             isLoading={storesLoading}
+            onReload={onReloadStores}
             storeScopeType={storeScopeType}
             storeIds={storeIds}
             onChange={next => {

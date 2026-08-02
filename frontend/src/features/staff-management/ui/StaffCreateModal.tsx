@@ -19,6 +19,8 @@ interface StaffCreateModalProps {
   /** 店舗目録（一覧ページが取得済みのものを共有する）。 */
   stores: PlatformStore[];
   storesLoading: boolean;
+  /** 店舗目録の取り直し（取得失敗からの手動回復導線）。 */
+  onReloadStores: () => void;
   onClose: () => void;
   /** 作成成功後に呼ばれる（一覧の再取得用）。 */
   onCreated: () => void;
@@ -37,6 +39,7 @@ interface StaffCreateFormValues {
 export function StaffCreateModal({
   stores,
   storesLoading,
+  onReloadStores,
   onClose,
   onCreated,
 }: StaffCreateModalProps) {
@@ -127,6 +130,7 @@ export function StaffCreateModal({
           <StoreSetPicker
             stores={stores}
             isLoading={storesLoading}
+            onReload={onReloadStores}
             storeScopeType={storeScopeType}
             storeIds={storeIds}
             onChange={next => {

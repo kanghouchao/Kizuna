@@ -37,6 +37,7 @@ const renderModal = (props: Partial<React.ComponentProps<typeof StaffEditModal>>
       staff={staff()}
       stores={[]}
       storesLoading={false}
+      onReloadStores={jest.fn()}
       onClose={onClose}
       onUpdated={onUpdated}
       {...props}
