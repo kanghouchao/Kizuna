@@ -14,6 +14,36 @@ export interface CustomerResponse {
   usage_areas?: string;
   ng_type?: string;
   ng_content?: string;
+  // 会員紐づけの有無。一覧・詳細・作成・更新の応答では常に真偽値が入る
+  member_linked?: boolean;
+  // 紐づけ済みの会員コード。未紐づけなら欠落
+  linked_member_code?: string;
+}
+
+/** 会員紐づけの関連状態。customer/domain/LinkStatus.java と対応。 */
+export type CustomerMemberLinkStatus = 'ACTIVE' | 'RELEASED';
+
+/** 会員紐づけリクエスト。customer/api/dto/CustomerMemberLinkRequest.java に対応。 */
+export interface CustomerMemberLinkRequest {
+  member_code: string;
+}
+
+/** 会員紐づけ応答。customer/api/dto/CustomerMemberLinkResponse.java に対応。 */
+export interface CustomerMemberLinkResponse {
+  linked: boolean;
+  member_code?: string;
+  linked_at?: string;
+}
+
+/** 会員紐づけ履歴 1 件。customer/api/dto/CustomerMemberLinkHistoryResponse.java に対応。 */
+export interface CustomerMemberLinkHistoryResponse {
+  id?: string;
+  member_code?: string;
+  status?: CustomerMemberLinkStatus;
+  linked_at?: string;
+  linked_by_name?: string;
+  released_at?: string;
+  released_by_name?: string;
 }
 
 // 顧客作成リクエスト

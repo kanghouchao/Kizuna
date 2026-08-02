@@ -24,4 +24,10 @@ public class CustomerResponse {
   private String usageAreas;
   private String ngType;
   private String ngContent;
+
+  /** 会員紐づけの有無。関連状態の投影であり、応答では必ず真偽値が入る（null にはならない）。 */
+  private Boolean memberLinked;
+
+  /** 紐づけ済みの会員コード。未紐づけなら null。 */
+  private String linkedMemberCode;
 }

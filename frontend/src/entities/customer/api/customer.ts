@@ -1,5 +1,11 @@
 import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
-import { CustomerCreateRequest, CustomerResponse, CustomerUpdateRequest } from '../model/types';
+import {
+  CustomerCreateRequest,
+  CustomerMemberLinkHistoryResponse,
+  CustomerMemberLinkResponse,
+  CustomerResponse,
+  CustomerUpdateRequest,
+} from '../model/types';
 
 // 一覧のクエリ: 共通ページネーション + rank / classification の絞り込み
 export type CustomerListParams = PaginationParams & {
@@ -31,5 +37,21 @@ export const customerApi = {
   /** 顧客を削除する */
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/store/customers/${id}`);
+  },
+  /** 会員コードで会員を顧客へ紐づける（既に別の会員と紐づいていれば付け替える） */
+  linkMember: async (id: string, memberCode: string): Promise<CustomerMemberLinkResponse> => {
+    const response = await apiClient.post(`/store/customers/${id}/member-link`, {
+      member_code: memberCode,
+    });
+    return response.data;
+  },
+  /** 会員の紐づけを解除する（履歴は残る） */
+  unlinkMember: async (id: string): Promise<void> => {
+    await apiClient.delete(`/store/customers/${id}/member-link`);
+  },
+  /** 会員紐づけの履歴を新しい順に取得する */
+  memberLinkHistory: async (id: string): Promise<CustomerMemberLinkHistoryResponse[]> => {
+    const response = await apiClient.get(`/store/customers/${id}/member-link/history`);
+    return response.data;
   },
 };

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
+import { MemberLinkSection } from './MemberLinkSection';
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { Order, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
@@ -102,6 +103,8 @@ export default function CustomerEditPage() {
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
       />
+
+      <MemberLinkSection customerId={id} />
 
       {/* 注文履歴 */}
       <TableCard>

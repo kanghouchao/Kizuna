@@ -8,6 +8,9 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface CustomerMapper {
 
+  // 会員紐づけは別集約の投影なので、application 層が写像後に補う。
+  @Mapping(target = "memberLinked", ignore = true)
+  @Mapping(target = "linkedMemberCode", ignore = true)
   CustomerResponse toResponse(Customer customer);
 
   @Mapping(target = "points", constant = "0")

@@ -8,6 +8,9 @@ jest.mock('@/entities/customer', () => ({
   customerApi: {
     list: jest.fn(),
     create: jest.fn(),
+    linkMember: jest.fn(),
+    unlinkMember: jest.fn(),
+    memberLinkHistory: jest.fn(),
   },
 }));
 
@@ -106,6 +109,23 @@ describe('顧客一覧ページ固有の要素', () => {
       'href',
       '/store/1/customers/create'
     );
+  });
+
+  it('会員列は紐づけ済み・未紐づけを状態バッジで出し分けること', async () => {
+    mockedCustomerApi.list.mockResolvedValue({
+      rows: [
+        { id: '1', name: '紐づけ太郎', member_linked: true, linked_member_code: '123456789012' },
+        { id: '2', name: '未紐づけ次郎', member_linked: false },
+      ],
+      page: 0,
+      pageCount: 1,
+      total: 2,
+    } as never);
+
+    render(<CustomersPage />);
+
+    expect(await screen.findByText('紐づけ済み')).toBeInTheDocument();
+    expect(screen.getByText('未紐づけ')).toBeInTheDocument();
   });
 
   it('検索の送信で入力中の絞り込み条件を 1 ページ目から取り直すこと', async () => {

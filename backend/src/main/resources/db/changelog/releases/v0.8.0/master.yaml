@@ -1,0 +1,6 @@
+# v0.8.0 = 会員と店舗顧客台帳の紐づけ（履歴付き）を追加する。
+# 構成は v0.1.0 〜 v0.4.0 と同じ platform / store / seed の 3 層のうち store のみ。
+databaseChangeLog:
+  - include:
+      file: store/01-customer-member-link.yaml
+      relativeToChangelogFile: true

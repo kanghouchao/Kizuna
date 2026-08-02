@@ -1,0 +1,155 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0800-001-customer-member-link-schema
+      author: kanghouchao
+      # 会員と店舗顧客台帳の紐づけ。1 行が 1 区間（ACTIVE → RELEASED）を表す追加型の台帳で、
+      # 解除・変更でも行は削除せず履歴として残す。member_code は会員行が消えた後も履歴を
+      # 読めるようにするためのスナップショット列（member_id は SET NULL で欠落しうる）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_customer_member_links
+            remarks: 会員と店舗顧客台帳の紐づけ履歴
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_customer_member_links
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: customer_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 紐づけ先の顧客
+              - column:
+                  name: member_id
+                  type: BIGINT
+                  remarks: 紐づけ元の会員。会員削除後も履歴を残すため SET NULL
+              - column:
+                  name: member_code
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 紐づけ時点の会員コード（会員削除後も履歴を読めるようにするスナップショット）
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 関連状態（ACTIVE=紐づけ済み/RELEASED=解除済み）
+              - column:
+                  name: linked_by
+                  type: BIGINT
+                  remarks: 紐づけの実行者
+              - column:
+                  name: linked_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 紐づけの日時
+              - column:
+                  name: released_by
+                  type: BIGINT
+                  remarks: 解除の実行者。ACTIVE では NULL
+              - column:
+                  name: released_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 解除の日時。ACTIVE では NULL
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_member_links_store
+            baseTableName: t_customer_member_links
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_member_links_customer
+            baseTableName: t_customer_member_links
+            baseColumnNames: customer_id
+            referencedTableName: t_customers
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_member_links_member
+            baseTableName: t_customer_member_links
+            baseColumnNames: member_id
+            referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_member_links_linked_by
+            baseTableName: t_customer_member_links
+            baseColumnNames: linked_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_member_links_released_by
+            baseTableName: t_customer_member_links
+            baseColumnNames: released_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - createIndex:
+            indexName: idx_t_customer_member_links_customer
+            tableName: t_customer_member_links
+            columns:
+              - column:
+                  name: customer_id
+      rollback:
+        - dropTable:
+            tableName: t_customer_member_links
+
+  - changeSet:
+      id: store-v0800-002-customer-member-link-active-indexes
+      author: kanghouchao
+      # 「紐づけ済み」は 1 顧客につき 1 件、同一店舗の同一会員につき 1 件までという業務不変量を
+      # DB 側の最終防波堤として固定する。解除済み（RELEASED）の行は履歴として何件でも積むため、
+      # 対象を status='ACTIVE' に絞った部分一意索引にする（Liquibase の addUniqueConstraint は
+      # 述語付き索引を表現できないため裸 SQL）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_customer_member_links_active_customer
+              ON t_customer_member_links (customer_id) WHERE status = 'ACTIVE'
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_customer_member_links_active_member
+              ON t_customer_member_links (store_id, member_id) WHERE status = 'ACTIVE'
+      rollback:
+        - sql:
+            sql: DROP INDEX uq_t_customer_member_links_active_customer
+        - sql:
+            sql: DROP INDEX uq_t_customer_member_links_active_member
