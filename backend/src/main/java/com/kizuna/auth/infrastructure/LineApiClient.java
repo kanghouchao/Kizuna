@@ -1,8 +1,11 @@
 package com.kizuna.auth.infrastructure;
 
 import com.kizuna.shared.config.AppProperties;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -26,12 +29,26 @@ public class LineApiClient {
   private static final String TOKEN_PATH = "/oauth2/v2.1/token";
   private static final String VERIFY_PATH = "/oauth2/v2.1/verify";
 
+  // 公開端点（/platform/line/login）から呼ばれるため、LINE 側の停滞がサーブレットスレッドを
+  // 無期限に占有しないよう接続・読み取りとも有限にする。超過は RestClientException として
+  // 既存の写像（LineAuthenticationException → 401）に落ちる。
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
   private static final JsonMapper JSON = JsonMapper.builder().build();
 
   private final RestClient restClient;
 
   public LineApiClient(AppProperties appProperties) {
-    this.restClient = RestClient.builder().baseUrl(appProperties.getLine().getApiBaseUrl()).build();
+    JdkClientHttpRequestFactory requestFactory =
+        new JdkClientHttpRequestFactory(
+            HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build());
+    requestFactory.setReadTimeout(READ_TIMEOUT);
+    this.restClient =
+        RestClient.builder()
+            .baseUrl(appProperties.getLine().getApiBaseUrl())
+            .requestFactory(requestFactory)
+            .build();
   }
 
   /**
