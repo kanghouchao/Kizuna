@@ -34,17 +34,23 @@ function actorCell(name?: string, at?: string) {
 /** 顧客編集ページの会員紐づけ区画。紐づけ・変更・解除と、その履歴を扱う。 */
 export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
   const [history, setHistory] = useState<CustomerMemberLinkHistoryResponse[]>([]);
+  const [historyStatus, setHistoryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [memberCode, setMemberCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmingUnlink, setIsConfirmingUnlink] = useState(false);
 
   // 現に有効な区間は高々 1 件で、履歴は新しい順に返る
   const activeLink = history.find(row => row.status === 'ACTIVE');
+  // 履歴が読めていない間は現況が不明。紐づけ POST は既存の有効区間を置き換えるため、
+  // 未読込のまま操作させると読み取り失敗が誤解除に化ける — 読めるまで操作を止める
+  const isHistoryReady = historyStatus === 'ready';
 
   const reload = useCallback(async () => {
     try {
       setHistory(await customerApi.memberLinkHistory(customerId));
+      setHistoryStatus('ready');
     } catch {
+      setHistoryStatus('error');
       toast.error('会員紐づけの履歴取得に失敗しました');
     }
   }, [customerId]);
@@ -90,7 +96,11 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
 
         <div className="space-y-4 px-6 py-4">
           <div className="flex items-center gap-2">
-            {activeLink ? (
+            {!isHistoryReady ? (
+              <span className="text-muted-foreground">
+                {historyStatus === 'loading' ? '読み込み中...' : '紐づけ状態を取得できませんでした'}
+              </span>
+            ) : activeLink ? (
               <>
                 <Badge
                   variant="outline"
@@ -115,14 +125,17 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
               placeholder="会員コード（数字12桁）"
               aria-label="会員コード"
             />
-            <Button onClick={() => void handleLink()} disabled={isSubmitting || !memberCode}>
+            <Button
+              onClick={() => void handleLink()}
+              disabled={isSubmitting || !memberCode || !isHistoryReady}
+            >
               紐づける
             </Button>
             {activeLink && (
               <Button
                 variant="outline"
                 onClick={() => setIsConfirmingUnlink(true)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !isHistoryReady}
               >
                 解除
               </Button>
@@ -130,7 +143,20 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
           </div>
         </div>
 
-        {history.length === 0 ? (
+        {!isHistoryReady ? (
+          <div className="p-8 text-center text-muted-foreground">
+            {historyStatus === 'loading' ? (
+              '読み込み中...'
+            ) : (
+              <div className="space-y-2">
+                <p>紐づけ履歴を取得できませんでした</p>
+                <Button variant="outline" onClick={() => void reload()}>
+                  再読み込み
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : history.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">紐づけ履歴がありません</div>
         ) : (
           <Table>

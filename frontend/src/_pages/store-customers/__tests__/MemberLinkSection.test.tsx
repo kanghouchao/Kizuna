@@ -101,6 +101,35 @@ describe('MemberLinkSection', () => {
     );
   });
 
+  it('履歴の取得に失敗している間は未紐づけ表示にせず、紐づけ操作を無効化すること', async () => {
+    mockedApi.memberLinkHistory.mockRejectedValueOnce(new Error('network'));
+
+    render(<MemberLinkSection customerId="c1" />);
+
+    expect(await screen.findByText('紐づけ状態を取得できませんでした')).toBeInTheDocument();
+    // 取得失敗を「未紐づけ」と断定表示しない（POST は既存の有効区間を置き換えるため）
+    expect(screen.queryByText('未紐づけ')).not.toBeInTheDocument();
+    expect(screen.queryByText('紐づけ履歴がありません')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('会員コード'), {
+      target: { value: '123456789012' },
+    });
+    expect(screen.getByRole('button', { name: '紐づける' })).toBeDisabled();
+  });
+
+  it('再読み込みで履歴が取れれば操作が解放されること', async () => {
+    mockedApi.memberLinkHistory.mockRejectedValueOnce(new Error('network'));
+
+    render(<MemberLinkSection customerId="c1" />);
+    fireEvent.click(await screen.findByRole('button', { name: '再読み込み' }));
+
+    expect(await screen.findByText('未紐づけ')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('会員コード'), {
+      target: { value: '123456789012' },
+    });
+    expect(screen.getByRole('button', { name: '紐づける' })).toBeEnabled();
+  });
+
   it('解除は確認ダイアログの実行でのみ API を呼ぶこと', async () => {
     mockedApi.memberLinkHistory.mockResolvedValue([activeRow]);
     mockedApi.unlinkMember.mockResolvedValue(undefined);

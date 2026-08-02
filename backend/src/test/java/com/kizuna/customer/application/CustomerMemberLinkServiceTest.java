@@ -198,8 +198,8 @@ class CustomerMemberLinkServiceTest {
   }
 
   @Test
-  @DisplayName("事前チェックをすり抜けた並行紐づけが一意索引に当たった場合も 409 になること")
-  void linkMapsUniqueViolationToConflict() {
+  @DisplayName("事前チェックをすり抜けた整合性違反はサービスで握りつぶさず、そのまま伝播すること")
+  void linkPropagatesDataIntegrityViolation() {
     givenActor();
     givenCustomerExists();
     givenMember(MEMBER_CODE, 7L);
@@ -208,11 +208,14 @@ class CustomerMemberLinkServiceTest {
         .thenReturn(Optional.empty());
     Mockito.when(customerMemberLinkRepository.existsByMemberIdAndStatus(7L, LinkStatus.ACTIVE))
         .thenReturn(false);
-    Mockito.when(customerMemberLinkRepository.saveAndFlush(any()))
-        .thenThrow(new DataIntegrityViolationException("uq_t_customer_member_links_active_member"));
+    DataIntegrityViolationException violation =
+        new DataIntegrityViolationException("uq_t_customer_member_links_active_member");
+    Mockito.when(customerMemberLinkRepository.saveAndFlush(any())).thenThrow(violation);
 
+    // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
+    // サービス層で 409 に変換すると FK 等の実装欠陥まで「やり直せば直る」に化けてしまう
     assertThatThrownBy(() -> service.link(CUSTOMER_ID, MEMBER_CODE, ACTOR_EMAIL))
-        .isInstanceOf(ConflictException.class);
+        .isSameAs(violation);
   }
 
   @Test

@@ -17,7 +17,6 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,15 +73,12 @@ public class CustomerMemberLinkService {
             .linkedBy(actorId)
             .linkedAt(OffsetDateTime.now())
             .build();
-    try {
-      // store_id は StoreScopeStampListener が @PrePersist で採番する
-      CustomerMemberLink saved = customerMemberLinkRepository.saveAndFlush(link);
-      return new CustomerMemberLinkResponse(true, saved.getMemberCode(), saved.getLinkedAt());
-    } catch (DataIntegrityViolationException ex) {
-      // 事前チェックをすり抜けた並行紐づけが部分一意索引に当たったレース。
-      // 事前チェックと同一の 409（ConflictException）へ変換する（saveAndFlush で違反をこの try 内に顕在化させる）。
-      throw new ConflictException("他の操作と競合しました。最新の状態を取得してやり直してください");
-    }
+    // store_id は StoreScopeStampListener が @PrePersist で採番する。
+    // 事前チェックをすり抜けた並行紐づけが部分一意索引に当たるレースはここで catch しない —
+    // CommonExceptionHandler が SQLSTATE で一意違反だけを 409 へ写像し、FK 等の他の整合性違反は
+    // 実装欠陥として 500 のまま大きく失敗させる分類を持っているため、そこへ委ねる。
+    CustomerMemberLink saved = customerMemberLinkRepository.saveAndFlush(link);
+    return new CustomerMemberLinkResponse(true, saved.getMemberCode(), saved.getLinkedAt());
   }
 
   @StoreScoped
