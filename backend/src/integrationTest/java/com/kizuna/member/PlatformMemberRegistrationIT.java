@@ -9,6 +9,7 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.util.Locale;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -116,6 +117,20 @@ class PlatformMemberRegistrationIT extends CrossStoreTestSupport {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("小文字化で列長(255)を超えるメールアドレスでの登録は 400 で拒否され、副作用がないこと")
+  void lowercaseExpandingEmailRegistrationIsRejected() {
+    // U+0130 は永続化前の小文字化で 2 文字に伸長する。原文 146 字は @Email を通過するが
+    // 小文字化後は 280 字となり VARCHAR(255) を超えるため、@Size は伸長を見込んだ上限で拒否する必要がある。
+    String label = "İ".repeat(10);
+    String email = "İ".repeat(64) + "@" + (label + ".").repeat(7) + "test";
+
+    ResponseEntity<JsonNode> res = register(email, PASSWORD, "伸長メール花子");
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findByEmail(email.toLowerCase(Locale.ROOT))).isEmpty();
   }
 
   @Test

@@ -60,10 +60,10 @@ export function MemberRegisterForm() {
           type="email"
           autoComplete="email"
           required
-          maxLength={255}
+          maxLength={127}
           className="auth-field__input"
           placeholder="example@mail.com"
-          {...register('email', { required: true, maxLength: 255 })}
+          {...register('email', { required: true, maxLength: 127 })}
         />
         <span className="auth-field__accent" />
       </div>

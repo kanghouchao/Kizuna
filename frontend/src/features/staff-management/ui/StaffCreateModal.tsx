@@ -92,7 +92,7 @@ export function StaffCreateModal({ open, onClose, onCreated }: StaffCreateModalP
             <Input
               id="staff-email"
               type="email"
-              maxLength={255}
+              maxLength={127}
               {...register('email', { required: true })}
             />
           </div>

@@ -185,6 +185,23 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("小文字化で列長(255)を超えるメールでの新規登録受諾は 400 で拒否され、副作用がないこと")
+  void lowercaseExpandingEmailRegistrationIsRejected() {
+    String castId = createCast(STORE_A, "伸長メール受諾テスト");
+    String token = issue(castId, STORE_A);
+    // U+0130 は永続化前の小文字化で 2 文字に伸長する。原文 146 字は @Email を通過するが
+    // 小文字化後は 280 字となり VARCHAR(255) を超えるため、@Size は伸長を見込んだ上限で拒否する必要がある。
+    String label = "İ".repeat(10);
+    String email = "İ".repeat(64) + "@" + (label + ".").repeat(7) + "test";
+    long before = platformUserRepository.count();
+
+    ResponseEntity<JsonNode> res = acceptNewUser(token, email, "password1234", "花子");
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.count()).isEqualTo(before);
+  }
+
+  @Test
   @DisplayName("既存 CAST アカウントの受諾で所属店舗が追加され、档案に紐づくこと")
   void existingCastAcceptanceAddsStoreAndLinks() {
     PlatformUser castUser = ensureExistingCastUser();

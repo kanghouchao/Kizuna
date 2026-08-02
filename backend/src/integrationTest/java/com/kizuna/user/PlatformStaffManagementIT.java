@@ -10,6 +10,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -302,6 +303,29 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         .as("列長超過は email 由来の検証エラーとして返ること（店舗エラーへの誤帰属でないこと）")
         .isTrue();
     assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("小文字化で列長(255)を超えるメールでの作成は email 由来の 400 で拒否され、副作用がないこと")
+  void lowercaseExpandingEmailCreateIsRejected() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    // U+0130 は永続化前の小文字化で 2 文字に伸長する。原文 146 字は @Email を通過するが
+    // 小文字化後は 280 字となり VARCHAR(255) を超えるため、@Size は伸長を見込んだ上限で拒否する必要がある。
+    String label = "İ".repeat(10);
+    String email = "İ".repeat(64) + "@" + (label + ".").repeat(7) + "test";
+
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("details").has("email"))
+        .as("伸長超過は email 由来の検証エラーとして返ること（店舗エラーへの誤帰属でないこと）")
+        .isTrue();
+    assertThat(platformUserRepository.findByEmail(email.toLowerCase(Locale.ROOT))).isEmpty();
   }
 
   @Test
