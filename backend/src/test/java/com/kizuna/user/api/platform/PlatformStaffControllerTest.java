@@ -27,7 +27,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** 呼出側の {@code ?sort=} 上書きで一意な副キー id が消えないことの単体テスト（offset ページングの安定性）。 */
+/** 一覧の要求パラメータ配線の単体テスト（{@code ?sort=} 上書き時の副キー id 補完と、{@code ?storeId=} の受け渡し）。 */
 @WebMvcTest(PlatformStaffController.class)
 @Import({PlatformStaffControllerTest.MethodSecurityConfig.class, StoreContext.class})
 class PlatformStaffControllerTest {
@@ -52,10 +52,36 @@ class PlatformStaffControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<PlatformStaffResponse> empty = new PageImpl<>(List.of());
-    when(platformStaffService.list(any(), pageableCaptor.capture())).thenReturn(empty);
+    when(platformStaffService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc.perform(get("/platform/staff?sort=displayName")).andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
+  }
+
+  @Test
+  @DisplayName("GET /platform/staff?storeId= が店舗絞り込みとしてサービスへ渡ること")
+  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  void listPassesStoreIdFilterToService() throws Exception {
+    ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
+    Page<PlatformStaffResponse> empty = new PageImpl<>(List.of());
+    when(platformStaffService.list(any(), storeIdCaptor.capture(), any())).thenReturn(empty);
+
+    mockMvc.perform(get("/platform/staff?storeId=7")).andExpect(status().isOk());
+
+    assertThat(storeIdCaptor.getValue()).isEqualTo(7L);
+  }
+
+  @Test
+  @DisplayName("storeId 未指定なら絞り込みなし（null）でサービスへ渡ること")
+  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  void listPassesNullStoreIdWhenParamAbsent() throws Exception {
+    ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
+    Page<PlatformStaffResponse> empty = new PageImpl<>(List.of());
+    when(platformStaffService.list(any(), storeIdCaptor.capture(), any())).thenReturn(empty);
+
+    mockMvc.perform(get("/platform/staff")).andExpect(status().isOk());
+
+    assertThat(storeIdCaptor.getValue()).isNull();
   }
 }

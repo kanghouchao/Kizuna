@@ -28,7 +28,6 @@ jest.mock('@/features/staff-management', () => {
         React.createElement('button', { onClick: onUpdated }, '競合再取得')
       ),
     roleSetLabel: () => 'ロールラベル',
-    storeSetLabel: () => '担当店舗ラベル',
   };
 });
 
@@ -62,23 +61,34 @@ const paginated = (
   ...override,
 });
 
+/**
+ * 店舗の絞り込みを選ぶ。Radix Select はポインタ系 API が jsdom に無いため、
+ * キーボードで開いて項目をクリックする（store-shifts のセレクト操作に倣う）。
+ */
+async function pickStore(optionName: string) {
+  fireEvent.keyDown(screen.getByRole('combobox', { name: '店舗で絞り込む' }), { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: optionName }));
+}
+
 describe('スタッフ一覧ページ', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
     mockedStaffApi.list.mockResolvedValue(
       paginated([
-        staff({ id: 1, display_name: '山田太郎', enabled: true }),
-        staff({ id: 2, display_name: '鈴木花子', enabled: false }),
+        staff({ id: 1, display_name: '山田太郎', email: 'yamada@example.com', enabled: true }),
+        staff({ id: 2, display_name: '鈴木花子', email: 'suzuki@example.com', enabled: false }),
       ])
     );
   });
 
-  it('氏名と在籍状態を一覧表示すること', async () => {
+  it('氏名・ログインメールアドレス・在籍状態を一覧表示すること', async () => {
     render(<StaffPage />);
 
     expect(await screen.findByText('山田太郎')).toBeInTheDocument();
     expect(screen.getByText('鈴木花子')).toBeInTheDocument();
+    expect(screen.getByText('yamada@example.com')).toBeInTheDocument();
+    expect(screen.getByText('suzuki@example.com')).toBeInTheDocument();
     expect(screen.getByText('有効')).toBeInTheDocument();
     expect(screen.getByText('停止中')).toBeInTheDocument();
   });
@@ -206,20 +216,75 @@ describe('スタッフ一覧ページ', () => {
         page: 0,
         size: 10,
         search: '山田',
+        storeId: undefined,
+      })
+    );
+  });
+
+  // 店舗の選択は検索ボタンを待たずに即時適用する（1 ページ目から取り直す）
+  it('店舗を選ぶと storeId 付きで即時に取り直すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    await pickStore('店舗A');
+
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: undefined,
+        storeId: 9,
+      })
+    );
+  });
+
+  // 「すべての店舗」は絞り込み無し（番兵値であって店舗 id ではない）
+  it('すべての店舗へ戻すと storeId なしで取り直すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+    await pickStore('店舗A');
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 9 }))
+    );
+
+    await pickStore('すべての店舗');
+
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: undefined,
+        storeId: undefined,
       })
     );
   });
 
   // クリアは入力を空にすると同時に取り直す。検索語 state をそのまま読むと更新前の値で
   // 取得してしまうため、適用済み検索語は ref で持っている（その回帰を固定する）。
-  it('クリアは検索語を空にして取り直すこと', async () => {
+  // 店舗の絞り込みはクリアの対象外（消したいのは検索語だけ）。
+  it('クリアは検索語だけを空にし、店舗の絞り込みは保つこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
     render(<StaffPage />);
     await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+    await pickStore('店舗A');
 
     fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
     fireEvent.click(screen.getByRole('button', { name: '検索' }));
     await waitFor(() =>
-      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({ page: 0, size: 10, search: '山田' })
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: '山田',
+        storeId: 9,
+      })
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'クリア' }));
@@ -229,9 +294,66 @@ describe('スタッフ一覧ページ', () => {
         page: 0,
         size: 10,
         search: undefined,
+        storeId: 9,
       })
     );
     expect(screen.getByLabelText('スタッフを検索')).toHaveValue('');
+  });
+
+  // 絞り込みで 0 件のときに「登録されていません」と言うと、他店舗に居るスタッフの存在を否定してしまう
+  it('店舗で絞り込んで 0 件のときは「該当なし」の文言を出すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    mockedStaffApi.list.mockResolvedValue(paginated([]));
+    await pickStore('店舗A');
+
+    expect(await screen.findByText('該当するスタッフが見つかりません')).toBeInTheDocument();
+  });
+
+  // 選択中の店舗が取り直した目録から消える（他管理者の削除）と、トリガー表示が空白のまま
+  // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す。
+  // 背景のリセットは適用済みの検索語を保ち、入力欄の未提出の下書きを巻き込まない。
+  it('取り直した目録から選択中の店舗が消えたら、適用済み検索語を保ったまま、すべての店舗へ戻して取り直すこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([
+      { id: 9, name: '店舗A' },
+      { id: 10, name: '店舗B' },
+    ]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+    await pickStore('店舗A');
+    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: '山田', storeId: 9 })
+      )
+    );
+
+    // 未提出の下書きへ書き換えた状態で、モーダルを開くと目録を取り直す既存挙動を使い、
+    // 店舗A が消えた目録を届ける
+    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '下書き' } });
+    mockedAuthApi.stores.mockResolvedValue([{ id: 10, name: '店舗B' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        search: '山田',
+        storeId: undefined,
+      })
+    );
+    expect(screen.getByRole('combobox', { name: '店舗で絞り込む' })).toHaveTextContent(
+      'すべての店舗'
+    );
+    expect(screen.getByLabelText('スタッフを検索')).toHaveValue('下書き');
   });
 
   it('ページ番号のクリックで該当ページを取得すること', async () => {
@@ -251,6 +373,7 @@ describe('スタッフ一覧ページ', () => {
         page: 1,
         size: 10,
         search: undefined,
+        storeId: undefined,
       })
     );
   });

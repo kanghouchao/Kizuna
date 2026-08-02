@@ -10,6 +10,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -446,6 +447,53 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     assertThat(none.getBody().path("total_elements").asLong()).isZero();
   }
 
+  // 店舗絞り込みは「担当範囲がその店舗を覆う」行だけを残す。ALL_STORES は個別 id を持たないまま全店舗を覆うため、
+  // 店舗集合の member of だけでは拾えない側の代表として必ず含まれること、他店舗専任が消えること、検索語と AND で
+  // 重なることを 1 件ずつ id で断言する。
+  @Test
+  @DisplayName("スタッフ一覧は storeId で担当範囲に該当する行だけへ絞り込めること")
+  void staffListFiltersByStoreId() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    String marker = "staff-it-storefilter-" + UUID.randomUUID();
+    long onlyStoreA =
+        createStaffWithDisplayName(
+            marker + "-a", "staff-it-sf-a-", StoreScopeType.SPECIFIC_STORES, Set.of(storeAId));
+    long onlyStoreB =
+        createStaffWithDisplayName(
+            marker + "-b", "staff-it-sf-b-", StoreScopeType.SPECIFIC_STORES, Set.of(storeBId));
+    // 表示名の接尾辞は互いに部分一致しないこと（"-all" は "-a" を含むため検索語 AND の断言が壊れる）
+    long allStores =
+        createStaffWithDisplayName(
+            marker + "-zen", "staff-it-sf-zen-", StoreScopeType.ALL_STORES, Set.of());
+
+    assertThat(staffIds(hq, "?search=" + marker + "&size=100"))
+        .as("前提: 絞り込みなしでは 3 件とも見えること")
+        .containsExactlyInAnyOrder(onlyStoreA, onlyStoreB, allStores);
+    assertThat(staffIds(hq, "?search=" + marker + "&storeId=" + storeAId + "&size=100"))
+        .as("店舗A 専任と全店舗担当だけが残ること")
+        .containsExactlyInAnyOrder(onlyStoreA, allStores);
+    assertThat(staffIds(hq, "?search=" + marker + "&storeId=" + storeBId + "&size=100"))
+        .as("店舗B 側でも同じ規則が成り立つこと")
+        .containsExactlyInAnyOrder(onlyStoreB, allStores);
+    assertThat(staffIds(hq, "?search=" + marker + "-a&storeId=" + storeAId + "&size=100"))
+        .as("検索語と AND で重なること")
+        .containsExactly(onlyStoreA);
+  }
+
+  /** 一覧を取得し、content の id を列挙する。 */
+  private Set<Long> staffIds(String token, String query) {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/staff" + query,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(token)),
+            JsonNode.class);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    Set<Long> ids = new HashSet<>();
+    res.getBody().path("content").forEach(node -> ids.add(node.path("id").asLong()));
+    return ids;
+  }
+
   // 呼出側が ?sort= で既定値（表示名 + id）を上書きしても、id が副キーとして補われることで
   // 表示名が重複する行の間でもページ境界を跨いだ取りこぼし・重複が起きないこと。
   @Test
@@ -453,8 +501,12 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   void staffListPagesWithoutGapsOrDuplicatesWhenSortIsOverridden() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String duplicateName = "staff-it-duplicate-displayname-" + UUID.randomUUID();
-    long dupId1 = createStaffWithDisplayName(duplicateName, "staff-it-dup1-");
-    long dupId2 = createStaffWithDisplayName(duplicateName, "staff-it-dup2-");
+    long dupId1 =
+        createStaffWithDisplayName(
+            duplicateName, "staff-it-dup1-", StoreScopeType.ALL_STORES, Set.of());
+    long dupId2 =
+        createStaffWithDisplayName(
+            duplicateName, "staff-it-dup2-", StoreScopeType.ALL_STORES, Set.of());
 
     ResponseEntity<JsonNode> page0 =
         rest.exchange(
@@ -478,8 +530,9 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         .isEqualTo(Set.of(dupId1, dupId2));
   }
 
-  /** 表示名を指定してスタッフを作成し（重複表示名でのページング検証用）、id を返す。 */
-  private long createStaffWithDisplayName(String displayName, String emailPrefix) {
+  /** 表示名と担当店舗集合を指定してスタッフを作成し、id を返す（ページング・店舗絞り込みの検証用）。 */
+  private long createStaffWithDisplayName(
+      String displayName, String emailPrefix, StoreScopeType scopeType, Set<Long> storeIds) {
     return platformUserRepository
         .save(
             PlatformUser.builder()
@@ -489,8 +542,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 .enabled(true)
                 .userType(UserType.STAFF)
                 .roleIds(roleIdsOf("店長"))
-                .storeScopeType(StoreScopeType.ALL_STORES)
-                .storeIds(Set.of())
+                .storeScopeType(scopeType)
+                .storeIds(storeIds)
                 .build())
         .getId();
   }

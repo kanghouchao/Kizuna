@@ -8,8 +8,8 @@ const EMPTY_PAGE: PageResult<never> = { rows: [], page: 0, pageCount: 0, total: 
 
 interface ListPageResult<T, C> extends PageResult<T> {
   isLoading: boolean;
-  /** 検索条件を適用して 1 ページ目から取り直す */
-  search: (criteria: C) => Promise<void>;
+  /** 検索条件を適用して 1 ページ目から取り直す（関数形は適用済み条件からの差分更新） */
+  search: (criteria: C | ((prev: C) => C)) => Promise<void>;
   onPageChange: (page: number) => Promise<void>;
   reload: () => Promise<void>;
 }
@@ -71,10 +71,15 @@ export function useListPage<T, C>(
     };
   }, [load]);
 
-  // 検索条件を適用して 1 ページ目から取り直す
+  // 検索条件を適用して 1 ページ目から取り直す。関数形は setState と同様、適用済み条件を基に
+  // した差分更新。呼び出し側の入力 state（未提出の下書き）を読んではいけない背景処理が、
+  // 条件の一部だけを差し替えるための形。
   const search = useCallback(
-    (criteria: C) => {
-      criteriaRef.current = criteria;
+    (criteria: C | ((prev: C) => C)) => {
+      criteriaRef.current =
+        typeof criteria === 'function'
+          ? (criteria as (prev: C) => C)(criteriaRef.current)
+          : criteria;
       return load(0);
     },
     [load]

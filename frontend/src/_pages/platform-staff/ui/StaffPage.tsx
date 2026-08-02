@@ -8,18 +8,18 @@ import {
   platformAuthApi,
   platformStaffApi,
 } from '@/entities/user';
-import {
-  StaffCreateModal,
-  StaffEditModal,
-  roleSetLabel,
-  storeSetLabel,
-} from '@/features/staff-management';
+import { StaffCreateModal, StaffEditModal, roleSetLabel } from '@/features/staff-management';
 import { useListPage, useManagedList } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
   Button,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -31,22 +31,34 @@ import {
 /** 一覧 1 ページあたりの件数 */
 const PAGE_SIZE = 10;
 
+/** 店舗で絞り込まないことを表す番兵値（Radix Select は空文字を値に採れない。命名は既存の SELECT_NONE に倣う）。 */
+const ALL_STORES = '__all__';
+
+/** 一覧の絞り込み条件。検索語と店舗のどちらを変えても 1 ページ目から取り直す。 */
+interface StaffCriteria {
+  search: string;
+  storeId?: number;
+}
+
 /** スタッフ一覧ページ。一覧内モーダルで新規作成・編集を行う。 */
 export default function StaffPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [storeFilter, setStoreFilter] = useState(ALL_STORES);
+  const storeId = storeFilter === ALL_STORES ? undefined : Number(storeFilter);
 
-  const list = useListPage<PlatformStaffResponse, string>(
-    (page, search) =>
+  const list = useListPage<PlatformStaffResponse, StaffCriteria>(
+    (page, criteria) =>
       platformStaffApi.list({
         page,
         size: PAGE_SIZE,
-        search: search || undefined,
+        search: criteria.search || undefined,
+        storeId: criteria.storeId,
       }),
     'スタッフ一覧の取得に失敗しました',
-    ''
+    { search: '' }
   );
   const staff = list.rows;
-  // 店舗目録はページで 1 回だけ取得し、一覧の担当店舗ラベルとモーダル（担当店舗の選択・要約）で共有する
+  // 店舗目録はページで 1 回だけ取得し、検索欄の絞り込みとモーダル（担当店舗の選択・要約）で共有する
   const {
     items: stores,
     isLoading: storesLoading,
@@ -87,6 +99,17 @@ export default function StaffPage() {
     }
   }, [modalOpen, storesLoading, stores.length, refetchStores]);
 
+  // 取り直した目録から選択中の店舗が消えたら（他管理者の削除）、トリガー表示が空白のまま
+  // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す。
+  // 取得失敗は既存目録を保つ（useManagedList）ので、失敗でここが誤発火することはない。
+  // 背景処理のため入力欄の下書き（searchTerm）は読まず、適用済み条件から店舗だけを外す。
+  useEffect(() => {
+    if (storeFilter === ALL_STORES || storesLoading) return;
+    if (stores.some(store => String(store.id) === storeFilter)) return;
+    setStoreFilter(ALL_STORES);
+    void list.search(prev => ({ ...prev, storeId: undefined }));
+  }, [stores, storesLoading, storeFilter, list]);
+
   /**
    * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
    *
@@ -119,7 +142,7 @@ export default function StaffPage() {
           </Button>
         }
         search={{
-          onSearch: () => void list.search(searchTerm),
+          onSearch: () => void list.search({ search: searchTerm, storeId }),
           content: (
             <>
               <div className="w-full md:max-w-xs">
@@ -135,6 +158,31 @@ export default function StaffPage() {
                   placeholder="氏名またはメールアドレスで検索..."
                 />
               </div>
+              {/* 店舗の選択は検索ボタンを待たずに即時適用する（選び直すたびに一覧が変わる方が自然なため） */}
+              <Select
+                value={storeFilter}
+                onValueChange={value => {
+                  setStoreFilter(value);
+                  void list.search({
+                    search: searchTerm,
+                    storeId: value === ALL_STORES ? undefined : Number(value),
+                  });
+                }}
+              >
+                <SelectTrigger aria-label="店舗で絞り込む" className="w-full md:w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_STORES}>すべての店舗</SelectItem>
+                  {stores.map(store =>
+                    store.id === undefined ? null : (
+                      <SelectItem key={store.id} value={String(store.id)}>
+                        {store.name ?? String(store.id)}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
               <Button type="submit">検索</Button>
               {searchTerm && (
                 <Button
@@ -142,7 +190,7 @@ export default function StaffPage() {
                   variant="outline"
                   onClick={() => {
                     setSearchTerm('');
-                    void list.search('');
+                    void list.search({ search: '', storeId });
                   }}
                 >
                   クリア
@@ -153,16 +201,19 @@ export default function StaffPage() {
         }}
         state={list}
         emptyMessage={
-          searchTerm ? '該当するスタッフが見つかりません' : 'スタッフが登録されていません'
+          // 店舗の絞り込み中も「登録なし」ではなく「該当なし」（他店舗にはスタッフが居る可能性がある）
+          searchTerm || storeId !== undefined
+            ? '該当するスタッフが見つかりません'
+            : 'スタッフが登録されていません'
         }
       >
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>氏名</TableHead>
+              <TableHead>メールアドレス</TableHead>
               <TableHead>ロール</TableHead>
               <TableHead>状態</TableHead>
-              <TableHead>担当店舗</TableHead>
               <TableHead className="text-right">アクション</TableHead>
             </TableRow>
           </TableHeader>
@@ -170,6 +221,7 @@ export default function StaffPage() {
             {staff.map(member => (
               <TableRow key={member.id}>
                 <TableCell className="font-medium text-foreground">{member.display_name}</TableCell>
+                <TableCell className="text-muted-foreground">{member.email}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {roleSetLabel(member.roles)}
                 </TableCell>
@@ -189,9 +241,6 @@ export default function StaffPage() {
                       停止中
                     </Badge>
                   )}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {storeSetLabel(member.store_scope_type, member.store_ids, stores)}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button

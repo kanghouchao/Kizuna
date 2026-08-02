@@ -22,7 +22,19 @@ describe('platformStaffApi', () => {
 
     expect(res).toEqual({ rows: [{ id: 1 }], page: 1, pageCount: 3, total: 21 });
     expect(apiClient.get).toHaveBeenCalledWith('/platform/staff', {
-      params: { page: 1, size: 10, search: '山田' },
+      params: { page: 1, size: 10, search: '山田', storeId: undefined },
+    });
+  });
+  // 店舗絞り込みはバックエンドの @RequestParam 名に合わせて storeId（クエリはキャメルのまま）
+  it('list は storeId をそのままの名前でクエリへ載せる', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValueOnce({
+      data: { content: [], total_pages: 0, total_elements: 0, size: 10, number: 0 },
+    });
+
+    await platformStaffApi.list({ page: 0, size: 10, storeId: 9 });
+
+    expect(apiClient.get).toHaveBeenCalledWith('/platform/staff', {
+      params: { page: 0, size: 10, search: undefined, storeId: 9 },
     });
   });
   it('get は /platform/staff/{id} を GET する', async () => {
