@@ -40,7 +40,11 @@ function writeCachedMe(token: string, me: PlatformMeResponse): void {
 /** ログアウト時に呼ぶ。放置しても token 不一致で読まれないが、他者の目に残さない。 */
 export function clearMeCache(): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(ME_CACHE_KEY);
+  try {
+    window.localStorage.removeItem(ME_CACHE_KEY);
+  } catch {
+    // storage が塞がれていても、後続のログアウト処理（cookie 破棄・遷移）を止めない
+  }
 }
 
 // 同一 token での同時呼び出し（StrictMode の二重 effect・ログイン直後の連続呼び出し）を 1 本の
@@ -80,9 +84,11 @@ export const platformAuthApi = {
     }
   },
   updateMe: async (data: PlatformMeUpdateRequest): Promise<PlatformMeResponse> => {
-    const response = await apiClient.put('/platform/me', data);
+    // token は発送前に捕まえ、応答後も同じ token のときだけ書く。応答後に読み直すと、
+    // 待機中に別タブで再ログインした場合、新しい token の鍵へ旧利用者の応答を書き込んでしまう。
     const token = Cookies.get('token');
-    if (token) writeCachedMe(token, response.data);
+    const response = await apiClient.put('/platform/me', data);
+    if (token && Cookies.get('token') === token) writeCachedMe(token, response.data);
     return response.data;
   },
   stores: async (): Promise<PlatformStore[]> => {

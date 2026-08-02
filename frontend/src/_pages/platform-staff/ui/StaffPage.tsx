@@ -47,10 +47,18 @@ export default function StaffPage() {
   );
   const staff = list.rows;
   // 店舗目録はページで 1 回だけ取得し、一覧の担当店舗ラベルとモーダル（担当店舗の選択・要約）で共有する
-  const { items: stores, isLoading: storesLoading } = useManagedList<PlatformStore>(
-    () => platformAuthApi.stores(),
-    '店舗一覧の取得に失敗しました'
-  );
+  const {
+    items: stores,
+    isLoading: storesLoading,
+    refetch: refetchStores,
+  } = useManagedList<PlatformStore>(() => platformAuthApi.stores(), '店舗一覧の取得に失敗しました');
+
+  // 取得失敗後の回復経路。モーダルごとの再取得をページ 1 回に束ねたため、目録が空のまま
+  // モーダルを開くと個別店舗の選択肢が無いままになる。開く時点で空なら取り直す
+  // （目録が本当に 0 件の環境でも 1 リクエスト増えるだけで無害）。
+  const ensureStores = () => {
+    if (!storesLoading && stores.length === 0) void refetchStores();
+  };
 
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
@@ -85,7 +93,12 @@ export default function StaffPage() {
         title="スタッフ管理"
         description="ロール・担当店舗の付与と編集ができます。"
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button
+            onClick={() => {
+              ensureStores();
+              setCreateOpen(true);
+            }}
+          >
             <PlusIcon />
             スタッフを追加
           </Button>
@@ -170,7 +183,10 @@ export default function StaffPage() {
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    onClick={() => setEditingStaff(member)}
+                    onClick={() => {
+                      ensureStores();
+                      setEditingStaff(member);
+                    }}
                   >
                     編集
                   </Button>

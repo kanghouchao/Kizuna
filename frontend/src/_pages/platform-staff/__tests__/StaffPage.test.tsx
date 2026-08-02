@@ -110,6 +110,21 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
   });
 
+  // 店舗目録の取得をページ 1 回に束ねたため、初回取得の失敗はモーダルを開く時点で取り直す
+  // （回復経路が無いと個別店舗の選択肢が空のまま提出できてしまう）
+  it('店舗目録の取得に失敗していても、モーダルを開く時点で取り直すこと', async () => {
+    mockedAuthApi.stores.mockRejectedValueOnce(new Error('network'));
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
+  });
+
   // 409 の再取得は「最新の内容を確認してください」と言うための導線。対象が現在ページから
   // 外れても（本人の改名で検索から外れる・他の追加で次ページへずれる）モーダルは閉じず、
   // 版が古いまま再試行が 409 を繰り返さないよう id で最新値を取り直す。

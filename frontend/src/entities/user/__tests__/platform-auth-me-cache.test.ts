@@ -82,6 +82,21 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(1);
   });
 
+  it('updateMe の待機中に token が替わったら（別タブの再ログイン）応答をキャッシュしない', async () => {
+    client.put.mockImplementation(async () => {
+      // PUT の応答待ちの間に別タブでログインし直し、token が入れ替わった状況
+      (mockedCookies.get as jest.Mock).mockReturnValue('token-b');
+      return { data: me('旧利用者') };
+    });
+
+    await platformAuthApi.updateMe({ display_name: '旧利用者' });
+
+    // token-b の me はキャッシュに汚染されず、サーバから取り直す
+    client.get.mockResolvedValue({ data: me('新利用者') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('新利用者'));
+    expect(client.get).toHaveBeenCalledTimes(1);
+  });
+
   it('clearMeCache（ログアウト）後は取り直す', async () => {
     await platformAuthApi.me();
 
@@ -89,6 +104,16 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     await platformAuthApi.me();
 
     expect(client.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('clearMeCache は storage が塞がれていても投げない（logout の後続処理を止めない）', () => {
+    const removeSpy = jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    expect(() => clearMeCache()).not.toThrow();
+
+    removeSpy.mockRestore();
   });
 
   it('壊れた保存値は無視して取り直す', async () => {
