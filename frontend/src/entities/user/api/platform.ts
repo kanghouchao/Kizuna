@@ -15,13 +15,30 @@ import {
 // 応答でキャッシュを上書きする。権限の強制はサーバ側にあり、これは表示用の複製にすぎない。
 const ME_CACHE_KEY = 'platform-me-cache';
 
+// 鍵には token そのものではなく一方向の指紋を保存する。token を保存すると、cookie の除去だけで
+// 終わるセッション破棄経路（未対応 user_type のログイン中断・401 での強制退場など）の後も
+// 有効な JWT が localStorage から回収できてしまう。照合できれば十分で、復元できてはならない。
+// crypto.subtle は insecure context（http の開発環境）で使えないため、同期の非暗号ハッシュ
+// 2 本の連結で衝突面だけ確保する（衝突しても別 token のキャッシュを表示に使うだけで、権限の
+// 強制はサーバ側にある）。
+function tokenFingerprint(token: string): string {
+  let h1 = 5381 | 0;
+  let h2 = 52711 | 0;
+  for (let i = 0; i < token.length; i++) {
+    const code = token.charCodeAt(i);
+    h1 = (Math.imul(h1, 33) + code) | 0;
+    h2 = (Math.imul(h2, 31) + code) | 0;
+  }
+  return `${h1.toString(36)}.${h2.toString(36)}`;
+}
+
 function readCachedMe(token: string): PlatformMeResponse | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(ME_CACHE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { token?: string; me?: PlatformMeResponse };
-    return parsed.token === token && parsed.me ? parsed.me : null;
+    const parsed = JSON.parse(raw) as { fingerprint?: string; me?: PlatformMeResponse };
+    return parsed.fingerprint === tokenFingerprint(token) && parsed.me ? parsed.me : null;
   } catch {
     // 壊れた保存値は無いものとして扱う（次の取得成功時に上書きされる）
     return null;
@@ -31,9 +48,14 @@ function readCachedMe(token: string): PlatformMeResponse | null {
 function writeCachedMe(token: string, me: PlatformMeResponse): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(ME_CACHE_KEY, JSON.stringify({ token, me }));
+    window.localStorage.setItem(
+      ME_CACHE_KEY,
+      JSON.stringify({ fingerprint: tokenFingerprint(token), me })
+    );
   } catch {
-    // 保存できなくても機能は損なわれない（次回も取得するだけ）
+    // 書けない環境で古い値が残り続けると、成功した updateMe の後も次の me() が旧値を
+    // 返し続ける。既存の記録も best-effort で消し、次の読みはサーバへ倒す
+    clearMeCache();
   }
 }
 

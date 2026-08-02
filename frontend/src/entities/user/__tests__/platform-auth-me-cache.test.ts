@@ -119,6 +119,32 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
   });
 
+  it('保存値に token そのものを含めない（cookie 除去後の localStorage から JWT を回収させない）', async () => {
+    await platformAuthApi.me();
+
+    const stored = window.localStorage.getItem('platform-me-cache');
+    expect(stored).not.toBeNull();
+    expect(stored).not.toContain('token-a');
+  });
+
+  it('上書きの失敗時は既存の記録も消し、次の me() はサーバへ取りに行く', async () => {
+    await platformAuthApi.me();
+    expect(window.localStorage.getItem('platform-me-cache')).not.toBeNull();
+
+    const setSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    client.put.mockResolvedValue({ data: me('改名後') });
+    await platformAuthApi.updateMe({ display_name: '改名後' });
+    setSpy.mockRestore();
+
+    // 古い値が残って命中し続けてはならない。キャッシュは空になり、サーバから取り直す
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+    client.get.mockResolvedValue({ data: me('改名後') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('改名後'));
+    expect(client.get).toHaveBeenCalledTimes(2);
+  });
+
   it('clearMeCache は storage が塞がれていても投げない（logout の後続処理を止めない）', () => {
     const removeSpy = jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
       throw new Error('storage blocked');
