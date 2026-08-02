@@ -6,6 +6,7 @@ import {
   getPlatformStoreId,
   getStoreIdFromPath,
   isPlatformSession,
+  readTokenClaims,
   replaceStoreIdInPath,
   setPlatformStore,
 } from '@/shared/lib';
@@ -15,12 +16,13 @@ import { PlatformStore } from './types';
 /**
  * 店舗コンテキスト（現在店舗・授権店舗・切替・ログイン後着地の授権店舗解決）を一手に担う deep module。
  * 両コンソール layout に1つだけ搭載し、Header / StoreEntryPage が共有状態を消費する。
- * me()+stores() は provider で1回のみ呼ばれる（消費者ごとの重複取得を無くす）。
+ * 資格（storeBridge）は token claim から同期に読み、stores() だけを provider で1回呼ぶ
+ * （消費者ごとの重複取得を無くす）。
  */
 interface StoreContextValue {
   /** null = 読み込み中、[] = 到達資格のある店舗なし、非空 = 授権店舗一覧。 */
   stores: PlatformStore[] | null;
-  /** 店舗コンソール資格（/me の store_bridge）。null = 読み込み中。 */
+  /** 店舗コンソール資格（token claim の storeBridge）。null = 読み込み中。 */
   storeBridge: boolean | null;
   /** 表示に用いる現在店舗 id。pathname 由来を最優先し、無ければ前回選択 cookie。 */
   currentStoreId: string | undefined;
@@ -65,31 +67,23 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    // まず me()（GET /platform/me・isAuthenticated() のみで守られ常に到達可能）で店舗コンソール資格を確認する。
-    // store_bridge=false（SHARED/標識のみ/PLATFORM のみ）は stores() を呼ばず空一覧扱い。
-    // store_bridge=true のみ stores()（緩和後の GET /platform/stores/me）で店名付き一覧を取得する。
-    platformAuthApi.me().then(
-      async me => {
-        setStoreBridge(me.store_bridge);
-        if (!me.store_bridge) {
-          setStores([]);
-          return;
-        }
-        try {
-          setStores(await platformAuthApi.stores());
-        } catch (error) {
-          console.error('Failed to fetch stores', error);
-          setLoadFailed(true);
-        }
-      },
-      reason => {
-        // 取得失敗を空一覧・資格なしへ畳んではいけない。畳むと通信障害が「授権店舗ゼロ」
-        // （入口がセッションを破棄する）や「店舗コンソール資格なし」（入口が平台側へ送り、
-        // 守衛が店舗 cookie の利用者を入口へ弾き返す）に化ける。値は未確定のまま旗だけ立てる。
-        console.error('Failed to fetch me', reason);
-        setLoadFailed(true);
-      }
-    );
+    // 店舗コンソール資格は token claim（storeBridge）から同期に読む。値は現在の cookie の
+    // token から導出され、取り違えも失効管理も無い（token 無し・壊れは資格なし側に倒れ、
+    // その利用者は最初の API 呼び出しの 401 でログインへ誘導される）。
+    // storeBridge=false（SHARED/標識のみ/PLATFORM のみ）は stores() を呼ばず空一覧扱い。
+    // storeBridge=true のみ stores()（GET /platform/stores/me）で店名付き一覧を取得する。
+    const bridge = readTokenClaims()?.storeBridge === true;
+    setStoreBridge(bridge);
+    if (!bridge) {
+      setStores([]);
+      return;
+    }
+    platformAuthApi.stores().then(setStores, (reason: unknown) => {
+      // 取得失敗を空一覧へ畳んではいけない。畳むと通信障害が「授権店舗ゼロ」
+      // （入口がセッションを破棄する）に化ける。値は未確定のまま旗だけ立てる。
+      console.error('Failed to fetch stores', reason);
+      setLoadFailed(true);
+    });
   }, [loadAttempt]);
 
   const reload = () => {

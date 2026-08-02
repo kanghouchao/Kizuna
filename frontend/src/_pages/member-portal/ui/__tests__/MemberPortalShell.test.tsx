@@ -1,18 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemberPortalShell } from '../MemberPortalShell';
-import { platformAuthApi } from '@/entities/user';
-import { redirectToLogin } from '@/shared/lib';
-
-jest.mock('@/entities/user', () => ({
-  platformAuthApi: { me: jest.fn() },
-}));
+import { readTokenClaims, redirectToLogin } from '@/shared/lib';
 
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
   redirectToLogin: jest.fn(),
 }));
 
-const mockedMe = platformAuthApi.me as jest.Mock;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 const mockedRedirect = redirectToLogin as jest.Mock;
 
 describe('MemberPortalShell', () => {
@@ -20,21 +16,12 @@ describe('MemberPortalShell', () => {
     jest.clearAllMocks();
   });
 
-  it('本人確認が完了するまでローディング表示のみで、childrenを出さない', () => {
-    mockedMe.mockReturnValue(new Promise(() => {}));
-
-    render(
-      <MemberPortalShell>
-        <p>子要素</p>
-      </MemberPortalShell>
-    );
-
-    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
-    expect(screen.queryByText('子要素')).not.toBeInTheDocument();
-  });
-
-  it('user_type=MEMBER なら children を表示する', async () => {
-    mockedMe.mockResolvedValue({ user_type: 'MEMBER', display_name: '会員花子' });
+  it('userType=MEMBER なら children を表示する', async () => {
+    mockedReadClaims.mockReturnValue({
+      authorities: ['ROLE_MEMBER'],
+      userType: 'MEMBER',
+      storeBridge: false,
+    });
 
     render(
       <MemberPortalShell>
@@ -46,8 +33,12 @@ describe('MemberPortalShell', () => {
     expect(mockedRedirect).not.toHaveBeenCalled();
   });
 
-  it('user_type が MEMBER 以外ならログイン画面へ差し戻す', async () => {
-    mockedMe.mockResolvedValue({ user_type: 'CAST', display_name: 'キャスト太郎' });
+  it('userType が MEMBER 以外ならログイン画面へ差し戻す', async () => {
+    mockedReadClaims.mockReturnValue({
+      authorities: ['ROLE_CAST'],
+      userType: 'CAST',
+      storeBridge: false,
+    });
 
     render(
       <MemberPortalShell>
@@ -59,8 +50,8 @@ describe('MemberPortalShell', () => {
     expect(screen.queryByText('子要素')).not.toBeInTheDocument();
   });
 
-  it('本人確認 API が失敗したらログイン画面へ差し戻す', async () => {
-    mockedMe.mockRejectedValue(new Error('unauthorized'));
+  it('token が無い・壊れている（claims=null）ならログイン画面へ差し戻す', async () => {
+    mockedReadClaims.mockReturnValue(null);
 
     render(
       <MemberPortalShell>

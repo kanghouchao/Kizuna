@@ -1,24 +1,22 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { CastPortalShell } from '../CastPortalShell';
-import { platformAuthApi } from '@/entities/user';
-import { redirectToLogin } from '@/shared/lib';
+import { readTokenClaims, redirectToLogin } from '@/shared/lib';
 
 let mockPathname = '/cast/schedule';
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
 }));
 
-jest.mock('@/entities/user', () => ({
-  platformAuthApi: { me: jest.fn() },
-}));
-
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
   redirectToLogin: jest.fn(),
 }));
 
-const mockedMe = platformAuthApi.me as jest.Mock;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 const mockedRedirect = redirectToLogin as jest.Mock;
+
+const castClaims = { authorities: ['ROLE_CAST'], userType: 'CAST', storeBridge: false };
 
 describe('CastPortalShell', () => {
   beforeEach(() => {
@@ -26,21 +24,8 @@ describe('CastPortalShell', () => {
     mockPathname = '/cast/schedule';
   });
 
-  it('本人確認が完了するまでローディング表示のみで、タブバーもchildrenも出さない', () => {
-    mockedMe.mockReturnValue(new Promise(() => {}));
-
-    render(
-      <CastPortalShell>
-        <p>子要素</p>
-      </CastPortalShell>
-    );
-
-    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
-    expect(screen.queryByText('子要素')).not.toBeInTheDocument();
-  });
-
-  it('user_type=CAST なら children と3タブを表示する', async () => {
-    mockedMe.mockResolvedValue({ user_type: 'CAST', display_name: '田中一郎' });
+  it('userType=CAST なら children と3タブを表示する', async () => {
+    mockedReadClaims.mockReturnValue(castClaims);
 
     render(
       <CastPortalShell>
@@ -66,7 +51,7 @@ describe('CastPortalShell', () => {
 
   it('現在のパスに一致するタブを aria-current=page でハイライトする', async () => {
     mockPathname = '/cast/account';
-    mockedMe.mockResolvedValue({ user_type: 'CAST', display_name: '田中一郎' });
+    mockedReadClaims.mockReturnValue(castClaims);
 
     render(
       <CastPortalShell>
@@ -83,8 +68,12 @@ describe('CastPortalShell', () => {
     expect(screen.getByRole('link', { name: /スケジュール/ })).not.toHaveAttribute('aria-current');
   });
 
-  it('user_type が CAST 以外ならログイン画面へ差し戻す', async () => {
-    mockedMe.mockResolvedValue({ user_type: 'MEMBER', display_name: '会員太郎' });
+  it('userType が CAST 以外ならログイン画面へ差し戻す', async () => {
+    mockedReadClaims.mockReturnValue({
+      authorities: ['ROLE_MEMBER'],
+      userType: 'MEMBER',
+      storeBridge: false,
+    });
 
     render(
       <CastPortalShell>
@@ -96,8 +85,8 @@ describe('CastPortalShell', () => {
     expect(screen.queryByText('子要素')).not.toBeInTheDocument();
   });
 
-  it('本人確認 API が失敗したらログイン画面へ差し戻す', async () => {
-    mockedMe.mockRejectedValue(new Error('unauthorized'));
+  it('token が無い・壊れている（claims=null）ならログイン画面へ差し戻す', async () => {
+    mockedReadClaims.mockReturnValue(null);
 
     render(
       <CastPortalShell>

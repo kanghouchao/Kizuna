@@ -1,6 +1,5 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import { clearMeCache } from './me-cache';
 import {
   clearPlatformSession,
   getPlatformConsole,
@@ -23,9 +22,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   config => {
     const token = Cookies.get('token');
-    // 呼び出し元が明示的に束縛した Authorization（me キャッシュの鍵と応答の対応を守る）は
-    // 上書きしない。無いときだけ cookie から補う
-    if (token && !config.headers.Authorization) {
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     const csrfToken = Cookies.get('XSRF-TOKEN') || Cookies.get('X-CSRF-TOKEN');
@@ -83,19 +80,7 @@ apiClient.interceptors.response.use(
       if ((error.config as any)?.skipAuthRedirect) {
         return Promise.reject(error);
       }
-      // 要求が明示的に束縛した token（expectedToken）と異なる「非空の」token が現在の
-      // cookie にあるなら、既に別セッションへ移行済み。陳腐な要求の 401 で新しいセッションを
-      // 壊さない。cookie が無い（失効・除去済み）場合は移行の証拠ではないので、通常どおり
-      // 後始末（キャッシュ破棄・ログインへの誘導）を行う
-      const expectedToken = (error.config as any)?.expectedToken;
-      const currentToken = Cookies.get('token');
-      if (expectedToken && currentToken && currentToken !== expectedToken) {
-        return Promise.reject(error);
-      }
       Cookies.remove('token');
-      // 失効・停止で終わるセッションは logout を経ないため、ここでも me キャッシュを破棄して
-      // 共有端末に個人情報（氏名・権限・担当店舗）を残さない
-      clearMeCache();
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         redirectToLogin();
       }
@@ -114,7 +99,6 @@ apiClient.interceptors.response.use(
         platformConsole !== 'member'
       ) {
         Cookies.remove('token');
-        clearMeCache();
         clearPlatformSession();
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           redirectToLogin();

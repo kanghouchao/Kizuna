@@ -10,10 +10,7 @@ jest.mock('js-cookie');
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-jest.mock('../api/platform', () => ({
-  platformAuthApi: { logout: jest.fn() },
-  clearMeCache: jest.fn(),
-}));
+jest.mock('../api/platform', () => ({ platformAuthApi: { logout: jest.fn() } }));
 
 const mockClearPlatformSession = jest.fn();
 jest.mock('@/shared/lib', () => ({

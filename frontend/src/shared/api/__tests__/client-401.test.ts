@@ -53,53 +53,11 @@ describe('apiClient 401/403 interceptor', () => {
 
   it('clears token and redirects on 401', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
-    // 失効・停止で終わるセッションは logout を経ないため、me キャッシュもここで破棄される
-    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
 
     await withRejectingAdapter(401, () => apiClient.get('/platform/me'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
-    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
     // assert that our navigation helper was called (no real navigation in jsdom)
-    expect(redirectMock).toHaveBeenCalled();
-  });
-
-  // me キャッシュの要求は expectedToken で束縛される。既に別セッションへ移行済みなら、
-  // 陳腐な要求の 401 で新しいセッションを壊してはならない
-  it('does not tear down the session on 401 when expectedToken no longer matches the cookie', async () => {
-    const removeSpy = jest.spyOn(Cookies, 'remove');
-
-    await withRejectingAdapter(401, () =>
-      apiClient.get('/platform/me', { expectedToken: 'old-token' } as never)
-    );
-
-    expect(removeSpy).not.toHaveBeenCalledWith('token');
-    expect(redirectMock).not.toHaveBeenCalled();
-  });
-
-  // cookie が既に無い（失効・除去済み）のは「別セッションへ移行した証拠」ではないため、
-  // expectedToken 付きの要求でも通常どおり後始末する（放置すると失効利用者のキャッシュが残り、
-  // 画面は読み込み失敗のまま座礁する）
-  it('tears down on 401 when the cookie is already gone even if expectedToken is set', async () => {
-    (Cookies.get as jest.Mock).mockReturnValue(undefined);
-    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
-
-    await withRejectingAdapter(401, () =>
-      apiClient.get('/platform/me', { expectedToken: 'expired-token' } as never)
-    );
-
-    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
-    expect(redirectMock).toHaveBeenCalled();
-  });
-
-  it('tears down the session on 401 when expectedToken matches the current cookie', async () => {
-    const removeSpy = jest.spyOn(Cookies, 'remove');
-
-    await withRejectingAdapter(401, () =>
-      apiClient.get('/platform/me', { expectedToken: 'tkn' } as never)
-    );
-
-    expect(removeSpy).toHaveBeenCalledWith('token');
     expect(redirectMock).toHaveBeenCalled();
   });
 
@@ -117,12 +75,10 @@ describe('apiClient 401/403 interceptor', () => {
   it('clears session and redirects on 403 when the platform-role cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
     platformConsoleValue = 'STORE_MANAGER';
     const removeSpy = jest.spyOn(Cookies, 'remove');
-    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
 
     await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
-    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
     expect(clearPlatformSessionMock).toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalled();
   });

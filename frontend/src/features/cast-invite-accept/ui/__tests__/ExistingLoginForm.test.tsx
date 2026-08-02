@@ -108,9 +108,6 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
       expires_at: Date.now() + 60 * 60 * 1000,
     });
     mockedAcceptanceApi.acceptAsExistingUser.mockResolvedValue({ store_name: '渋谷店' });
-    // 招待を開く前の旧セッションが残していた me キャッシュ。成功で旧セッションの放棄が
-    // 確定するため、これも消えなければならない
-    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
     const onSuccess = jest.fn();
 
     render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
@@ -124,7 +121,6 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
 
     expect(Cookies.get('token')).toBeUndefined();
-    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
     expect(getPlatformConsole()).toBeUndefined();
     expect(getPlatformStoreId()).toBeUndefined();
   });
@@ -156,8 +152,6 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
       expires_at: Date.now() + 60 * 60 * 1000,
     });
     mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue(new Error('invite expired'));
-    // 復元されるセッションの me キャッシュはまだ有効なので、失敗経路では消してはならない
-    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
     const onSuccess = jest.fn();
 
     render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
@@ -177,7 +171,6 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     expect(onSuccess).not.toHaveBeenCalled();
     expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(window.localStorage.getItem('platform-me-cache')).not.toBeNull();
     expect(getPlatformConsole()).toBe('STORE_MANAGER');
     expect(getPlatformStoreId()).toBe('7');
   });

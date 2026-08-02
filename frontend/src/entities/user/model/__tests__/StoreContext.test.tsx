@@ -1,8 +1,13 @@
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { StoreContextProvider, useStoreContext } from '../StoreContext';
 import { platformAuthApi } from '../../api/platform';
-import { isPlatformSession, getPlatformStoreId, setPlatformStore } from '@/shared/lib';
-import type { PlatformMeResponse, PlatformStoreScopeType } from '../types';
+import {
+  isPlatformSession,
+  getPlatformStoreId,
+  readTokenClaims,
+  setPlatformStore,
+} from '@/shared/lib';
+import type { TokenClaims } from '@/shared/lib';
 
 let mockPathname = '/platform/dashboard';
 const mockPush = jest.fn();
@@ -12,35 +17,27 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('../../api/platform', () => ({
-  platformAuthApi: { me: jest.fn(), stores: jest.fn() },
+  platformAuthApi: { stores: jest.fn() },
 }));
 
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
   isPlatformSession: jest.fn(),
   getPlatformStoreId: jest.fn(),
+  readTokenClaims: jest.fn(),
   setPlatformStore: jest.fn(),
 }));
 
-const mockedMe = platformAuthApi.me as jest.MockedFunction<typeof platformAuthApi.me>;
 const mockedStores = platformAuthApi.stores as jest.MockedFunction<typeof platformAuthApi.stores>;
 const mockedIsPlatformSession = isPlatformSession as jest.MockedFunction<typeof isPlatformSession>;
 const mockedGetStoreId = getPlatformStoreId as jest.MockedFunction<typeof getPlatformStoreId>;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 const mockedSetPlatformStore = setPlatformStore as jest.MockedFunction<typeof setPlatformStore>;
 
-const meResponse = (
-  store_bridge: boolean,
-  store_scope_type: PlatformStoreScopeType = 'ALL_STORES',
-  store_ids: number[] = []
-): PlatformMeResponse => ({
-  email: 'staff@example.com',
-  display_name: 'スタッフ',
-  user_type: 'STAFF',
-  permissions: [],
-  console: 'store',
-  store_bridge,
-  store_scope_type,
-  store_ids,
+const staffClaims = (storeBridge: boolean): TokenClaims => ({
+  authorities: ['PERM_ORDER_MANAGE'],
+  userType: 'STAFF',
+  storeBridge,
 });
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -53,22 +50,21 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
     mockPathname = '/platform/dashboard';
     mockedIsPlatformSession.mockReturnValue(false);
     mockedGetStoreId.mockReturnValue(undefined);
-    mockedMe.mockResolvedValue(meResponse(true));
+    mockedReadClaims.mockReturnValue(staffClaims(true));
     mockedStores.mockResolvedValue([]);
   });
 
   describe('授権店舗の解決', () => {
-    it('取得前の初期値は null（読み込み中）', () => {
-      mockedMe.mockReturnValue(new Promise(() => {}));
+    it('stores() の取得完了までは stores=null（読み込み中）で、資格は同期に確定する', () => {
+      mockedStores.mockReturnValue(new Promise(() => {}));
 
       const { result } = renderHook(() => useStoreContext(), { wrapper });
 
       expect(result.current.stores).toBeNull();
-      expect(result.current.storeBridge).toBeNull();
+      expect(result.current.storeBridge).toBe(true);
     });
 
-    it('store_bridge=true なら stores() の結果をそのまま返す', async () => {
-      mockedMe.mockResolvedValue(meResponse(true));
+    it('storeBridge=true（token claim）なら stores() の結果をそのまま返す', async () => {
       mockedStores.mockResolvedValue([
         { id: 1, name: '店舗A' },
         { id: 2, name: '店舗B' },
@@ -85,8 +81,8 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       expect(result.current.storeBridge).toBe(true);
     });
 
-    it('store_bridge=false なら stores() を呼ばず空一覧を返す', async () => {
-      mockedMe.mockResolvedValue(meResponse(false));
+    it('storeBridge=false なら stores() を呼ばず空一覧を返す', async () => {
+      mockedReadClaims.mockReturnValue(staffClaims(false));
 
       const { result } = renderHook(() => useStoreContext(), { wrapper });
 
@@ -95,21 +91,19 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       expect(mockedStores).not.toHaveBeenCalled();
     });
 
-    it('me() が失敗したときは値を確定させず loadFailed を立てる', async () => {
-      // 空一覧・storeBridge=false へ畳むと、通信障害が「授権店舗ゼロ」や「店舗コンソール資格なし」
-      // という授権の答えに化け、入口がセッションを破棄したり平台側へ送り出したりする。
-      mockedMe.mockRejectedValue(new Error('500'));
+    it('token が無い・壊れている（claims=null）ときは資格なしとして扱う', async () => {
+      // 未認証は資格なし側に倒す。最初の API 呼び出しの 401 がログインへの誘導を担う。
+      mockedReadClaims.mockReturnValue(null);
 
       const { result } = renderHook(() => useStoreContext(), { wrapper });
 
-      await waitFor(() => expect(result.current.loadFailed).toBe(true));
-      expect(result.current.stores).toBeNull();
-      expect(result.current.storeBridge).toBeNull();
+      await waitFor(() => expect(result.current.stores).toEqual([]));
+      expect(result.current.storeBridge).toBe(false);
       expect(mockedStores).not.toHaveBeenCalled();
     });
 
-    it('stores() が失敗したときも値を確定させず loadFailed を立てる', async () => {
-      mockedMe.mockResolvedValue(meResponse(true));
+    it('stores() が失敗したときは値を確定させず loadFailed を立てる', async () => {
+      // 空一覧へ畳むと、通信障害が「授権店舗ゼロ」（入口がセッションを破棄する）に化ける。
       mockedStores.mockRejectedValue(new Error('500'));
 
       const { result } = renderHook(() => useStoreContext(), { wrapper });
@@ -119,8 +113,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
     });
 
     it('reload は取得をやり直し、成功すれば loadFailed が下りる', async () => {
-      mockedMe.mockRejectedValueOnce(new Error('500'));
-      mockedMe.mockResolvedValue(meResponse(true));
+      mockedStores.mockRejectedValueOnce(new Error('500'));
       mockedStores.mockResolvedValue([{ id: 1, name: '店舗A' }]);
 
       const { result } = renderHook(() => useStoreContext(), { wrapper });
@@ -132,8 +125,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       expect(result.current.loadFailed).toBe(false);
     });
 
-    it('1つの provider 配下で複数の consumer が描画されても me() は1回だけ呼ばれる', async () => {
-      mockedMe.mockResolvedValue(meResponse(true));
+    it('1つの provider 配下で複数の consumer が描画されても stores() は1回だけ呼ばれる', async () => {
       mockedStores.mockResolvedValue([{ id: 1, name: '店舗A' }]);
 
       function Consumer() {
@@ -149,7 +141,6 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       );
 
       await waitFor(() => expect(screen.getAllByText('1')).toHaveLength(2));
-      expect(mockedMe).toHaveBeenCalledTimes(1);
       expect(mockedStores).toHaveBeenCalledTimes(1);
     });
   });

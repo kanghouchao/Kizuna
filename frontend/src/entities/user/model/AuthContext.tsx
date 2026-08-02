@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { clearMeCache, platformAuthApi } from '../api/platform';
+import { platformAuthApi } from '../api/platform';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 import { clearPlatformSession } from '@/shared/lib';
@@ -34,7 +34,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Logout failed:', error);
     } finally {
       Cookies.remove('token');
-      clearMeCache();
       clearPlatformSession();
       router.push('/platform/login');
     }
