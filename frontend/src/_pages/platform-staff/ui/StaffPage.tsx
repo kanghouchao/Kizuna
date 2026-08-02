@@ -1,7 +1,7 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   PlatformStaffResponse,
   PlatformStore,
@@ -53,19 +53,29 @@ export default function StaffPage() {
     refetch: refetchStores,
   } = useManagedList<PlatformStore>(() => platformAuthApi.stores(), '店舗一覧の取得に失敗しました');
 
-  // 取得失敗後の回復経路。モーダルごとの再取得をページ 1 回に束ねたため、目録が空のまま
-  // モーダルを開くと個別店舗の選択肢が無いままになる。開く時点で空なら取り直す
-  // （目録が本当に 0 件の環境でも 1 リクエスト増えるだけで無害）。
-  const ensureStores = () => {
-    if (!storesLoading && stores.length === 0) void refetchStores();
-  };
-
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
   // 対象がそのページから外れた瞬間（本人が PUT /platform/me で改名して検索から外れる、
   // 他の管理者の追加で行が次ページへずれる等）にモーダルが黙って閉じ、
   // 「最新の内容を確認してください」と言いながら内容を見せない状態になる。
   const [editingStaff, setEditingStaff] = useState<PlatformStaffResponse | null>(null);
+
+  // 取得失敗後の回復経路。モーダルごとの再取得をページ 1 回に束ねたため、目録が空のまま
+  // モーダルを開くと個別店舗の選択肢が無いままになる。「モーダルが開いていて、取得が済んでいて、
+  // 目録が空」なら取り直す。開く時点の判定ではなく効果にするのは、開いた瞬間はまだ読み込み中で
+  // その後に失敗が確定する時序も拾うため。再試行は開くたびに 1 回だけ（失敗が続く環境で
+  // 無限に叩かない。目録が本当に 0 件の環境でも 1 リクエスト増えるだけで無害）。
+  const modalOpen = createOpen || editingStaff !== null;
+  const storesRetriedRef = useRef(false);
+  useEffect(() => {
+    storesRetriedRef.current = false;
+  }, [modalOpen]);
+  useEffect(() => {
+    if (modalOpen && !storesLoading && stores.length === 0 && !storesRetriedRef.current) {
+      storesRetriedRef.current = true;
+      void refetchStores();
+    }
+  }, [modalOpen, storesLoading, stores.length, refetchStores]);
 
   /**
    * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
@@ -93,12 +103,7 @@ export default function StaffPage() {
         title="スタッフ管理"
         description="ロール・担当店舗の付与と編集ができます。"
         actions={
-          <Button
-            onClick={() => {
-              ensureStores();
-              setCreateOpen(true);
-            }}
-          >
+          <Button onClick={() => setCreateOpen(true)}>
             <PlusIcon />
             スタッフを追加
           </Button>
@@ -183,10 +188,7 @@ export default function StaffPage() {
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    onClick={() => {
-                      ensureStores();
-                      setEditingStaff(member);
-                    }}
+                    onClick={() => setEditingStaff(member)}
                   >
                     編集
                   </Button>

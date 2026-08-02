@@ -119,6 +119,28 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
   });
 
+  it('未キャッシュの me() 応答が遅延しても、待機中に済んだ updateMe の書き込みを潰さない', async () => {
+    let resolveGet!: (value: { data: unknown }) => void;
+    client.get.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveGet = resolve;
+        })
+    );
+    const pending = platformAuthApi.me();
+
+    // GET の応答待ちの間に（別タブ相当の）updateMe が完了して新値をキャッシュする
+    client.put.mockResolvedValue({ data: me('新しい名前') });
+    await platformAuthApi.updateMe({ display_name: '新しい名前' });
+
+    resolveGet({ data: me('古い名前') });
+    await expect(pending).resolves.toEqual(me('古い名前'));
+
+    // キャッシュは updateMe の新値のまま。次の me() は再取得せず新値を返す
+    await expect(platformAuthApi.me()).resolves.toEqual(me('新しい名前'));
+    expect(client.get).toHaveBeenCalledTimes(1);
+  });
+
   it('保存値に token そのものを含めない（cookie 除去後の localStorage から JWT を回収させない）', async () => {
     await platformAuthApi.me();
 

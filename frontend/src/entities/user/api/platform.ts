@@ -32,17 +32,33 @@ function tokenFingerprint(token: string): string {
   return `${h1.toString(36)}.${h2.toString(36)}`;
 }
 
-function readCachedMe(token: string): PlatformMeResponse | null {
+interface MeCacheRecord {
+  fingerprint?: string;
+  me?: PlatformMeResponse;
+  /** 書き込み時刻（epoch millis）。遅延した GET 応答が新しい書き込みを潰さないための順序印。 */
+  writtenAt?: number;
+}
+
+function readCacheRecord(): MeCacheRecord | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(ME_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { fingerprint?: string; me?: PlatformMeResponse };
-    return parsed.fingerprint === tokenFingerprint(token) && parsed.me ? parsed.me : null;
+    return raw ? (JSON.parse(raw) as MeCacheRecord) : null;
   } catch {
     // 壊れた保存値は無いものとして扱う（次の取得成功時に上書きされる）
     return null;
   }
+}
+
+function readCachedMe(token: string): PlatformMeResponse | null {
+  const record = readCacheRecord();
+  return record?.fingerprint === tokenFingerprint(token) && record.me ? record.me : null;
+}
+
+/** since 以降に同一 token 向けの書き込みが済んでいるか（遅延応答の上書き判定に使う）。 */
+function hasNewerWrite(token: string, since: number): boolean {
+  const record = readCacheRecord();
+  return record?.fingerprint === tokenFingerprint(token) && (record.writtenAt ?? 0) >= since;
 }
 
 function writeCachedMe(token: string, me: PlatformMeResponse): void {
@@ -50,7 +66,11 @@ function writeCachedMe(token: string, me: PlatformMeResponse): void {
   try {
     window.localStorage.setItem(
       ME_CACHE_KEY,
-      JSON.stringify({ fingerprint: tokenFingerprint(token), me })
+      JSON.stringify({
+        fingerprint: tokenFingerprint(token),
+        me,
+        writtenAt: Date.now(),
+      } satisfies MeCacheRecord)
     );
   } catch {
     // 書けない環境で古い値が残り続けると、成功した updateMe の後も次の me() が旧値を
@@ -94,10 +114,15 @@ export const platformAuthApi = {
     const cached = readCachedMe(token);
     if (cached) return cached;
     if (inflightMe?.token === token) return inflightMe.request;
+    const startedAt = Date.now();
     const request = apiClient.get('/platform/me').then(response => {
       // 応答待ちの間に logout（キャッシュ破棄 + token 除去）が走った場合に書き戻すと、
       // ログアウト後の共有端末に個人情報が残る。今も同じ token のときだけ書く。
-      if (Cookies.get('token') === token) writeCachedMe(token, response.data);
+      // 加えて、待機中に同一 token の新しい書き込み（別タブの updateMe 等）が済んでいたら
+      // 上書きしない。cookie は全タブ共有のため token 照合では同 token の順序を守れない。
+      if (Cookies.get('token') === token && !hasNewerWrite(token, startedAt)) {
+        writeCachedMe(token, response.data);
+      }
       return response.data as PlatformMeResponse;
     });
     inflightMe = { token, request };

@@ -125,6 +125,27 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
   });
 
+  // 開いた瞬間はまだ読み込み中で、その後に失敗が確定する時序でも取り直す
+  it('モーダルを開いた後に店舗目録の取得失敗が確定しても、取り直すこと', async () => {
+    let rejectFirst!: (reason: Error) => void;
+    mockedAuthApi.stores.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectFirst = reject;
+        })
+    );
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1);
+
+    rejectFirst(new Error('network'));
+
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
+  });
+
   // 409 の再取得は「最新の内容を確認してください」と言うための導線。対象が現在ページから
   // 外れても（本人の改名で検索から外れる・他の追加で次ページへずれる）モーダルは閉じず、
   // 版が古いまま再試行が 409 を繰り返さないよう id で最新値を取り直す。
