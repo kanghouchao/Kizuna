@@ -11,7 +11,8 @@ public class CastInvitationAcceptRequest {
 
   @NotBlank(message = "email is required")
   @Email(message = "email format is invalid")
-  @Size(max = 255)
+  // 永続化前の小文字化で最大2倍に伸長する文字(U+0130 等)があっても t_users.email VARCHAR(255) に収まる上限。
+  @Size(max = 127)
   private String email;
 
   @NotBlank(message = "password is required")
