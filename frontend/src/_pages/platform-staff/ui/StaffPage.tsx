@@ -102,12 +102,13 @@ export default function StaffPage() {
   // 取り直した目録から選択中の店舗が消えたら（他管理者の削除）、トリガー表示が空白のまま
   // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す。
   // 取得失敗は既存目録を保つ（useManagedList）ので、失敗でここが誤発火することはない。
+  // 背景処理のため入力欄の下書き（searchTerm）は読まず、適用済み条件から店舗だけを外す。
   useEffect(() => {
     if (storeFilter === ALL_STORES || storesLoading) return;
     if (stores.some(store => String(store.id) === storeFilter)) return;
     setStoreFilter(ALL_STORES);
-    void list.search({ search: searchTerm, storeId: undefined });
-  }, [stores, storesLoading, storeFilter, searchTerm, list]);
+    void list.search(prev => ({ ...prev, storeId: undefined }));
+  }, [stores, storesLoading, storeFilter, list]);
 
   /**
    * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。

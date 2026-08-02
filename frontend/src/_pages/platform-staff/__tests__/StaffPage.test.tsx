@@ -315,8 +315,9 @@ describe('スタッフ一覧ページ', () => {
   });
 
   // 選択中の店舗が取り直した目録から消える（他管理者の削除）と、トリガー表示が空白のまま
-  // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す
-  it('取り直した目録から選択中の店舗が消えたら、すべての店舗へ戻して取り直すこと', async () => {
+  // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す。
+  // 背景のリセットは適用済みの検索語を保ち、入力欄の未提出の下書きを巻き込まない。
+  it('取り直した目録から選択中の店舗が消えたら、適用済み検索語を保ったまま、すべての店舗へ戻して取り直すこと', async () => {
     mockedAuthApi.stores.mockResolvedValue([
       { id: 9, name: '店舗A' },
       { id: 10, name: '店舗B' },
@@ -326,11 +327,17 @@ describe('スタッフ一覧ページ', () => {
     await screen.findByText('山田太郎');
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
     await pickStore('店舗A');
+    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
     await waitFor(() =>
-      expect(mockedStaffApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 9 }))
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: '山田', storeId: 9 })
+      )
     );
 
-    // モーダルを開くと目録を取り直す既存挙動を使い、店舗A が消えた目録を届ける
+    // 未提出の下書きへ書き換えた状態で、モーダルを開くと目録を取り直す既存挙動を使い、
+    // 店舗A が消えた目録を届ける
+    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '下書き' } });
     mockedAuthApi.stores.mockResolvedValue([{ id: 10, name: '店舗B' }]);
     fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
@@ -339,13 +346,14 @@ describe('スタッフ一覧ページ', () => {
       expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
         page: 0,
         size: 10,
-        search: undefined,
+        search: '山田',
         storeId: undefined,
       })
     );
     expect(screen.getByRole('combobox', { name: '店舗で絞り込む' })).toHaveTextContent(
       'すべての店舗'
     );
+    expect(screen.getByLabelText('スタッフを検索')).toHaveValue('下書き');
   });
 
   it('ページ番号のクリックで該当ページを取得すること', async () => {

@@ -103,6 +103,25 @@ describe('useListPage', () => {
     expect(fetcher).toHaveBeenLastCalledWith(1, 'やまだ');
   });
 
+  // 背景処理（呼び出し側の入力 state を読んではいけない文脈）が条件の一部だけを差し替えるための形
+  it('search の関数形は適用済み条件を基にした差分更新で取得する', async () => {
+    const fetcher = jest.fn(async (page: number) => pageOf(page));
+    const { result } = renderHook(() =>
+      useListPage<string, { term: string; storeId?: number }>(fetcher, '取得失敗', { term: '' })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.search({ term: 'やまだ', storeId: 9 });
+    });
+
+    await act(async () => {
+      await result.current.search(prev => ({ ...prev, storeId: undefined }));
+    });
+
+    expect(fetcher).toHaveBeenLastCalledWith(0, { term: 'やまだ', storeId: undefined });
+  });
+
   it('条件を保持する state を更新した直後に呼んでも、渡した条件で取得する', async () => {
     // 呼び出し側の state を fetcher のクロージャから読ませていた頃は、条件を更新した同一
     // ハンドラ内で search を呼ぶと再レンダー前の古い値で取得していた。条件は引数で渡す。
