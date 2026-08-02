@@ -23,7 +23,9 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   config => {
     const token = Cookies.get('token');
-    if (token) {
+    // 呼び出し元が明示的に束縛した Authorization（me キャッシュの鍵と応答の対応を守る）は
+    // 上書きしない。無いときだけ cookie から補う
+    if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     const csrfToken = Cookies.get('XSRF-TOKEN') || Cookies.get('X-CSRF-TOKEN');

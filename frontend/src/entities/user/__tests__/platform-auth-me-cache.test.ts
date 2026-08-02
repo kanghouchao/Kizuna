@@ -72,6 +72,39 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(2);
   });
 
+  it('me() のリクエストは捕まえた token を Authorization に明示束縛する', async () => {
+    await platformAuthApi.me();
+
+    expect(client.get).toHaveBeenCalledWith('/platform/me', {
+      headers: { Authorization: 'Bearer token-a' },
+    });
+  });
+
+  it('updateMe の応答待ち中も変異前キャッシュを配信しない（発送前の失効標）', async () => {
+    await platformAuthApi.me();
+    client.put.mockImplementationOnce(() => new Promise(() => {}));
+    void platformAuthApi.updateMe({ display_name: '改名中' });
+
+    client.get.mockResolvedValue({ data: me('取り直し') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('取り直し'));
+    expect(client.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('時計が逆行しても失効の裁定は壊れない（順序は壁時計でなく序数）', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(2000);
+    await platformAuthApi.me();
+
+    // 時刻補正・VM 復帰などで壁時計が過去へ戻った状況
+    nowSpy.mockReturnValue(1000);
+    client.put.mockResolvedValue({ data: me('改名後') });
+    await platformAuthApi.updateMe({ display_name: '改名後' });
+
+    client.get.mockResolvedValue({ data: me('改名後') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('改名後'));
+    expect(client.get).toHaveBeenCalledTimes(2);
+    nowSpy.mockRestore();
+  });
+
   it('updateMe はキャッシュを失効させ、次の me() はサーバから取り直す', async () => {
     await platformAuthApi.me();
     client.put.mockResolvedValue({ data: me('改名後') });

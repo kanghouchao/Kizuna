@@ -2,6 +2,7 @@ import Cookies from 'js-cookie';
 import {
   apiClient,
   clearMeCache,
+  currentMeSeq,
   markMeCacheStale,
   readCachedMe,
   writeCachedMe,
@@ -49,19 +50,24 @@ export const platformAuthApi = {
     const cached = readCachedMe(token) as PlatformMeResponse | null;
     if (cached) return cached;
     if (inflightMe?.token === token) return inflightMe.request;
-    const startedAt = Date.now();
-    const request = apiClient.get('/platform/me').then(response => {
-      // 応答待ちの間に logout（キャッシュ破棄 + token 除去）が走った場合に書き戻すと、
-      // ログアウト後の共有端末に個人情報が残る。今も同じ token のときだけ書き、書き込みの
-      // 直後にもう一度確認して、書き込みと交錯した logout の破棄を打ち消さない。
-      // 別タブの変異（updateMe）との交錯は失効標（別 key）に対する読み取り側の裁定で
-      // 弾かれるため、ここでの事前検査は要らない。
-      if (Cookies.get('token') === token) {
-        writeCachedMe(token, response.data, startedAt);
-        if (Cookies.get('token') !== token) clearMeCache();
-      }
-      return response.data as PlatformMeResponse;
-    });
+    const asOfSeq = currentMeSeq();
+    // Authorization は捕まえた token で明示的に束縛する。cookie 任せにすると、リクエスト組立の
+    // 時点までに別タブが token を差し替えた場合、別人の応答をこの token の鍵で保存してしまう
+    //（interceptor は明示ヘッダを上書きしない）。
+    const request = apiClient
+      .get('/platform/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(response => {
+        // 応答待ちの間に logout（キャッシュ破棄 + token 除去）が走った場合に書き戻すと、
+        // ログアウト後の共有端末に個人情報が残る。今も同じ token のときだけ書き、書き込みの
+        // 直後にもう一度確認して、書き込みと交錯した logout の破棄を打ち消さない。
+        // 別タブの変異（updateMe）との交錯は失効標（別 key）に対する読み取り側の裁定で
+        // 弾かれるため、ここでの事前検査は要らない。
+        if (Cookies.get('token') === token) {
+          writeCachedMe(token, response.data, asOfSeq);
+          if (Cookies.get('token') !== token) clearMeCache();
+        }
+        return response.data as PlatformMeResponse;
+      });
     inflightMe = { token, request };
     try {
       return await request;
@@ -75,7 +81,10 @@ export const platformAuthApi = {
     // サーバから取り直させる。標は発送時に捕まえた token の指紋作用域なので、応答時点で
     // cookie が別 token に替わっていても（招待受諾の一時 token 等）無条件に記してよい——
     // 記さないと、元の token が後から復元されたとき変異前のキャッシュが生き返る。
+    // 発送前にも記すのは、サーバ側で変異が確定してから応答が戻るまでの間に他所の me() が
+    // 変異前のキャッシュを掴まないため（PUT が失敗した場合の代償は 1 回の再取得のみ）。
     const token = Cookies.get('token');
+    if (token) markMeCacheStale(token);
     const response = await apiClient.put('/platform/me', data);
     if (token) markMeCacheStale(token);
     return response.data;

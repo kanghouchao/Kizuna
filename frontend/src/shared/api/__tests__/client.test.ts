@@ -26,6 +26,27 @@ describe('apiClient request interceptor', () => {
     apiClient.defaults.adapter = original;
   });
 
+  // me キャッシュは「鍵にした token」と「応答を得た token」の一致に依存するため、
+  // 呼び出し元が明示束縛した Authorization を cookie で上書きしてはならない
+  it('does not overwrite an explicitly bound Authorization header', async () => {
+    (Cookies.get as jest.Mock).mockReturnValue('cookie-token');
+    const original = apiClient.defaults.adapter as any;
+    apiClient.defaults.adapter = (async (config: any) => ({
+      data: {},
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })) as any;
+
+    const res = await apiClient.get('/platform/me', {
+      headers: { Authorization: 'Bearer captured-token' },
+    });
+    expect(res.config.headers?.Authorization).toBe('Bearer captured-token');
+
+    apiClient.defaults.adapter = original;
+  });
+
   it('propagates store headers when cookies exist', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
