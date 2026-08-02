@@ -67,6 +67,16 @@ class LineApiClientTest {
   }
 
   @Test
+  @DisplayName("LINE が空の応答本文を返した場合も未処理例外にせず認証失敗として扱う")
+  void emptyResponseBodyIsAuthenticationFailure() {
+    tokenBody = "";
+
+    assertThatThrownBy(
+            () -> client.exchangeAndVerify(CHANNEL, "auth-code", "https://app.test/cb", "verifier"))
+        .isInstanceOf(LineAuthenticationException.class);
+  }
+
+  @Test
   @DisplayName("認可コードを交換し id_token を検証して LINE ユーザー ID と表示名を返す")
   void exchangeAndVerifyReturnsIdentity() {
     LineIdentity identity =
