@@ -16,9 +16,15 @@ export const platformStaffApi = {
     page: number;
     size: number;
     search?: string;
+    /** 指定店舗を担当範囲に含むスタッフだけへ絞り込む（全店舗担当も該当する） */
+    storeId?: number;
   }): Promise<PageResult<PlatformStaffResponse>> => {
     const response = await apiClient.get('/platform/staff', {
-      params: { ...toSpringPageParams(params.page, params.size), search: params.search },
+      params: {
+        ...toSpringPageParams(params.page, params.size),
+        search: params.search,
+        storeId: params.storeId,
+      },
     });
     return fromSpringPage(response.data);
   },

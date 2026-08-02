@@ -15,6 +15,7 @@ import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
+import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -52,8 +53,8 @@ public class PlatformStaffService {
   private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
-  public Page<PlatformStaffResponse> list(String search, Pageable pageable) {
-    Page<PlatformUser> staff = repository.findAll(staffSpec(search), pageable);
+  public Page<PlatformStaffResponse> list(String search, Long storeId, Pageable pageable) {
+    Page<PlatformUser> staff = repository.findAll(staffSpec(search, storeId), pageable);
     Set<Long> allRoleIds =
         staff.getContent().stream()
             .flatMap(user -> user.getRoleIds().stream())
@@ -63,12 +64,13 @@ public class PlatformStaffService {
   }
 
   /**
-   * 一覧の対象は本人種別 STAFF に限る（CAST/MEMBER は専用フローが扱う）。検索語は表示名とメールアドレスを横断する部分一致。
+   * 一覧の対象は本人種別 STAFF に限る（CAST/MEMBER は専用フローが扱う）。検索語は表示名とメールアドレスを横断する部分一致。店舗 id
+   * は「その店舗を担当範囲に含む」行への絞り込みで、ALL_STORES は個別 id を持たないまま全店舗を覆うため常に該当させる。
    *
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
    */
-  private static Specification<PlatformUser> staffSpec(String search) {
+  private static Specification<PlatformUser> staffSpec(String search, Long storeId) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
@@ -79,6 +81,14 @@ public class PlatformStaffService {
             cb.or(
                 cb.like(cb.lower(root.get("displayName")), pattern, escape),
                 cb.like(cb.lower(root.get("email")), pattern, escape)));
+      }
+      if (storeId != null) {
+        // 担当店舗集合は @ElementCollection のため、member of は Hibernate が相関副問い合わせ（exists）へ展開する。
+        // 親行を結合で増やさないので、ページングの件数・境界に影響しない。
+        predicates.add(
+            cb.or(
+                cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
+                cb.isMember(storeId, root.get("storeIds"))));
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };

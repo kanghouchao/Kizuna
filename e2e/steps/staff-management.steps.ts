@@ -143,11 +143,3 @@ When('保存する', async ({ page }) => {
   await dialog.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(heading).toBeHidden({ timeout: 15000 });
 });
-
-Then(
-  'スタッフ一覧の {string} の担当店舗が {string} と表示される',
-  async ({ page }, _label: string, scopeLabel: string) => {
-    const row = await findCreatedStaffRow(page);
-    await expect(row.getByText(scopeLabel, { exact: true })).toBeVisible({ timeout: 15000 });
-  }
-);

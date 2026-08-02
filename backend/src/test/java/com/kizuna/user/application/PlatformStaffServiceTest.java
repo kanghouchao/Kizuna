@@ -152,7 +152,7 @@ class PlatformStaffServiceTest {
     when(roleRepository.findAllById(Set.of(HQ_ROLE, MANAGER_ROLE)))
         .thenReturn(List.of(role(HQ_ROLE, "HQ管理者"), role(MANAGER_ROLE, "店長")));
 
-    Page<PlatformStaffResponse> result = service.list(null, PAGEABLE);
+    Page<PlatformStaffResponse> result = service.list(null, null, PAGEABLE);
 
     assertThat(result.getTotalElements()).isEqualTo(2);
     assertThat(result.getContent().get(0).roles())

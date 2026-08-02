@@ -33,8 +33,9 @@ public class PlatformStaffController {
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<Page<PlatformStaffResponse>> list(
       @RequestParam(required = false) String search,
+      @RequestParam(required = false) Long storeId,
       @PageableDefault(sort = "displayName") Pageable pageable) {
-    return ResponseEntity.ok(platformStaffService.list(search, pageable));
+    return ResponseEntity.ok(platformStaffService.list(search, storeId, pageable));
   }
 
   @GetMapping("/{id}")
