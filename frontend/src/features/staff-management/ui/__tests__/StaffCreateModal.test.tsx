@@ -140,4 +140,21 @@ describe('スタッフ新規作成モーダル', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockedStaffApi.create).not.toHaveBeenCalled();
   });
+
+  // 閉じると unmount で isSubmitting が消え、開き直した複製から二重送信できてしまうため、
+  // 送信中はキャンセルも Escape も閉じない
+  it('送信中は閉じられない', async () => {
+    mockedStaffApi.create.mockImplementationOnce(() => new Promise(() => {}));
+    const { onClose } = renderModal();
+    await screen.findByLabelText('店長');
+
+    fillBasics();
+    fireEvent.click(screen.getByLabelText('店長'));
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+    await screen.findByRole('button', { name: '追加中...' });
+
+    expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

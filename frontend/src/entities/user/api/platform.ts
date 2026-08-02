@@ -1,5 +1,12 @@
 import Cookies from 'js-cookie';
-import { apiClient } from '@/shared/api';
+import {
+  apiClient,
+  clearMeCache,
+  hasNewerWrite,
+  markMeCacheStale,
+  readCachedMe,
+  writeCachedMe,
+} from '@/shared/api';
 import {
   LoginResponse,
   PasswordChangeRequest,
@@ -10,84 +17,13 @@ import {
 } from '../model/types';
 
 // /platform/me の応答（権限・console・storeBridge）はログイン時に鋳造される JWT が根拠で、
-// 次回ログインまで変わらない。そこで応答を token をキーに localStorage へキャッシュし、
-// 再ログイン・失効による token の変化で自然に無効化する。表示名の変更（updateMe）は
-// 応答でキャッシュを上書きする。権限の強制はサーバ側にあり、これは表示用の複製にすぎない。
-const ME_CACHE_KEY = 'platform-me-cache';
+// 次回ログインまで変わらない。そこで応答を token の一方向指紋をキーに localStorage へ
+// キャッシュし、再ログイン・失効による token の変化で自然に無効化する。保管庫は
+// shared/api/me-cache（apiClient の強制退場でも破棄できる場所）にあり、ここは取得・変異の
+// ライフサイクルだけを持つ。権限の強制はサーバ側にあり、これは表示用の複製にすぎない。
 
-// 鍵には token そのものではなく一方向の指紋を保存する。token を保存すると、cookie の除去だけで
-// 終わるセッション破棄経路（未対応 user_type のログイン中断・401 での強制退場など）の後も
-// 有効な JWT が localStorage から回収できてしまう。照合できれば十分で、復元できてはならない。
-// crypto.subtle は insecure context（http の開発環境）で使えないため、同期の非暗号ハッシュ
-// 2 本の連結で衝突面だけ確保する（衝突しても別 token のキャッシュを表示に使うだけで、権限の
-// 強制はサーバ側にある）。
-function tokenFingerprint(token: string): string {
-  let h1 = 5381 | 0;
-  let h2 = 52711 | 0;
-  for (let i = 0; i < token.length; i++) {
-    const code = token.charCodeAt(i);
-    h1 = (Math.imul(h1, 33) + code) | 0;
-    h2 = (Math.imul(h2, 31) + code) | 0;
-  }
-  return `${h1.toString(36)}.${h2.toString(36)}`;
-}
-
-interface MeCacheRecord {
-  fingerprint?: string;
-  me?: PlatformMeResponse;
-  /** 書き込み時刻（epoch millis）。遅延した GET 応答が新しい書き込みを潰さないための順序印。 */
-  writtenAt?: number;
-}
-
-function readCacheRecord(): MeCacheRecord | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(ME_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as MeCacheRecord) : null;
-  } catch {
-    // 壊れた保存値は無いものとして扱う（次の取得成功時に上書きされる）
-    return null;
-  }
-}
-
-function readCachedMe(token: string): PlatformMeResponse | null {
-  const record = readCacheRecord();
-  return record?.fingerprint === tokenFingerprint(token) && record.me ? record.me : null;
-}
-
-/** since 以降に同一 token 向けの書き込みが済んでいるか（遅延応答の上書き判定に使う）。 */
-function hasNewerWrite(token: string, since: number): boolean {
-  const record = readCacheRecord();
-  return record?.fingerprint === tokenFingerprint(token) && (record.writtenAt ?? 0) >= since;
-}
-
-function writeCachedMe(token: string, me: PlatformMeResponse): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(
-      ME_CACHE_KEY,
-      JSON.stringify({
-        fingerprint: tokenFingerprint(token),
-        me,
-        writtenAt: Date.now(),
-      } satisfies MeCacheRecord)
-    );
-  } catch {
-    // 書けない環境で古い値が残り続けると、成功した updateMe の後も次の me() が旧値を
-    // 返し続ける。既存の記録も best-effort で消し、次の読みはサーバへ倒す
-    clearMeCache();
-  }
-}
-
-/** ログアウト時に呼ぶ。放置しても token 不一致で読まれないが、他者の目に残さない。 */
-export function clearMeCache(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(ME_CACHE_KEY);
-  } catch {
-    // storage が塞がれていても、後続のログアウト処理（cookie 破棄・遷移）を止めない
-  }
-}
+// AuthContext（logout）が使う。保管庫の実体は shared/api/me-cache。
+export { clearMeCache };
 
 // 同一 token での同時呼び出し（StrictMode の二重 effect・ログイン直後の連続呼び出し）を 1 本の
 // リクエストへ束ねる。失敗はキャッシュせず、次の呼び出しが改めて取得する。
@@ -111,7 +47,7 @@ export const platformAuthApi = {
       const response = await apiClient.get('/platform/me');
       return response.data;
     }
-    const cached = readCachedMe(token);
+    const cached = readCachedMe(token) as PlatformMeResponse | null;
     if (cached) return cached;
     if (inflightMe?.token === token) return inflightMe.request;
     const startedAt = Date.now();
@@ -133,11 +69,13 @@ export const platformAuthApi = {
     }
   },
   updateMe: async (data: PlatformMeUpdateRequest): Promise<PlatformMeResponse> => {
-    // token は発送前に捕まえ、応答後も同じ token のときだけ書く。応答後に読み直すと、
-    // 待機中に別タブで再ログインした場合、新しい token の鍵へ旧利用者の応答を書き込んでしまう。
+    // 変異の応答をキャッシュへ書き戻すと、同一 token の並行変異（別タブの updateMe・遅延中の
+    // GET）との順序をクライアントでは正しく決められない。失効印だけを残し、次の me() に
+    // サーバから取り直させる。token は発送前に捕まえ、応答後も同一のときだけ印を書く
+    //（待機中に別タブで再ログインした場合、新しい利用者の枠に印を残さない）。
     const token = Cookies.get('token');
     const response = await apiClient.put('/platform/me', data);
-    if (token && Cookies.get('token') === token) writeCachedMe(token, response.data);
+    if (token && Cookies.get('token') === token) markMeCacheStale(token);
     return response.data;
   },
   stores: async (): Promise<PlatformStore[]> => {

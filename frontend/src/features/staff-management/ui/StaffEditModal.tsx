@@ -100,7 +100,9 @@ export function StaffEditModal({
     <Dialog
       open
       onOpenChange={next => {
-        if (!next) onClose();
+        // 送信中は閉じさせない。閉じると unmount で isSubmitting が消え、開き直した複製から
+        // 二重送信できるうえ、古い継続の onClose/onUpdated が複製のモーダルへ波及する
+        if (!next && !isSubmitting) onClose();
       }}
     >
       <DialogContent
@@ -159,7 +161,7 @@ export function StaffEditModal({
             <p className="rounded-md bg-primary/10 p-3 text-sm text-primary-strong">{summary}</p>
           </div>
           <div className="flex justify-end gap-3 border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               キャンセル
             </Button>
             <Button type="button" onClick={submit} disabled={isSubmitting}>

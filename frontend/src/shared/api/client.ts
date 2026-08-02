@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import { clearMeCache } from './me-cache';
 import {
   clearPlatformSession,
   getPlatformConsole,
@@ -81,6 +82,9 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
       }
       Cookies.remove('token');
+      // 失効・停止で終わるセッションは logout を経ないため、ここでも me キャッシュを破棄して
+      // 共有端末に個人情報（氏名・権限・担当店舗）を残さない
+      clearMeCache();
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         redirectToLogin();
       }
@@ -99,6 +103,7 @@ apiClient.interceptors.response.use(
         platformConsole !== 'member'
       ) {
         Cookies.remove('token');
+        clearMeCache();
         clearPlatformSession();
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           redirectToLogin();

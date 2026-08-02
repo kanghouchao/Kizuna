@@ -20,6 +20,8 @@ const me = (name: string) => ({ display_name: name, permissions: ['PLATFORM_VIEW
 describe('platformAuthApi.me の token 単位キャッシュ', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // localStorage と、書けなかった変異の in-memory 控えの両方を初期化する
+    clearMeCache();
     window.localStorage.clear();
     (mockedCookies.get as jest.Mock).mockReturnValue('token-a');
     client.get.mockResolvedValue({ data: me('山田') });
@@ -70,16 +72,16 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(2);
   });
 
-  it('updateMe は応答でキャッシュを上書きする（次の me は新表示名を返す）', async () => {
+  it('updateMe はキャッシュを失効させ、次の me() はサーバから取り直す', async () => {
     await platformAuthApi.me();
     client.put.mockResolvedValue({ data: me('改名後') });
 
+    // 変異の応答は書き戻さない（並行変異との順序をクライアントで決めない）。失効印だけ残る
     await platformAuthApi.updateMe({ display_name: '改名後' });
-    const after = await platformAuthApi.me();
 
-    expect(after).toEqual(me('改名後'));
-    // 表示名の更新後もキャッシュが有効なままなので GET は初回の 1 回だけ
-    expect(client.get).toHaveBeenCalledTimes(1);
+    client.get.mockResolvedValue({ data: me('改名後') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('改名後'));
+    expect(client.get).toHaveBeenCalledTimes(2);
   });
 
   it('updateMe の待機中に token が替わったら（別タブの再ログイン）応答をキャッシュしない', async () => {
@@ -119,7 +121,7 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
   });
 
-  it('未キャッシュの me() 応答が遅延しても、待機中に済んだ updateMe の書き込みを潰さない', async () => {
+  it('未キャッシュの me() 応答が遅延しても、待機中に済んだ updateMe の失効印を潰さない', async () => {
     let resolveGet!: (value: { data: unknown }) => void;
     client.get.mockImplementationOnce(
       () =>
@@ -129,16 +131,45 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     );
     const pending = platformAuthApi.me();
 
-    // GET の応答待ちの間に（別タブ相当の）updateMe が完了して新値をキャッシュする
+    // GET の応答待ちの間に（別タブ相当の）updateMe が完了して失効印を残す
     client.put.mockResolvedValue({ data: me('新しい名前') });
     await platformAuthApi.updateMe({ display_name: '新しい名前' });
 
     resolveGet({ data: me('古い名前') });
     await expect(pending).resolves.toEqual(me('古い名前'));
 
-    // キャッシュは updateMe の新値のまま。次の me() は再取得せず新値を返す
+    // 遅延応答（古い名前）はキャッシュされず、次の me() はサーバから新値を取り直す
+    client.get.mockResolvedValue({ data: me('新しい名前') });
     await expect(platformAuthApi.me()).resolves.toEqual(me('新しい名前'));
-    expect(client.get).toHaveBeenCalledTimes(1);
+    expect(client.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('updateMe の失効印の保存に失敗しても（quota 超過）、遅延中の GET が旧値を書き戻さない', async () => {
+    let resolveGet!: (value: { data: unknown }) => void;
+    client.get.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveGet = resolve;
+        })
+    );
+    const pending = platformAuthApi.me();
+
+    // 失効印の書き込みも失敗する storage 環境で updateMe が完了する
+    const setSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    client.put.mockResolvedValue({ data: me('新しい名前') });
+    await platformAuthApi.updateMe({ display_name: '新しい名前' });
+    setSpy.mockRestore();
+
+    resolveGet({ data: me('古い名前') });
+    await pending;
+
+    // in-memory の変異控えが遅延応答の書き戻しを弾く。キャッシュは空のまま、次はサーバへ
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+    client.get.mockResolvedValue({ data: me('新しい名前') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('新しい名前'));
+    expect(client.get).toHaveBeenCalledTimes(2);
   });
 
   it('保存値に token そのものを含めない（cookie 除去後の localStorage から JWT を回収させない）', async () => {
@@ -149,7 +180,7 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(stored).not.toContain('token-a');
   });
 
-  it('上書きの失敗時は既存の記録も消し、次の me() はサーバへ取りに行く', async () => {
+  it('失効印の保存に失敗したら既存の記録も消し、次の me() はサーバへ取りに行く', async () => {
     await platformAuthApi.me();
     expect(window.localStorage.getItem('platform-me-cache')).not.toBeNull();
 

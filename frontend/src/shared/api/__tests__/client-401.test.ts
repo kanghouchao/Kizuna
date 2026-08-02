@@ -53,10 +53,13 @@ describe('apiClient 401/403 interceptor', () => {
 
   it('clears token and redirects on 401', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
+    // 失効・停止で終わるセッションは logout を経ないため、me キャッシュもここで破棄される
+    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
 
     await withRejectingAdapter(401, () => apiClient.get('/platform/me'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
     // assert that our navigation helper was called (no real navigation in jsdom)
     expect(redirectMock).toHaveBeenCalled();
   });
@@ -75,10 +78,12 @@ describe('apiClient 401/403 interceptor', () => {
   it('clears session and redirects on 403 when the platform-role cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
     platformConsoleValue = 'STORE_MANAGER';
     const removeSpy = jest.spyOn(Cookies, 'remove');
+    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
 
     await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
     expect(clearPlatformSessionMock).toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalled();
   });

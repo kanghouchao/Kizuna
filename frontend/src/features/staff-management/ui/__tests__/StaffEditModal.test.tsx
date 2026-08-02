@@ -163,4 +163,19 @@ describe('スタッフ授権編集モーダル', () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
+
+  // 閉じると unmount で送信状態が消え、開き直した複製から二重送信できてしまうため、
+  // 送信中はキャンセルも Escape も閉じない
+  it('送信中は閉じられない', async () => {
+    mockedStaffApi.update.mockImplementationOnce(() => new Promise(() => {}));
+    const { onClose } = renderModal();
+    await screen.findByRole('dialog');
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await screen.findByRole('button', { name: '保存中...' });
+
+    expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
