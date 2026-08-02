@@ -6,6 +6,7 @@ import Cookies from 'js-cookie';
 import { toast } from 'react-hot-toast';
 import { memberApi, MemberRegisterRequest } from '@/entities/member';
 import { platformAuthApi } from '@/entities/user';
+import { clearMeCache } from '@/shared/api';
 import { getApiErrorMessage, startPlatformSession } from '@/shared/lib';
 
 /**
@@ -35,6 +36,9 @@ export function MemberRegisterForm() {
         { email: values.email, password: values.password },
         { skipAuthRedirect: true }
       );
+      // 別セッションの me キャッシュが残っていると、新しい token へ差し替えた後も旧セッションの
+      // 応答が読める窓が生まれるため、token を書く前に破棄する
+      clearMeCache();
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
       Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
       startPlatformSession('member', expires_at);

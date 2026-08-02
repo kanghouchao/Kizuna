@@ -132,6 +132,51 @@ describe('platformAuthApi.me の token 単位キャッシュ', () => {
     expect(client.get).toHaveBeenCalledTimes(2);
   });
 
+  it('PUT の飛行中は、前標と同序数で取得した変異前の応答も配信しない（pending の裁定）', async () => {
+    await platformAuthApi.me();
+    let resolvePut!: (value: { data: unknown }) => void;
+    client.put.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolvePut = resolve;
+        })
+    );
+    const mutation = platformAuthApi.updateMe({ display_name: '改名後' });
+
+    // 前標の後・変異確定の前に発送された GET は、標と同じ序数で変異前の応答を持ち帰り得る
+    client.get.mockResolvedValueOnce({ data: me('変異前') });
+    await platformAuthApi.me();
+
+    // 飛行中の 2 回目の me() がその等序数キャッシュを掴むと、変異前の値が配信される
+    client.get.mockResolvedValue({ data: me('変異前2') });
+    await expect(platformAuthApi.me()).resolves.toEqual(me('変異前2'));
+    expect(client.get).toHaveBeenCalledTimes(3);
+
+    resolvePut({ data: me('改名後') });
+    await mutation;
+  });
+
+  it('pending の失効標は別タブでも効く（等序数の変異前キャッシュを配信しない）', async () => {
+    await platformAuthApi.me();
+    client.put.mockImplementationOnce(() => new Promise(() => {}));
+    void platformAuthApi.updateMe({ display_name: '改名中' });
+
+    // 飛行中に発送された GET が変異前の応答を等序数でキャッシュした状況
+    client.get.mockResolvedValueOnce({ data: me('変異前') });
+    await platformAuthApi.me();
+
+    // 別タブ相当: in-memory の変異控えを持たない新モジュールでも、storage の pending 標が
+    // 同序数の記録を陳腐と裁定する
+    let freshApi!: typeof platformAuthApi;
+    jest.isolateModules(() => {
+      freshApi = (require('../api/platform') as { platformAuthApi: typeof platformAuthApi })
+        .platformAuthApi;
+    });
+    client.get.mockResolvedValue({ data: me('変異前2') });
+    await expect(freshApi.me()).resolves.toEqual(me('変異前2'));
+    expect(client.get).toHaveBeenCalledTimes(3);
+  });
+
   it('時計が逆行しても失効の裁定は壊れない（順序は壁時計でなく序数）', async () => {
     const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(2000);
     await platformAuthApi.me();

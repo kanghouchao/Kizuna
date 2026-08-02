@@ -5,8 +5,8 @@
 //
 // 記録は 3 種の key に分かれる:
 // - ME_CACHE_KEY: 応答本体（GET の継続だけが書く）
-// - ME_STALE_PREFIX + 指紋: 失効標（変異 updateMe だけが書く。指紋ごとに独立の key —
-//   1 つの写像に束ねると read-modify-write になり、別タブの変異と交錯して片方の標が失われる）
+// - ME_STALE_PREFIX + 指紋: 失効標 {seq, pending}（変異 updateMe だけが書く。指紋ごとに独立の
+//   key — 1 つの写像に束ねると read-modify-write になり、別タブの変異と交錯して片方の標が失われる）
 // - ME_SEQ_KEY:  単調増加の序数（新旧の裁定に使う。壁時計は時刻補正・VM 復帰で逆行し得るため
 //                順序付けに使わない）
 // localStorage には検査と書き込みを跨ぐ原子性が無く、「新しい書き込みが無いか確認してから書く」
@@ -39,12 +39,24 @@ interface MeCacheRecord {
   asOfSeq?: number;
 }
 
+/**
+ * 失効標。seq は変異の序数、pending は「変異がまだ飛行中」の印。飛行中は、標と同じ序数で
+ * 発送された GET（＝前標の後・変異確定の前に出た読み）が変異前の応答を持ち帰り得るため、
+ * 同序数の記録も陳腐として扱う。確定後（finally の後標）は pending が畳まれ、通常の
+ * 「標より大きい序数の記録だけ新鮮」に戻る。
+ */
+interface StaleMark {
+  seq?: number;
+  pending?: boolean;
+}
+
 /** 失効標の保持上限。トークンは寿命が短く、古い標から捨てても実害は無い。 */
 const MAX_STALE_ENTRIES = 8;
 
 // storage へ書けなかった変異の控え。同一タブ内では persistence が失敗しても
 // 「この序数より古い応答は陳腐」という裁定を残す。
 let lastMutationSeq = 0;
+let lastMutationPending = false;
 
 function readJson<T>(key: string): T | null {
   if (typeof window === 'undefined') return null;
@@ -97,10 +109,17 @@ function bumpMeSeq(): number {
   return next;
 }
 
-/** 指紋の失効標（変異序数）。無ければ 0。 */
-function readStaleSeq(fingerprint: string): number {
+/** 指紋の失効標。無ければ seq 0・pending 無し。 */
+function readStaleMark(fingerprint: string): { seq: number; pending: boolean } {
   const raw = readJson<unknown>(ME_STALE_PREFIX + fingerprint);
-  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+  if (raw && typeof raw === 'object') {
+    const { seq, pending } = raw as StaleMark;
+    return {
+      seq: typeof seq === 'number' && Number.isFinite(seq) ? seq : 0,
+      pending: pending === true,
+    };
+  }
+  return { seq: 0, pending: false };
 }
 
 /** 失効標の key を全て列挙する（掃除・破棄用）。 */
@@ -118,13 +137,20 @@ function listStaleKeys(): string[] {
   }
 }
 
-/** token に対応する新鮮な応答を返す。as-of より大きい序数の失効標がある記録は陳腐として扱わない。 */
+/**
+ * token に対応する新鮮な応答を返す。as-of より大きい序数の失効標がある記録は陳腐。
+ * 標が pending（変異の飛行中）の間は、同序数の記録も陳腐として扱う — 前標の直後に発送された
+ * GET は標と同じ序数を as-of に持つが、変異前の応答を持ち帰り得るため。
+ */
 export function readCachedMe(token: string): unknown | null {
   const record = readJson<MeCacheRecord>(ME_CACHE_KEY);
   if (record?.fingerprint !== tokenFingerprint(token) || record.me === undefined) return null;
   const asOfSeq = record.asOfSeq ?? 0;
   if (lastMutationSeq > asOfSeq) return null;
-  if (readStaleSeq(record.fingerprint) > asOfSeq) return null;
+  if (lastMutationPending && lastMutationSeq >= asOfSeq) return null;
+  const mark = readStaleMark(record.fingerprint);
+  if (mark.seq > asOfSeq) return null;
+  if (mark.pending && mark.seq >= asOfSeq) return null;
   return record.me;
 }
 
@@ -154,20 +180,29 @@ export function writeCachedMe(token: string, me: unknown, asOfSeq: number): void
  * 変異（PUT /platform/me）の発送前と応答後に呼ぶ。応答の全量を書き戻すと、同一 token の
  * 並行変異（別タブの updateMe・遅延中の GET）との順序をクライアントでは正しく決められない
  * ため、「この序数より古い応答は陳腐」という失効標だけを残す。
+ *
+ * pending は前標（発送前）で立て、後標（finally）で畳む。飛行中に発送された GET は標と
+ * 同じ序数を持ち得るため、pending の間は同序数も陳腐と裁定される（readCachedMe）。後標が
+ * 書かれずに終わった場合（タブ閉鎖・storage 故障）は pending が残り、その指紋のキャッシュが
+ * 効かなくなるだけで、陳腐な応答が配られる側には倒れない。
  */
-export async function markMeCacheStale(token: string): Promise<void> {
+export async function markMeCacheStale(token: string, pending = false): Promise<void> {
   await withSeqLock(() => {
     const seq = bumpMeSeq();
     // 保存に失敗しても同一タブ内の遅延 GET は弾けるよう、in-memory の控えは必ず立てる
     lastMutationSeq = seq;
+    lastMutationPending = pending;
     if (typeof window === 'undefined') return;
     try {
       // 指紋ごとに独立の key へ 1 回の setItem で書く（read-modify-write を作らない）
-      window.localStorage.setItem(ME_STALE_PREFIX + tokenFingerprint(token), JSON.stringify(seq));
+      window.localStorage.setItem(
+        ME_STALE_PREFIX + tokenFingerprint(token),
+        JSON.stringify({ seq, pending } satisfies StaleMark)
+      );
       // 上限を超えたら古い標（小さい序数）から捨てる。掃除は古い標にしか触れないため、
       // 直前に書かれた標（最大級の序数）を消すことはない
       const entries = listStaleKeys()
-        .map(key => [key, readStaleSeq(key.slice(ME_STALE_PREFIX.length))] as const)
+        .map(key => [key, readStaleMark(key.slice(ME_STALE_PREFIX.length)).seq] as const)
         .sort(([, a], [, b]) => b - a);
       for (const [key] of entries.slice(MAX_STALE_ENTRIES)) {
         removeKey(key);
@@ -196,6 +231,7 @@ export function clearMeCache(): void {
   // セッションが終わるので、書けなかった変異の控えも次のセッションへ持ち越さない。
   // 序数（ME_SEQ_KEY）は破棄しない — 消すと他タブの in-flight な記録との大小関係が壊れる
   lastMutationSeq = 0;
+  lastMutationPending = false;
   removeKey(ME_CACHE_KEY);
   for (const key of listStaleKeys()) {
     removeKey(key);

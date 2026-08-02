@@ -73,6 +73,20 @@ describe('MemberRegisterForm', () => {
     expect(mockedToastError).not.toHaveBeenCalled();
   });
 
+  it('自動ログインで token を書く前に、別セッションの me キャッシュを破棄する', async () => {
+    // 直前まで別利用者が使っていた端末に、その利用者の me キャッシュが残っている状況
+    window.localStorage.setItem('platform-me-cache', JSON.stringify({ fingerprint: 'x' }));
+    window.localStorage.setItem('platform-me-stale.x', JSON.stringify({ seq: 1 }));
+    mockedRegister.mockResolvedValue({ member_code: '123456789012' });
+    mockedLogin.mockResolvedValue({ token: 'jwt-token', expires_at: Date.now() + 3600_000 });
+
+    await submitForm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
+    expect(window.localStorage.getItem('platform-me-cache')).toBeNull();
+    expect(window.localStorage.getItem('platform-me-stale.x')).toBeNull();
+  });
+
   it('登録に失敗したらエラートーストを出し、ログインは試みない', async () => {
     mockedRegister.mockRejectedValue(new Error('duplicate'));
 

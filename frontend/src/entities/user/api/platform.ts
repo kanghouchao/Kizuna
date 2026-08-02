@@ -89,12 +89,14 @@ export const platformAuthApi = {
     // cookie が別 token に替わっていても（招待受諾の一時 token 等）無条件に記してよい——
     // 記さないと、元の token が後から復元されたとき変異前のキャッシュが生き返る。
     // 発送前にも記すのは、サーバ側で変異が確定してから応答が戻るまでの間に他所の me() が
-    // 変異前のキャッシュを掴まないため。後標は finally で記す — 応答が失われても（timeout・
+    // 変異前のキャッシュを掴まないため。前標は pending で記す — 飛行中に発送された GET は
+    // 前標と同じ序数を as-of に持ちながら変異前の応答を持ち帰り得るため、pending の間は
+    // 同序数も陳腐と裁定させる。後標は finally で記す — 応答が失われても（timeout・
     // 通信断）変異はサーバで確定し得るため、成否を問わず残す（失敗が確定していた場合の
     // 代償は 1 回の再取得のみ）。Authorization も捕まえた token で明示束縛し、変異と失効標が
     // 常に同じセッションを指すようにする。
     const token = Cookies.get('token');
-    if (token) await markMeCacheStale(token);
+    if (token) await markMeCacheStale(token, true);
     try {
       const response = await apiClient.put(
         '/platform/me',
