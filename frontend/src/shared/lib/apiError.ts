@@ -16,6 +16,18 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
  * 再試行も閉じ直しも同じ 409 を繰り返す。
  */
 export function isConflict(error: unknown): boolean {
-  if (!error || typeof error !== 'object' || !('response' in error)) return false;
-  return (error as { response?: { status?: number } }).response?.status === 409;
+  return statusOf(error) === 409;
+}
+
+/**
+ * 対象が存在しない（404）か。「見つからない」と「取得そのものの失敗」を同じ表示に潰さないために使う。
+ * 潰すと、瞬断で消えたように見える画面から利用者が再試行できなくなる。
+ */
+export function isNotFound(error: unknown): boolean {
+  return statusOf(error) === 404;
+}
+
+function statusOf(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object' || !('response' in error)) return undefined;
+  return (error as { response?: { status?: number } }).response?.status;
 }

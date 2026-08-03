@@ -22,10 +22,10 @@ export const orderApi = {
     const response = await apiClient.get('/store/orders/receptionists');
     return response.data;
   },
-  /** 予約受付 inbox の未確定申請一覧（絞り込みはサーバ側）。 */
-  listReservationRequests: async (): Promise<Order[]> => {
-    const response = await apiClient.get('/store/orders/reservation-requests');
-    return response.data;
+  /** 予約受付 inbox の未確定申請一覧（絞り込みと並びはサーバ側、取得件数はページで抑える）。 */
+  listReservationRequests: async (params?: PaginationParams): Promise<PageResult<Order>> => {
+    const response = await apiClient.get('/store/orders/reservation-requests', { params });
+    return fromSpringPage(response.data);
   },
   /** 予約申請を確定する（受注として受け付ける）。 */
   confirm: async (id: string): Promise<Order> => {

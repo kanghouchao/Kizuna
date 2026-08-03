@@ -76,4 +76,40 @@ describe('MemberReservationsPage', () => {
       await screen.findByText('予約を取得できませんでした。再読み込みしてください。')
     ).toBeInTheDocument();
   });
+
+  it('追加読み込みに失敗しても既に読み込んだ予約は消さず、その拡張だけ再試行できる', async () => {
+    // 窓が満ちているかどうかを見る画面なので、件数は実際の応答と同じ形にする
+    const reservations = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `o${i}`,
+        store_name: i === 0 ? '店舗A' : `店舗${i}`,
+        business_date: '2026-08-10',
+        status: 'CREATED',
+      }));
+    mockedList.mockResolvedValueOnce({ rows: reservations(20), page: 0, pageCount: 2, total: 25 });
+    mockedList.mockRejectedValueOnce(new Error('failed'));
+    mockedList.mockResolvedValueOnce({ rows: reservations(25), page: 0, pageCount: 2, total: 25 });
+
+    render(<MemberReservationsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
+
+    expect(
+      await screen.findByText('予約を追加で取得できませんでした。表示は前回の取得内容です。')
+    ).toBeInTheDocument();
+    // 全体を失敗表示に置き換えない — 既に読み込めていた予約は取り下げられるままにする
+    expect(screen.getByText('店舗A')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(20);
+    expect(
+      screen.queryByText('予約を取得できませんでした。再読み込みしてください。')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    // 失敗した拡張と同じ範囲を取り直す（読み込み済みページ数を進めていない）
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith({ page: 0, size: 40 }));
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(25)
+    );
+  });
 });

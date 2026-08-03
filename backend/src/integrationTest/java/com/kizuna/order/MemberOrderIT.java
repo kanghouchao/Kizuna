@@ -151,7 +151,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
     List<String> ids = new ArrayList<>();
-    inbox.getBody().forEach(node -> ids.add(node.path("id").asString()));
+    inbox.getBody().path("content").forEach(node -> ids.add(node.path("id").asString()));
     assertThat(ids).as("会員の未確定申請は現れること").contains(requestId);
     assertThat(ids).as("店舗が起こした受注は受付経路が WEB でも現れないこと").doesNotContain(staffOrderId);
 
@@ -168,8 +168,42 @@ class MemberOrderIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
     List<String> remaining = new ArrayList<>();
-    afterConfirm.getBody().forEach(node -> remaining.add(node.path("id").asString()));
+    afterConfirm
+        .getBody()
+        .path("content")
+        .forEach(node -> remaining.add(node.path("id").asString()));
     assertThat(remaining).doesNotContain(requestId);
+  }
+
+  @Test
+  @DisplayName("取得件数の上限を超えた未処理の申請にも、ページを辿れば到達できること")
+  void inboxPagesThroughEveryPendingRequest() {
+    List<String> requested =
+        List.of(
+            requestReservation(memberAToken, STORE_A, "ページング 1"),
+            requestReservation(memberAToken, STORE_A, "ページング 2"),
+            requestReservation(memberAToken, STORE_A, "ページング 3"));
+
+    // 1 件ずつしか返さない窓でも、総ページ数を辿ればすべての未処理の申請に届く。
+    List<String> collected = new ArrayList<>();
+    int page = 0;
+    int totalPages;
+    do {
+      ResponseEntity<JsonNode> inbox =
+          rest.exchange(
+              "/store/orders/reservation-requests?page=" + page + "&size=1",
+              HttpMethod.GET,
+              new HttpEntity<>(storeHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+      JsonNode body = inbox.getBody();
+      assertThat(body.path("content").size()).as("1 回の取得件数が上限で抑えられること").isLessThanOrEqualTo(1);
+      body.path("content").forEach(node -> collected.add(node.path("id").asString()));
+      totalPages = body.path("total_pages").asInt();
+      page++;
+    } while (page < totalPages);
+
+    assertThat(collected).as("未処理の申請がすべて取得窓に現れること").containsAll(requested);
   }
 
   private String createCastAs(long storeId, String name) {
@@ -221,7 +255,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
     List<String> ids = new ArrayList<>();
-    inbox.getBody().forEach(node -> ids.add(node.path("id").asString()));
+    inbox.getBody().path("content").forEach(node -> ids.add(node.path("id").asString()));
     assertThat(ids).as("会員 ID が欠落しても未確定の申請は処理対象として残ること").contains(orderId);
 
     ResponseEntity<JsonNode> confirmed =

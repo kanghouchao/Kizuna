@@ -69,13 +69,16 @@ public class OrderService {
    * 予約受付 inbox の未確定申請一覧。
    *
    * <p>絞り込みは DB 側で行う — 受注一覧の先頭ページを取って手元で選り分けると、確定済みの受注が積み上がった店舗で 未処理の申請が窓から落ちて見えなくなる。
+   *
+   * <p>絞り込んだうえでページングもする。未処理の申請は店舗が処理し終えるまで残り続けるため、無界で返すと 積み上がるほど 1
+   * 回の取得・応答・描画が重くなる。総件数を伴うので、上限を超えた分にも呼出側が到達できる。
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<OrderResponse> listPendingReservationRequests() {
-    return orderRepository.findPendingReservationRequestViews().stream()
-        .map(orderMapper::toResponse)
-        .toList();
+  public Page<OrderResponse> listPendingReservationRequests(Pageable pageable) {
+    return orderRepository
+        .findPendingReservationRequestViews(pageable)
+        .map(orderMapper::toResponse);
   }
 
   @StoreScoped

@@ -37,7 +37,12 @@ describe('店側オーダー画面の描画', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
-    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
+    mockedOrderApi.listReservationRequests.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
+    });
   });
 
   // fixture は手書きであり、バックエンドの実応答を見ているわけではない。
@@ -103,6 +108,23 @@ describe('店側オーダー画面の描画', () => {
     );
     const links = screen.getAllByRole('link');
     expect(links.map(link => link.getAttribute('href'))).toContain('/store/1/orders/7/edit');
+  });
+
+  it('店舗が手入力した未確定の受注を「申請中」と表示しないこと', async () => {
+    // CREATED は申請でも店舗起点の受注でも起きる。申請中と呼ぶと、店舗が起こした受注まで
+    // 会員の申請に見えて予約受付 inbox の対象と誤認される。
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [{ id: '9', business_date: '2026-07-05', status: 'CREATED' }],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
+
+    render(<OrderListPage />);
+
+    expect(await screen.findByText('未確定')).toBeInTheDocument();
+    expect(screen.queryByText('申請中')).not.toBeInTheDocument();
+    expect(screen.queryByText('WEB申請')).not.toBeInTheDocument();
   });
 
   it('キャスト未指名はフリー表記になること', async () => {
@@ -188,7 +210,12 @@ describe('オーダー一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
-    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
+    mockedOrderApi.listReservationRequests.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
+    });
     mockedOrderApi.list.mockResolvedValue({
       rows: [],
       page: 0,
@@ -215,7 +242,12 @@ describe('オーダー一覧のページ送り', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
-    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
+    mockedOrderApi.listReservationRequests.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
+    });
   });
 
   // 1 ページ 20 件で、101 件目以降にもページ送りで到達できることを固定する

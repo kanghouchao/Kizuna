@@ -1,6 +1,5 @@
 package com.kizuna.order.domain;
 
-import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -51,6 +50,15 @@ public interface OrderRepository
   @Query(VIEW_SELECT + " where o.id = :id")
   Optional<OrderView> findViewById(@Param("id") String id);
 
+  // 未確定の申請の抽出条件。本体と件数の問い合わせが同じ条件を共有する（片方だけ直すと
+  // 総件数と中身が食い違い、ページングが到達できない申請を生む）。
+  String PENDING_REQUEST_WHERE =
+      """
+      where o.status = com.kizuna.order.domain.OrderStatus.CREATED
+        and o.receptionRoute = com.kizuna.order.domain.ReceptionRoute.WEB
+        and o.requesterMemberCode is not null
+      """;
+
   /**
    * 予約受付 inbox が扱う未確定の申請（会員ポータルからの Web 申請のうち、まだ確定も謝絶もしていないもの）。
    *
@@ -59,17 +67,13 @@ public interface OrderRepository
    * <p>申請者の判定に使うのは会員 ID ではなく会員コードのスナップショットである。会員行が消えると FK は SET NULL で 会員 ID
    * が欠落するが、未確定の申請はそれでも店舗が処理し終える必要がある。ID を要求すると、その申請が CREATED のまま inbox から消えて処理不能になる。
    *
-   * <p>処理済みの閲覧は受注一覧の責務なので、ここでは未確定のものだけを古い順に返す。
+   * <p>処理済みの閲覧は受注一覧の責務なので、ここでは未確定のものだけを古い順に返す。並びは問い合わせ側で 一意な副キー id
+   * まで固定する（未処理の申請は処理するまで残り続けるため、offset ページングで行の重複・欠落を 起こさない全順序が要る）。
    */
   @Query(
-      VIEW_SELECT
-          + """
-          where o.status = com.kizuna.order.domain.OrderStatus.CREATED
-            and o.receptionRoute = com.kizuna.order.domain.ReceptionRoute.WEB
-            and o.requesterMemberCode is not null
-          order by o.createdAt asc, o.id asc
-          """)
-  List<OrderView> findPendingReservationRequestViews();
+      value = VIEW_SELECT + PENDING_REQUEST_WHERE + " order by o.createdAt asc, o.id asc",
+      countQuery = "select count(o) from com.kizuna.order.domain.Order o " + PENDING_REQUEST_WHERE)
+  Page<OrderView> findPendingReservationRequestViews(Pageable pageable);
 
   // 平台横断一覧（集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う。
   // 店舗（store）表示名の join は張らない。

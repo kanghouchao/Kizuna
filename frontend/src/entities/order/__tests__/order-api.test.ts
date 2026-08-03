@@ -42,10 +42,26 @@ describe('orderApi', () => {
       url: '/store/orders/receptionists',
     });
   });
-  it('listReservationRequests は予約受付の専用読み口を GET する', async () => {
-    expect(await orderApi.listReservationRequests()).toEqual({
-      ok: true,
-      url: '/store/orders/reservation-requests',
+  it('listReservationRequests は予約受付の専用読み口を GET し、Spring Page を正規化する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        content: [{ id: 'o1' }],
+        total_pages: 2,
+        total_elements: 21,
+        size: 20,
+        number: 0,
+      },
+    });
+
+    // 絞り込みは専用読み口の責務。受注一覧を取って手元で選り分ける形へは戻さない。
+    await expect(orderApi.listReservationRequests({ page: 0, size: 20 })).resolves.toEqual({
+      rows: [{ id: 'o1' }],
+      page: 0,
+      pageCount: 2,
+      total: 21,
+    });
+    expect(mockedGet).toHaveBeenCalledWith('/store/orders/reservation-requests', {
+      params: { page: 0, size: 20 },
     });
   });
   it('confirm は確定の子リソースを POST する', async () => {
