@@ -109,18 +109,19 @@ class CastFieldDefinitionServiceTest {
   }
 
   @Test
-  void create_convertsDbDuplicateKeyRaceTo400() {
-    // 事前チェックをすり抜けた並行 create が DB の (store_id, key) 一意制約に当たるレース。
-    // save 時の DataIntegrityViolationException を、事前チェックと同一の 400 へ変換する。
+  void create_propagatesDataIntegrityViolation() {
+    // 事前チェックをすり抜けた整合性違反はサービスで握りつぶさず、そのまま伝播すること。
+    // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
+    // サービス層で 400 に変換すると FK 等の実装欠陥まで「重複」に化けてしまう。
     when(repository.existsByKey("blood_type")).thenReturn(false);
     when(repository.count()).thenReturn(0L);
     when(repository.findMaxDisplayOrder()).thenReturn(null);
-    when(repository.saveAndFlush(any()))
-        .thenThrow(new DataIntegrityViolationException("uq_t_cast_field_definitions_store_key"));
+    DataIntegrityViolationException violation =
+        new DataIntegrityViolationException("uq_t_cast_field_definitions_store_key");
+    when(repository.saveAndFlush(any())).thenThrow(violation);
 
     assertThatThrownBy(() -> service.create(createRequest("blood_type", "血液型")))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("既に登録されています");
+        .isSameAs(violation);
   }
 
   @Test

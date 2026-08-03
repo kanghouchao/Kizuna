@@ -105,15 +105,16 @@ class CastInvitationServiceTest {
   }
 
   @Test
-  void issue_convertsPendingUniqueViolationToStateException() {
-    // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定した場合、部分ユニーク
-    // インデックス違反（DataIntegrityViolationException）となる。これを意味のある 400 に変換する。
+  void issue_propagatesDataIntegrityViolation() {
+    // 事前チェックをすり抜けた整合性違反はサービスで握りつぶさず、そのまま伝播すること。
+    // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
+    // サービス層で 400 に変換すると FK 等の実装欠陥まで「競合」に化けてしまう。
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
-    when(castInvitationRepository.saveAndFlush(any()))
-        .thenThrow(new DataIntegrityViolationException("uq_t_cast_invitations_pending_cast"));
+    DataIntegrityViolationException violation =
+        new DataIntegrityViolationException("uq_t_cast_invitations_pending_cast");
+    when(castInvitationRepository.saveAndFlush(any())).thenThrow(violation);
 
-    assertThatThrownBy(() -> castInvitationService.issue("c1"))
-        .isInstanceOf(CastInvitationStateException.class);
+    assertThatThrownBy(() -> castInvitationService.issue("c1")).isSameAs(violation);
   }
 
   @Test
