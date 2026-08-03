@@ -248,9 +248,37 @@ class PlatformStaffServiceTest {
     when(repository.findByEmail("fk@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
     when(repository.saveAndFlush(any()))
-        .thenThrow(new DataIntegrityViolationException("fk violation"));
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "save failed",
+                new RuntimeException(
+                    "ERROR: insert or update on table \"t_user_stores\" violates foreign key"
+                        + " constraint \"fk_t_user_stores_store\"")));
 
     assertThatThrownBy(() -> service.create(req)).isInstanceOf(InvalidStoreScopeException.class);
+  }
+
+  @Test
+  void create_propagatesUnrelatedDataIntegrityViolation() {
+    // email 一意・店舗 FK 以外の整合性違反はサービスで握りつぶさず、そのまま伝播すること。
+    // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
+    // サービス層で 400 に変換すると想定外の実装欠陥まで「店舗が存在しません」に化けてしまう。
+    PlatformStaffCreateRequest req =
+        createRequest(
+            "fk@kizuna.test",
+            "rawpass",
+            Set.of(MANAGER_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(1L));
+    when(roleRepository.findAllById(Set.of(MANAGER_ROLE)))
+        .thenReturn(List.of(role(MANAGER_ROLE, "店長")));
+    when(repository.findByEmail("fk@kizuna.test")).thenReturn(Optional.empty());
+    when(encoder.encode("rawpass")).thenReturn("ENCODED");
+    DataIntegrityViolationException violation =
+        new DataIntegrityViolationException("save failed", new RuntimeException("NOT NULL 違反"));
+    when(repository.saveAndFlush(any())).thenThrow(violation);
+
+    assertThatThrownBy(() -> service.create(req)).isSameAs(violation);
   }
 
   @Test
@@ -382,7 +410,12 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(role(MANAGER_ROLE, "店長")));
     when(repository.findById(7L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing))
-        .thenThrow(new DataIntegrityViolationException("fk violation"));
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "save failed",
+                new RuntimeException(
+                    "ERROR: insert or update on table \"t_user_stores\" violates foreign key"
+                        + " constraint \"fk_t_user_stores_store\"")));
 
     assertThatThrownBy(
             () ->
