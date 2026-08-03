@@ -1,5 +1,6 @@
 package com.kizuna.order.domain;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -49,6 +50,24 @@ public interface OrderRepository
 
   @Query(VIEW_SELECT + " where o.id = :id")
   Optional<OrderView> findViewById(@Param("id") String id);
+
+  /**
+   * 予約受付 inbox が扱う未確定の申請（会員ポータルからの Web 申請のうち、まだ確定も謝絶もしていないもの）。
+   *
+   * <p>申請の判定は受付経路だけでは足りない — 受付経路は店舗が手入力の受注にも自由に付けられる記録項目であり、
+   * 申請であることの証拠にはならない。申請者（requesterMemberId）の存在まで見て初めて会員の申請だと言える。
+   *
+   * <p>処理済みの閲覧は受注一覧の責務なので、ここでは未確定のものだけを古い順に返す。
+   */
+  @Query(
+      VIEW_SELECT
+          + """
+          where o.status = com.kizuna.order.domain.OrderStatus.CREATED
+            and o.receptionRoute = com.kizuna.order.domain.ReceptionRoute.WEB
+            and o.requesterMemberId is not null
+          order by o.createdAt asc, o.id asc
+          """)
+  List<OrderView> findPendingReservationRequestViews();
 
   // 平台横断一覧（集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う。
   // 店舗（store）表示名の join は張らない。

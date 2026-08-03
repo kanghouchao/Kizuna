@@ -10,13 +10,12 @@ interface ReservationRequestInboxProps {
   onProcessed: () => void;
 }
 
-/** inbox が拾う件数の上限。未処理の申請は溜め込まない運用のため、一覧の 1 ページ分で足りる。 */
-const FETCH_SIZE = 50;
-
 /**
- * 予約受付 inbox。会員ポータルからの未確定申請（WEB 受付の CREATED）だけを表示する。
+ * 予約受付 inbox。会員ポータルからの未確定申請だけを表示する。
  *
- * <p>店舗が起こした未確定の受注は申請ではないため出さない — 確定・謝絶はあくまで申請への応答である。
+ * 絞り込みはサーバ側の専用読み口が行う。受注一覧を取って手元で選り分けると、
+ * 受付経路 WEB を手で付けた店舗起点の受注まで拾ってしまい、かつ確定済みが積み上がった
+ * 店舗では未処理の申請が取得窓から落ちて見えなくなる。
  */
 export function ReservationRequestInbox({ onProcessed }: ReservationRequestInboxProps) {
   const [requests, setRequests] = useState<Order[]>([]);
@@ -26,12 +25,8 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
   const load = () => {
     setLoading(true);
     orderApi
-      .list({ page: 0, size: FETCH_SIZE, sort: 'createdAt,id,desc' })
-      .then(page =>
-        setRequests(
-          page.rows.filter(order => order.status === 'CREATED' && order.reception_route === 'WEB')
-        )
-      )
+      .listReservationRequests()
+      .then(setRequests)
       .catch(() => toast.error('予約申請の取得に失敗しました'))
       .finally(() => setLoading(false));
   };

@@ -70,6 +70,20 @@ class OrderControllerTest {
   }
 
   @Test
+  @DisplayName("受注管理権限が無ければ予約受付 inbox を読めないこと")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void reservationRequestsAreRejectedWithoutOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            get("/store/orders/reservation-requests")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   @DisplayName("受注管理権限があれば予約申請を確定・謝絶できること")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmAndDeclineAreAllowedForOrderManage() throws Exception {

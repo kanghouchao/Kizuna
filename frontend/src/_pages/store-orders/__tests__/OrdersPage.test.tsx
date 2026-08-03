@@ -11,6 +11,7 @@ jest.mock('@/entities/order', () => ({
     list: jest.fn(),
     create: jest.fn(),
     listReceptionists: jest.fn(),
+    listReservationRequests: jest.fn(),
     confirm: jest.fn(),
     decline: jest.fn(),
   },
@@ -35,6 +36,8 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 describe('店側オーダー画面の描画', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
+    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
   });
 
   // fixture は手書きであり、バックエンドの実応答を見ているわけではない。
@@ -184,6 +187,8 @@ describe('店側オーダー画面の描画', () => {
 describe('オーダー一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
+    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
     mockedOrderApi.list.mockResolvedValue({
       rows: [],
       page: 0,
@@ -209,6 +214,8 @@ describe('オーダー一覧ページ固有の要素', () => {
 describe('オーダー一覧のページ送り', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
+    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
   });
 
   // 1 ページ 20 件で、101 件目以降にもページ送りで到達できることを固定する

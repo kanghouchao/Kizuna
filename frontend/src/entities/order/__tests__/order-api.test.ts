@@ -42,6 +42,12 @@ describe('orderApi', () => {
       url: '/store/orders/receptionists',
     });
   });
+  it('listReservationRequests は予約受付の専用読み口を GET する', async () => {
+    expect(await orderApi.listReservationRequests()).toEqual({
+      ok: true,
+      url: '/store/orders/reservation-requests',
+    });
+  });
   it('confirm は確定の子リソースを POST する', async () => {
     expect(await orderApi.confirm('o1')).toEqual({
       ok: true,

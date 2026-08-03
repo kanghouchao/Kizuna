@@ -58,6 +58,13 @@ public class OrderController {
         .body(orderService.create(request));
   }
 
+  /** 予約受付 inbox の未確定申請一覧。 */
+  @GetMapping("/reservation-requests")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<List<OrderResponse>> listReservationRequests() {
+    return ResponseEntity.ok(orderService.listPendingReservationRequests());
+  }
+
   /** 予約申請を確定する（受注として受け付ける）。 */
   @PostMapping("/{id}/confirmation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")

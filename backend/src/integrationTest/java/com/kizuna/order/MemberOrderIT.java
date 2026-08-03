@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -125,6 +127,71 @@ class MemberOrderIT extends CrossStoreTestSupport {
     assertThat(own.path("id").asString()).isEqualTo(orderId);
     assertThat(own.path("status").asString()).isEqualTo("CONFIRMED");
     assertThat(own.path("store_name").asString()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("予約受付 inbox には会員の未確定申請だけが現れること")
+  void reservationRequestInboxHoldsOnlyPendingMemberRequests() {
+    String requestId = requestReservation(memberAToken, STORE_A, "inbox 対象");
+
+    // 店舗が手入力した受注に受付経路 WEB を付けても、申請ではないため inbox には現れてはならない。
+    String castId = createCastAs(STORE_A, "inbox 判定用キャスト");
+    String staffOrderId = createStoreOrderTaggedWeb(castId);
+
+    ResponseEntity<JsonNode> inbox =
+        rest.exchange(
+            "/store/orders/reservation-requests",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+    List<String> ids = new ArrayList<>();
+    inbox.getBody().forEach(node -> ids.add(node.path("id").asString()));
+    assertThat(ids).as("会員の未確定申請は現れること").contains(requestId);
+    assertThat(ids).as("店舗が起こした受注は受付経路が WEB でも現れないこと").doesNotContain(staffOrderId);
+
+    // 確定したものは処理済みなので inbox から外れる
+    rest.exchange(
+        "/store/orders/" + requestId + "/confirmation",
+        HttpMethod.POST,
+        new HttpEntity<>(storeHeaders(STORE_A)),
+        JsonNode.class);
+    ResponseEntity<JsonNode> afterConfirm =
+        rest.exchange(
+            "/store/orders/reservation-requests",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    List<String> remaining = new ArrayList<>();
+    afterConfirm.getBody().forEach(node -> remaining.add(node.path("id").asString()));
+    assertThat(remaining).doesNotContain(requestId);
+  }
+
+  private String createCastAs(long storeId, String name) {
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/store/casts",
+            new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(storeId)),
+            JsonNode.class);
+    assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: キャスト作成が成功すること").isTrue();
+    return created.getBody().path("id").asString();
+  }
+
+  /** 店舗スタッフが手入力し、受付経路だけ WEB を付けた受注（申請ではない）。 */
+  private String createStoreOrderTaggedWeb(String castId) {
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/store/orders",
+            new HttpEntity<>(
+                "{\"receptionist_id\": 3, \"business_date\": \""
+                    + LocalDate.now()
+                    + "\", \"cast_id\": \""
+                    + castId
+                    + "\", \"reception_route\": \"WEB\"}",
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 店舗側の受注作成が成功すること").isTrue();
+    return created.getBody().path("id").asString();
   }
 
   @Test

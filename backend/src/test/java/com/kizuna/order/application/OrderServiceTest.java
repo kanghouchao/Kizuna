@@ -458,6 +458,18 @@ class OrderServiceTest {
   }
 
   @Test
+  void listPendingReservationRequestsDelegatesFilteringToTheQuery() {
+    OrderView view = mock(OrderView.class);
+    OrderResponse res = OrderResponse.builder().id("o1").build();
+    when(orderRepository.findPendingReservationRequestViews()).thenReturn(List.of(view));
+    when(orderMapper.toResponse(view)).thenReturn(res);
+
+    assertThat(service.listPendingReservationRequests()).containsExactly(res);
+    // 受注一覧の先頭ページを取って手元で選り分ける実装だと、確定済みが積み上がった店舗で申請が窓から落ちる
+    verify(orderRepository, never()).findAllViews(any(), any(Pageable.class));
+  }
+
+  @Test
   void confirmAssignsActorAsReceptionistWhenSlotIsEmpty() {
     Order request = Order.builder().status(OrderStatus.CREATED).build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
