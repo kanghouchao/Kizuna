@@ -281,8 +281,13 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public void delete(String id) {
-    if (!orderRepository.existsById(id)) {
-      throw new NotFoundException("注文が見つかりません: " + id);
+    Order order =
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    // 未確定の申請は削除ではなく謝絶で扱う — 削除すると CANCELLED の記録が残らず、会員側の
+    // 予約履歴からも消えてしまう。汎用更新の状態ガードと同じく、確定・謝絶を経た後の行は
+    // 通常の受注として削除の管理操作を受け付ける。
+    if (order.isReservationRequest() && order.getStatus() == OrderStatus.CREATED) {
+      throw new ServiceException("未確定の予約申請は削除できません。謝絶で扱ってください");
     }
     orderRepository.deleteById(id);
   }

@@ -765,15 +765,37 @@ class OrderServiceTest {
 
   @Test
   void deleteRemovesIfExists() {
-    when(orderRepository.existsById("o1")).thenReturn(true);
+    Order storeOrder = Order.builder().status(OrderStatus.CREATED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
     service.delete("o1");
     verify(orderRepository).deleteById("o1");
   }
 
   @Test
   void deleteThrowsWhenMissing() {
-    when(orderRepository.existsById("nope")).thenReturn(false);
+    when(orderRepository.findById("nope")).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.delete("nope")).isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void deleteRejectsPendingReservationRequests() {
+    // 未確定の申請を削除すると CANCELLED の記録が残らず会員の履歴からも消える — 謝絶へ誘導する
+    Order pending = reservationRequest().build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(pending));
+
+    assertThatThrownBy(() -> service.delete("o1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("謝絶で扱ってください");
+    verify(orderRepository, never()).deleteById(anyString());
+  }
+
+  @Test
+  void deleteAllowsProcessedMemberOrders() {
+    // 確定・謝絶を経た後の行は通常の受注として削除の管理操作を受け付ける
+    Order cancelled = reservationRequest().status(OrderStatus.CANCELLED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(cancelled));
+    service.delete("o1");
+    verify(orderRepository).deleteById("o1");
   }
 
   /** {@link #authorizedReceptionist()} を id・表示名だけ差し替えて複製する（一覧テストで複数件を区別するため）。 */
