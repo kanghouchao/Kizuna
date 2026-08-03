@@ -346,6 +346,32 @@ class OrderServiceTest {
   }
 
   @Test
+  void updateAllowsLifecycleTransitionsAfterConfirmation() {
+    // 受付経路と申請者スナップショットは確定後も残るため、「申請かどうか」だけで遷移を塞ぐと
+    // 会員起点の受注が完了・キャンセルへ一切進めなくなる。ガードは未確定（CREATED）に限る
+    Order confirmedOrder =
+        reservationRequest().status(OrderStatus.CONFIRMED).receptionistId(3L).build();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmedOrder));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    when(castRepository.existsById("g2")).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId(2L);
+    req.setStatus("COMPLETED");
+
+    service.update("o1", req);
+
+    assertThat(confirmedOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+  }
+
+  @Test
   void updateAllowsFieldEditsOnReservationRequestsWithoutStatusChange() {
     // 状態に触れない編集（受付担当・キャストの補完など）は申請にも引き続き許す
     Order request = reservationRequest().build();

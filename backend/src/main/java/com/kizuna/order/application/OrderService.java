@@ -105,9 +105,13 @@ public class OrderService {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
-    // 申請の状態遷移の入口は確定・謝絶の専用操作ただ一つ。汎用更新でも遷移できると、
-    // 確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう。
-    if (request.getStatus() != null && order.isReservationRequest()) {
+    // 未確定（CREATED）の申請に限り、状態遷移の入口は確定・謝絶の専用操作ただ一つ。汎用更新でも
+    // 遷移できると、確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう。
+    // 確定後は通常の受注としてのライフサイクル（完了・キャンセル）を汎用更新が引き続き受け持つ —
+    // 受付経路と申請者スナップショットは追跡のため残り続けるので、申請かどうかだけで判定してはならない。
+    if (request.getStatus() != null
+        && order.isReservationRequest()
+        && order.getStatus() == OrderStatus.CREATED) {
       throw new ServiceException("予約申請の状態は確定・謝絶の操作でのみ変更できます");
     }
 
