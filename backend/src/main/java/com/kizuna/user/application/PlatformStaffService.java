@@ -47,6 +47,9 @@ public class PlatformStaffService {
   /** 担当店舗集合が実在店舗を指すことを保証する t_user_stores の FK。FK 違反は全域ハンドラで 4xx にならないため、ここで照合して変換する。 */
   private static final String STORE_FK_CONSTRAINT = "fk_t_user_stores_store";
 
+  /** 授与ロールが実在することを保証する t_user_roles の FK。requireRoles 通過後の並行ロール削除で当たる。 */
+  private static final String ROLE_FK_CONSTRAINT = "fk_t_user_roles_role";
+
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
@@ -187,8 +190,8 @@ public class PlatformStaffService {
   }
 
   /**
-   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（存在しない店舗 id）は店舗エラーへ変換する（いずれも
-   * 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
+   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK
+   * 違反（requireRoles 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
    *
    * <p>店舗集合等の @ElementCollection 行はトランザクション commit 時に flush されるため、{@code save} だけでは FK 違反が この try
    * を突き抜けて 500 になる。{@code saveAndFlush} で違反をここで顕在化させ 400 へ変換する。
@@ -203,6 +206,9 @@ public class PlatformStaffService {
       }
       if (cause != null && cause.contains(STORE_FK_CONSTRAINT)) {
         throw new InvalidStoreScopeException("指定された店舗が存在しません");
+      }
+      if (cause != null && cause.contains(ROLE_FK_CONSTRAINT)) {
+        throw new ServiceException("指定されたロールが存在しません");
       }
       throw ex;
     }
