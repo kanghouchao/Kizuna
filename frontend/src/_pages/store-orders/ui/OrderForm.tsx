@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { CastResponse, castApi } from '@/entities/cast';
-import { OrderReceptionist, orderApi } from '@/entities/order';
+import { OrderReceptionist, ReceptionRoute, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 import {
   Button,
@@ -46,6 +46,8 @@ export interface OrderFormData {
   landmark: string;
   hasPet: boolean;
   castId: string;
+  pax: number;
+  receptionRoute: ReceptionRoute;
   courseMinutes: number;
   extensionMinutes: number;
   options: string[];
@@ -74,6 +76,8 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
       receptionistId: '',
       businessDate: new Date().toISOString().split('T')[0],
       classification: 'ーー',
+      pax: 1,
+      receptionRoute: 'PHONE',
       courseMinutes: 60,
       extensionMinutes: 0,
       discountName: '',
@@ -396,6 +400,30 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                         <SelectItem value="60">60</SelectItem>
                         <SelectItem value="90">90</SelectItem>
                         <SelectItem value="120">120</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+              <div className="grid gap-2">
+                <Label htmlFor="pax">人数</Label>
+                <Input id="pax" type="number" min={1} {...register('pax')} />
+              </div>
+              <FormField
+                control={control}
+                name="receptionRoute"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>受付経路</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="PHONE">電話受付</SelectItem>
+                        <SelectItem value="WEB">Web 申請</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormItem>

@@ -34,6 +34,8 @@ export default function CreateOrderPage() {
         ng_type: data.ngType,
         ng_content: data.ngContent,
         cast_id: data.castId, // 注: ユーザーが名前を入力する場合、ID解決が必要かもしれないが、フォーム上は 'castId' となっている
+        pax: Number(data.pax),
+        reception_route: data.receptionRoute,
         course_minutes: Number(data.courseMinutes),
         extension_minutes: Number(data.extensionMinutes),
         option_codes: data.options || [],

@@ -23,6 +23,7 @@ public class OrderResponse {
   private String customerName; // Helper
   private String castId;
   private String castName; // Helper
+  private Integer pax;
   private Integer courseMinutes;
   private Integer extensionMinutes;
   private List<String> optionCodes;
@@ -35,6 +36,8 @@ public class OrderResponse {
   private String remarks;
   private String castDriverMessage;
   private String status;
+  private String receptionRoute;
+  private String requesterMemberCode; // 申請した会員（店舗が起こした受注では null）
   private String locationAddress;
   private String locationBuilding;
 }

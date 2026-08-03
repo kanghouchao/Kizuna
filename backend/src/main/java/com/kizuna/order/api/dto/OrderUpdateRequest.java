@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalTime;
@@ -16,6 +17,9 @@ public class OrderUpdateRequest {
 
   @NotBlank(message = "キャストIDは必須です")
   private String castId;
+
+  @Min(value = 1, message = "人数は 1 以上です")
+  private Integer pax;
 
   private Integer courseMinutes;
   private Integer extensionMinutes;

@@ -22,12 +22,15 @@ public interface OrderRepository
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,
              o.customerId as customerId, c.name as customerName,
              o.castId as castId, k.name as castName,
+             o.pax as pax,
              o.courseMinutes as courseMinutes, o.extensionMinutes as extensionMinutes,
              o.optionCodes as optionCodes, o.discountName as discountName,
              o.manualDiscount as manualDiscount, o.carrier as carrier,
              o.mediaName as mediaName, o.usedPoints as usedPoints,
              o.manualGrantPoints as manualGrantPoints, o.remarks as remarks,
              o.castDriverMessage as castDriverMessage, o.status as status,
+             o.receptionRoute as receptionRoute,
+             o.requesterMemberCode as requesterMemberCode,
              o.locationAddress as locationAddress, o.locationBuilding as locationBuilding
       from com.kizuna.order.domain.Order o
         left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
@@ -63,4 +66,40 @@ public interface OrderRepository
       value = PLATFORM_VIEW_SELECT,
       countQuery = "select count(o) from com.kizuna.order.domain.Order o")
   Page<PlatformOrderView> findPlatformViews(Pageable pageable);
+
+  /**
+   * 会員本人の予約一覧（跨店集約）。
+   *
+   * <p>本人は店舗文脈を確立できず storeFilter は働かないため、where 句の {@code requesterMemberId} が唯一の隔離境界である。並びは業務日の降順に
+   * 一意な副キー id を重ねて全順序にする（offset ページングで行の重複・欠落を起こさないため）。
+   */
+  String MEMBER_VIEW_SELECT =
+      """
+      select o.id as id, o.storeId as storeId, st.name as storeName,
+             o.businessDate as businessDate,
+             o.arrivalScheduledStartTime as arrivalScheduledStartTime,
+             o.pax as pax, k.name as castName, o.status as status
+      from com.kizuna.order.domain.Order o
+        join com.kizuna.store.domain.Store st on st.id = o.storeId
+        left join com.kizuna.cast.domain.Cast k on k.id = o.castId
+      """;
+
+  @Query(
+      value =
+          MEMBER_VIEW_SELECT
+              + """
+              where o.requesterMemberId = :memberId
+              order by o.businessDate desc, o.id desc
+              """,
+      countQuery =
+          """
+          select count(o) from com.kizuna.order.domain.Order o
+          where o.requesterMemberId = :memberId
+          """)
+  Page<MemberOrderView> findMemberViews(@Param("memberId") Long memberId, Pageable pageable);
+
+  /** 会員本人の予約 1 件。一覧と同じく申請者の一致を問い合わせに載せ、他人の予約には到達させない。 */
+  @Query(MEMBER_VIEW_SELECT + " where o.requesterMemberId = :memberId and o.id = :orderId")
+  Optional<MemberOrderView> findMemberView(
+      @Param("memberId") Long memberId, @Param("orderId") String orderId);
 }

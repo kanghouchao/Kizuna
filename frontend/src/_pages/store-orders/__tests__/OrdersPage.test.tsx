@@ -5,10 +5,14 @@ import { orderApi } from '@/entities/order';
 import { castApi } from '@/entities/cast';
 
 jest.mock('@/entities/order', () => ({
+  // 表示ラベル等の定数は本物を使う（API だけを差し替える）
+  ...jest.requireActual('@/entities/order/model/types'),
   orderApi: {
     list: jest.fn(),
     create: jest.fn(),
     listReceptionists: jest.fn(),
+    confirm: jest.fn(),
+    decline: jest.fn(),
   },
 }));
 
@@ -150,7 +154,9 @@ describe('店側オーダー画面の描画', () => {
 
     render(<CreateOrderPage />);
     // 受付・キャストはサーバ側が @NotNull / @NotBlank。選ばないと送信自体が止まる。
-    fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付/ }), { key: 'ArrowDown' });
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付(?!経路)/ }), {
+      key: 'ArrowDown',
+    });
     fireEvent.click(await screen.findByRole('option', { name: '受付花子' }));
     fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
       target: { value: '花' },

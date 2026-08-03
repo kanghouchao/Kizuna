@@ -27,6 +27,8 @@ public interface OrderView {
 
   String getCastName();
 
+  Integer getPax();
+
   Integer getCourseMinutes();
 
   Integer getExtensionMinutes();
@@ -50,6 +52,10 @@ public interface OrderView {
   String getCastDriverMessage();
 
   OrderStatus getStatus();
+
+  ReceptionRoute getReceptionRoute();
+
+  String getRequesterMemberCode();
 
   String getLocationAddress();
 

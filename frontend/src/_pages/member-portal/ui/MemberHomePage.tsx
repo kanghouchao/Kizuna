@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { memberApi } from '@/entities/member';
@@ -71,6 +72,9 @@ export function MemberHomePage() {
           )}
         </CardContent>
       </Card>
+      <Button asChild className="mt-4 w-full">
+        <Link href="/member/reservations/">予約を見る</Link>
+      </Button>
       <Button type="button" variant="outline" onClick={logout} className="mt-6 w-full">
         ログアウト
       </Button>

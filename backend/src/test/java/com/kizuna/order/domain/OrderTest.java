@@ -3,6 +3,7 @@ package com.kizuna.order.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -64,6 +65,43 @@ class OrderTest {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
     assertThatThrownBy(order::confirm).isInstanceOf(IllegalOrderStateTransitionException.class);
     assertThatThrownBy(order::complete).isInstanceOf(IllegalOrderStateTransitionException.class);
+  }
+
+  @Test
+  @DisplayName("未確定の申請を取り下げられること")
+  void cancelRequest_fromCreated() {
+    Order order = orderWithStatus(OrderStatus.CREATED);
+    order.cancelRequest();
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+  }
+
+  @Test
+  @DisplayName("確定済み・完了済み・キャンセル済みの注文は申請取り下げの経路では取り消せないこと")
+  void cancelRequest_afterConfirmation_isRejected() {
+    for (OrderStatus status :
+        List.of(OrderStatus.CONFIRMED, OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
+      Order order = orderWithStatus(status);
+      assertThatThrownBy(order::cancelRequest)
+          .as("状態 %s からの申請取り下げが拒否されること", status)
+          .isInstanceOf(IllegalOrderStateTransitionException.class);
+      assertThat(order.getStatus()).as("拒否時に状態が変わらないこと").isEqualTo(status);
+    }
+  }
+
+  @Test
+  @DisplayName("部分更新で人数を変更でき、null は変更しないこと")
+  void apply_pax() {
+    Order order = Order.builder().status(OrderStatus.CREATED).pax(2).build();
+
+    order.apply(patchWithPax(5));
+    assertThat(order.getPax()).isEqualTo(5);
+
+    order.apply(patchWithPax(null));
+    assertThat(order.getPax()).as("null の人数は変更しないこと").isEqualTo(5);
+  }
+
+  private OrderPatch patchWithPax(Integer pax) {
+    return new OrderPatch(null, null, pax, null, null, null, null, null, null, null, null, null);
   }
 
   @Test

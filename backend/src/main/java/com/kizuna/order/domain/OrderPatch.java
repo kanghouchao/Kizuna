@@ -7,6 +7,7 @@ import java.util.List;
 public record OrderPatch(
     LocalTime arrivalScheduledStartTime,
     LocalTime arrivalScheduledEndTime,
+    Integer pax,
     Integer courseMinutes,
     Integer extensionMinutes,
     List<String> optionCodes,

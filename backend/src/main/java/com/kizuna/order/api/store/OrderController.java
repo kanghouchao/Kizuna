@@ -6,6 +6,7 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.application.OrderService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -55,6 +56,20 @@ public class OrderController {
   public ResponseEntity<OrderResponse> create(@Valid @RequestBody OrderCreateRequest request) {
     return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
         .body(orderService.create(request));
+  }
+
+  /** 予約申請を確定する（受注として受け付ける）。 */
+  @PostMapping("/{id}/confirmation")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderResponse> confirm(@PathVariable String id, Principal principal) {
+    return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
+  }
+
+  /** 予約申請を謝絶する。 */
+  @PostMapping("/{id}/decline")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderResponse> decline(@PathVariable String id) {
+    return ResponseEntity.ok(orderService.decline(id));
   }
 
   @PutMapping("/{id}")

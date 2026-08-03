@@ -3,6 +3,7 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
@@ -19,6 +20,7 @@ import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderRepository;
@@ -68,7 +70,7 @@ class OrderServiceTest {
   private static final long STORE_ID = 1L;
 
   private OrderPatch emptyPatch() {
-    return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null);
+    return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null, null);
   }
 
   /** 受付担当ヘルパーが持つ既定ロール id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
@@ -322,7 +324,8 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(
-            new OrderPatch(null, null, null, null, null, "新しい割引名", null, null, null, null, null));
+            new OrderPatch(
+                null, null, null, null, null, null, "新しい割引名", null, null, null, null, null));
     when(castRepository.existsById("g2")).thenReturn(true);
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -452,6 +455,89 @@ class OrderServiceTest {
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void confirmAssignsActorAsReceptionistWhenSlotIsEmpty() {
+    Order request = Order.builder().status(OrderStatus.CREATED).build();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    PlatformUser actor = authorizedReceptionist();
+    actor.setId(7L);
+    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(request.getReceptionistId()).isEqualTo(7L);
+  }
+
+  @Test
+  void confirmLeavesReceptionistEmptyWhenActorIsNotEligible() {
+    Order request = Order.builder().status(OrderStatus.CREATED).build();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    PlatformUser otherStoreActor =
+        receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    otherStoreActor.setId(7L);
+    when(platformUserRepository.findByEmail("staff@kizuna.test"))
+        .thenReturn(Optional.of(otherStoreActor));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(request.getReceptionistId()).as("適格でない実行者は受付担当に据えないこと").isNull();
+  }
+
+  @Test
+  void confirmKeepsExistingReceptionist() {
+    Order existing = Order.builder().status(OrderStatus.CREATED).receptionistId(3L).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(existing.getReceptionistId()).isEqualTo(3L);
+    verify(platformUserRepository, never()).findByEmail(anyString());
+  }
+
+  @Test
+  void confirmThrowsWhenOrderMissing() {
+    when(orderRepository.findById("nope")).thenReturn(Optional.empty());
+    assertThatThrownBy(() -> service.confirm("nope", "staff@kizuna.test"))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void declineCancelsPendingRequest() {
+    Order request = Order.builder().status(OrderStatus.CREATED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.decline("o1");
+
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+  }
+
+  @Test
+  void declineRejectsAlreadyConfirmedOrder() {
+    Order confirmed = Order.builder().status(OrderStatus.CONFIRMED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
+
+    assertThatThrownBy(() -> service.decline("o1"))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThat(confirmed.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test

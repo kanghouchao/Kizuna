@@ -45,6 +45,9 @@ public class Order extends StoreScopedEntity {
   @Column(name = "cast_id")
   private String castId;
 
+  @Column(name = "pax")
+  private Integer pax;
+
   @Column(name = "course_minutes")
   private Integer courseMinutes;
 
@@ -98,6 +101,18 @@ public class Order extends StoreScopedEntity {
   @Column(name = "status")
   private OrderStatus status;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "reception_route", length = 20)
+  private ReceptionRoute receptionRoute;
+
+  /** 申請した会員。店舗が直接起こした受注では null。 */
+  @Column(name = "requester_member_id")
+  private Long requesterMemberId;
+
+  /** 申請時点の会員コード。会員行が消えて requesterMemberId が欠落した後も申請者を読めるようにする。 */
+  @Column(name = "requester_member_code", length = 20)
+  private String requesterMemberCode;
+
   /** キャストを割り当てる（存在確認は application 層の責務）。 */
   public void assignCast(String castId) {
     this.castId = castId;
@@ -120,6 +135,9 @@ public class Order extends StoreScopedEntity {
     }
     if (patch.arrivalScheduledEndTime() != null) {
       this.arrivalScheduledEndTime = patch.arrivalScheduledEndTime();
+    }
+    if (patch.pax() != null) {
+      this.pax = patch.pax();
     }
     if (patch.courseMinutes() != null) {
       this.courseMinutes = patch.courseMinutes();
@@ -162,6 +180,18 @@ public class Order extends StoreScopedEntity {
 
   /** 注文をキャンセルする。完了前のみ可能。 */
   public void cancel() {
+    transitionTo(OrderStatus.CANCELLED);
+  }
+
+  /**
+   * 未確定の申請を取り下げる。確定前（CREATED）のみ可能で、確定後は店舗との調整を要するため通常のキャンセル経路に委ねる。
+   *
+   * <p>会員の自己キャンセルと店舗の謝絶が共有する。
+   */
+  public void cancelRequest() {
+    if (status != OrderStatus.CREATED) {
+      throw new IllegalOrderStateTransitionException(status, OrderStatus.CANCELLED);
+    }
     transitionTo(OrderStatus.CANCELLED);
   }
 

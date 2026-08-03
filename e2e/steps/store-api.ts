@@ -273,3 +273,82 @@ export async function approveShiftRequest(
     throw new Error(`approve shift request failed: ${res.status()} ${await res.text()}`);
   }
 }
+
+/** 会員を自助登録し会員コードを返す（POST /api/platform/members, 匿名・CSRF 免除）。 */
+export async function registerMember(
+  request: APIRequestContext,
+  email: string,
+  password: string,
+  displayName: string
+): Promise<string> {
+  const res = await request.post('/api/platform/members', {
+    data: { email, password, display_name: displayName },
+  });
+  if (!res.ok()) {
+    throw new Error(`register member failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.member_code as string;
+}
+
+/** 顧客を作成し id を返す（POST /api/store/customers, hasAuthority('CUSTOMER_MANAGE')）。 */
+export async function createCustomer(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+  phoneNumber: string
+): Promise<string> {
+  const res = await request.post('/api/store/customers', {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { name, phone_number: phoneNumber },
+  });
+  if (!res.ok()) {
+    throw new Error(`create customer failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  return body.id as string;
+}
+
+/** 顧客を削除する（DELETE /api/store/customers/{id}, hasAuthority('CUSTOMER_MANAGE')）。 */
+export async function deleteCustomer(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  const res = await request.delete(`/api/store/customers/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`delete customer failed: ${res.status()} ${await res.text()}`);
+  }
+}
+
+/** 会員コードを顧客台帳へ紐づける（POST /api/store/customers/{id}/member-link）。 */
+export async function linkMemberToCustomer(
+  request: APIRequestContext,
+  token: string,
+  customerId: string,
+  memberCode: string
+): Promise<void> {
+  const res = await request.post(`/api/store/customers/${customerId}/member-link`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { member_code: memberCode },
+  });
+  if (!res.ok()) {
+    throw new Error(`link member failed: ${res.status()} ${await res.text()}`);
+  }
+}
+
+/** 受注を削除する（DELETE /api/store/orders/{id}, hasAuthority('ORDER_MANAGE')）。 */
+export async function deleteOrder(
+  request: APIRequestContext,
+  token: string,
+  id: string
+): Promise<void> {
+  const res = await request.delete(`/api/store/orders/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) {
+    throw new Error(`delete order failed: ${res.status()} ${await res.text()}`);
+  }
+}

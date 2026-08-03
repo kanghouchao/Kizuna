@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.order.api.dto.OrderResponse;
@@ -27,6 +29,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** 呼出側の {@code ?sort=} 上書きで一意な副キー id が消えないことの単体テスト（offset ページングの安定性）。 */
 @WebMvcTest(OrderController.class)
@@ -64,5 +67,36 @@ class OrderControllerTest {
         .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
+  }
+
+  @Test
+  @DisplayName("受注管理権限があれば予約申請を確定・謝絶できること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void confirmAndDeclineAreAllowedForOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.confirm(any(), any())).thenReturn(OrderResponse.builder().build());
+    when(orderService.decline(any())).thenReturn(OrderResponse.builder().build());
+
+    mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isOk());
+    mockMvc.perform(storePost("/store/orders/o1/decline")).andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("受注管理権限が無ければ予約申請の確定・謝絶が拒否されること")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void confirmAndDeclineAreRejectedWithoutOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isForbidden());
+    mockMvc.perform(storePost("/store/orders/o1/decline")).andExpect(status().isForbidden());
+  }
+
+  // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
+  private MockHttpServletRequestBuilder storePost(String path) {
+    return post(path)
+        .header("X-Role", "store")
+        .header("X-Store-ID", "1")
+        .principal(() -> "staff@kizuna.test")
+        .with(csrf());
   }
 }

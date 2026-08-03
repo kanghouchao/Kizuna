@@ -13,6 +13,11 @@ export const platformStoreApi = {
     });
     return fromSpringPage(response.data);
   },
+  /** ドメインから店舗を引く（公開・匿名）。ブラウザから渡されたドメインをサーバ側の正本に突き合わせる用途。 */
+  lookupByDomain: async (domain: string): Promise<Store> => {
+    const response = await apiClient.get('/platform/stores/lookup', { params: { domain } });
+    return response.data;
+  },
   getById: async (id: string): Promise<Store> => {
     const response = await apiClient.get(`/platform/stores/${id}`);
     return response.data;

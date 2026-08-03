@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +78,18 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   /** 会員ホームが返してよい項目名。増えたら落ちる。 */
   private static final List<String> MEMBER_HOME_ALLOWED_FIELDS =
       List.of("member_code", "display_name");
+
+  /** 会員の予約 1 件が返してよい項目名。増えたら落ちる。 */
+  private static final List<String> MEMBER_ORDER_ALLOWED_FIELDS =
+      List.of(
+          "id",
+          "store_id",
+          "store_name",
+          "business_date",
+          "arrival_scheduled_start_time",
+          "pax",
+          "cast_name",
+          "status");
 
   @Autowired private CustomerRepository customerRepository;
 
@@ -174,10 +187,62 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             String.class);
     assertThat(home.getStatusCode()).isEqualTo(HttpStatus.OK);
 
+    // 予約申請は紐づけ済み顧客に結び付くため、台帳側の項目が会員側の一覧へ回り込む余地が最も大きい経路になる。
+    requestReservation();
+    ResponseEntity<String> reservations =
+        rest.exchange(
+            "/platform/me/orders",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(memberToken)),
+            String.class);
+    assertThat(reservations.getStatusCode()).isEqualTo(HttpStatus.OK);
+
     assertNoLedgerLeak("会員登録", registrationBody);
     assertNoLedgerLeak("平台ログイン", loginBody);
     assertNoLedgerLeak("GET /platform/me", me.getBody());
     assertNoLedgerLeak("GET /platform/me/member", home.getBody());
+    assertNoLedgerLeak("GET /platform/me/orders", reservations.getBody());
+  }
+
+  @Test
+  @DisplayName("会員の予約一覧は申請内容と状態だけを返すこと（項目名の白名単）")
+  void memberReservationReturnsOnlyWhitelistedFields() {
+    requestReservation();
+
+    ResponseEntity<JsonNode> reservations =
+        rest.exchange(
+            "/platform/me/orders",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(memberToken)),
+            JsonNode.class);
+
+    assertThat(reservations.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode first = reservations.getBody().path("content").path(0);
+    assertThat(first.isObject()).as("前提: 申請した予約が一覧に現れること").isTrue();
+    List<String> fields = new ArrayList<>();
+    first.propertyNames().forEach(fields::add);
+    // 値が null の項目は non_null 包含設定で応答から消えるため、白名単は「これ以外が現れないこと」で見る。
+    assertThat(fields)
+        .as("会員の予約 1 件の応答項目（想定外の項目が増えていないこと）")
+        .isSubsetOf(MEMBER_ORDER_ALLOWED_FIELDS);
+  }
+
+  /** 紐づけ済み店舗へ会員本人として予約を申請する（指名なし）。 */
+  private void requestReservation() {
+    HttpHeaders headers = bearer(memberToken);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    ResponseEntity<JsonNode> requested =
+        rest.postForEntity(
+            "/platform/me/orders",
+            new HttpEntity<>(
+                "{\"store_id\": "
+                    + STORE_A
+                    + ", \"business_date\": \""
+                    + LocalDate.now()
+                    + "\", \"pax\": 2}",
+                headers),
+            JsonNode.class);
+    assertThat(requested.getStatusCode()).as("前提: 会員が予約を申請できること").isEqualTo(HttpStatus.CREATED);
   }
 
   @Test

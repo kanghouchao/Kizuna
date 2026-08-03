@@ -38,6 +38,9 @@ public interface OrderMapper {
   @Mapping(target = "customerId", ignore = true)
   @Mapping(target = "castId", ignore = true)
   @Mapping(target = "receptionistId", ignore = true)
+  // 申請者は会員ポータル経由の受注だけが持つ
+  @Mapping(target = "requesterMemberId", ignore = true)
+  @Mapping(target = "requesterMemberCode", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   // ==================== UpdateRequest -> Patch ====================

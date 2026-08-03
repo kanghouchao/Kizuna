@@ -22,6 +22,7 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -100,6 +101,45 @@ public class OrderService {
 
     Order saved = orderRepository.save(order);
     return toResponse(saved.getId());
+  }
+
+  /**
+   * 予約申請を確定する。受付担当が未設定（会員の Web 申請）で、確定した本人が受付候補の条件を満たす場合はその本人を受付担当として補う。
+   *
+   * <p>条件を満たさない実行者（店舗を授権する HQ 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
+   */
+  @StoreScoped
+  @Transactional
+  public OrderResponse confirm(String id, String actorEmail) {
+    Order order =
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    order.confirm();
+    if (order.getReceptionistId() == null) {
+      eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
+    }
+    orderRepository.save(order);
+    return toResponse(id);
+  }
+
+  /** 予約申請を謝絶する。確定前の申請のみが対象で、確定後の取り消しは通常のキャンセル経路に委ねる。 */
+  @StoreScoped
+  @Transactional
+  public OrderResponse decline(String id) {
+    Order order =
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    order.cancelRequest();
+    orderRepository.save(order);
+    return toResponse(id);
+  }
+
+  private Optional<Long> eligibleReceptionistId(String actorEmail) {
+    Long storeId = storeContext.getStoreId();
+    Set<Long> orderManageRoleIds =
+        roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
+    return platformUserRepository
+        .findByEmail(actorEmail)
+        .filter(user -> isEligibleReceptionist(user, storeId, orderManageRoleIds))
+        .map(PlatformUser::getId);
   }
 
   private OrderResponse toResponse(String id) {

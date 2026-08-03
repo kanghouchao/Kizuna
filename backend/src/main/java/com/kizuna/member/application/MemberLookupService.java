@@ -26,6 +26,14 @@ public class MemberLookupService {
         .map(member -> new MemberLookup(member.getId(), member.getMemberCode()));
   }
 
+  /** プラットフォームユーザーに対応する会員。会員でなければ空。 */
+  @Transactional(readOnly = true)
+  public Optional<MemberLookup> findByPlatformUserId(Long platformUserId) {
+    return memberRepository
+        .findByPlatformUserId(platformUserId)
+        .map(member -> new MemberLookup(member.getId(), member.getMemberCode()));
+  }
+
   /** 店舗側へ渡す会員の最小表現。 */
   public record MemberLookup(Long memberId, String memberCode) {}
 }

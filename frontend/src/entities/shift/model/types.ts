@@ -115,3 +115,12 @@ export interface StoreShiftRequestItem {
   current_end_time?: string;
   approvable?: boolean;
 }
+
+// 会員の指名候補となる確定シフトのキャスト1件（GET /platform/shifts/casts）。
+export interface ConfirmedShiftCast {
+  cast_id?: string;
+  cast_name?: string;
+  cast_photo_url?: string;
+  start_time?: string;
+  end_time?: string;
+}
