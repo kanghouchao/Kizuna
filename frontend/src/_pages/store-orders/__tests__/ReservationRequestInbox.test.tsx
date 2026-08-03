@@ -70,4 +70,21 @@ describe('ReservationRequestInbox', () => {
 
     expect(await screen.findByText('未確定の予約申請はありません')).toBeInTheDocument();
   });
+
+  it('取得に失敗したら空表示ではなくエラーを出し、再読み込みで復帰できる', async () => {
+    // 瞬断を「申請なし」に見せると、店舗が未処理の申請を見落とす
+    mockedList.mockRejectedValueOnce(new Error('network'));
+    mockedList.mockResolvedValueOnce([
+      { id: 'o1', status: 'CREATED', reception_route: 'WEB', business_date: '2026-08-10' },
+    ]);
+
+    render(<ReservationRequestInbox onProcessed={jest.fn()} />);
+
+    expect(await screen.findByText('予約申請を取得できませんでした。')).toBeInTheDocument();
+    expect(screen.queryByText('未確定の予約申請はありません')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+
+    expect(await screen.findByText('2026-08-10')).toBeInTheDocument();
+  });
 });

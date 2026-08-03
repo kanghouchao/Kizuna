@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
@@ -33,12 +34,14 @@ import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -63,6 +66,7 @@ class OrderServiceTest {
   @Mock CustomerRepository customerRepository;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock CastRepository castRepository;
+  @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock RoleRepository roleRepository;
   @Mock StoreContext storeContext;
@@ -580,6 +584,70 @@ class OrderServiceTest {
         .hasMessageContaining("予約申請が見つかりません");
     assertThat(storeOrder.getStatus()).isEqualTo(OrderStatus.CREATED);
     verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  private static final LocalDate REQUEST_DATE = LocalDate.of(2026, 8, 10);
+
+  /** store_id=1 のキャスト。確定時の指名再検証で用いる。 */
+  private Cast castWithStatus(String status) {
+    Cast cast = Cast.builder().name("指名キャスト").status(status).build();
+    cast.setId("cast-1");
+    cast.setStoreId(STORE_ID);
+    return cast;
+  }
+
+  /** 指名付きの申請（利用日・受付担当あり）。 */
+  private Order nominatedRequest() {
+    Order request =
+        reservationRequest().castId("cast-1").receptionistId(3L).businessDate(REQUEST_DATE).build();
+    request.setStoreId(STORE_ID);
+    return request;
+  }
+
+  @Test
+  void confirmRejectsWhenNominatedCastIsNoLongerActive() {
+    // 申請から確定までの間に在籍停止になった指名は、そのまま確定させない
+    Order request = nominatedRequest();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(castRepository.findById("cast-1")).thenReturn(Optional.of(castWithStatus("INACTIVE")));
+
+    assertThatThrownBy(() -> service.confirm("o1", "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("在籍中でない");
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CREATED);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void confirmRejectsWhenNominatedCastLostTheConfirmedShift() {
+    // 確定シフトが取り消し・未確定化された指名も、そのまま確定させない
+    Order request = nominatedRequest();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(castRepository.findById("cast-1")).thenReturn(Optional.of(castWithStatus("ACTIVE")));
+    when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", REQUEST_DATE))
+        .thenReturn(false);
+
+    assertThatThrownBy(() -> service.confirm("o1", "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("確定シフトが無い");
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CREATED);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void confirmProceedsWhenNominationStillHolds() {
+    Order request = nominatedRequest();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(castRepository.findById("cast-1")).thenReturn(Optional.of(castWithStatus("ACTIVE")));
+    when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", REQUEST_DATE))
+        .thenReturn(true);
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
   }
 
   @Test

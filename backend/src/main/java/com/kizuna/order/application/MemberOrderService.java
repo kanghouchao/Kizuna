@@ -23,6 +23,7 @@ import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -125,10 +126,15 @@ public class MemberOrderService {
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }
 
+  /** 利用日は「本日以降かつ候補照会と同じ上限（90 日）以内」。指名なしの申請が候補照会を経ずに上限を素通りしないよう、書き込み側でも同じ範囲を見る。 */
   private void validateBusinessDate(LocalDate businessDate) {
     LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
     if (businessDate.isBefore(today)) {
       throw new ServiceException("過去の日付は申請できません");
+    }
+    if (ChronoUnit.DAYS.between(today, businessDate)
+        > ConfirmedShiftLookupService.MAX_LOOKAHEAD_DAYS) {
+      throw new ServiceException("申請できる日付の範囲を超えています");
     }
   }
 

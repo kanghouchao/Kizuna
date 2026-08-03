@@ -20,14 +20,18 @@ interface ReservationRequestInboxProps {
 export function ReservationRequestInbox({ onProcessed }: ReservationRequestInboxProps) {
   const [requests, setRequests] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
     orderApi
       .listReservationRequests()
-      .then(setRequests)
-      .catch(() => toast.error('予約申請の取得に失敗しました'))
+      .then(list => {
+        setRequests(list);
+        setFailed(false);
+      })
+      .catch(() => setFailed(true))
       .finally(() => setLoading(false));
   };
 
@@ -56,6 +60,17 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
+  }
+  // 取得失敗を空表示と区別する — 「申請なし」に見せると未処理の申請を見落とす
+  if (failed) {
+    return (
+      <div className="flex items-center gap-3">
+        <p className="text-sm text-destructive-strong">予約申請を取得できませんでした。</p>
+        <Button type="button" variant="outline" size="sm" onClick={load}>
+          再読み込み
+        </Button>
+      </div>
+    );
   }
   if (requests.length === 0) {
     return <p className="text-sm text-muted-foreground">未確定の予約申請はありません</p>;

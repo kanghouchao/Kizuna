@@ -185,6 +185,33 @@ class MemberOrderServiceTest {
   }
 
   @Test
+  @DisplayName("候補照会と同じ上限（90 日）を超える先の申請を拒否すること")
+  void requestRejectsDateBeyondLookaheadLimit() {
+    // 指名なしの申請は候補照会（ConfirmedShiftLookupService.validateWorkDate）を経ないため、
+    // 書き込み側で上限を見ないと無制限の未来日が素通りする
+    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
+
+    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today().plusDays(91), null)))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("範囲");
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  @DisplayName("上限ちょうど（90 日先）の申請は受け付けること")
+  void requestAcceptsDateAtLookaheadLimit() {
+    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
+    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
+            STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    stubSavedView();
+
+    service.request(EMAIL, requestFor(today().plusDays(90), null));
+
+    verify(orderRepository).save(any(Order.class));
+  }
+
+  @Test
   @DisplayName("他店舗のキャストは指名できないこと")
   void requestRejectsCastOfAnotherStore() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);

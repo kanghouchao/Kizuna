@@ -28,8 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @NamedInterface("application")
 public class ConfirmedShiftLookupService {
 
-  /** 予約申請で参照できる先の上限日数。無制限の未来日を引かせないための保護。 */
-  private static final int MAX_LOOKAHEAD_DAYS = 90;
+  /** 予約で扱える先の上限日数。候補一覧の照会と申請の利用日検証（MemberOrderService）が共有し、無制限の未来日を防ぐ。 */
+  public static final int MAX_LOOKAHEAD_DAYS = 90;
 
   private static final String CONFIRMED = "CONFIRMED";
 

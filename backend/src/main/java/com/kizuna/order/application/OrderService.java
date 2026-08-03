@@ -18,6 +18,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -37,10 +38,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderService {
 
+  /** 指名を成立させるキャストの在籍状態。申請時の検証（MemberOrderService）と同じ条件を確定時にも用いる。 */
+  private static final String ACTIVE_CAST_STATUS = "ACTIVE";
+
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CastRepository castRepository;
+  private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final StoreContext storeContext;
@@ -132,6 +137,7 @@ public class OrderService {
   @Transactional
   public OrderResponse confirm(String id, String actorEmail) {
     Order order = findReservationRequest(id);
+    revalidateNomination(order);
     order.confirm();
     if (order.getReceptionistId() == null) {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
@@ -166,6 +172,27 @@ public class OrderService {
         .findById(id)
         .filter(Order::isReservationRequest)
         .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
+  }
+
+  /**
+   * 確定時に指名の前提を取り直す。申請から確定までの間にキャストの在籍停止や確定シフトの取り消しが起こりうるため、 申請時（MemberOrderService
+   * の検証）と同じ条件を満たさなくなった指名付き申請は確定させない — そのまま確定すると、来店時に指名キャストがいない受注が成立してしまう。
+   *
+   * <p>申請時の検証と違い対象は店舗スタッフなので、列挙を防ぐ 404 ではなく理由の分かる 400 で返す。
+   */
+  private void revalidateNomination(Order order) {
+    if (order.getCastId() == null) {
+      return;
+    }
+    castRepository
+        .findById(order.getCastId())
+        .filter(cast -> order.getStoreId().equals(cast.getStoreId()))
+        .filter(cast -> ACTIVE_CAST_STATUS.equals(cast.getStatus()))
+        .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
+    if (!confirmedShiftLookupService.hasConfirmedShift(
+        order.getStoreId(), order.getCastId(), order.getBusinessDate())) {
+      throw new ServiceException("指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
+    }
   }
 
   private Optional<Long> eligibleReceptionistId(String actorEmail) {
