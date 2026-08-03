@@ -195,6 +195,60 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("申請後に台帳へ紐づけた会員でも、確定した受注が顧客の受注履歴に載ること")
+  void confirmationAttachesCustomerLinkedAfterTheRequest() {
+    // 初回来店の順序: 申請（このとき紐づけは無い）→ 店舗が会員コードを読んで台帳に紐づけ → 確定
+    String orderId = requestReservation(memberAToken, STORE_A, "初回来店の申請");
+    String memberCode = firstReservationMemberCode(memberAToken, orderId);
+
+    ResponseEntity<JsonNode> customer =
+        rest.postForEntity(
+            "/store/customers",
+            new HttpEntity<>("{\"name\": \"初回来店の会員\"}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(customer.getStatusCode().is2xxSuccessful()).as("前提: 顧客作成が成功すること").isTrue();
+    String customerId = customer.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> linked =
+        rest.exchange(
+            "/store/customers/" + customerId + "/member-link",
+            HttpMethod.POST,
+            new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(linked.getStatusCode()).as("前提: 紐づけが成功すること").isEqualTo(HttpStatus.OK);
+
+    rest.exchange(
+        "/store/orders/" + orderId + "/confirmation",
+        HttpMethod.POST,
+        new HttpEntity<>(storeHeaders(STORE_A)),
+        JsonNode.class);
+
+    ResponseEntity<JsonNode> history =
+        rest.exchange(
+            "/store/orders?customer_id=" + customerId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
+    List<String> ids = new ArrayList<>();
+    history.getBody().path("content").forEach(node -> ids.add(node.path("id").asString()));
+    assertThat(ids).as("確定した申請が顧客の受注履歴に現れること").contains(orderId);
+  }
+
+  /** 店舗側から見た申請の会員コード（紐づけ操作に使う）。 */
+  private String firstReservationMemberCode(String memberToken, String orderId) {
+    ResponseEntity<JsonNode> storeView =
+        rest.exchange(
+            "/store/orders/" + orderId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    String code = storeView.getBody().path("requester_member_code").asString();
+    assertThat(code).as("前提: 店舗側から申請者の会員コードが読めること").isNotBlank();
+    return code;
+  }
+
+  @Test
   @DisplayName("会員の一覧に他会員の予約が一切現れないこと")
   void memberListNeverExposesOtherMembersReservations() {
     String canaryOrderId = requestReservation(memberBToken, STORE_A, CANARY_REMARKS);

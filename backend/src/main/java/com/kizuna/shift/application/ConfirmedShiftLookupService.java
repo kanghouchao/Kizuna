@@ -4,11 +4,14 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
+import com.kizuna.shift.domain.ConfirmedShiftCastView;
 import com.kizuna.shift.domain.ShiftRepository;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.stereotype.Service;
@@ -41,17 +44,22 @@ public class ConfirmedShiftLookupService {
       throw new ServiceException("店舗が見つかりません");
     }
     validateWorkDate(workDate);
-    return shiftRepository.findConfirmedCasts(storeId, workDate).stream()
-        .map(
-            view ->
-                PublicShiftResponse.builder()
-                    .castId(view.getCastId())
-                    .castName(view.getCastName())
-                    .castPhotoUrl(view.getCastPhotoUrl())
-                    .startTime(view.getStartTime())
-                    .endTime(view.getEndTime())
-                    .build())
-        .toList();
+    // 同じ日に複数の確定シフトを持つキャストは 1 件に畳む。指名はキャスト単位で、どのシフトかは選べないため、
+    // 重複させると同じ値の選択肢が並ぶだけになる。問い合わせは開始時刻の昇順なので、残るのは最も早い出勤。
+    Map<String, PublicShiftResponse> byCast = new LinkedHashMap<>();
+    for (ConfirmedShiftCastView view : shiftRepository.findConfirmedCasts(storeId, workDate)) {
+      byCast.computeIfAbsent(
+          view.getCastId(),
+          castId ->
+              PublicShiftResponse.builder()
+                  .castId(castId)
+                  .castName(view.getCastName())
+                  .castPhotoUrl(view.getCastPhotoUrl())
+                  .startTime(view.getStartTime())
+                  .endTime(view.getEndTime())
+                  .build());
+    }
+    return List.copyOf(byCast.values());
   }
 
   /** 指定店舗・指定キャスト・指定日に確定シフトがあるか。 */

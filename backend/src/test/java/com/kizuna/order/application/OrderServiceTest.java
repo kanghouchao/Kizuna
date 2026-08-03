@@ -3,6 +3,7 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
@@ -14,7 +15,10 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
@@ -35,6 +39,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -56,6 +61,7 @@ class OrderServiceTest {
 
   @Mock OrderRepository orderRepository;
   @Mock CustomerRepository customerRepository;
+  @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock CastRepository castRepository;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock RoleRepository roleRepository;
@@ -519,6 +525,58 @@ class OrderServiceTest {
 
     assertThat(existing.getReceptionistId()).isEqualTo(3L);
     verify(platformUserRepository, never()).findByEmail(anyString());
+  }
+
+  @Test
+  void confirmLinksCustomerResolvedAfterTheRequestWasSubmitted() {
+    // 初回来店は「申請 → 店舗が会員コードを読んで台帳に紐づけ → 確定」の順になるため、
+    // 申請時点では顧客が決まらない。確定時に見直さないと受注が顧客履歴に載らないまま残る。
+    Order request =
+        Order.builder()
+            .status(OrderStatus.CREATED)
+            .requesterMemberId(100L)
+            .receptionistId(3L)
+            .build();
+    request.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    CustomerMemberLink link =
+        CustomerMemberLink.builder()
+            .customerId("cust-1")
+            .memberId(100L)
+            .memberCode("123456789012")
+            .linkedBy(3L)
+            .linkedAt(OffsetDateTime.now())
+            .build();
+    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
+            STORE_ID, 100L, LinkStatus.ACTIVE))
+        .thenReturn(Optional.of(link));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(request.getCustomerId()).isEqualTo("cust-1");
+  }
+
+  @Test
+  void confirmKeepsCustomerUntouchedForStoreOriginatedOrders() {
+    Order storeOrder =
+        Order.builder()
+            .status(OrderStatus.CREATED)
+            .customerId("cust-existing")
+            .receptionistId(3L)
+            .build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(storeOrder.getCustomerId()).isEqualTo("cust-existing");
+    verify(customerMemberLinkRepository, never())
+        .findByStoreIdAndMemberIdAndStatus(anyLong(), anyLong(), any());
   }
 
   @Test

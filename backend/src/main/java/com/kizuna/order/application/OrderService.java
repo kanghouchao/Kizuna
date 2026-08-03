@@ -2,7 +2,10 @@ package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
@@ -36,6 +39,7 @@ public class OrderService {
 
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
+  private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CastRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
@@ -120,6 +124,9 @@ public class OrderService {
    * 予約申請を確定する。受付担当が未設定（会員の Web 申請）で、確定した本人が受付候補の条件を満たす場合はその本人を受付担当として補う。
    *
    * <p>条件を満たさない実行者（店舗を授権する HQ 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
+   *
+   * <p>顧客も未設定なら、この時点の紐づけを見て補う。申請時に紐づけが無くても、店舗が会員コードを読んで台帳に結び付けてから
+   * 確定するのが初回来店の順序であり、申請時の解決だけでは受注が顧客履歴に載らないまま残る。
    */
   @StoreScoped
   @Transactional
@@ -129,6 +136,13 @@ public class OrderService {
     order.confirm();
     if (order.getReceptionistId() == null) {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
+    }
+    if (order.getCustomerId() == null && order.getRequesterMemberId() != null) {
+      customerMemberLinkRepository
+          .findByStoreIdAndMemberIdAndStatus(
+              order.getStoreId(), order.getRequesterMemberId(), LinkStatus.ACTIVE)
+          .map(CustomerMemberLink::getCustomerId)
+          .ifPresent(order::linkCustomer);
     }
     orderRepository.save(order);
     return toResponse(id);

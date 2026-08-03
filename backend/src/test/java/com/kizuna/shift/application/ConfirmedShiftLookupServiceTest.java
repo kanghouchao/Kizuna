@@ -71,6 +71,27 @@ class ConfirmedShiftLookupServiceTest {
   }
 
   @Test
+  @DisplayName("同じ日に複数の確定シフトを持つキャストは 1 件に畳むこと")
+  void listConfirmedCastsCollapsesMultipleShiftsPerCast() {
+    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
+    ConfirmedShiftCastView early = mock(ConfirmedShiftCastView.class);
+    when(early.getCastId()).thenReturn("cast-1");
+    when(early.getCastName()).thenReturn("さくら");
+    when(early.getStartTime()).thenReturn(LocalTime.of(12, 0));
+    when(early.getEndTime()).thenReturn(LocalTime.of(15, 0));
+    ConfirmedShiftCastView late = mock(ConfirmedShiftCastView.class);
+    when(late.getCastId()).thenReturn("cast-1");
+    when(shiftRepository.findConfirmedCasts(STORE_ID, today())).thenReturn(List.of(early, late));
+
+    List<PublicShiftResponse> result = service.listConfirmedCasts(STORE_ID, today());
+
+    // 指名はキャスト単位のため、重複させると同じ値の選択肢が並ぶだけになる
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getCastId()).isEqualTo("cast-1");
+    assertThat(result.get(0).getStartTime()).as("残るのは最も早い出勤").isEqualTo(LocalTime.of(12, 0));
+  }
+
+  @Test
   @DisplayName("存在しない店舗では照会せずに拒否すること")
   void listConfirmedCastsRejectsUnknownStore() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(false);
