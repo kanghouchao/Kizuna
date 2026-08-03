@@ -46,6 +46,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberOrderService {
 
+  /** 指名を受け付けるキャストの在籍状態。候補一覧（ConfirmedShiftLookupService）と同じ条件を書き込み側でも用いる。 */
+  private static final String ACTIVE_CAST_STATUS = "ACTIVE";
+
   private final OrderRepository orderRepository;
   private final CastRepository castRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
@@ -129,7 +132,11 @@ public class MemberOrderService {
     }
   }
 
-  /** 指名は「その店舗に在籍するキャスト」かつ「当日の確定シフトに入っていること」を満たす場合のみ受け付ける。 */
+  /**
+   * 指名は「その店舗に在籍する在籍中（ACTIVE）のキャスト」かつ「当日の確定シフトに入っていること」を満たす場合のみ受け付ける。
+   *
+   * <p>在籍状態は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
+   */
   private void validateNomination(Long storeId, String castId, LocalDate businessDate) {
     if (castId == null) {
       return;
@@ -138,6 +145,7 @@ public class MemberOrderService {
         castRepository
             .findById(castId)
             .filter(candidate -> storeId.equals(candidate.getStoreId()))
+            .filter(candidate -> ACTIVE_CAST_STATUS.equals(candidate.getStatus()))
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
     if (!confirmedShiftLookupService.hasConfirmedShift(storeId, cast.getId(), businessDate)) {
       throw new ServiceException("指名したキャストはこの日の出勤予定がありません");

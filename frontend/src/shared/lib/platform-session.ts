@@ -4,6 +4,7 @@ import Cookies from 'js-cookie';
 // コンソール値（platform / store — /me の console、サーバ側が能力目録から導出）を保存する。
 const PLATFORM_ROLE_COOKIE = 'platform-role';
 const PLATFORM_STORE_ID_COOKIE = 'platform-store-id';
+const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
 
 /** 平台セッションの cookie 読み書きの唯一の入口。 */
 export function getPlatformConsole(): string | undefined {
@@ -44,4 +45,39 @@ export function isPlatformSession(): boolean {
 /** 店舗コンソールかどうか。旧形式（ロール名）の cookie 値は false になる（fail-closed — 要再ログイン）。 */
 export function isStoreConsole(platformConsole: string | undefined): boolean {
   return platformConsole === 'store';
+}
+
+/**
+ * 会員ポータル内の相対パスだけを許す白名単。
+ *
+ * <p>ログイン後の遷移先を利用者側の値から決めるため、素通しにすると外部サイトへ飛ばせてしまう。
+ * `/member/` 配下であること、スキームや `//host` の形を取らないこと、クエリを含めても記号が限られることを
+ * すべて満たすものだけを通す（判定は保存時と取り出し時の両方で行う）。
+ */
+export function isSafeMemberReturnPath(value: string | undefined | null): value is string {
+  if (!value) {
+    return false;
+  }
+  if (!value.startsWith('/member/') || value.startsWith('//')) {
+    return false;
+  }
+  if (value.includes('\\') || value.includes(':')) {
+    return false;
+  }
+  return /^\/member\/[A-Za-z0-9/_-]*(\?[A-Za-z0-9=&._%-]*)?$/.test(value);
+}
+
+/** ログイン後に戻る会員ポータル内のパスを覚える。安全でない値は黙って捨てる。 */
+export function rememberMemberReturnPath(value: string): void {
+  if (!isSafeMemberReturnPath(value)) {
+    return;
+  }
+  Cookies.set(MEMBER_RETURN_PATH_COOKIE, value);
+}
+
+/** 覚えた戻り先を 1 度だけ取り出す（取り出しと同時に消す）。無い・安全でない場合は null。 */
+export function takeMemberReturnPath(): string | null {
+  const value = Cookies.get(MEMBER_RETURN_PATH_COOKIE);
+  Cookies.remove(MEMBER_RETURN_PATH_COOKIE);
+  return isSafeMemberReturnPath(value) ? value : null;
 }

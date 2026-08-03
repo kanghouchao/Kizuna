@@ -103,7 +103,9 @@ export default function OrderListPage() {
                     >
                       {order.status ? ORDER_STATUS_LABELS[order.status] : '-'}
                     </Badge>
-                    {order.reception_route === 'WEB' && (
+                    {/* 申請の判定は受付経路だけでは足りない（店舗が手入力の受注にも付けられる）。
+                      サーバ側の予約受付 inbox と同じく申請者の有無まで見る。 */}
+                    {order.reception_route === 'WEB' && order.requester_member_code && (
                       <Badge
                         variant="outline"
                         className="border-transparent bg-primary/10 text-primary-strong"

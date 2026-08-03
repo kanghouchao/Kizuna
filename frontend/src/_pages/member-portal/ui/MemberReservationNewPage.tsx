@@ -47,6 +47,7 @@ export function MemberReservationNewPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     watch,
     formState: { errors },
   } = useForm<ReservationFormValues>({
@@ -86,8 +87,11 @@ export function MemberReservationNewPage() {
   const storeId = store?.id ? Number(store.id) : null;
 
   useEffect(() => {
+    // 候補はその日その店舗の確定シフトに紐づくため、日付・店舗が変わった時点で選択も候補も捨てる。
+    // 非同期の取得完了を待つと、その間だけ前の日付のキャストを指名したまま送信できてしまう。
+    setCasts([]);
+    setValue('cast_id', '');
     if (storeId === null || !businessDate) {
-      setCasts([]);
       return;
     }
     let cancelled = false;
@@ -102,7 +106,7 @@ export function MemberReservationNewPage() {
     return () => {
       cancelled = true;
     };
-  }, [storeId, businessDate]);
+  }, [storeId, businessDate, setValue]);
 
   const submit = async (values: ReservationFormValues) => {
     if (storeId === null) return;

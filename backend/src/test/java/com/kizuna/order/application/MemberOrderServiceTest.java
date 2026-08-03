@@ -198,6 +198,22 @@ class MemberOrderServiceTest {
   }
 
   @Test
+  @DisplayName("在籍していない（非 ACTIVE）キャストは指名できないこと")
+  void requestRejectsInactiveCast() {
+    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
+    Cast retired = Cast.builder().name("退店した子").status("INACTIVE").build();
+    retired.setStoreId(STORE_ID);
+    retired.setId("cast-1");
+    when(castRepository.findById("cast-1")).thenReturn(Optional.of(retired));
+
+    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
+        .isInstanceOf(NotFoundException.class);
+    // 候補に出さないだけでは、キャスト ID を直接送る要求を防げない
+    verify(confirmedShiftLookupService, never()).hasConfirmedShift(anyLong(), anyString(), any());
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
   @DisplayName("その日の確定シフトが無いキャストは指名できないこと")
   void requestRejectsCastWithoutConfirmedShift() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);

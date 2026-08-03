@@ -6,7 +6,10 @@ import {
   isPlatformSession,
   isStoreConsole,
   setPlatformStore,
+  isSafeMemberReturnPath,
+  rememberMemberReturnPath,
   startPlatformSession,
+  takeMemberReturnPath,
 } from '../platform-session';
 
 describe('platform-session', () => {
@@ -67,5 +70,46 @@ describe('platform-session', () => {
 
     expect(setSpy).toHaveBeenCalledWith('platform-store-id', '2', { expires: new Date(expiresAt) });
     setSpy.mockRestore();
+  });
+});
+
+describe('会員ポータルの戻り先パス', () => {
+  beforeEach(() => {
+    Cookies.remove('member-return-path');
+  });
+
+  it('会員ポータル内の相対パスは覚えて取り出せること', () => {
+    rememberMemberReturnPath('/member/reservations/new?store=store1.kizuna.test');
+
+    expect(takeMemberReturnPath()).toBe('/member/reservations/new?store=store1.kizuna.test');
+  });
+
+  it('取り出しは 1 度きりで、2 度目は null になること', () => {
+    rememberMemberReturnPath('/member/reservations/');
+
+    expect(takeMemberReturnPath()).toBe('/member/reservations/');
+    expect(takeMemberReturnPath()).toBeNull();
+  });
+
+  // 利用者側の値をそのまま遷移先にすると外部サイトへ飛ばせてしまうため、形ごと弾く
+  it.each([
+    ['絶対 URL', 'https://evil.test/member/'],
+    ['スキーム相対', '//evil.test/member/'],
+    ['スキーム入り', '/member/x:https://evil.test'],
+    ['バックスラッシュ', '/member\\evil.test'],
+    ['会員ポータル外', '/platform/dashboard/'],
+    ['店舗コンソール', '/store/1/orders'],
+    ['空文字', ''],
+  ])('%s は覚えないこと', (_label, value) => {
+    expect(isSafeMemberReturnPath(value)).toBe(false);
+    rememberMemberReturnPath(value);
+    expect(takeMemberReturnPath()).toBeNull();
+  });
+
+  it('cookie に直接仕込まれた危険な値も取り出さないこと', () => {
+    Cookies.set('member-return-path', 'https://evil.test/');
+
+    expect(takeMemberReturnPath()).toBeNull();
+    expect(Cookies.get('member-return-path')).toBeUndefined();
   });
 });

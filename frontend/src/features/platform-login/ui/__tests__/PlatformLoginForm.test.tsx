@@ -78,6 +78,27 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     expect(mockedToastError).not.toHaveBeenCalled();
   });
 
+  it('会員が公式サイトの予約導線から弾かれていた場合、その画面へ戻ること', async () => {
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
+    Cookies.set('member-return-path', '/member/reservations/new?store=store1.kizuna.test');
+
+    await submitLoginForm();
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith('/member/reservations/new?store=store1.kizuna.test')
+    );
+    expect(Cookies.get('member-return-path')).toBeUndefined();
+  });
+
+  it('戻り先に外部 URL が仕込まれていても既定のホームへ遷移すること', async () => {
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
+    Cookies.set('member-return-path', 'https://evil.test/');
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
+  });
+
   it('user_type=MEMBER は member セッションを開始し /member/ へ遷移する', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
 

@@ -6,6 +6,9 @@ export { useListPage } from './useListPage';
 export { useDeleteAction } from './useDeleteAction';
 export {
   clearPlatformSession,
+  isSafeMemberReturnPath,
+  rememberMemberReturnPath,
+  takeMemberReturnPath,
   getPlatformConsole,
   getPlatformStoreId,
   isPlatformSession,

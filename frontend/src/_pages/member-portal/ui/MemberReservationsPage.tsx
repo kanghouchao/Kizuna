@@ -23,19 +23,28 @@ function StatusBadge({ status }: { status: MemberOrder['status'] }) {
   );
 }
 
+/** 1 回に読み込む件数。会員の画面は縦に伸ばす前提なので、追加読み込みで過去へ遡る。 */
+const PAGE_SIZE = 20;
+
 /** 会員ポータルの予約一覧。全店舗を集約し、確定前のものは本人が取り下げられる。 */
 export function MemberReservationsPage() {
   const [reservations, setReservations] = useState<MemberOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  // 読み込み済みのページ数。追加読み込み後の再取得でも同じ範囲を取り直せるように保持する。
+  const [loadedPages, setLoadedPages] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
-  const load = useCallback(() => {
+  const load = useCallback((pages: number) => {
     setLoading(true);
+    // 取り下げ後も表示中の範囲を保つため、読み込み済みページ分をまとめて取り直す。
     memberOrderApi
-      .list()
+      .list({ page: 0, size: pages * PAGE_SIZE })
       .then(page => {
         setReservations(page.rows);
+        setHasMore(page.rows.length < page.total);
+        setLoadedPages(pages);
         setFailed(false);
       })
       .catch(() => setFailed(true))
@@ -43,7 +52,7 @@ export function MemberReservationsPage() {
   }, []);
 
   useEffect(() => {
-    load();
+    load(1);
   }, [load]);
 
   const cancel = async (id: string) => {
@@ -51,7 +60,7 @@ export function MemberReservationsPage() {
     try {
       await memberOrderApi.cancel(id);
       toast.success('予約を取り下げました');
-      load();
+      load(loadedPages);
     } catch {
       toast.error('取り下げに失敗しました');
     } finally {
@@ -110,6 +119,17 @@ export function MemberReservationsPage() {
                 </li>
               ))}
             </ul>
+          )}
+          {hasMore && (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 w-full"
+              onClick={() => load(loadedPages + 1)}
+              disabled={loading}
+            >
+              もっと見る
+            </Button>
           )}
         </CardContent>
       </Card>

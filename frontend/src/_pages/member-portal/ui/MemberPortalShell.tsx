@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { readTokenClaims, redirectToLogin } from '@/shared/lib';
+import { readTokenClaims, redirectToLogin, rememberMemberReturnPath } from '@/shared/lib';
 
 interface MemberPortalShellProps {
   children: React.ReactNode;
@@ -18,6 +18,8 @@ export function MemberPortalShell({ children }: MemberPortalShellProps) {
 
   useEffect(() => {
     if (readTokenClaims()?.userType !== 'MEMBER') {
+      // 公式サイトの予約導線から未ログインで来た場合、ログイン後に元の画面（店舗つき）へ戻せるようにする。
+      rememberMemberReturnPath(`${window.location.pathname}${window.location.search}`);
       redirectToLogin();
       return;
     }

@@ -1,6 +1,11 @@
 import Cookies from 'js-cookie';
 import { LoginResponse, platformAuthApi, resolvePlatformDestination } from '@/entities/user';
-import { clearPlatformSession, startPlatformSession, storeEntryPath } from '@/shared/lib';
+import {
+  clearPlatformSession,
+  startPlatformSession,
+  storeEntryPath,
+  takeMemberReturnPath,
+} from '@/shared/lib';
 
 /** ログイン完了の結果。unsupported は着地先の無い利用者種別で、セッションは破棄済み。 */
 export type PlatformLoginCompletion = { status: 'ok'; path: string } | { status: 'unsupported' };
@@ -41,7 +46,8 @@ export async function completePlatformLogin({
 
   if (me.user_type === 'MEMBER') {
     startPlatformSession('member', expires_at);
-    return { status: 'ok', path: '/member/' };
+    // 会員ポータル内で弾かれてログインへ回された場合はその画面へ戻す（白名単を通った相対パスのみ）。
+    return { status: 'ok', path: takeMemberReturnPath() ?? '/member/' };
   }
 
   // 想定外の user_type: 着地先が無いためセッションを破棄する
