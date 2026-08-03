@@ -282,6 +282,35 @@ class PlatformStaffServiceTest {
   }
 
   @Test
+  void create_roleFkViolation_convertsToMissingRole() {
+    // requireRoles 通過後にロールが並行削除され、t_user_roles への授与行挿入が FK に当たるレース
+    // （RoleService.delete の事前検証は未授与ロールの削除を許すため実在する経路）。
+    // 事前検証と同じ 400（ロール不存在）へ分類する。
+    PlatformStaffCreateRequest req =
+        createRequest(
+            "role-race@kizuna.test",
+            "rawpass",
+            Set.of(MANAGER_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(1L));
+    when(roleRepository.findAllById(Set.of(MANAGER_ROLE)))
+        .thenReturn(List.of(role(MANAGER_ROLE, "店長")));
+    when(repository.findByEmail("role-race@kizuna.test")).thenReturn(Optional.empty());
+    when(encoder.encode("rawpass")).thenReturn("ENCODED");
+    when(repository.saveAndFlush(any()))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "save failed",
+                new RuntimeException(
+                    "ERROR: insert or update on table \"t_user_roles\" violates foreign key"
+                        + " constraint \"fk_t_user_roles_role\"")));
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("ロールが存在しません");
+  }
+
+  @Test
   void create_duplicateEmailUniqueViolation_convertsToDuplicateEmail() {
     // 事前 findByEmail を通過した後に DB 一意制約で敗者が弾かれるレース。店舗エラーではなく重複エラーへ分類する。
     PlatformStaffCreateRequest req =
