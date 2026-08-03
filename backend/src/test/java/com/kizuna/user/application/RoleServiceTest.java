@@ -298,4 +298,33 @@ class RoleServiceTest {
 
     assertThatThrownBy(() -> service.delete(7L)).isInstanceOf(RoleInUseException.class);
   }
+
+  @Test
+  void delete_propagatesUnrelatedDataIntegrityViolation() {
+    // 授与 FK（RESTRICT）以外の整合性違反はサービスで握りつぶさず、そのまま伝播すること。
+    // 無条件に 409 へ変換すると想定外の実装欠陥まで「使用中」に化けてしまう。
+    Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
+    when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
+    when(platformUserRepository.existsByRoleId(7L)).thenReturn(false);
+    DataIntegrityViolationException violation =
+        new DataIntegrityViolationException("delete failed", new RuntimeException("CHECK 制約違反"));
+    doThrow(violation).when(roleRepository).flush();
+
+    assertThatThrownBy(() -> service.delete(7L)).isSameAs(violation);
+  }
+
+  @Test
+  void create_propagatesUnrelatedDataIntegrityViolation() {
+    // ロール名一意制約以外の整合性違反はサービスで握りつぶさず、そのまま伝播すること。
+    // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
+    // サービス層で 400 に変換すると想定外の実装欠陥まで「権限が存在しません」に化けてしまう。
+    when(permissionRepository.findByCodeIn(Set.of("ORDER_MANAGE")))
+        .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE)));
+    DataIntegrityViolationException violation =
+        new DataIntegrityViolationException("save failed", new RuntimeException("NOT NULL 違反"));
+    when(roleRepository.saveAndFlush(any())).thenThrow(violation);
+
+    assertThatThrownBy(() -> service.create(createRequest("店長", Set.of("ORDER_MANAGE"))))
+        .isSameAs(violation);
+  }
 }

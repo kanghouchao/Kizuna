@@ -35,6 +35,9 @@ public class RoleService {
 
   private static final String NAME_UNIQUE_CONSTRAINT = "uq_t_roles_name";
 
+  /** 授与中ロールの削除を拒否する t_user_roles の RESTRICT 制約。FK 違反は全域ハンドラで 409 にならないため、ここで照合して変換する。 */
+  private static final String ROLE_IN_USE_FK_CONSTRAINT = "fk_t_user_roles_role";
+
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
   private final PlatformUserRepository platformUserRepository;
@@ -100,7 +103,12 @@ public class RoleService {
       roleRepository.delete(role);
       roleRepository.flush();
     } catch (DataIntegrityViolationException ex) {
-      throw new RoleInUseException("授与中のロールは削除できません");
+      String cause = ex.getMostSpecificCause().getMessage();
+      if (cause != null && cause.contains(ROLE_IN_USE_FK_CONSTRAINT)) {
+        throw new RoleInUseException("授与中のロールは削除できません");
+      }
+      // 授与 FK 以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
+      throw ex;
     }
   }
 
@@ -118,7 +126,7 @@ public class RoleService {
   }
 
   /**
-   * 保存時の整合性違反を 400 へ変換する（現状の経路は名称の一意制約違反のみ — 権限は事前検証済み）。
+   * 保存時の名称一意制約違反（並行作成レース）を事前チェックと同じ 400 へ変換する。それ以外の整合性違反は実装欠陥であり（権限は事前検証済み）、 握りつぶさず全域ハンドラの分類に委ねる。
    *
    * <p>権限集合の @ElementCollection 行はトランザクション commit 時に flush されるため、{@code save} だけでは違反がこの try を突き抜けて
    * 500 になる。{@code saveAndFlush} で違反をここで顕在化させる。
@@ -131,7 +139,7 @@ public class RoleService {
       if (cause != null && cause.contains(NAME_UNIQUE_CONSTRAINT)) {
         throw new ServiceException("このロール名は既に使われています");
       }
-      throw new ServiceException("指定された権限が存在しません");
+      throw ex;
     }
   }
 
