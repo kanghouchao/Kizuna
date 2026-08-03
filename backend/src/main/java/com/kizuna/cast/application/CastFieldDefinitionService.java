@@ -11,14 +11,13 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * カスタムフィールド定義の CRUD ユースケース。
  *
- * <p>重複 key・件数上限はいずれも {@link ServiceException}（400）で統一する。DB 一意制約 {@code (store_id, key)}
+ * <p>事前チェックで検出した重複 key・件数上限は {@link ServiceException}（400）。DB 一意制約 {@code (store_id, key)}
  * を最終防波堤とし、悲観ロックは導入しない（{@code CastInvitationAcceptanceService} のメール重複チェックと同じ許容パターン）。
  */
 @Service
@@ -56,13 +55,10 @@ public class CastFieldDefinitionService {
             .displayOrder(nextOrder)
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
-    try {
-      return mapper.toResponse(repository.saveAndFlush(definition));
-    } catch (DataIntegrityViolationException ex) {
-      // 事前チェックをすり抜けた並行 create が (store_id, key) 一意制約に当たったレース。
-      // 事前チェックと同一の 400（ServiceException）へ変換する（saveAndFlush で違反をこの try 内に顕在化させる）。
-      throw new ServiceException("このキーは既に登録されています: " + request.getKey());
-    }
+    // 事前チェックをすり抜けた並行 create が (store_id, key) 一意制約に当たるレースはここで catch しない —
+    // CommonExceptionHandler が SQLSTATE で一意違反だけを 409 へ写像し、FK 等の他の整合性違反は
+    // 実装欠陥として 500 のまま大きく失敗させる分類を持っているため、そこへ委ねる。
+    return mapper.toResponse(repository.saveAndFlush(definition));
   }
 
   @StoreScoped

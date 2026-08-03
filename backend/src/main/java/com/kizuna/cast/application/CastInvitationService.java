@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,14 +77,12 @@ public class CastInvitationService {
             .expiresAt(OffsetDateTime.now().plus(CastInvitation.VALIDITY))
             .build();
     invitation.setStoreId(cast.getStoreId());
-    try {
-      CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
-      return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
-    } catch (DataIntegrityViolationException ex) {
-      // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定していた場合、部分ユニーク
-      // インデックス違反となる。意味のある 400（CastInvitationStateException）へ変換する。
-      throw new CastInvitationStateException("招待の発行が他の操作と競合しました。時間をおいて再度お試しください");
-    }
+    // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定していた場合、部分ユニーク
+    // インデックス違反となるが、ここで catch しない — CommonExceptionHandler が SQLSTATE で一意違反
+    // だけを 409 へ写像し、FK 等の他の整合性違反は実装欠陥として 500 のまま大きく失敗させる分類を
+    // 持っているため、そこへ委ねる。
+    CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
+    return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
   }
 
   /** ページ内の档案について招待状態（四態）を一括導出する。呼び出し元の storeFilter 有効なトランザクション内で使う。 */
