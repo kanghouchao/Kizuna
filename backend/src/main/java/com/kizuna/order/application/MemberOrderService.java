@@ -1,0 +1,187 @@
+package com.kizuna.order.application;
+
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.CustomerMemberLinkRepository;
+import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.member.application.MemberLookupService;
+import com.kizuna.member.application.MemberLookupService.MemberLookup;
+import com.kizuna.order.api.dto.MemberOrderCreateRequest;
+import com.kizuna.order.api.dto.MemberOrderResponse;
+import com.kizuna.order.domain.MemberOrderView;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.ReceptionRoute;
+import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shift.application.ConfirmedShiftLookupService;
+import com.kizuna.user.domain.PlatformUserRepository;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 会員ポータルからの予約申請ユースケース。
+ *
+ * <p>会員は店舗を授権されないため店舗文脈（{@code @StoreScoped}）を確立できず、storeFilter も働かない。したがって
+ *
+ * <ul>
+ *   <li>書き込みは店舗の実在を確かめたうえで store_id を明示設定する（{@code StoreScopeStampListener} は設定済みの store_id を尊重する）
+ *   <li>読み取り・取り消しは申請者（requesterMemberId）の一致が唯一の隔離境界であり、必ず問い合わせ自体に載せる
+ * </ul>
+ *
+ * <p>申請できる店舗は絞らない（紐づけ済みの店舗に限らない）。会員が初めて訪れる店舗にも申請できることが業務上の既定で、顧客台帳との紐づけは店舗側の操作で後から成立する。
+ */
+@Service
+@RequiredArgsConstructor
+public class MemberOrderService {
+
+  /** 指名を受け付けるキャストの在籍状態。候補一覧（ConfirmedShiftLookupService）と同じ条件を書き込み側でも用いる。 */
+  private static final String ACTIVE_CAST_STATUS = "ACTIVE";
+
+  private final OrderRepository orderRepository;
+  private final CastRepository castRepository;
+  private final CustomerMemberLinkRepository customerMemberLinkRepository;
+  private final PlatformUserRepository platformUserRepository;
+  private final MemberLookupService memberLookupService;
+  private final ConfirmedShiftLookupService confirmedShiftLookupService;
+  private final StoreExistenceCheck storeExistenceCheck;
+  private final AppProperties appProperties;
+
+  /** 予約を申請する。申請は受注（Order）の CREATED として起き、店舗の確定で同じ行が CONFIRMED になる。 */
+  @Transactional
+  public MemberOrderResponse request(String email, MemberOrderCreateRequest request) {
+    MemberLookup member = resolveMember(email);
+    Long storeId = request.getStoreId();
+    if (!storeExistenceCheck.exists(storeId)) {
+      throw new ServiceException("店舗が見つかりません");
+    }
+    validateBusinessDate(request.getBusinessDate());
+    validateNomination(storeId, request.getCastId(), request.getBusinessDate());
+
+    Order order =
+        Order.builder()
+            .businessDate(request.getBusinessDate())
+            .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
+            .pax(request.getPax())
+            .castId(request.getCastId())
+            .remarks(request.getRemarks())
+            .status(OrderStatus.CREATED)
+            .receptionRoute(ReceptionRoute.WEB)
+            .requesterMemberId(member.memberId())
+            .requesterMemberCode(member.memberCode())
+            .build();
+    // 店舗文脈が無い経路のため store_id を明示する。
+    order.setStoreId(storeId);
+    resolveLinkedCustomerId(storeId, member.memberId()).ifPresent(order::linkCustomer);
+
+    Order saved = orderRepository.save(order);
+    return toResponse(member.memberId(), saved.getId());
+  }
+
+  /** 本人が申請した予約の一覧（跨店集約）。 */
+  @Transactional(readOnly = true)
+  public Page<MemberOrderResponse> list(String email, Pageable pageable) {
+    MemberLookup member = resolveMember(email);
+    return orderRepository.findMemberViews(member.memberId(), pageable).map(this::toResponse);
+  }
+
+  /** 本人が申請した未確定の予約を取り下げる。確定後は店舗との調整が要るため取り下げられない。 */
+  @Transactional
+  public MemberOrderResponse cancel(String email, String orderId) {
+    MemberLookup member = resolveMember(email);
+    Order order = ownedOrder(member.memberId(), orderId);
+    order.cancelRequest();
+    orderRepository.save(order);
+    return toResponse(member.memberId(), orderId);
+  }
+
+  /** 本人が申請した予約を取り出す。他人の予約・店舗が起こした受注は「見つからない」として扱う — 権限違反として区別すると、その id の予約が存在することそのものが分かってしまう。 */
+  private Order ownedOrder(Long memberId, String orderId) {
+    return orderRepository
+        .findById(orderId)
+        .filter(order -> memberId.equals(order.getRequesterMemberId()))
+        .orElseThrow(() -> new NotFoundException("予約が見つかりません: " + orderId));
+  }
+
+  private MemberLookup resolveMember(String email) {
+    Long platformUserId =
+        platformUserRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
+            .getId();
+    return memberLookupService
+        .findByPlatformUserId(platformUserId)
+        .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
+  }
+
+  /** 利用日は「本日以降かつ候補照会と同じ上限（90 日）以内」。指名なしの申請が候補照会を経ずに上限を素通りしないよう、書き込み側でも同じ範囲を見る。 */
+  private void validateBusinessDate(LocalDate businessDate) {
+    LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    if (businessDate.isBefore(today)) {
+      throw new ServiceException("過去の日付は申請できません");
+    }
+    if (ChronoUnit.DAYS.between(today, businessDate)
+        > ConfirmedShiftLookupService.MAX_LOOKAHEAD_DAYS) {
+      throw new ServiceException("申請できる日付の範囲を超えています");
+    }
+  }
+
+  /**
+   * 指名は「その店舗に在籍する在籍中（ACTIVE）のキャスト」かつ「当日の確定シフトに入っていること」を満たす場合のみ受け付ける。
+   *
+   * <p>在籍状態は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
+   */
+  private void validateNomination(Long storeId, String castId, LocalDate businessDate) {
+    if (castId == null) {
+      return;
+    }
+    Cast cast =
+        castRepository
+            .findById(castId)
+            .filter(candidate -> storeId.equals(candidate.getStoreId()))
+            .filter(candidate -> ACTIVE_CAST_STATUS.equals(candidate.getStatus()))
+            .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
+    if (!confirmedShiftLookupService.hasConfirmedShift(storeId, cast.getId(), businessDate)) {
+      throw new ServiceException("指名したキャストはこの日の出勤予定がありません");
+    }
+  }
+
+  /** 申請先店舗に本人の紐づけ済み顧客があれば結び付ける。無ければ空のままで、店舗側の紐づけ操作で後から成立する。 */
+  private Optional<String> resolveLinkedCustomerId(Long storeId, Long memberId) {
+    return customerMemberLinkRepository
+        .findByStoreIdAndMemberIdAndStatus(storeId, memberId, LinkStatus.ACTIVE)
+        .map(CustomerMemberLink::getCustomerId);
+  }
+
+  private MemberOrderResponse toResponse(Long memberId, String orderId) {
+    return orderRepository
+        .findMemberView(memberId, orderId)
+        .map(this::toResponse)
+        .orElseThrow(() -> new NotFoundException("予約が見つかりません: " + orderId));
+  }
+
+  private MemberOrderResponse toResponse(MemberOrderView view) {
+    return MemberOrderResponse.builder()
+        .id(view.getId())
+        .storeId(view.getStoreId())
+        .storeName(view.getStoreName())
+        .businessDate(view.getBusinessDate())
+        .arrivalScheduledStartTime(view.getArrivalScheduledStartTime())
+        .pax(view.getPax())
+        .castName(view.getCastName())
+        .status(view.getStatus() == null ? null : view.getStatus().name())
+        .build();
+  }
+}

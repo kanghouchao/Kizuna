@@ -2,7 +2,10 @@ package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
@@ -15,6 +18,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -22,6 +26,7 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,9 +38,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderService {
 
+  /** 指名を成立させるキャストの在籍状態。申請時の検証（MemberOrderService）と同じ条件を確定時にも用いる。 */
+  private static final String ACTIVE_CAST_STATUS = "ACTIVE";
+
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
+  private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CastRepository castRepository;
+  private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final StoreContext storeContext;
@@ -53,6 +63,19 @@ public class OrderService {
   @Transactional(readOnly = true)
   public OrderResponse get(String id) {
     return toResponse(id);
+  }
+
+  /**
+   * 予約受付 inbox の未確定申請一覧。
+   *
+   * <p>絞り込みは DB 側で行う — 受注一覧の先頭ページを取って手元で選り分けると、確定済みの受注が積み上がった店舗で 未処理の申請が窓から落ちて見えなくなる。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public List<OrderResponse> listPendingReservationRequests() {
+    return orderRepository.findPendingReservationRequestViews().stream()
+        .map(orderMapper::toResponse)
+        .toList();
   }
 
   @StoreScoped
@@ -82,6 +105,16 @@ public class OrderService {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
+    // 未確定（CREATED）の申請に限り、状態遷移の入口は確定・謝絶の専用操作ただ一つ。汎用更新でも
+    // 遷移できると、確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう。
+    // 確定後は通常の受注としてのライフサイクル（完了・キャンセル）を汎用更新が引き続き受け持つ —
+    // 受付経路と申請者スナップショットは追跡のため残り続けるので、申請かどうかだけで判定してはならない。
+    if (request.getStatus() != null
+        && order.isReservationRequest()
+        && order.getStatus() == OrderStatus.CREATED) {
+      throw new ServiceException("予約申請の状態は確定・謝絶の操作でのみ変更できます");
+    }
+
     // 非nullフィールドのみをドメインの部分更新コマンドとして適用
     order.apply(orderMapper.toPatch(request));
 
@@ -100,6 +133,86 @@ public class OrderService {
 
     Order saved = orderRepository.save(order);
     return toResponse(saved.getId());
+  }
+
+  /**
+   * 予約申請を確定する。受付担当が未設定（会員の Web 申請）で、確定した本人が受付候補の条件を満たす場合はその本人を受付担当として補う。
+   *
+   * <p>条件を満たさない実行者（店舗を授権する HQ 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
+   *
+   * <p>顧客も未設定なら、この時点の紐づけを見て補う。申請時に紐づけが無くても、店舗が会員コードを読んで台帳に結び付けてから
+   * 確定するのが初回来店の順序であり、申請時の解決だけでは受注が顧客履歴に載らないまま残る。
+   */
+  @StoreScoped
+  @Transactional
+  public OrderResponse confirm(String id, String actorEmail) {
+    Order order = findReservationRequest(id);
+    revalidateNomination(order);
+    order.confirm();
+    if (order.getReceptionistId() == null) {
+      eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
+    }
+    if (order.getCustomerId() == null && order.getRequesterMemberId() != null) {
+      customerMemberLinkRepository
+          .findByStoreIdAndMemberIdAndStatus(
+              order.getStoreId(), order.getRequesterMemberId(), LinkStatus.ACTIVE)
+          .map(CustomerMemberLink::getCustomerId)
+          .ifPresent(order::linkCustomer);
+    }
+    orderRepository.save(order);
+    return toResponse(id);
+  }
+
+  /** 予約申請を謝絶する。確定前の申請のみが対象で、確定後の取り消しは通常のキャンセル経路に委ねる。 */
+  @StoreScoped
+  @Transactional
+  public OrderResponse decline(String id) {
+    Order order = findReservationRequest(id);
+    order.cancelRequest();
+    orderRepository.save(order);
+    return toResponse(id);
+  }
+
+  /**
+   * 確定・謝絶の対象となる予約申請を引く。店舗が起こした受注は、ID を知っていても申請専用の操作では変更させない — 受注のステータス変更は通常の更新経路が受け持つ。判定は予約受付 inbox
+   * の抽出条件と同じ（{@link Order#isReservationRequest()}）。
+   */
+  private Order findReservationRequest(String id) {
+    return orderRepository
+        .findById(id)
+        .filter(Order::isReservationRequest)
+        .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
+  }
+
+  /**
+   * 確定時に指名の前提を取り直す。申請から確定までの間にキャストの在籍停止や確定シフトの取り消しが起こりうるため、 申請時（MemberOrderService
+   * の検証）と同じ条件を満たさなくなった指名付き申請は確定させない — そのまま確定すると、来店時に指名キャストがいない受注が成立してしまう。
+   *
+   * <p>申請時の検証と違い対象は店舗スタッフなので、列挙を防ぐ 404 ではなく理由の分かる 400 で返す。
+   */
+  private void revalidateNomination(Order order) {
+    if (order.getCastId() == null) {
+      return;
+    }
+    castRepository
+        .findById(order.getCastId())
+        .filter(cast -> order.getStoreId().equals(cast.getStoreId()))
+        .filter(cast -> ACTIVE_CAST_STATUS.equals(cast.getStatus()))
+        .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
+    if (!confirmedShiftLookupService.hasConfirmedShift(
+        order.getStoreId(), order.getCastId(), order.getBusinessDate())) {
+      throw new ServiceException("指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
+    }
+  }
+
+  private Optional<Long> eligibleReceptionistId(String actorEmail) {
+    Long storeId = storeContext.getStoreId();
+    Set<Long> orderManageRoleIds =
+        roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
+    return platformUserRepository
+        .findByEmail(actorEmail)
+        .filter(user -> isEligibleReceptionist(user, storeId, orderManageRoleIds))
+        .map(PlatformUser::getId);
   }
 
   private OrderResponse toResponse(String id) {
@@ -168,8 +281,13 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public void delete(String id) {
-    if (!orderRepository.existsById(id)) {
-      throw new NotFoundException("注文が見つかりません: " + id);
+    Order order =
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    // 未確定の申請は削除ではなく謝絶で扱う — 削除すると CANCELLED の記録が残らず、会員側の
+    // 予約履歴からも消えてしまう。汎用更新の状態ガードと同じく、確定・謝絶を経た後の行は
+    // 通常の受注として削除の管理操作を受け付ける。
+    if (order.isReservationRequest() && order.getStatus() == OrderStatus.CREATED) {
+      throw new ServiceException("未確定の予約申請は削除できません。謝絶で扱ってください");
     }
     orderRepository.deleteById(id);
   }

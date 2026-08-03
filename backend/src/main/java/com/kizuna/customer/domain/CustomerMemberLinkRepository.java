@@ -16,6 +16,11 @@ public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemb
 
   boolean existsByMemberIdAndStatus(Long memberId, LinkStatus status);
 
+  // 会員起点の照会。店舗文脈を持たない経路（会員本人）から呼ばれるため storeFilter は働かず、
+  // 引数の storeId が唯一の店舗境界になる。ACTIVE 行は部分一意索引により店舗ごとに 1 件以下。
+  Optional<CustomerMemberLink> findByStoreIdAndMemberIdAndStatus(
+      Long storeId, Long memberId, LinkStatus status);
+
   // 実行者の表示名は ID 参照のため JPQL join で取得する。PlatformUser は FQCN で参照する
   // （HQL の予約語衝突を避ける既存規約）。実行者が削除されると linked_by / released_by は
   // NULL になるため join は left。

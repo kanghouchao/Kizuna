@@ -40,7 +40,7 @@ async function submitAndGetBody(onSubmit: jest.Mock) {
 
 /** 受付はサーバ側が @NotNull。送信まで進めるテストは先に選んでおく。 */
 async function selectReceptionist() {
-  await pickOption(/受付/, '受付花子');
+  await pickOption(/受付(?!経路)/, '受付花子');
 }
 
 /** キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）。 */
@@ -78,7 +78,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   it('受付の選択が番兵を経て素の ID 文字列で送られること', async () => {
     const { onSubmit } = renderForm();
 
-    await pickOption(/受付/, '受付花子');
+    await pickOption(/受付(?!経路)/, '受付花子');
     const body = await submitAndGetBody(onSubmit);
 
     // 番兵値 __none__ が漏れず、選んだ受付の id が文字列で載ること
@@ -88,8 +88,8 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   it('受付を未選択へ戻すと送信されないこと', async () => {
     const { onSubmit } = renderForm();
 
-    await pickOption(/受付/, '受付花子');
-    await pickOption(/受付/, '－－－');
+    await pickOption(/受付(?!経路)/, '受付花子');
+    await pickOption(/受付(?!経路)/, '－－－');
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
 
     // 受付は @NotNull。未選択のまま送ると 400 になるため、フォーム側で止める。

@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getPlatformDomain } from '@/shared/lib';
 
 interface HeaderProps {
   storeName: string;
@@ -19,6 +20,16 @@ const navLinks = [
 
 export default function Header({ storeName, logoUrl }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // 会員ポータルは平台ドメイン側にあるため、自サイトのドメインを引き継いで店舗を伝える。
+  // ポータル側はこのドメインを公開照会に突き合わせて店舗を解決するので、店舗 ID は URL に載せない。
+  const [reservationHref, setReservationHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    const { protocol, hostname } = window.location;
+    setReservationHref(
+      `${protocol}//${getPlatformDomain()}/member/reservations/new?store=${encodeURIComponent(hostname)}`
+    );
+  }, []);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -70,6 +81,17 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
 
             {/* 右側エリア */}
             <div className="flex items-center gap-3 md:gap-4">
+              {/* WEB予約ボタン（sm以上で表示）。会員ポータルへ店舗を引き継いで遷移する */}
+              {reservationHref && (
+                <a
+                  href={reservationHref}
+                  className="hidden sm:block text-[9px] tracking-[0.3em] bg-[var(--storefront-accent)] text-[var(--storefront-bg)] px-4 py-1.5 md:px-5 md:py-2 hover:opacity-80 transition-all duration-300"
+                  style={{ fontFamily: 'var(--storefront-font-display)' }}
+                >
+                  WEB予約
+                </a>
+              )}
+
               {/* ログインボタン（sm以上で表示） */}
               <Link
                 href="/platform/login"
@@ -152,6 +174,18 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
             </span>
             <div className="h-px w-10 bg-linear-to-l from-transparent to-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)]" />
           </div>
+
+          {/* WEB予約ボタン（xs） */}
+          {reservationHref && (
+            <a
+              href={reservationHref}
+              onClick={closeMenu}
+              className="text-[10px] tracking-[0.4em] bg-[var(--storefront-accent)] text-[var(--storefront-bg)] px-8 py-3 hover:opacity-80 transition-all duration-300"
+              style={{ fontFamily: 'var(--storefront-font-display)' }}
+            >
+              WEB予約
+            </a>
+          )}
 
           {/* ログインボタン（xs） */}
           <Link

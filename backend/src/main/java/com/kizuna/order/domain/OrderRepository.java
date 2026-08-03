@@ -1,5 +1,6 @@
 package com.kizuna.order.domain;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,12 +23,15 @@ public interface OrderRepository
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,
              o.customerId as customerId, c.name as customerName,
              o.castId as castId, k.name as castName,
+             o.pax as pax,
              o.courseMinutes as courseMinutes, o.extensionMinutes as extensionMinutes,
              o.optionCodes as optionCodes, o.discountName as discountName,
              o.manualDiscount as manualDiscount, o.carrier as carrier,
              o.mediaName as mediaName, o.usedPoints as usedPoints,
              o.manualGrantPoints as manualGrantPoints, o.remarks as remarks,
              o.castDriverMessage as castDriverMessage, o.status as status,
+             o.receptionRoute as receptionRoute,
+             o.requesterMemberCode as requesterMemberCode,
              o.locationAddress as locationAddress, o.locationBuilding as locationBuilding
       from com.kizuna.order.domain.Order o
         left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
@@ -47,6 +51,26 @@ public interface OrderRepository
   @Query(VIEW_SELECT + " where o.id = :id")
   Optional<OrderView> findViewById(@Param("id") String id);
 
+  /**
+   * 予約受付 inbox が扱う未確定の申請（会員ポータルからの Web 申請のうち、まだ確定も謝絶もしていないもの）。
+   *
+   * <p>申請の判定は受付経路だけでは足りない — 受付経路は店舗が手入力の受注にも自由に付けられる記録項目であり、 申請であることの証拠にはならない。申請者まで見て初めて会員の申請だと言える。
+   *
+   * <p>申請者の判定に使うのは会員 ID ではなく会員コードのスナップショットである。会員行が消えると FK は SET NULL で 会員 ID
+   * が欠落するが、未確定の申請はそれでも店舗が処理し終える必要がある。ID を要求すると、その申請が CREATED のまま inbox から消えて処理不能になる。
+   *
+   * <p>処理済みの閲覧は受注一覧の責務なので、ここでは未確定のものだけを古い順に返す。
+   */
+  @Query(
+      VIEW_SELECT
+          + """
+          where o.status = com.kizuna.order.domain.OrderStatus.CREATED
+            and o.receptionRoute = com.kizuna.order.domain.ReceptionRoute.WEB
+            and o.requesterMemberCode is not null
+          order by o.createdAt asc, o.id asc
+          """)
+  List<OrderView> findPendingReservationRequestViews();
+
   // 平台横断一覧（集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う。
   // 店舗（store）表示名の join は張らない。
   String PLATFORM_VIEW_SELECT =
@@ -63,4 +87,40 @@ public interface OrderRepository
       value = PLATFORM_VIEW_SELECT,
       countQuery = "select count(o) from com.kizuna.order.domain.Order o")
   Page<PlatformOrderView> findPlatformViews(Pageable pageable);
+
+  /**
+   * 会員本人の予約一覧（跨店集約）。
+   *
+   * <p>本人は店舗文脈を確立できず storeFilter は働かないため、where 句の {@code requesterMemberId} が唯一の隔離境界である。並びは業務日の降順に
+   * 一意な副キー id を重ねて全順序にする（offset ページングで行の重複・欠落を起こさないため）。
+   */
+  String MEMBER_VIEW_SELECT =
+      """
+      select o.id as id, o.storeId as storeId, st.name as storeName,
+             o.businessDate as businessDate,
+             o.arrivalScheduledStartTime as arrivalScheduledStartTime,
+             o.pax as pax, k.name as castName, o.status as status
+      from com.kizuna.order.domain.Order o
+        join com.kizuna.store.domain.Store st on st.id = o.storeId
+        left join com.kizuna.cast.domain.Cast k on k.id = o.castId
+      """;
+
+  @Query(
+      value =
+          MEMBER_VIEW_SELECT
+              + """
+              where o.requesterMemberId = :memberId
+              order by o.businessDate desc, o.id desc
+              """,
+      countQuery =
+          """
+          select count(o) from com.kizuna.order.domain.Order o
+          where o.requesterMemberId = :memberId
+          """)
+  Page<MemberOrderView> findMemberViews(@Param("memberId") Long memberId, Pageable pageable);
+
+  /** 会員本人の予約 1 件。一覧と同じく申請者の一致を問い合わせに載せ、他人の予約には到達させない。 */
+  @Query(MEMBER_VIEW_SELECT + " where o.requesterMemberId = :memberId and o.id = :orderId")
+  Optional<MemberOrderView> findMemberView(
+      @Param("memberId") Long memberId, @Param("orderId") String orderId);
 }

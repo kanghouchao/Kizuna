@@ -95,6 +95,69 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("店舗起点の受注は申請専用の確定・謝絶で変更できず、他店舗からは到達もできないこと")
+  void otherStoreCannotConfirmOrDeclineForeignOrder() {
+    String castId = createCastAs(STORE_A, "統合テストキャスト（確定謝絶用）");
+
+    // 店舗が起こした受注は会員申請ではないため、自店舗でも申請専用の操作では変更できない
+    // （会員申請での正向対照は MemberOrderIT が持つ）。ステータス変更は通常の更新経路が受け持つ。
+    String controlId = createOrderAs(STORE_A, castId);
+    ResponseEntity<JsonNode> ownConfirm =
+        rest.exchange(
+            "/store/orders/" + controlId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(ownConfirm.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    String declineControlId = createOrderAs(STORE_A, castId);
+    ResponseEntity<JsonNode> ownDecline =
+        rest.exchange(
+            "/store/orders/" + declineControlId + "/decline",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(ownDecline.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    ResponseEntity<JsonNode> untouched =
+        rest.exchange(
+            "/store/orders/" + declineControlId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(untouched.getBody().path("status").asString())
+        .as("謝絶が拒否された受注はキャンセルへ落ちないこと")
+        .isEqualTo("CREATED");
+
+    // 負向: store B は store A の受注に申請専用経路でも到達できない
+    String orderId = createOrderAs(STORE_A, castId);
+    ResponseEntity<JsonNode> foreignConfirm =
+        rest.exchange(
+            "/store/orders/" + orderId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_B)),
+            JsonNode.class);
+    assertThat(foreignConfirm.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+    ResponseEntity<JsonNode> foreignDecline =
+        rest.exchange(
+            "/store/orders/" + orderId + "/decline",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_B)),
+            JsonNode.class);
+    assertThat(foreignDecline.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+    // 拒否された受注は未確定のまま残っている
+    ResponseEntity<JsonNode> after =
+        rest.exchange(
+            "/store/orders/" + orderId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(after.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(after.getBody().path("status").asString()).isEqualTo("CREATED");
+  }
+
+  @Test
   @DisplayName("他店舗の受注を更新できないこと")
   void otherStoreCannotUpdateForeignOrder() {
     String castId = createCastAs(STORE_A, "統合テストキャスト（受注更新用）");

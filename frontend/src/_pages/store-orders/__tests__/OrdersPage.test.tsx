@@ -5,10 +5,15 @@ import { orderApi } from '@/entities/order';
 import { castApi } from '@/entities/cast';
 
 jest.mock('@/entities/order', () => ({
+  // 表示ラベル等の定数は本物を使う（API だけを差し替える）
+  ...jest.requireActual('@/entities/order/model/types'),
   orderApi: {
     list: jest.fn(),
     create: jest.fn(),
     listReceptionists: jest.fn(),
+    listReservationRequests: jest.fn(),
+    confirm: jest.fn(),
+    decline: jest.fn(),
   },
 }));
 
@@ -31,6 +36,8 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 describe('店側オーダー画面の描画', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
+    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
   });
 
   // fixture は手書きであり、バックエンドの実応答を見ているわけではない。
@@ -150,7 +157,9 @@ describe('店側オーダー画面の描画', () => {
 
     render(<CreateOrderPage />);
     // 受付・キャストはサーバ側が @NotNull / @NotBlank。選ばないと送信自体が止まる。
-    fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付/ }), { key: 'ArrowDown' });
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付(?!経路)/ }), {
+      key: 'ArrowDown',
+    });
     fireEvent.click(await screen.findByRole('option', { name: '受付花子' }));
     fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
       target: { value: '花' },
@@ -178,6 +187,8 @@ describe('店側オーダー画面の描画', () => {
 describe('オーダー一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
+    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
     mockedOrderApi.list.mockResolvedValue({
       rows: [],
       page: 0,
@@ -203,6 +214,8 @@ describe('オーダー一覧ページ固有の要素', () => {
 describe('オーダー一覧のページ送り', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
+    mockedOrderApi.listReservationRequests.mockResolvedValue([]);
   });
 
   // 1 ページ 20 件で、101 件目以降にもページ送りで到達できることを固定する
