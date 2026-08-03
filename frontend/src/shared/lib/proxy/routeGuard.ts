@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isLegacyStorePath, isRetiredStorePath, storeEntryPath } from '../store-route';
 import { consoleAreaOfPath, isPublicPlatformPath, isSharedPlatformPath } from '../app-area';
+import { MEMBER_RETURN_PATH_COOKIE, isSafeMemberReturnPath } from '../platform-session';
 
 // コンソール別の入場可能エリアとホーム。/me の console（サーバ側が能力目録から導出）を
 // ログイン時に保存した platform-role cookie が根拠。platform コンソールは storeBridge に
@@ -52,7 +53,15 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 専用ログイン画面は無い）。厳密一致＋/member/ 配下に限定するのも同じ理由。
   if ((path === '/member' || path.startsWith('/member/')) && !hasToken) {
     console.error('🔒 Unauthorized access to /member, redirecting to login');
-    return NextResponse.redirect(new URL('/platform/login', request.url));
+    const response = NextResponse.redirect(new URL('/platform/login', request.url));
+    // ここで差し戻す時点では会員ポータルの画面は描画されておらず、クライアント側では戻り先を
+    // 覚えられない。ログイン後に元の画面（店舗つき予約導線など）へ戻すため、リダイレクト応答の
+    // cookie に残す。白名単（/member/ 配下の相対パスのみ）は保存時にも通し、開放リダイレクトを防ぐ。
+    const returnPath = `${path}${request.nextUrl.search}`;
+    if (isSafeMemberReturnPath(returnPath)) {
+      response.cookies.set(MEMBER_RETURN_PATH_COOKIE, returnPath, { path: '/' });
+    }
+    return response;
   }
 
   // 3. Console/area alignment

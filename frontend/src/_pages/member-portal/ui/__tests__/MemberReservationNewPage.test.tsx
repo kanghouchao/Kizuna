@@ -114,4 +114,20 @@ describe('MemberReservationNewPage', () => {
     expect(await screen.findByText('人数を入力してください')).toBeInTheDocument();
     expect(mockedCreate).not.toHaveBeenCalled();
   });
+
+  it('ご要望が 500 文字を超えると申請せずに検証エラーを出す', async () => {
+    // エラーを描画しないと、送信ボタンが何も起こさないように見える（API 呼び出しも失敗トーストも無い）
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fireEvent.change(screen.getByLabelText('ご要望（任意）'), {
+      target: { value: 'あ'.repeat(501) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'この内容で申請する' }));
+
+    expect(await screen.findByText('ご要望は 500 文字以内で入力してください')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
 });

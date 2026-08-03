@@ -131,8 +131,7 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderResponse confirm(String id, String actorEmail) {
-    Order order =
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    Order order = findReservationRequest(id);
     order.confirm();
     if (order.getReceptionistId() == null) {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
@@ -152,11 +151,21 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderResponse decline(String id) {
-    Order order =
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    Order order = findReservationRequest(id);
     order.cancelRequest();
     orderRepository.save(order);
     return toResponse(id);
+  }
+
+  /**
+   * 確定・謝絶の対象となる予約申請を引く。店舗が起こした受注は、ID を知っていても申請専用の操作では変更させない — 受注のステータス変更は通常の更新経路が受け持つ。判定は予約受付 inbox
+   * の抽出条件と同じ（{@link Order#isReservationRequest()}）。
+   */
+  private Order findReservationRequest(String id) {
+    return orderRepository
+        .findById(id)
+        .filter(Order::isReservationRequest)
+        .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
   }
 
   private Optional<Long> eligibleReceptionistId(String actorEmail) {

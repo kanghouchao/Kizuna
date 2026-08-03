@@ -137,6 +137,16 @@ public class Order extends StoreScopedEntity {
     this.requesterMemberId = null;
   }
 
+  /**
+   * 会員ポータル発の予約申請かどうか。予約受付 inbox の抽出と確定・謝絶の対象判定が共有する。
+   *
+   * <p>受付経路は店舗が手入力の受注にも自由に付けられる記録項目のため、申請者の会員コードまで見て初めて申請と言える。 判定に会員 ID を使わないのは、会員行が消えて FK が SET
+   * NULL になった後も未確定の申請を店舗が処理し終える必要があるため。
+   */
+  public boolean isReservationRequest() {
+    return receptionRoute == ReceptionRoute.WEB && requesterMemberCode != null;
+  }
+
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(OrderPatch patch) {
     if (patch.arrivalScheduledStartTime() != null) {

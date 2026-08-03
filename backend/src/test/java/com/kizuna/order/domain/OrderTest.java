@@ -89,6 +89,32 @@ class OrderTest {
   }
 
   @Test
+  @DisplayName("Web 受付かつ申請者の会員コードが揃って初めて予約申請と判定されること")
+  void isReservationRequest_requiresRouteAndRequesterSnapshot() {
+    assertThat(
+            Order.builder()
+                .receptionRoute(ReceptionRoute.WEB)
+                .requesterMemberCode("123456789012")
+                .build()
+                .isReservationRequest())
+        .isTrue();
+    assertThat(Order.builder().build().isReservationRequest())
+        .as("受付経路の記録が無い受注は申請ではないこと")
+        .isFalse();
+    assertThat(Order.builder().receptionRoute(ReceptionRoute.WEB).build().isReservationRequest())
+        .as("店舗が WEB を手入力しただけの受注は申請ではないこと")
+        .isFalse();
+    assertThat(
+            Order.builder()
+                .receptionRoute(ReceptionRoute.PHONE)
+                .requesterMemberCode("123456789012")
+                .build()
+                .isReservationRequest())
+        .as("電話受付は申請ではないこと")
+        .isFalse();
+  }
+
+  @Test
   @DisplayName("部分更新で人数を変更でき、null は変更しないこと")
   void apply_pax() {
     Order order = Order.builder().status(OrderStatus.CREATED).pax(2).build();

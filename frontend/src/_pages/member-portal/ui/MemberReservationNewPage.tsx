@@ -207,7 +207,16 @@ export function MemberReservationNewPage() {
               </div>
               <div>
                 <Label htmlFor="remarks">ご要望（任意）</Label>
-                <Textarea id="remarks" rows={3} {...register('remarks', { maxLength: 500 })} />
+                <Textarea
+                  id="remarks"
+                  rows={3}
+                  {...register('remarks', {
+                    maxLength: { value: 500, message: 'ご要望は 500 文字以内で入力してください' },
+                  })}
+                />
+                {errors.remarks && (
+                  <p className="mt-1 text-xs text-destructive-strong">{errors.remarks.message}</p>
+                )}
               </div>
               <Button type="submit" className="w-full" disabled={submitting}>
                 この内容で申請する

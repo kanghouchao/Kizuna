@@ -3,7 +3,6 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
@@ -30,6 +29,7 @@ import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
+import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -475,9 +475,17 @@ class OrderServiceTest {
     verify(orderRepository, never()).findAllViews(any(), any(Pageable.class));
   }
 
+  /** 確定・謝絶の対象となる会員申請の形（Web 受付 + 申請時点の会員コード）。 */
+  private static Order.OrderBuilder reservationRequest() {
+    return Order.builder()
+        .status(OrderStatus.CREATED)
+        .receptionRoute(ReceptionRoute.WEB)
+        .requesterMemberCode("123456789012");
+  }
+
   @Test
   void confirmAssignsActorAsReceptionistWhenSlotIsEmpty() {
-    Order request = Order.builder().status(OrderStatus.CREATED).build();
+    Order request = reservationRequest().build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
     PlatformUser actor = authorizedReceptionist();
@@ -495,7 +503,7 @@ class OrderServiceTest {
 
   @Test
   void confirmLeavesReceptionistEmptyWhenActorIsNotEligible() {
-    Order request = Order.builder().status(OrderStatus.CREATED).build();
+    Order request = reservationRequest().build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
     PlatformUser otherStoreActor =
@@ -515,7 +523,7 @@ class OrderServiceTest {
 
   @Test
   void confirmKeepsExistingReceptionist() {
-    Order existing = Order.builder().status(OrderStatus.CREATED).receptionistId(3L).build();
+    Order existing = reservationRequest().receptionistId(3L).build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
@@ -531,12 +539,7 @@ class OrderServiceTest {
   void confirmLinksCustomerResolvedAfterTheRequestWasSubmitted() {
     // 初回来店は「申請 → 店舗が会員コードを読んで台帳に紐づけ → 確定」の順になるため、
     // 申請時点では顧客が決まらない。確定時に見直さないと受注が顧客履歴に載らないまま残る。
-    Order request =
-        Order.builder()
-            .status(OrderStatus.CREATED)
-            .requesterMemberId(100L)
-            .receptionistId(3L)
-            .build();
+    Order request = reservationRequest().requesterMemberId(100L).receptionistId(3L).build();
     request.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
     CustomerMemberLink link =
@@ -560,23 +563,23 @@ class OrderServiceTest {
   }
 
   @Test
-  void confirmKeepsCustomerUntouchedForStoreOriginatedOrders() {
+  void confirmRejectsStoreOriginatedOrders() {
+    // 店舗が起こした受注は ID を知っていても申請専用の確定操作では変更させない（受付経路 WEB を
+    // 手入力で付けただけの受注も、申請者の会員コードが無ければ対象外）
     Order storeOrder =
         Order.builder()
             .status(OrderStatus.CREATED)
+            .receptionRoute(ReceptionRoute.WEB)
             .customerId("cust-existing")
             .receptionistId(3L)
             .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
-    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
-    service.confirm("o1", "staff@kizuna.test");
-
-    assertThat(storeOrder.getCustomerId()).isEqualTo("cust-existing");
-    verify(customerMemberLinkRepository, never())
-        .findByStoreIdAndMemberIdAndStatus(anyLong(), anyLong(), any());
+    assertThatThrownBy(() -> service.confirm("o1", "staff@kizuna.test"))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("予約申請が見つかりません");
+    assertThat(storeOrder.getStatus()).isEqualTo(OrderStatus.CREATED);
+    verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test
@@ -588,7 +591,7 @@ class OrderServiceTest {
 
   @Test
   void declineCancelsPendingRequest() {
-    Order request = Order.builder().status(OrderStatus.CREATED).build();
+    Order request = reservationRequest().build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
@@ -601,12 +604,25 @@ class OrderServiceTest {
 
   @Test
   void declineRejectsAlreadyConfirmedOrder() {
-    Order confirmed = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order confirmed = reservationRequest().status(OrderStatus.CONFIRMED).build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
 
     assertThatThrownBy(() -> service.decline("o1"))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
     assertThat(confirmed.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void declineRejectsStoreOriginatedOrders() {
+    // 謝絶は申請専用の操作。店舗起点の受注に対して呼ばれても CANCELLED へ落とさない
+    Order storeOrder = Order.builder().status(OrderStatus.CREATED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+
+    assertThatThrownBy(() -> service.decline("o1"))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("予約申請が見つかりません");
+    assertThat(storeOrder.getStatus()).isEqualTo(OrderStatus.CREATED);
     verify(orderRepository, never()).save(any(Order.class));
   }
 

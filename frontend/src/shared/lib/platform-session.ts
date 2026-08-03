@@ -4,7 +4,8 @@ import Cookies from 'js-cookie';
 // コンソール値（platform / store — /me の console、サーバ側が能力目録から導出）を保存する。
 const PLATFORM_ROLE_COOKIE = 'platform-role';
 const PLATFORM_STORE_ID_COOKIE = 'platform-store-id';
-const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
+// proxy 側（routeGuard）はサーバ応答の Set-Cookie で書き、クライアント側は js-cookie で読み書きする。
+export const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
 
 /** 平台セッションの cookie 読み書きの唯一の入口。 */
 export function getPlatformConsole(): string | undefined {

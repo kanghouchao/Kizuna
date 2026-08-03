@@ -8,15 +8,22 @@ jest.mock('next/server', () => {
       redirect: jest.fn(url => ({
         status: 307,
         headers: { get: () => url.toString() },
+        cookies: { set: jest.fn() },
       })),
     },
   };
 });
 
-const createRequest = (path: string, hasToken: boolean, cookies: Record<string, string> = {}) => {
+const createRequest = (
+  path: string,
+  hasToken: boolean,
+  cookies: Record<string, string> = {},
+  search = ''
+) => {
   return {
     nextUrl: {
       pathname: path,
+      search,
     },
     url: 'http://localhost' + path,
     cookies: {
@@ -163,6 +170,38 @@ describe('routeGuard', () => {
       expect.objectContaining({ pathname: '/platform/login' })
     );
     expect(res).not.toBeNull();
+  });
+
+  it('persists the member return path (with query) on the unauthenticated redirect', () => {
+    // 差し戻しはサーバ側で起きるため、クライアントの画面は戻り先を覚えられない。
+    // リダイレクト応答の cookie が唯一の持ち越し手段であることを固定する。
+    const req = createRequest('/member/reservations/new', false, {}, '?store=demo.kizuna.test');
+    const res = handleRouteProtection(req, 'platform') as unknown as {
+      cookies: { set: jest.Mock };
+    };
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/platform/login' })
+    );
+    expect(res.cookies.set).toHaveBeenCalledWith(
+      'member-return-path',
+      '/member/reservations/new?store=demo.kizuna.test',
+      { path: '/' }
+    );
+  });
+
+  it('does not persist a return path that fails the whitelist', () => {
+    // /member 単独は白名単（/member/ 配下）を通らない。危険な文字を含むクエリも保存しない。
+    const bare = handleRouteProtection(createRequest('/member', false), 'platform') as unknown as {
+      cookies: { set: jest.Mock };
+    };
+    expect(bare.cookies.set).not.toHaveBeenCalled();
+
+    const unsafe = handleRouteProtection(
+      createRequest('/member/reservations/new', false, {}, '?store=<script>'),
+      'platform'
+    ) as unknown as { cookies: { set: jest.Mock } };
+    expect(unsafe.cookies.set).not.toHaveBeenCalled();
   });
 
   it('allows access to /member with token', () => {

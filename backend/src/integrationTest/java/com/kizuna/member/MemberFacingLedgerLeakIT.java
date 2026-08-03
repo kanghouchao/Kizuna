@@ -6,6 +6,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -238,7 +239,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
                 "{\"store_id\": "
                     + STORE_A
                     + ", \"business_date\": \""
-                    + LocalDate.now()
+                    + LocalDate.now(ZoneId.of("Asia/Tokyo"))
                     + "\", \"pax\": 2}",
                 headers),
             JsonNode.class);

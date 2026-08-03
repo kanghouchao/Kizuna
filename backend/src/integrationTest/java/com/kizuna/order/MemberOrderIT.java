@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,7 +82,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
                 "{\"store_id\": "
                     + storeId
                     + ", \"business_date\": \""
-                    + LocalDate.now()
+                    + LocalDate.now(ZoneId.of("Asia/Tokyo"))
                     + "\", \"pax\": 3, \"remarks\": \""
                     + remarks
                     + "\"}",
@@ -188,7 +189,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
             "/store/orders",
             new HttpEntity<>(
                 "{\"receptionist_id\": 3, \"business_date\": \""
-                    + LocalDate.now()
+                    + LocalDate.now(ZoneId.of("Asia/Tokyo"))
                     + "\", \"cast_id\": \""
                     + castId
                     + "\", \"reception_route\": \"WEB\"}",
@@ -368,6 +369,38 @@ class MemberOrderIT extends CrossStoreTestSupport {
     JsonNode own = firstReservation(memberBToken);
     assertThat(own.path("id").asString()).isEqualTo(othersOrderId);
     assertThat(own.path("status").asString()).isEqualTo("CREATED");
+  }
+
+  @Test
+  @DisplayName("他店舗は会員の申請を確定も謝絶もできず、申請はその後も処理できること")
+  void otherStoreCannotConfirmOrDeclineForeignApplication() {
+    String orderId = requestReservation(memberAToken, STORE_A, "他店舗からの操作対象外");
+
+    ResponseEntity<JsonNode> foreignConfirm =
+        rest.exchange(
+            "/store/orders/" + orderId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_B)),
+            JsonNode.class);
+    assertThat(foreignConfirm.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+    ResponseEntity<JsonNode> foreignDecline =
+        rest.exchange(
+            "/store/orders/" + orderId + "/decline",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_B)),
+            JsonNode.class);
+    assertThat(foreignDecline.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+    // 正向対照: 申請先の店舗ではそのまま確定できる（負向がルーティング起因でない証明）
+    ResponseEntity<JsonNode> ownConfirm =
+        rest.exchange(
+            "/store/orders/" + orderId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(ownConfirm.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(ownConfirm.getBody().path("status").asString()).isEqualTo("CONFIRMED");
   }
 
   @Test

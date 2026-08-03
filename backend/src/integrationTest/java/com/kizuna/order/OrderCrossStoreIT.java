@@ -95,11 +95,12 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("他店舗の受注を確定・謝絶できないこと")
+  @DisplayName("店舗起点の受注は申請専用の確定・謝絶で変更できず、他店舗からは到達もできないこと")
   void otherStoreCannotConfirmOrDeclineForeignOrder() {
     String castId = createCastAs(STORE_A, "統合テストキャスト（確定謝絶用）");
 
-    // 正向対照: 同じ操作を自店舗で行えば成功する（負向がルーティング起因でない証明）
+    // 店舗が起こした受注は会員申請ではないため、自店舗でも申請専用の操作では変更できない
+    // （会員申請での正向対照は MemberOrderIT が持つ）。ステータス変更は通常の更新経路が受け持つ。
     String controlId = createOrderAs(STORE_A, castId);
     ResponseEntity<JsonNode> ownConfirm =
         rest.exchange(
@@ -107,8 +108,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             HttpMethod.POST,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(ownConfirm.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(ownConfirm.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(ownConfirm.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     String declineControlId = createOrderAs(STORE_A, castId);
     ResponseEntity<JsonNode> ownDecline =
@@ -117,10 +117,18 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             HttpMethod.POST,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(ownDecline.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(ownDecline.getBody().path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(ownDecline.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    ResponseEntity<JsonNode> untouched =
+        rest.exchange(
+            "/store/orders/" + declineControlId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(untouched.getBody().path("status").asString())
+        .as("謝絶が拒否された受注はキャンセルへ落ちないこと")
+        .isEqualTo("CREATED");
 
-    // 負向: store B は store A の受注を確定も謝絶もできない
+    // 負向: store B は store A の受注に申請専用経路でも到達できない
     String orderId = createOrderAs(STORE_A, castId);
     ResponseEntity<JsonNode> foreignConfirm =
         rest.exchange(
