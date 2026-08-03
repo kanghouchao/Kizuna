@@ -54,8 +54,10 @@ public interface OrderRepository
   /**
    * 予約受付 inbox が扱う未確定の申請（会員ポータルからの Web 申請のうち、まだ確定も謝絶もしていないもの）。
    *
-   * <p>申請の判定は受付経路だけでは足りない — 受付経路は店舗が手入力の受注にも自由に付けられる記録項目であり、
-   * 申請であることの証拠にはならない。申請者（requesterMemberId）の存在まで見て初めて会員の申請だと言える。
+   * <p>申請の判定は受付経路だけでは足りない — 受付経路は店舗が手入力の受注にも自由に付けられる記録項目であり、 申請であることの証拠にはならない。申請者まで見て初めて会員の申請だと言える。
+   *
+   * <p>申請者の判定に使うのは会員 ID ではなく会員コードのスナップショットである。会員行が消えると FK は SET NULL で 会員 ID
+   * が欠落するが、未確定の申請はそれでも店舗が処理し終える必要がある。ID を要求すると、その申請が CREATED のまま inbox から消えて処理不能になる。
    *
    * <p>処理済みの閲覧は受注一覧の責務なので、ここでは未確定のものだけを古い順に返す。
    */
@@ -64,7 +66,7 @@ public interface OrderRepository
           + """
           where o.status = com.kizuna.order.domain.OrderStatus.CREATED
             and o.receptionRoute = com.kizuna.order.domain.ReceptionRoute.WEB
-            and o.requesterMemberId is not null
+            and o.requesterMemberCode is not null
           order by o.createdAt asc, o.id asc
           """)
   List<OrderView> findPendingReservationRequestViews();

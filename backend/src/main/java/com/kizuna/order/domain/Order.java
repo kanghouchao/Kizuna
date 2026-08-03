@@ -128,6 +128,15 @@ public class Order extends StoreScopedEntity {
     this.customerId = customerId;
   }
 
+  /**
+   * 申請者の会員参照を外す。会員行の削除に伴う FK の SET NULL と同じ意味で、会員コードのスナップショットは残す。
+   *
+   * <p>誰の申請だったかは残り続けるため、未確定の申請は会員が消えた後も店舗が処理し終えられる。
+   */
+  public void detachRequesterMember() {
+    this.requesterMemberId = null;
+  }
+
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(OrderPatch patch) {
     if (patch.arrivalScheduledStartTime() != null) {

@@ -2,6 +2,7 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -24,6 +26,8 @@ import tools.jackson.databind.JsonNode;
  * カナリアで強く見る（帰属不一致の確認では、実データが混ざっていないことの証明にならない）。
  */
 class MemberOrderIT extends CrossStoreTestSupport {
+
+  @Autowired private OrderRepository orderRepository;
 
   private static final String PASSWORD = "password1234";
 
@@ -192,6 +196,41 @@ class MemberOrderIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 店舗側の受注作成が成功すること").isTrue();
     return created.getBody().path("id").asString();
+  }
+
+  @Test
+  @DisplayName("会員行が消えても未確定の申請は inbox に残り、処理し終えられること")
+  void inboxKeepsPendingRequestAfterTheMemberRowIsGone() {
+    String orderId = requestReservation(memberAToken, STORE_A, "会員削除後も処理する申請");
+
+    // 会員行の削除を DB 側の FK（SET NULL）と同じ形で再現する。会員コードのスナップショットは残る。
+    orderRepository
+        .findById(orderId)
+        .ifPresent(
+            order -> {
+              order.detachRequesterMember();
+              orderRepository.save(order);
+            });
+
+    ResponseEntity<JsonNode> inbox =
+        rest.exchange(
+            "/store/orders/reservation-requests",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+    List<String> ids = new ArrayList<>();
+    inbox.getBody().forEach(node -> ids.add(node.path("id").asString()));
+    assertThat(ids).as("会員 ID が欠落しても未確定の申請は処理対象として残ること").contains(orderId);
+
+    ResponseEntity<JsonNode> confirmed =
+        rest.exchange(
+            "/store/orders/" + orderId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
   }
 
   @Test
