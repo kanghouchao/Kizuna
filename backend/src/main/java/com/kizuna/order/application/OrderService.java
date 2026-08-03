@@ -105,6 +105,12 @@ public class OrderService {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
+    // 申請の状態遷移の入口は確定・謝絶の専用操作ただ一つ。汎用更新でも遷移できると、
+    // 確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう。
+    if (request.getStatus() != null && order.isReservationRequest()) {
+      throw new ServiceException("予約申請の状態は確定・謝絶の操作でのみ変更できます");
+    }
+
     // 非nullフィールドのみをドメインの部分更新コマンドとして適用
     order.apply(orderMapper.toPatch(request));
 

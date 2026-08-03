@@ -372,6 +372,36 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("申請の状態は汎用更新（PUT）では変更できず、専用の確定操作でのみ変わること")
+  void genericUpdateCannotTransitionReservationRequests() {
+    String orderId = requestReservation(memberAToken, STORE_A, "汎用更新の対象外");
+    String castId = createCastAs(STORE_A, "汎用更新ガード用キャスト");
+
+    // 汎用更新で CONFIRMED を送っても、確定時の指名再検証・顧客補完を迂回して遷移はできない
+    ResponseEntity<JsonNode> tampered =
+        rest.exchange(
+            "/store/orders/" + orderId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                "{\"receptionist_id\": 3, \"cast_id\": \""
+                    + castId
+                    + "\", \"status\": \"CONFIRMED\"}",
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    // 申請は未確定のまま残り、専用の確定操作では引き続き処理できる
+    ResponseEntity<JsonNode> confirmed =
+        rest.exchange(
+            "/store/orders/" + orderId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+  }
+
+  @Test
   @DisplayName("他店舗は会員の申請を確定も謝絶もできず、申請はその後も処理できること")
   void otherStoreCannotConfirmOrDeclineForeignApplication() {
     String orderId = requestReservation(memberAToken, STORE_A, "他店舗からの操作対象外");

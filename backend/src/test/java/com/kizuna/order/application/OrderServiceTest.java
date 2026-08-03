@@ -327,6 +327,49 @@ class OrderServiceTest {
   }
 
   @Test
+  void updateRejectsStatusChangeForReservationRequests() {
+    // 申請の状態遷移の入口は確定・謝絶の専用操作ただ一つ — 汎用更新から遷移できると
+    // 確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう
+    Order request = reservationRequest().build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId(2L);
+    req.setStatus("CONFIRMED");
+
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("確定・謝絶の操作でのみ");
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CREATED);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateAllowsFieldEditsOnReservationRequestsWithoutStatusChange() {
+    // 状態に触れない編集（受付担当・キャストの補完など）は申請にも引き続き許す
+    Order request = reservationRequest().build();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
+    when(castRepository.existsById("g2")).thenReturn(true);
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g2");
+    req.setReceptionistId(2L);
+
+    service.update("o1", req);
+
+    assertThat(request.getCastId()).isEqualTo("g2");
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CREATED);
+  }
+
+  @Test
   void updateAppliesPatchFields() {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
 

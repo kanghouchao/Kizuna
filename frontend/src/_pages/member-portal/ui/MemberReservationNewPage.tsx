@@ -42,6 +42,9 @@ export function MemberReservationNewPage() {
   const [store, setStore] = useState<Store | null>(null);
   const [storeResolved, setStoreResolved] = useState(false);
   const [casts, setCasts] = useState<ConfirmedShiftCast[]>([]);
+  const [castsFailed, setCastsFailed] = useState(false);
+  // 取得失敗時の再試行用。日付・店舗が同じままでも effect を引き直せるようにする。
+  const [castsReloadNonce, setCastsReloadNonce] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   const {
@@ -90,6 +93,7 @@ export function MemberReservationNewPage() {
     // 候補はその日その店舗の確定シフトに紐づくため、日付・店舗が変わった時点で選択も候補も捨てる。
     // 非同期の取得完了を待つと、その間だけ前の日付のキャストを指名したまま送信できてしまう。
     setCasts([]);
+    setCastsFailed(false);
     setValue('cast_id', '');
     if (storeId === null || !businessDate) {
       return;
@@ -101,12 +105,14 @@ export function MemberReservationNewPage() {
         if (!cancelled) setCasts(list);
       })
       .catch(() => {
-        if (!cancelled) setCasts([]);
+        // 取得失敗を空候補と区別する — 「出勤なし」に見せると、指名するつもりの会員が
+        // 誤った空き情報のまま指名なしで申請してしまう
+        if (!cancelled) setCastsFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [storeId, businessDate, setValue]);
+  }, [storeId, businessDate, setValue, castsReloadNonce]);
 
   const submit = async (values: ReservationFormValues) => {
     if (storeId === null) return;
@@ -199,7 +205,22 @@ export function MemberReservationNewPage() {
                     </option>
                   ))}
                 </select>
-                {businessDate && casts.length === 0 && (
+                {businessDate && castsFailed && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-xs text-destructive-strong">
+                      出勤情報を取得できませんでした。
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCastsReloadNonce(nonce => nonce + 1)}
+                    >
+                      再読み込み
+                    </Button>
+                  </div>
+                )}
+                {businessDate && !castsFailed && casts.length === 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     この日に出勤予定のキャストはいません。
                   </p>

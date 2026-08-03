@@ -115,6 +115,27 @@ describe('MemberReservationNewPage', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
+  it('出勤情報の取得に失敗したら「出勤なし」ではなくエラーを出し、再読み込みで復帰できる', async () => {
+    // 失敗を空候補に見せると、指名するつもりの会員が誤った空き情報のまま指名なしで申請してしまう
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+    mockedCasts.mockRejectedValueOnce(new Error('network'));
+    mockedCasts.mockResolvedValueOnce([
+      { cast_id: 'c1', cast_name: 'さくら', start_time: '18:00:00' },
+    ]);
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+
+    expect(await screen.findByText('出勤情報を取得できませんでした。')).toBeInTheDocument();
+    expect(screen.queryByText('この日に出勤予定のキャストはいません。')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+
+    expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
+    expect(screen.queryByText('出勤情報を取得できませんでした。')).not.toBeInTheDocument();
+  });
+
   it('ご要望が 500 文字を超えると申請せずに検証エラーを出す', async () => {
     // エラーを描画しないと、送信ボタンが何も起こさないように見える（API 呼び出しも失敗トーストも無い）
     mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
