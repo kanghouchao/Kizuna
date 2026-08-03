@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,9 @@ public class CastInvitationService {
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private static final int TOKEN_BYTES = 32;
   private static final String ALREADY_LINKED_MESSAGE = "この档案は既に平台身分と連携済みのため招待を発行できません";
+
+  /** 招待の宛先档案が実在することを保証する t_cast_invitations の FK。冒頭の findById 通過後の並行档案削除で当たる。 */
+  private static final String CAST_FK_CONSTRAINT = "fk_t_cast_invitations_cast";
 
   private final CastRepository castRepository;
   private final CastInvitationRepository castInvitationRepository;
@@ -80,9 +84,19 @@ public class CastInvitationService {
     // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定していた場合、部分ユニーク
     // インデックス違反となるが、ここで catch しない — CommonExceptionHandler が SQLSTATE で一意違反
     // だけを 409 へ写像し、FK 等の他の整合性違反は実装欠陥として 500 のまま大きく失敗させる分類を
-    // 持っているため、そこへ委ねる。
-    CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
-    return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
+    // 持っているため、そこへ委ねる。唯一の例外は cast FK 違反 — 冒頭の findById 通過後に並行の
+    // 档案削除（日常操作）が先にコミットすると当たるレースであり、実装欠陥ではないため、
+    // 冒頭の档案不在と同じ分類（NotFoundException → 404）へ変換する。
+    try {
+      CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
+      return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
+    } catch (DataIntegrityViolationException ex) {
+      String cause = ex.getMostSpecificCause().getMessage();
+      if (cause != null && cause.contains(CAST_FK_CONSTRAINT)) {
+        throw new NotFoundException("キャストが見つかりません: " + castId);
+      }
+      throw ex;
+    }
   }
 
   /** ページ内の档案について招待状態（四態）を一括導出する。呼び出し元の storeFilter 有効なトランザクション内で使う。 */

@@ -118,6 +118,25 @@ class CastInvitationServiceTest {
   }
 
   @Test
+  void issue_castFkViolation_convertsToNotFound() {
+    // 冒頭の findById 通過後に並行の CastService.delete（日常操作）が先にコミットすると、
+    // 招待行の INSERT が t_cast_invitations の cast FK に当たるレース。
+    // 冒頭の档案不在と同じ分類（NotFoundException → 404）へ変換する。
+    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castInvitationRepository.saveAndFlush(any()))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "save failed",
+                new RuntimeException(
+                    "ERROR: insert or update on table \"t_cast_invitations\" violates foreign key"
+                        + " constraint \"fk_t_cast_invitations_cast\"")));
+
+    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("キャストが見つかりません");
+  }
+
+  @Test
   void issue_abortsWhenCastGetsLinkedConcurrentlyBeforeReissuing() {
     // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が档案を紐づけた状況を模す。
     // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する。
