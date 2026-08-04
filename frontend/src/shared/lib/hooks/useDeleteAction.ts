@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { getApiErrorMessage } from './apiError';
+import { getApiErrorMessage } from '../apiError';
 
 interface DeleteActionOptions<T> {
   /** 削除本体。確認済みの対象を受け取る */

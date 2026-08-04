@@ -10,21 +10,19 @@ jest.mock('@/entities/order', () => ({
 const mockedList = memberOrderApi.list as jest.Mock;
 const mockedCancel = memberOrderApi.cancel as jest.Mock;
 
-const page = (rows: unknown[], total = rows.length) => ({ rows, page: 0, pageCount: 1, total });
+const page = (rows: unknown[], nextCursor: string | null = null) => ({ rows, nextCursor });
 
-/** 固定長ページを返すサーバの代役。1 回の取得は常に 20 件までという前提を持つ。 */
-const pagedServer = (total: number) => (params: { page: number; size: number }) => {
-  const start = params.page * params.size;
-  const rows = Array.from(
-    { length: Math.max(0, Math.min(params.size, total - start)) },
-    (_, i) => ({
-      id: `o${start + i}`,
-      store_name: `店舗${start + i}`,
-      business_date: '2026-08-10',
-      status: 'CREATED',
-    })
-  );
-  return Promise.resolve(page(rows, total));
+/** カーソルで続きを返すサーバの代役。位置は「次に返す行の番号」で表す。 */
+const cursorServer = (total: number) => (params: { cursor?: string; size: number }) => {
+  const start = params.cursor ? Number(params.cursor) : 0;
+  const end = Math.min(start + params.size, total);
+  const rows = Array.from({ length: end - start }, (_, i) => ({
+    id: `o${start + i}`,
+    store_name: `店舗${start + i}`,
+    business_date: '2026-08-10',
+    status: 'CREATED',
+  }));
+  return Promise.resolve(page(rows, end < total ? String(end) : null));
 };
 
 describe('MemberReservationsPage', () => {
@@ -68,37 +66,25 @@ describe('MemberReservationsPage', () => {
     expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(1);
   });
 
-  it('取り下げると本人取り下げの API を呼び、一覧を取り直す', async () => {
+  it('取り下げると本人取り下げの API を呼び、その行だけ差し替える', async () => {
     mockedList.mockResolvedValue(
       page([{ id: 'o1', store_name: '店舗A', business_date: '2026-08-10', status: 'CREATED' }])
     );
-    mockedCancel.mockResolvedValue({});
+    mockedCancel.mockResolvedValue({
+      id: 'o1',
+      store_name: '店舗A',
+      business_date: '2026-08-10',
+      status: 'CANCELLED',
+    });
 
     render(<MemberReservationsPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: '取り下げる' }));
 
     await waitFor(() => expect(mockedCancel).toHaveBeenCalledWith('o1'));
-    expect(mockedList).toHaveBeenCalledTimes(2);
-  });
-
-  it('取り下げ後の取り直しが届くまで、表示中の行の取り下げを受け付けない', async () => {
-    // 行は残したままだが、古い行を押せると済んだ取り下げをもう一度投げてしまう
-    mockedList.mockResolvedValueOnce(
-      page([{ id: 'o1', store_name: '店舗A', business_date: '2026-08-10', status: 'CREATED' }])
-    );
-    mockedCancel.mockResolvedValue({});
-    mockedList.mockReturnValueOnce(new Promise(() => {}));
-
-    render(<MemberReservationsPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: '取り下げる' }));
-
-    // 取り直しが始まった＝processingId は既にクリアされている。ここから先が観測したい窓。
-    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('button', { name: '取り下げる' })).toBeDisabled();
-    // 行そのものは消さない
-    expect(screen.getByText('店舗A')).toBeInTheDocument();
+    // 取り下げても予約は一覧に残る（状態が変わるだけ）ので、取り直しに行く必要がない
+    expect(await screen.findByText('キャンセル')).toBeInTheDocument();
+    expect(mockedList).toHaveBeenCalledTimes(1);
   });
 
   it('取得に失敗したらエラーメッセージを表示する', async () => {
@@ -111,16 +97,16 @@ describe('MemberReservationsPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('追加読み込みに失敗しても既に読み込んだ予約は消さず、その拡張だけ再試行できる', async () => {
-    const server = pagedServer(25);
+  it('追加読み込みに失敗しても既に読み込んだ予約は消さず、その続きだけ再試行できる', async () => {
+    const server = cursorServer(25);
     mockedList.mockImplementation(server);
 
     render(<MemberReservationsPage />);
     await screen.findByRole('button', { name: 'もっと見る' });
 
-    // 拡張の取得だけを落とす
+    // 続きの取得だけを落とす
     mockedList.mockImplementation(params =>
-      params.page === 1 ? Promise.reject(new Error('failed')) : server(params)
+      params.cursor ? Promise.reject(new Error('failed')) : server(params)
     );
     fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
 
@@ -137,25 +123,43 @@ describe('MemberReservationsPage', () => {
     mockedList.mockImplementation(server);
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
-    // 失敗した拡張と同じ範囲を取り直す（読み込み済みページ数を進めていない）
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 }));
+    // 失敗した続きと同じ位置から取り直す（続きの位置を進めていない）
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ cursor: '20', size: 20 }));
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(25)
     );
   });
 
   it('どこまで広げても 1 回の取得件数は上限のまま', async () => {
-    // 要求サイズ自体を膨らませると、サーバ側のページ上限に当たった時点で以降の予約へ到達できなくなる
-    mockedList.mockImplementation(pagedServer(2500));
+    // 要求サイズ自体を膨らませると、サーバ側の取得上限に当たった時点で以降の予約へ到達できなくなる
+    mockedList.mockImplementation(cursorServer(2500));
 
     render(<MemberReservationsPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ cursor: '20', size: 20 }));
 
     expect(mockedList.mock.calls.every(([params]) => params.size === 20)).toBe(true);
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(40)
     );
+  });
+
+  it('追加読み込みは、読み込み済みの量によらず 1 回の操作につき 1 要求で済む', async () => {
+    mockedList.mockImplementation(cursorServer(45));
+
+    render(<MemberReservationsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(40)
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(45)
+    );
+
+    // 読み込み済みの範囲を読み直す実装では、ここまでで 1+2+3=6 要求が飛ぶ
+    expect(mockedList).toHaveBeenCalledTimes(3);
   });
 });

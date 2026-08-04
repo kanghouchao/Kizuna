@@ -2,6 +2,7 @@ package com.kizuna.order.api.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -15,6 +16,7 @@ import com.kizuna.order.application.OrderService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.web.CursorPage;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -72,23 +74,43 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("予約受付 inbox が要求されたページを読み口へ渡すこと")
+  @DisplayName("予約受付 inbox が要求された続きの位置と件数を読み口へ渡すこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
-  void reservationRequestsForwardTheRequestedPage() throws Exception {
+  void reservationRequestsForwardTheRequestedCursor() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    when(orderService.listPendingReservationRequests(pageableCaptor.capture()))
-        .thenReturn(new PageImpl<>(List.of()));
+    ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
+    when(orderService.listPendingReservationRequests(cursorCaptor.capture(), sizeCaptor.capture()))
+        .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(
-            get("/store/orders/reservation-requests?page=1&size=5")
+            get("/store/orders/reservation-requests?cursor=abc&size=5")
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
-    assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
-    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+    assertThat(cursorCaptor.getValue()).isEqualTo("abc");
+    assertThat(sizeCaptor.getValue()).isEqualTo(5);
+  }
+
+  @Test
+  @DisplayName("続きの位置を指定しない予約受付 inbox は先頭から読むこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void reservationRequestsStartFromTheBeginningWithoutACursor() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
+    when(orderService.listPendingReservationRequests(cursorCaptor.capture(), anyInt()))
+        .thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc
+        .perform(
+            get("/store/orders/reservation-requests")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
+
+    assertThat(cursorCaptor.getValue()).isNull();
   }
 
   @Test

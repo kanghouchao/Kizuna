@@ -6,6 +6,7 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
@@ -59,12 +60,17 @@ public class OrderController {
         .body(orderService.create(request));
   }
 
-  /** 予約受付 inbox の未確定申請一覧。並び（古い順）は読み口が固定するため、既定の sort は置かない。 */
+  /**
+   * 予約受付 inbox の未確定申請一覧。並び（古い順）は読み口が固定するため、並び順の指定は受けない。
+   *
+   * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。処理で行が消えていく一覧なので、
+   * 位置を「何件目か」で指すと処理の直後に境界の申請を飛ばす。
+   */
   @GetMapping("/reservation-requests")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<Page<OrderResponse>> listReservationRequests(
-      @PageableDefault(size = 20) Pageable pageable) {
-    return ResponseEntity.ok(orderService.listPendingReservationRequests(pageable));
+  public ResponseEntity<CursorPage<OrderResponse>> listReservationRequests(
+      @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
+    return ResponseEntity.ok(orderService.listPendingReservationRequests(cursor, size));
   }
 
   /**

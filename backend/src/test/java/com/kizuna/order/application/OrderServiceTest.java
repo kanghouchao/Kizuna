@@ -35,6 +35,8 @@ import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
@@ -55,6 +57,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -79,6 +82,10 @@ class OrderServiceTest {
   @Captor ArgumentCaptor<Customer> customerCaptor;
 
   private static final long STORE_ID = 1L;
+
+  /** 予約受付 inbox の並びの鍵になる受付時刻。 */
+  private static final OffsetDateTime RECEIVED_AT =
+      OffsetDateTime.parse("2026-08-04T10:00:00+09:00");
 
   private OrderPatch emptyPatch() {
     return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null, null);
@@ -537,30 +544,83 @@ class OrderServiceTest {
     verify(orderRepository, never()).save(any());
   }
 
+  /** 予約受付 inbox の読み口が返す 1 行分の projection。 */
+  private static OrderView pendingView(String id, OffsetDateTime createdAt) {
+    OrderView view = mock(OrderView.class);
+    lenient().when(view.getId()).thenReturn(id);
+    lenient().when(view.getCreatedAt()).thenReturn(createdAt);
+    return view;
+  }
+
   @Test
   void listPendingReservationRequestsDelegatesFilteringToTheQuery() {
-    OrderView view = mock(OrderView.class);
+    OrderView view = pendingView("o1", RECEIVED_AT);
     OrderResponse res = OrderResponse.builder().id("o1").build();
-    Pageable pageable = PageRequest.of(0, 20);
-    when(orderRepository.findPendingReservationRequestViews(pageable))
-        .thenReturn(new PageImpl<>(List.of(view), pageable, 1));
+    when(orderRepository.findPendingReservationRequestViews(any(Limit.class)))
+        .thenReturn(List.of(view));
     when(orderMapper.toResponse(view)).thenReturn(res);
 
-    assertThat(service.listPendingReservationRequests(pageable).getContent()).containsExactly(res);
+    assertThat(service.listPendingReservationRequests(null, 20).content()).containsExactly(res);
     // 受注一覧の先頭ページを取って手元で選り分ける実装だと、確定済みが積み上がった店舗で申請が窓から落ちる
     verify(orderRepository, never()).findAllViews(any(), any(Pageable.class));
   }
 
   @Test
-  void listPendingReservationRequestsReportsTheTotalSoCallersCanReachEveryRequest() {
-    OrderView view = mock(OrderView.class);
-    Pageable pageable = PageRequest.of(0, 1);
-    when(orderRepository.findPendingReservationRequestViews(pageable))
-        .thenReturn(new PageImpl<>(List.of(view), pageable, 3));
-    when(orderMapper.toResponse(view)).thenReturn(OrderResponse.builder().id("o1").build());
+  void listPendingReservationRequestsHandsBackTheCursorOfTheLastReturnedRequest() {
+    // 上限より 1 件多く返るのが「続きがある」ことの現れ。3 件目は応答に載せない。
+    List<OrderView> fetched =
+        List.of(
+            pendingView("o1", RECEIVED_AT),
+            pendingView("o2", RECEIVED_AT.plusMinutes(1)),
+            pendingView("o3", RECEIVED_AT.plusMinutes(2)));
+    when(orderRepository.findPendingReservationRequestViews(Limit.of(3))).thenReturn(fetched);
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
-    // 取得件数の上限を超えた未処理の申請が「無い」ことにならないよう、総件数を伝える
-    assertThat(service.listPendingReservationRequests(pageable).getTotalElements()).isEqualTo(3);
+    CursorPage<OrderResponse> page = service.listPendingReservationRequests(null, 2);
+
+    assertThat(page.content()).hasSize(2);
+    // 続きの位置は返した最後の行を指す。余分に取った 3 件目を指すと、その行が飛ばされる。
+    assertThat(PageCursor.decode(page.nextCursor()))
+        .isEqualTo(new PageCursor(RECEIVED_AT.plusMinutes(1).toString(), "o2"));
+  }
+
+  @Test
+  void listPendingReservationRequestsReportsNoCursorWhenNothingFollows() {
+    List<OrderView> fetched = List.of(pendingView("o1", RECEIVED_AT));
+    when(orderRepository.findPendingReservationRequestViews(Limit.of(3))).thenReturn(fetched);
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    assertThat(service.listPendingReservationRequests(null, 2).nextCursor()).isNull();
+  }
+
+  @Test
+  void listPendingReservationRequestsResumesFromTheGivenCursorInsteadOfAnOffset() {
+    String cursor = new PageCursor(RECEIVED_AT.toString(), "o1").encode();
+    when(orderRepository.findPendingReservationRequestViewsAfter(
+            eq(RECEIVED_AT), eq("o1"), any(Limit.class)))
+        .thenReturn(List.of());
+
+    assertThat(service.listPendingReservationRequests(cursor, 20).content()).isEmpty();
+    // 位置を件数で指す読み口へ落ちると、手前の申請が処理で消えた分だけ境界の申請を飛ばす
+    verify(orderRepository, never()).findPendingReservationRequestViews(any(Limit.class));
+  }
+
+  @Test
+  void listPendingReservationRequestsRejectsAMalformedCursor() {
+    assertThatThrownBy(() -> service.listPendingReservationRequests("not-a-cursor", 20))
+        .isInstanceOf(ServiceException.class);
+    verify(orderRepository, never()).findPendingReservationRequestViewsAfter(any(), any(), any());
+  }
+
+  @Test
+  void listPendingReservationRequestsCapsTheRequestedSize() {
+    when(orderRepository.findPendingReservationRequestViews(any(Limit.class)))
+        .thenReturn(List.of());
+
+    service.listPendingReservationRequests(null, 10_000);
+
+    // 1 回の応答は抑える。続きはカーソルで辿れるので、抑えても到達性は落ちない。
+    verify(orderRepository).findPendingReservationRequestViews(Limit.of(CursorPage.MAX_SIZE + 1));
   }
 
   /** 確定・謝絶の対象となる会員申請の形（Web 受付 + 申請時点の会員コード）。 */

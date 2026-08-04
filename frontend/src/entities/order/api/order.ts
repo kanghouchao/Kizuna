@@ -1,4 +1,12 @@
-import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
+import {
+  CursorPageResult,
+  CursorParams,
+  PageResult,
+  PaginationParams,
+  apiClient,
+  fromCursorPage,
+  fromSpringPage,
+} from '@/shared/api';
 import {
   MemberOrder,
   MemberOrderCreateRequest,
@@ -23,10 +31,15 @@ export const orderApi = {
     const response = await apiClient.get('/store/orders/receptionists');
     return response.data;
   },
-  /** 予約受付 inbox の未確定申請一覧（絞り込みと並びはサーバ側、取得件数はページで抑える）。 */
-  listReservationRequests: async (params?: PaginationParams): Promise<PageResult<Order>> => {
+  /**
+   * 予約受付 inbox の未確定申請一覧（絞り込みと並びはサーバ側、取得件数は 1 回分に抑える）。
+   *
+   * 続きは応答の nextCursor をそのまま cursor に渡して取る。確定・謝絶で行が消えても位置がずれないため、
+   * 読み込み済みの範囲を読み直さずに済む。
+   */
+  listReservationRequests: async (params?: CursorParams): Promise<CursorPageResult<Order>> => {
     const response = await apiClient.get('/store/orders/reservation-requests', { params });
-    return fromSpringPage(response.data);
+    return fromCursorPage(response.data);
   },
   /** 未確定の予約申請を編集する。送った内容がそのまま新しい申請内容になる（省略＝未設定）。 */
   updateReservationRequest: async (
@@ -50,9 +63,9 @@ export const orderApi = {
 
 /** 会員本人の予約 API。店舗文脈を要さない（/platform/me 配下）。 */
 export const memberOrderApi = {
-  list: async (params?: PaginationParams): Promise<PageResult<MemberOrder>> => {
+  list: async (params?: CursorParams): Promise<CursorPageResult<MemberOrder>> => {
     const response = await apiClient.get('/platform/me/orders', { params });
-    return fromSpringPage(response.data);
+    return fromCursorPage(response.data);
   },
   create: async (data: MemberOrderCreateRequest): Promise<MemberOrder> => {
     const response = await apiClient.post('/platform/me/orders', data);

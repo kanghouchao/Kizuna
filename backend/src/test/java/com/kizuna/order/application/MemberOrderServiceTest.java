@@ -20,6 +20,7 @@ import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.order.api.dto.MemberOrderCreateRequest;
+import com.kizuna.order.api.dto.MemberOrderResponse;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.MemberOrderView;
 import com.kizuna.order.domain.Order;
@@ -31,6 +32,8 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -39,6 +42,7 @@ import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,9 +54,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Limit;
 
 @ExtendWith(MockitoExtension.class)
 class MemberOrderServiceTest {
@@ -280,11 +282,45 @@ class MemberOrderServiceTest {
   @Test
   @DisplayName("一覧は本人が申請した予約に限って引くこと")
   void listQueriesOwnRequestsOnly() {
-    when(orderRepository.findMemberViews(anyLong(), any())).thenReturn(Page.empty());
+    when(orderRepository.findMemberViews(anyLong(), any(Limit.class))).thenReturn(List.of());
 
-    service.list(EMAIL, PageRequest.of(0, 20));
+    service.list(EMAIL, null, 20);
 
-    verify(orderRepository).findMemberViews(eq(MEMBER_ID), any(Pageable.class));
+    verify(orderRepository).findMemberViews(eq(MEMBER_ID), any(Limit.class));
+  }
+
+  @Test
+  @DisplayName("続きの取得でも申請者の一致を問い合わせに載せ続けること")
+  void listKeepsTheRequesterPredicateWhenResumingFromACursor() {
+    when(orderRepository.findMemberViewsAfter(anyLong(), any(), anyString(), any(Limit.class)))
+        .thenReturn(List.of());
+
+    service.list(EMAIL, new PageCursor("2026-08-04", "o1").encode(), 20);
+
+    // カーソルは位置を指すだけで隔離境界ではない。ここが抜けると他会員の予約に続きから到達できる。
+    verify(orderRepository)
+        .findMemberViewsAfter(
+            eq(MEMBER_ID), eq(LocalDate.parse("2026-08-04")), eq("o1"), any(Limit.class));
+  }
+
+  @Test
+  @DisplayName("続きがあるときは最後に返した予約を指すカーソルを添えること")
+  void listHandsBackTheCursorOfTheLastReturnedReservation() {
+    List<MemberOrderView> fetched =
+        List.of(memberView("o1", "2026-08-04"), memberView("o2", "2026-08-03"));
+    when(orderRepository.findMemberViews(anyLong(), eq(Limit.of(2)))).thenReturn(fetched);
+
+    CursorPage<MemberOrderResponse> page = service.list(EMAIL, null, 1);
+
+    assertThat(page.content()).hasSize(1);
+    assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("2026-08-04", "o1"));
+  }
+
+  private static MemberOrderView memberView(String id, String businessDate) {
+    MemberOrderView view = mock(MemberOrderView.class);
+    lenient().when(view.getId()).thenReturn(id);
+    lenient().when(view.getBusinessDate()).thenReturn(LocalDate.parse(businessDate));
+    return view;
   }
 
   @Test
@@ -339,9 +375,9 @@ class MemberOrderServiceTest {
   void rejectsNonMemberPrincipal() {
     when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list(EMAIL, Pageable.unpaged()))
+    assertThatThrownBy(() -> service.list(EMAIL, null, 20))
         .isInstanceOf(StaleSessionException.class);
-    verify(orderRepository, never()).findMemberViews(anyLong(), any());
+    verify(orderRepository, never()).findMemberViews(anyLong(), any(Limit.class));
   }
 
   @Test
@@ -349,7 +385,7 @@ class MemberOrderServiceTest {
   void rejectsUnknownPrincipal() {
     when(platformUserRepository.findByEmail(anyString())).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list("ghost@kizuna.test", Pageable.unpaged()))
+    assertThatThrownBy(() -> service.list("ghost@kizuna.test", null, 20))
         .isInstanceOf(StaleSessionException.class);
   }
 }

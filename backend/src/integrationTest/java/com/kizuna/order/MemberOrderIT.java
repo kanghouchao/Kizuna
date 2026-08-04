@@ -176,7 +176,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("取得件数の上限を超えた未処理の申請にも、ページを辿れば到達できること")
+  @DisplayName("取得件数の上限を超えた未処理の申請にも、続きを辿れば到達できること")
   void inboxPagesThroughEveryPendingRequest() {
     List<String> requested =
         List.of(
@@ -184,26 +184,114 @@ class MemberOrderIT extends CrossStoreTestSupport {
             requestReservation(memberAToken, STORE_A, "ページング 2"),
             requestReservation(memberAToken, STORE_A, "ページング 3"));
 
-    // 1 件ずつしか返さない窓でも、総ページ数を辿ればすべての未処理の申請に届く。
+    // 1 件ずつしか返さない窓でも、続きの位置を辿ればすべての未処理の申請に届く。到達性は
+    // サーバ側のページ上限に依らない（位置は件数ではなく並びの鍵で指すため）。
     List<String> collected = new ArrayList<>();
-    int page = 0;
-    int totalPages;
+    String cursor = null;
     do {
-      ResponseEntity<JsonNode> inbox =
-          rest.exchange(
-              "/store/orders/reservation-requests?page=" + page + "&size=1",
-              HttpMethod.GET,
-              new HttpEntity<>(storeHeaders(STORE_A)),
-              JsonNode.class);
-      assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
-      JsonNode body = inbox.getBody();
+      JsonNode body = fetchInbox(cursor, 1);
       assertThat(body.path("content").size()).as("1 回の取得件数が上限で抑えられること").isLessThanOrEqualTo(1);
-      body.path("content").forEach(node -> collected.add(node.path("id").asString()));
-      totalPages = body.path("total_pages").asInt();
-      page++;
-    } while (page < totalPages);
+      collected.addAll(idsOf(body));
+      cursor = nextCursor(body);
+    } while (cursor != null && collected.size() <= PAGING_GUARD);
 
     assertThat(collected).as("未処理の申請がすべて取得窓に現れること").containsAll(requested);
+  }
+
+  @Test
+  @DisplayName("読み込み済みの申請を確定した直後に続きを取っても、境界の申請を飛ばさないこと")
+  void inboxDoesNotSkipTheBoundaryRequestAfterOneIsConfirmed() {
+    String first = requestReservation(memberAToken, STORE_A, "境界 1");
+    String second = requestReservation(memberAToken, STORE_A, "境界 2");
+    String third = requestReservation(memberAToken, STORE_A, "境界 3");
+
+    // first まで読み進めた状態を作る（続きの位置は first を指す）。
+    String cursor = cursorAfter(first);
+
+    // 読み込み済みの範囲にある申請を処理する。位置を「何件目か」で指す取得だと、ここで後続が繰り上がる。
+    ResponseEntity<JsonNode> confirmed =
+        rest.exchange(
+            "/store/orders/" + first + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(confirmed.getStatusCode()).as("前提: 確定が成功すること").isEqualTo(HttpStatus.OK);
+
+    JsonNode resumed = fetchInbox(cursor, 1);
+    assertThat(idsOf(resumed)).as("処理で後続が繰り上がらず、直後の申請が飛ばされないこと").containsExactly(second);
+    assertThat(idsOf(fetchInbox(nextCursor(resumed), 1)))
+        .as("その先も 1 件ずつ順に続くこと")
+        .containsExactly(third);
+  }
+
+  @Test
+  @DisplayName("会員本人の予約一覧も続きを辿ればすべてに到達できること")
+  void memberReservationsPageThroughEveryReservation() {
+    List<String> requested =
+        List.of(
+            requestReservation(memberAToken, STORE_A, "会員ページング 1"),
+            requestReservation(memberAToken, STORE_A, "会員ページング 2"),
+            requestReservation(memberAToken, STORE_A, "会員ページング 3"));
+
+    List<String> collected = new ArrayList<>();
+    String cursor = null;
+    do {
+      ResponseEntity<JsonNode> list =
+          rest.exchange(
+              "/platform/me/orders?size=1" + (cursor == null ? "" : "&cursor=" + cursor),
+              HttpMethod.GET,
+              new HttpEntity<>(bearer(memberAToken)),
+              JsonNode.class);
+      assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
+      JsonNode body = list.getBody();
+      assertThat(body.path("content").size()).as("1 回の取得件数が上限で抑えられること").isLessThanOrEqualTo(1);
+      collected.addAll(idsOf(body));
+      cursor = nextCursor(body);
+    } while (cursor != null && collected.size() <= PAGING_GUARD);
+
+    assertThat(collected).as("本人の予約がすべて取得窓に現れること").containsAll(requested);
+  }
+
+  /** 続きを辿る試験が、位置が進まない不具合でぶら下がらないための打ち切り。 */
+  private static final int PAGING_GUARD = 200;
+
+  private JsonNode fetchInbox(String cursor, int size) {
+    ResponseEntity<JsonNode> inbox =
+        rest.exchange(
+            "/store/orders/reservation-requests?size="
+                + size
+                + (cursor == null ? "" : "&cursor=" + cursor),
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+    return inbox.getBody();
+  }
+
+  private static List<String> idsOf(JsonNode body) {
+    List<String> ids = new ArrayList<>();
+    body.path("content").forEach(node -> ids.add(node.path("id").asString()));
+    return ids;
+  }
+
+  /** 続きが無いときは応答から項目ごと省かれる（null を出さない応答方針）。 */
+  private static String nextCursor(JsonNode body) {
+    return body.has("next_cursor") ? body.path("next_cursor").asString() : null;
+  }
+
+  /** 古い順に 1 件ずつ辿り、指定の申請を返した取得の「続きの位置」を返す。 */
+  private String cursorAfter(String orderId) {
+    String cursor = null;
+    for (int visited = 0; visited < PAGING_GUARD; visited++) {
+      JsonNode body = fetchInbox(cursor, 1);
+      List<String> ids = idsOf(body);
+      cursor = nextCursor(body);
+      if (ids.contains(orderId)) {
+        return cursor;
+      }
+      assertThat(cursor).as("前提: 対象の申請まで読み進められること").isNotNull();
+    }
+    throw new AssertionError("前提: 対象の申請に到達できること: " + orderId);
   }
 
   private String createCastAs(long storeId, String name) {
