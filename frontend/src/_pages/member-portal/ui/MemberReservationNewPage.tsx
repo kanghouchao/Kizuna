@@ -274,8 +274,14 @@ export function MemberReservationNewPage() {
                   <p className="mt-1 text-xs text-destructive-strong">{errors.remarks.message}</p>
                 )}
               </div>
-              {/* 候補が確定するまで送信させない。指名を選ぶ機会が無いまま「指名なし」で申請が通る。 */}
-              <Button type="submit" className="w-full" disabled={submitting || castsLoading}>
+              {/* 候補が確定するまで送信させない。取得中も失敗中も「その日に誰が出勤するか」は
+                  未確定であり、指名を選ぶ機会が無いまま「指名なし」で申請が通ってしまう。
+                  失敗のときは再読み込みが復帰の手段になる。 */}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={submitting || castsLoading || castsFailed}
+              >
                 この内容で申請する
               </Button>
             </form>

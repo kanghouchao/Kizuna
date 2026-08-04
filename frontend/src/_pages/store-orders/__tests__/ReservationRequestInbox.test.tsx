@@ -33,6 +33,14 @@ const page = (rows: unknown[], total = rows.length) => ({
   total,
 });
 
+/** 固定長ページを返すサーバの代役。1 回の取得は常に 20 件までという前提を持つ。 */
+const pagedServer = (total: number) => (params: { page: number; size: number }) => {
+  const start = params.page * params.size;
+  return Promise.resolve(
+    page(requests(Math.max(0, Math.min(params.size, total - start)), start), total)
+  );
+};
+
 describe('ReservationRequestInbox', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -164,45 +172,48 @@ describe('ReservationRequestInbox', () => {
     expect(screen.queryByText('予約申請を取得できませんでした。')).not.toBeInTheDocument();
   });
 
-  it('サーバ側の上限に当たったら「もっと見る」を出さない', async () => {
-    // 要求より少ない件数しか返らないのに残りがある状態で出し続けると、押しても増えないボタンになる
-    mockedList.mockResolvedValueOnce(page(requests(20), 2500));
-    // 40 件要求したのに 20 件しか返らない＝サーバ側の上限に当たっている
-    mockedList.mockResolvedValueOnce(page(requests(20), 2500));
+  it('どこまで広げても 1 回の取得件数は上限のまま', async () => {
+    // 要求サイズ自体を膨らませると、サーバ側のページ上限に当たった時点で以降の申請へ到達できなくなる
+    mockedList.mockImplementation(pagedServer(2500));
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 2, size: 20 }));
 
-    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith({ page: 0, size: 40 }));
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'もっと見る' })).not.toBeInTheDocument()
-    );
+    expect(mockedList.mock.calls.every(([params]) => params.size === 20)).toBe(true);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(60));
   });
 
   it('取得件数の上限を超える申請は追加読み込みで辿れる', async () => {
-    mockedList.mockResolvedValueOnce(page(requests(20), 25));
-    mockedList.mockResolvedValueOnce(page(requests(25), 25));
+    mockedList.mockImplementation(pagedServer(25));
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
 
-    // 継ぎ足しではなく読み込み済みの範囲ごと取り直す（処理で 1 件消えた分の繰り上がりで申請を飛ばさない）
-    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith({ page: 0, size: 40 }));
+    // 読み込み済みの範囲は毎回まとめて読み直す（処理で 1 件消えた分の繰り上がりで申請を飛ばさない）
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 0, size: 20 }));
+    expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 });
     await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(25));
     // 全件に届いたので追加読み込みは消える
     expect(screen.queryByRole('button', { name: 'もっと見る' })).not.toBeInTheDocument();
   });
 
   it('追加読み込みに失敗しても既に読み込んだ申請は消さず、その拡張だけ再試行できる', async () => {
-    mockedList.mockResolvedValueOnce(page(requests(20), 25));
-    mockedList.mockRejectedValueOnce(new Error('network'));
-    mockedList.mockResolvedValueOnce(page(requests(25), 25));
+    const server = pagedServer(25);
+    mockedList.mockImplementation(server);
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
+    await screen.findByRole('button', { name: 'もっと見る' });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
+    // 拡張の取得だけを落とす
+    mockedList.mockImplementation(params =>
+      params.page === 1 ? Promise.reject(new Error('network')) : server(params)
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
 
     expect(
       await screen.findByText('予約申請を取得できませんでした。表示は前回の取得内容です。')
@@ -210,10 +221,11 @@ describe('ReservationRequestInbox', () => {
     // 見えていた未処理の申請が消えない
     expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(20);
 
+    mockedList.mockImplementation(server);
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     // 失敗した拡張と同じ範囲を取り直す（読み込み済みページ数を進めていない）
-    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith({ page: 0, size: 40 }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 }));
     await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(25));
   });
 });

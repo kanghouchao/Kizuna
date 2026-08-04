@@ -46,16 +46,20 @@ export function MemberReservationsPage() {
     setLoading(true);
     setFailedPages(null);
     setFailed(false);
-    // 取り下げ後も表示中の範囲を保つため、読み込み済みページ分をまとめて取り直す。
-    const size = pages * PAGE_SIZE;
-    memberOrderApi
-      .list({ page: 0, size })
-      .then(page => {
-        shownCount.current = page.rows.length;
-        setReservations(page.rows);
-        // 要求した件数より少なく返ってきたのに残りがある＝サーバ側の上限に当たっている。
-        // ここで「もっと見る」を出し続けると、押しても増えないボタンになる。
-        setHasMore(page.rows.length < page.total && page.rows.length >= size);
+    // 1 回の取得は常に PAGE_SIZE 件に抑え、表示中の範囲は固定長ページを並べて組み立てる。
+    // 要求サイズ自体を膨らませると、サーバ側のページ上限に当たった時点でそれ以降の予約へ
+    // 到達できなくなる。取り下げ後に読み込み済みの範囲を丸ごと読み直すのは従来どおり。
+    Promise.all(
+      Array.from({ length: pages }, (_, index) =>
+        memberOrderApi.list({ page: index, size: PAGE_SIZE })
+      )
+    )
+      .then(fetched => {
+        const rows = fetched.flatMap(one => one.rows);
+        const total = fetched[fetched.length - 1].total;
+        shownCount.current = rows.length;
+        setReservations(rows);
+        setHasMore(rows.length < total);
         setLoadedPages(pages);
       })
       .catch(() => {

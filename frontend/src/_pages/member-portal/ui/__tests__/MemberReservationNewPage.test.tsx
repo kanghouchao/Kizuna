@@ -170,10 +170,15 @@ describe('MemberReservationNewPage', () => {
     expect(await screen.findByText('出勤情報を取得できませんでした。')).toBeInTheDocument();
     expect(screen.queryByText('この日に出勤予定のキャストはいません。')).not.toBeInTheDocument();
 
+    // 誰が出勤するか不明のまま送信できると、指名するつもりの会員が「指名なし」で申請してしまう
+    expect(submitButton()).toBeDisabled();
+
     fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
 
     expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
     expect(screen.queryByText('出勤情報を取得できませんでした。')).not.toBeInTheDocument();
+    // 再読み込みが通れば送信できる（失敗が行き止まりにならない）
+    expect(submitButton()).toBeEnabled();
   });
 
   it('指名候補の取得中は「出勤なし」を出さず、送信も抑止する', async () => {

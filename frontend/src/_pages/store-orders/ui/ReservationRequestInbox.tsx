@@ -41,17 +41,24 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
     setFailedPages(null);
     // 再読み込み中は失敗表示を畳む。残したままだと、押した再読み込みが効いているのか分からない。
     setFailed(false);
-    // 処理後も表示中の範囲を保つため、読み込み済みページ分をまとめて取り直す。
-    // ページ単位で継ぎ足すと、処理で 1 件消えた分だけ後続が繰り上がり、境界の申請を飛ばす。
-    const size = pages * PAGE_SIZE;
-    orderApi
-      .listReservationRequests({ page: 0, size })
-      .then(page => {
-        shownCount.current = page.rows.length;
-        setRequests(page.rows);
-        // 要求した件数より少なく返ってきたのに残りがある＝サーバ側の上限に当たっている。
-        // ここで「もっと見る」を出し続けると、押しても増えないボタンになる。
-        setHasMore(page.rows.length < page.total && page.rows.length >= size);
+    // 1 回の取得は常に PAGE_SIZE 件に抑え、表示中の範囲は固定長ページを並べて組み立てる。
+    // 要求サイズ自体を膨らませる形にすると、サーバ側のページ上限に当たった時点で
+    // それ以降の申請へ到達する手段が無くなる。
+    //
+    // 処理後も読み込み済みの範囲を丸ごと読み直すのは、ページ単位で継ぎ足すと処理で 1 件消えた分だけ
+    // 後続が繰り上がり、境界の申請を飛ばすため。
+    Promise.all(
+      Array.from({ length: pages }, (_, index) =>
+        orderApi.listReservationRequests({ page: index, size: PAGE_SIZE })
+      )
+    )
+      .then(fetched => {
+        const rows = fetched.flatMap(one => one.rows);
+        // 総件数は最後に読んだページのものを採る（取得中に処理が入っても、次の取り直しで揃う）。
+        const total = fetched[fetched.length - 1].total;
+        shownCount.current = rows.length;
+        setRequests(rows);
+        setHasMore(rows.length < total);
         setLoadedPages(pages);
       })
       .catch(() => {
