@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { MEMBER_ORDER_STATUS_LABELS, MemberOrder, memberOrderApi } from '@/entities/order';
+import { useCursorList } from '@/shared/lib';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/shared/ui';
 
 /** 予約の状態バッジ。確定前だけが取り下げ可能なので、申請中を強調する。 */
@@ -28,44 +29,18 @@ const PAGE_SIZE = 20;
 
 /** 会員ポータルの予約一覧。全店舗を集約し、確定前のものは本人が取り下げられる。 */
 export function MemberReservationsPage() {
-  const [reservations, setReservations] = useState<MemberOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  // 表示できるものが何も無い状態での取得失敗。空表示（＝予約なし）と区別する。
-  const [failed, setFailed] = useState(false);
-  // 表示中の予約を保ったまま失敗した追加読み込み。再試行は同じ続きの位置をそのまま使う。
-  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  // 続きの位置。null なら続きが無い（サーバが返した位置をそのまま持つ）。
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-
-  const load = useCallback((cursor: string | null) => {
-    setLoading(true);
-    setLoadMoreFailed(false);
-    setFailed(false);
-    // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。
-    // 要求サイズ自体を膨らませると、サーバ側の取得上限に当たった時点でそれ以降の予約へ
-    // 到達できなくなる。
-    memberOrderApi
-      .list({ cursor: cursor ?? undefined, size: PAGE_SIZE })
-      .then(page => {
-        setReservations(prev => (cursor === null ? page.rows : [...prev, ...page.rows]));
-        setNextCursor(page.nextCursor);
-      })
-      .catch(() => {
-        // 表示中の予約があるなら消さない — 追加読み込みの失敗で既読み込み分まで失うと、
-        // 取り下げられる予約すら見えなくなる。続きの位置も進めない。
-        if (cursor === null) {
-          setFailed(true);
-        } else {
-          setLoadMoreFailed(true);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    load(null);
-  }, [load]);
+  // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。要求サイズ自体を
+  // 膨らませると、サーバ側の取得上限に当たった時点でそれ以降の予約へ到達できなくなる。
+  const {
+    rows: reservations,
+    setRows: setReservations,
+    isLoading: loading,
+    failed,
+    loadMoreFailed,
+    hasMore,
+    loadMore,
+  } = useCursorList<MemberOrder>(cursor => memberOrderApi.list({ cursor, size: PAGE_SIZE }));
 
   const cancel = async (id: string) => {
     setProcessingId(id);
@@ -147,19 +122,19 @@ export function MemberReservationsPage() {
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={() => load(nextCursor)}
+                onClick={loadMore}
                 disabled={loading}
               >
                 再試行
               </Button>
             </div>
           )}
-          {nextCursor !== null && !loadMoreFailed && (
+          {hasMore && !loadMoreFailed && (
             <Button
               type="button"
               variant="outline"
               className="mt-4 w-full"
-              onClick={() => load(nextCursor)}
+              onClick={loadMore}
               disabled={loading}
             >
               もっと見る

@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Order, orderApi } from '@/entities/order';
-import { getApiErrorMessage } from '@/shared/lib';
+import { getApiErrorMessage, useCursorList } from '@/shared/lib';
 import { Badge, Button } from '@/shared/ui';
 import { ReservationRequestEditModal } from './ReservationRequestEditModal';
 
@@ -23,49 +23,20 @@ const PAGE_SIZE = 20;
  * 店舗では未処理の申請が取得窓から落ちて見えなくなる。
  */
 export function ReservationRequestInbox({ onProcessed }: ReservationRequestInboxProps) {
-  const [requests, setRequests] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  // 表示できるものが何も無い状態での取得失敗。空表示（＝申請なし）と区別する。
-  const [failed, setFailed] = useState(false);
-  // 表示中の申請を保ったまま失敗した追加読み込み。再試行は同じ続きの位置をそのまま使う。
-  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Order | null>(null);
-  // 続きの位置。null なら続きが無い（サーバが返した位置をそのまま持ち、表示中の行からは作らない —
-  // 最後に表示していた申請が処理で消えても、続きの位置は失われてはならない）。
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-
-  const load = useCallback((cursor: string | null) => {
-    setLoading(true);
-    setLoadMoreFailed(false);
-    // 再読み込み中は失敗表示を畳む。残したままだと、押した再読み込みが効いているのか分からない。
-    setFailed(false);
-    // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。
-    // 要求サイズ自体を膨らませる形にすると、サーバ側の取得上限に当たった時点で
-    // それ以降の申請へ到達する手段が無くなる。
-    orderApi
-      .listReservationRequests({ cursor: cursor ?? undefined, size: PAGE_SIZE })
-      .then(page => {
-        // 続きは継ぎ足す。位置は並びの鍵なので、確定・謝絶で手前の行が消えても後続が繰り上がらず、
-        // 読み込み済みの範囲を読み直さなくても境界の申請を飛ばさない。
-        setRequests(prev => (cursor === null ? page.rows : [...prev, ...page.rows]));
-        setNextCursor(page.nextCursor);
-      })
-      .catch(() => {
-        // 表示中の申請があるなら消さない — 追加読み込みの失敗で既読み込み分まで消すと、
-        // 見えていた未処理の申請を見失う。続きの位置も進めない。
-        if (cursor === null) {
-          setFailed(true);
-        } else {
-          setLoadMoreFailed(true);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    load(null);
-  }, [load]);
+  // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。要求サイズ自体を
+  // 膨らませる形にすると、サーバ側の取得上限に当たった時点でそれ以降の申請へ到達する手段が無くなる。
+  const {
+    rows: requests,
+    setRows: setRequests,
+    isLoading: loading,
+    failed,
+    loadMoreFailed,
+    hasMore,
+    reload,
+    loadMore,
+  } = useCursorList<Order>(cursor => orderApi.listReservationRequests({ cursor, size: PAGE_SIZE }));
 
   const process = async (id: string, action: 'confirm' | 'decline') => {
     setProcessingId(id);
@@ -102,7 +73,7 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
     return (
       <div className="flex items-center gap-3">
         <p className="text-sm text-destructive-strong">予約申請を取得できませんでした。</p>
-        <Button type="button" variant="outline" size="sm" onClick={() => load(null)}>
+        <Button type="button" variant="outline" size="sm" onClick={reload}>
           再読み込み
         </Button>
       </div>
@@ -110,7 +81,7 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
   }
   // 続きが残っているうちは「申請なし」と言い切らない — 表示中をすべて処理し終えただけで、
   // まだ読んでいない申請がある状態と区別できなくなる。
-  if (requests.length === 0 && nextCursor === null) {
+  if (requests.length === 0 && !hasMore) {
     return <p className="text-sm text-muted-foreground">未確定の予約申請はありません</p>;
   }
 
@@ -181,24 +152,18 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
           <p className="text-sm text-destructive-strong">
             予約申請を取得できませんでした。表示は前回の取得内容です。
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={loading}
-            onClick={() => load(nextCursor)}
-          >
+          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={loadMore}>
             再試行
           </Button>
         </div>
       )}
-      {nextCursor !== null && !loadMoreFailed && (
+      {hasMore && !loadMoreFailed && (
         <Button
           type="button"
           variant="outline"
           className="mt-3 w-full"
           disabled={loading}
-          onClick={() => load(nextCursor)}
+          onClick={loadMore}
         >
           もっと見る
         </Button>
