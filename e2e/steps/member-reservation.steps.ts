@@ -1,10 +1,11 @@
-import { expect } from '@playwright/test';
+import { expect, type APIRequestContext } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { BASE_URL, PLATFORM_URL } from '../base-url';
 import {
   createCast,
   createCustomer,
   createShift,
+  declineOrder,
   deleteCast,
   deleteCustomer,
   deleteOrder,
@@ -13,6 +14,7 @@ import {
   loginAsStoreAdmin,
   loginViaUiAndEnterStore,
   registerMember,
+  STORE_HEADERS,
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
@@ -26,20 +28,47 @@ const MEMBER_PASSWORD = 'pass12345';
 // 播種した実体の id / 認証情報。MEMBER PlatformUser には削除 API が無いためタイムスタンプ付き
 // メールアドレスで隔離し残留を許容する（顧客・キャスト・シフト・受注は明示削除する）。
 let memberEmail = '';
+// 会員コードはこの run のシナリオを一意に指す鍵。inbox は店舗共有で他の未処理申請が先に並ぶため、
+// 確定する行の特定にも、後片付けで自分の申請を引き直すのにも使う。
+let memberCode = '';
 let createdCustomerId = '';
 let createdCastId = '';
+let createdCastName = '';
 let createdShiftId = '';
 let createdOrderId = '';
+
+/**
+ * 未処理の予約申請のうち、このシナリオの会員が出したものの id を引く
+ * （GET /api/store/orders/reservation-requests）。UI から出した申請は応答を取り損ねると id が
+ * 手元に無いため、後片付けはこの引き直しを拠り所にする。
+ */
+async function findPendingRequestIds(
+  request: APIRequestContext,
+  token: string,
+  code: string
+): Promise<string[]> {
+  const res = await request.get('/api/store/orders/reservation-requests', {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    params: { size: 100 },
+  });
+  if (!res.ok()) {
+    throw new Error(`list reservation requests failed: ${res.status()} ${await res.text()}`);
+  }
+  const body = await res.json();
+  const rows = body.content as Array<{ id: string; requester_member_code: string | null }>;
+  return rows.filter(row => row.requester_member_code === code).map(row => row.id);
+}
+
+// 後片付けの失敗を黙って握り潰すと、消し残った申請が次の run を落とす連鎖になる。
+// 後続の片付けは続けたいのでテストは倒さず、痕跡だけ残す。
+const warnCleanupFailure = (error: unknown) => {
+  console.warn(`[member-reservation cleanup] ${String(error)}`);
+};
 
 Given('会員を登録し店舗側で顧客台帳に紐づける', async ({ request }) => {
   const suffix = Date.now();
   memberEmail = `member-reservation-e2e-${suffix}@kizuna.test`;
-  const memberCode = await registerMember(
-    request,
-    memberEmail,
-    MEMBER_PASSWORD,
-    `E2E会員-${suffix}`
-  );
+  memberCode = await registerMember(request, memberEmail, MEMBER_PASSWORD, `E2E会員-${suffix}`);
 
   const adminToken = await loginAsStoreAdmin(request);
   createdCustomerId = await createCustomer(
@@ -53,7 +82,8 @@ Given('会員を登録し店舗側で顧客台帳に紐づける', async ({ requ
 
 Given('予約用に本日の確定シフトを API で作成する', async ({ request }) => {
   const adminToken = await loginAsStoreAdmin(request);
-  createdCastId = await createCast(request, adminToken, `E2E予約キャスト-${Date.now()}`);
+  createdCastName = `E2E予約キャスト-${Date.now()}`;
+  createdCastId = await createCast(request, adminToken, createdCastName);
   createdShiftId = await createShift(request, adminToken, {
     castId: createdCastId,
     workDate: todayInTokyo(),
@@ -98,9 +128,11 @@ Then('予約申請画面に該当店舗がプリセレクトされる', async ({
 Then('指名候補に本日の出勤キャストが出る', async ({ page }) => {
   await page.getByLabel('利用日').fill(todayInTokyo());
   // 指名候補はその日の確定シフトから引くため、日付を入れて初めて選択肢が現れる。
-  await expect(page.getByLabel('指名（任意）').getByRole('option')).toHaveCount(2, {
-    timeout: 15000,
-  });
+  // 件数ではなく作成したキャスト自身を名指すのは、共有 dev 店舗に本日出勤の別キャストが
+  // 居ても成立させるため（選択肢の総数は他シナリオの残留シフトで動く）。
+  await expect(
+    page.getByLabel('指名（任意）').getByRole('option', { name: createdCastName })
+  ).toHaveCount(1, { timeout: 15000 });
 });
 
 When('人数 {string} で予約を申請する', async ({ page }, pax: string) => {
@@ -126,7 +158,12 @@ Then('予約一覧に {string} の予約が表示される', async ({ page }, st
 When('店舗管理者が予約受付 inbox で予約を確定する', async ({ page }) => {
   const storeId = await loginViaUiAndEnterStore(page);
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
-  const request = page.getByRole('listitem').filter({ hasText: 'WEB申請' }).first();
+  // inbox は店舗共有かつ古い順に並ぶため、先頭を掴むと先に残っている他人の申請を確定してしまう。
+  // 行に出る会員コードでこのシナリオの申請だけを名指す。
+  const request = page
+    .getByRole('listitem')
+    .filter({ hasText: 'WEB申請' })
+    .filter({ hasText: memberCode });
   await expect(request).toBeVisible({ timeout: 15000 });
   await Promise.all([
     page.waitForResponse(
@@ -162,8 +199,19 @@ When('予約を取り下げる', async ({ page }) => {
 // 受注は顧客・キャストを参照する（FK RESTRICT）ため、必ず受注 → シフト → キャスト → 顧客の順で消す。
 After(async ({ request }) => {
   const adminToken = await loginAsStoreAdmin(request);
-  if (createdOrderId) {
-    await deleteOrder(request, adminToken, createdOrderId).catch(() => {});
+  // 未確定のまま終わった申請は削除が拒否される（謝絶で扱う設計）ので、まず謝絶して CANCELLED にする。
+  // 対象は id ではなく会員コードで引き直す — 申請の POST 応答を取り損ねた中断でも消し残さないため。
+  const pendingIds = memberCode
+    ? await findPendingRequestIds(request, adminToken, memberCode).catch(error => {
+        warnCleanupFailure(error);
+        return [] as string[];
+      })
+    : [];
+  for (const id of pendingIds) {
+    await declineOrder(request, adminToken, id).catch(warnCleanupFailure);
+  }
+  for (const id of new Set([...pendingIds, createdOrderId].filter(Boolean))) {
+    await deleteOrder(request, adminToken, id).catch(warnCleanupFailure);
   }
   if (createdShiftId) {
     await deleteShift(request, adminToken, createdShiftId).catch(() => {});
@@ -175,8 +223,10 @@ After(async ({ request }) => {
     await deleteCustomer(request, adminToken, createdCustomerId).catch(() => {});
   }
   memberEmail = '';
+  memberCode = '';
   createdCustomerId = '';
   createdCastId = '';
+  createdCastName = '';
   createdShiftId = '';
   createdOrderId = '';
 });
