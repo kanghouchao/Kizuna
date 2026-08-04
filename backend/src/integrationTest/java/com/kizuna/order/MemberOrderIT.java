@@ -143,15 +143,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
     String castId = createCastAs(STORE_A, "inbox 判定用キャスト");
     String staffOrderId = createStoreOrderTaggedWeb(castId);
 
-    ResponseEntity<JsonNode> inbox =
-        rest.exchange(
-            "/store/orders/reservation-requests",
-            HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
-    List<String> ids = new ArrayList<>();
-    inbox.getBody().path("content").forEach(node -> ids.add(node.path("id").asString()));
+    List<String> ids = allPendingIds();
     assertThat(ids).as("会員の未確定申請は現れること").contains(requestId);
     assertThat(ids).as("店舗が起こした受注は受付経路が WEB でも現れないこと").doesNotContain(staffOrderId);
 
@@ -161,18 +153,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
         HttpMethod.POST,
         new HttpEntity<>(storeHeaders(STORE_A)),
         JsonNode.class);
-    ResponseEntity<JsonNode> afterConfirm =
-        rest.exchange(
-            "/store/orders/reservation-requests",
-            HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    List<String> remaining = new ArrayList<>();
-    afterConfirm
-        .getBody()
-        .path("content")
-        .forEach(node -> remaining.add(node.path("id").asString()));
-    assertThat(remaining).doesNotContain(requestId);
+    assertThat(allPendingIds()).doesNotContain(requestId);
   }
 
   @Test
@@ -268,6 +249,22 @@ class MemberOrderIT extends CrossStoreTestSupport {
     return inbox.getBody();
   }
 
+  /**
+   * 未処理の申請を続きの位置を辿って全件集める。
+   *
+   * <p>先頭ページだけを見て在不在を断言すると、未処理の申請が取得窓の件数まで積み上がった時点で 自分の申請が窓から落ち、判定が他のテストの残す件数に左右される。
+   */
+  private List<String> allPendingIds() {
+    List<String> collected = new ArrayList<>();
+    String cursor = null;
+    do {
+      JsonNode body = fetchInbox(cursor, 20);
+      collected.addAll(idsOf(body));
+      cursor = nextCursor(body);
+    } while (cursor != null && collected.size() <= PAGING_GUARD);
+    return collected;
+  }
+
   private static List<String> idsOf(JsonNode body) {
     List<String> ids = new ArrayList<>();
     body.path("content").forEach(node -> ids.add(node.path("id").asString()));
@@ -335,16 +332,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
               orderRepository.save(order);
             });
 
-    ResponseEntity<JsonNode> inbox =
-        rest.exchange(
-            "/store/orders/reservation-requests",
-            HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
-    List<String> ids = new ArrayList<>();
-    inbox.getBody().path("content").forEach(node -> ids.add(node.path("id").asString()));
-    assertThat(ids).as("会員 ID が欠落しても未確定の申請は処理対象として残ること").contains(orderId);
+    assertThat(allPendingIds()).as("会員 ID が欠落しても未確定の申請は処理対象として残ること").contains(orderId);
 
     ResponseEntity<JsonNode> confirmed =
         rest.exchange(
@@ -647,6 +635,92 @@ class MemberOrderIT extends CrossStoreTestSupport {
     assertThat(updateReservationRequest(STORE_A, orderId, "{\"pax\": 2}").getStatusCode())
         .as("確定後は通常の受注として汎用更新が受け持つこと")
         .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  private ResponseEntity<JsonNode> updateOrder(String id, String body) {
+    return rest.exchange(
+        "/store/orders/" + id,
+        HttpMethod.PUT,
+        new HttpEntity<>(body, storeHeaders(STORE_A)),
+        JsonNode.class);
+  }
+
+  @Test
+  @DisplayName("指名なしで確定した受注を、キャストを設定せずに汎用更新で編集できること")
+  void confirmedNominationFreeOrderCanBeEditedByTheGenericUpdate() {
+    String orderId = requestReservation(memberAToken, STORE_A, "確定後に人数を直す");
+    ResponseEntity<JsonNode> confirmed =
+        rest.exchange(
+            "/store/orders/" + orderId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(confirmed.getStatusCode()).as("前提: 指名なしのまま確定できること").isEqualTo(HttpStatus.OK);
+    assertThat(confirmed.getBody().path("cast_id").isMissingNode()).as("前提: 指名なしであること").isTrue();
+    long receptionistId = confirmed.getBody().path("receptionist_id").asLong();
+
+    ResponseEntity<JsonNode> edited =
+        updateOrder(
+            orderId,
+            "{\"receptionist_id\": "
+                + receptionistId
+                + ", \"pax\": 6, \"remarks\": \"確定後に人数を直した\"}");
+    assertThat(edited.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(edited.getBody().path("pax").asInt()).isEqualTo(6);
+    assertThat(edited.getBody().path("remarks").asString()).isEqualTo("確定後に人数を直した");
+    assertThat(edited.getBody().path("cast_id").isMissingNode()).as("編集のために指名を作り出さずに済むこと").isTrue();
+
+    // 受付担当が未設定のまま確定した受注（確定した実行者が受付候補の条件を満たさない場合）も同じく編集できる。
+    // その状態は実行者の適格性に依るため、ここでは確定後の行から受付担当を外して同じ形を作る。
+    orderRepository
+        .findById(orderId)
+        .ifPresent(
+            order -> {
+              order.assignReceptionist(null);
+              orderRepository.save(order);
+            });
+
+    ResponseEntity<JsonNode> withoutReceptionist = updateOrder(orderId, "{\"pax\": 7}");
+    assertThat(withoutReceptionist.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(withoutReceptionist.getBody().path("pax").asInt()).isEqualTo(7);
+    assertThat(withoutReceptionist.getBody().path("receptionist_id").isMissingNode())
+        .as("受付担当を作り出さずに済むこと")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("汎用更新では既にある指名・受付担当を省略で外せないこと")
+  void genericUpdateCannotRemoveAnExistingNominationOrReceptionist() {
+    String castId = createCastAs(STORE_A, "汎用更新の必須性ガード用キャスト");
+    String storeOrderId = createStoreOrderTaggedWeb(castId);
+
+    ResponseEntity<JsonNode> withoutReceptionist = updateOrder(storeOrderId, "{\"pax\": 3}");
+    assertThat(withoutReceptionist.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(withoutReceptionist.getBody().path("error").asString())
+        .as("拒否が経路の都合ではなく必須性の判定から来ていること")
+        .contains("受付担当を外すことはできません");
+
+    ResponseEntity<JsonNode> withoutCast =
+        updateOrder(storeOrderId, "{\"receptionist_id\": 3, \"pax\": 3}");
+    assertThat(withoutCast.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(withoutCast.getBody().path("error").asString()).contains("指名を外すことはできません");
+
+    // 撥ねられた要求は受注を書き換えない
+    ResponseEntity<JsonNode> untouched =
+        rest.exchange(
+            "/store/orders/" + storeOrderId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(untouched.getBody().path("cast_id").asString()).isEqualTo(castId);
+    assertThat(untouched.getBody().path("pax").isMissingNode()).isTrue();
+
+    // 正向対照: 両方を送れば同じ受注を編集できる（拒否が PUT そのものの不達ではない証明）
+    ResponseEntity<JsonNode> edited =
+        updateOrder(
+            storeOrderId, "{\"receptionist_id\": 3, \"cast_id\": \"" + castId + "\", \"pax\": 3}");
+    assertThat(edited.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(edited.getBody().path("pax").asInt()).isEqualTo(3);
   }
 
   @Test

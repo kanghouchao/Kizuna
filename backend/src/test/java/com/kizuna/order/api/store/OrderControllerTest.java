@@ -174,20 +174,29 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("店舗起点の受注を更新する汎用契約ではキャスト・受付担当が必須のままであること")
+  @DisplayName("汎用更新の契約はキャスト・受付担当の省略を受け付けること（可否は受注の状態が決める）")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
-  void orderUpdateStillRequiresCastAndReceptionist() throws Exception {
+  void orderUpdateContractAcceptsAnOmittedCastAndReceptionist() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.update(any(), any())).thenReturn(OrderResponse.builder().build());
 
-    // 申請専用の可空な契約を足しても、既存の受注更新は必須項目を緩めない
-    mockMvc
-        .perform(storePut("/store/orders/o1", "{\"pax\": 3}"))
-        .andExpect(status().isBadRequest());
+    // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
+    // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。
+    // 店舗起点の受注に対する 400 が経路として維持されることは MemberOrderIT が通しで固定する。
+    mockMvc.perform(storePut("/store/orders/o1", "{\"pax\": 3}")).andExpect(status().isOk());
     mockMvc
         .perform(storePut("/store/orders/o1", "{\"cast_id\": \"cast-1\", \"pax\": 3}"))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("汎用更新の契約でも人数の下限は撥ねられること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void orderUpdateStillRejectsAnInvalidPax() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
     mockMvc
-        .perform(storePut("/store/orders/o1", "{\"receptionist_id\": 2, \"pax\": 3}"))
+        .perform(storePut("/store/orders/o1", "{\"pax\": 0}"))
         .andExpect(status().isBadRequest());
   }
 

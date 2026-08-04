@@ -145,16 +145,41 @@ public class OrderService {
       throw new ServiceException("予約申請の状態は確定・謝絶の操作でのみ変更できます");
     }
 
+    // 空文字は「送っていない」と同じに扱う。編集画面の未選択がそのまま乗ってくる形なので、存在しない
+    // キャストとして扱って 404 を返すより、指名なしの要求として同じ判定に載せる方が呼び手に意味が通る。
+    String castId =
+        (request.getCastId() == null || request.getCastId().isBlank()) ? null : request.getCastId();
+    Long receptionistId = request.getReceptionistId();
+
+    // 指名・受付担当の検証は書き換えより先に済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
+    // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
+    //
+    // 必須性は契約ではなく受注の状態が決める。未設定のまま確定した受注（指名を外した
+    // 会員申請、受付候補でない実行者が確定したもの）は未設定のまま他項目を直せなければならない一方、
+    // 既に付いているものを省略で外せると、この汎用更新が指名解除・受付担当解除の裏口になる。
+    if (receptionistId != null) {
+      validateReceptionist(receptionistId);
+    } else if (order.getReceptionistId() != null) {
+      throw new ServiceException("受付担当を外すことはできません。受付担当を指定してください");
+    }
+    if (castId != null) {
+      if (!castRepository.existsById(castId)) {
+        throw new NotFoundException("キャストが見つかりません: " + castId);
+      }
+    } else if (order.getCastId() != null) {
+      throw new ServiceException("指名を外すことはできません。キャストを指定してください");
+    }
+
     // 非nullフィールドのみをドメインの部分更新コマンドとして適用
     order.apply(orderMapper.toPatch(request));
 
-    // 関連 ID の更新（存在確認のうえ）
-    validateReceptionist(request.getReceptionistId());
-    order.assignReceptionist(request.getReceptionistId());
-    if (!castRepository.existsById(request.getCastId())) {
-      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
+    // 関連 ID の更新（存在確認は上で済ませている）
+    if (castId != null) {
+      order.assignCast(castId);
     }
-    order.assignCast(request.getCastId());
+    if (receptionistId != null) {
+      order.assignReceptionist(receptionistId);
+    }
 
     // ステータスはドメインの遷移メソッド経由で変更（不正な遷移はドメイン例外 → 400）
     if (request.getStatus() != null) {
