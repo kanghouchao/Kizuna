@@ -14,8 +14,11 @@ interface CastSearchComboboxProps {
    * 表示だけで、onChange は鳴らない（親の初期値と競合させないため）。
    */
   castName: string;
-  /** 候補を選ぶとその id、名前を打ち直して選択が外れると null。 */
-  onChange: (castId: string | null) => void;
+  /**
+   * 候補を選ぶとその id、名前を打ち直して選択が外れると null。あわせて今の入力文字列を渡す
+   * ——「打ちかけで未選択」と「空欄で指名なし」は id では区別が付かず、親の検証に要る。
+   */
+  onChange: (castId: string | null, name: string) => void;
   disabled?: boolean;
 }
 
@@ -78,15 +81,16 @@ export function CastSearchCombobox({
   }, [nameInput]);
 
   const handleSelect = (cast: CastResponse) => {
+    const name = cast.name ?? '';
     skipNextSearchRef.current = true;
-    setNameInput(cast.name ?? '');
-    onChange(cast.id ?? null);
+    setNameInput(name);
+    onChange(cast.id ?? null, name);
     setIsOpen(false);
   };
 
   const handleInputChange = (value: string) => {
     setNameInput(value);
-    onChange(null);
+    onChange(null, value);
   };
 
   return (

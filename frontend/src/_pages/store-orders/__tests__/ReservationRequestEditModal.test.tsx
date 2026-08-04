@@ -219,6 +219,40 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     ).toBeInTheDocument();
   });
 
+  it('指名なしの申請でも、打ちかけのままなら保存させない', async () => {
+    // 消える指名は無いが、名前を打った以上は指名するつもり。黙って指名なしで保存すると気付けない
+    renderModal(nominationFreeRequest);
+
+    await openSuggestions('み');
+    await save();
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('指名なしの申請は、打ちかけを消せばそのまま指名なしで保存できる', async () => {
+    // 立てかけたキャストを取り消す唯一の経路。空欄まで止めると指名なしへ戻せなくなる
+    renderModal(nominationFreeRequest);
+
+    await openSuggestions('み');
+    await openSuggestions('');
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ cast_id: undefined })
+    );
+  });
+
+  it('指名済みの申請は、名前を消しただけでは指名を落とさない', async () => {
+    // 空欄は「外す」ではない。契約は部分更新ではないので、通すと黙って指名が消える
+    renderModal(nominatedRequest);
+
+    await openSuggestions('');
+    await save();
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
   it('打ちかけを候補の選択で決着させれば保存できる', async () => {
     renderModal(nominatedRequest);
 

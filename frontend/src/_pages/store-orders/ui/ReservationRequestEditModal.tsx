@@ -76,6 +76,10 @@ export function ReservationRequestEditModal({
     formState: { errors, isSubmitting },
   } = form;
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+  // 指名欄に見えている文字列。id では「打ちかけで未選択」と「空欄で指名なし」を区別できない
+  const [castNameInput, setCastNameInput] = useState('');
+
+  const castName = request?.cast_name ?? request?.cast_id ?? '';
 
   useEffect(() => {
     if (!request) return;
@@ -86,6 +90,7 @@ export function ReservationRequestEditModal({
       cast_id: request.cast_id ?? '',
       clear_cast: false,
     });
+    setCastNameInput(request.cast_name ?? request.cast_id ?? '');
   }, [request, reset]);
 
   useEffect(() => {
@@ -186,21 +191,23 @@ export function ReservationRequestEditModal({
               <CastSearchCombobox
                 id="reservation-request-cast"
                 label="指名"
-                castName={request?.cast_name ?? request?.cast_id ?? ''}
-                onChange={castId =>
-                  setValue('cast_id', castId ?? '', { shouldValidate: true, shouldDirty: true })
-                }
+                castName={castName}
+                onChange={(castId, name) => {
+                  setCastNameInput(name);
+                  setValue('cast_id', castId ?? '', { shouldValidate: true, shouldDirty: true });
+                }}
                 disabled={clearCast}
               />
-              {/* 契約は部分更新ではないため、打ちかけの空欄のまま送ると指名が消える。解除は
-                  「指名を外す」だけの権能なので、決着が付いていない状態は送信前に止める */}
+              {/* 契約は部分更新ではないので、決着の付いていない指名を送ると黙って消える。止めるのは
+                  「元は指名があった」（空欄も外すことになる）か「名前が入っている」（選び切って
+                  いない）とき。指名なしの申請で空欄のままなのだけが、そのまま通す状態 */}
               <input
                 type="hidden"
                 {...register('cast_id', {
                   validate: value =>
-                    !request?.cast_id ||
                     clearCast ||
                     !!value ||
+                    (!request?.cast_id && !castNameInput) ||
                     '指名を変えるときは候補から選んでください。外す場合は「指名を外す」にチェックしてください',
                 })}
               />
