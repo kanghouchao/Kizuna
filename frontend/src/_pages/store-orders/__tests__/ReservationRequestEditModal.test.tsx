@@ -183,6 +183,40 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     });
   };
 
+  it('候補と同じ名前を打ち切ってから選んでも、次の検索が止まらない', async () => {
+    // 打った文字列と選んだ名前が同じだと入力欄の値が動かない。検索の抑止を「値が変わったか」に
+    // 頼ると、この一手で抑止が解除されないまま次の入力を飲み込む
+    renderModal(nominationFreeRequest);
+
+    await openSuggestions('みか');
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    await openSuggestions('あ');
+
+    expect(mockedCastList).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'あ' }));
+  });
+
+  it('古い検索の応答が遅れて届いても、今の候補を上書きしない', async () => {
+    // デバウンスの片付けは飛んだ後の通信を止められない。遅れて着いた古い応答をそのまま入れると、
+    // 今の入力とは無関係なキャストが選べてしまう
+    let landStaleResponse = () => {};
+    mockedCastList.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          landStaleResponse = () =>
+            resolve({ rows: [{ id: 'cast-9', name: 'ふるい' }], page: 0, pageCount: 1, total: 1 });
+        })
+    );
+    renderModal(nominationFreeRequest);
+
+    await openSuggestions('ふ');
+    await openSuggestions('み');
+    landStaleResponse();
+    await act(async () => {});
+
+    expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /ふるい/ })).not.toBeInTheDocument();
+  });
+
   it('指名済みの申請を、別のキャストへ差し替えて保存できる', async () => {
     renderModal(nominatedRequest);
 

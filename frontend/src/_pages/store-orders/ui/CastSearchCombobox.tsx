@@ -39,19 +39,20 @@ export function CastSearchCombobox({
   const [options, setOptions] = useState<CastResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  // 表示名の差し込み（親からの反映・候補の選択）で検索が走ると、選んだ直後に候補が開き直す
-  const skipNextSearchRef = useRef(false);
+  // 表示名の差し込み（親からの反映・候補の選択）で検索が走ると、選んだ直後に候補が開き直す。
+  // 「次を一回飛ばす」ではなく飛ばす対象の文字列を覚えるのは、差し込む値が今の入力と同じだと
+  // 状態が動かず、飛ばす合図だけが残って次の入力を飲み込むため
+  const skipSearchForRef = useRef<string | null>(castName);
 
   useEffect(() => {
-    skipNextSearchRef.current = true;
+    skipSearchForRef.current = castName;
     setNameInput(castName);
   }, [castName]);
 
   useEffect(() => {
-    if (skipNextSearchRef.current) {
-      skipNextSearchRef.current = false;
-      return;
-    }
+    const skipped = skipSearchForRef.current;
+    skipSearchForRef.current = null;
+    if (skipped === nameInput) return;
 
     const keyword = nameInput.trim();
     if (!keyword) {
@@ -60,6 +61,9 @@ export function CastSearchCombobox({
       return;
     }
 
+    // デバウンスの片付けは飛んだ後の通信を止められない。遅れて着いた古い応答を入れると、
+    // 今の入力と無関係なキャストが候補に残る
+    let superseded = false;
     const timer = setTimeout(async () => {
       try {
         setIsLoading(true);
@@ -68,21 +72,25 @@ export function CastSearchCombobox({
           sort: 'displayOrder,asc',
           search: keyword,
         });
+        if (superseded) return;
         setOptions(response.rows);
         setIsOpen(true);
       } catch {
-        toast.error('キャスト候補の取得に失敗しました');
+        if (!superseded) toast.error('キャスト候補の取得に失敗しました');
       } finally {
-        setIsLoading(false);
+        if (!superseded) setIsLoading(false);
       }
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      superseded = true;
+      clearTimeout(timer);
+    };
   }, [nameInput]);
 
   const handleSelect = (cast: CastResponse) => {
     const name = cast.name ?? '';
-    skipNextSearchRef.current = true;
+    skipSearchForRef.current = name;
     setNameInput(name);
     onChange(cast.id ?? null, name);
     setIsOpen(false);
