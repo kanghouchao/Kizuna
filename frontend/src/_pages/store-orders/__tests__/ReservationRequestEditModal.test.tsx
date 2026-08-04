@@ -263,6 +263,45 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     expect(mockedUpdate).not.toHaveBeenCalled();
   });
 
+  it('指名なしの申請には、この画面で実行できる直し方だけを示す', async () => {
+    // 「指名を外す」は元から指名がある申請にしか出ない。取れない操作を促すと手詰まりに見える
+    renderModal(nominationFreeRequest);
+
+    await openSuggestions('み');
+    await save();
+
+    expect(
+      await screen.findByText('候補から選んでください。指名しない場合は入力を空にしてください')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/「指名を外す」にチェック/)).not.toBeInTheDocument();
+  });
+
+  it('指名を外している間は候補を出さない', async () => {
+    // 選べない状態で選択肢だけ残ると、入力を消して閉じることもできず modal の操作を覆う
+    renderModal(nominatedRequest);
+
+    await openSuggestions('み');
+    expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
+
+    expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
+  });
+
+  it('候補の取得に失敗したら、古い候補を残さず閉じる', async () => {
+    // 残すと、今の入力とは無関係な候補がいつまでも選べる状態になる
+    renderModal(nominationFreeRequest);
+
+    await openSuggestions('み');
+    expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
+
+    mockedCastList.mockRejectedValueOnce(new Error('boom'));
+    await openSuggestions('あ');
+
+    expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith('キャスト候補の取得に失敗しました');
+  });
+
   it('指名なしの申請は、打ちかけを消せばそのまま指名なしで保存できる', async () => {
     // 立てかけたキャストを取り消す唯一の経路。空欄まで止めると指名なしへ戻せなくなる
     renderModal(nominationFreeRequest);

@@ -50,6 +50,12 @@ export function CastSearchCombobox({
   }, [castName]);
 
   useEffect(() => {
+    // 無効化中は選べないので探しにも行かない
+    if (disabled) {
+      setIsOpen(false);
+      return;
+    }
+
     const skipped = skipSearchForRef.current;
     skipSearchForRef.current = null;
     if (skipped === nameInput) return;
@@ -76,7 +82,11 @@ export function CastSearchCombobox({
         setOptions(response.rows);
         setIsOpen(true);
       } catch {
-        if (!superseded) toast.error('キャスト候補の取得に失敗しました');
+        if (superseded) return;
+        // 取れなかったのに前の候補を残すと、今の入力と無関係な候補がいつまでも選べる
+        setOptions([]);
+        setIsOpen(false);
+        toast.error('キャスト候補の取得に失敗しました');
       } finally {
         if (!superseded) setIsLoading(false);
       }
@@ -86,7 +96,7 @@ export function CastSearchCombobox({
       superseded = true;
       clearTimeout(timer);
     };
-  }, [nameInput]);
+  }, [nameInput, disabled]);
 
   const handleSelect = (cast: CastResponse) => {
     const name = cast.name ?? '';
