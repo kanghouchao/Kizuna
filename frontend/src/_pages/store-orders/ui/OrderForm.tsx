@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { CastResponse, castApi } from '@/entities/cast';
+import { castApi } from '@/entities/cast';
 import { OrderReceptionist, ReceptionRoute, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
+import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
   Card,
@@ -97,11 +98,8 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
     formState: { errors },
   } = form;
 
-  const [castNameInput, setCastNameInput] = useState('');
-  const [castOptions, setCastOptions] = useState<CastResponse[]>([]);
-  const [isCastLoading, setIsCastLoading] = useState(false);
-  const [isCastOpen, setIsCastOpen] = useState(false);
-  const skipNextSearchRef = useRef(false);
+  // 編集で渡ってくるのは id だけなので、コンボボックスに出す名前は取りに行く
+  const [initialCastName, setInitialCastName] = useState('');
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
 
   useEffect(() => {
@@ -122,8 +120,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
       if (!initialData?.castId) return;
       try {
         const cast = await castApi.get(initialData.castId);
-        skipNextSearchRef.current = true;
-        setCastNameInput(cast.name ?? '');
+        setInitialCastName(cast.name ?? '');
       } catch {
         toast.error('キャスト名の取得に失敗しました');
       }
@@ -131,51 +128,6 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
 
     loadInitialCast();
   }, [initialData?.castId]);
-
-  useEffect(() => {
-    if (skipNextSearchRef.current) {
-      skipNextSearchRef.current = false;
-      return;
-    }
-
-    const keyword = castNameInput.trim();
-    if (!keyword) {
-      setCastOptions([]);
-      setIsCastOpen(false);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        setIsCastLoading(true);
-        const response = await castApi.list({
-          size: 10,
-          sort: 'displayOrder,asc',
-          search: keyword,
-        });
-        setCastOptions(response.rows);
-        setIsCastOpen(true);
-      } catch {
-        toast.error('キャスト候補の取得に失敗しました');
-      } finally {
-        setIsCastLoading(false);
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [castNameInput]);
-
-  const handleCastSelect = (cast: CastResponse) => {
-    skipNextSearchRef.current = true;
-    setCastNameInput(cast.name ?? '');
-    setValue('castId', cast.id ?? '', { shouldValidate: true, shouldDirty: true });
-    setIsCastOpen(false);
-  };
-
-  const handleCastInputChange = (value: string) => {
-    setCastNameInput(value);
-    setValue('castId', '', { shouldValidate: true, shouldDirty: true });
-  };
 
   return (
     <Form {...form}>
@@ -327,56 +279,20 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="relative grid gap-2">
-                <Label htmlFor="castName">キャスト *</Label>
-                <Input
+              <div className="grid gap-2">
+                <CastSearchCombobox
                   id="castName"
-                  type="text"
-                  value={castNameInput}
-                  onChange={e => handleCastInputChange(e.target.value)}
-                  onFocus={() => castOptions.length > 0 && setIsCastOpen(true)}
-                  placeholder="名前で検索"
-                  role="combobox"
-                  aria-expanded={isCastOpen}
-                  aria-controls="cast-suggestions"
-                  autoComplete="off"
+                  label="キャスト *"
+                  initialName={initialCastName}
+                  onChange={castId =>
+                    setValue('castId', castId ?? '', { shouldValidate: true, shouldDirty: true })
+                  }
                 />
                 {/* キャストはサーバ側が @NotBlank。候補から選ばないと 400 になるため送信前に止める */}
                 <input
                   type="hidden"
                   {...register('castId', { required: 'キャストを候補から選択してください' })}
                 />
-                {isCastOpen && (
-                  <div
-                    id="cast-suggestions"
-                    role="listbox"
-                    className="absolute top-full z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-lg"
-                  >
-                    {isCastLoading ? (
-                      <div className="px-4 py-2 text-sm text-muted-foreground">検索中...</div>
-                    ) : castOptions.length === 0 ? (
-                      <div className="px-4 py-2 text-sm text-muted-foreground">
-                        該当するキャストがいません
-                      </div>
-                    ) : (
-                      <ul className="max-h-56 overflow-auto py-1">
-                        {castOptions.map(cast => (
-                          <li key={cast.id}>
-                            <button
-                              type="button"
-                              onClick={() => handleCastSelect(cast)}
-                              className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-foreground hover:bg-primary/10"
-                              role="option"
-                            >
-                              <span className="font-medium">{cast.name}</span>
-                              <span className="text-xs text-muted-foreground">ID: {cast.id}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
                 {errors.castId && (
                   <p className="text-sm text-destructive">{errors.castId.message}</p>
                 )}

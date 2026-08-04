@@ -1,10 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import { ReservationRequestEditModal } from '../ui/ReservationRequestEditModal';
 import { Order, orderApi } from '@/entities/order';
+import { castApi } from '@/entities/cast';
 
 jest.mock('@/entities/order', () => ({
   orderApi: { listReceptionists: jest.fn(), updateReservationRequest: jest.fn() },
+}));
+
+jest.mock('@/entities/cast', () => ({
+  castApi: { get: jest.fn(), list: jest.fn() },
 }));
 
 jest.mock('react-hot-toast', () => ({
@@ -13,6 +18,7 @@ jest.mock('react-hot-toast', () => ({
 
 const mockedUpdate = orderApi.updateReservationRequest as jest.Mock;
 const mockedReceptionists = orderApi.listReceptionists as jest.Mock;
+const mockedCastList = castApi.list as jest.Mock;
 
 const nominationFreeRequest: Order = {
   id: 'o1',
@@ -90,7 +96,8 @@ describe('ReservationRequestEditModal', () => {
   it('指名が無い申請には指名解除の操作を出さない', async () => {
     renderModal(nominationFreeRequest);
 
-    expect(await screen.findByText('なし')).toBeInTheDocument();
+    // 外す対象が無いので、解除は操作としてそもそも現れない
+    expect(await screen.findByRole('combobox', { name: '指名' })).toHaveValue('');
     expect(screen.queryByRole('checkbox', { name: '指名を外す' })).not.toBeInTheDocument();
   });
 
@@ -138,5 +145,87 @@ describe('ReservationRequestEditModal', () => {
       )
     );
     expect(onSaved).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReservationRequestEditModal の指名の差し替え', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    mockedReceptionists.mockResolvedValue([]);
+    mockedUpdate.mockResolvedValue({});
+    mockedCastList.mockResolvedValue({
+      rows: [{ id: 'cast-2', name: 'みか' }],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** 入力→デバウンス経過→候補描画までを進める。 */
+  const openSuggestions = async (keyword: string) => {
+    fireEvent.change(screen.getByRole('combobox', { name: '指名' }), {
+      target: { value: keyword },
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+  };
+
+  const save = async () => {
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await act(async () => {
+      jest.advanceTimersByTime(0);
+    });
+  };
+
+  it('指名済みの申請を、別のキャストへ差し替えて保存できる', async () => {
+    renderModal(nominatedRequest);
+
+    expect(screen.getByRole('combobox', { name: '指名' })).toHaveValue('あや');
+    await openSuggestions('み');
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
+  });
+
+  it('指名なしの申請に、キャストを立てて保存できる', async () => {
+    renderModal(nominationFreeRequest);
+
+    await openSuggestions('み');
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
+  });
+
+  it('候補から選ばずに名前を打っただけなら、指名は送らない', async () => {
+    // 候補の選択だけが id を確定させる。打ちかけの文字列で古い指名が残ると、外したつもりが残る
+    renderModal(nominatedRequest);
+
+    await openSuggestions('み');
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ cast_id: undefined })
+    );
+  });
+
+  it('指名を外す操作は、差し替えの候補が出ていても解除として優先する', async () => {
+    renderModal(nominatedRequest);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ cast_id: undefined })
+    );
   });
 });
