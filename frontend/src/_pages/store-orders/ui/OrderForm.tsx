@@ -285,7 +285,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                   label="キャスト *"
                   castName={initialCastName}
                   onChange={castId =>
-                    setValue('castId', castId ?? '', { shouldValidate: true, shouldDirty: true })
+                    setValue('castId', castId, { shouldValidate: true, shouldDirty: true })
                   }
                 />
                 {/* キャストはサーバ側が @NotBlank。候補から選ばないと 400 になるため送信前に止める */}

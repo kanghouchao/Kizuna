@@ -177,14 +177,13 @@ describe('店側オーダー画面の描画', () => {
 
     render(<CreateOrderPage />);
     // 受付・キャストはサーバ側が @NotNull / @NotBlank。選ばないと送信自体が止まる。
+    // キャストを先に選ぶ（Radix Select を開いた直後は Popover が開かない）。
+    fireEvent.click(await screen.findByRole('combobox', { name: /キャスト/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /花子/ }));
     fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付(?!経路)/ }), {
       key: 'ArrowDown',
     });
     fireEvent.click(await screen.findByRole('option', { name: '受付花子' }));
-    fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
-      target: { value: '花' },
-    });
-    fireEvent.click(await screen.findByRole('option', { name: /花子/ }));
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
 
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));

@@ -97,7 +97,7 @@ describe('ReservationRequestEditModal', () => {
     renderModal(nominationFreeRequest);
 
     // 外す対象が無いので、解除は操作としてそもそも現れない
-    expect(await screen.findByRole('combobox', { name: '指名' })).toHaveValue('');
+    expect(await screen.findByRole('combobox', { name: '指名' })).toHaveTextContent('名前で検索');
     expect(screen.queryByRole('checkbox', { name: '指名を外す' })).not.toBeInTheDocument();
   });
 
@@ -166,11 +166,17 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     jest.useRealTimers();
   });
 
-  /** 入力→デバウンス経過→候補描画までを進める。 */
-  const openSuggestions = async (keyword: string) => {
-    fireEvent.change(screen.getByRole('combobox', { name: '指名' }), {
-      target: { value: keyword },
+  /** 指名の選択を開き、初回の候補取得まで進める。 */
+  const openPicker = async () => {
+    fireEvent.click(screen.getByRole('combobox', { name: '指名' }));
+    await act(async () => {
+      jest.advanceTimersByTime(300);
     });
+  };
+
+  /** 選択の中で絞り込む。検索語は選択を閉じると捨てられる。 */
+  const search = async (keyword: string) => {
+    fireEvent.change(screen.getByPlaceholderText('名前で検索'), { target: { value: keyword } });
     await act(async () => {
       jest.advanceTimersByTime(300);
     });
@@ -183,21 +189,109 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     });
   };
 
-  it('候補と同じ名前を打ち切ってから選んでも、次の検索が止まらない', async () => {
-    // 打った文字列と選んだ名前が同じだと入力欄の値が動かない。検索の抑止を「値が変わったか」に
-    // 頼ると、この一手で抑止が解除されないまま次の入力を飲み込む
+  it('指名済みの申請を、別のキャストへ差し替えて保存できる', async () => {
+    renderModal(nominatedRequest);
+
+    expect(screen.getByRole('combobox', { name: '指名' })).toHaveTextContent('あや');
+    await openPicker();
+    await search('み');
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
+  });
+
+  it('指名なしの申請に、キャストを立てて保存できる', async () => {
     renderModal(nominationFreeRequest);
 
-    await openSuggestions('みか');
+    await openPicker();
     fireEvent.click(screen.getByRole('option', { name: /みか/ }));
-    await openSuggestions('あ');
+    await save();
 
-    expect(mockedCastList).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'あ' }));
+    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
+  });
+
+  it('絞り込んだだけで選ばずに閉じても、元の指名はそのまま残る', async () => {
+    // 検索語は選択の中だけに在り、指名を動かすのは候補のクリックだけ。打ちかけが指名を
+    // 書き換える経路がそもそも無いことを固定する
+    renderModal(nominatedRequest);
+
+    await openPicker();
+    await search('み');
+    fireEvent.keyDown(screen.getByPlaceholderText('名前で検索'), { key: 'Escape' });
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-1' }));
+  });
+
+  it('絞り込んだだけで選ばずに閉じても、指名なしの申請は指名なしのまま保存できる', async () => {
+    renderModal(nominationFreeRequest);
+
+    await openPicker();
+    await search('み');
+    fireEvent.keyDown(screen.getByPlaceholderText('名前で検索'), { key: 'Escape' });
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ cast_id: undefined })
+    );
+  });
+
+  it('打ちかけの検索語は次に開いたとき残っていない', async () => {
+    // 残ると、表示中の指名と食い違う候補が出たままになる
+    renderModal(nominatedRequest);
+
+    await openPicker();
+    await search('み');
+    fireEvent.keyDown(screen.getByPlaceholderText('名前で検索'), { key: 'Escape' });
+    await openPicker();
+
+    expect(screen.getByPlaceholderText('名前で検索')).toHaveValue('');
+  });
+
+  it('この場で立てた指名も、解除の明示操作で取り消せる', async () => {
+    // 「指名を外す」を元から指名のある申請だけに出すと、今立てた指名を戻す手段が無くなる
+    renderModal(nominationFreeRequest);
+
+    expect(screen.queryByRole('checkbox', { name: '指名を外す' })).not.toBeInTheDocument();
+    await openPicker();
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: '指名を外す' }));
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ cast_id: undefined })
+    );
+  });
+
+  it('指名を外す操作は、別のキャストを選んだ後でも解除として優先する', async () => {
+    renderModal(nominatedRequest);
+
+    await openPicker();
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ cast_id: undefined })
+    );
+  });
+
+  it('指名を外している間は選択を開けない', async () => {
+    renderModal(nominatedRequest);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
+
+    expect(screen.getByRole('combobox', { name: '指名' })).toBeDisabled();
   });
 
   it('古い検索の応答が遅れて届いても、今の候補を上書きしない', async () => {
-    // デバウンスの片付けは飛んだ後の通信を止められない。遅れて着いた古い応答をそのまま入れると、
-    // 今の入力とは無関係なキャストが選べてしまう
+    // 片付けは飛んだ後の通信を止められない。遅れて着いた古い応答をそのまま入れると、
+    // 今の検索語とは無関係なキャストが選べてしまう
     let landStaleResponse = () => {};
     mockedCastList.mockImplementationOnce(
       () =>
@@ -208,8 +302,8 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     );
     renderModal(nominationFreeRequest);
 
-    await openSuggestions('ふ');
-    await openSuggestions('み');
+    await openPicker();
+    await search('み');
     landStaleResponse();
     await act(async () => {});
 
@@ -217,166 +311,16 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     expect(screen.queryByRole('option', { name: /ふるい/ })).not.toBeInTheDocument();
   });
 
-  it('指名済みの申請を、別のキャストへ差し替えて保存できる', async () => {
-    renderModal(nominatedRequest);
-
-    expect(screen.getByRole('combobox', { name: '指名' })).toHaveValue('あや');
-    await openSuggestions('み');
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
-    await save();
-
-    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
-  });
-
-  it('指名なしの申請に、キャストを立てて保存できる', async () => {
+  it('候補の取得に失敗したら、古い候補を残さない', async () => {
     renderModal(nominationFreeRequest);
 
-    await openSuggestions('み');
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
-    await save();
-
-    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
-  });
-
-  it('候補から選ばずに名前を打っただけでは保存させず、外すなら明示するよう促す', async () => {
-    // 契約は部分更新ではないので、打ちかけのまま送ると指名が消える。解除は明示操作だけの権能
-    renderModal(nominatedRequest);
-
-    await openSuggestions('み');
-    await save();
-
-    expect(mockedUpdate).not.toHaveBeenCalled();
-    expect(
-      await screen.findByText(
-        '指名を変えるときは候補から選んでください。外す場合は「指名を外す」にチェックしてください'
-      )
-    ).toBeInTheDocument();
-  });
-
-  it('指名なしの申請でも、打ちかけのままなら保存させない', async () => {
-    // 消える指名は無いが、名前を打った以上は指名するつもり。黙って指名なしで保存すると気付けない
-    renderModal(nominationFreeRequest);
-
-    await openSuggestions('み');
-    await save();
-
-    expect(mockedUpdate).not.toHaveBeenCalled();
-  });
-
-  it('指名なしの申請には、この画面で実行できる直し方だけを示す', async () => {
-    // 「指名を外す」は元から指名がある申請にしか出ない。取れない操作を促すと手詰まりに見える
-    renderModal(nominationFreeRequest);
-
-    await openSuggestions('み');
-    await save();
-
-    expect(
-      await screen.findByText('候補から選んでください。指名しない場合は入力を空にしてください')
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/「指名を外す」にチェック/)).not.toBeInTheDocument();
-  });
-
-  it('入力欄から離れたら候補を閉じる', async () => {
-    // 候補は真下の「指名を外す」や保存ボタンに重なる。選ぶ気が無いときに閉じられないと、
-    // 覆われた操作を押そうとしてキャストを選んでしまう
-    renderModal(nominatedRequest);
-
-    await openSuggestions('み');
-    expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
-
-    fireEvent.focusOut(screen.getByRole('combobox', { name: '指名' }), {
-      relatedTarget: document.body,
-    });
-
-    expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
-  });
-
-  it('候補を選ばずに他の項目へ移っても、選択は付かないまま候補だけが消える', async () => {
-    // 覆われた操作へ手を伸ばす経路。閉じるだけで、触っていない指名が確定してはいけない
-    renderModal(nominatedRequest);
-
-    await openSuggestions('み');
-    fireEvent.focusOut(screen.getByRole('combobox', { name: '指名' }), {
-      relatedTarget: screen.getByLabelText('人数'),
-    });
-    await save();
-
-    expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
-    expect(mockedUpdate).not.toHaveBeenCalled();
-  });
-
-  it('指名を外している間は候補を出さない', async () => {
-    // 選べない状態で選択肢だけ残ると、入力を消して閉じることもできず modal の操作を覆う
-    renderModal(nominatedRequest);
-
-    await openSuggestions('み');
-    expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
-
-    expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
-  });
-
-  it('候補の取得に失敗したら、古い候補を残さず閉じる', async () => {
-    // 残すと、今の入力とは無関係な候補がいつまでも選べる状態になる
-    renderModal(nominationFreeRequest);
-
-    await openSuggestions('み');
+    await openPicker();
     expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
 
     mockedCastList.mockRejectedValueOnce(new Error('boom'));
-    await openSuggestions('あ');
+    await search('あ');
 
     expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
     expect(toast.error).toHaveBeenCalledWith('キャスト候補の取得に失敗しました');
-  });
-
-  it('指名なしの申請は、打ちかけを消せばそのまま指名なしで保存できる', async () => {
-    // 立てかけたキャストを取り消す唯一の経路。空欄まで止めると指名なしへ戻せなくなる
-    renderModal(nominationFreeRequest);
-
-    await openSuggestions('み');
-    await openSuggestions('');
-    await save();
-
-    expect(mockedUpdate).toHaveBeenCalledWith(
-      'o1',
-      expect.objectContaining({ cast_id: undefined })
-    );
-  });
-
-  it('指名済みの申請は、名前を消しただけでは指名を落とさない', async () => {
-    // 空欄は「外す」ではない。契約は部分更新ではないので、通すと黙って指名が消える
-    renderModal(nominatedRequest);
-
-    await openSuggestions('');
-    await save();
-
-    expect(mockedUpdate).not.toHaveBeenCalled();
-  });
-
-  it('打ちかけを候補の選択で決着させれば保存できる', async () => {
-    renderModal(nominatedRequest);
-
-    await openSuggestions('み');
-    await save();
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
-    await save();
-
-    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
-  });
-
-  it('指名を外す操作は、別のキャストを選んだ後でも解除として優先する', async () => {
-    renderModal(nominatedRequest);
-
-    await openSuggestions('み');
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
-    fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
-    await save();
-
-    expect(mockedUpdate).toHaveBeenCalledWith(
-      'o1',
-      expect.objectContaining({ cast_id: undefined })
-    );
   });
 });

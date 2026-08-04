@@ -76,8 +76,6 @@ export function ReservationRequestEditModal({
     formState: { errors, isSubmitting },
   } = form;
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
-  // 指名欄に見えている文字列。id では「打ちかけで未選択」と「空欄で指名なし」を区別できない
-  const [castNameInput, setCastNameInput] = useState('');
 
   const castName = request?.cast_name ?? request?.cast_id ?? '';
 
@@ -90,7 +88,6 @@ export function ReservationRequestEditModal({
       cast_id: request.cast_id ?? '',
       clear_cast: false,
     });
-    setCastNameInput(request.cast_name ?? request.cast_id ?? '');
   }, [request, reset]);
 
   useEffect(() => {
@@ -120,6 +117,7 @@ export function ReservationRequestEditModal({
   };
 
   const clearCast = watch('clear_cast');
+  const selectedCastId = watch('cast_id');
 
   return (
     <Dialog
@@ -192,33 +190,12 @@ export function ReservationRequestEditModal({
                 id="reservation-request-cast"
                 label="指名"
                 castName={castName}
-                onChange={(castId, name) => {
-                  setCastNameInput(name);
-                  setValue('cast_id', castId ?? '', { shouldValidate: true, shouldDirty: true });
-                }}
+                onChange={castId => setValue('cast_id', castId, { shouldDirty: true })}
                 disabled={clearCast}
               />
-              {/* 契約は部分更新ではないので、決着の付いていない指名を送ると黙って消える。止めるのは
-                  「元は指名があった」（空欄も外すことになる）か「名前が入っている」（選び切って
-                  いない）とき。指名なしの申請で空欄のままなのだけが、そのまま通す状態。
-                  文言を申請の状態で分けるのは、「指名を外す」が元から指名のある申請にしか
-                  出ないため——出ていない操作を促すと直し方が無いように見える */}
-              <input
-                type="hidden"
-                {...register('cast_id', {
-                  validate: value =>
-                    clearCast ||
-                    !!value ||
-                    (!request?.cast_id && !castNameInput) ||
-                    (request?.cast_id
-                      ? '指名を変えるときは候補から選んでください。外す場合は「指名を外す」にチェックしてください'
-                      : '候補から選んでください。指名しない場合は入力を空にしてください'),
-                })}
-              />
-              {!clearCast && errors.cast_id && (
-                <p className="text-xs text-destructive-strong">{errors.cast_id.message}</p>
-              )}
-              {request?.cast_id && (
+              {/* 解除は明示操作。今この場で立てた指名も取り消せるよう、元から指名があったかでは
+                  なく「今この申請に指名が載っているか」で出す */}
+              {selectedCastId && (
                 <FormField
                   control={control}
                   name="clear_cast"

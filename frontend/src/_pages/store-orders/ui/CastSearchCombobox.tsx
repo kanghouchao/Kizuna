@@ -1,12 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ChevronsUpDownIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { CastResponse, castApi } from '@/entities/cast';
-import { Input, Label } from '@/shared/ui';
+import {
+  Button,
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/shared/ui';
 
 interface CastSearchComboboxProps {
-  /** input と候補リストを結ぶ id。同一画面で衝突しない値を親が与える。 */
+  /** ラベルと引き金を結ぶ id。同一画面で衝突しない値を親が与える。 */
   id: string;
   label: string;
   /**
@@ -14,19 +26,16 @@ interface CastSearchComboboxProps {
    * 表示だけで、onChange は鳴らない（親の初期値と競合させないため）。
    */
   castName: string;
-  /**
-   * 候補を選ぶとその id、名前を打ち直して選択が外れると null。あわせて今の入力文字列を渡す
-   * ——「打ちかけで未選択」と「空欄で指名なし」は id では区別が付かず、親の検証に要る。
-   */
-  onChange: (castId: string | null, name: string) => void;
+  /** 候補を選んだときだけ鳴る。 */
+  onChange: (castId: string) => void;
   disabled?: boolean;
 }
 
 /**
  * 名前で当店のキャストを絞り込んで 1 人選ぶコンボボックス。
  *
- * 選択の確定は候補のクリックだけで、打ちかけの文字列では id を返さない。曖昧な名前のまま
- * 送れてしまうと、店舗が意図しないキャストが指名として残るため。
+ * 検索語は popover の中だけに存在し、閉じると捨てる。選択を動かすのは候補のクリックだけなので、
+ * 「打ちかけの文字列」が指名として漏れることも、打ちかけのまま保存して指名が消えることも無い。
  */
 export function CastSearchCombobox({
   id,
@@ -35,40 +44,22 @@ export function CastSearchCombobox({
   onChange,
   disabled,
 }: CastSearchComboboxProps) {
-  const [nameInput, setNameInput] = useState(castName);
+  const [isOpen, setIsOpen] = useState(false);
+  const [keyword, setKeyword] = useState('');
   const [options, setOptions] = useState<CastResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  // 表示名の差し込み（親からの反映・候補の選択）で検索が走ると、選んだ直後に候補が開き直す。
-  // 「次を一回飛ばす」ではなく飛ばす対象の文字列を覚えるのは、差し込む値が今の入力と同じだと
-  // 状態が動かず、飛ばす合図だけが残って次の入力を飲み込むため
-  const skipSearchForRef = useRef<string | null>(castName);
+  const [selectedName, setSelectedName] = useState(castName);
 
   useEffect(() => {
-    skipSearchForRef.current = castName;
-    setNameInput(castName);
+    setSelectedName(castName);
   }, [castName]);
 
   useEffect(() => {
-    // 無効化中は選べないので探しにも行かない
-    if (disabled) {
-      setIsOpen(false);
-      return;
-    }
+    if (!isOpen) return;
 
-    const skipped = skipSearchForRef.current;
-    skipSearchForRef.current = null;
-    if (skipped === nameInput) return;
-
-    const keyword = nameInput.trim();
-    if (!keyword) {
-      setOptions([]);
-      setIsOpen(false);
-      return;
-    }
-
-    // デバウンスの片付けは飛んだ後の通信を止められない。遅れて着いた古い応答を入れると、
-    // 今の入力と無関係なキャストが候補に残る
+    const search = keyword.trim();
+    // 片付けは飛んだ後の通信を止められない。遅れて着いた古い応答を入れると、今の検索語とは
+    // 無関係なキャストが候補に残る
     let superseded = false;
     const timer = setTimeout(async () => {
       try {
@@ -76,16 +67,13 @@ export function CastSearchCombobox({
         const response = await castApi.list({
           size: 10,
           sort: 'displayOrder,asc',
-          search: keyword,
+          ...(search ? { search } : {}),
         });
         if (superseded) return;
         setOptions(response.rows);
-        setIsOpen(true);
       } catch {
         if (superseded) return;
-        // 取れなかったのに前の候補を残すと、今の入力と無関係な候補がいつまでも選べる
         setOptions([]);
-        setIsOpen(false);
         toast.error('キャスト候補の取得に失敗しました');
       } finally {
         if (!superseded) setIsLoading(false);
@@ -96,81 +84,66 @@ export function CastSearchCombobox({
       superseded = true;
       clearTimeout(timer);
     };
-  }, [nameInput, disabled]);
+  }, [keyword, isOpen]);
 
-  const handleSelect = (cast: CastResponse) => {
-    const name = cast.name ?? '';
-    skipSearchForRef.current = name;
-    setNameInput(name);
-    onChange(cast.id ?? null, name);
-    setIsOpen(false);
+  const handleOpenChange = (next: boolean) => {
+    setIsOpen(next);
+    // 打ちかけの検索語を持ち越すと、次に開いたとき表示中の指名と食い違う候補が出る
+    if (!next) {
+      setKeyword('');
+      setOptions([]);
+    }
   };
 
-  const handleInputChange = (value: string) => {
-    setNameInput(value);
-    onChange(null, value);
+  const handleSelect = (cast: CastResponse) => {
+    setSelectedName(cast.name ?? '');
+    onChange(cast.id ?? '');
+    handleOpenChange(false);
   };
 
   return (
-    // 候補は入力欄の真下に重なるので、開いたままだと下の操作（modal では「指名を外す」や
-    // 保存）を覆う。閉じる手段が「選ぶ」「消す」しか無いと、選ぶ気が無いときに詰む
-    <div
-      className="relative grid gap-2"
-      onBlur={event => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false);
-      }}
-      // Escape では閉じない。Radix Dialog が document の capture で拾うため、ここで伝播を
-      // 止めても modal ごと閉じて編集内容を捨てる。候補だけを閉じるには modal 側の
-      // onEscapeKeyDown まで配線が要り、それは DESIGN.md 準拠の Popover 化でまとめて解く
-    >
+    <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type="text"
-        value={nameInput}
-        onChange={e => handleInputChange(e.target.value)}
-        onFocus={() => options.length > 0 && setIsOpen(true)}
-        placeholder="名前で検索"
-        role="combobox"
-        aria-expanded={isOpen}
-        aria-controls={`${id}-suggestions`}
-        autoComplete="off"
-        disabled={disabled}
-      />
-      {isOpen && (
-        <div
-          id={`${id}-suggestions`}
-          role="listbox"
-          className="absolute top-full z-20 mt-1 w-full rounded-md border border-border bg-popover shadow-lg"
-        >
-          {isLoading ? (
-            <div className="px-4 py-2 text-sm text-muted-foreground">検索中...</div>
-          ) : options.length === 0 ? (
-            <div className="px-4 py-2 text-sm text-muted-foreground">
-              該当するキャストがいません
-            </div>
-          ) : (
-            <ul className="max-h-56 overflow-auto py-1">
-              {options.map(cast => (
-                <li key={cast.id}>
-                  <button
-                    type="button"
-                    // 押下で入力欄からフォーカスが外れると、click より先に上の onBlur が
-                    // 候補を閉じ、選択が届かない
-                    onMouseDown={event => event.preventDefault()}
-                    onClick={() => handleSelect(cast)}
-                    className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-foreground hover:bg-primary/10"
-                    role="option"
-                  >
-                    <span className="font-medium">{cast.name}</span>
-                    <span className="text-xs text-muted-foreground">ID: {cast.id}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={isOpen}
+            disabled={disabled}
+            className="w-full justify-between font-normal"
+          >
+            <span className={selectedName ? '' : 'text-muted-foreground'}>
+              {selectedName || '名前で検索'}
+            </span>
+            <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        {/* 引き金の幅に合わせるが、狭い桁に置かれても候補が潰れないよう下限を持たせる */}
+        <PopoverContent className="w-(--radix-popover-trigger-width) min-w-72 p-0" align="start">
+          {/* 絞り込みはサーバ側が担うので、cmdk 自前の絞り込みは切る */}
+          <Command shouldFilter={false}>
+            <CommandInput value={keyword} onValueChange={setKeyword} placeholder="名前で検索" />
+            <CommandList>
+              {isLoading ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">検索中...</div>
+              ) : (
+                <>
+                  <CommandEmpty>該当するキャストがいません</CommandEmpty>
+                  {options.map(cast => (
+                    <CommandItem key={cast.id} value={cast.id} onSelect={() => handleSelect(cast)}>
+                      <span className="font-medium">{cast.name}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">ID: {cast.id}</span>
+                    </CommandItem>
+                  ))}
+                </>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
