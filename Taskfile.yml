@@ -91,9 +91,8 @@ tasks:
       STACK_ID:
         sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
     env:
-      # プロジェクト名は -p ではなくこの環境変数で与える。e2e compose の gateway が
-      # docker provider の制約に同じ変数を使っており、-p で上書きすると制約だけ既定値のまま
-      # 取り残されて他プロジェクトのコンテナを拾ってしまう。
+      # gateway の docker provider 制約は解決後のプロジェクト名に追随するため、ここで
+      # 与えるだけでスタックの隔離と traefik の対象範囲が揃う。
       COMPOSE_PROJECT_NAME: kizuna-e2e-{{.STACK_ID}}
       E2E_IMAGE_TAG: e2e-{{.STACK_ID}}
     cmds:
@@ -104,7 +103,7 @@ tasks:
       - task -d backend build DOCKER_TAG=e2e-{{.STACK_ID}}
       - task -d frontend build DOCKER_TAG=e2e-{{.STACK_ID}}
       # 事前 down: 前回 run が中断されると defer が走らず依存コンテナが残留し、`docker compose run`
-      # がそれを静かに再利用して前回のデータが残った DB に対して走る（backend の #412 と同型）。
+      # がそれを静かに再利用して前回のデータが残った DB に対して走る。
       - docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
       # 成否・途中クラッシュを問わずスタックを必ず破棄する（起動失敗時の残骸も回収）。
       - defer: docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans

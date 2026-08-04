@@ -5,10 +5,10 @@
 # COMPOSE_PROJECT_NAME（root Taskfile が worktree 名から導出する）で一意化されるため、
 # 複数の worktree が同時に e2e を走らせても衝突しない。
 #
-# name: は手動実行時のフォールバックで、COMPOSE_PROJECT_NAME が与えられていればそちらが勝つ。
-# プロジェクト名は必ず COMPOSE_PROJECT_NAME で与えること（-p は使わない）——gateway の
-# docker provider 制約が同じ変数を参照しており、-p で上書きすると制約だけ既定値のまま取り残される。
-# 制約の既定値は下の name: と揃えてあり、片方だけ変えると手動実行時に何も routing されなくなる。
+# name: は既定値で、COMPOSE_PROJECT_NAME でも -p でも上書きできる。どちらで与えても gateway の
+# docker provider 制約は同じ名前に追随する（compose は解決後のプロジェクト名を
+# ${COMPOSE_PROJECT_NAME} として展開に渡すため）。ただし制約の既定値は下の name: と同じ文字列を
+# 直に書いているので、片方だけ書き換えると、どちらも与えずに手で叩いたとき router がゼロになる。
 #
 # 実行は root の `task e2e`。手で叩く場合は事前 down を忘れないこと（残骸の黙った再利用を防ぐ）。
 name: kizuna-e2e
@@ -191,9 +191,25 @@ services:
     environment:
       # gateway alias 経由で store ドメインへ到達する baseURL。
       BASE_URL: http://store1.kizuna.test
-    command: sh -c "npm ci && npx bddgen && npx playwright test"
-    # gateway の healthcheck は backend / frontend の healthy を前提に並ぶため、ここが通れば
-    # スタック全体が応答可能。以前ホスト側で回していた curl の疎通待ちはこれで不要になった。
+    # gateway の healthcheck は traefik の ping しか見ないため、プロセスが生きていることしか
+    # 保証しない。docker provider が router を登録したかどうかは別問題で、制約とプロジェクト名が
+    # ずれていれば router はゼロのまま healthy になる。実際に router を通る経路で疎通を確かめ、
+    # 到達しないなら原因を名指しして落ちる（全シナリオが理由不明で赤くなるのを避ける）。
+    command:
+      - sh
+      - -c
+      - |
+        i=0
+        until curl -sf -o /dev/null http://store1.kizuna.test/; do
+          i=$$((i + 1))
+          if [ "$$i" -ge 60 ]; then
+            echo "❌ gateway 経由で frontend に到達できません（router 未登録の可能性）"
+            exit 1
+          fi
+          sleep 2
+        done
+        npm ci && npx bddgen && npx playwright test
+    # backend / frontend が healthy になってから gateway が起動する連鎖に乗るための依存。
     depends_on:
       gateway:
         condition: service_healthy
