@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { Order, OrderReceptionist, orderApi } from '@/entities/order';
 import { getApiErrorMessage } from '@/shared/lib';
+import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
   Checkbox,
@@ -35,6 +36,8 @@ interface ReservationRequestEditFormValues {
   receptionist_id: string;
   pax: number;
   remarks: string;
+  /** 指名するキャストの id。'' は指名なし。 */
+  cast_id: string;
   /** 指名を外して保存するか。申請が指名を持つときだけ意味を持つ。 */
   clear_cast: boolean;
 }
@@ -51,8 +54,9 @@ interface ReservationRequestEditModalProps {
  * 未確定の予約申請の編集モーダル。
  *
  * 会員は指名なしでも申請できるため、キャストを埋めずに人数・備考・受付担当を直せることと、
- * 無効になった指名を確定前に外せることがこの画面の目的。編集の収口は受注の汎用更新とは別で、
- * 送った内容がそのまま新しい申請内容になる（画面が持たない項目は契約にも無いので書き換わらない）。
+ * 無効になった指名を確定前に外す・別のキャストへ立て直すことがこの画面の目的。編集の収口は
+ * 受注の汎用更新とは別で、送った内容がそのまま新しい申請内容になる（画面が持たない項目は
+ * 契約にも無いので書き換わらない）。
  */
 export function ReservationRequestEditModal({
   request,
@@ -60,7 +64,7 @@ export function ReservationRequestEditModal({
   onSaved,
 }: ReservationRequestEditModalProps) {
   const form = useForm<ReservationRequestEditFormValues>({
-    defaultValues: { receptionist_id: '', pax: 1, remarks: '', clear_cast: false },
+    defaultValues: { receptionist_id: '', pax: 1, remarks: '', cast_id: '', clear_cast: false },
   });
   const {
     register,
@@ -68,9 +72,12 @@ export function ReservationRequestEditModal({
     reset,
     control,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = form;
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+
+  const castName = request?.cast_name ?? request?.cast_id ?? '';
 
   useEffect(() => {
     if (!request) return;
@@ -78,6 +85,7 @@ export function ReservationRequestEditModal({
       receptionist_id: request.receptionist_id != null ? String(request.receptionist_id) : '',
       pax: request.pax ?? 1,
       remarks: request.remarks ?? '',
+      cast_id: request.cast_id ?? '',
       clear_cast: false,
     });
   }, [request, reset]);
@@ -95,8 +103,8 @@ export function ReservationRequestEditModal({
     try {
       const updated = await orderApi.updateReservationRequest(request.id, {
         receptionist_id: values.receptionist_id ? Number(values.receptionist_id) : undefined,
-        // 指名は「そのまま送り返す」ことで維持される。外すときは送らない
-        cast_id: values.clear_cast ? undefined : (request.cast_id ?? undefined),
+        // 指名は「そのまま送り返す」ことで維持される。外すときだけ送らない
+        cast_id: values.clear_cast || !values.cast_id ? undefined : values.cast_id,
         pax: Number(values.pax),
         remarks: values.remarks ? values.remarks : undefined,
       });
@@ -109,6 +117,7 @@ export function ReservationRequestEditModal({
   };
 
   const clearCast = watch('clear_cast');
+  const selectedCastId = watch('cast_id');
 
   return (
     <Dialog
@@ -177,35 +186,34 @@ export function ReservationRequestEditModal({
               )}
             />
             <div className="grid gap-2">
-              <Label>指名</Label>
-              {request?.cast_id ? (
-                <>
-                  <p
-                    className={clearCast ? 'text-sm text-muted-foreground line-through' : 'text-sm'}
-                  >
-                    {request.cast_name ?? request.cast_id}
-                  </p>
-                  <FormField
-                    control={control}
-                    name="clear_cast"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center gap-2">
-                        <FormControl>
-                          <Checkbox
-                            id="clear_cast"
-                            checked={field.value}
-                            onCheckedChange={value => field.onChange(value === true)}
-                          />
-                        </FormControl>
-                        <FormLabel htmlFor="clear_cast" className="font-medium">
-                          指名を外す
-                        </FormLabel>
-                      </FormItem>
-                    )}
-                  />
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">なし</p>
+              <CastSearchCombobox
+                id="reservation-request-cast"
+                label="指名"
+                castName={castName}
+                onChange={castId => setValue('cast_id', castId, { shouldDirty: true })}
+                disabled={clearCast}
+              />
+              {/* 解除は明示操作。今この場で立てた指名も取り消せるよう、元から指名があったかでは
+                  なく「今この申請に指名が載っているか」で出す */}
+              {selectedCastId && (
+                <FormField
+                  control={control}
+                  name="clear_cast"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center gap-2">
+                      <FormControl>
+                        <Checkbox
+                          id="clear_cast"
+                          checked={field.value}
+                          onCheckedChange={value => field.onChange(value === true)}
+                        />
+                      </FormControl>
+                      <FormLabel htmlFor="clear_cast" className="font-medium">
+                        指名を外す
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
               )}
             </div>
             <div className="grid gap-2">

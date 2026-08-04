@@ -24,15 +24,19 @@ jest.mock('next/navigation', () => ({
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 
-/** フォームの必須項目（受付・キャスト）を満たして送信まで進める。 */
+/**
+ * フォームの必須項目（受付・キャスト）を満たして送信まで進める。
+ *
+ * キャストを先に選ぶ。Radix Select を開いた直後は Popover が開かない。
+ */
 async function fillRequiredAndRender() {
   render(<CreateOrderPage />);
+  fireEvent.click(await screen.findByRole('combobox', { name: /キャスト/ }));
+  fireEvent.click(await screen.findByRole('option', { name: /ID: cast-1/ }));
   fireEvent.keyDown(await screen.findByRole('combobox', { name: /受付(?!経路)/ }), {
     key: 'ArrowDown',
   });
   fireEvent.click(await screen.findByRole('option', { name: '受付花子' }));
-  fireEvent.change(screen.getByLabelText('キャスト *'), { target: { value: '花子' } });
-  fireEvent.click(await screen.findByRole('option', { name: /ID: cast-1/ }));
 }
 
 describe('新規オーダー登録の送信ペイロード', () => {

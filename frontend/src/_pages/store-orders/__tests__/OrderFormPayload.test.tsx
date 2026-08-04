@@ -170,13 +170,18 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     jest.useRealTimers();
   });
 
-  /** 入力→デバウンス経過→候補描画までを進める。 */
-  const openSuggestions = async () => {
-    fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
-      target: { value: '花' },
-    });
+  /** キャストの選択を開き、候補取得まで進める。 */
+  const openPicker = async () => {
+    fireEvent.click(screen.getByRole('combobox', { name: /キャスト/ }));
     await act(async () => {
       jest.advanceTimersByTime(300);
+    });
+  };
+
+  const submit = async () => {
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await act(async () => {
+      jest.advanceTimersByTime(0);
     });
   };
 
@@ -186,35 +191,36 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
       <OrderForm initialData={{ receptionistId: '7' }} onSubmit={onSubmit} isSubmitting={false} />
     );
 
-    await openSuggestions();
+    await openPicker();
+    fireEvent.change(screen.getByPlaceholderText('名前で検索'), { target: { value: '花' } });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
     fireEvent.click(screen.getByRole('option', { name: /花子/ }));
 
-    expect(screen.getByRole('combobox', { name: /キャスト/ })).toHaveValue('花子');
-    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
-    await act(async () => {
-      jest.advanceTimersByTime(0);
-    });
+    expect(screen.getByRole('combobox', { name: /キャスト/ })).toHaveTextContent('花子');
+    await submit();
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0].castId).toBe('cast-1');
   });
 
-  it('候補選択後に名前を打ち直すと castId が空へ戻り送信されないこと', async () => {
+  it('候補を選ばないまま送ると、キャスト未選択として止められること', async () => {
+    // キャストは @NotBlank。絞り込んだだけでは選択にならない
     const onSubmit = jest.fn<void, [OrderFormData]>();
     render(
       <OrderForm initialData={{ receptionistId: '7' }} onSubmit={onSubmit} isSubmitting={false} />
     );
 
-    await openSuggestions();
-    fireEvent.click(screen.getByRole('option', { name: /花子/ }));
-    fireEvent.change(screen.getByRole('combobox', { name: /キャスト/ }), {
-      target: { value: '別の人' },
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await openPicker();
+    fireEvent.change(screen.getByPlaceholderText('名前で検索'), { target: { value: '花' } });
     await act(async () => {
-      jest.advanceTimersByTime(0);
+      jest.advanceTimersByTime(300);
     });
-    // キャストは @NotBlank。候補から選び直されるまで送信を止める。
+    fireEvent.keyDown(screen.getByPlaceholderText('名前で検索'), { key: 'Escape' });
+
+    await submit();
+
     expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('キャストを候補から選択してください')).toBeInTheDocument();
   });
 });
