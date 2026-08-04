@@ -147,6 +147,17 @@ public class Order extends StoreScopedEntity {
     return receptionRoute == ReceptionRoute.WEB && requesterMemberCode != null;
   }
 
+  /**
+   * 申請の内容を店舗が書き換える。渡された値がそのまま新しい内容になり、null は「未設定にする」を意味する。
+   *
+   * <p>「null は変更しない」の {@link #apply(OrderPatch)} と意味が逆なのは、備考を空に戻せる必要があるため —
+   * 部分更新では消せる項目と消せない項目が生まれ、申請を確定できる形に直しきれない。
+   */
+  public void reviseRequest(Integer pax, String remarks) {
+    this.pax = pax;
+    this.remarks = remarks;
+  }
+
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(OrderPatch patch) {
     if (patch.arrivalScheduledStartTime() != null) {

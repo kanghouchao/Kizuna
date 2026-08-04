@@ -97,6 +97,17 @@ export interface OrderCreateRequest {
   ng_content?: string;
 }
 
+// 未確定の予約申請に対する店舗側の編集（PUT /store/orders/reservation-requests/{id}）。
+// 送った内容がそのまま新しい申請内容になる部分更新ではない契約で、省略した項目は未設定になる。
+// 指名・受付担当を外せることがこの契約の目的なので、両者は可空。
+export interface ReservationRequestUpdateRequest {
+  receptionist_id?: number;
+  cast_id?: string;
+  // Java 側が @NotNull @Min(1)
+  pax: number;
+  remarks?: string;
+}
+
 // 会員本人の予約1件（GET /platform/me/orders）。店舗の顧客台帳の項目は含まない。
 export interface MemberOrder {
   id?: string;

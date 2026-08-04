@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { Order, orderApi } from '@/entities/order';
 import { getApiErrorMessage } from '@/shared/lib';
 import { Badge, Button } from '@/shared/ui';
+import { ReservationRequestEditModal } from './ReservationRequestEditModal';
 
 interface ReservationRequestInboxProps {
   /** 確定・謝絶の成功後に呼ばれる（同じ受注の状態が変わるため、一覧の再取得に使う）。 */
@@ -29,6 +30,7 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
   // 表示中の申請を保ったまま失敗した取得の対象ページ数（再試行にそのまま使う）。
   const [failedPages, setFailedPages] = useState<number | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Order | null>(null);
   // 読み込み済みのページ数。確定・謝絶後の取り直しでも同じ範囲を保つために持つ。
   const [loadedPages, setLoadedPages] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -155,6 +157,15 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
             <div className="flex gap-2">
               <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditing(request)}
+                disabled={loading || processingId === request.id}
+              >
+                編集
+              </Button>
+              <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => process(request.id ?? '', 'decline')}
@@ -201,6 +212,15 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
           もっと見る
         </Button>
       )}
+      <ReservationRequestEditModal
+        request={editing}
+        onClose={() => setEditing(null)}
+        // 編集後の行は古いままなので、確定・謝絶と同じ範囲で読み直す
+        onSaved={() => {
+          load(loadedPages);
+          onProcessed();
+        }}
+      />
     </>
   );
 }

@@ -5,6 +5,7 @@ import {
   Order,
   OrderCreateRequest,
   OrderReceptionist,
+  ReservationRequestUpdateRequest,
 } from '../model/types';
 
 export const orderApi = {
@@ -26,6 +27,14 @@ export const orderApi = {
   listReservationRequests: async (params?: PaginationParams): Promise<PageResult<Order>> => {
     const response = await apiClient.get('/store/orders/reservation-requests', { params });
     return fromSpringPage(response.data);
+  },
+  /** 未確定の予約申請を編集する。送った内容がそのまま新しい申請内容になる（省略＝未設定）。 */
+  updateReservationRequest: async (
+    id: string,
+    data: ReservationRequestUpdateRequest
+  ): Promise<Order> => {
+    const response = await apiClient.put(`/store/orders/reservation-requests/${id}`, data);
+    return response.data;
   },
   /** 予約申請を確定する（受注として受け付ける）。 */
   confirm: async (id: string): Promise<Order> => {

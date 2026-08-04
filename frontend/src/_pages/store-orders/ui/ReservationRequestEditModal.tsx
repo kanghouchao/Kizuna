@@ -1,0 +1,217 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'react-hot-toast';
+import { Order, OrderReceptionist, orderApi } from '@/entities/order';
+import { getApiErrorMessage } from '@/shared/lib';
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from '@/shared/ui';
+
+// Radix Select は value="" を許容しないため、受付担当なしを表す番兵値。
+const SELECT_NONE = '__none__';
+
+interface ReservationRequestEditFormValues {
+  /** '' は受付担当なし。 */
+  receptionist_id: string;
+  pax: number;
+  remarks: string;
+  /** 指名を外して保存するか。申請が指名を持つときだけ意味を持つ。 */
+  clear_cast: boolean;
+}
+
+interface ReservationRequestEditModalProps {
+  /** 編集対象の申請。null なら閉じている。 */
+  request: Order | null;
+  onClose: () => void;
+  /** 保存の成功後に呼ばれる（一覧の取り直し用）。 */
+  onSaved: () => void;
+}
+
+/**
+ * 未確定の予約申請の編集モーダル。
+ *
+ * 会員は指名なしでも申請できるため、キャストを埋めずに人数・備考・受付担当を直せることと、
+ * 無効になった指名を確定前に外せることがこの画面の目的。編集の収口は受注の汎用更新とは別で、
+ * 送った内容がそのまま新しい申請内容になる（画面が持たない項目は契約にも無いので書き換わらない）。
+ */
+export function ReservationRequestEditModal({
+  request,
+  onClose,
+  onSaved,
+}: ReservationRequestEditModalProps) {
+  const form = useForm<ReservationRequestEditFormValues>({
+    defaultValues: { receptionist_id: '', pax: 1, remarks: '', clear_cast: false },
+  });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    control,
+    watch,
+    formState: { isSubmitting },
+  } = form;
+  const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+
+  useEffect(() => {
+    if (!request) return;
+    reset({
+      receptionist_id: request.receptionist_id != null ? String(request.receptionist_id) : '',
+      pax: request.pax ?? 1,
+      remarks: request.remarks ?? '',
+      clear_cast: false,
+    });
+  }, [request, reset]);
+
+  useEffect(() => {
+    if (!request) return;
+    orderApi
+      .listReceptionists()
+      .then(setReceptionistOptions)
+      .catch(() => toast.error('受付担当者の取得に失敗しました'));
+  }, [request]);
+
+  const submit = async (values: ReservationRequestEditFormValues) => {
+    if (!request?.id) return;
+    try {
+      await orderApi.updateReservationRequest(request.id, {
+        receptionist_id: values.receptionist_id ? Number(values.receptionist_id) : undefined,
+        // 指名は「そのまま送り返す」ことで維持される。外すときは送らない
+        cast_id: values.clear_cast ? undefined : (request.cast_id ?? undefined),
+        pax: Number(values.pax),
+        remarks: values.remarks ? values.remarks : undefined,
+      });
+      toast.success('予約申請を更新しました');
+      onSaved();
+      onClose();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, '予約申請の更新に失敗しました'));
+    }
+  };
+
+  const clearCast = watch('clear_cast');
+
+  return (
+    <Dialog
+      open={request !== null}
+      onOpenChange={next => {
+        // 保存中に閉じると、結果が分からないまま古い一覧が残る
+        if (!next && !isSubmitting) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
+      >
+        <DialogTitle className="border-b px-6 py-4">予約申請を編集</DialogTitle>
+        <Form {...form}>
+          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+            <FormField
+              control={control}
+              name="receptionist_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>受付担当</FormLabel>
+                  <Select
+                    value={field.value ? field.value : SELECT_NONE}
+                    onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={SELECT_NONE}>未設定</SelectItem>
+                      {receptionistOptions.map(option => {
+                        const id = option.id;
+                        if (id === undefined) return null;
+                        return (
+                          <SelectItem key={id} value={String(id)}>
+                            {option.display_name}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-2">
+              <Label htmlFor="pax">人数</Label>
+              <Input
+                id="pax"
+                type="number"
+                min={1}
+                {...register('pax', { required: true, min: 1 })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>指名</Label>
+              {request?.cast_id ? (
+                <>
+                  <p
+                    className={clearCast ? 'text-sm text-muted-foreground line-through' : 'text-sm'}
+                  >
+                    {request.cast_name ?? request.cast_id}
+                  </p>
+                  <FormField
+                    control={control}
+                    name="clear_cast"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center gap-2">
+                        <FormControl>
+                          <Checkbox
+                            id="clear_cast"
+                            checked={field.value}
+                            onCheckedChange={value => field.onChange(value === true)}
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="clear_cast" className="font-medium">
+                          指名を外す
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">なし</p>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="remarks">備考</Label>
+              <Textarea id="remarks" rows={3} {...register('remarks')} />
+            </div>
+            <div className="flex justify-end gap-3 border-t pt-4">
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? '保存中...' : '保存する'}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
