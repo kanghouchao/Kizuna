@@ -75,6 +75,16 @@ describe('店側オーダー画面の描画', () => {
     expect(screen.getByText('60 分')).toBeInTheDocument();
   });
 
+  it('予約受付カードの見出しが見出しナビゲーションに乗ること', async () => {
+    // CardTitle は div を描くため、role と aria-level の両方が無いと支援技術の見出し
+    // 一覧から消える。描画差分には現れない欠落なので、ここで固定する。
+    mockedOrderApi.list.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
+
+    render(<OrderListPage />);
+
+    expect(await screen.findByRole('heading', { level: 2, name: '予約受付' })).toBeInTheDocument();
+  });
+
   it('一覧の遷移リンクは店舗スコープのパスを指すこと', async () => {
     mockedOrderApi.list.mockResolvedValue({
       rows: [

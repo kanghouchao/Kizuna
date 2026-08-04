@@ -40,7 +40,9 @@ export default function OrderListPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>予約受付</CardTitle>
+          <CardTitle role="heading" aria-level={2}>
+            予約受付
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ReservationRequestInbox onProcessed={list.reload} />
