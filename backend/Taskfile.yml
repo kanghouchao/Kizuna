@@ -45,6 +45,17 @@ tasks:
 
   test-integration:
     desc: バックエンドの統合テストを実行（compose ネットワーク接続）
+    vars:
+      # worktree ごとに compose プロジェクト名を分ける。固定名のままだと、下の事前 down /
+      # defer down が別 worktree の実行中スタックを巻き込んで消してしまう。
+      STACK_ID:
+        sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+    env:
+      # -p ではなく環境変数で与える（compose ファイルの name: より優先される）。
+      # 副作用として gradle キャッシュボリュームも worktree ごとに分かれるため、
+      # 新しい worktree の初回だけ依存をフル取得する。共有すると並行実行が
+      # 同じ /root/.gradle のロックを奪い合うので、分けるほうを取っている。
+      COMPOSE_PROJECT_NAME: kizuna-backend-test-{{.STACK_ID}}
     cmds:
       - echo "🧪  バックエンドの統合テストを実行中（compose ネットワーク接続）..."
       # -v を付けない: 唯一のボリュームは gradle キャッシュで、消すと毎回フル再取得になり

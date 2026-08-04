@@ -1,10 +1,181 @@
-# E2E one-shot 実行 compose（issue #247）
-# 既存の開発スタック（project kizuna）を再利用し、external な kizuna_network に
-# attach してフル実スタックを外部から検証する。自前の DB/backend は立てない。
-# gateway サービスの network alias（store1.kizuna.test / kizuna.test）で名前解決する。
+# E2E 専用の使い捨てフルスタック
+#
+# 開発スタック（project kizuna）とは何も共有しない：ホストポートを公開せず、container_name も
+# 持たず、DB / キャッシュ / ストレージは tmpfs で毎回まっさらに作り直す。プロジェクト名は
+# COMPOSE_PROJECT_NAME（root Taskfile が worktree 名から導出する）で一意化されるため、
+# 複数の worktree が同時に e2e を走らせても衝突しない。
+#
+# name: は手動実行時のフォールバックで、COMPOSE_PROJECT_NAME が与えられていればそちらが勝つ。
+# プロジェクト名は必ず COMPOSE_PROJECT_NAME で与えること（-p は使わない）——gateway の
+# docker provider 制約が同じ変数を参照しており、-p で上書きすると制約だけ既定値のまま取り残される。
+# 制約の既定値は下の name: と揃えてあり、片方だけ変えると手動実行時に何も routing されなくなる。
+#
+# 実行は root の `task e2e`。手で叩く場合は事前 down を忘れないこと（残骸の黙った再利用を防ぐ）。
 name: kizuna-e2e
 
 services:
+  database:
+    image: postgres:18-alpine
+    # 永続化しない。実行ごとにシードからやり直すことで、手動 QA の残骸や前回実行の書き込みが
+    # 次の実行を汚染する経路そのものを断つ。
+    tmpfs:
+      - /var/lib/postgresql
+    environment:
+      POSTGRES_DB: kizuna
+      POSTGRES_USER: kizuna
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kizuna -d kizuna"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cache:
+    image: redis:8.8.0-alpine3.23
+    # 資格情報は開発用 compose と同じ変数参照形式（既定値は E2E 専用のダミー値）
+    command: redis-server --requirepass ${REDIS_PASSWORD:-password}
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-password}
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  storage:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    tmpfs:
+      - /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+    networks:
+      - network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.storage.rule=PathPrefix(`/static`)"
+      - "traefik.http.routers.storage.entrypoints=web"
+      - "traefik.http.routers.storage.middlewares=storage-strip@docker"
+      - "traefik.http.routers.storage.service=storage"
+      - "traefik.http.services.storage.loadbalancer.server.port=9000"
+      - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    # タグは worktree ごとに分ける（root Taskfile が E2E_IMAGE_TAG を export する）。
+    # latest 固定だと、別 worktree の task build が同じタグを上書きし、相手のコードを検証してしまう。
+    image: kizuna-backend:${E2E_IMAGE_TAG:-latest}
+    networks:
+      - network
+    environment:
+      POSTGRES_HOST: database
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: kizuna
+      POSTGRES_USER: kizuna
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      REDIS_HOST: cache
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
+      MINIO_ENDPOINT: http://storage:9000
+      MINIO_BUCKET: uploads
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      # E2E はデモデータ（店舗 1/2 と店長・スタッフ）に依存する。application.yml の既定は
+      # production＝デモデータ無しなので、ここを外すと全シナリオがログインで落ちる。
+      LIQUIBASE_CONTEXTS: demo
+      # HMAC-SHA256 の要件（RFC 7518）で 256bit 以上必要（秘密鍵は raw bytes として解釈される）
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-e2e-test-secret-0123456789abcdef}
+      # gateway の network alias と一致させる。frontend/backend はこの値で platform ドメインと
+      # 店舗ドメインを判別するため、alias とずれると店舗として解決されて全シナリオが崩れる。
+      APP_DOMAIN: kizuna.test
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.routers.backend.middlewares=backend-strip@docker"
+      - "traefik.http.services.backend.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.backend-strip.stripPrefix.prefixes=/api"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      start_period: 15s
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    image: kizuna-frontend:${E2E_IMAGE_TAG:-latest}
+    networks:
+      - network
+    environment:
+      STORE_LOOKUP_API_URL: http://backend:8080/platform/stores/lookup
+      STORE_CONFIG_API_URL: http://backend:8080/store/config/public
+      APP_DOMAIN: kizuna.test
+    depends_on:
+      backend:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      start_period: 20s
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    image: traefik:v3.7.6
+    # 設定ファイルはマウントせず CLI 引数で完結させる（開発環境の traefik.yml への相乗りを避ける）。
+    command:
+      - "--global.checkNewVersion=false"
+      - "--global.sendAnonymousUsage=false"
+      - "--ping=true"
+      - "--entryPoints.web.address=:80"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.exposedByDefault=false"
+      # docker provider は daemon 上の全コンテナを見るため、制約が無いと同時に動いている
+      # 開発スタックや別 worktree の E2E スタックのコンテナまで拾い、router 名
+      # （backend / frontend / storage）が衝突して他プロジェクトへ振り分けられる。
+      - "--providers.docker.constraints=Label(`com.docker.compose.project`,`${COMPOSE_PROJECT_NAME:-kizuna-e2e}`)"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    # ホストポートは公開しない。テストランナーはこのネットワークの内側から alias で到達するため
+    # 不要であり、公開しないことが複数スタック同時起動の前提になっている。
+    networks:
+      network:
+        aliases:
+          - store1.kizuna.test
+          - kizuna.test
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 10
+
   e2e:
     # タグは e2e/package.json の @playwright/test バージョンから派生（root Taskfile の e2e が
     # PLAYWRIGHT_VERSION を export する）。既定値は単独 compose 実行時のフォールバック。
@@ -21,13 +192,17 @@ services:
       # gateway alias 経由で store ドメインへ到達する baseURL。
       BASE_URL: http://store1.kizuna.test
     command: sh -c "npm ci && npx bddgen && npx playwright test"
+    # gateway の healthcheck は backend / frontend の healthy を前提に並ぶため、ここが通れば
+    # スタック全体が応答可能。以前ホスト側で回していた curl の疎通待ちはこれで不要になった。
+    depends_on:
+      gateway:
+        condition: service_healthy
     networks:
-      - kizuna_network
+      - network
 
 volumes:
   e2e-node-modules:
 
 networks:
-  # 開発スタックが作成する既存ネットワーク（docker compose -p kizuna の network）。
-  kizuna_network:
-    external: true
+  network:
+    driver: bridge

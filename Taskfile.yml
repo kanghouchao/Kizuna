@@ -84,38 +84,38 @@ tasks:
       - task -d backend test-integration
 
   e2e:
-    desc: E2E（playwright-bdd）をフル実スタックで実行（build → up → 実行 → down）
+    desc: E2E（playwright-bdd）を専用の使い捨てスタックで実行（build → 実行 → 破棄）
+    vars:
+      # worktree ごとに compose プロジェクト名とイメージタグを分ける。開発スタック（kizuna）とも、
+      # 並行して走る別 worktree の e2e とも、コンテナ・ネットワーク・イメージを一切共有しない。
+      STACK_ID:
+        sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+    env:
+      # プロジェクト名は -p ではなくこの環境変数で与える。e2e compose の gateway が
+      # docker provider の制約に同じ変数を使っており、-p で上書きすると制約だけ既定値のまま
+      # 取り残されて他プロジェクトのコンテナを拾ってしまう。
+      COMPOSE_PROJECT_NAME: kizuna-e2e-{{.STACK_ID}}
+      E2E_IMAGE_TAG: e2e-{{.STACK_ID}}
     cmds:
-      # Playwright 版数抽出に jq を使うため、重いスタック起動前に存在を確認して fail fast する。
+      # Playwright 版数抽出に jq を使うため、重いビルド前に存在を確認して fail fast する。
       - |
         command -v jq >/dev/null 2>&1 || { echo "❌ jq が必要です（e2e の Playwright 版数抽出に使用）"; exit 1; }
-      - echo "🏗️  E2E 用にイメージをビルド..."
-      - task: build
-      # 成否・途中クラッシュを問わずスタックを必ず停止する（up 失敗時の残骸も回収）。
-      - defer: { task: down }
-      - echo "🚀 開発スタックを起動..."
-      - task: up
+      - echo "🏗️  E2E 用にイメージをビルド（tag=e2e-{{.STACK_ID}}）..."
+      - task -d backend build DOCKER_TAG=e2e-{{.STACK_ID}}
+      - task -d frontend build DOCKER_TAG=e2e-{{.STACK_ID}}
+      # 事前 down: 前回 run が中断されると defer が走らず依存コンテナが残留し、`docker compose run`
+      # がそれを静かに再利用して前回のデータが残った DB に対して走る（backend の #412 と同型）。
+      - docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
+      # 成否・途中クラッシュを問わずスタックを必ず破棄する（起動失敗時の残骸も回収）。
+      - defer: docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
       - |
         set -e
-        echo "⏳ gateway 経由で frontend の応答を待機..."
-        ready=0
-        for i in $(seq 1 60); do
-          if curl -sf -H "Host: store1.kizuna.test" http://localhost/ >/dev/null 2>&1; then
-            ready=1
-            echo "✅ frontend 応答確認（${i} 回目）"
-            break
-          fi
-          sleep 2
-        done
-        if [ "$ready" -ne 1 ]; then
-          echo "❌ frontend が規定時間内に応答しませんでした"
-          exit 1
-        fi
-        echo "🎭 E2E（playwright-bdd）を one-shot コンテナで実行..."
+        echo "🎭 E2E（playwright-bdd）を実行..."
         # Playwright イメージタグを package.json 単一真源から派生（版数ドリフト防止）。
         # ^1.62.0 / ~1.60.0 等の範囲表記でも先頭の semver 数字列のみ取り出す。
         PLAYWRIGHT_VERSION=$(jq -r '.devDependencies["@playwright/test"]' e2e/package.json | grep -oE '[0-9]+(\.[0-9]+)+' | head -1)
         export PLAYWRIGHT_VERSION
+        # 依存サービスは compose の depends_on（gateway が healthy になるまで）が待つ。
         docker compose -f e2e/docker-compose.e2e.yml run --rm e2e
 
   format:

@@ -22,3 +22,7 @@ providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
+    # docker provider は daemon 上の全コンテナを見る。E2E は同じ daemon 上に別プロジェクトの
+    # フルスタックを立てるため、制約が無いと router 名（backend / frontend / storage）が衝突し、
+    # 開発スタックのリクエストが E2E 側のコンテナへ振り分けられる。自プロジェクトだけを対象にする。
+    constraints: "Label(`com.docker.compose.project`,`kizuna`)"
