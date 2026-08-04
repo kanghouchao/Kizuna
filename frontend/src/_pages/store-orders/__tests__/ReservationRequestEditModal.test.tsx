@@ -276,6 +276,35 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     expect(screen.queryByText(/「指名を外す」にチェック/)).not.toBeInTheDocument();
   });
 
+  it('入力欄から離れたら候補を閉じる', async () => {
+    // 候補は真下の「指名を外す」や保存ボタンに重なる。選ぶ気が無いときに閉じられないと、
+    // 覆われた操作を押そうとしてキャストを選んでしまう
+    renderModal(nominatedRequest);
+
+    await openSuggestions('み');
+    expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
+
+    fireEvent.focusOut(screen.getByRole('combobox', { name: '指名' }), {
+      relatedTarget: document.body,
+    });
+
+    expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
+  });
+
+  it('候補を選ばずに他の項目へ移っても、選択は付かないまま候補だけが消える', async () => {
+    // 覆われた操作へ手を伸ばす経路。閉じるだけで、触っていない指名が確定してはいけない
+    renderModal(nominatedRequest);
+
+    await openSuggestions('み');
+    fireEvent.focusOut(screen.getByRole('combobox', { name: '指名' }), {
+      relatedTarget: screen.getByLabelText('人数'),
+    });
+    await save();
+
+    expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
   it('指名を外している間は候補を出さない', async () => {
     // 選べない状態で選択肢だけ残ると、入力を消して閉じることもできず modal の操作を覆う
     renderModal(nominatedRequest);

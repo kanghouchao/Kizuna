@@ -112,7 +112,17 @@ export function CastSearchCombobox({
   };
 
   return (
-    <div className="relative grid gap-2">
+    // 候補は入力欄の真下に重なるので、開いたままだと下の操作（modal では「指名を外す」や
+    // 保存）を覆う。閉じる手段が「選ぶ」「消す」しか無いと、選ぶ気が無いときに詰む
+    <div
+      className="relative grid gap-2"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false);
+      }}
+      // Escape では閉じない。Radix Dialog が document の capture で拾うため、ここで伝播を
+      // 止めても modal ごと閉じて編集内容を捨てる。候補だけを閉じるには modal 側の
+      // onEscapeKeyDown まで配線が要り、それは DESIGN.md 準拠の Popover 化でまとめて解く
+    >
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
@@ -145,6 +155,9 @@ export function CastSearchCombobox({
                 <li key={cast.id}>
                   <button
                     type="button"
+                    // 押下で入力欄からフォーカスが外れると、click より先に上の onBlur が
+                    // 候補を閉じ、選択が届かない
+                    onMouseDown={event => event.preventDefault()}
                     onClick={() => handleSelect(cast)}
                     className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-foreground hover:bg-primary/10"
                     role="option"
