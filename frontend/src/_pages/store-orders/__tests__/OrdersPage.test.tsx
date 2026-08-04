@@ -39,9 +39,7 @@ describe('店側オーダー画面の描画', () => {
     // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
     mockedOrderApi.listReservationRequests.mockResolvedValue({
       rows: [],
-      page: 0,
-      pageCount: 0,
-      total: 0,
+      nextCursor: null,
     });
   });
 
@@ -212,9 +210,7 @@ describe('オーダー一覧ページ固有の要素', () => {
     // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
     mockedOrderApi.listReservationRequests.mockResolvedValue({
       rows: [],
-      page: 0,
-      pageCount: 0,
-      total: 0,
+      nextCursor: null,
     });
     mockedOrderApi.list.mockResolvedValue({
       rows: [],
@@ -244,9 +240,7 @@ describe('オーダー一覧のページ送り', () => {
     // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
     mockedOrderApi.listReservationRequests.mockResolvedValue({
       rows: [],
-      page: 0,
-      pageCount: 0,
-      total: 0,
+      nextCursor: null,
     });
   });
 

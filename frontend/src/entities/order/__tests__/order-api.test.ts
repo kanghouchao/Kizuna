@@ -42,26 +42,18 @@ describe('orderApi', () => {
       url: '/store/orders/receptionists',
     });
   });
-  it('listReservationRequests は予約受付の専用読み口を GET し、Spring Page を正規化する', async () => {
+  it('listReservationRequests は予約受付の専用読み口を GET し、カーソルページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
-      data: {
-        content: [{ id: 'o1' }],
-        total_pages: 2,
-        total_elements: 21,
-        size: 20,
-        number: 0,
-      },
+      data: { content: [{ id: 'o1' }], next_cursor: 'abc' },
     });
 
     // 絞り込みは専用読み口の責務。受注一覧を取って手元で選り分ける形へは戻さない。
-    await expect(orderApi.listReservationRequests({ page: 0, size: 20 })).resolves.toEqual({
+    await expect(orderApi.listReservationRequests({ cursor: 'abc', size: 20 })).resolves.toEqual({
       rows: [{ id: 'o1' }],
-      page: 0,
-      pageCount: 2,
-      total: 21,
+      nextCursor: 'abc',
     });
     expect(mockedGet).toHaveBeenCalledWith('/store/orders/reservation-requests', {
-      params: { page: 0, size: 20 },
+      params: { cursor: 'abc', size: 20 },
     });
   });
   it('confirm は確定の子リソースを POST する', async () => {
@@ -76,22 +68,13 @@ describe('orderApi', () => {
 });
 
 describe('memberOrderApi', () => {
-  it('list は /platform/me/orders を GET し、Spring Page を PageResult へ正規化する', async () => {
-    mockedGet.mockResolvedValueOnce({
-      data: {
-        content: [{ id: 'o1' }],
-        total_pages: 1,
-        total_elements: 1,
-        size: 20,
-        number: 0,
-      },
-    });
+  it('list は /platform/me/orders を GET し、カーソルページを正規化する', async () => {
+    // 続きが無いときサーバは next_cursor を省く（null 非出力方針）
+    mockedGet.mockResolvedValueOnce({ data: { content: [{ id: 'o1' }] } });
 
     await expect(memberOrderApi.list()).resolves.toEqual({
       rows: [{ id: 'o1' }],
-      page: 0,
-      pageCount: 1,
-      total: 1,
+      nextCursor: null,
     });
     expect(mockedGet).toHaveBeenCalledWith('/platform/me/orders', { params: undefined });
   });

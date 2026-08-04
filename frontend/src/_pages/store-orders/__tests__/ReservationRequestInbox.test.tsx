@@ -32,19 +32,17 @@ const request = (id: string) => ({
 const requests = (n: number, offset = 0) =>
   Array.from({ length: n }, (_, i) => request(`o${offset + i}`));
 
-const page = (rows: unknown[], total = rows.length) => ({
-  rows,
-  page: 0,
-  pageCount: 1,
-  total,
-});
+const page = (rows: unknown[], nextCursor: string | null = null) => ({ rows, nextCursor });
 
-/** 固定長ページを返すサーバの代役。1 回の取得は常に 20 件までという前提を持つ。 */
-const pagedServer = (total: number) => (params: { page: number; size: number }) => {
-  const start = params.page * params.size;
-  return Promise.resolve(
-    page(requests(Math.max(0, Math.min(params.size, total - start)), start), total)
-  );
+/**
+ * カーソルで続きを返すサーバの代役。位置は「次に返す行の番号」で表す。
+ *
+ * 位置が件数ではなく行そのものを指すため、手前の行が処理で消えても続きはずれない。
+ */
+const cursorServer = (total: number) => (params: { cursor?: string; size: number }) => {
+  const start = params.cursor ? Number(params.cursor) : 0;
+  const end = Math.min(start + params.size, total);
+  return Promise.resolve(page(requests(end - start, start), end < total ? String(end) : null));
 };
 
 describe('ReservationRequestInbox', () => {
@@ -62,8 +60,8 @@ describe('ReservationRequestInbox', () => {
     expect(await screen.findByText('2026-08-10')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(1);
     expect(screen.getByText('会員コード: 123456789012')).toBeInTheDocument();
-    // 絞り込みは専用読み口の責務。取得するのはページの窓だけで、手元では選り分けない。
-    expect(mockedList).toHaveBeenCalledWith({ page: 0, size: 20 });
+    // 絞り込みは専用読み口の責務。取得するのは 1 回分の窓だけで、手元では選り分けない。
+    expect(mockedList).toHaveBeenCalledWith({ cursor: undefined, size: 20 });
   });
 
   it('確定すると確定 API を呼び、一覧の再取得を促す', async () => {
@@ -79,28 +77,28 @@ describe('ReservationRequestInbox', () => {
     expect(onProcessed).toHaveBeenCalled();
   });
 
-  it('処理後の取り直しが届くまで、表示中の行の確定・謝絶を受け付けない', async () => {
-    // 行は残したまま（見失わせないため）だが、古い行を押せると済んだ遷移をもう一度投げてしまう
-    mockedList.mockResolvedValueOnce(page([request('o1')]));
+  it('処理した申請は手元から取り除き、一覧を取り直さない', async () => {
+    // 処理済みの申請は inbox の対象から外れる。取り直しに行くと、読み込み済みの範囲ぶんの要求を撒く
+    mockedList.mockResolvedValue(page([request('o1'), request('o2')]));
     mockedConfirm.mockResolvedValue({});
-    mockedList.mockReturnValueOnce(new Promise(() => {}));
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '確定' }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(2));
+    fireEvent.click(screen.getAllByRole('button', { name: '確定' })[0]);
 
-    // 取り直しが始まった＝processingId は既にクリアされている。ここから先が観測したい窓。
-    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('button', { name: '確定' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '謝絶' })).toBeDisabled();
-    // 行そのものは消さない
-    expect(screen.getByText('2026-08-10')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(1));
+    // 未処理の申請は残り、取り直しは起きない
+    expect(mockedList).toHaveBeenCalledTimes(1);
   });
 
-  it('編集を押すとその申請の編集モーダルが開き、保存後に一覧を取り直す', async () => {
+  it('編集を押すとその申請の編集モーダルが開き、保存後はその行だけ差し替わる', async () => {
     mockedList.mockResolvedValue(page([{ ...request('o1'), pax: 3 }]));
     (orderApi.listReceptionists as jest.Mock).mockResolvedValue([]);
-    (orderApi.updateReservationRequest as jest.Mock).mockResolvedValue({});
+    (orderApi.updateReservationRequest as jest.Mock).mockResolvedValue({
+      ...request('o1'),
+      pax: 5,
+    });
     const onProcessed = jest.fn();
 
     render(<ReservationRequestInbox onProcessed={onProcessed} />);
@@ -111,8 +109,9 @@ describe('ReservationRequestInbox', () => {
     await waitFor(() =>
       expect(orderApi.updateReservationRequest).toHaveBeenCalledWith('o1', expect.anything())
     );
-    // 編集した行は古いままなので、確定・謝絶と同じく読み直す
-    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+    // 編集後も申請は未確定のまま残るので、応答の内容で行を差し替えるだけでよい
+    expect(await screen.findByText(/5 名/)).toBeInTheDocument();
+    expect(mockedList).toHaveBeenCalledTimes(1);
     expect(onProcessed).toHaveBeenCalled();
   });
 
@@ -198,45 +197,77 @@ describe('ReservationRequestInbox', () => {
   });
 
   it('どこまで広げても 1 回の取得件数は上限のまま', async () => {
-    // 要求サイズ自体を膨らませると、サーバ側のページ上限に当たった時点で以降の申請へ到達できなくなる
-    mockedList.mockImplementation(pagedServer(2500));
+    // 要求サイズ自体を膨らませると、サーバ側の取得上限に当たった時点で以降の申請へ到達できなくなる
+    mockedList.mockImplementation(cursorServer(2500));
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ cursor: '20', size: 20 }));
     fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 2, size: 20 }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ cursor: '40', size: 20 }));
 
     expect(mockedList.mock.calls.every(([params]) => params.size === 20)).toBe(true);
     await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(60));
   });
 
-  it('取得件数の上限を超える申請は追加読み込みで辿れる', async () => {
-    mockedList.mockImplementation(pagedServer(25));
+  it('取得件数の上限を超える申請は追加読み込みで辿れ、1 回の操作につき 1 要求で済む', async () => {
+    mockedList.mockImplementation(cursorServer(25));
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
 
-    // 読み込み済みの範囲は毎回まとめて読み直す（処理で 1 件消えた分の繰り上がりで申請を飛ばさない）
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 0, size: 20 }));
-    expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 });
     await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(25));
+    // 読み込み済みの範囲は読み直さない。読み直す実装では、読み込み済みページ数と同数の要求が飛ぶ
+    expect(mockedList).toHaveBeenCalledTimes(2);
+    expect(mockedList).toHaveBeenNthCalledWith(2, { cursor: '20', size: 20 });
     // 全件に届いたので追加読み込みは消える
     expect(screen.queryByRole('button', { name: 'もっと見る' })).not.toBeInTheDocument();
   });
 
-  it('追加読み込みに失敗しても既に読み込んだ申請は消さず、その拡張だけ再試行できる', async () => {
-    const server = pagedServer(25);
+  it('読み込み済みの申請を処理しても、追加読み込みは続きの位置から続けること', async () => {
+    // 位置を「何件目か」で持つと、処理で 1 件消えた分だけ後続が繰り上がり境界の申請を飛ばす
+    mockedList.mockImplementation(cursorServer(25));
+    mockedConfirm.mockResolvedValue({});
+
+    render(<ReservationRequestInbox onProcessed={jest.fn()} />);
+
+    await screen.findByRole('button', { name: 'もっと見る' });
+    fireEvent.click(screen.getAllByRole('button', { name: '確定' })[0]);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(19));
+
+    fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
+
+    await waitFor(() => expect(mockedList).toHaveBeenNthCalledWith(2, { cursor: '20', size: 20 }));
+    // 20 件目（境界）を含めて、未処理の申請がすべて残る
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(24));
+  });
+
+  it('表示中をすべて処理し終えても、続きが残っていれば「申請なし」とは言わない', async () => {
+    // まだ読んでいない申請がある状態を「申請なし」と見せると、店舗が未処理の申請を見落とす
+    mockedList.mockResolvedValue(page([request('o1')], 'next'));
+    mockedConfirm.mockResolvedValue({});
+
+    render(<ReservationRequestInbox onProcessed={jest.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '確定' }));
+
+    await waitFor(() => expect(screen.queryAllByRole('button', { name: '確定' })).toHaveLength(0));
+    expect(screen.queryByText('未確定の予約申請はありません')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'もっと見る' })).toBeInTheDocument();
+  });
+
+  it('追加読み込みに失敗しても既に読み込んだ申請は消さず、その続きだけ再試行できる', async () => {
+    const server = cursorServer(25);
     mockedList.mockImplementation(server);
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
     await screen.findByRole('button', { name: 'もっと見る' });
 
-    // 拡張の取得だけを落とす
+    // 続きの取得だけを落とす
     mockedList.mockImplementation(params =>
-      params.page === 1 ? Promise.reject(new Error('network')) : server(params)
+      params.cursor ? Promise.reject(new Error('network')) : server(params)
     );
     fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
 
@@ -249,8 +280,8 @@ describe('ReservationRequestInbox', () => {
     mockedList.mockImplementation(server);
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
-    // 失敗した拡張と同じ範囲を取り直す（読み込み済みページ数を進めていない）
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ page: 1, size: 20 }));
+    // 失敗した続きと同じ位置から取り直す（続きの位置を進めていない）
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ cursor: '20', size: 20 }));
     await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(25));
   });
 });

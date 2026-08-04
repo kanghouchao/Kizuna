@@ -16,10 +16,13 @@ import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.OrderView;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
@@ -31,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -72,15 +76,36 @@ public class OrderService {
    *
    * <p>絞り込みは DB 側で行う — 受注一覧の先頭ページを取って手元で選り分けると、確定済みの受注が積み上がった店舗で 未処理の申請が窓から落ちて見えなくなる。
    *
-   * <p>絞り込んだうえでページングもする。未処理の申請は店舗が処理し終えるまで残り続けるため、無界で返すと 積み上がるほど 1
-   * 回の取得・応答・描画が重くなる。総件数を伴うので、上限を超えた分にも呼出側が到達できる。
+   * <p>絞り込んだうえで取得件数も抑える。未処理の申請は店舗が処理し終えるまで残り続けるため、無界で返すと 積み上がるほど 1 回の取得・応答・描画が重くなる。
+   *
+   * <p>続きの指定は「何件目か」ではなくカーソル（並びの鍵）で受ける。この一覧は行が処理で消えていく作業キューなので、
+   * 件数で位置を指すと確定・謝絶のたびに後続が繰り上がり、続きを取った時点で境界の申請を飛ばす。
+   *
+   * @param cursor 続きの位置。null なら先頭から
+   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<OrderResponse> listPendingReservationRequests(Pageable pageable) {
-    return orderRepository
-        .findPendingReservationRequestViews(pageable)
-        .map(orderMapper::toResponse);
+  public CursorPage<OrderResponse> listPendingReservationRequests(
+      String cursor, int requestedSize) {
+    int size = CursorPage.clampSize(requestedSize);
+    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
+    Limit limit = Limit.of(size + 1);
+    List<OrderView> fetched =
+        cursor == null
+            ? orderRepository.findPendingReservationRequestViews(limit)
+            : fetchAfter(PageCursor.decode(cursor), limit);
+    return CursorPage.of(fetched, size, OrderService::cursorOf).map(orderMapper::toResponse);
+  }
+
+  private List<OrderView> fetchAfter(PageCursor cursor, Limit limit) {
+    return orderRepository.findPendingReservationRequestViewsAfter(
+        cursor.timestampKey(), cursor.id(), limit);
+  }
+
+  /** 続きの位置は inbox の並び（受付時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
+  private static String cursorOf(OrderView view) {
+    return new PageCursor(view.getCreatedAt().toString(), view.getId()).encode();
   }
 
   @StoreScoped

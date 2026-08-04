@@ -2,6 +2,7 @@ package com.kizuna.order.domain;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /** 注文一覧・詳細の読み側 projection。関連集約の表示名は JPQL join で取得する（読み側は集約を経由しない）。 */
@@ -60,4 +61,7 @@ public interface OrderView {
   String getLocationAddress();
 
   String getLocationBuilding();
+
+  /** 受付時刻。予約受付 inbox の並びの鍵であり、続きを指すカーソルもこの値から組む。 */
+  OffsetDateTime getCreatedAt();
 }

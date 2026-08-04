@@ -1,6 +1,7 @@
 package com.kizuna.order.api.platform;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -13,13 +14,14 @@ import com.kizuna.order.application.MemberOrderService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.web.CursorPage;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithAnonymousUser;
@@ -58,7 +60,8 @@ class PlatformMemberOrderControllerTest {
   void memberCanUseOwnReservationRoutes() throws Exception {
     when(memberOrderService.request(anyString(), any()))
         .thenReturn(MemberOrderResponse.builder().build());
-    when(memberOrderService.list(anyString(), any())).thenReturn(Page.empty());
+    when(memberOrderService.list(anyString(), any(), anyInt()))
+        .thenReturn(new CursorPage<>(List.of(), null));
     when(memberOrderService.cancel(anyString(), anyString()))
         .thenReturn(MemberOrderResponse.builder().build());
 

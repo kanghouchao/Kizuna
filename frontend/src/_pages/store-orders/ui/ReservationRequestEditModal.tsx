@@ -43,8 +43,8 @@ interface ReservationRequestEditModalProps {
   /** 編集対象の申請。null なら閉じている。 */
   request: Order | null;
   onClose: () => void;
-  /** 保存の成功後に呼ばれる（一覧の取り直し用）。 */
-  onSaved: () => void;
+  /** 保存の成功後に、更新後の申請を伴って呼ばれる（一覧の当該行の差し替え用）。 */
+  onSaved: (updated: Order) => void;
 }
 
 /**
@@ -93,7 +93,7 @@ export function ReservationRequestEditModal({
   const submit = async (values: ReservationRequestEditFormValues) => {
     if (!request?.id) return;
     try {
-      await orderApi.updateReservationRequest(request.id, {
+      const updated = await orderApi.updateReservationRequest(request.id, {
         receptionist_id: values.receptionist_id ? Number(values.receptionist_id) : undefined,
         // 指名は「そのまま送り返す」ことで維持される。外すときは送らない
         cast_id: values.clear_cast ? undefined : (request.cast_id ?? undefined),
@@ -101,7 +101,7 @@ export function ReservationRequestEditModal({
         remarks: values.remarks ? values.remarks : undefined,
       });
       toast.success('予約申請を更新しました');
-      onSaved();
+      onSaved(updated);
       onClose();
     } catch (error) {
       toast.error(getApiErrorMessage(error, '予約申請の更新に失敗しました'));

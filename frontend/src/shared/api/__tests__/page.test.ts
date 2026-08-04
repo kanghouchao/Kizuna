@@ -1,4 +1,4 @@
-import { Page, fromSpringPage, toSpringPageParams } from '@/shared/api';
+import { CursorPage, Page, fromCursorPage, fromSpringPage, toSpringPageParams } from '@/shared/api';
 
 describe('fromSpringPage', () => {
   it('0 起点の Spring Data Page をそのまま正規化する', () => {
@@ -28,6 +28,21 @@ describe('fromSpringPage', () => {
     };
 
     expect(fromSpringPage(raw).page).toBe(3);
+  });
+});
+
+describe('fromCursorPage', () => {
+  it('続きの位置をそのまま持ち越す', () => {
+    const raw: CursorPage<{ id: string }> = { content: [{ id: 'a' }], next_cursor: 'abc' };
+
+    expect(fromCursorPage(raw)).toEqual({ rows: [{ id: 'a' }], nextCursor: 'abc' });
+  });
+
+  it('続きが無い応答（項目そのものが省かれる）を null として扱う', () => {
+    // サーバは null を出力しないため、項目の欠落が「続きなし」の唯一の現れ方になる
+    const raw: CursorPage<{ id: string }> = { content: [{ id: 'a' }] };
+
+    expect(fromCursorPage(raw).nextCursor).toBeNull();
   });
 });
 
