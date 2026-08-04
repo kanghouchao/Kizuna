@@ -1,5 +1,6 @@
 package com.kizuna.order.application;
 
+import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
@@ -11,6 +12,7 @@ import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
@@ -166,6 +168,39 @@ public class OrderService {
     return toResponse(id);
   }
 
+  /**
+   * 未確定の予約申請を店舗が編集する。汎用更新（{@link #update}）と別の収口なのは、指名と受付担当を可空として扱うため —
+   * 会員は指名なしで申請できるので、必須の契約しか無いと人数や備考を直すだけで指名付きの受注に変えざるを得ず、 無効になった指名を確定前に外すこともできない。
+   *
+   * <p>受け取った内容がそのまま新しい申請内容になる（省略＝未設定にする）。確定・謝絶と同じく対象は未確定の申請だけで、 確定後は通常の受注として汎用更新が引き続き受け持つ。
+   */
+  @StoreScoped
+  @Transactional
+  public OrderResponse updateReservationRequest(
+      String id, ReservationRequestUpdateRequest request) {
+    Order order = findReservationRequest(id);
+    if (order.getStatus() != OrderStatus.CREATED) {
+      throw new ServiceException("確定・謝絶済みの予約は編集できません");
+    }
+
+    // 検証は書き換えより先にすべて済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
+    // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
+    if (request.getReceptionistId() != null) {
+      validateReceptionist(request.getReceptionistId());
+    }
+    if (request.getCastId() != null) {
+      // 対象は店舗スタッフなので、確定時の再検証と同じく列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す
+      nominatableCast(order.getStoreId(), request.getCastId())
+          .orElseThrow(() -> new ServiceException("指名できるキャストではありません。在籍中のキャストを選ぶか、指名を外してください"));
+    }
+
+    order.revise(
+        request.getReceptionistId(), request.getCastId(), request.getPax(), request.getRemarks());
+
+    Order saved = orderRepository.save(order);
+    return toResponse(saved.getId());
+  }
+
   /** 予約申請を謝絶する。確定前の申請のみが対象で、確定後の取り消しは通常のキャンセル経路に委ねる。 */
   @StoreScoped
   @Transactional
@@ -197,15 +232,25 @@ public class OrderService {
     if (order.getCastId() == null) {
       return;
     }
-    castRepository
-        .findById(order.getCastId())
-        .filter(cast -> order.getStoreId().equals(cast.getStoreId()))
-        .filter(cast -> ACTIVE_CAST_STATUS.equals(cast.getStatus()))
+    nominatableCast(order.getStoreId(), order.getCastId())
         .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
     if (!confirmedShiftLookupService.hasConfirmedShift(
         order.getStoreId(), order.getCastId(), order.getBusinessDate())) {
       throw new ServiceException("指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
     }
+  }
+
+  /**
+   * 指名先として成立するキャスト（対象店舗に在籍する在籍中のキャスト）を引く。
+   *
+   * <p>店舗の一致を述語に置くのは、キャストの読み取りに掛かる絞り込みへ暗黙に頼らないため。編集時の指名先と確定時の再検証が 同じ条件を共有する。当日の確定シフトの有無は確定時だけが見る —
+   * 先の日付の申請は編集時点でシフトが確定していないのが通常で、 編集で要求すると指名を差し替える手段が事実上無くなる。
+   */
+  private Optional<Cast> nominatableCast(Long storeId, String castId) {
+    return castRepository
+        .findById(castId)
+        .filter(cast -> storeId.equals(cast.getStoreId()))
+        .filter(cast -> ACTIVE_CAST_STATUS.equals(cast.getStatus()));
   }
 
   private Optional<Long> eligibleReceptionistId(String actorEmail) {

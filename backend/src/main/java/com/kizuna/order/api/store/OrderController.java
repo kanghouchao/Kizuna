@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.application.OrderService;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -64,6 +65,17 @@ public class OrderController {
   public ResponseEntity<Page<OrderResponse>> listReservationRequests(
       @PageableDefault(size = 20) Pageable pageable) {
     return ResponseEntity.ok(orderService.listPendingReservationRequests(pageable));
+  }
+
+  /**
+   * 未確定の予約申請を編集する。指名・受付担当を可空で扱う専用の契約で、汎用更新（{@link #update}）の必須項目に縛られずに
+   * 人数・備考を直したり指名を外したりできる。受け取った内容がそのまま新しい申請内容になる。
+   */
+  @PutMapping("/reservation-requests/{id}")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderResponse> updateReservationRequest(
+      @PathVariable String id, @Valid @RequestBody ReservationRequestUpdateRequest request) {
+    return ResponseEntity.ok(orderService.updateReservationRequest(id, request));
   }
 
   /** 予約申請を確定する（受注として受け付ける）。 */

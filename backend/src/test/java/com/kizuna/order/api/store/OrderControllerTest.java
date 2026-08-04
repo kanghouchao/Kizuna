@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.order.api.dto.OrderResponse;
@@ -25,6 +26,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -125,12 +127,64 @@ class OrderControllerTest {
     mockMvc.perform(storePost("/store/orders/o1/decline")).andExpect(status().isForbidden());
   }
 
+  @Test
+  @DisplayName("予約申請の編集はキャスト・受付担当を省いても受け付けられること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void reservationRequestUpdateAcceptsAnOmittedCastAndReceptionist() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.updateReservationRequest(any(), any()))
+        .thenReturn(OrderResponse.builder().build());
+
+    mockMvc
+        .perform(storePut("/store/orders/reservation-requests/o1", "{\"pax\": 3}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("受注管理権限が無ければ予約申請を編集できないこと")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void reservationRequestUpdateIsRejectedWithoutOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePut("/store/orders/reservation-requests/o1", "{\"pax\": 3}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("店舗起点の受注を更新する汎用契約ではキャスト・受付担当が必須のままであること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void orderUpdateStillRequiresCastAndReceptionist() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    // 申請専用の可空な契約を足しても、既存の受注更新は必須項目を緩めない
+    mockMvc
+        .perform(storePut("/store/orders/o1", "{\"pax\": 3}"))
+        .andExpect(status().isBadRequest());
+    mockMvc
+        .perform(storePut("/store/orders/o1", "{\"cast_id\": \"cast-1\", \"pax\": 3}"))
+        .andExpect(status().isBadRequest());
+    mockMvc
+        .perform(storePut("/store/orders/o1", "{\"receptionist_id\": 2, \"pax\": 3}"))
+        .andExpect(status().isBadRequest());
+  }
+
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder storePost(String path) {
     return post(path)
         .header("X-Role", "store")
         .header("X-Store-ID", "1")
         .principal(() -> "staff@kizuna.test")
+        .with(csrf());
+  }
+
+  private MockHttpServletRequestBuilder storePut(String path, String body) {
+    return put(path)
+        .header("X-Role", "store")
+        .header("X-Store-ID", "1")
+        .principal(() -> "staff@kizuna.test")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(body)
         .with(csrf());
   }
 }

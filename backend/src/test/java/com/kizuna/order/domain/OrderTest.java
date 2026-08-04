@@ -131,6 +131,31 @@ class OrderTest {
   }
 
   @Test
+  @DisplayName("申請の書き換えは渡した値で置き換え、null は未設定にすること")
+  void revise_replacesInsteadOfPatching() {
+    Order order =
+        Order.builder()
+            .status(OrderStatus.CREATED)
+            .receptionistId(3L)
+            .castId("cast-1")
+            .pax(2)
+            .remarks("元の備考")
+            .build();
+
+    order.revise(4L, "cast-2", 5, "書き換えた備考");
+    assertThat(order.getReceptionistId()).isEqualTo(4L);
+    assertThat(order.getCastId()).isEqualTo("cast-2");
+    assertThat(order.getPax()).isEqualTo(5);
+    assertThat(order.getRemarks()).isEqualTo("書き換えた備考");
+
+    // 部分更新（apply）では消せない項目を、この経路では空に戻せる
+    order.revise(null, null, 5, null);
+    assertThat(order.getReceptionistId()).isNull();
+    assertThat(order.getCastId()).isNull();
+    assertThat(order.getRemarks()).isNull();
+  }
+
+  @Test
   @DisplayName("同じステータスへの遷移は何もしない（冪等）こと")
   void transitionTo_sameStatus_isNoOp() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);

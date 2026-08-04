@@ -4,7 +4,13 @@ import { ReservationRequestInbox } from '../ui/ReservationRequestInbox';
 import { orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
-  orderApi: { listReservationRequests: jest.fn(), confirm: jest.fn(), decline: jest.fn() },
+  orderApi: {
+    listReservationRequests: jest.fn(),
+    confirm: jest.fn(),
+    decline: jest.fn(),
+    listReceptionists: jest.fn(),
+    updateReservationRequest: jest.fn(),
+  },
 }));
 
 jest.mock('react-hot-toast', () => ({
@@ -89,6 +95,25 @@ describe('ReservationRequestInbox', () => {
     expect(screen.getByRole('button', { name: '謝絶' })).toBeDisabled();
     // 行そのものは消さない
     expect(screen.getByText('2026-08-10')).toBeInTheDocument();
+  });
+
+  it('編集を押すとその申請の編集モーダルが開き、保存後に一覧を取り直す', async () => {
+    mockedList.mockResolvedValue(page([{ ...request('o1'), pax: 3 }]));
+    (orderApi.listReceptionists as jest.Mock).mockResolvedValue([]);
+    (orderApi.updateReservationRequest as jest.Mock).mockResolvedValue({});
+    const onProcessed = jest.fn();
+
+    render(<ReservationRequestInbox onProcessed={onProcessed} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+
+    await waitFor(() =>
+      expect(orderApi.updateReservationRequest).toHaveBeenCalledWith('o1', expect.anything())
+    );
+    // 編集した行は古いままなので、確定・謝絶と同じく読み直す
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+    expect(onProcessed).toHaveBeenCalled();
   });
 
   it('謝絶すると謝絶 API を呼ぶ', async () => {

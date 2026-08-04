@@ -24,6 +24,7 @@ import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderPatch;
@@ -774,6 +775,162 @@ class OrderServiceTest {
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("予約申請が見つかりません");
     assertThat(storeOrder.getStatus()).isEqualTo(OrderStatus.CREATED);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  /** 編集後の応答組み立て（読み口 → DTO）だけを満たす stub。編集そのものの検証は集約の状態で行う。 */
+  private void stubReservationRequestUpdateResponse() {
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+  }
+
+  private ReservationRequestUpdateRequest reservationRequestUpdate(
+      Long receptionistId, String castId, Integer pax, String remarks) {
+    ReservationRequestUpdateRequest req = new ReservationRequestUpdateRequest();
+    req.setReceptionistId(receptionistId);
+    req.setCastId(castId);
+    req.setPax(pax);
+    req.setRemarks(remarks);
+    return req;
+  }
+
+  @Test
+  void updateReservationRequestEditsNominationFreeRequestWithoutSettingCast() {
+    // 指名なしの申請は、キャストを埋めずに人数・備考・受付担当を直せなければならない
+    Order request = reservationRequest().pax(2).build();
+    request.setStoreId(STORE_ID);
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+    stubReservationRequestUpdateResponse();
+
+    service.updateReservationRequest("o1", reservationRequestUpdate(2L, null, 4, "人数変更"));
+
+    assertThat(request.getPax()).isEqualTo(4);
+    assertThat(request.getRemarks()).isEqualTo("人数変更");
+    assertThat(request.getReceptionistId()).isEqualTo(2L);
+    assertThat(request.getCastId()).as("指名なしのままであること").isNull();
+    verify(castRepository, never()).findById(anyString());
+  }
+
+  @Test
+  void updateReservationRequestKeepsNominationWhenTheCastIsSentBack() {
+    Order request = nominatedRequest();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(castRepository.findById("cast-1")).thenReturn(Optional.of(castWithStatus("ACTIVE")));
+    stubReservationRequestUpdateResponse();
+
+    service.updateReservationRequest("o1", reservationRequestUpdate(null, "cast-1", 3, null));
+
+    assertThat(request.getCastId()).isEqualTo("cast-1");
+    assertThat(request.getPax()).isEqualTo(3);
+    // 当日の確定シフトは確定時だけが見る。先の日付の申請は編集時点で未確定なのが通常のため
+    verify(confirmedShiftLookupService, never()).hasConfirmedShift(any(), any(), any());
+  }
+
+  @Test
+  void updateReservationRequestClearsNominationWhenTheCastIsOmitted() {
+    // 無効になった指名を確定前に外す導線。省略が「変更しない」だと外す手段が無くなる
+    Order request = nominatedRequest();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    stubReservationRequestUpdateResponse();
+
+    service.updateReservationRequest("o1", reservationRequestUpdate(null, null, 2, null));
+
+    assertThat(request.getCastId()).isNull();
+    assertThat(request.getReceptionistId()).as("受付担当も同じく外せること").isNull();
+    assertThat(request.getRequesterMemberCode())
+        .as("申請者のスナップショットは指名解除で壊れないこと")
+        .isEqualTo("123456789012");
+    assertThat(request.getReceptionRoute()).isEqualTo(ReceptionRoute.WEB);
+    verify(castRepository, never()).findById(anyString());
+  }
+
+  @Test
+  void updateReservationRequestRejectsCastOfAnotherStore() {
+    Order request = nominatedRequest();
+    Cast otherStoreCast = Cast.builder().name("他店のキャスト").status("ACTIVE").build();
+    otherStoreCast.setId("cast-2");
+    otherStoreCast.setStoreId(2L);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(castRepository.findById("cast-2")).thenReturn(Optional.of(otherStoreCast));
+
+    assertThatThrownBy(
+            () ->
+                service.updateReservationRequest(
+                    "o1", reservationRequestUpdate(null, "cast-2", 2, null)))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("指名を外してください");
+    // 撥ねる要求は集約を触らない — 拒否の健全さをトランザクションの巻き戻しだけに委ねない
+    assertThat(request.getCastId()).as("元の指名が残ること").isEqualTo("cast-1");
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateReservationRequestRejectsSuspendedCast() {
+    // 対象は店舗スタッフなので、確定時の再検証と同じく列挙を防ぐ 404 ではなく対処の分かる 400 で返す
+    Order request = nominatedRequest();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(castRepository.findById("cast-2")).thenReturn(Optional.of(castWithStatus("INACTIVE")));
+
+    assertThatThrownBy(
+            () ->
+                service.updateReservationRequest(
+                    "o1", reservationRequestUpdate(null, "cast-2", 2, null)))
+        .isInstanceOf(ServiceException.class)
+        .isNotInstanceOf(NotFoundException.class);
+    assertThat(request.getCastId()).as("元の指名が残ること").isEqualTo("cast-1");
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateReservationRequestRejectsAlreadyProcessedRequests() {
+    // 確定後は通常の受注として汎用更新が受け持つ。ここを通せば確定済みの受注から指名を外せてしまう
+    Order confirmed = reservationRequest().status(OrderStatus.CONFIRMED).castId("cast-1").build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
+
+    assertThatThrownBy(
+            () ->
+                service.updateReservationRequest(
+                    "o1", reservationRequestUpdate(null, null, 2, null)))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("編集できません");
+    assertThat(confirmed.getCastId()).isEqualTo("cast-1");
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateReservationRequestRejectsStoreOriginatedOrders() {
+    // 申請専用の収口。店舗が起こした受注は ID を知っていても可空の契約では変更させない
+    Order storeOrder = Order.builder().status(OrderStatus.CREATED).castId("cast-1").build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+
+    assertThatThrownBy(
+            () ->
+                service.updateReservationRequest(
+                    "o1", reservationRequestUpdate(null, null, 2, null)))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("予約申請が見つかりません");
+    assertThat(storeOrder.getCastId()).isEqualTo("cast-1");
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateReservationRequestRejectsReceptionistOfAnotherStore() {
+    Order request = reservationRequest().build();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(platformUserRepository.findById(2L))
+        .thenReturn(
+            Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+
+    assertThatThrownBy(
+            () ->
+                service.updateReservationRequest("o1", reservationRequestUpdate(2L, null, 2, null)))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any(Order.class));
   }
 
