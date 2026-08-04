@@ -1,8 +1,11 @@
 version: "3"
 
 # 開発環境用タスク
+#
+# プロジェクト名は docker-compose.yml の `name: kizuna` を唯一の出所とし、ここで -p を渡さない。
+# traefik.yml の docker provider 制約がその名前を直に書いているため、上書き手段を残すと
+# 制約だけ取り残されて router がゼロになる（全リクエストが静かに 404 になる）。
 vars:
-  PROJECT_NAME: '{{default "kizuna" .PROJECT_NAME}}'
   service: '{{default "" .service}}'
 
 tasks:
@@ -26,17 +29,17 @@ tasks:
     desc: サービスを起動
     deps: [ensure-env]
     cmds:
-      - docker compose -p {{.PROJECT_NAME}} up -d --timestamps --wait
+      - docker compose up -d --timestamps --wait
 
   down:
     desc: サービスを停止
     cmds:
-      - docker compose -p {{.PROJECT_NAME}} down
+      - docker compose down
 
   ps:
     desc: サービス状態を表示
     cmds:
-      - docker compose -p {{.PROJECT_NAME}} ps
+      - docker compose ps
 
   logs:
     desc: ログを表示
@@ -44,9 +47,9 @@ tasks:
       - |
         if [ -n "{{.service}}" ]; then
           echo "📜 {{.service}}サービスのログを表示中..."
-          docker compose -p {{.PROJECT_NAME}} logs -f {{.service}}
+          docker compose logs -f {{.service}}
         else
-          docker compose -p {{.PROJECT_NAME}} logs -f
+          docker compose logs -f
         fi
 
   exec:
@@ -54,7 +57,7 @@ tasks:
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
-          docker compose -p {{.PROJECT_NAME}} exec {{.service}} sh
+          docker compose exec {{.service}} sh
         else
           echo "❗ serviceを指定してください。例: task exec service=backend"
           exit 1
@@ -66,8 +69,8 @@ tasks:
       - |
         if [ -n "{{.service}}" ]; then
           echo "🔄 {{.service}}サービスを再起動中..."
-          docker compose -p {{.PROJECT_NAME}} restart {{.service}}
+          docker compose restart {{.service}}
         else
           echo "🔄 すべてのサービスを再起動中..."
-          docker compose -p {{.PROJECT_NAME}} restart
+          docker compose restart
         fi
