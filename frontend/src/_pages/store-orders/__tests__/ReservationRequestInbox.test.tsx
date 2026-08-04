@@ -65,6 +65,24 @@ describe('ReservationRequestInbox', () => {
     expect(onProcessed).toHaveBeenCalled();
   });
 
+  it('処理後の取り直しが届くまで、表示中の行の確定・謝絶を受け付けない', async () => {
+    // 行は残したまま（見失わせないため）だが、古い行を押せると済んだ遷移をもう一度投げてしまう
+    mockedList.mockResolvedValueOnce(page([request('o1')]));
+    mockedConfirm.mockResolvedValue({});
+    mockedList.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<ReservationRequestInbox onProcessed={jest.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '確定' }));
+
+    // 取り直しが始まった＝processingId は既にクリアされている。ここから先が観測したい窓。
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: '確定' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '謝絶' })).toBeDisabled();
+    // 行そのものは消さない
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument();
+  });
+
   it('謝絶すると謝絶 API を呼ぶ', async () => {
     mockedList.mockResolvedValue(page([request('o1')]));
     mockedDecline.mockResolvedValue({});

@@ -124,13 +124,15 @@ export function MemberReservationsPage() {
                     指名: {reservation.cast_name ?? 'なし'}
                   </p>
                   {reservation.status === 'CREATED' && (
+                    // 取り直しの最中は行が古いままなので、取り下げを受け付けない。取り下げ直後の
+                    // 再取得が届くまで同じ行を押せると、済んだ取り下げをもう一度投げてしまう。
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="mt-3"
                       onClick={() => cancel(reservation.id ?? '')}
-                      disabled={processingId === reservation.id}
+                      disabled={loading || processingId === reservation.id}
                     >
                       取り下げる
                     </Button>

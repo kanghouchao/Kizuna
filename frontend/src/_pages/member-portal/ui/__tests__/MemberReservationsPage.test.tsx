@@ -67,6 +67,25 @@ describe('MemberReservationsPage', () => {
     expect(mockedList).toHaveBeenCalledTimes(2);
   });
 
+  it('取り下げ後の取り直しが届くまで、表示中の行の取り下げを受け付けない', async () => {
+    // 行は残したままだが、古い行を押せると済んだ取り下げをもう一度投げてしまう
+    mockedList.mockResolvedValueOnce(
+      page([{ id: 'o1', store_name: '店舗A', business_date: '2026-08-10', status: 'CREATED' }])
+    );
+    mockedCancel.mockResolvedValue({});
+    mockedList.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<MemberReservationsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '取り下げる' }));
+
+    // 取り直しが始まった＝processingId は既にクリアされている。ここから先が観測したい窓。
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: '取り下げる' })).toBeDisabled();
+    // 行そのものは消さない
+    expect(screen.getByText('店舗A')).toBeInTheDocument();
+  });
+
   it('取得に失敗したらエラーメッセージを表示する', async () => {
     mockedList.mockRejectedValue(new Error('failed'));
 

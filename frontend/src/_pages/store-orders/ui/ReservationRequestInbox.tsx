@@ -143,13 +143,15 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
                 <p className="mt-1 text-xs text-muted-foreground">{request.remarks}</p>
               )}
             </div>
+            {/* 取り直しの最中は行が古いままなので、確定・謝絶を受け付けない。処理直後の再取得が
+                届くまで同じ行を押せると、済んだ遷移をもう一度投げてしまう。 */}
             <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => process(request.id ?? '', 'decline')}
-                disabled={processingId === request.id}
+                disabled={loading || processingId === request.id}
               >
                 謝絶
               </Button>
@@ -157,7 +159,7 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
                 type="button"
                 size="sm"
                 onClick={() => process(request.id ?? '', 'confirm')}
-                disabled={processingId === request.id}
+                disabled={loading || processingId === request.id}
               >
                 確定
               </Button>
