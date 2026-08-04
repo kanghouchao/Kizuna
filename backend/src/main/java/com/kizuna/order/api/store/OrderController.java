@@ -58,11 +58,12 @@ public class OrderController {
         .body(orderService.create(request));
   }
 
-  /** 予約受付 inbox の未確定申請一覧。 */
+  /** 予約受付 inbox の未確定申請一覧。並び（古い順）は読み口が固定するため、既定の sort は置かない。 */
   @GetMapping("/reservation-requests")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<List<OrderResponse>> listReservationRequests() {
-    return ResponseEntity.ok(orderService.listPendingReservationRequests());
+  public ResponseEntity<Page<OrderResponse>> listReservationRequests(
+      @PageableDefault(size = 20) Pageable pageable) {
+    return ResponseEntity.ok(orderService.listPendingReservationRequests(pageable));
   }
 
   /** 予約申請を確定する（受注として受け付ける）。 */

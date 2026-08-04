@@ -2,18 +2,29 @@
 // 応答の任意性は Java 側の可空性が正本。wrapper 型のフィールドは
 // default-property-inclusion: non_null によりキーごと応答から消えるため optional にする。
 
-// 受注ステータス。CREATED=申請中/CONFIRMED=確定/COMPLETED=完了/CANCELLED=キャンセル。
+// 受注ステータス。CREATED=未確定/CONFIRMED=確定/COMPLETED=完了/CANCELLED=キャンセル。
 export type OrderStatus = 'CREATED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 
 // 受付経路。WEB=会員ポータルからの申請/PHONE=電話受付。
 export type ReceptionRoute = 'WEB' | 'PHONE';
 
-/** 受注ステータスの日本語表示。 */
+/**
+ * 受注ステータスの日本語表示（既定）。
+ *
+ * CREATED は会員の申請でも店舗が手入力した受注でも起きるため、中立に「未確定」と呼ぶ。
+ * 申請かどうかは別途 WEB申請 バッジが担う。
+ */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  CREATED: '申請中',
+  CREATED: '未確定',
   CONFIRMED: '確定',
   COMPLETED: '完了',
   CANCELLED: 'キャンセル',
+};
+
+/** 会員ポータルでの表示。会員本人の予約は必ず申請として起きるので、CREATED を「申請中」と呼べる。 */
+export const MEMBER_ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  ...ORDER_STATUS_LABELS,
+  CREATED: '申請中',
 };
 
 export interface Order {

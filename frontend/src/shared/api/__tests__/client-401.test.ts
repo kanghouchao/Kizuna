@@ -3,10 +3,12 @@ import Cookies from 'js-cookie';
 // mock navigation helper before importing client so that interceptor uses the mock
 const redirectMock = jest.fn();
 const clearPlatformSessionMock = jest.fn();
+const rememberMemberReturnPathMock = jest.fn();
 let platformConsoleValue: string | undefined;
 jest.mock('@/shared/lib', () => ({
   redirectToLogin: () => redirectMock(),
   clearPlatformSession: () => clearPlatformSessionMock(),
+  rememberMemberReturnPath: (value: string) => rememberMemberReturnPathMock(value),
   getPlatformConsole: () => platformConsoleValue,
   getPlatformStoreId: () => undefined,
   isStoreConsole: (v: string | undefined) => v === 'store',
@@ -58,6 +60,19 @@ describe('apiClient 401/403 interceptor', () => {
 
     expect(removeSpy).toHaveBeenCalledWith('token');
     // assert that our navigation helper was called (no real navigation in jsdom)
+    expect(redirectMock).toHaveBeenCalled();
+  });
+
+  it('401 でログインへ差し戻す前に、会員ポータルの現在地を戻り先として覚える', async () => {
+    // 失効した MEMBER token は画面の入口を通ってしまうため、差し戻しがここで初めて起きる。
+    // 覚えないとログイン後に店舗つきの申請画面へ戻れない。
+    window.history.pushState({}, '', '/member/reservations/new?store=store1.kizuna.test');
+
+    await withRejectingAdapter(401, () => apiClient.get('/platform/me/orders'));
+
+    expect(rememberMemberReturnPathMock).toHaveBeenCalledWith(
+      '/member/reservations/new?store=store1.kizuna.test'
+    );
     expect(redirectMock).toHaveBeenCalled();
   });
 

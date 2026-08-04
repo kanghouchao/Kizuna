@@ -70,6 +70,26 @@ class OrderControllerTest {
   }
 
   @Test
+  @DisplayName("予約受付 inbox が要求されたページを読み口へ渡すこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void reservationRequestsForwardTheRequestedPage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    when(orderService.listPendingReservationRequests(pageableCaptor.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(
+            get("/store/orders/reservation-requests?page=1&size=5")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
+
+    assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
+    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+  }
+
+  @Test
   @DisplayName("受注管理権限が無ければ予約受付 inbox を読めないこと")
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void reservationRequestsAreRejectedWithoutOrderManage() throws Exception {

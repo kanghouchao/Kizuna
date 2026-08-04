@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { memberOrderApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
 import { Store, platformStoreApi } from '@/entities/store';
+import { isNotFound } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -41,7 +42,12 @@ export function MemberReservationNewPage() {
 
   const [store, setStore] = useState<Store | null>(null);
   const [storeResolved, setStoreResolved] = useState(false);
+  // 照会そのものの失敗。「その店舗が無い」と同じ表示にすると、瞬断のときに再試行する手段が無くなる。
+  const [storeLookupFailed, setStoreLookupFailed] = useState(false);
+  // 取得失敗時の再試行用。ドメインが同じままでも effect を引き直せるようにする。
+  const [storeReloadNonce, setStoreReloadNonce] = useState(0);
   const [casts, setCasts] = useState<ConfirmedShiftCast[]>([]);
+  const [castsLoading, setCastsLoading] = useState(false);
   const [castsFailed, setCastsFailed] = useState(false);
   // 取得失敗時の再試行用。日付・店舗が同じままでも effect を引き直せるようにする。
   const [castsReloadNonce, setCastsReloadNonce] = useState(0);
@@ -66,18 +72,24 @@ export function MemberReservationNewPage() {
   const businessDate = watch('business_date');
 
   useEffect(() => {
+    // ドメインが変わった時点で前の店舗を捨てる。照会の完了を待つと、その間だけ前の店舗宛の
+    // フォームが送信可能なまま残る。
+    setStore(null);
+    setStoreLookupFailed(false);
     if (!domain) {
       setStoreResolved(true);
       return;
     }
+    setStoreResolved(false);
     let cancelled = false;
     platformStoreApi
       .lookupByDomain(domain)
       .then(resolved => {
         if (!cancelled) setStore(resolved);
       })
-      .catch(() => {
-        if (!cancelled) setStore(null);
+      .catch(error => {
+        // 「そのドメインの店舗が無い」（404）と照会自体の失敗を区別する。後者は再試行で復帰しうる。
+        if (!cancelled && !isNotFound(error)) setStoreLookupFailed(true);
       })
       .finally(() => {
         if (!cancelled) setStoreResolved(true);
@@ -85,7 +97,7 @@ export function MemberReservationNewPage() {
     return () => {
       cancelled = true;
     };
-  }, [domain]);
+  }, [domain, storeReloadNonce]);
 
   const storeId = store?.id ? Number(store.id) : null;
 
@@ -96,8 +108,11 @@ export function MemberReservationNewPage() {
     setCastsFailed(false);
     setValue('cast_id', '');
     if (storeId === null || !businessDate) {
+      // 取得するものが無い＝待っているものも無い。読み込み中として送信を止めない。
+      setCastsLoading(false);
       return;
     }
+    setCastsLoading(true);
     let cancelled = false;
     shiftApi
       .confirmedCasts({ store_id: storeId, date: businessDate })
@@ -108,6 +123,9 @@ export function MemberReservationNewPage() {
         // 取得失敗を空候補と区別する — 「出勤なし」に見せると、指名するつもりの会員が
         // 誤った空き情報のまま指名なしで申請してしまう
         if (!cancelled) setCastsFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setCastsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -147,6 +165,18 @@ export function MemberReservationNewPage() {
         <CardContent>
           {!storeResolved ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : storeLookupFailed ? (
+            <div className="space-y-2">
+              <p className="text-sm text-destructive-strong">店舗情報を取得できませんでした。</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setStoreReloadNonce(nonce => nonce + 1)}
+              >
+                再読み込み
+              </Button>
+            </div>
           ) : !store ? (
             <p className="text-sm text-muted-foreground">
               店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。
@@ -205,7 +235,10 @@ export function MemberReservationNewPage() {
                     </option>
                   ))}
                 </select>
-                {businessDate && castsFailed && (
+                {businessDate && castsLoading && (
+                  <p className="mt-1 text-xs text-muted-foreground">出勤情報を確認しています...</p>
+                )}
+                {businessDate && !castsLoading && castsFailed && (
                   <div className="mt-1 flex items-center gap-2">
                     <p className="text-xs text-destructive-strong">
                       出勤情報を取得できませんでした。
@@ -220,7 +253,9 @@ export function MemberReservationNewPage() {
                     </Button>
                   </div>
                 )}
-                {businessDate && !castsFailed && casts.length === 0 && (
+                {/* 取得が終わるまで「出勤なし」と言い切らない — 未解決の間に空表示を出すと、
+                    指名するつもりの会員が誤った空き情報のまま指名なしで申請してしまう。 */}
+                {businessDate && !castsLoading && !castsFailed && casts.length === 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     この日に出勤予定のキャストはいません。
                   </p>
@@ -239,7 +274,14 @@ export function MemberReservationNewPage() {
                   <p className="mt-1 text-xs text-destructive-strong">{errors.remarks.message}</p>
                 )}
               </div>
-              <Button type="submit" className="w-full" disabled={submitting}>
+              {/* 候補が確定するまで送信させない。取得中も失敗中も「その日に誰が出勤するか」は
+                  未確定であり、指名を選ぶ機会が無いまま「指名なし」で申請が通ってしまう。
+                  失敗のときは再読み込みが復帰の手段になる。 */}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={submitting || castsLoading || castsFailed}
+              >
                 この内容で申請する
               </Button>
             </form>

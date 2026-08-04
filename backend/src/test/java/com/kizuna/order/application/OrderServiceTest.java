@@ -540,12 +540,26 @@ class OrderServiceTest {
   void listPendingReservationRequestsDelegatesFilteringToTheQuery() {
     OrderView view = mock(OrderView.class);
     OrderResponse res = OrderResponse.builder().id("o1").build();
-    when(orderRepository.findPendingReservationRequestViews()).thenReturn(List.of(view));
+    Pageable pageable = PageRequest.of(0, 20);
+    when(orderRepository.findPendingReservationRequestViews(pageable))
+        .thenReturn(new PageImpl<>(List.of(view), pageable, 1));
     when(orderMapper.toResponse(view)).thenReturn(res);
 
-    assertThat(service.listPendingReservationRequests()).containsExactly(res);
+    assertThat(service.listPendingReservationRequests(pageable).getContent()).containsExactly(res);
     // 受注一覧の先頭ページを取って手元で選り分ける実装だと、確定済みが積み上がった店舗で申請が窓から落ちる
     verify(orderRepository, never()).findAllViews(any(), any(Pageable.class));
+  }
+
+  @Test
+  void listPendingReservationRequestsReportsTheTotalSoCallersCanReachEveryRequest() {
+    OrderView view = mock(OrderView.class);
+    Pageable pageable = PageRequest.of(0, 1);
+    when(orderRepository.findPendingReservationRequestViews(pageable))
+        .thenReturn(new PageImpl<>(List.of(view), pageable, 3));
+    when(orderMapper.toResponse(view)).thenReturn(OrderResponse.builder().id("o1").build());
+
+    // 取得件数の上限を超えた未処理の申請が「無い」ことにならないよう、総件数を伝える
+    assertThat(service.listPendingReservationRequests(pageable).getTotalElements()).isEqualTo(3);
   }
 
   /** 確定・謝絶の対象となる会員申請の形（Web 受付 + 申請時点の会員コード）。 */
