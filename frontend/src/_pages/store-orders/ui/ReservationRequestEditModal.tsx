@@ -16,6 +16,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
   Input,
   Label,
   Select,
@@ -67,7 +68,7 @@ export function ReservationRequestEditModal({
     reset,
     control,
     watch,
-    formState: { isSubmitting },
+    formState: { errors, isSubmitting },
   } = form;
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
 
@@ -156,15 +157,25 @@ export function ReservationRequestEditModal({
                 </FormItem>
               )}
             />
-            <div className="grid gap-2">
-              <Label htmlFor="pax">人数</Label>
-              <Input
-                id="pax"
-                type="number"
-                min={1}
-                {...register('pax', { required: true, min: 1 })}
-              />
-            </div>
+            {/* 人数はサーバ側が @NotNull @Min(1)。検証の結果を出さないと、空欄のまま押した保存が
+                無反応に見える */}
+            <FormField
+              control={control}
+              name="pax"
+              rules={{
+                required: '人数を入力してください',
+                min: { value: 1, message: '人数は 1 以上です' },
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>人数</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={1} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid gap-2">
               <Label>指名</Label>
               {request?.cast_id ? (
@@ -199,7 +210,17 @@ export function ReservationRequestEditModal({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="remarks">備考</Label>
-              <Textarea id="remarks" rows={3} {...register('remarks')} />
+              {/* 上限はサーバ側の @Size(max = 500) に合わせる（会員の申請画面と同じ） */}
+              <Textarea
+                id="remarks"
+                rows={3}
+                {...register('remarks', {
+                  maxLength: { value: 500, message: '備考は 500 文字以内で入力してください' },
+                })}
+              />
+              {errors.remarks && (
+                <p className="text-xs text-destructive-strong">{errors.remarks.message}</p>
+              )}
             </div>
             <div className="flex justify-end gap-3 border-t pt-4">
               <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>

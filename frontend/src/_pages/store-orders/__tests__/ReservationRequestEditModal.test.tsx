@@ -94,9 +94,38 @@ describe('ReservationRequestEditModal', () => {
     expect(screen.queryByRole('checkbox', { name: '指名を外す' })).not.toBeInTheDocument();
   });
 
+  it('人数が空欄なら送信せず、無反応にもせず理由を出す', async () => {
+    // 検証の結果を出さないと、押した保存が効いているのか分からないまま止まる
+    renderModal(nominationFreeRequest);
+
+    fireEvent.change(await screen.findByLabelText('人数'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('人数を入力してください')).toBeInTheDocument();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('備考がサーバ側の上限を超えたら送信せず理由を出す', async () => {
+    renderModal(nominationFreeRequest);
+
+    fireEvent.change(await screen.findByLabelText('備考'), {
+      target: { value: 'あ'.repeat(501) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('備考は 500 文字以内で入力してください')).toBeInTheDocument();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
   it('保存に失敗したら、対処方法を含むサーバの文言をそのまま出す', async () => {
+    // 指名の検証は「在籍中を選ぶか外すか」を伝える 400 を返す。汎用文言に潰すと行動できない
     mockedUpdate.mockRejectedValue({
-      response: { status: 404, data: { error: 'キャストが見つかりません: cast-1' } },
+      response: {
+        status: 400,
+        data: {
+          error: '指名できるキャストではありません。在籍中のキャストを選ぶか、指名を外してください',
+        },
+      },
     });
     const onSaved = jest.fn();
     renderModal(nominatedRequest, onSaved);
@@ -104,7 +133,9 @@ describe('ReservationRequestEditModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
 
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('キャストが見つかりません: cast-1')
+      expect(toast.error).toHaveBeenCalledWith(
+        '指名できるキャストではありません。在籍中のキャストを選ぶか、指名を外してください'
+      )
     );
     expect(onSaved).not.toHaveBeenCalled();
   });

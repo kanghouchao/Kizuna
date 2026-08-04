@@ -500,6 +500,19 @@ class MemberOrderIT extends CrossStoreTestSupport {
     assertThat(nominated.getStatusCode()).as("前提: 店舗が指名を設定できること").isEqualTo(HttpStatus.OK);
     assertThat(nominated.getBody().path("cast_id").asString()).isEqualTo(castId);
 
+    // 撥ねられた編集は元の指名を残す（拒否の健全さをトランザクションの巻き戻しだけに委ねない）
+    ResponseEntity<JsonNode> rejected =
+        updateReservationRequest(STORE_A, orderId, "{\"cast_id\": \"does-not-exist\", \"pax\": 9}");
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    ResponseEntity<JsonNode> afterRejection =
+        rest.exchange(
+            "/store/orders/" + orderId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(afterRejection.getBody().path("cast_id").asString()).isEqualTo(castId);
+    assertThat(afterRejection.getBody().path("pax").asInt()).isEqualTo(3);
+
     ResponseEntity<JsonNode> cleared = updateReservationRequest(STORE_A, orderId, "{\"pax\": 3}");
     assertThat(cleared.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(cleared.getBody().path("cast_id").isMissingNode()).isTrue();

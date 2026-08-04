@@ -852,31 +852,36 @@ class OrderServiceTest {
   void updateReservationRequestRejectsCastOfAnotherStore() {
     Order request = nominatedRequest();
     Cast otherStoreCast = Cast.builder().name("他店のキャスト").status("ACTIVE").build();
-    otherStoreCast.setId("cast-1");
+    otherStoreCast.setId("cast-2");
     otherStoreCast.setStoreId(2L);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(otherStoreCast));
+    when(castRepository.findById("cast-2")).thenReturn(Optional.of(otherStoreCast));
 
     assertThatThrownBy(
             () ->
                 service.updateReservationRequest(
-                    "o1", reservationRequestUpdate(null, "cast-1", 2, null)))
-        .isInstanceOf(NotFoundException.class)
-        .hasMessageContaining("キャストが見つかりません");
+                    "o1", reservationRequestUpdate(null, "cast-2", 2, null)))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("指名を外してください");
+    // 撥ねる要求は集約を触らない — 拒否の健全さをトランザクションの巻き戻しだけに委ねない
+    assertThat(request.getCastId()).as("元の指名が残ること").isEqualTo("cast-1");
     verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test
   void updateReservationRequestRejectsSuspendedCast() {
+    // 対象は店舗スタッフなので、確定時の再検証と同じく列挙を防ぐ 404 ではなく対処の分かる 400 で返す
     Order request = nominatedRequest();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(castWithStatus("INACTIVE")));
+    when(castRepository.findById("cast-2")).thenReturn(Optional.of(castWithStatus("INACTIVE")));
 
     assertThatThrownBy(
             () ->
                 service.updateReservationRequest(
-                    "o1", reservationRequestUpdate(null, "cast-1", 2, null)))
-        .isInstanceOf(NotFoundException.class);
+                    "o1", reservationRequestUpdate(null, "cast-2", 2, null)))
+        .isInstanceOf(ServiceException.class)
+        .isNotInstanceOf(NotFoundException.class);
+    assertThat(request.getCastId()).as("元の指名が残ること").isEqualTo("cast-1");
     verify(orderRepository, never()).save(any(Order.class));
   }
 

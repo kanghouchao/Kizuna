@@ -183,18 +183,19 @@ public class OrderService {
       throw new ServiceException("確定・謝絶済みの予約は編集できません");
     }
 
+    // 検証は書き換えより先にすべて済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
+    // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
     if (request.getReceptionistId() != null) {
       validateReceptionist(request.getReceptionistId());
     }
-    order.assignReceptionist(request.getReceptionistId());
-
-    order.assignCast(request.getCastId());
-    if (order.getCastId() != null) {
-      nominatableCast(order)
-          .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + order.getCastId()));
+    if (request.getCastId() != null) {
+      // 対象は店舗スタッフなので、確定時の再検証と同じく列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す
+      nominatableCast(order.getStoreId(), request.getCastId())
+          .orElseThrow(() -> new ServiceException("指名できるキャストではありません。在籍中のキャストを選ぶか、指名を外してください"));
     }
 
-    order.reviseRequest(request.getPax(), request.getRemarks());
+    order.revise(
+        request.getReceptionistId(), request.getCastId(), request.getPax(), request.getRemarks());
 
     Order saved = orderRepository.save(order);
     return toResponse(saved.getId());
@@ -231,7 +232,7 @@ public class OrderService {
     if (order.getCastId() == null) {
       return;
     }
-    nominatableCast(order)
+    nominatableCast(order.getStoreId(), order.getCastId())
         .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
     if (!confirmedShiftLookupService.hasConfirmedShift(
         order.getStoreId(), order.getCastId(), order.getBusinessDate())) {
@@ -240,15 +241,15 @@ public class OrderService {
   }
 
   /**
-   * 指名先として成立するキャスト（受注と同じ店舗に在籍する在籍中のキャスト）を引く。
+   * 指名先として成立するキャスト（対象店舗に在籍する在籍中のキャスト）を引く。
    *
    * <p>店舗の一致を述語に置くのは、キャストの読み取りに掛かる絞り込みへ暗黙に頼らないため。編集時の指名先と確定時の再検証が 同じ条件を共有する。当日の確定シフトの有無は確定時だけが見る —
    * 先の日付の申請は編集時点でシフトが確定していないのが通常で、 編集で要求すると指名を差し替える手段が事実上無くなる。
    */
-  private Optional<Cast> nominatableCast(Order order) {
+  private Optional<Cast> nominatableCast(Long storeId, String castId) {
     return castRepository
-        .findById(order.getCastId())
-        .filter(cast -> order.getStoreId().equals(cast.getStoreId()))
+        .findById(castId)
+        .filter(cast -> storeId.equals(cast.getStoreId()))
         .filter(cast -> ACTIVE_CAST_STATUS.equals(cast.getStatus()));
   }
 
