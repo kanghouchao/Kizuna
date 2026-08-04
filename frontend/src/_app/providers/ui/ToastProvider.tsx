@@ -12,20 +12,23 @@ export function ToastProvider() {
       position="top-center"
       toastOptions={{
         duration: 4000,
+        // 色は token class ではなくインライン style の CSS 変数で渡す。react-hot-toast が
+        // goober 生成 class で背景を当てるため、class を重ねると勝敗がソース順に依存する。
+        // 採る組み合わせと適用範囲は DESIGN.md の contrast matrix 注記が正本。
         style: {
-          background: '#1f2937', // gray-800
-          color: '#fff',
+          background: 'var(--card)',
+          color: 'var(--card-foreground)',
           borderRadius: '10px',
         },
         success: {
           duration: 2500,
-          // react-hot-toast はインライン style しか受けないため、success トークンは
-          // CSS 変数で参照する（bg-success + text-success-foreground、6.18/11.20 — 両モード AA 達成）。
           style: { background: 'var(--success)', color: 'var(--success-foreground)' },
         },
         error: {
           duration: 5000,
-          style: { background: '#dc2626' }, // red-600
+          // color も明示する。型別 style は基底 style へ重ねられるだけなので、background だけ
+          // 差し替えると文字色が基底のまま残り、赤地の上に matrix にない前景色が乗る。
+          style: { background: 'var(--destructive)', color: 'var(--destructive-foreground)' },
         },
       }}
     />
