@@ -492,7 +492,6 @@ class OrderServiceTest {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(castRepository.existsById("none")).thenReturn(false);
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
 
@@ -508,7 +507,6 @@ class OrderServiceTest {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
     when(platformUserRepository.findById(2L))
         .thenReturn(
@@ -529,7 +527,6 @@ class OrderServiceTest {
     Order existing = Order.builder().status(OrderStatus.CREATED).build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
     when(platformUserRepository.findById(2L))
         .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
@@ -542,6 +539,107 @@ class OrderServiceTest {
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
+  }
+
+  /** 人数と備考だけを差し替える部分更新コマンド（汎用更新の典型的な編集）。 */
+  private static OrderPatch paxAndRemarksPatch(Integer pax, String remarks) {
+    return new OrderPatch(null, null, pax, null, null, null, null, null, null, null, remarks, null);
+  }
+
+  @Test
+  void updateEditsConfirmedNominationFreeOrderWithoutSettingCast() {
+    // 指名を外したまま確定した受注は、キャストを作り出さずに人数・備考を直せなければならない
+    Order confirmed =
+        reservationRequest().status(OrderStatus.CONFIRMED).receptionistId(3L).pax(2).build();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
+        .thenReturn(paxAndRemarksPatch(5, "人数を直した"));
+    when(platformUserRepository.findById(3L)).thenReturn(Optional.of(authorizedReceptionist()));
+    stubReservationRequestUpdateResponse();
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setReceptionistId(3L);
+    req.setPax(5);
+    req.setRemarks("人数を直した");
+
+    service.update("o1", req);
+
+    assertThat(confirmed.getPax()).isEqualTo(5);
+    assertThat(confirmed.getRemarks()).isEqualTo("人数を直した");
+    assertThat(confirmed.getCastId()).as("指名なしのままであること").isNull();
+    verify(castRepository, never()).existsById(anyString());
+  }
+
+  @Test
+  void updateEditsOrderWhoseReceptionistWasNeverAssigned() {
+    // 確定した実行者が受付候補の条件を満たさなければ受付担当は未設定のまま残る。その行も編集できなければならない
+    Order confirmed = reservationRequest().status(OrderStatus.CONFIRMED).pax(2).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
+        .thenReturn(paxAndRemarksPatch(4, null));
+    stubReservationRequestUpdateResponse();
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setPax(4);
+
+    service.update("o1", req);
+
+    assertThat(confirmed.getPax()).isEqualTo(4);
+    assertThat(confirmed.getReceptionistId()).as("未設定のままであること").isNull();
+    verify(platformUserRepository, never()).findById(any());
+  }
+
+  @Test
+  void updateRejectsRemovingAnExistingNomination() {
+    // 店舗が起こした受注は必ず指名を持つ。省略で外せると、汎用更新が指名解除の裏口になる
+    Order storeOrder = Order.builder().status(OrderStatus.CONFIRMED).castId("g1").pax(2).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setPax(9);
+
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("指名を外すことはできません");
+    // 撥ねる要求は集約を触る前に止める（拒否の健全さをトランザクションの巻き戻しだけに委ねない）
+    assertThat(storeOrder.getPax()).isEqualTo(2);
+    assertThat(storeOrder.getCastId()).isEqualTo("g1");
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateRejectsRemovingAnExistingReceptionist() {
+    Order storeOrder =
+        Order.builder().status(OrderStatus.CONFIRMED).castId("g1").receptionistId(3L).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g1");
+    req.setPax(9);
+
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("受付担当を外すことはできません");
+    assertThat(storeOrder.getReceptionistId()).isEqualTo(3L);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateTreatsABlankCastIdAsAnOmittedNomination() {
+    // 編集画面の未選択がそのまま空文字で乗ってくる。存在しないキャストとして 404 を返すより、
+    // 指名なしの要求として同じ判定（外せない）に載せる方が呼び手にとって意味が通る
+    Order storeOrder = Order.builder().status(OrderStatus.CONFIRMED).castId("g1").build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("");
+    req.setPax(9);
+
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("指名を外すことはできません");
+    verify(castRepository, never()).existsById(anyString());
   }
 
   /** 予約受付 inbox の読み口が返す 1 行分の projection。 */
