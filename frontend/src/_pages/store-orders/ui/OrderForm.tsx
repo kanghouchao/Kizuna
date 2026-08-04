@@ -283,7 +283,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                 <CastSearchCombobox
                   id="castName"
                   label="キャスト *"
-                  initialName={initialCastName}
+                  castName={initialCastName}
                   onChange={castId =>
                     setValue('castId', castId ?? '', { shouldValidate: true, shouldDirty: true })
                   }

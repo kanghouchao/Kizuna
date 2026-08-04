@@ -10,10 +10,10 @@ interface CastSearchComboboxProps {
   id: string;
   label: string;
   /**
-   * 初期表示する名前。選択済みの id を持つのは親なので、この props が動かすのは表示だけで、
-   * onChange は鳴らない（親の初期値と競合させないため）。
+   * 親が選択済みとみなしているキャストの名前。id を持つのは親なので、この props が動かすのは
+   * 表示だけで、onChange は鳴らない（親の初期値と競合させないため）。
    */
-  initialName?: string;
+  castName: string;
   /** 候補を選ぶとその id、名前を打ち直して選択が外れると null。 */
   onChange: (castId: string | null) => void;
   disabled?: boolean;
@@ -28,22 +28,21 @@ interface CastSearchComboboxProps {
 export function CastSearchCombobox({
   id,
   label,
-  initialName,
+  castName,
   onChange,
   disabled,
 }: CastSearchComboboxProps) {
-  const [nameInput, setNameInput] = useState(initialName ?? '');
+  const [nameInput, setNameInput] = useState(castName);
   const [options, setOptions] = useState<CastResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  // 表示名の差し込み（初期表示・候補の選択）で検索が走ると、選んだ直後に候補が開き直す
+  // 表示名の差し込み（親からの反映・候補の選択）で検索が走ると、選んだ直後に候補が開き直す
   const skipNextSearchRef = useRef(false);
 
   useEffect(() => {
-    if (initialName === undefined) return;
     skipNextSearchRef.current = true;
-    setNameInput(initialName);
-  }, [initialName]);
+    setNameInput(castName);
+  }, [castName]);
 
   useEffect(() => {
     if (skipNextSearchRef.current) {

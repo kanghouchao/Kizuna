@@ -204,22 +204,37 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
   });
 
-  it('候補から選ばずに名前を打っただけなら、指名は送らない', async () => {
-    // 候補の選択だけが id を確定させる。打ちかけの文字列で古い指名が残ると、外したつもりが残る
+  it('候補から選ばずに名前を打っただけでは保存させず、外すなら明示するよう促す', async () => {
+    // 契約は部分更新ではないので、打ちかけのまま送ると指名が消える。解除は明示操作だけの権能
     renderModal(nominatedRequest);
 
     await openSuggestions('み');
     await save();
 
-    expect(mockedUpdate).toHaveBeenCalledWith(
-      'o1',
-      expect.objectContaining({ cast_id: undefined })
-    );
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(
+        '指名を変えるときは候補から選んでください。外す場合は「指名を外す」にチェックしてください'
+      )
+    ).toBeInTheDocument();
   });
 
-  it('指名を外す操作は、差し替えの候補が出ていても解除として優先する', async () => {
+  it('打ちかけを候補の選択で決着させれば保存できる', async () => {
     renderModal(nominatedRequest);
 
+    await openSuggestions('み');
+    await save();
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    await save();
+
+    expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
+  });
+
+  it('指名を外す操作は、別のキャストを選んだ後でも解除として優先する', async () => {
+    renderModal(nominatedRequest);
+
+    await openSuggestions('み');
+    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
     await save();
 

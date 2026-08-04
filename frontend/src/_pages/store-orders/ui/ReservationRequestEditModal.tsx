@@ -101,7 +101,7 @@ export function ReservationRequestEditModal({
     try {
       const updated = await orderApi.updateReservationRequest(request.id, {
         receptionist_id: values.receptionist_id ? Number(values.receptionist_id) : undefined,
-        // 指名は「そのまま送り返す」ことで維持される。外すときと選び直しの途中は送らない
+        // 指名は「そのまま送り返す」ことで維持される。外すときだけ送らない
         cast_id: values.clear_cast || !values.cast_id ? undefined : values.cast_id,
         pax: Number(values.pax),
         remarks: values.remarks ? values.remarks : undefined,
@@ -186,11 +186,27 @@ export function ReservationRequestEditModal({
               <CastSearchCombobox
                 id="reservation-request-cast"
                 label="指名"
-                initialName={request?.cast_name ?? request?.cast_id ?? ''}
-                onChange={castId => setValue('cast_id', castId ?? '', { shouldDirty: true })}
+                castName={request?.cast_name ?? request?.cast_id ?? ''}
+                onChange={castId =>
+                  setValue('cast_id', castId ?? '', { shouldValidate: true, shouldDirty: true })
+                }
                 disabled={clearCast}
               />
-              {/* 解除は明示操作として残す。名前を消しただけの空欄は「打ちかけ」と区別が付かない */}
+              {/* 契約は部分更新ではないため、打ちかけの空欄のまま送ると指名が消える。解除は
+                  「指名を外す」だけの権能なので、決着が付いていない状態は送信前に止める */}
+              <input
+                type="hidden"
+                {...register('cast_id', {
+                  validate: value =>
+                    !request?.cast_id ||
+                    clearCast ||
+                    !!value ||
+                    '指名を変えるときは候補から選んでください。外す場合は「指名を外す」にチェックしてください',
+                })}
+              />
+              {!clearCast && errors.cast_id && (
+                <p className="text-xs text-destructive-strong">{errors.cast_id.message}</p>
+              )}
               {request?.cast_id && (
                 <FormField
                   control={control}
