@@ -76,13 +76,13 @@ export default function CastListPage() {
     onDeleted: list.reload,
   });
 
-  /** ステータスの表示ラベルと配色を返す */
+  /** 在籍状態の表示ラベルと配色を返す */
   const statusLabel = (status: string | undefined) => {
     switch (status) {
       case 'ACTIVE':
-        return { text: '有効', color: 'bg-success/10 text-success-strong' };
+        return { text: '在籍中', color: 'bg-success/10 text-success-strong' };
       case 'INACTIVE':
-        return { text: '無効', color: 'bg-muted text-foreground' };
+        return { text: '在籍停止', color: 'bg-muted text-foreground' };
       default:
         return { text: status ?? '', color: 'bg-muted text-foreground' };
     }

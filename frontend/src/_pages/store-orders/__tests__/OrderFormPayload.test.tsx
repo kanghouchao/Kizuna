@@ -228,7 +228,8 @@ describe('オーダーフォームの編集時の指名表示', () => {
     // 受注の応答が cast_name を持っているので、呼び出し側から受け取れば足りる
     render(
       <OrderForm
-        initialData={{ castId: 'cast-1', castName: 'あや' }}
+        initialData={{ castId: 'cast-1' }}
+        castName="あや"
         onSubmit={jest.fn()}
         isSubmitting={false}
       />

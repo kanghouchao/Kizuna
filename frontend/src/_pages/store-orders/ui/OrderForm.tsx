@@ -46,13 +46,6 @@ export interface OrderFormData {
   landmark: string;
   hasPet: boolean;
   castId: string;
-  /**
-   * 指名キャストの表示名。コンボボックスの初期表示にだけ使い、選択を動かすのは候補のクリックだけ。
-   *
-   * 名前を呼び出し側から受け取るのは、キャスト管理の詳細（CAST_MANAGE）を引かずに済ませるため —
-   * 受注の応答が cast_name を持っているので取り直す必要が無い。
-   */
-  castName: string;
   pax: number;
   receptionRoute: ReceptionRoute;
   courseMinutes: number;
@@ -72,11 +65,19 @@ export interface OrderFormData {
 
 interface OrderFormProps {
   initialData?: Partial<OrderFormData>;
+  /**
+   * 指名キャストの表示名。コンボボックスの初期表示にだけ使い、選択を動かすのは候補のクリックだけ。
+   *
+   * 送信ペイロード（{@link OrderFormData}）ではなく別の props なのは、フォームの値ではなく表示だけの
+   * データだから。名前を呼び出し側から受け取るのは、キャスト管理の詳細（CAST_MANAGE）を引かずに
+   * 済ませるため — 受注の応答が cast_name を持っているので取り直す必要が無い。
+   */
+  castName?: string;
   onSubmit: (data: OrderFormData) => void;
   isSubmitting?: boolean;
 }
 
-export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProps) {
+export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: OrderFormProps) {
   const router = useRouter();
   const form = useForm<OrderFormData>({
     defaultValues: {
@@ -273,7 +274,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                 <CastSearchCombobox
                   id="castName"
                   label="キャスト *"
-                  castName={initialData?.castName ?? ''}
+                  castName={castName ?? ''}
                   onChange={castId =>
                     setValue('castId', castId, { shouldValidate: true, shouldDirty: true })
                   }
