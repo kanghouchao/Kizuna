@@ -41,7 +41,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     await waitFor(() => expect(mockedCastApi.create).toHaveBeenCalledTimes(1));
     const body = mockedCastApi.create.mock.calls[0][0] as unknown as Record<string, unknown>;
     expect(body).toHaveProperty('name', '花子');
-    // ステータス未操作時の既定ペイロード
+    // 在籍状態を未操作のときの既定ペイロード
     expect(body).toHaveProperty('status', 'ACTIVE');
     expect(body).toHaveProperty('photo_url', '');
     expect(body).toHaveProperty('introduction', '');
@@ -102,8 +102,8 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     render(<CastEditPage />);
     const customField = (await screen.findByLabelText('血液型')) as HTMLInputElement;
     expect(customField.value).toBe('A');
-    // 取得値のステータスがセレクトに選択済みとして表示されること
-    expect(screen.getByRole('combobox', { name: 'ステータス' })).toHaveTextContent('無効');
+    // 取得値の在籍状態がセレクトに選択済みとして表示されること
+    expect(screen.getByRole('combobox', { name: '在籍状態' })).toHaveTextContent('在籍停止');
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -111,7 +111,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(mockedCastApi.update.mock.calls[0][0]).toBe('cast-1');
     const body = mockedCastApi.update.mock.calls[0][1] as unknown as Record<string, unknown>;
     expect(body).toHaveProperty('name', '花子');
-    // プリフィルされたステータスが往復で変わらないこと
+    // プリフィルされた在籍状態が往復で変わらないこと
     expect(body).toHaveProperty('status', 'INACTIVE');
     expect(body).toHaveProperty('introduction', '紹介');
     expect(body).toHaveProperty('age', 25);
@@ -123,7 +123,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(body).not.toHaveProperty('invitation_status');
   });
 
-  it('セレクトで選び直したステータスが送信ボディに反映されること', async () => {
+  it('セレクトで選び直した在籍状態が送信ボディに反映されること', async () => {
     mockedCastApi.get.mockResolvedValue({
       id: 'cast-1',
       name: '花子',
@@ -140,12 +140,12 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     mockedFieldApi.list.mockResolvedValue([]);
 
     render(<CastEditPage />);
-    const trigger = await screen.findByRole('combobox', { name: 'ステータス' });
-    expect(trigger).toHaveTextContent('無効');
+    const trigger = await screen.findByRole('combobox', { name: '在籍状態' });
+    expect(trigger).toHaveTextContent('在籍停止');
 
     // キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）
     fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: '有効' }));
+    fireEvent.click(await screen.findByRole('option', { name: '在籍中' }));
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(mockedCastApi.update).toHaveBeenCalledTimes(1));

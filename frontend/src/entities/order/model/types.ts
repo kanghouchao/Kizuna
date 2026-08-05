@@ -66,7 +66,7 @@ export interface OrderReceptionist {
 /**
  * 指名候補 1 件（当店に在籍中のキャスト）。
  *
- * キャスト管理の CastResponse とは別物で、下拉に要る最小限だけを持つ。読み口が受注側にあるのは、
+ * キャスト管理の CastResponse とは別物で、ドロップダウンに要る最小限だけを持つ。読み口が受注側にあるのは、
  * 指名が受注の操作で、候補の範囲も要る権限も受注側が決めるため。
  */
 export interface OrderCastCandidate {

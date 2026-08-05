@@ -49,7 +49,7 @@ public enum PermissionCode {
   /** 出勤（シフト）の閲覧・登録・更新（ShiftController）。 */
   SHIFT_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
-  /** 在籍キャストの閲覧・登録・更新・削除（CastController）。 */
+  /** キャストの閲覧・登録・更新・削除（CastController — 在籍停止のキャストも対象）。 */
   CAST_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** キャスト招待の発行（確定系操作 — CastController の招待端点）。 */

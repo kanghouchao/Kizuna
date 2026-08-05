@@ -119,7 +119,7 @@ export function CastForm({
                   name="status"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ステータス</FormLabel>
+                      <FormLabel>在籍状態</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger className="w-full">
@@ -127,8 +127,8 @@ export function CastForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="ACTIVE">有効</SelectItem>
-                          <SelectItem value="INACTIVE">無効</SelectItem>
+                          <SelectItem value="ACTIVE">在籍中</SelectItem>
+                          <SelectItem value="INACTIVE">在籍停止</SelectItem>
                         </SelectContent>
                       </Select>
                     </FormItem>
