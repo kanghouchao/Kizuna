@@ -19,6 +19,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>店舗の一致を述語に置くのは、キャストの読み取りに掛かる絞り込みへ暗黙に頼らないため。当日の確定シフトの有無は確定時だけが見る —
  * 先の日付の申請は編集時点でシフトが確定していないのが通常で、編集で要求すると指名を差し替える手段が事実上無くなる。
+ *
+ * <p>同じ層の他の bean と違い {@code @Service} ではなく {@code @Component} なのは、これがユースケースでも取引境界でもなく、
+ * 呼び出し側の取引の中で回る引き当てだけを持つため。
  */
 @Component
 @RequiredArgsConstructor
