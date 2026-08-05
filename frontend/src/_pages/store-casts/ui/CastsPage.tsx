@@ -145,7 +145,7 @@ export default function CastListPage() {
               <TableHead>年齢</TableHead>
               <TableHead>スリーサイズ</TableHead>
               <TableHead>表示順</TableHead>
-              <TableHead>ステータス</TableHead>
+              <TableHead>在籍状態</TableHead>
               <TableHead>招待状態</TableHead>
               <TableHead className="text-right">アクション</TableHead>
             </TableRow>
