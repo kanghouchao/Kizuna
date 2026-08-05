@@ -1,12 +1,11 @@
 package com.kizuna.order.application;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
@@ -44,13 +43,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderService {
 
-  /** 指名を成立させるキャストの在籍状態。申請時の検証（MemberOrderService）と同じ条件を確定時にも用いる。 */
-  private static final String ACTIVE_CAST_STATUS = "ACTIVE";
+  /** 指名が成立しないことを店舗スタッフへ返すときの文言。列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す。 */
+  private static final String NOT_NOMINATABLE_MESSAGE = "指名できるキャストではありません。在籍中のキャストを選んでください";
 
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
-  private final CastRepository castRepository;
+  private final NominatableCastLookup nominatableCast;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
@@ -117,10 +116,11 @@ public class OrderService {
     // 複雑な関連ロジックの処理（顧客のスマートリンク）
     handleCustomerLinking(request, order);
 
-    // 関連 ID の割り当て（存在確認のうえ）
-    if (!castRepository.existsById(request.getCastId())) {
-      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
-    }
+    // 指名は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
+    // 店舗が起こす受注は常に新しい指名を立てるため、据え置きの余地は無く無条件に要求する。
+    nominatableCast
+        .find(storeContext.getStoreId(), request.getCastId())
+        .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
     order.assignCast(request.getCastId());
     validateReceptionist(request.getReceptionistId());
     order.assignReceptionist(request.getReceptionistId());
@@ -163,8 +163,14 @@ public class OrderService {
       throw new ServiceException("受付担当を外すことはできません。受付担当を指定してください");
     }
     if (castId != null) {
-      if (!castRepository.existsById(castId)) {
-        throw new NotFoundException("キャストが見つかりません: " + castId);
+      // 縛るのは新しく立てる指名と差し替えだけで、据え置き（同じ指名の再送）は素通しする。この経路は指名済みの
+      // 受注に cast_id の再送を必須にしているため、無条件に在籍中を要求すると、指名者が在籍停止になった確定済みの
+      // 受注が備考・人数の修正も完了への遷移もできなくなる。据え置かれた指名は成立した時点で検証済みで、
+      // cast_id には FK も掛かっているので、素通しが存在しないキャストを通すことにはならない。
+      if (!castId.equals(order.getCastId())) {
+        nominatableCast
+            .find(storeContext.getStoreId(), castId)
+            .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
       }
     } else if (order.getCastId() != null) {
       throw new ServiceException("指名を外すことはできません。キャストを指定してください");
@@ -239,8 +245,11 @@ public class OrderService {
       validateReceptionist(request.getReceptionistId());
     }
     if (request.getCastId() != null) {
-      // 対象は店舗スタッフなので、確定時の再検証と同じく列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す
-      nominatableCast(order.getStoreId(), request.getCastId())
+      // 対象は店舗スタッフなので、確定時の再検証と同じく列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す。
+      // 汎用更新と違い据え置きも縛るのは、未確定の申請は確定前に直っている必要がある作業だからで、
+      // 素通しは 400 を確定時へ先送りするだけになる。
+      nominatableCast
+          .find(order.getStoreId(), request.getCastId())
           .orElseThrow(() -> new ServiceException("指名できるキャストではありません。在籍中のキャストを選ぶか、指名を外してください"));
     }
 
@@ -282,7 +291,8 @@ public class OrderService {
     if (order.getCastId() == null) {
       return;
     }
-    nominatableCast(order.getStoreId(), order.getCastId())
+    nominatableCast
+        .find(order.getStoreId(), order.getCastId())
         .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
     if (!confirmedShiftLookupService.hasConfirmedShift(
         order.getStoreId(), order.getCastId(), order.getBusinessDate())) {
@@ -291,16 +301,20 @@ public class OrderService {
   }
 
   /**
-   * 指名先として成立するキャスト（対象店舗に在籍する在籍中のキャスト）を引く。
+   * 指名候補の一覧（当店に在籍中のキャストを名前で絞り込んだもの）。書き込み時の指名検証と同一の述語（{@link NominatableCastLookup}）を共有する。
    *
-   * <p>店舗の一致を述語に置くのは、キャストの読み取りに掛かる絞り込みへ暗黙に頼らないため。編集時の指名先と確定時の再検証が 同じ条件を共有する。当日の確定シフトの有無は確定時だけが見る —
-   * 先の日付の申請は編集時点でシフトが確定していないのが通常で、 編集で要求すると指名を差し替える手段が事実上無くなる。
+   * <p>キャスト管理の一覧ではなくこの読み口を持つのは、指名が受注の操作だからで、候補の範囲も要る権限も受注側が決める。 管理一覧は在籍停止のキャストも返し、キャスト管理権限を要求する。
+   *
+   * @param search 名前の部分一致（任意）。未指定なら絞り込まない
    */
-  private Optional<Cast> nominatableCast(Long storeId, String castId) {
-    return castRepository
-        .findById(castId)
-        .filter(cast -> storeId.equals(cast.getStoreId()))
-        .filter(cast -> ACTIVE_CAST_STATUS.equals(cast.getStatus()));
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public List<OrderCastCandidateResponse> listCastCandidates(String search) {
+    return nominatableCast.searchCandidates(storeContext.getStoreId(), search).stream()
+        .map(
+            cast ->
+                OrderCastCandidateResponse.builder().id(cast.getId()).name(cast.getName()).build())
+        .toList();
   }
 
   private Optional<Long> eligibleReceptionistId(String actorEmail) {

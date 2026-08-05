@@ -2,14 +2,13 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { toast } from 'react-hot-toast';
 import { ReservationRequestEditModal } from '../ui/ReservationRequestEditModal';
 import { Order, orderApi } from '@/entities/order';
-import { castApi } from '@/entities/cast';
 
 jest.mock('@/entities/order', () => ({
-  orderApi: { listReceptionists: jest.fn(), updateReservationRequest: jest.fn() },
-}));
-
-jest.mock('@/entities/cast', () => ({
-  castApi: { get: jest.fn(), list: jest.fn() },
+  orderApi: {
+    listReceptionists: jest.fn(),
+    updateReservationRequest: jest.fn(),
+    listCastCandidates: jest.fn(),
+  },
 }));
 
 jest.mock('react-hot-toast', () => ({
@@ -18,7 +17,7 @@ jest.mock('react-hot-toast', () => ({
 
 const mockedUpdate = orderApi.updateReservationRequest as jest.Mock;
 const mockedReceptionists = orderApi.listReceptionists as jest.Mock;
-const mockedCastList = castApi.list as jest.Mock;
+const mockedCastCandidates = orderApi.listCastCandidates as jest.Mock;
 
 const nominationFreeRequest: Order = {
   id: 'o1',
@@ -154,12 +153,7 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     jest.useFakeTimers();
     mockedReceptionists.mockResolvedValue([]);
     mockedUpdate.mockResolvedValue({});
-    mockedCastList.mockResolvedValue({
-      rows: [{ id: 'cast-2', name: 'みか' }],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
+    mockedCastCandidates.mockResolvedValue([{ id: 'cast-2', name: 'みか' }]);
   });
 
   afterEach(() => {
@@ -293,11 +287,10 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     // 片付けは飛んだ後の通信を止められない。遅れて着いた古い応答をそのまま入れると、
     // 今の検索語とは無関係なキャストが選べてしまう
     let landStaleResponse = () => {};
-    mockedCastList.mockImplementationOnce(
+    mockedCastCandidates.mockImplementationOnce(
       () =>
         new Promise(resolve => {
-          landStaleResponse = () =>
-            resolve({ rows: [{ id: 'cast-9', name: 'ふるい' }], page: 0, pageCount: 1, total: 1 });
+          landStaleResponse = () => resolve([{ id: 'cast-9', name: 'ふるい' }]);
         })
     );
     renderModal(nominationFreeRequest);
@@ -317,7 +310,7 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     await openPicker();
     expect(screen.getByRole('option', { name: /みか/ })).toBeInTheDocument();
 
-    mockedCastList.mockRejectedValueOnce(new Error('boom'));
+    mockedCastCandidates.mockRejectedValueOnce(new Error('boom'));
     await search('あ');
 
     expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();

@@ -1,7 +1,6 @@
 package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.LinkStatus;
@@ -49,11 +48,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberOrderService {
 
-  /** 指名を受け付けるキャストの在籍状態。候補一覧（ConfirmedShiftLookupService）と同じ条件を書き込み側でも用いる。 */
-  private static final String ACTIVE_CAST_STATUS = "ACTIVE";
-
   private final OrderRepository orderRepository;
-  private final CastRepository castRepository;
+  private final NominatableCastLookup nominatableCast;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final PlatformUserRepository platformUserRepository;
   private final MemberLookupService memberLookupService;
@@ -166,19 +162,20 @@ public class MemberOrderService {
   }
 
   /**
-   * 指名は「その店舗に在籍する在籍中（ACTIVE）のキャスト」かつ「当日の確定シフトに入っていること」を満たす場合のみ受け付ける。
+   * 指名は「その店舗に在籍中のキャスト」かつ「当日の確定シフトに入っていること」を満たす場合のみ受け付ける。
    *
    * <p>在籍状態は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
+   *
+   * <p>対象は会員なので、成立しない理由を区別せず「見つからない」として返す — 区別すると、その id のキャストが当該店舗に在籍することそのものが分かってしまう。店舗スタッフ向けの
+   * {@link OrderService} は同じ述語から 400 を返す。
    */
   private void validateNomination(Long storeId, String castId, LocalDate businessDate) {
     if (castId == null) {
       return;
     }
     Cast cast =
-        castRepository
-            .findById(castId)
-            .filter(candidate -> storeId.equals(candidate.getStoreId()))
-            .filter(candidate -> ACTIVE_CAST_STATUS.equals(candidate.getStatus()))
+        nominatableCast
+            .find(storeId, castId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
     if (!confirmedShiftLookupService.hasConfirmedShift(storeId, cast.getId(), businessDate)) {
       throw new ServiceException("指名したキャストはこの日の出勤予定がありません");

@@ -13,7 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.LinkStatus;
@@ -68,7 +67,7 @@ class MemberOrderServiceTest {
   private static final String TIMEZONE = "Asia/Tokyo";
 
   @Mock OrderRepository orderRepository;
-  @Mock CastRepository castRepository;
+  @Mock NominatableCastLookup nominatableCast;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock MemberLookupService memberLookupService;
@@ -112,6 +111,18 @@ class MemberOrderServiceTest {
     request.setPax(2);
     request.setCastId(castId);
     return request;
+  }
+
+  /**
+   * 述語が「成立する」と答えたときに返るキャスト。
+   *
+   * <p>成立の条件そのもの（店舗一致・在籍中）を固定するのは {@link NominatableCastLookupTest} で、ここは空か否かの翻訳だけを見る。
+   */
+  private static Cast nominatable(String castId) {
+    Cast cast = Cast.builder().name("さくら").status("ACTIVE").build();
+    cast.setId(castId);
+    cast.setStoreId(STORE_ID);
+    return cast;
   }
 
   private void stubSavedView() {
@@ -214,26 +225,13 @@ class MemberOrderServiceTest {
   }
 
   @Test
-  @DisplayName("他店舗のキャストは指名できないこと")
-  void requestRejectsCastOfAnotherStore() {
+  @DisplayName("指名先として成立しないキャストは、理由を区別せず「見つからない」として返すこと")
+  void requestRejectsACastThatIsNotNominatable() {
+    // 対象は会員なので、他店舗・在籍停止・不在を区別しない — 区別すると、その id のキャストが当該店舗に
+    // 在籍することそのものが分かってしまう（店舗スタッフ向けの OrderService は同じ述語から 400 を返す）。
+    // 成立しない理由の判定そのものは NominatableCastLookupTest が持つ
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    Cast otherStoreCast = Cast.builder().name("よその子").status("ACTIVE").build();
-    otherStoreCast.setStoreId(OTHER_STORE_ID);
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(otherStoreCast));
-
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
-        .isInstanceOf(NotFoundException.class);
-    verify(orderRepository, never()).save(any(Order.class));
-  }
-
-  @Test
-  @DisplayName("在籍していない（非 ACTIVE）キャストは指名できないこと")
-  void requestRejectsInactiveCast() {
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    Cast retired = Cast.builder().name("退店した子").status("INACTIVE").build();
-    retired.setStoreId(STORE_ID);
-    retired.setId("cast-1");
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(retired));
+    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
         .isInstanceOf(NotFoundException.class);
@@ -243,13 +241,24 @@ class MemberOrderServiceTest {
   }
 
   @Test
+  @DisplayName("指名の判定は申請先の店舗で行うこと")
+  void requestChecksTheNominationAgainstTheRequestedStore() {
+    // 会員は店舗を授権されず storeFilter も働かないため、店舗の一致は問い合わせ自体に載せるしかない
+    when(storeExistenceCheck.exists(OTHER_STORE_ID)).thenReturn(true);
+    when(nominatableCast.find(OTHER_STORE_ID, "cast-1")).thenReturn(Optional.empty());
+
+    MemberOrderCreateRequest request = requestFor(today(), "cast-1");
+    request.setStoreId(OTHER_STORE_ID);
+
+    assertThatThrownBy(() -> service.request(EMAIL, request)).isInstanceOf(NotFoundException.class);
+    verify(nominatableCast).find(OTHER_STORE_ID, "cast-1");
+  }
+
+  @Test
   @DisplayName("その日の確定シフトが無いキャストは指名できないこと")
   void requestRejectsCastWithoutConfirmedShift() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    Cast cast = Cast.builder().name("さくら").status("ACTIVE").build();
-    cast.setStoreId(STORE_ID);
-    cast.setId("cast-1");
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(cast));
+    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
     when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", today()))
         .thenReturn(false);
 
@@ -262,10 +271,7 @@ class MemberOrderServiceTest {
   @DisplayName("確定シフトのあるキャストは指名できること")
   void requestAcceptsNominationBackedByConfirmedShift() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    Cast cast = Cast.builder().name("さくら").status("ACTIVE").build();
-    cast.setStoreId(STORE_ID);
-    cast.setId("cast-1");
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(cast));
+    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
     when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", today()))
         .thenReturn(true);
     when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(

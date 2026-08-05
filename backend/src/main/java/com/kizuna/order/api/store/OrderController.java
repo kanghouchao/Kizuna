@@ -1,5 +1,6 @@
 package com.kizuna.order.api.store;
 
+import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
@@ -51,6 +52,18 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<List<OrderReceptionistResponse>> listReceptionists() {
     return ResponseEntity.ok(orderService.listReceptionists());
+  }
+
+  /**
+   * 指名候補の一覧（当店に在籍中のキャスト）。キャスト管理の一覧ではなくこの読み口を持つのは、指名が受注の操作で、候補の範囲も要る権限も受注側が決めるため。
+   *
+   * <p>件数上限と並びは読み口が固定する。絞り込みは名前で行うため、続きを辿る手段は持たせない。
+   */
+  @GetMapping("/cast-candidates")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<List<OrderCastCandidateResponse>> listCastCandidates(
+      @RequestParam(required = false) String search) {
+    return ResponseEntity.ok(orderService.listCastCandidates(search));
   }
 
   @PostMapping
