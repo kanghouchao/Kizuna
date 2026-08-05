@@ -1,6 +1,6 @@
 # Design System
 
-Design rules for all UI work. Structure follows the DESIGN.md convention (designmd.app): Colors / Fonts / Spacing / Components / Admin restyle rules / Do's and Don'ts. **Any agent implementing or modifying UI MUST read this file first** and, if a frontend-design skill is available in its environment, invoke it before writing markup. (`frontend/CLAUDE.md` points here.)
+Design rules for all UI work. Structure follows the DESIGN.md convention (designmd.app): Colors / Fonts / Spacing / Components / Admin restyle rules / Do's and Don'ts, plus a Notifications and failure states section the convention itself does not carry. **Any agent implementing or modifying UI MUST read this file first** and, if a frontend-design skill is available in its environment, invoke it before writing markup. (`frontend/CLAUDE.md` points here.)
 
 ## Scope: three visual worlds
 
@@ -115,6 +115,10 @@ A few of the newer rows need a note, since each answers a question that came up 
 - The toasts (`ToastProvider`) are three rows already in the table, none of them new: the base is `text-foreground` on `bg-card` (`--card-foreground` is defined identically to `--foreground` in both modes, so it is literally that row), the success toast is `bg-success` + `text-success-foreground`, and the error toast is `bg-destructive` + `text-destructive-foreground`. react-hot-toast paints its own background from a generated class, and a Tailwind token class layered on top wins or loses by source order — so each pairing is written as an inline `var(--token)` instead, which is deterministic and follows the mode the same way. Two consequences bind anyone editing that file: a per-type `style` is **merged over** the base one, so overriding a background without also naming its `color` leaves the base foreground on the new fill; and the toast's drop shadow lives on the generated class, so an inline `background` never removes it.
 
   A third one bounds where those rows apply. Both root layouts mount the `Toaster`, so admin tokens reach the storefront and the auth screens too — and `(public)` has no theme wiring, so there they always resolve to the `:root` values. That is harmless for the two types anything actually calls: every `toast` call site in the tree is `.success` or `.error`, and `--destructive` / `--destructive-foreground` in light are the saturated red on near-white those screens already showed. **The base pairing is the one that does not travel.** It is unreached today, and a bare `toast()` added later would paint an admin card surface — white — over Midnight Atelier. Whoever adds the first one settles what the neutral toast looks like outside admin; do not assume this row answers it.
+
+  As the classification stands, none of the three tiers reaches for the base pairing — `success`, `error` and `critical` all paint a hue — and the two `critical` call sites (`StaffEditModal` and `RoleFormModal`) were traced to their host routes, both under `app/(admin)/`. So no white card is printed today. That is a note on the current state so the next reader does not re-count the tiers, not a retraction of the warning above.
+
+  The tiers add no row to this table, and this is why: `critical` reuses the error row's recipe unchanged, its octagon icon is `currentColor` (= `--destructive-foreground`, so the same row again), and the correction to `error`'s default icon colours moves that cross onto the same token. No pairing outside the rows above is prescribed anywhere in that section. Note the headroom while reading this row, though: light is **4.56** against the 4.5 text bar, 0.06 to spare. Nothing in the tier system created that, but anything layered onto this row is working with almost none.
 
 Three of these recipes exist in this form only because the matrix caught them failing: `text-primary` on a dark surface (3.37), solid destructive with a near-white foreground in dark (2.77), and category chips coloured with `text-chart-*`, where three of the five hues fall below 3:1 against their own tint in one mode or the other (as low as 1.62). Where a fix changed appearance it is noted with the recipe.
 
@@ -374,13 +378,104 @@ Consequences that the module cannot enforce for the page:
 - **An offset-paged list needs a total order.** The sort must end in a unique column, or rows shift across page boundaries and get duplicated or skipped between requests. Spring Data takes multiple keys in one parameter as `sort=prop1,prop2,direction`, so `displayOrder,id,asc` is the shape — `displayOrder` alone defaults to `0` for every cast and is not an order at all.
 - **Dialogs, modals and drawers stay outside `ListPage`.** `children` is unmounted while loading and when empty; a modal placed there disappears mid-refetch.
 
+## Notifications and failure states
+
+Every message the console shows is placed by two decisions, taken in that order: **which surface it belongs on**, then **how heavy it is**. Surface comes first. Sorting severity alone would only recolour the banner that flies over a list which still reads 0 件 — the structural mistake is the surface, not the hue.
+
+### Which surface (decide this first)
+
+Run the precheck, then apply the three clauses **in order, and stop at the first one that matches**. The input to every step is _what happened_, never the wording's tone.
+
+**Precheck — immediately after this message appears, does the screen carrying it still exist?** If it does not, toast is not among the choices; see "When the screen will not survive the message".
+
+|     | Condition                                                                                                     | Surface                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| ①   | A region that renders fetched content is now holding the wrong content (the fetch failed, or it is not there) | **the region names the failure itself.** No toast       |
+| ②   | An input the user can fix on the spot is identifiable (client-side validation)                                | **beside that input.** No toast                         |
+| ③   | Everything else — the outcome of an action                                                                    | **toast**, success and failure alike, with no exception |
+
+Each clause's grounds, because each is a rule somebody will want to bend:
+
+- ① Escaping to a toast leaves the region indistinguishable from an empty result, so the screen asserts something untrue while the truth lives in a banner that is gone in seconds. A failed fetch that falls through to a "not configured" branch is the same defect wearing different copy.
+- ② A toast cannot point at a field, and by the time the user is back at the field it has expired. Only client-side validation reaches this clause: a server response carries no field name — `getApiErrorMessage` reads a flat `error` / `message` — so a server-side failure cannot identify "the input to fix" and falls through to ③.
+- ③ An event is not a state. Something with no place on the screen that is _currently like that_ cannot go on a surface that expresses state. A 409 conflict is an event too and stays here, even though missing it costs more than missing an ordinary write failure — that cost is answered by severity below, not by moving the surface.
+
+**A "region" in ① is not only a list.** These rank equally: a list or table, a form's options (a `Select`'s items), a combobox's candidates, a detail page's own body, and a **sub-region inside a detail page** (an order-history block, a custom-field definition set). The failure mode is identical in all of them — the failure disguises itself as "nothing here" — so the size of the container does not change the clause that applies.
+
+### When the screen will not survive the message
+
+The precheck's exit. **A toast cannot outlive the screen that carries it.** Crossing between the two root layouts is a full page load and takes the `Toaster` down with it, so a message posted immediately before one of those is never read. Where that is the situation there are exactly two forms, and no third:
+
+- **In place** — the screen says it outright before it goes away. This is the form for a dead end the user has to stop and read; an automatic logout becomes a button the user presses, so nothing disappears before it is read.
+- **Reason code** — the landing screen states why it is there. The caller passes a reason as a query parameter and the landing side **resolves it against a whitelist of fixed copy**.
+
+Three rules bind that second form:
+
+- **Never render the query string.** Otherwise a crafted `?reason=<any wording at all>` link makes our login screen speak an attacker's words. An unknown value renders nothing.
+- **The reason is passed by the caller.** Do not move `logout()`'s default destination — it is used by reference from several places, and changing the default lands a user who pressed logout themselves on a screen explaining something they never did.
+- **Do not build a general mechanism for carrying copy across a transition.** The landing points are few, and the landing side only consults a lookup table.
+
+A client navigation _within_ one root layout does not destroy the `Toaster`, so there the precheck answers yes and clause ③ applies as normal. The question is whether the screen carrying the message survives, never whether a navigation happens.
+
+### Severity — the three tiers
+
+Only clause ③ reaches a toast, and there it is one of three tiers. One question decides which: **after the failure, is the screen still telling the truth?**
+
+| Tier       | Judgment                                                                                                                                                                                                           | Duration |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| `success`  | The action completed                                                                                                                                                                                               | 3000ms   |
+| `error`    | It did not complete, and the screen says so by itself — the modal is still open, the values are still in it, the button can be pressed again. The toast supplements the reason; missing it does not mislead anyone | 5000ms   |
+| `critical` | It did not complete **and the screen can no longer state that** — the values in front of the user were replaced by something else. The toast is the only record of what was lost                                   | 10000ms  |
+
+Call sites write the meaning and never the colour, the duration or the icon: `notify.success` / `notify.error` / `notify.critical` from `@/shared/notify`, each taking the message and nothing else. That layer does not wrap `getApiErrorMessage` — turning an exception into copy is a separate job with consumers outside toasts, and folding it in would give `notify` two signatures. `react-hot-toast` is imported nowhere but that layer and `ToastProvider`, tests included: a direct `toast.error` looks identical to `notify.error` at the call site, so it would leave the tier system silently. (The semantic layer, and the provider-side values that have to match the table above, arrive with their own tickets. Read all of it the way a matrix row added ahead of its slice is read — as the destination, not as evidence the tree already agrees with it.)
+
+Where the numbers live, since they are not all in one file: `success` and `error` durations are per-type entries in `ToastProvider`, while **`critical`'s duration and its icon are passed by the semantic layer at the call site.** The library has no `critical` per-type key, and the auto-dismiss timer is armed before the render pass, so a duration swapped in at render time would not take. **The word `critical` does not appear in `ToastProvider` at all** — do not go looking for it there. What the layer emits is an **`error`-type toast with those two values overridden**: that is how `critical` inherits the `error` colour recipe below, and the call's own options are merged last, so the override lands even though no `critical` key exists. A tier built on a bare or custom toast instead would take the base card pairing, which is the one thing the Colors section says does not travel outside admin. Splitting the pair (icon in the provider, duration at the call site) is worse than either: `critical`'s definition would break across two files, joined only by a marker string that degrades to a plain `error` if it is ever misspelled, silently and untyped.
+
+#### `critical` differs from `error` by an icon, not a colour
+
+`critical` keeps `error`'s recipe exactly — `bg-destructive` + `text-destructive-foreground`, which is already a matrix row — so **no new state semantic and no new matrix row**. The whole distinction is carried by the icon the semantic layer passes — `icon: <OctagonAlertIcon size={20} className="shrink-0" />`:
+
+- **The octagon is the semantic.** A red octagon is the real-world stop sign, which is what `critical` means: do not skim past this. It also leaves the triangle to `warning`, whose attention-icon seat in the Colors table is still open — the most generic warning shape should not be spent on a red fill here.
+- The colour is `currentColor`, i.e. `--destructive-foreground`, so it lands on the existing row (4.56 / 6.88) and clears both the 3:1 graphic bar and the 4.5 text bar.
+- **20px**, matching the width of the other tiers' icon slot so all three start their text at the same place. The tier difference is carried by shape, never by volume.
+- **`shrink-0` is not optional.** The library's own default icons sit inside a wrapper carrying `min-width: 20px`; an icon handed in per call is inserted **bare** into the flex row, where it inherits `flex-shrink: 1` / `min-width: auto`. Measured, it crushes to **10.7×20** and the octagon becomes a vertical ellipse — which destroys the only thing separating the two tiers. **It appears only when both modes are painted in a real browser**: neither static review nor jsdom sees it. Treat the class as part of the icon's identity rather than as styling, and do not "clean it up".
+
+`error`'s own icon is **corrected**, not restyled. The library's default paints a hardcoded circle-and-cross onto our red fill, and that cross measures **2.89 in dark** against `--destructive` — under the 3:1 graphic bar, an unmeasured pairing that arrived through a dependency rather than through this document. So the `error` per-type block sets `iconTheme: { primary: 'transparent', secondary: 'var(--destructive-foreground)' }`: the circle was effectively invisible anyway (1.44 / 1.14) and is made explicitly transparent, while the cross moves onto the same token as the body text (**2.89 → 6.88**). **The repair deliberately does not change the shape.** Making the circle an opaque white would give `error` a crisp round symbol and narrow the very gap the octagon exists to open.
+
+#### Dismissal, ARIA and position are identical across the tiers
+
+- **Clicking the toast body dismisses it, at every tier**, and there is no × button. This is one behaviour shared by all three; it carries no part of the tier distinction.
+- **`role="status"` / `aria-live="polite"` and `top-center` are the library defaults and stay that way** — for `error` and `critical` too, since the package ships no assertive variant at all. There is no per-tier override to write, at the provider or at the call site.
+- Two consequences, both accepted deliberately. Dismissal is **pointer-only**, which is tolerable **because all three durations are finite** — pairing body-click dismissal with a persistent toast would produce a banner a keyboard user could never close. And **nothing interactive can live inside a toast**, because the whole body is the dismiss target; recovery affordances belong in the failing region, which is where clause ① already puts them.
+
+### The in-region error state (clause ①'s shape)
+
+One shape covers every case — a list, a `Select`'s options, a whole detail page, a sub-region inside one: **one line of red copy plus one outline button.** Only the outer placement differs, and placement is the caller's `className`. The copy is `text-destructive-strong` — hand-written colour takes the `-strong` form, and that one is certified on both surfaces such a region sits on (`bg-card` 10.06 / 6.13, `bg-background` 10.06 / 6.88) — and the button is `Button variant="outline"`. Nothing in this shape needs a pairing the matrix does not already have.
+
+- **The retry button is always there.** Copy that tells the user to reload the page is not an alternative: it charges them anything half-typed elsewhere on the screen. A region that names its own failure owns its own recovery, or it has merely moved where it shouts "broken".
+- **On failure the region clears completely, and there is no exception.** No stale rows left standing, and no "this is the previously loaded content" caveat either. Rows and paging position both return to the start, so **retry always reads from the first page** — a retry resuming from a cursor would return rows 21–40 over a missing 1–20. This applies to a failed load-more exactly as it applies to a first load.
+- **Submission is not blocked** when auxiliary data (a `Select`'s options, a definition table) failed to load. Required-field validation stays as it is: the server re-validates and is the final authority, and a failed fetch of supporting data is about as likely as a flicker in the line — not something to design a gate around. What keeps this honest is clause ① itself; a region that has named its own failure, plus a required-field message, state the fact together instead of blaming the user for a system fault.
+- **A detail page does not navigate away.** The region of a detail page is the page, so it stays put and shows the error state itself. 404 is distinguished from other failures by **copy and recovery affordance, not by navigation**: a 404 gets a link to the list and **no** retry button, since retrying will never succeed. Navigating away would delete the failure from the screen and hand the whole explanation to the notification — the shape this section exists to remove.
+- The shape lives in **one hand-written component in `shared/ui`** (the side without `data-slot`) with three props — the copy, an optional retry handler, and the alternative link for 404. Retry being optional is how "no retry on a 404" is expressed. Adding to or editing `shared/ui` is a shared-file change and goes through the parallel-PR contract below.
+
+### Client-side validation (clause ②'s shape)
+
+- **The browser's own bubble does not satisfy ②.** Only text we draw does.
+- **Take the native `required` / `minLength` attributes off.** While they are present the browser stops the submit ahead of the handler, so our message is never drawn. The two are alternatives, not partners — and removing an attribute is only safe together with the copy that replaces it, otherwise the field just falls silent.
+- The form is **`FormField` (the sanctioned `Controller` — never a bare one) + `rules` + `FormMessage`**. `FormField` is this repository's standing answer to "react-hook-form can only grab a real `<input>`": every Radix `Select` here is wired that way, and one native `Input` is wrapped in it for no reason other than drawing a message. Where the check spans a group rather than one field ("select at least one"), `rules.validate` is the form it takes, since `required` cannot express it. A hidden input added to give react-hook-form something to grab is not a precedent to copy from.
+- **"Beside the input" covers the programmatic relation, not only visual proximity.** `FormControl` emits `aria-invalid` and an `aria-describedby` pointing at its `FormMessage`; a hand-written `<p>` emits neither, so a screen reader hears "a line appeared somewhere" instead of "this field is wrong, and this is why". Routing everything through `FormMessage` is also what ends the class-name drift between hand-written error paragraphs — its `text-destructive` is the emission the Colors section names as allowed, and where copy genuinely has to be hand-written it takes `-strong` like any other hand-written colour.
+- **Never disable the submit button because validation has not passed.** Let it be pressed, show the messages, and move focus to the first problem — `handleSubmit` already does that. A greyed-out button does not say what is still missing, and keyboard or screen-reader users may not even be able to put focus on it to find out. (`disabled={isSubmitting}` is unrelated: that is double-submit protection, not validation.)
+- Moving a value into react-hook-form pulls in the form's structure, and that is in scope rather than a reason to keep a hand-written paragraph: a modal with no `<form>` element at all, a hand-rolled submitting flag that something else depends on, a `reset()` after a 409 whose reach widens once more fields are registered.
+
+**"Do not seal the submit" holds in both scopes, and the two agree in direction.** For a **fetch failure**, the region names it and the submit still goes through, because the server re-validates. For **failed validation**, the button stays enabled and the messages appear. Different scopes — one is a system fault, the other is the user's input — and the same rule: never pre-emptively block the submit; put the fact into words instead.
+
 ## Admin restyle rules (shadcn sweep)
 
 Rules for converting a remaining admin slice to the primitives + token vocabulary. Slices are converted independently and in parallel, so these are contracts, not suggestions.
 
 ### Form pattern
 
-Keep native inputs bound straight to `register` and swap the element for the shadcn `Input` / `Textarea`. Reach for `FormField` only where a Radix-controlled component needs a controlled value (`Select` / `Checkbox` / `Switch` / `RadioGroup`). Wrap the whole form in `<Form {...form}>`. Never introduce a bare `Controller`.
+Keep native inputs bound straight to `register` and swap the element for the shadcn `Input` / `Textarea`. Reach for `FormField` where a Radix-controlled component needs a controlled value (`Select` / `Checkbox` / `Switch` / `RadioGroup`), and wherever a validation message has to be drawn — `FormMessage` and `FormControl`'s `aria-invalid` / `aria-describedby` resolve through `FormField`'s context and emit nothing outside it, registered native input or not (see "Client-side validation" above). Nothing else needs it. Wrap the whole form in `<Form {...form}>`. Never introduce a bare `Controller`.
 
 ```tsx
 <FormField
