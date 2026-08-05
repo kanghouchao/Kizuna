@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { castApi } from '@/entities/cast';
 import { OrderReceptionist, ReceptionRoute, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
 import { CastSearchCombobox } from './CastSearchCombobox';
@@ -47,6 +46,13 @@ export interface OrderFormData {
   landmark: string;
   hasPet: boolean;
   castId: string;
+  /**
+   * 指名キャストの表示名。コンボボックスの初期表示にだけ使い、選択を動かすのは候補のクリックだけ。
+   *
+   * 名前を呼び出し側から受け取るのは、キャスト管理の詳細（CAST_MANAGE）を引かずに済ませるため —
+   * 受注の応答が cast_name を持っているので取り直す必要が無い。
+   */
+  castName: string;
   pax: number;
   receptionRoute: ReceptionRoute;
   courseMinutes: number;
@@ -98,8 +104,6 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
     formState: { errors },
   } = form;
 
-  // 編集で渡ってくるのは id だけなので、コンボボックスに出す名前は取りに行く
-  const [initialCastName, setInitialCastName] = useState('');
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
 
   useEffect(() => {
@@ -114,20 +118,6 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
 
     loadReceptionists();
   }, []);
-
-  useEffect(() => {
-    const loadInitialCast = async () => {
-      if (!initialData?.castId) return;
-      try {
-        const cast = await castApi.get(initialData.castId);
-        setInitialCastName(cast.name ?? '');
-      } catch {
-        toast.error('キャスト名の取得に失敗しました');
-      }
-    };
-
-    loadInitialCast();
-  }, [initialData?.castId]);
 
   return (
     <Form {...form}>
@@ -283,7 +273,7 @@ export function OrderForm({ initialData, onSubmit, isSubmitting }: OrderFormProp
                 <CastSearchCombobox
                   id="castName"
                   label="キャスト *"
-                  castName={initialCastName}
+                  castName={initialData?.castName ?? ''}
                   onChange={castId =>
                     setValue('castId', castId, { shouldValidate: true, shouldDirty: true })
                   }

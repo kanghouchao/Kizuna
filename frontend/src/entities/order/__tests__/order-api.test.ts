@@ -42,6 +42,16 @@ describe('orderApi', () => {
       url: '/store/orders/receptionists',
     });
   });
+  it('listCastCandidates は受注側の指名候補の読み口を GET する', async () => {
+    // キャスト管理一覧（/store/casts）を流用すると受注権限だけでは 403 になり、在籍停止も混ざる
+    expect(await orderApi.listCastCandidates({ search: '花' })).toEqual({
+      ok: true,
+      url: '/store/orders/cast-candidates',
+    });
+    expect(mockedGet).toHaveBeenCalledWith('/store/orders/cast-candidates', {
+      params: { search: '花' },
+    });
+  });
   it('listReservationRequests は予約受付の専用読み口を GET し、カーソルページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
       data: { content: [{ id: 'o1' }], next_cursor: 'abc' },

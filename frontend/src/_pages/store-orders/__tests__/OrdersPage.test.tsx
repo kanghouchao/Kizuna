@@ -2,7 +2,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
 import { orderApi } from '@/entities/order';
-import { castApi } from '@/entities/cast';
 
 jest.mock('@/entities/order', () => ({
   // 表示ラベル等の定数は本物を使う（API だけを差し替える）
@@ -11,20 +10,12 @@ jest.mock('@/entities/order', () => ({
     list: jest.fn(),
     create: jest.fn(),
     listReceptionists: jest.fn(),
+    listCastCandidates: jest.fn(),
     listReservationRequests: jest.fn(),
     confirm: jest.fn(),
     decline: jest.fn(),
   },
 }));
-
-jest.mock('@/entities/cast', () => ({
-  castApi: {
-    get: jest.fn(),
-    list: jest.fn(),
-  },
-}));
-
-const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
@@ -178,12 +169,7 @@ describe('店側オーダー画面の描画', () => {
   it('新規登録はバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
     mockedOrderApi.create.mockResolvedValue({});
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
-    mockedCastApi.list.mockResolvedValue({
-      rows: [{ id: 'cast-1', name: '花子' }],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
+    mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
 
     render(<CreateOrderPage />);
     // 受付・キャストはサーバ側が @NotNull / @NotBlank。選ばないと送信自体が止まる。

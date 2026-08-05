@@ -1,19 +1,12 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CreateOrderPage from '../ui/OrderCreatePage';
-import { castApi } from '@/entities/cast';
 import { orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
   orderApi: {
     create: jest.fn(),
     listReceptionists: jest.fn(),
-  },
-}));
-
-jest.mock('@/entities/cast', () => ({
-  castApi: {
-    get: jest.fn(),
-    list: jest.fn(),
+    listCastCandidates: jest.fn(),
   },
 }));
 
@@ -43,12 +36,7 @@ describe('新規オーダー登録の送信ペイロード', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
-    (castApi as jest.Mocked<typeof castApi>).list.mockResolvedValue({
-      rows: [{ id: 'cast-1', name: '花子' }],
-      total: 1,
-      page: 0,
-      size: 10,
-    });
+    mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
     mockedOrderApi.create.mockResolvedValue({});
   });
 

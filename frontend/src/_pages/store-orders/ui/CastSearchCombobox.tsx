@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { CastResponse, castApi } from '@/entities/cast';
+import { OrderCastCandidate, orderApi } from '@/entities/order';
 import {
   Button,
   Command,
@@ -32,7 +32,7 @@ interface CastSearchComboboxProps {
 }
 
 /**
- * 名前で当店のキャストを絞り込んで 1 人選ぶコンボボックス。
+ * 名前で当店の指名候補（在籍中のキャスト）を絞り込んで 1 人選ぶコンボボックス。
  *
  * 検索語は popover の中だけに存在し、閉じると捨てる。選択を動かすのは候補のクリックだけなので、
  * 「打ちかけの文字列」が指名として漏れることも、打ちかけのまま保存して指名が消えることも無い。
@@ -46,7 +46,7 @@ export function CastSearchCombobox({
 }: CastSearchComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
-  const [options, setOptions] = useState<CastResponse[]>([]);
+  const [options, setOptions] = useState<OrderCastCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedName, setSelectedName] = useState(castName);
 
@@ -64,13 +64,10 @@ export function CastSearchCombobox({
     const timer = setTimeout(async () => {
       try {
         setIsLoading(true);
-        const response = await castApi.list({
-          size: 10,
-          sort: 'displayOrder,asc',
-          ...(search ? { search } : {}),
-        });
+        // 件数上限・並び・在籍中への絞り込みはすべてサーバ側の読み口が持つ
+        const candidates = await orderApi.listCastCandidates(search ? { search } : undefined);
         if (superseded) return;
-        setOptions(response.rows);
+        setOptions(candidates);
       } catch {
         if (superseded) return;
         setOptions([]);
@@ -95,7 +92,7 @@ export function CastSearchCombobox({
     }
   };
 
-  const handleSelect = (cast: CastResponse) => {
+  const handleSelect = (cast: OrderCastCandidate) => {
     setSelectedName(cast.name ?? '');
     onChange(cast.id ?? '');
     handleOpenChange(false);

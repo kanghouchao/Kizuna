@@ -1,11 +1,12 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
-import { castApi } from '@/entities/cast';
+import * as castEntity from '@/entities/cast';
 import { orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
   orderApi: {
     listReceptionists: jest.fn(),
+    listCastCandidates: jest.fn(),
   },
 }));
 
@@ -55,10 +56,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
   beforeEach(() => {
     jest.clearAllMocks();
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
-    (castApi as jest.Mocked<typeof castApi>).get.mockResolvedValue({
-      id: 'cast-1',
-      name: '花子',
-    });
+    mockedOrderApi.listCastCandidates.mockResolvedValue([]);
   });
 
   it('受付以外を未操作のまま送ると既定値が型ごとそのまま送られること', async () => {
@@ -152,18 +150,11 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
 });
 
 describe('オーダーフォームのキャスト候補リストの選択配線', () => {
-  const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
-
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
-    mockedCastApi.list.mockResolvedValue({
-      rows: [{ id: 'cast-1', name: '花子' }],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    } as never);
+    mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
   });
 
   afterEach(() => {
@@ -222,5 +213,30 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText('キャストを候補から選択してください')).toBeInTheDocument();
+  });
+});
+
+describe('オーダーフォームの編集時の指名表示', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
+    mockedOrderApi.listCastCandidates.mockResolvedValue([]);
+  });
+
+  it('渡された castName をそのまま出し、キャスト管理 API を一切呼ばないこと', async () => {
+    // 名前を id から取り直すと CAST_MANAGE が要り、受注担当だけのロールでは 403 になる。
+    // 受注の応答が cast_name を持っているので、呼び出し側から受け取れば足りる
+    render(
+      <OrderForm
+        initialData={{ castId: 'cast-1', castName: 'あや' }}
+        onSubmit={jest.fn()}
+        isSubmitting={false}
+      />
+    );
+    await waitFor(() => expect(mockedOrderApi.listReceptionists).toHaveBeenCalled());
+
+    expect(screen.getByRole('combobox', { name: /キャスト/ })).toHaveTextContent('あや');
+    expect(castEntity.castApi.get as jest.Mock).not.toHaveBeenCalled();
+    expect(castEntity.castApi.list as jest.Mock).not.toHaveBeenCalled();
   });
 });

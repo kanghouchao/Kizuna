@@ -11,6 +11,7 @@ import {
   MemberOrder,
   MemberOrderCreateRequest,
   Order,
+  OrderCastCandidate,
   OrderCreateRequest,
   OrderReceptionist,
   ReservationRequestUpdateRequest,
@@ -29,6 +30,16 @@ export const orderApi = {
   },
   listReceptionists: async (): Promise<OrderReceptionist[]> => {
     const response = await apiClient.get('/store/orders/receptionists');
+    return response.data;
+  },
+  /**
+   * 指名候補の一覧（当店に在籍中のキャストを名前で絞り込む）。件数上限と並びはサーバ側が固定する。
+   *
+   * キャスト管理の一覧ではなくこの読み口を使うのは、受注権限だけで引けること・在籍停止が混ざらないことの
+   * 両方がここでしか成り立たないため。
+   */
+  listCastCandidates: async (params?: { search?: string }): Promise<OrderCastCandidate[]> => {
+    const response = await apiClient.get('/store/orders/cast-candidates', { params });
     return response.data;
   },
   /**
