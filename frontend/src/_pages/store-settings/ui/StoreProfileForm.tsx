@@ -50,6 +50,12 @@ interface StoreProfileFormProps {
   isSubmitting: boolean;
 }
 
+// 引き金に出る文言は候補一覧（items）から引かれる。渡さないと生の値が出る。
+const MV_TYPE_OPTIONS = [
+  { value: 'image', label: '画像' },
+  { value: 'video', label: '動画' },
+];
+
 const SNS_PLATFORMS = [
   { value: 'twitter', label: 'Twitter / X' },
   { value: 'instagram', label: 'Instagram' },
@@ -306,15 +312,22 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center gap-2">
                     <FormLabel className="text-muted-foreground font-normal">タイプ:</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select
+                      items={MV_TYPE_OPTIONS}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
                       <FormControl>
                         <SelectTrigger size="sm">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="image">画像</SelectItem>
-                        <SelectItem value="video">動画</SelectItem>
+                        {MV_TYPE_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>
@@ -370,6 +383,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                         <FormItem>
                           <FormLabel>プラットフォーム</FormLabel>
                           <Select
+                            items={SNS_PLATFORMS}
                             value={platformField.value}
                             onValueChange={platformField.onChange}
                           >

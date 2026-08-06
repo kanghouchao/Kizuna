@@ -189,7 +189,10 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     expect(screen.getByRole('combobox', { name: '指名' })).toHaveTextContent('あや');
     await openPicker();
     await search('み');
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    const option = screen.getByRole('option', { name: /みか/ });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
     await save();
 
     expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
@@ -199,7 +202,10 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     renderModal(nominationFreeRequest);
 
     await openPicker();
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    const option = screen.getByRole('option', { name: /みか/ });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
     await save();
 
     expect(mockedUpdate).toHaveBeenCalledWith('o1', expect.objectContaining({ cast_id: 'cast-2' }));
@@ -250,7 +256,10 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
 
     expect(screen.queryByRole('checkbox', { name: '指名を外す' })).not.toBeInTheDocument();
     await openPicker();
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    const option = screen.getByRole('option', { name: /みか/ });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
 
     fireEvent.click(await screen.findByRole('checkbox', { name: '指名を外す' }));
     await save();
@@ -265,7 +274,10 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     renderModal(nominatedRequest);
 
     await openPicker();
-    fireEvent.click(screen.getByRole('option', { name: /みか/ }));
+    const option = screen.getByRole('option', { name: /みか/ });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
     fireEvent.click(screen.getByRole('checkbox', { name: '指名を外す' }));
     await save();
 

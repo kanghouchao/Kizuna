@@ -49,20 +49,18 @@ export function Header() {
 
         {stores && stores.length > 0 && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <StoreIcon className="size-5 shrink-0 text-muted-foreground" />
-                {/* 店名は 200 字まで許されるため、上限を置かないと行の固有幅に上界が無くなり、
-                    シェルの下限幅では守れなくなる。 */}
-                <span className="max-w-40 truncate">{currentStoreName || '店舗を選択'}</span>
-              </Button>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <StoreIcon className="size-5 shrink-0 text-muted-foreground" />
+              {/* 店名は 200 字まで許されるため、上限を置かないと行の固有幅に上界が無くなり、
+                  シェルの下限幅では守れなくなる。 */}
+              <span className="max-w-40 truncate">{currentStoreName || '店舗を選択'}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-56">
               {stores.map(store => {
                 const id = store.id;
                 if (id === undefined) return null;
                 return (
-                  <DropdownMenuItem key={id} onSelect={() => switchStore(id)}>
+                  <DropdownMenuItem key={id} onClick={() => switchStore(id)}>
                     {store.name}
                   </DropdownMenuItem>
                 );
@@ -77,24 +75,26 @@ export function Header() {
             <p className="text-xs text-muted-foreground">Platform Admin</p>
           </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="アカウントメニュー"
-                className="text-muted-foreground hover:text-primary-strong"
-              >
-                <CircleUserRoundIcon className="size-8" />
-              </Button>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="アカウントメニュー"
+                  className="text-muted-foreground hover:text-primary-strong"
+                />
+              }
+            >
+              <CircleUserRoundIcon className="size-8" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-48">
-              <DropdownMenuItem asChild>
-                <Link href={accountHref}>アカウント設定</Link>
+              <DropdownMenuItem render={<Link href={accountHref} />}>
+                アカウント設定
               </DropdownMenuItem>
               {/* 原語の destructive 変種は淡色地の上で既定の赤を使い明モードで 4.5 を割るため、
                   文字は -strong 側を指定する。 */}
               <DropdownMenuItem
-                onSelect={logout}
+                onClick={logout}
                 className="text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong"
               >
                 ログアウト

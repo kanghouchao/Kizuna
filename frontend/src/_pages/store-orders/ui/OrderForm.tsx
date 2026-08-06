@@ -28,9 +28,29 @@ import {
   Textarea,
 } from '@/shared/ui';
 
-// Radix Select は value="" を許容しないため、空選択を表す番兵値。
+// 空選択を表す番兵値。フォームが持つ値は従来どおり空文字に戻す。
 // onValueChange 側で '' に戻すことで送信ペイロードは従来どおり空文字になる。
 const SELECT_NONE = '__none__';
+
+// 引き金に出る文言は候補一覧（items）から引かれる。渡さないと生の値が出るので、
+// 選べる値と表示はここで対にして持ち、項目の描画も同じ配列を読む。
+const CLASSIFICATION_OPTIONS = ['ーー', '自宅', 'ラブホ', 'ビジホ'].map(v => ({
+  value: v,
+  label: v,
+}));
+const HAS_PET_OPTIONS = [
+  { value: 'false', label: 'なし' },
+  { value: 'true', label: 'あり' },
+];
+const COURSE_MINUTES_OPTIONS = ['60', '90', '120'].map(v => ({ value: v, label: v }));
+const RECEPTION_ROUTE_OPTIONS = [
+  { value: 'PHONE', label: '電話受付' },
+  { value: 'WEB', label: 'Web 申請' },
+];
+const DISCOUNT_OPTIONS = [
+  { value: SELECT_NONE, label: 'なし' },
+  { value: '一番最初割', label: '一番最初割' },
+];
 
 export interface OrderFormData {
   receptionistId: string;
@@ -106,6 +126,12 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
   } = form;
 
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+  const receptionistItems = [
+    { value: SELECT_NONE, label: '－－－' },
+    ...receptionistOptions
+      .filter(o => o.id !== undefined)
+      .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
+  ];
 
   useEffect(() => {
     const loadReceptionists = async () => {
@@ -141,6 +167,7 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                   <FormItem>
                     <FormLabel>受付 *</FormLabel>
                     <Select
+                      items={receptionistItems}
                       value={field.value ? field.value : SELECT_NONE}
                       onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
                     >
@@ -150,16 +177,11 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value={SELECT_NONE}>－－－</SelectItem>
-                        {receptionistOptions.map(option => {
-                          const id = option.id;
-                          if (id === undefined) return null;
-                          return (
-                            <SelectItem key={id} value={String(id)}>
-                              {option.display_name}
-                            </SelectItem>
-                          );
-                        })}
+                        {receptionistItems.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -214,17 +236,22 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>区分</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select
+                      items={CLASSIFICATION_OPTIONS}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
                       <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="ーー">ーー</SelectItem>
-                        <SelectItem value="自宅">自宅</SelectItem>
-                        <SelectItem value="ラブホ">ラブホ</SelectItem>
-                        <SelectItem value="ビジホ">ビジホ</SelectItem>
+                        {CLASSIFICATION_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>
@@ -237,6 +264,7 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                   <FormItem>
                     <FormLabel>ペット有無</FormLabel>
                     <Select
+                      items={HAS_PET_OPTIONS}
                       value={String(field.value)}
                       onValueChange={v => field.onChange(v === 'true')}
                     >
@@ -246,8 +274,11 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="false">なし</SelectItem>
-                        <SelectItem value="true">あり</SelectItem>
+                        {HAS_PET_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>
@@ -295,6 +326,7 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                   <FormItem>
                     <FormLabel>ｺｰｽ(分)</FormLabel>
                     <Select
+                      items={COURSE_MINUTES_OPTIONS}
                       value={String(field.value)}
                       onValueChange={v => field.onChange(Number(v))}
                     >
@@ -304,9 +336,11 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="60">60</SelectItem>
-                        <SelectItem value="90">90</SelectItem>
-                        <SelectItem value="120">120</SelectItem>
+                        {COURSE_MINUTES_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>
@@ -322,15 +356,22 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>受付経路</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select
+                      items={RECEPTION_ROUTE_OPTIONS}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
                       <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="PHONE">電話受付</SelectItem>
-                        <SelectItem value="WEB">Web 申請</SelectItem>
+                        {RECEPTION_ROUTE_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>
@@ -347,6 +388,7 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                   <FormItem>
                     <FormLabel>割引</FormLabel>
                     <Select
+                      items={DISCOUNT_OPTIONS}
                       value={field.value ? field.value : SELECT_NONE}
                       onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
                     >
@@ -356,8 +398,11 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value={SELECT_NONE}>なし</SelectItem>
-                        <SelectItem value="一番最初割">一番最初割</SelectItem>
+                        {DISCOUNT_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>

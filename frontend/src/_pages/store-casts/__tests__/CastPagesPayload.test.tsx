@@ -144,8 +144,11 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(trigger).toHaveTextContent('在籍停止');
 
     // キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）
-    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: '在籍中' }));
+    fireEvent.click(trigger);
+    const option = await screen.findByRole('option', { name: '在籍中' });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(mockedCastApi.update).toHaveBeenCalledTimes(1));

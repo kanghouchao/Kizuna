@@ -31,7 +31,7 @@ import {
 /** 一覧 1 ページあたりの件数 */
 const PAGE_SIZE = 10;
 
-/** 店舗で絞り込まないことを表す番兵値（Radix Select は空文字を値に採れない。命名は既存の SELECT_NONE に倣う）。 */
+/** 店舗で絞り込まないことを表す番兵値（命名は既存の SELECT_NONE に倣う）。 */
 const ALL_STORES = '__all__';
 
 /** 一覧の絞り込み条件。検索語と店舗のどちらを変えても 1 ページ目から取り直す。 */
@@ -110,6 +110,14 @@ export default function StaffPage() {
     void list.search(prev => ({ ...prev, storeId: undefined }));
   }, [stores, storesLoading, storeFilter, list]);
 
+  // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
+  const storeFilterOptions = [
+    { value: ALL_STORES, label: 'すべての店舗' },
+    ...stores
+      .filter(store => store.id !== undefined)
+      .map(store => ({ value: String(store.id), label: store.name ?? String(store.id) })),
+  ];
+
   /**
    * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
    *
@@ -160,12 +168,17 @@ export default function StaffPage() {
               </div>
               {/* 店舗の選択は検索ボタンを待たずに即時適用する（選び直すたびに一覧が変わる方が自然なため） */}
               <Select
+                items={storeFilterOptions}
                 value={storeFilter}
-                onValueChange={value => {
-                  setStoreFilter(value);
+                onValueChange={(selected, details) => {
+                  // 候補から消えた値の巻き戻し（先頭項目へ倒される）でもここは鳴る。拾うのは
+                  // 利用者が項目を押したときだけ——巻き戻しは上の effect が適用済み条件を
+                  // 保ったまま担うので、下書きの検索語で上書きしてはいけない。
+                  if (details.reason !== 'item-press' || selected === null) return;
+                  setStoreFilter(selected);
                   void list.search({
                     search: searchTerm,
-                    storeId: value === ALL_STORES ? undefined : Number(value),
+                    storeId: selected === ALL_STORES ? undefined : Number(selected),
                   });
                 }}
               >
@@ -173,14 +186,11 @@ export default function StaffPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL_STORES}>すべての店舗</SelectItem>
-                  {stores.map(store =>
-                    store.id === undefined ? null : (
-                      <SelectItem key={store.id} value={String(store.id)}>
-                        {store.name ?? String(store.id)}
-                      </SelectItem>
-                    )
-                  )}
+                  {storeFilterOptions.map(o => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Button type="submit">検索</Button>

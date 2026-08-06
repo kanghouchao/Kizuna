@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModeToggle } from '../ModeToggle';
 
 // next-themes 本体（永続化と OS 追随）はライブラリの責務で、根 layout の props 錨が
@@ -10,10 +10,8 @@ jest.mock('next-themes', () => ({
   useTheme: () => ({ theme: mockTheme.current, setTheme: mockSetTheme }),
 }));
 
-// Radix のトリガーは pointerdown/キー入力で開く。jsdom の fireEvent.click は
-// pointerdown を合成しないため、キーボードでメニューを開く。
 function openModeMenu() {
-  fireEvent.keyDown(screen.getByRole('button', { name: '表示モード' }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('button', { name: '表示モード' }));
 }
 
 describe('ModeToggle', () => {
@@ -40,6 +38,18 @@ describe('ModeToggle', () => {
     fireEvent.click(await screen.findByRole('menuitemradio', { name: label }));
 
     expect(mockSetTheme).toHaveBeenCalledWith(value);
+  });
+
+  it('選ぶとメニューは閉じる', async () => {
+    // ライブラリ既定の radio 項目は選んでも開いたまま（複数切り替え向け）。開けっぱなしだと
+    // 覆いが残り、背後の画面が押せなくなる。
+    render(<ModeToggle />);
+    openModeMenu();
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'ダーク' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('menuitemradio', { name: 'ダーク' })).not.toBeInTheDocument()
+    );
   });
 
   it('表示は現在値ではなく .dark の有無で決まる（初回フレームから確定する）', () => {

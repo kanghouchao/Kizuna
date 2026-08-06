@@ -62,12 +62,15 @@ const paginated = (
 });
 
 /**
- * 店舗の絞り込みを選ぶ。Radix Select はポインタ系 API が jsdom に無いため、
+ * 店舗の絞り込みを選ぶ。項目の確定には pointerdown が要るため、
  * キーボードで開いて項目をクリックする（store-shifts のセレクト操作に倣う）。
  */
 async function pickStore(optionName: string) {
-  fireEvent.keyDown(screen.getByRole('combobox', { name: '店舗で絞り込む' }), { key: 'ArrowDown' });
-  fireEvent.click(await screen.findByRole('option', { name: optionName }));
+  fireEvent.click(screen.getByRole('combobox', { name: '店舗で絞り込む' }));
+  const option = await screen.findByRole('option', { name: optionName });
+  // Base UI の Item は pointerdown を経ていない mouse click を無視する
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
 }
 
 describe('スタッフ一覧ページ', () => {

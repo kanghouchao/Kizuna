@@ -142,8 +142,8 @@ export function MemberReservationsPage() {
           )}
         </CardContent>
       </Card>
-      <Button asChild variant="outline" className="mt-6 w-full">
-        <Link href="/member/">ホームへ戻る</Link>
+      <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">
+        ホームへ戻る
       </Button>
     </div>
   );

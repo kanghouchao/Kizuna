@@ -288,8 +288,12 @@ export function MemberReservationNewPage() {
           )}
         </CardContent>
       </Card>
-      <Button asChild variant="outline" className="mt-6 w-full">
-        <Link href="/member/reservations/">予約一覧へ</Link>
+      <Button
+        render={<Link href="/member/reservations/" />}
+        variant="outline"
+        className="mt-6 w-full"
+      >
+        予約一覧へ
       </Button>
     </div>
   );

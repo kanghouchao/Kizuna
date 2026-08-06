@@ -67,7 +67,7 @@ function selectAt(index: number) {
 }
 
 /**
- * 選択中の項目の表示文言。素の select は選択済み option、Radix はトリガの内容。
+ * 選択中の項目の表示文言。素の select は選択済み option、shadcn Select はトリガの内容。
  */
 function selectedLabel(index: number) {
   const el = selectAt(index);
@@ -78,8 +78,8 @@ function selectedLabel(index: number) {
 }
 
 /**
- * 表示文言で項目を選ぶ。素の select は change、Radix はキーボードで開いてクリックする
- * （ポインタ系 API は jsdom に無いため開く経路はキーボードに限る）。
+ * 表示文言で項目を選ぶ。素の select は change、shadcn Select は開いてから項目を押す
+ * （項目の確定には pointerdown が要る——click だけでは無視される）。
  */
 async function pickOption(index: number, optionName: string) {
   const el = selectAt(index);
@@ -88,8 +88,11 @@ async function pickOption(index: number, optionName: string) {
     fireEvent.change(el, { target: { value: option.value } });
     return;
   }
-  fireEvent.keyDown(el, { key: 'ArrowDown' });
-  fireEvent.click(await screen.findByRole('option', { name: optionName }));
+  fireEvent.click(el);
+  const option = await screen.findByRole('option', { name: optionName });
+  // Base UI の Item は pointerdown を経ていない mouse click を無視する
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
 }
 
 function submit() {

@@ -17,11 +17,11 @@ export default function NotFound() {
           アクセスしたリンクが無効になっているか、移動された可能性があります。ブラウザのアドレスが正しいかをご確認のうえ、以下のリンクから操作を続けてください。
         </p>
         <div className="mt-8 flex flex-col space-y-3">
-          <Button asChild className="w-full">
-            <Link href="/">ホームへ戻る</Link>
+          <Button render={<Link href="/" />} className="w-full">
+            ホームへ戻る
           </Button>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/platform/login">ログイン画面を開く</Link>
+          <Button render={<Link href="/platform/login" />} variant="outline" className="w-full">
+            ログイン画面を開く
           </Button>
         </div>
         <p className="mt-6 text-sm text-muted-foreground">

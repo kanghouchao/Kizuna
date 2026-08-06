@@ -1,6 +1,6 @@
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from 'radix-ui';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 
 import { cn } from '@/shared/lib/utils';
 
@@ -36,27 +36,24 @@ const buttonVariants = cva(
   }
 );
 
+// Base UI の `Button` ではなく素の `button` を描く。前者は type を既定で `button` に倒すため、
+// フォーム内の送信ボタンが黙って送信をやめる。ここで欲しいのは `render` による合成だけ。
 function Button({
   className,
   variant = 'default',
   size = 'default',
-  asChild = false,
+  render,
   ...props
-}: React.ComponentProps<'button'> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean;
-  }) {
-  const Comp = asChild ? Slot.Root : 'button';
-
-  return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  );
+}: useRender.ComponentProps<'button'> & VariantProps<typeof buttonVariants>) {
+  return useRender({
+    defaultTagName: 'button',
+    render,
+    props: mergeProps<'button'>(
+      { className: cn(buttonVariants({ variant, size, className })) },
+      props
+    ),
+    state: { slot: 'button', variant, size },
+  });
 }
 
 export { Button, buttonVariants };

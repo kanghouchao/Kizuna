@@ -52,11 +52,9 @@ export default function OrderListPage() {
         title="オーダー一覧"
         description="当日の注文状況を確認・管理できます。"
         actions={
-          <Button asChild>
-            <Link href={storePath(storeId, '/orders/create')}>
-              <PlusIcon aria-hidden="true" />
-              新規オーダー登録
-            </Link>
+          <Button render={<Link href={storePath(storeId, '/orders/create')} />}>
+            <PlusIcon aria-hidden="true" />
+            新規オーダー登録
           </Button>
         }
         state={list}
@@ -119,10 +117,12 @@ export default function OrderListPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
-                    <Button asChild variant="ghost" size="icon-sm">
-                      <Link href={storePath(storeId, `/orders/${order.id}/edit`)}>
-                        <SquarePenIcon />
-                      </Link>
+                    <Button
+                      render={<Link href={storePath(storeId, `/orders/${order.id}/edit`)} />}
+                      variant="ghost"
+                      size="icon-sm"
+                    >
+                      <SquarePenIcon />
                     </Button>
                   </div>
                 </TableCell>

@@ -72,8 +72,8 @@ export function MemberHomePage() {
           )}
         </CardContent>
       </Card>
-      <Button asChild className="mt-4 w-full">
-        <Link href="/member/reservations/">予約を見る</Link>
+      <Button render={<Link href="/member/reservations/" />} className="mt-4 w-full">
+        予約を見る
       </Button>
       <Button type="button" variant="outline" onClick={logout} className="mt-6 w-full">
         ログアウト

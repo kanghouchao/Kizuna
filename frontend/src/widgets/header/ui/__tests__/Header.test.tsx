@@ -80,9 +80,9 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     );
 
     render(<Header />);
-    // Radix のトリガーは pointerdown/キー入力で開く。jsdom の fireEvent.click は
+    // トリガーは click で開く。jsdom の fireEvent.click は
     // pointerdown を合成しないため、キーボードでメニューを開いてから項目を選ぶ。
-    fireEvent.keyDown(screen.getByRole('button', { name: '店舗A' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: '店舗A' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '店舗B' }));
 
     expect(mockSwitchStore).toHaveBeenCalledWith(2);
@@ -90,7 +90,7 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
 
   // アカウントメニューの中身は開いている間だけ描かれる。
   function openAccountMenu() {
-    fireEvent.keyDown(screen.getByRole('button', { name: 'アカウントメニュー' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: 'アカウントメニュー' }));
   }
 
   it('店舗別ドメイン経由ではアカウント設定リンクが currentStoreId を含む店舗ルートを指す', async () => {
@@ -135,7 +135,7 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     withContext([], '1');
 
     render(<Header />);
-    fireEvent.keyDown(screen.getByRole('button', { name: '表示モード' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: '表示モード' }));
 
     expect(await screen.findByRole('menuitemradio', { name: 'システム' })).toBeInTheDocument();
   });

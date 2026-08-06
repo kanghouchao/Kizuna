@@ -53,6 +53,11 @@ interface CastFormProps {
   isSubmitting?: boolean;
 }
 
+const STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: '在籍中' },
+  { value: 'INACTIVE', label: '在籍停止' },
+];
+
 /** キャスト登録・編集フォームコンポーネント */
 export function CastForm({
   initialData,
@@ -120,15 +125,22 @@ export function CastForm({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>在籍状態</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        items={STATUS_OPTIONS}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
                         <FormControl>
                           <SelectTrigger className="w-full">
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="ACTIVE">在籍中</SelectItem>
-                          <SelectItem value="INACTIVE">在籍停止</SelectItem>
+                          {STATUS_OPTIONS.map(o => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </FormItem>

@@ -29,7 +29,7 @@ function tomorrowStr(): string {
 }
 
 /**
- * 店舗セレクタ。native <select> と Radix Select のどちらでも role=combobox かつ
+ * 店舗セレクタ。native <select> と shadcn Select のどちらでも role=combobox かつ
  * アクセシブル名「店舗」で引けるため、DOM 形状の差だけを吸収して操作の意味は同一に保つ。
  */
 function storeCombobox(): Promise<HTMLElement> {
@@ -37,22 +37,25 @@ function storeCombobox(): Promise<HTMLElement> {
 }
 
 /**
- * 所属店舗の読み込み完了を待つ。Radix Select は form 内で隠し native <select> を併走させ
+ * 所属店舗の読み込み完了を待つ。Select は form 内で隠し input を併走させ
  * 同じ店舗名を選択中ラベルと option の二箇所に描くため、件数を問わない findAll で待つ。
  */
 function waitStoresLoaded() {
   return screen.findAllByText('店舗A');
 }
 
-/** 店舗を選ぶ。native は値変更、Radix はキーボードで開いて項目クリック。 */
+/** 店舗を選ぶ。native は値変更、shadcn Select は開いて項目を押す。 */
 async function pickStore(name: string, value: string) {
   const combobox = await storeCombobox();
   if (combobox instanceof HTMLSelectElement) {
     fireEvent.change(combobox, { target: { value } });
     return;
   }
-  fireEvent.keyDown(combobox, { key: 'ArrowDown' });
-  fireEvent.click(await screen.findByRole('option', { name }));
+  fireEvent.click(combobox);
+  const option = await screen.findByRole('option', { name });
+  // Base UI の Item は pointerdown を経ていない mouse click を無視する
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
 }
 
 /** セレクタが今どの店舗を表示しているか。閉じた状態でのみ呼ぶこと。 */

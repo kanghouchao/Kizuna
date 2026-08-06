@@ -3,19 +3,9 @@
 import { useEffect, useState } from 'react';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { Combobox } from '@base-ui/react/combobox';
 import { OrderCastCandidate, orderApi } from '@/entities/order';
-import {
-  Button,
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  Label,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/shared/ui';
+import { Button, Label } from '@/shared/ui';
 
 interface CastSearchComboboxProps {
   /** ラベルと引き金を結ぶ id。同一画面で衝突しない値を親が与える。 */
@@ -101,46 +91,72 @@ export function CastSearchCombobox({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Popover open={isOpen} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button
-            id={id}
-            type="button"
-            variant="outline"
-            role="combobox"
-            aria-expanded={isOpen}
-            disabled={disabled}
-            className="w-full justify-between font-normal"
-          >
-            <span className={selectedName ? '' : 'text-muted-foreground'}>
-              {selectedName || '名前で検索'}
-            </span>
-            <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        {/* 引き金の幅に合わせるが、狭い桁に置かれても候補が潰れないよう下限を持たせる */}
-        <PopoverContent className="w-(--radix-popover-trigger-width) min-w-72 p-0" align="start">
-          {/* 絞り込みはサーバ側が担うので、cmdk 自前の絞り込みは切る */}
-          <Command shouldFilter={false}>
-            <CommandInput value={keyword} onValueChange={setKeyword} placeholder="名前で検索" />
-            <CommandList>
+      {/*
+       * 選択を持つのは親なので、combobox 自身の値は常に null に固定して選択を出来事としてだけ受け取る。
+       * 絞り込みはサーバ側の読み口が担うため filter は切る。
+       */}
+      <Combobox.Root
+        items={options}
+        filter={null}
+        value={null}
+        onValueChange={cast => cast && handleSelect(cast)}
+        open={isOpen}
+        onOpenChange={handleOpenChange}
+        inputValue={keyword}
+        onInputValueChange={setKeyword}
+        itemToStringLabel={(cast: OrderCastCandidate) => cast.name ?? ''}
+        disabled={disabled}
+      >
+        <Combobox.Trigger
+          render={
+            <Button
+              id={id}
+              type="button"
+              variant="outline"
+              className="w-full justify-between font-normal"
+            />
+          }
+        >
+          <span className={selectedName ? '' : 'text-muted-foreground'}>
+            {selectedName || '名前で検索'}
+          </span>
+          <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
+        </Combobox.Trigger>
+        <Combobox.Portal>
+          <Combobox.Positioner align="start" sideOffset={4} className="isolate z-50">
+            {/* 引き金の幅に合わせるが、狭い桁に置かれても候補が潰れないよう下限を持たせる */}
+            <Combobox.Popup className="w-(--anchor-width) min-w-72 origin-(--transform-origin) rounded-md border bg-popover text-popover-foreground shadow-md outline-hidden">
+              <div className="flex h-9 items-center gap-2 border-b px-3">
+                <Combobox.Input
+                  placeholder="名前で検索"
+                  className="flex h-10 w-full bg-transparent py-3 text-sm outline-hidden placeholder:text-muted-foreground"
+                />
+              </div>
               {isLoading ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">検索中...</div>
               ) : (
                 <>
-                  <CommandEmpty>該当するキャストがいません</CommandEmpty>
-                  {options.map(cast => (
-                    <CommandItem key={cast.id} value={cast.id} onSelect={() => handleSelect(cast)}>
-                      <span className="font-medium">{cast.name}</span>
-                      <span className="ml-auto text-xs text-muted-foreground">ID: {cast.id}</span>
-                    </CommandItem>
-                  ))}
+                  <Combobox.Empty className="py-6 text-center text-sm">
+                    該当するキャストがいません
+                  </Combobox.Empty>
+                  <Combobox.List className="max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto p-1">
+                    {(cast: OrderCastCandidate) => (
+                      <Combobox.Item
+                        key={cast.id}
+                        value={cast}
+                        className="relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                      >
+                        <span className="font-medium">{cast.name}</span>
+                        <span className="ml-auto text-xs text-muted-foreground">ID: {cast.id}</span>
+                      </Combobox.Item>
+                    )}
+                  </Combobox.List>
                 </>
               )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+            </Combobox.Popup>
+          </Combobox.Positioner>
+        </Combobox.Portal>
+      </Combobox.Root>
     </div>
   );
 }
