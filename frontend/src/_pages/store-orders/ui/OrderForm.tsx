@@ -28,7 +28,7 @@ import {
   Textarea,
 } from '@/shared/ui';
 
-// Radix Select は value="" を許容しないため、空選択を表す番兵値。
+// 空選択を表す番兵値。フォームが持つ値は従来どおり空文字に戻す。
 // onValueChange 側で '' に戻すことで送信ペイロードは従来どおり空文字になる。
 const SELECT_NONE = '__none__';
 

@@ -91,6 +91,12 @@ export function CastRequestsPage() {
   const [history, setHistory] = useState<CastShiftRequestItem[] | null>(null);
   const [hasError, setHasError] = useState(false);
 
+  // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
+  const storeOptions = stores.map(s => ({
+    value: String(s.store_id),
+    label: s.store_name ?? '',
+  }));
+
   const form = useForm<RequestFormValues>({ defaultValues: defaultValues('') });
   const {
     register,
@@ -126,8 +132,8 @@ export function CastRequestsPage() {
     };
   }, []);
 
-  // 初期店舗の流し込みは選択肢が描画され終えた次のコミットで行う。Radix Select は
-  // form 内で隠し <select> を併走させており、選択肢が未登録のまま値だけ変わると
+  // 初期店舗の流し込みは選択肢が描画され終えた次のコミットで行う。Select は
+  // form 内で隠し input を併走させており、選択肢が未登録のまま値だけ変わると
   // その隠し要素が値を保持できず change を打ち返して選択を空へ巻き戻すため。
   useEffect(() => {
     const first = stores[0];
@@ -170,7 +176,11 @@ export function CastRequestsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>店舗</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select
+                      items={storeOptions}
+                      value={field.value || null}
+                      onValueChange={field.onChange}
+                    >
                       <FormControl>
                         <SelectTrigger className="w-full">
                           {/* 所属店舗が無いときは選択肢自体が無く、値は空のままなので placeholder が出る。 */}
@@ -178,9 +188,9 @@ export function CastRequestsPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {stores.map(s => (
-                          <SelectItem key={s.store_id} value={String(s.store_id)}>
-                            {s.store_name}
+                        {storeOptions.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
                           </SelectItem>
                         ))}
                       </SelectContent>

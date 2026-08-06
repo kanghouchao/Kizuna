@@ -20,7 +20,7 @@ const STORES = [
 ];
 
 /**
- * 所属店舗の読み込み完了を待つ。Radix Select は form 内で隠し native <select> を併走させ
+ * 所属店舗の読み込み完了を待つ。Select は form 内で隠し input を併走させ
  * 同じ店舗名を選択中ラベルと option の二箇所に描くため、件数を問わない findAll で待つ。
  */
 function waitStoresLoaded() {
@@ -38,8 +38,8 @@ describe('CastRequestsPage', () => {
     render(<CastRequestsPage />);
 
     await waitFor(() => expect(mockedMyStores).toHaveBeenCalledTimes(1));
-    // Radix Select の選択肢は開いている間だけ描画される。
-    fireEvent.keyDown(await screen.findByRole('combobox', { name: '店舗' }), { key: 'ArrowDown' });
+    // 選択肢は開いている間だけ描画される。
+    fireEvent.click(await screen.findByRole('combobox', { name: '店舗' }));
     expect(await screen.findByRole('option', { name: '店舗A' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '店舗B' })).toBeInTheDocument();
   });

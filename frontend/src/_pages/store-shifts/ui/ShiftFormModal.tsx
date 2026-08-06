@@ -51,9 +51,18 @@ const STATUS_OPTIONS = [
   { value: 'CONFIRMED', label: '確定' },
 ];
 
-// Radix Select は value="" を許容しないため、キャスト未登録の案内項目に与える番兵値。
-// onValueChange で '' に戻すことで、フォームが持つ値は従来どおり空文字になる。
+// 「キャスト未登録」の案内項目に与える番兵値。onValueChange で '' に戻すことで、
+// フォームが持つ値は従来どおり空文字になる。
 const SELECT_NONE = '__none__';
+
+/**
+ * 引き金に出す値。候補に無い値（在籍を外れたキャストなど）は未選択として null に倒す。
+ * 引き金の文言は候補一覧から引かれるので、素通しすると生の ID がそのまま出る。
+ */
+function castValue(value: string, options: { value: string }[]): string | null {
+  const candidate = value || SELECT_NONE;
+  return options.some(o => o.value === candidate) ? candidate : null;
+}
 
 /** シフトの追加・編集モーダル。 */
 export function ShiftFormModal({
@@ -81,6 +90,15 @@ export function ShiftFormModal({
     formState: { isSubmitting },
   } = form;
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // 候補は Select と項目描画の両方が読む。引き金に出る文言は items から引かれるので、
+  // 選べる値の一覧はここ一箇所に持つ。
+  const castOptions =
+    casts.length === 0
+      ? [{ value: SELECT_NONE, label: 'キャストが未登録です' }]
+      : casts
+          .filter(c => c.id !== undefined)
+          .map(c => ({ value: c.id as string, label: c.name ?? '' }));
 
   useEffect(() => {
     if (!open) return;
@@ -163,7 +181,8 @@ export function ShiftFormModal({
                 <FormItem>
                   <FormLabel>キャスト</FormLabel>
                   <Select
-                    value={field.value ? field.value : SELECT_NONE}
+                    items={castOptions}
+                    value={castValue(field.value, castOptions)}
                     onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
                   >
                     <FormControl>
@@ -172,18 +191,11 @@ export function ShiftFormModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {casts.length === 0 && (
-                        <SelectItem value={SELECT_NONE}>キャストが未登録です</SelectItem>
-                      )}
-                      {casts.map(c => {
-                        const id = c.id;
-                        if (id === undefined) return null;
-                        return (
-                          <SelectItem key={id} value={id}>
-                            {c.name}
-                          </SelectItem>
-                        );
-                      })}
+                      {castOptions.map(o => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </FormItem>
@@ -216,7 +228,7 @@ export function ShiftFormModal({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>ステータス</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select items={STATUS_OPTIONS} value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue />

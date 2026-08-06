@@ -46,10 +46,11 @@ async function selectReceptionist() {
 
 /** キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）。 */
 async function pickOption(comboboxName: string | RegExp, optionName: string) {
-  fireEvent.keyDown(await screen.findByRole('combobox', { name: comboboxName }), {
-    key: 'ArrowDown',
-  });
-  fireEvent.click(await screen.findByRole('option', { name: optionName }));
+  fireEvent.click(await screen.findByRole('combobox', { name: comboboxName }));
+  const option = await screen.findByRole('option', { name: optionName });
+  // Base UI の Item は pointerdown を経ていない mouse click を無視する
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
 }
 
 describe('オーダーフォームのセレクト配線と送信ペイロード', () => {
@@ -187,7 +188,10 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     await act(async () => {
       jest.advanceTimersByTime(300);
     });
-    fireEvent.click(screen.getByRole('option', { name: /花子/ }));
+    const option = screen.getByRole('option', { name: /花子/ });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
 
     expect(screen.getByRole('combobox', { name: /キャスト/ })).toHaveTextContent('花子');
     await submit();

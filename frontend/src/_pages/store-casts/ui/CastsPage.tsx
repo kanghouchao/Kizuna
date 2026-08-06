@@ -97,18 +97,17 @@ export default function CastListPage() {
           <>
             {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定。 */}
             {canManageFieldDefs && (
-              <Button asChild variant="outline">
-                <Link href={storePath(storeId, '/casts/fields')}>
-                  <SettingsIcon />
-                  カスタムフィールド管理
-                </Link>
+              <Button
+                render={<Link href={storePath(storeId, '/casts/fields')} />}
+                variant="outline"
+              >
+                <SettingsIcon />
+                カスタムフィールド管理
               </Button>
             )}
-            <Button asChild>
-              <Link href={storePath(storeId, '/casts/create')}>
-                <PlusIcon />
-                新規キャスト登録
-              </Link>
+            <Button render={<Link href={storePath(storeId, '/casts/create')} />}>
+              <PlusIcon />
+              新規キャスト登録
             </Button>
           </>
         }
@@ -202,10 +201,12 @@ export default function CastListPage() {
                           onIssued={handleIssued}
                         />
                       )}
-                      <Button asChild variant="ghost" size="icon-sm">
-                        <Link href={storePath(storeId, `/casts/${cast.id}/edit`)}>
-                          <SquarePenIcon />
-                        </Link>
+                      <Button
+                        render={<Link href={storePath(storeId, `/casts/${cast.id}/edit`)} />}
+                        variant="ghost"
+                        size="icon-sm"
+                      >
+                        <SquarePenIcon />
                       </Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => deletion.ask(cast)}>
                         <Trash2Icon />

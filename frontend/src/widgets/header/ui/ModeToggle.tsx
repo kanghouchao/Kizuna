@@ -23,19 +23,23 @@ export function ModeToggle() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="表示モード"
-          className="text-muted-foreground"
-        >
-          <SunIcon className="size-6 dark:hidden" />
-          <MoonIcon className="hidden size-6 dark:block" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="表示モード"
+            className="text-muted-foreground"
+          />
+        }
+      >
+        <SunIcon className="size-6 dark:hidden" />
+        <MoonIcon className="hidden size-6 dark:block" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8} className="w-40">
-        <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+        {/* 値だけを渡す。onValueChange は第二引数に出来事の詳細を載せるので、素通しすると
+            next-themes へ知らない引数が流れる。 */}
+        <DropdownMenuRadioGroup value={theme} onValueChange={value => setTheme(value)}>
           <DropdownMenuRadioItem value="light">ライト</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dark">ダーク</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="system">システム</DropdownMenuRadioItem>

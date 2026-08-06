@@ -68,11 +68,9 @@ export default function CustomersPage() {
         title="顧客管理"
         description="顧客情報の登録・編集ができます。"
         actions={
-          <Button asChild>
-            <Link href={storePath(storeId, '/customers/create')}>
-              <PlusIcon />
-              新規顧客登録
-            </Link>
+          <Button render={<Link href={storePath(storeId, '/customers/create')} />}>
+            <PlusIcon />
+            新規顧客登録
           </Button>
         }
         search={{
@@ -167,10 +165,12 @@ export default function CustomersPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
-                    <Button asChild variant="ghost" size="icon-sm">
-                      <Link href={storePath(storeId, `/customers/${customer.id}/edit`)}>
-                        <SquarePenIcon />
-                      </Link>
+                    <Button
+                      render={<Link href={storePath(storeId, `/customers/${customer.id}/edit`)} />}
+                      variant="ghost"
+                      size="icon-sm"
+                    >
+                      <SquarePenIcon />
                     </Button>
                     <Button variant="ghost" size="icon-sm" onClick={() => deletion.ask(customer)}>
                       <Trash2Icon />

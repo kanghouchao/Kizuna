@@ -10,10 +10,8 @@ jest.mock('next-themes', () => ({
   useTheme: () => ({ theme: mockTheme.current, setTheme: mockSetTheme }),
 }));
 
-// Radix のトリガーは pointerdown/キー入力で開く。jsdom の fireEvent.click は
-// pointerdown を合成しないため、キーボードでメニューを開く。
 function openModeMenu() {
-  fireEvent.keyDown(screen.getByRole('button', { name: '表示モード' }), { key: 'Enter' });
+  fireEvent.click(screen.getByRole('button', { name: '表示モード' }));
 }
 
 describe('ModeToggle', () => {

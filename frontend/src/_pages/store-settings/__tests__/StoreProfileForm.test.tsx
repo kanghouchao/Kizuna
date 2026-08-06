@@ -88,9 +88,10 @@ describe('店舗プロフィールフォームの送信ペイロード', () => {
   it('セレクトで選び直した MV タイプが送信ペイロードに反映されること', async () => {
     const { onSubmit } = renderForm(initialData());
 
-    // キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'タイプ:' }), { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: '動画' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'タイプ:' }));
+    const option = await screen.findByRole('option', { name: '動画' });
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
 
     const body = await submitAndGetBody(onSubmit);
 
@@ -100,10 +101,11 @@ describe('店舗プロフィールフォームの送信ペイロード', () => {
   it('セレクトで選び直した SNS プラットフォームが送信ペイロードに反映されること', async () => {
     const { onSubmit } = renderForm(initialData());
 
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'プラットフォーム' }), {
-      key: 'ArrowDown',
-    });
-    fireEvent.click(await screen.findByRole('option', { name: 'LINE' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'プラットフォーム' }));
+    const option = await screen.findByRole('option', { name: 'LINE' });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
 
     const body = await submitAndGetBody(onSubmit);
 

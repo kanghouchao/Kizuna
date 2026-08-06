@@ -28,7 +28,7 @@ import {
   Textarea,
 } from '@/shared/ui';
 
-// Radix Select は value="" を許容しないため、受付担当なしを表す番兵値。
+// 受付担当なしを表す番兵値。フォームが持つ値は従来どおり空文字に戻す。
 const SELECT_NONE = '__none__';
 
 interface ReservationRequestEditFormValues {
