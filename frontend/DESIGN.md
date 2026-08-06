@@ -628,6 +628,11 @@ Two rituals, both forced by the library rather than by choice:
 
 `Select` also decides the trigger's text from the `items` prop, not from the selected `SelectItem`'s children, so a test asserting the trigger's text is really asserting that the consumer passed `items` — see "Select sentinel" above.
 
+### Two DOM facts worth knowing before writing a selector
+
+- **`FormControl` overwrites the wrapped primitive's `data-slot`.** It injects its own props into the single child, and on a collision the injected value wins — so a `Select` inside a `FormControl` reports `data-slot="form-control"`, not `select-trigger`. The functional half (`id`, `aria-invalid`, `aria-describedby`) still lands. Query by `role` for these, not by `data-slot`.
+- **`Checkbox` and `RadioGroupItem` do not render a `<button>`** (the primitives opt into that only via `nativeButton` + `render`), so `:disabled` never matches them and the disabled dimming has to be written as `data-disabled:`. `Select`'s trigger, `Button` and `Tabs`'s tab _are_ real buttons, so those keep `disabled:`. Measured, not assumed: shadcn's own Base UI recipe still writes `disabled:` on the checkbox.
+
 ## Do's and Don'ts
 
 - **DO** use token classes for admin colors; if a needed semantic is genuinely missing, extend `globals.css` and THIS file in a dedicated PR.
