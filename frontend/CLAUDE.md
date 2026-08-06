@@ -22,7 +22,8 @@ frontend/src/
 ├── entities/     # Mirror of the backend domain modules:
 │                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift, member
 │                 #   each slice = model (types) / api (requests) / index (public API)
-└── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (shadcn/ui barrel + hand-written generics)
+└── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (shadcn/ui barrel + hand-written generics),
+                  #   notify (the toast severity tiers — call sites write the meaning, never the colour/duration/icon)
 ```
 
 Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice), `proxy.ts` + `proxy.test.ts` (the Next proxy entry — Host-based store/platform dispatch, delegating to `shared/lib/proxy`), and `__tests__/` (cross-cutting invariant tests).
