@@ -76,15 +76,19 @@ function DropdownMenuItem({
   );
 }
 
+// 選んだら閉じる。ライブラリ既定は開いたまま（複数切り替え向け）だが、当リポジトリの
+// メニューは単発の選択に使う。開けっぱなしにしたい消費者は `closeOnClick={false}` を渡す。
 function DropdownMenuCheckboxItem({
   className,
   children,
   checked,
+  closeOnClick = true,
   ...props
 }: MenuPrimitive.CheckboxItem.Props) {
   return (
     <MenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
+      closeOnClick={closeOnClick}
       className={cn(
         "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
@@ -106,10 +110,16 @@ function DropdownMenuRadioGroup({ ...props }: MenuPrimitive.RadioGroup.Props) {
   return <MenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />;
 }
 
-function DropdownMenuRadioItem({ className, children, ...props }: MenuPrimitive.RadioItem.Props) {
+function DropdownMenuRadioItem({
+  className,
+  children,
+  closeOnClick = true,
+  ...props
+}: MenuPrimitive.RadioItem.Props) {
   return (
     <MenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
+      closeOnClick={closeOnClick}
       className={cn(
         "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
