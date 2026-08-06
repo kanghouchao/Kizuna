@@ -76,6 +76,12 @@ export function ReservationRequestEditModal({
     formState: { errors, isSubmitting },
   } = form;
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+  const receptionistItems = [
+    { value: SELECT_NONE, label: '未設定' },
+    ...receptionistOptions
+      .filter(o => o.id !== undefined)
+      .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
+  ];
 
   const castName = request?.cast_name ?? request?.cast_id ?? '';
 
@@ -142,6 +148,7 @@ export function ReservationRequestEditModal({
                 <FormItem>
                   <FormLabel>受付担当</FormLabel>
                   <Select
+                    items={receptionistItems}
                     value={field.value ? field.value : SELECT_NONE}
                     onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
                   >
@@ -151,16 +158,11 @@ export function ReservationRequestEditModal({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={SELECT_NONE}>未設定</SelectItem>
-                      {receptionistOptions.map(option => {
-                        const id = option.id;
-                        if (id === undefined) return null;
-                        return (
-                          <SelectItem key={id} value={String(id)}>
-                            {option.display_name}
-                          </SelectItem>
-                        );
-                      })}
+                      {receptionistItems.map(o => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </FormItem>
