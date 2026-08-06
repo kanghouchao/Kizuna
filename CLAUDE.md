@@ -89,7 +89,7 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 
 - A second HTTP client on the frontend — `axios` is the established client.
 - A second icon library — `lucide-react` is the icon set (`@heroicons/react` was removed; see `frontend/DESIGN.md`).
-- CSS-in-JS (styled-components / emotion) or UI kits that bypass the vendored shadcn/ui primitives (`frontend/src/shared/ui`, Radix-based) + Tailwind CSS.
+- CSS-in-JS (styled-components / emotion) or UI kits that bypass the vendored shadcn/ui primitives (`frontend/src/shared/ui`, Base UI-based) + Tailwind CSS. `radix-ui` and `cmdk` were removed with the Base UI migration (`docs/adr/0005-frontend-shadcn-ui-on-base-ui.md`) — do not bring either back.
 - Global state libraries (Redux / MobX / Zustand) — none is in use; forms use react-hook-form.
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
 - ModelMapper / Dozer (MapStruct is the mapper), MyBatis (Spring Data JPA is the data layer), TestNG (JUnit 5 is the test framework).

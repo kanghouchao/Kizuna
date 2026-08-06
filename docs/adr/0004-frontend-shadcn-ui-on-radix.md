@@ -1,6 +1,9 @@
 # フロントエンドの UI 基盤は Radix ベースの shadcn/ui を vendoring する
 
-Status: Accepted
+Status: Superseded by [0005](0005-frontend-shadcn-ui-on-base-ui.md)
+
+> base の選択（Radix）だけが 0005 に置き換わった。トークン層・ダークモードの方式・意味色の語彙・
+> ファイル配置と参照経路・生成物を無改変で保つ方針は 0005 がそのまま引き継いでいる。
 
 ## Context
 
