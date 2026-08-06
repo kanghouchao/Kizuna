@@ -7,8 +7,7 @@ describe('toastOptions', () => {
   });
 
   it('アイコンの配色を自前の token へ引き取る（ライブラリ既定はマトリクス外）', () => {
-    // primary は円の塗り、secondary は線。円を不透明にすると其の段が持たない
-    // 「輪郭のはっきりした円形記号」を獲得するため、是正は色だけで形は変えない。
+    // 是正は色だけで形は変えない（primary＝円の塗り、secondary＝線）。
     expect(toastOptions.success?.iconTheme).toEqual({
       primary: 'transparent',
       secondary: 'var(--success-foreground)',

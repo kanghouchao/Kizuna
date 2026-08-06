@@ -3,7 +3,7 @@
 import { Toaster, type DefaultToastOptions } from 'react-hot-toast';
 
 /**
- * ライブラリが型別キーを持つ二段（success / error）の姿。三段目 warning は型別キーが無いため
+ * ライブラリが型別キーを持つ二段（success / error）の姿。三段目は型別キーが無いため
  * ここには現れず、shared/notify が姿ごと持つ。判定条文と各値の根拠は DESIGN.md が正本。
  * テストから直接読めるよう名前付きで公開する。
  */
@@ -37,7 +37,6 @@ export const toastOptions: DefaultToastOptions = {
 
 /**
  * Global toast provider for consistent top-center notifications.
- * Keep visual styles and durations centralized here.
  */
 export function ToastProvider() {
   return <Toaster position="top-center" toastOptions={toastOptions} />;

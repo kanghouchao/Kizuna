@@ -3,7 +3,7 @@ import { TriangleAlertIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { notify } from '@/shared/notify';
 
-// 呼び出し側は T8 以降この層を mock するため、toast ライブラリを観測するのはここだけになる。
+// 呼び出し側はこの層を mock するため、toast ライブラリを観測するのはここだけ。
 jest.mock('react-hot-toast', () => {
   const toast = jest.fn();
   return { toast: Object.assign(toast, { success: jest.fn(), error: jest.fn() }) };
@@ -55,9 +55,8 @@ describe('notify', () => {
   it('warning のアイコンは 20px の三角で、潰れ防止の shrink-0 を持つ', () => {
     notify.warning('他の担当者が先に更新しました');
 
-    // React 要素のアイコンはラッパ無しで toast の flex 行へ挿さるため、shrink-0 を
-    // 落とすと 10.7×20 まで潰れて輪郭が失われる。実ブラウザでしか見えない潰れなので、
-    // 指定そのものをアイコンの一部として固定する。
+    // 潰れは実ブラウザでしか描かれず jsdom では見えない。だから指定そのものを
+    // アイコンの一部として固定する（機序は index.tsx の注記が持つ）。
     const icon = warningOptions().icon as ReactElement<{ size: number; className: string }>;
     expect(icon.type).toBe(TriangleAlertIcon);
     expect(icon.props.size).toBe(20);
