@@ -2,25 +2,28 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { StoreStats, platformStoreApi } from '@/entities/store';
-import { Card, CardContent, Skeleton } from '@/shared/ui';
-import toast from 'react-hot-toast';
+import { Card, CardContent, RegionError, Skeleton } from '@/shared/ui';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<StoreStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // 再試行から呼び直せるよう effect の外に置く。先頭で読み込み中へ戻すのは、同じ姿のまま
+  // 二度目の失敗を迎えると RegionError が mount し直されず読み上げに何も届かないため
   const loadStats = useCallback(async () => {
+    setLoadingStats(true);
     try {
       setStats(await platformStoreApi.getStats());
-    } catch (error) {
-      toast.error('データの読み込みに失敗しました');
+    } catch {
+      // 取れなかった統計を残すと 0 と表示され、店舗が 1 つも無い状態と見分けがつかない
+      setStats(null);
     } finally {
       setLoadingStats(false);
     }
   }, []);
 
   useEffect(() => {
-    loadStats();
+    void loadStats();
   }, [loadStats]);
 
   return (
@@ -34,6 +37,9 @@ export default function AdminDashboard() {
               <Skeleton className="h-4 w-3/4 mb-2" />
               <Skeleton className="h-8 w-1/2" />
             </>
+          ) : !stats ? (
+            // 読み込みを終えて統計が無いのは取得に失敗したときだけ
+            <RegionError message="店舗数の取得に失敗しました" onRetry={() => void loadStats()} />
           ) : (
             <div className="flex items-center">
               <div className="shrink-0">

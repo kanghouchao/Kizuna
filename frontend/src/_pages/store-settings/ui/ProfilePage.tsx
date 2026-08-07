@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   StoreProfileResponse,
   StoreProfileUpdateRequest,
   storeProfileApi,
 } from '@/entities/store-profile';
+import { RegionError } from '@/shared/ui';
 import { StoreProfileForm } from './StoreProfileForm';
 
 export default function StoreProfilePage() {
@@ -14,20 +15,23 @@ export default function StoreProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loadConfig = async () => {
+  // 再試行から呼び直せるよう effect の外に置く。先頭で読み込み中へ戻すのは、同じ姿のまま
+  // 二度目の失敗を迎えると RegionError が mount し直されず読み上げに何も届かないため
+  const loadConfig = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const data = await storeProfileApi.get();
-      setConfig(data);
-    } catch (error) {
-      toast.error('設定の読み込みに失敗しました');
+      setConfig(await storeProfileApi.get());
+    } catch {
+      // 取れなかった設定でフォームを描くと、保存がその古い値を本当にしてしまう
+      setConfig(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadConfig();
-  }, []);
+    void loadConfig();
+  }, [loadConfig]);
 
   const handleSubmit = async (data: StoreProfileUpdateRequest) => {
     setIsSubmitting(true);
@@ -50,10 +54,13 @@ export default function StoreProfilePage() {
     );
   }
 
+  // 取得に失敗したときだけ config が null のまま読み込みを終える。出口の無い赤字ではなく、
+  // 頁自身が失敗を名乗って再試行を持つ
   if (!config) {
     return (
-      <div className="flex items-center justify-center min-h-100">
-        <div className="text-destructive-strong">設定の読み込みに失敗しました</div>
+      <div className="max-w-4xl mx-auto space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">店舗情報</h1>
+        <RegionError message="店舗情報の取得に失敗しました" onRetry={() => void loadConfig()} />
       </div>
     );
   }
