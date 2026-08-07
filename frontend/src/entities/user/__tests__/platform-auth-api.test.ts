@@ -43,4 +43,12 @@ describe('platform api', () => {
   it('logout POSTs /platform/logout', async () => {
     await expect(platformAuthApi.logout()).resolves.toBeUndefined();
   });
+  it('logout は skipAuthRedirect を積む（失効済みトークンの 401 で行き先が二重にならない）', async () => {
+    // パスワード変更は直前にセッションを畳むため、この退出は 401 になる。グローバルな差し戻しに
+    // 乗せると、呼び出し元が決めた行き先とログイン画面への全画面遷移が競合する。
+    const client = jest.requireMock('@/shared/api/client').default;
+    await platformAuthApi.logout();
+    const config = client.post.mock.calls[client.post.mock.calls.length - 1][2];
+    expect(config).toMatchObject({ skipAuthRedirect: true });
+  });
 });

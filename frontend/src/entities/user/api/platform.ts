@@ -36,6 +36,10 @@ export const platformAuthApi = {
     await apiClient.put('/platform/password', data);
   },
   logout: async (): Promise<void> => {
-    await apiClient.post('/platform/logout');
+    // 失効済みトークンでの退出は 401 になる（パスワード変更が直前にセッションを畳んだ場合など。
+    // 端点は @PermitAll だが Bearer 免除の対象外で、resource-server が controller の手前で弾く）。
+    // グローバルな 401 差し戻しに乗せると、退出処理が自分で決めた行き先とログイン画面への
+    // 全画面遷移が競合する。会話の畳み方はこの呼び出し元が持っているので除外する。
+    await apiClient.post('/platform/logout', undefined, { skipAuthRedirect: true } as any);
   },
 };
