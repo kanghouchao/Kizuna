@@ -14,6 +14,7 @@ export * from './input';
 export * from './label';
 export * from './popover';
 export * from './radio-group';
+export * from './region-error';
 export * from './select';
 export * from './skeleton';
 export * from './switch';
