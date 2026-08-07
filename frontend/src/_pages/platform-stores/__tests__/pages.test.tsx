@@ -290,6 +290,39 @@ describe('店舗管理 3 画面の挙動', () => {
       })
     );
   });
+
+  it('編集は取得に失敗しても一覧へ離脱せず、頁自身が失敗を名乗って再試行できること', async () => {
+    mockedApi.getById.mockRejectedValueOnce({ response: { status: 500 } });
+
+    render(<StoreEditPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('店舗情報の取得に失敗しました')).toBeInTheDocument();
+    // 空欄のフォームを残すと、保存で店舗名が空文字に化ける
+    expect(screen.queryByLabelText(/店舗名/)).not.toBeInTheDocument();
+    // 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
+    expect(mockPush).not.toHaveBeenCalled();
+
+    mockedApi.getById.mockResolvedValue(store({ id: '1', name: 'デルタ店' }));
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByLabelText(/店舗名/)).toHaveValue('デルタ店');
+  });
+
+  it('編集は 404 では再試行を出さず、一覧への導線だけを出すこと', async () => {
+    mockedApi.getById.mockRejectedValueOnce({ response: { status: 404 } });
+
+    render(<StoreEditPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('この店舗は見つかりませんでした')).toBeInTheDocument();
+    // 何度押しても取れないものを押させない
+    expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: '店舗一覧へ' })).toHaveAttribute(
+      'href',
+      '/platform/stores'
+    );
+  });
 });
 
 describe('店舗一覧ページ固有の要素', () => {

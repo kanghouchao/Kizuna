@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { Order, OrderReceptionist, orderApi } from '@/entities/order';
@@ -20,6 +20,7 @@ import {
   FormMessage,
   Input,
   Label,
+  RegionError,
   Select,
   SelectContent,
   SelectItem,
@@ -76,6 +77,7 @@ export function ReservationRequestEditModal({
     formState: { errors, isSubmitting },
   } = form;
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+  const [receptionistsFailed, setReceptionistsFailed] = useState(false);
   const receptionistItems = [
     { value: SELECT_NONE, label: '未設定' },
     ...receptionistOptions
@@ -96,13 +98,24 @@ export function ReservationRequestEditModal({
     });
   }, [request, reset]);
 
-  useEffect(() => {
+  // 再試行から呼び直せるよう effect の外に置く。取り直しの前に失敗を畳むのは、同じ姿のまま
+  // 失敗を繰り返すと role="alert" が挿入されず二度目の失敗が読み上げ利用者に届かないため
+  const loadReceptionists = useCallback(async () => {
     if (!request) return;
-    orderApi
-      .listReceptionists()
-      .then(setReceptionistOptions)
-      .catch(() => toast.error('受付担当者の取得に失敗しました'));
+    setReceptionistsFailed(false);
+    try {
+      setReceptionistOptions(await orderApi.listReceptionists());
+      setReceptionistsFailed(false);
+    } catch {
+      // 選択肢が「未設定」だけの状態は「受付が 1 人も居ない」と区別がつかない
+      setReceptionistOptions([]);
+      setReceptionistsFailed(true);
+    }
   }, [request]);
+
+  useEffect(() => {
+    void loadReceptionists();
+  }, [loadReceptionists]);
 
   const submit = async (values: ReservationRequestEditFormValues) => {
     if (!request?.id) return;
@@ -165,6 +178,13 @@ export function ReservationRequestEditModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* 送信は塞がない。受付担当は任意項目で、サーバ側の再検証が最終権威 */}
+                  {receptionistsFailed && (
+                    <RegionError
+                      message="受付担当者の取得に失敗しました"
+                      onRetry={() => void loadReceptionists()}
+                    />
+                  )}
                 </FormItem>
               )}
             />

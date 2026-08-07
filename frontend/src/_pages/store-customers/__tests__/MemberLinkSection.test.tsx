@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import { MemberLinkSection } from '../ui/MemberLinkSection';
 import { customerApi } from '@/entities/customer';
@@ -106,10 +106,15 @@ describe('MemberLinkSection', () => {
 
     render(<MemberLinkSection customerId="c1" />);
 
-    expect(await screen.findByText('紐づけ状態を取得できませんでした')).toBeInTheDocument();
+    expect(await screen.findByText('紐づけ状態は不明です')).toBeInTheDocument();
     // 取得失敗を「未紐づけ」と断定表示しない（POST は既存の有効区間を置き換えるため）
     expect(screen.queryByText('未紐づけ')).not.toBeInTheDocument();
     expect(screen.queryByText('紐づけ履歴がありません')).not.toBeInTheDocument();
+    // 失敗を名乗るのは区画自身。横断幕は飛ばさず、区画の中でも二度言わない
+    const region = screen.getByRole('alert');
+    expect(within(region).getByText('会員紐づけの履歴取得に失敗しました')).toBeInTheDocument();
+    expect(within(region).getByRole('button', { name: '再試行' })).toBeInTheDocument();
+    expect(mockedToast.error).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText('会員コード'), {
       target: { value: '123456789012' },
@@ -117,11 +122,11 @@ describe('MemberLinkSection', () => {
     expect(screen.getByRole('button', { name: '紐づける' })).toBeDisabled();
   });
 
-  it('再読み込みで履歴が取れれば操作が解放されること', async () => {
+  it('再試行で履歴が取れれば操作が解放されること', async () => {
     mockedApi.memberLinkHistory.mockRejectedValueOnce(new Error('network'));
 
     render(<MemberLinkSection customerId="c1" />);
-    fireEvent.click(await screen.findByRole('button', { name: '再読み込み' }));
+    fireEvent.click(await screen.findByRole('button', { name: '再試行' }));
 
     expect(await screen.findByText('未紐づけ')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('会員コード'), {

@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
-import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
+import { isNotFound } from '@/shared/lib';
+import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import toast from 'react-hot-toast';
 
 export default function EditStorePage() {
@@ -18,36 +19,39 @@ export default function EditStorePage() {
     email: '',
   });
   const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
+  const [loadFailure, setLoadFailure] = useState<'notFound' | 'error' | null>(null);
 
-  const loadStore = useCallback(
-    async (storeId: string) => {
-      if (!id) {
-        toast.error('店舗情報の取得できませんでした');
-        return;
-      }
-      try {
-        setLoading(true);
-        const res = await platformStoreApi.getById(storeId);
-        const t = res as unknown as Store;
-        setStore(t);
-        setFormData({
-          name: t.name ?? '',
-          email: t.email ?? '',
-        });
-      } catch (e) {
-        console.error('Error loading store:', e);
-        toast.error('店舗情報の取得に失敗しました');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [id]
-  );
+  // 再試行から呼び直せるよう effect の外に置く。取得できなかったこの頁自身が失敗を名乗るので、
+  // 一覧へは送り返さない
+  const loadStore = useCallback(async (storeId: string) => {
+    try {
+      setLoading(true);
+      const res = await platformStoreApi.getById(storeId);
+      const t = res as unknown as Store;
+      setStore(t);
+      setFormData({
+        name: t.name ?? '',
+        email: t.email ?? '',
+      });
+      setLoadFailure(null);
+    } catch (e) {
+      console.error('Error loading store:', e);
+      setStore(null);
+      // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
+      setLoadFailure(isNotFound(e) ? 'notFound' : 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (id) {
       loadStore(id);
+      return;
     }
+    // id を持たない URL で開かれた＝指せる店舗が無い。取りに行けないので再試行も置けない
+    setLoading(false);
+    setLoadFailure('notFound');
   }, [id, loadStore]);
 
   const validate = (): boolean => {
@@ -76,6 +80,31 @@ export default function EditStorePage() {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
+  }
+
+  if (loadFailure !== null) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">店舗編集</h1>
+        {loadFailure === 'notFound' ? (
+          <RegionError
+            message="この店舗は見つかりませんでした"
+            fallback={{ href: '/platform/stores', label: '店舗一覧へ' }}
+          />
+        ) : (
+          <RegionError
+            message="店舗情報の取得に失敗しました"
+            onRetry={() => {
+              if (id) void loadStore(id);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

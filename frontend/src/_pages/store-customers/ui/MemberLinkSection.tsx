@@ -9,6 +9,7 @@ import {
   Button,
   ConfirmDialog,
   Input,
+  RegionError,
   Table,
   TableBody,
   TableCard,
@@ -46,12 +47,16 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
   const isHistoryReady = historyStatus === 'ready';
 
   const reload = useCallback(async () => {
+    // 再試行の前に読み込み中へ戻す。同じ姿のまま失敗を繰り返すと role="alert" が挿入されず、
+    // 二度目の失敗が読み上げ利用者に届かない
+    setHistoryStatus('loading');
     try {
       setHistory(await customerApi.memberLinkHistory(customerId));
       setHistoryStatus('ready');
     } catch {
+      // 読めなかった履歴を残すと「紐づけ履歴がありません」に化ける。区画自身が失敗を名乗る
+      setHistory([]);
       setHistoryStatus('error');
-      toast.error('会員紐づけの履歴取得に失敗しました');
     }
   }, [customerId]);
 
@@ -96,9 +101,11 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
 
         <div className="space-y-4 px-6 py-4">
           <div className="flex items-center gap-2">
+            {/* 失敗はこの区画で 1 度だけ名乗る（下の RegionError）。ここに書き足すと、
+                回復手段を持たない二つ目の告知になる */}
             {!isHistoryReady ? (
               <span className="text-muted-foreground">
-                {historyStatus === 'loading' ? '読み込み中...' : '紐づけ状態を取得できませんでした'}
+                {historyStatus === 'loading' ? '読み込み中...' : '紐づけ状態は不明です'}
               </span>
             ) : activeLink ? (
               <>
@@ -143,19 +150,14 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
           </div>
         </div>
 
-        {!isHistoryReady ? (
-          <div className="p-8 text-center text-muted-foreground">
-            {historyStatus === 'loading' ? (
-              '読み込み中...'
-            ) : (
-              <div className="space-y-2">
-                <p>紐づけ履歴を取得できませんでした</p>
-                <Button variant="outline" onClick={() => void reload()}>
-                  再読み込み
-                </Button>
-              </div>
-            )}
-          </div>
+        {historyStatus === 'loading' ? (
+          <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
+        ) : historyStatus === 'error' ? (
+          <RegionError
+            message="会員紐づけの履歴取得に失敗しました"
+            onRetry={() => void reload()}
+            className="justify-center p-8"
+          />
         ) : history.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">紐づけ履歴がありません</div>
         ) : (

@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { MemberLinkSection } from './MemberLinkSection';
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { Order, orderApi } from '@/entities/order';
 import { toast } from 'react-hot-toast';
-import { storePath } from '@/shared/lib';
+import { isNotFound, storePath } from '@/shared/lib';
 import {
+  RegionError,
   Table,
   TableBody,
   TableCard,
@@ -27,30 +28,49 @@ export default function CustomerEditPage() {
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailure, setLoadFailure] = useState<'notFound' | 'error' | null>(null);
+  const [ordersStatus, setOrdersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 再試行から呼び直せるよう effect の外に置く。取得できなかったこの頁自身が失敗を名乗るので、
+  // 一覧へ送り返さない — 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
+  const fetchCustomer = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await customerApi.get(id);
+      setCustomer(data);
+      setLoadFailure(null);
+    } catch (error) {
+      setCustomer(null);
+      // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
+      setLoadFailure(isNotFound(error) ? 'notFound' : 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  // 注文履歴は附属区画。プロフィールの取得とは独立に取り、独立に再試行できる。
+  // 再試行の前に読み込み中へ戻す — 同じ姿のまま失敗を繰り返すと role="alert" が挿入されず、
+  // 二度目の失敗が読み上げ利用者に届かない
+  const fetchOrders = useCallback(async () => {
+    setOrdersStatus('loading');
+    try {
+      const page = await orderApi.list({ customer_id: id, size: 20, sort: 'businessDate,desc' });
+      setOrders(page.rows);
+      setOrdersStatus('ready');
+    } catch {
+      setOrders([]);
+      setOrdersStatus('error');
+    }
+  }, [id]);
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await customerApi.get(id);
-        setCustomer(data);
-      } catch {
-        toast.error('顧客情報の取得に失敗しました');
-        router.push(storePath(storeId, '/customers'));
-        return;
-      } finally {
-        setIsLoading(false);
-      }
-      try {
-        const page = await orderApi.list({ customer_id: id, size: 20, sort: 'businessDate,desc' });
-        setOrders(page.rows);
-      } catch {
-        // 注文履歴が取れなくてもプロフィール編集は可能にする
-        toast.error('注文履歴の取得に失敗しました');
-      }
-    };
-    fetchData();
-  }, [id, router, storeId]);
+    void fetchCustomer();
+  }, [fetchCustomer]);
+
+  useEffect(() => {
+    void fetchOrders();
+  }, [fetchOrders]);
 
   const handleSubmit = async (data: CustomerFormData) => {
     try {
@@ -67,6 +87,25 @@ export default function CustomerEditPage() {
 
   if (isLoading) {
     return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
+  }
+
+  if (loadFailure !== null) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">顧客編集</h1>
+        {loadFailure === 'notFound' ? (
+          <RegionError
+            message="この顧客は見つかりませんでした"
+            fallback={{ href: storePath(storeId, '/customers'), label: '顧客一覧へ' }}
+          />
+        ) : (
+          <RegionError
+            message="顧客情報の取得に失敗しました"
+            onRetry={() => void fetchCustomer()}
+          />
+        )}
+      </div>
+    );
   }
 
   if (!customer) return null;
@@ -111,7 +150,17 @@ export default function CustomerEditPage() {
         <div className="border-b bg-muted/50 px-6 py-4">
           <h2 className="text-lg font-medium text-foreground">注文履歴</h2>
         </div>
-        {orders.length === 0 ? (
+        {ordersStatus === 'loading' ? (
+          <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
+        ) : ordersStatus === 'error' ? (
+          // 「注文履歴がありません」と言い切ると、読めなかっただけの状態が事実に化ける。
+          // 失敗を名乗るのはこの区画だけで、頁の他の部分は編集できるまま残る
+          <RegionError
+            message="注文履歴の取得に失敗しました"
+            onRetry={() => void fetchOrders()}
+            className="justify-center p-8"
+          />
+        ) : orders.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">注文履歴がありません</div>
         ) : (
           <Table>

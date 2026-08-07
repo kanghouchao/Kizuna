@@ -1,11 +1,10 @@
 'use client';
 
 import { CalendarDaysIcon, ClockIcon, InboxIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CastResponse, castApi } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
+import { RegionError, Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
 import { monthRange, toDateStr } from '../lib/datetime';
 import { ShiftCalendar } from './ShiftCalendar';
 import { ShiftFormModal } from './ShiftFormModal';
@@ -26,28 +25,37 @@ export default function ShiftsPage() {
   const [selectedDate, setSelectedDate] = useState(() => toDateStr(new Date()));
   const [shifts, setShifts] = useState<ShiftResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shiftsFailed, setShiftsFailed] = useState(false);
   const [casts, setCasts] = useState<CastResponse[]>([]);
+  const [castsFailed, setCastsFailed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
 
   // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）。101 人以上でも氏名を解決できるよう全ページ取得する。
-  useEffect(() => {
-    const loadAllCasts = async () => {
-      try {
-        const size = 200;
-        const all: CastResponse[] = [];
-        for (let page = 0; ; page += 1) {
-          const res = await castApi.list({ page, size, sort: 'displayOrder,id,asc' });
-          all.push(...res.rows);
-          if (res.rows.length < size) break; // 最終ページ
-        }
-        setCasts(all);
-      } catch {
-        toast.error('キャストの取得に失敗しました');
+  const loadAllCasts = useCallback(async () => {
+    // 再試行の前に畳む。同じ姿のまま失敗を繰り返すと role="alert" が挿入されず、二度目の
+    // 失敗が読み上げ利用者に届かない
+    setCastsFailed(false);
+    try {
+      const size = 200;
+      const all: CastResponse[] = [];
+      for (let page = 0; ; page += 1) {
+        const res = await castApi.list({ page, size, sort: 'displayOrder,id,asc' });
+        all.push(...res.rows);
+        if (res.rows.length < size) break; // 最終ページ
       }
-    };
-    void loadAllCasts();
+      setCasts(all);
+      setCastsFailed(false);
+    } catch {
+      // 途中まで読めた分も捨てる — 欠けた名簿は「そのキャストは居ない」と読める
+      setCasts([]);
+      setCastsFailed(true);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadAllCasts();
+  }, [loadAllCasts]);
 
   // 表示中のタブに応じた取得区間（カレンダー = 月、タイムライン = 単日）
   const range = useMemo(
@@ -62,13 +70,22 @@ export default function ShiftsPage() {
   useEffect(() => {
     let ignore = false;
     setLoading(true);
+    // 取り直しの前に畳む（役割は上の setCastsFailed(false) と同じ）
+    setShiftsFailed(false);
     shiftApi
       .list(range)
       .then(result => {
-        if (!ignore) setShifts(result);
+        if (!ignore) {
+          setShifts(result);
+          setShiftsFailed(false);
+        }
       })
       .catch(() => {
-        if (!ignore) toast.error('シフトの取得に失敗しました');
+        // 読めなかった区間を空のまま見せると「この月は誰も出勤しない」に化ける
+        if (!ignore) {
+          setShifts([]);
+          setShiftsFailed(true);
+        }
       })
       .finally(() => {
         if (!ignore) setLoading(false);
@@ -93,6 +110,16 @@ export default function ShiftsPage() {
     setTab(TIMELINE_TAB);
   };
 
+  // シフトはカレンダーとタイムラインの二つの器に描かれる。どちらの器も同じ 1 件の取得の
+  // 産物なので、失敗の姿も同じものを置く。
+  const shiftsError = (
+    <RegionError
+      message="シフトの取得に失敗しました"
+      onRetry={reloadShifts}
+      className="justify-center p-8"
+    />
+  );
+
   // 既定・ホバーの文字色はプリミティブに任せ、選択中だけをプライマリの下線と文字色で示す。
   const tabTriggerClass =
     'h-auto flex-none rounded-none border-0 border-b-2 border-transparent px-1 py-3 text-sm font-medium shadow-none after:hidden data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary-strong data-[state=active]:shadow-none';
@@ -105,6 +132,12 @@ export default function ShiftsPage() {
           キャストの出勤シフトを登録・確認できます。
         </p>
       </div>
+
+      {/* 名簿は 3 つの子（タイムラインの名前解決・フォームの選択肢・inbox の申請者名）へ渡るため、
+          失敗はどれか 1 つの中ではなく頁の高さで名乗る */}
+      {castsFailed && (
+        <RegionError message="キャストの取得に失敗しました" onRetry={() => void loadAllCasts()} />
+      )}
 
       <Tabs value={tab} onValueChange={setTab} className="gap-0">
         <TabsList
@@ -131,23 +164,31 @@ export default function ShiftsPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value={CALENDAR_TAB} className="mt-6">
-          <ShiftCalendar
-            month={month}
-            shifts={shifts}
-            onPrevMonth={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
-            onNextMonth={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
-            onSelectDate={selectDay}
-          />
+          {shiftsFailed ? (
+            shiftsError
+          ) : (
+            <ShiftCalendar
+              month={month}
+              shifts={shifts}
+              onPrevMonth={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+              onNextMonth={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+              onSelectDate={selectDay}
+            />
+          )}
         </TabsContent>
         <TabsContent value={TIMELINE_TAB} className="mt-6">
-          <ShiftTimeline
-            date={selectedDate}
-            shifts={shifts}
-            casts={casts}
-            loading={loading}
-            onAddShift={openAdd}
-            onEditShift={openEdit}
-          />
+          {shiftsFailed ? (
+            shiftsError
+          ) : (
+            <ShiftTimeline
+              date={selectedDate}
+              shifts={shifts}
+              casts={casts}
+              loading={loading}
+              onAddShift={openAdd}
+              onEditShift={openEdit}
+            />
+          )}
         </TabsContent>
         <TabsContent value={REQUESTS_TAB} className="mt-6">
           <ShiftRequestInbox casts={casts} onApproved={reloadShifts} />

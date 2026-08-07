@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   SystemConfigResponse,
@@ -8,7 +8,7 @@ import {
   systemConfigService,
 } from '@/entities/system-config';
 import { getApiErrorMessage } from '@/shared/lib';
-import { Badge, Button, Card, Input, Switch, Textarea } from '@/shared/ui';
+import { Badge, Button, Card, Input, RegionError, Switch, Textarea } from '@/shared/ui';
 
 type ConfigGroup = {
   [category: string]: SystemConfigResponse[];
@@ -17,25 +17,30 @@ type ConfigGroup = {
 export default function SystemSettingsPage() {
   const [configs, setConfigs] = useState<SystemConfigResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const fetchConfigs = async () => {
+  const fetchConfigs = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await systemConfigService.getAllConfigs();
       setConfigs(data);
+      setFailed(false);
     } catch (error) {
       console.error('設定の取得に失敗しました', error);
-      toast.error('設定の取得に失敗しました');
+      // 読めなかった一覧を残すと「設定項目がありません」に化ける
+      setConfigs([]);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchConfigs();
-  }, []);
+    void fetchConfigs();
+  }, [fetchConfigs]);
 
   const saveConfig = async (configKey: string, configValue: string) => {
     const request: SystemConfigUpdateRequest = {
@@ -109,7 +114,15 @@ export default function SystemSettingsPage() {
         </p>
       </div>
 
-      {Object.keys(groupedConfigs).length === 0 ? (
+      {failed ? (
+        <Card className="p-8">
+          <RegionError
+            message="設定の取得に失敗しました"
+            onRetry={() => void fetchConfigs()}
+            className="justify-center"
+          />
+        </Card>
+      ) : Object.keys(groupedConfigs).length === 0 ? (
         <Card className="p-8 text-center text-muted-foreground">設定項目がありません。</Card>
       ) : (
         Object.entries(groupedConfigs).map(([category, items]) => (

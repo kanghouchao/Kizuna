@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { toast } from 'react-hot-toast';
 import { ShiftRequestInbox } from '../ShiftRequestInbox';
 import { CastResponse } from '@/entities/cast';
 import { shiftApi } from '@/entities/shift';
@@ -66,6 +67,24 @@ describe('ShiftRequestInbox', () => {
     render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
 
     expect(await screen.findByText('受付中の出勤希望はありません')).toBeInTheDocument();
+  });
+
+  it('取得に失敗したら空状態を装わず、一覧の場所が失敗を名乗って再試行できる', async () => {
+    mockedList.mockRejectedValueOnce(new Error('boom'));
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('出勤希望の取得に失敗しました')).toBeInTheDocument();
+    // 「ありません」に化けると未処理の希望を見落とす
+    expect(screen.queryByText('受付中の出勤希望はありません')).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    mockedList.mockResolvedValue([REQUEST]);
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('キャストA')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('status=PENDING で一覧を取得し、cast 名・日時・備考を表示する', async () => {

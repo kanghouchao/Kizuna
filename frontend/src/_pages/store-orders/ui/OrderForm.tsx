@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { OrderReceptionist, ReceptionRoute, orderApi } from '@/entities/order';
-import { toast } from 'react-hot-toast';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
@@ -20,6 +19,7 @@ import {
   FormMessage,
   Input,
   Label,
+  RegionError,
   Select,
   SelectContent,
   SelectItem,
@@ -126,6 +126,7 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
   } = form;
 
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
+  const [receptionistsFailed, setReceptionistsFailed] = useState(false);
   const receptionistItems = [
     { value: SELECT_NONE, label: '－－－' },
     ...receptionistOptions
@@ -133,18 +134,24 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
       .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
   ];
 
-  useEffect(() => {
-    const loadReceptionists = async () => {
-      try {
-        const receptionists = await orderApi.listReceptionists();
-        setReceptionistOptions(receptionists);
-      } catch {
-        toast.error('受付担当者の取得に失敗しました');
-      }
-    };
-
-    loadReceptionists();
+  // 再試行から呼び直せるよう effect の外に置く。取り直しの前に失敗を畳むのは、同じ姿のまま
+  // 失敗を繰り返すと role="alert" が挿入されず二度目の失敗が読み上げ利用者に届かないため
+  const loadReceptionists = useCallback(async () => {
+    setReceptionistsFailed(false);
+    try {
+      const receptionists = await orderApi.listReceptionists();
+      setReceptionistOptions(receptionists);
+      setReceptionistsFailed(false);
+    } catch {
+      // 選択肢が「－－－」だけの状態は「受付が 1 人も居ない」と区別がつかない
+      setReceptionistOptions([]);
+      setReceptionistsFailed(true);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadReceptionists();
+  }, [loadReceptionists]);
 
   return (
     <Form {...form}>
@@ -184,6 +191,13 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                         ))}
                       </SelectContent>
                     </Select>
+                    {/* 送信は塞がない。選べないまま押せば上の rules が欄の傍で止める */}
+                    {receptionistsFailed && (
+                      <RegionError
+                        message="受付担当者の取得に失敗しました"
+                        onRetry={() => void loadReceptionists()}
+                      />
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
