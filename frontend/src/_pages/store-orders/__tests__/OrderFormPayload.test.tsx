@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
 import * as castEntity from '@/entities/cast';
 import { orderApi } from '@/entities/order';
@@ -243,5 +243,35 @@ describe('オーダーフォームの編集時の指名表示', () => {
     expect(screen.getByRole('combobox', { name: /キャスト/ })).toHaveTextContent('あや');
     expect(castEntity.castApi.get as jest.Mock).not.toHaveBeenCalled();
     expect(castEntity.castApi.list as jest.Mock).not.toHaveBeenCalled();
+  });
+});
+
+describe('オーダーフォームの受付候補の取得失敗', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedOrderApi.listCastCandidates.mockResolvedValue([]);
+  });
+
+  it('候補が取れなければ欄の傍で失敗を名乗り、送信は塞がず、再試行で回復すること', async () => {
+    mockedOrderApi.listReceptionists.mockRejectedValueOnce(new Error('boom'));
+    const { onSubmit } = renderForm();
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('受付担当者の取得に失敗しました')).toBeInTheDocument();
+
+    // 系の故障を利用者の入力ミスとして扱わない — 押せるし、押した結果は欄の傍の必須検証が言う
+    const submit = screen.getByRole('button', { name: '登録する' });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+    expect(await screen.findByText('受付を選択してください')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+
+    await selectReceptionist();
+    const body = await submitAndGetBody(onSubmit);
+    expect(body.receptionistId).toBe('7');
   });
 });

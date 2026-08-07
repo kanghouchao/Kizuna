@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import type { PermissionResponse, RoleResponse } from '@/entities/user';
 import { platformRoleApi } from '@/entities/user';
@@ -63,11 +63,14 @@ describe('ロール編集モーダル', () => {
     mockedRoleApi.get.mockRejectedValueOnce({ response: { status: 500 } });
     renderModal();
 
-    expect(await screen.findByText('ロール情報の取得に失敗しました')).toBeInTheDocument();
+    // 失敗を名乗るのは区画自身。横断幕は飛ばさない
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('ロール情報の取得に失敗しました')).toBeInTheDocument();
+    expect(mockedToast.error).not.toHaveBeenCalled();
     expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByLabelText('ORDER_MANAGE')).toBeChecked();
     expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');

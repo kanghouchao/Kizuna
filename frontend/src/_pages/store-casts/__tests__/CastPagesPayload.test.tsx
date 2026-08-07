@@ -1,7 +1,10 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { toast } from 'react-hot-toast';
 import CastCreatePage from '../ui/CastCreatePage';
 import CastEditPage from '../ui/CastEditPage';
 import { castApi, castFieldDefinitionApi } from '@/entities/cast';
+
+const mockPush = jest.fn();
 
 jest.mock('@/entities/cast', () => ({
   castApi: {
@@ -15,8 +18,13 @@ jest.mock('@/entities/cast', () => ({
 }));
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => ({ storeId: '1', id: 'cast-1' }),
+}));
+
+jest.mock('react-hot-toast', () => ({
+  __esModule: true,
+  toast: { success: jest.fn(), error: jest.fn() },
 }));
 
 const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
@@ -155,5 +163,53 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     const body = mockedCastApi.update.mock.calls[0][1] as unknown as Record<string, unknown>;
     // 取得値 INACTIVE ではなく、選び直した値がフォーム状態に届いていること
     expect(body).toHaveProperty('status', 'ACTIVE');
+  });
+});
+
+describe('キャスト編集の取得失敗', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedFieldApi.list.mockResolvedValue([]);
+  });
+
+  it('取得に失敗しても一覧へ離脱せず、頁自身が失敗を名乗って再試行できること', async () => {
+    mockedCastApi.get.mockRejectedValueOnce({ response: { status: 500 } });
+
+    render(<CastEditPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('キャスト情報の取得に失敗しました')).toBeInTheDocument();
+    // 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    mockedCastApi.get.mockResolvedValue({
+      id: 'cast-1',
+      name: '花子',
+      status: 'ACTIVE',
+      display_order: 0,
+      invitation_status: 'NOT_INVITED',
+      created_at: '2026-07-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+    });
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByRole('button', { name: '保存する' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('404 では再試行を出さず、一覧への導線だけを出すこと', async () => {
+    mockedCastApi.get.mockRejectedValueOnce({ response: { status: 404 } });
+
+    render(<CastEditPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('このキャストは見つかりませんでした')).toBeInTheDocument();
+    // 何度押しても取れないものを押させない
+    expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: 'キャスト一覧へ' })).toHaveAttribute(
+      'href',
+      '/store/1/casts'
+    );
   });
 });

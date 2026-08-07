@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import { ReservationRequestEditModal } from '../ui/ReservationRequestEditModal';
 import { Order, orderApi } from '@/entities/order';
@@ -316,7 +316,7 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     expect(screen.queryByRole('option', { name: /ふるい/ })).not.toBeInTheDocument();
   });
 
-  it('候補の取得に失敗したら、古い候補を残さない', async () => {
+  it('候補の取得に失敗したら、古い候補を残さず候補欄自身が失敗を名乗る', async () => {
     renderModal(nominationFreeRequest);
 
     await openPicker();
@@ -326,6 +326,20 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     await search('あ');
 
     expect(screen.queryByRole('option', { name: /みか/ })).not.toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith('キャスト候補の取得に失敗しました');
+    // 空の候補一覧を「該当するキャストがいません」として見せない。横断幕も飛ばさない
+    const region = screen.getByRole('alert');
+    expect(within(region).getByText('キャスト候補の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('該当するキャストがいません')).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    // 再試行は同じ検索語のまま取り直す
+    mockedCastCandidates.mockResolvedValueOnce([{ id: 'cast-3', name: 'あやか' }]);
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+
+    expect(screen.getByRole('option', { name: /あやか/ })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

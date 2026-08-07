@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
-import { Badge, Button } from '@/shared/ui';
+import { Badge, Button, RegionError } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
   casts: CastResponse[];
@@ -18,6 +18,7 @@ interface ShiftRequestInboxProps {
 export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps) {
   const [requests, setRequests] = useState<StoreShiftRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // castId が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
@@ -28,8 +29,15 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
     setLoading(true);
     shiftApi
       .listShiftRequests({ status: 'PENDING' })
-      .then(setRequests)
-      .catch(() => toast.error('出勤希望の取得に失敗しました'))
+      .then(rows => {
+        setRequests(rows);
+        setFailed(false);
+      })
+      .catch(() => {
+        // 読めなかった一覧を残すと「受付中の出勤希望はありません」に化け、未処理の希望を見落とす
+        setRequests([]);
+        setFailed(true);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -66,6 +74,9 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
+  }
+  if (failed) {
+    return <RegionError message="出勤希望の取得に失敗しました" onRetry={load} />;
   }
   if (requests.length === 0) {
     return <p className="text-sm text-muted-foreground">受付中の出勤希望はありません</p>;

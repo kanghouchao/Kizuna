@@ -1,5 +1,6 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { toast } from 'react-hot-toast';
 import SystemSettingsPage from '../ui/SettingsPage';
 
 const mockGetAllConfigs = jest.fn();
@@ -108,6 +109,22 @@ describe('SystemSettingsPage', () => {
     const input = screen.getByPlaceholderText('新しい値を入力');
     expect(input).toHaveAttribute('type', 'password');
     expect(input).toHaveValue('');
+  });
+
+  it('取得に失敗したら「設定項目がありません」ではなく一覧の場所が失敗を名乗り、再試行で回復する', async () => {
+    mockGetAllConfigs.mockRejectedValueOnce(new Error('boom'));
+
+    render(<SystemSettingsPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('設定の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('設定項目がありません。')).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByRole('switch', { name: 'maintenance_mode' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('文字列設定は編集時に複数行入力欄になり現在値が初期表示される', async () => {

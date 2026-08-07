@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 import { Combobox } from '@base-ui/react/combobox';
 import { OrderCastCandidate, orderApi } from '@/entities/order';
-import { Button, Label } from '@/shared/ui';
+import { Button, Label, RegionError } from '@/shared/ui';
 
 interface CastSearchComboboxProps {
   /** ラベルと引き金を結ぶ id。同一画面で衝突しない値を親が与える。 */
@@ -38,7 +37,10 @@ export function CastSearchCombobox({
   const [keyword, setKeyword] = useState('');
   const [options, setOptions] = useState<OrderCastCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [selectedName, setSelectedName] = useState(castName);
+  // 再試行のたびに増やして、検索語が同じままでも取得を走らせ直す
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setSelectedName(castName);
@@ -58,10 +60,12 @@ export function CastSearchCombobox({
         const candidates = await orderApi.listCastCandidates(search ? { search } : undefined);
         if (superseded) return;
         setOptions(candidates);
+        setFailed(false);
       } catch {
         if (superseded) return;
+        // 空の候補一覧は「該当するキャストがいません」と区別がつかない。読めなかったことを名乗る
         setOptions([]);
-        toast.error('キャスト候補の取得に失敗しました');
+        setFailed(true);
       } finally {
         if (!superseded) setIsLoading(false);
       }
@@ -71,7 +75,7 @@ export function CastSearchCombobox({
       superseded = true;
       clearTimeout(timer);
     };
-  }, [keyword, isOpen]);
+  }, [keyword, isOpen, attempt]);
 
   const handleOpenChange = (next: boolean) => {
     setIsOpen(next);
@@ -134,6 +138,12 @@ export function CastSearchCombobox({
               </div>
               {isLoading ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">検索中...</div>
+              ) : failed ? (
+                <RegionError
+                  message="キャスト候補の取得に失敗しました"
+                  onRetry={() => setAttempt(count => count + 1)}
+                  className="justify-center px-3 py-6"
+                />
               ) : (
                 <>
                   <Combobox.Empty className="py-6 text-center text-sm">

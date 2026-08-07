@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
 import { CastResponse, CastUpdateRequest, castApi } from '@/entities/cast';
 import { toast } from 'react-hot-toast';
-import { storePath } from '@/shared/lib';
+import { isNotFound, storePath } from '@/shared/lib';
+import { RegionError } from '@/shared/ui';
 
 /** キャスト編集ページ */
 export default function CastEditPage() {
@@ -15,22 +16,29 @@ export default function CastEditPage() {
   const router = useRouter();
   const [cast, setCast] = useState<CastResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailure, setLoadFailure] = useState<'notFound' | 'error' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 再試行から呼び直せるよう effect の外に置く。取得できなかったこの頁自身が失敗を名乗るので、
+  // 一覧へ送り返さない — 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
+  const fetchCast = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await castApi.get(id);
+      setCast(data);
+      setLoadFailure(null);
+    } catch (error) {
+      setCast(null);
+      // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
+      setLoadFailure(isNotFound(error) ? 'notFound' : 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
-    const fetchCast = async () => {
-      try {
-        const data = await castApi.get(id);
-        setCast(data);
-      } catch {
-        toast.error('キャスト情報の取得に失敗しました');
-        router.push(storePath(storeId, '/casts'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchCast();
-  }, [id, router, storeId]);
+    void fetchCast();
+  }, [fetchCast]);
 
   const handleSubmit = async (data: CastFormData) => {
     try {
@@ -60,6 +68,25 @@ export default function CastEditPage() {
 
   if (isLoading) {
     return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
+  }
+
+  if (loadFailure !== null) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-foreground">キャスト編集</h1>
+        {loadFailure === 'notFound' ? (
+          <RegionError
+            message="このキャストは見つかりませんでした"
+            fallback={{ href: storePath(storeId, '/casts'), label: 'キャスト一覧へ' }}
+          />
+        ) : (
+          <RegionError
+            message="キャスト情報の取得に失敗しました"
+            onRetry={() => void fetchCast()}
+          />
+        )}
+      </div>
+    );
   }
 
   if (!cast) return null;

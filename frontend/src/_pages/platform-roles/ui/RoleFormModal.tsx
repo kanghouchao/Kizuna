@@ -116,9 +116,9 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
       if (requestId !== requestIdRef.current) return;
       setEditingRole(role);
       reset({ name: role.name ?? '', permissions: role.permissions ?? [] });
-    } catch (error) {
+    } catch {
       if (requestId !== requestIdRef.current) return;
-      toast.error(getApiErrorMessage(error, 'ロール情報の取得に失敗しました'));
+      // 取得できなかった詳細は区画自身が名乗る。モーダルは開いたままなので toast は要らない
       setDetailLoadFailed(true);
     }
   }, [editingId, reset]);
@@ -240,18 +240,11 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
                     {/* 詳細取得の失敗（初回・409 後の取り直しとも）は「読み込み中」に固着させず、
                         ダイアログ内で再試行できるようにする */}
                     {editingLoading && detailLoadFailed ? (
-                      <div className="space-y-2 rounded-md border p-3">
-                        <p className="text-sm text-destructive-strong">
-                          ロール情報の取得に失敗しました
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void reloadEditingRole()}
-                        >
-                          再試行
-                        </Button>
-                      </div>
+                      <RegionError
+                        message="ロール情報の取得に失敗しました"
+                        onRetry={() => void reloadEditingRole()}
+                        className="rounded-md border p-3"
+                      />
                     ) : (
                       <FormControl>
                         {/* 目録の到着前も組そのものは立てる。新規作成では目録の読み込み中でも
