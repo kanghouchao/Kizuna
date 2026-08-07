@@ -13,8 +13,11 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
         // 通知は積み重ねず素直な縦並びで出す。ライブラリの見本はカードを重ねる演出のため
         // Root を絶対配置して `--toast-index` から変形を組むが、こちらの規範は一覧表示。
         // 通常フローに置けば `--toast-offset-y` 等を使わずに済み、段数の計算が要らない。
-        // items-center で幅を内容に合わせる。伸ばすと短い一文でも常に最大幅の帯になり、
-        // 通知の重さが文の長さではなく枠の大きさで伝わってしまう。
+        // 幅は内容に合わせる。伸ばすと短い一文でも常に最大幅の帯になり、通知の重さが文の
+        // 長さではなく枠の大きさで伝わってしまう。器自身も `w-fit` で content 幅にする——
+        // 下の注記のとおり焦点の輪郭はこの器の箱に沿って描かれるので、器を伸ばしたままだと
+        // 通知の左右に空白を抱えた矩形が画面に浮く。`items-center` は段数が複数で幅が
+        // 揃わないときに短い方を中央へ寄せる係。
         //
         // z は overlay 一式（dialog / popover / select / menu＝どれも z-50）より上へ置く。
         // 同値だと後から portal した方＝モーダルが勝ち、`error` の段が前提にしている
@@ -26,7 +29,7 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
         // かといって自前の環は置けない——器自身は透明で、環が乗る地は下にある画面の中身、
         // つまり書く時点では何色か分からない面になる。ブラウザ既定の輪郭は二色で描かれ、
         // まさにその「地が分からない」場合のために設計されている。
-        'pointer-events-none fixed inset-x-4 top-4 z-[60] mx-auto flex w-auto max-w-sm flex-col items-center gap-2',
+        'pointer-events-none fixed inset-x-4 top-4 z-[60] mx-auto flex w-fit max-w-sm flex-col items-center gap-2',
         className
       )}
       {...props}
