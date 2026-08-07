@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { customerApi } from '@/entities/customer';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { storePath } from '@/shared/lib';
 
 /** 新規顧客登録ページ */
@@ -18,10 +18,10 @@ export default function CustomerCreatePage() {
     try {
       setIsSubmitting(true);
       await customerApi.create(toCustomerRequest(data));
-      toast.success('顧客を登録しました');
+      notify.success('顧客を登録しました');
       router.push(storePath(storeId, '/customers'));
     } catch {
-      toast.error('顧客の登録に失敗しました');
+      notify.error('顧客の登録に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

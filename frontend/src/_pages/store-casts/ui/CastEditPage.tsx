@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
 import { CastResponse, CastUpdateRequest, castApi } from '@/entities/cast';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { isNotFound, storePath } from '@/shared/lib';
 import { RegionError } from '@/shared/ui';
 
@@ -57,10 +57,10 @@ export default function CastEditPage() {
         custom_fields: data.custom_fields,
       };
       await castApi.update(id, requestData);
-      toast.success('キャスト情報を更新しました');
+      notify.success('キャスト情報を更新しました');
       router.push(storePath(storeId, '/casts'));
     } catch {
-      toast.error('キャスト情報の更新に失敗しました');
+      notify.error('キャスト情報の更新に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

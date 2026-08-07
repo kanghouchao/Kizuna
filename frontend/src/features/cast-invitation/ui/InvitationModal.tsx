@@ -1,6 +1,6 @@
 'use client';
 
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
 
 interface InvitationModalProps {
@@ -17,9 +17,9 @@ export function InvitationModal({ open, link, expiresAt, onClose }: InvitationMo
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(link);
-      toast.success('リンクをコピーしました');
+      notify.success('リンクをコピーしました');
     } catch {
-      toast.error('リンクのコピーに失敗しました');
+      notify.error('リンクのコピーに失敗しました');
     }
   };
 

@@ -2,7 +2,7 @@
 
 import Cookies from 'js-cookie';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
 import { PlatformLoginRequest, platformAuthApi } from '@/entities/user';
 import {
@@ -71,7 +71,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
           Cookies.set('token', previousToken);
         }
       }
-      toast.error(getApiErrorMessage(error, 'ログインまたは受諾に失敗しました'));
+      notify.error(getApiErrorMessage(error, 'ログインまたは受諾に失敗しました'));
     }
   };
 

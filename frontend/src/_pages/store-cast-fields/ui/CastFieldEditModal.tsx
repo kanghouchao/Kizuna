@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import {
   CastFieldDefinitionResponse,
   CastFieldDefinitionUpdateRequest,
@@ -58,11 +58,11 @@ export function CastFieldEditModal({
         is_public: values.is_public,
       };
       await castFieldDefinitionApi.update(definition.id ?? '', request);
-      toast.success('フィールドを更新しました');
+      notify.success('フィールドを更新しました');
       onUpdated();
       onClose();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'フィールドの更新に失敗しました'));
+      notify.error(getApiErrorMessage(error, 'フィールドの更新に失敗しました'));
     }
   };
 

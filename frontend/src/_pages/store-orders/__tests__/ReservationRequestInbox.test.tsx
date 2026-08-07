@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { ReservationRequestInbox } from '../ui/ReservationRequestInbox';
 import { orderApi } from '@/entities/order';
 
@@ -13,8 +13,8 @@ jest.mock('@/entities/order', () => ({
   },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedList = orderApi.listReservationRequests as jest.Mock;
@@ -143,7 +143,7 @@ describe('ReservationRequestInbox', () => {
     fireEvent.click(await screen.findByRole('button', { name: '確定' }));
 
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(
+      expect(notify.error).toHaveBeenCalledWith(
         '指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください'
       )
     );
@@ -157,7 +157,7 @@ describe('ReservationRequestInbox', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '確定' }));
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('確定に失敗しました'));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('確定に失敗しました'));
   });
 
   it('未確定の申請が無ければその旨を表示する', async () => {

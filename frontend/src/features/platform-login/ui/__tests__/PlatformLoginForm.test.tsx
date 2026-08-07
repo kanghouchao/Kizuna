@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
-import toast from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import PlatformLoginForm from '../PlatformLoginForm';
 import { platformAuthApi } from '@/entities/user';
 import type { PlatformMeResponse } from '@/entities/user';
@@ -8,9 +8,8 @@ import type { PlatformMeResponse } from '@/entities/user';
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  default: { error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('@/entities/user', () => {
@@ -26,7 +25,7 @@ jest.mock('@/entities/user', () => {
 });
 
 const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
-const mockedToastError = toast.error as jest.Mock;
+const mockedNotifyError = notify.error as jest.Mock;
 
 function meResponse(overrides: Partial<PlatformMeResponse>): PlatformMeResponse {
   return {
@@ -75,7 +74,7 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/schedule/'));
     expect(Cookies.get('platform-role')).toBe('cast');
     expect(Cookies.get('token')).toBe('jwt-token');
-    expect(mockedToastError).not.toHaveBeenCalled();
+    expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 
   it('会員が公式サイトの予約導線から弾かれていた場合、その画面へ戻ること', async () => {
@@ -107,6 +106,6 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
     expect(Cookies.get('platform-role')).toBe('member');
     expect(Cookies.get('token')).toBe('jwt-token');
-    expect(mockedToastError).not.toHaveBeenCalled();
+    expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 });

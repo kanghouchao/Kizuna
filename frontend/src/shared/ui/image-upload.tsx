@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { ImageIcon, XIcon } from 'lucide-react';
 import { fileApi } from '@/shared/api';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 
 interface ImageUploadProps {
   value?: string;
@@ -42,9 +42,9 @@ export default function ImageUpload({
       setIsUploading(true);
       const response = await fileApi.upload(file, bucket);
       onChange(response.url ?? '');
-      toast.success('画像をアップロードしました');
+      notify.success('画像をアップロードしました');
     } catch {
-      toast.error('画像のアップロードに失敗しました');
+      notify.error('画像のアップロードに失敗しました');
       setPreview(value);
     } finally {
       setIsUploading(false);

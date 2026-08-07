@@ -6,8 +6,8 @@ jest.mock('@/entities/shift', () => ({
   shiftApi: { mySchedule: jest.fn(), submitShiftChangeRequest: jest.fn() },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedMySchedule = shiftApi.mySchedule as jest.Mock;

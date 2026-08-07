@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { MEMBER_ORDER_STATUS_LABELS, MemberOrder, memberOrderApi } from '@/entities/order';
 import { useCursorList } from '@/shared/lib';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
@@ -47,12 +47,12 @@ export function MemberReservationsPage() {
     try {
       // 取り下げても予約は一覧に残る（状態が変わるだけ）ので、その行だけ差し替える。
       const updated = await memberOrderApi.cancel(id);
-      toast.success('予約を取り下げました');
+      notify.success('予約を取り下げました');
       setReservations(prev =>
         prev.map(reservation => (reservation.id === id ? updated : reservation))
       );
     } catch {
-      toast.error('取り下げに失敗しました');
+      notify.error('取り下げに失敗しました');
     } finally {
       setProcessingId(null);
     }

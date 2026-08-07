@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { LineAuthorizationRequest, platformAuthApi, platformLineApi } from '@/entities/user';
 import { completePlatformLogin } from '@/features/platform-login';
 import {
@@ -138,7 +138,7 @@ export default function LineCallbackPage() {
       // 消費済みのコールバック URL と使用済みフォームを履歴に残さない
       router.replace('/member/');
     } catch (error) {
-      toast.error(getApiErrorMessage(error, '会員登録に失敗しました'));
+      notify.error(getApiErrorMessage(error, '会員登録に失敗しました'));
     }
   };
 

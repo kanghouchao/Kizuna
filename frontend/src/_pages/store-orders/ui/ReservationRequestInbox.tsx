@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { Order, orderApi } from '@/entities/order';
 import { getApiErrorMessage, useCursorList } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
@@ -42,10 +42,10 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
     try {
       if (action === 'confirm') {
         await orderApi.confirm(id);
-        toast.success('予約を確定しました');
+        notify.success('予約を確定しました');
       } else {
         await orderApi.decline(id);
-        toast.success('予約を謝絶しました');
+        notify.success('予約を謝絶しました');
       }
       // 処理し終えた申請は inbox の対象から外れるので、手元から取り除くだけで一覧は正しくなる。
       // 取り直しに行くと、その 1 回のために読み込み済みの範囲ぶんの要求を撒くことになる。
@@ -53,7 +53,7 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
       onProcessed();
     } catch (error) {
       // 指名の再検証など、サーバは対処方法（修正か謝絶か）を含む文言を返す。汎用文言に潰さない。
-      toast.error(
+      notify.error(
         getApiErrorMessage(
           error,
           action === 'confirm' ? '確定に失敗しました' : '謝絶に失敗しました'

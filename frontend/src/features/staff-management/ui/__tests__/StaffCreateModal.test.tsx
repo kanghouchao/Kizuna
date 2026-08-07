@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { platformRoleApi, platformStaffApi } from '@/entities/user';
 import { StaffCreateModal } from '../StaffCreateModal';
 
@@ -8,13 +8,13 @@ jest.mock('@/entities/user', () => ({
   platformStaffApi: { create: jest.fn() },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
 const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
-const mockedToast = toast as jest.Mocked<typeof toast>;
+const mockedNotify = notify as jest.Mocked<typeof notify>;
 
 const stores = [{ id: 9, name: '店舗A' }];
 
@@ -106,7 +106,7 @@ describe('スタッフ新規作成モーダル', () => {
     fireEvent.click(submitButton);
 
     const message = await screen.findByText('ロールを 1 つ以上選択してください');
-    expect(mockedToast.error).not.toHaveBeenCalled();
+    expect(mockedNotify.error).not.toHaveBeenCalled();
     expect(mockedStaffApi.create).not.toHaveBeenCalled();
     // 必須は「N のうち 1 つ以上」＝組の性質なので、指摘も個々の項目ではなく組に紐づく
     const group = screen.getByRole('group', { name: 'ロール' });
@@ -156,7 +156,7 @@ describe('スタッフ新規作成モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
-    expect(mockedToast.success).toHaveBeenCalledWith('スタッフを追加しました');
+    expect(mockedNotify.success).toHaveBeenCalledWith('スタッフを追加しました');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

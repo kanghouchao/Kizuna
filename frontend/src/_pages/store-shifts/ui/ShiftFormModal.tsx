@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
 import { getApiErrorMessage } from '@/shared/lib';
@@ -132,15 +132,15 @@ export function ShiftFormModal({
     try {
       if (editing) {
         await shiftApi.update(editing.id ?? '', payload);
-        toast.success('シフトを更新しました');
+        notify.success('シフトを更新しました');
       } else {
         await shiftApi.create(payload);
-        toast.success('シフトを追加しました');
+        notify.success('シフトを追加しました');
       }
       onSaved();
       onClose();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'シフトの保存に失敗しました'));
+      notify.error(getApiErrorMessage(error, 'シフトの保存に失敗しました'));
     }
   };
 
@@ -148,11 +148,11 @@ export function ShiftFormModal({
     if (!editing) return;
     try {
       await shiftApi.delete(editing.id ?? '');
-      toast.success('シフトを削除しました');
+      notify.success('シフトを削除しました');
       onSaved();
       onClose();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'シフトの削除に失敗しました'));
+      notify.error(getApiErrorMessage(error, 'シフトの削除に失敗しました'));
     }
   };
 

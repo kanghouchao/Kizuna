@@ -1,7 +1,7 @@
 'use client';
 
 import { OrderForm, OrderFormData } from './OrderForm';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { storePath } from '@/shared/lib';
@@ -25,10 +25,10 @@ export default function EditOrderPage() {
       console.log('Order updated:', params.id, data);
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      toast.success('オーダーを更新しました');
+      notify.success('オーダーを更新しました');
       router.push(storePath(storeId, '/orders'));
     } catch (error) {
-      toast.error('オーダーの更新に失敗しました');
+      notify.error('オーダーの更新に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

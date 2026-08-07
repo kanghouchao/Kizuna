@@ -5,7 +5,7 @@ import { Loader2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { CreateStoreRequest, isStoreDomain, platformStoreApi } from '@/entities/store';
 import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
-import toast from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 
 export default function CreateStorePage() {
   const router = useRouter();
@@ -59,13 +59,13 @@ export default function CreateStorePage() {
 
     try {
       await platformStoreApi.create(formData);
-      toast.success('店舗を作成しました。店舗一覧に戻ります');
+      notify.success('店舗を作成しました。店舗一覧に戻ります');
       router.push('/platform/stores');
     } catch (error: any) {
       if (error.response?.data?.errors) {
         setErrors(error.response.data.errors);
       }
-      toast.error('店舗作成に失敗しました。入力内容をご確認ください');
+      notify.error('店舗作成に失敗しました。入力内容をご確認ください');
     } finally {
       setIsSubmitting(false);
     }

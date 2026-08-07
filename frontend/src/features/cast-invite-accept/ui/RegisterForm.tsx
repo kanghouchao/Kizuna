@@ -1,7 +1,7 @@
 'use client';
 
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
 
@@ -34,7 +34,7 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
       const response = await castInvitationAcceptanceApi.acceptAsNewUser(token, values);
       onSuccess(response);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, '登録に失敗しました'));
+      notify.error(getApiErrorMessage(error, '登録に失敗しました'));
     }
   };
 

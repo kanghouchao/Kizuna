@@ -1,12 +1,12 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { PasswordChangeForm } from '../PasswordChangeForm';
 import { platformAuthApi } from '@/entities/user';
 
 const mockLogout = jest.fn();
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('@/entities/user', () => ({
@@ -15,8 +15,8 @@ jest.mock('@/entities/user', () => ({
 }));
 
 const mockedChangePassword = platformAuthApi.changePassword as jest.Mock;
-const mockedToastError = toast.error as jest.Mock;
-const mockedToastSuccess = toast.success as jest.Mock;
+const mockedNotifyError = notify.error as jest.Mock;
+const mockedNotifySuccess = notify.success as jest.Mock;
 
 /** autoComplete 属性でフィールドを特定する（ラベル関連付けの有無に依存しない）。 */
 function fields(container: HTMLElement) {
@@ -52,7 +52,7 @@ describe('パスワード変更フォーム', () => {
     // 成功を通知で言うと、直後のログアウトでこの画面ごと破棄され誰にも読まれない。
     // 名乗るのは着地したログイン画面の仕事で、この画面は理由コードを渡すだけ。
     await waitFor(() => expect(mockLogout).toHaveBeenCalledWith('password-changed'));
-    expect(mockedToastSuccess).not.toHaveBeenCalled();
+    expect(mockedNotifySuccess).not.toHaveBeenCalled();
   });
 
   it('確認用パスワードが一致しない場合は、その欄の傍に文言を出し API を呼ばないこと', async () => {
@@ -65,7 +65,7 @@ describe('パスワード変更フォーム', () => {
     fireEvent.click(screen.getByRole('button', { name: 'パスワードを変更する' }));
 
     const message = await screen.findByText('新しいパスワードが一致しません');
-    expect(mockedToastError).not.toHaveBeenCalled();
+    expect(mockedNotifyError).not.toHaveBeenCalled();
     expect(mockedChangePassword).not.toHaveBeenCalled();
     expect(mockLogout).not.toHaveBeenCalled();
     // 「入力の傍」は視覚的な近さだけでなく、読み上げが欄と指摘を結べることまで含む
@@ -114,7 +114,7 @@ describe('パスワード変更フォーム', () => {
     fireEvent.change(confirm, { target: { value: 'newpass123' } });
     fireEvent.click(screen.getByRole('button', { name: 'パスワードを変更する' }));
 
-    await waitFor(() => expect(mockedToastError).toHaveBeenCalled());
+    await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
     expect(mockLogout).not.toHaveBeenCalled();
     expect(await screen.findByRole('button', { name: 'パスワードを変更する' })).toBeEnabled();
   });

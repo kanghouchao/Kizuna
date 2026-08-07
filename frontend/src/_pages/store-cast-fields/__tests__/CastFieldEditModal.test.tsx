@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import type { CastFieldDefinitionResponse } from '@/entities/cast';
 import { castFieldDefinitionApi } from '@/entities/cast';
 import { CastFieldEditModal } from '../ui/CastFieldEditModal';
@@ -8,8 +8,8 @@ jest.mock('@/entities/cast', () => ({
   castFieldDefinitionApi: { update: jest.fn() },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedApi = castFieldDefinitionApi as jest.Mocked<typeof castFieldDefinitionApi>;
@@ -131,7 +131,7 @@ describe('カスタムフィールド定義の編集モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1));
-    expect(toast.success).toHaveBeenCalledWith('フィールドを更新しました');
+    expect(notify.success).toHaveBeenCalledWith('フィールドを更新しました');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { StoreStats, platformStoreApi } from '@/entities/store';
 import { Card, CardContent, Skeleton } from '@/shared/ui';
-import toast from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<StoreStats | null>(null);
@@ -13,7 +13,7 @@ export default function AdminDashboard() {
     try {
       setStats(await platformStoreApi.getStats());
     } catch (error) {
-      toast.error('データの読み込みに失敗しました');
+      notify.error('データの読み込みに失敗しました');
     } finally {
       setLoadingStats(false);
     }
