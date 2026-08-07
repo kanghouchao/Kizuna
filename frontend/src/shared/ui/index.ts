@@ -21,3 +21,4 @@ export * from './table';
 export * from './table-card';
 export * from './tabs';
 export * from './textarea';
+export * from './toast';
