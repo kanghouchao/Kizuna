@@ -22,4 +22,5 @@ export * from './table';
 export * from './table-card';
 export * from './tabs';
 export * from './textarea';
-export * from './toast';
+// 通知は呼び出し側で組み立てない（DESIGN.md）。部品まで出すと語義層を迂回できる。
+export { Toaster } from './toast';

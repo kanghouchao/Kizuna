@@ -14,8 +14,8 @@ jest.mock('../ui/RoleFormModal', () => {
   };
 });
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
 import { Badge, Button, RegionError } from '@/shared/ui';
@@ -49,11 +49,11 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
     setProcessingId(id);
     try {
       await shiftApi.approveShiftRequest(id);
-      toast.success('出勤希望を承認しました');
+      notify.success('出勤希望を承認しました');
       load();
       onApproved();
     } catch {
-      toast.error('承認に失敗しました');
+      notify.error('承認に失敗しました');
     } finally {
       setProcessingId(null);
     }
@@ -63,10 +63,10 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
     setProcessingId(id);
     try {
       await shiftApi.declineShiftRequest(id);
-      toast.success('出勤希望を却下しました');
+      notify.success('出勤希望を却下しました');
       load();
     } catch {
-      toast.error('却下に失敗しました');
+      notify.error('却下に失敗しました');
     } finally {
       setProcessingId(null);
     }

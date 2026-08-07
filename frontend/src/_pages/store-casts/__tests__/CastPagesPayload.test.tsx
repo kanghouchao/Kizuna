@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import CastCreatePage from '../ui/CastCreatePage';
 import CastEditPage from '../ui/CastEditPage';
 import { castApi, castFieldDefinitionApi } from '@/entities/cast';
@@ -22,9 +22,8 @@ jest.mock('next/navigation', () => ({
   useParams: () => ({ storeId: '1', id: 'cast-1' }),
 }));
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
@@ -181,7 +180,7 @@ describe('キャスト編集の取得失敗', () => {
     expect(within(region).getByText('キャスト情報の取得に失敗しました')).toBeInTheDocument();
     // 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
     expect(mockPush).not.toHaveBeenCalled();
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
 
     mockedCastApi.get.mockResolvedValue({
       id: 'cast-1',

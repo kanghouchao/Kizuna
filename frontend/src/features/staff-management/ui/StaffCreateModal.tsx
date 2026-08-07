@@ -1,7 +1,7 @@
 'use client';
 
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import {
   PlatformStore,
   PlatformStoreScopeType,
@@ -94,11 +94,11 @@ export function StaffCreateModal({
   const submit = async (values: StaffCreateFormValues) => {
     try {
       await platformStaffApi.create(values);
-      toast.success('スタッフを追加しました');
+      notify.success('スタッフを追加しました');
       onCreated();
       onClose();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'スタッフの追加に失敗しました'));
+      notify.error(getApiErrorMessage(error, 'スタッフの追加に失敗しました'));
     }
   };
 

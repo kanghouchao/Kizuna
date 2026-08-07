@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { Order, OrderReceptionist, orderApi } from '@/entities/order';
 import { getApiErrorMessage } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
@@ -127,11 +127,11 @@ export function ReservationRequestEditModal({
         pax: Number(values.pax),
         remarks: values.remarks ? values.remarks : undefined,
       });
-      toast.success('予約申請を更新しました');
+      notify.success('予約申請を更新しました');
       onSaved(updated);
       onClose();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, '予約申請の更新に失敗しました'));
+      notify.error(getApiErrorMessage(error, '予約申請の更新に失敗しました'));
     }
   };
 

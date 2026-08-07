@@ -10,9 +10,8 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  toast: { error: jest.fn(), success: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('@/entities/user', () => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import {
   PlatformStaffResponse,
   PlatformStore,
@@ -103,17 +103,17 @@ export function StaffEditModal({
         // 楽観ロック用バージョン（応答の version をそのまま往復する）
         version: staff.version,
       });
-      toast.success('権限を更新しました');
+      notify.success('権限を更新しました');
       onUpdated();
       onClose();
     } catch (error) {
       if (isConflict(error)) {
         // 楽観ロック競合: 固定文言の toast を出し、一覧を再取得してモーダルの内容を
         // 最新値へ自動リフレッシュする（staff prop の更新で上の reset が走る。ローカル編集は破棄、モーダルは開いたまま）。
-        toast.error('他の管理者が更新しました。最新の内容を確認してください');
+        notify.warning('他の管理者が更新しました。最新の内容を確認してください');
         onUpdated();
       } else {
-        toast.error(getApiErrorMessage(error, '権限の更新に失敗しました'));
+        notify.error(getApiErrorMessage(error, '権限の更新に失敗しました'));
       }
     }
   };

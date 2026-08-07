@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { ShiftRequestInbox } from '../ShiftRequestInbox';
 import { CastResponse } from '@/entities/cast';
 import { shiftApi } from '@/entities/shift';
@@ -12,8 +12,8 @@ jest.mock('@/entities/shift', () => ({
   },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedList = shiftApi.listShiftRequests as jest.Mock;
@@ -78,7 +78,7 @@ describe('ShiftRequestInbox', () => {
     expect(within(region).getByText('出勤希望の取得に失敗しました')).toBeInTheDocument();
     // 「ありません」に化けると未処理の希望を見落とす
     expect(screen.queryByText('受付中の出勤希望はありません')).not.toBeInTheDocument();
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
 
     mockedList.mockResolvedValue([REQUEST]);
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));

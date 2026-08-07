@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import {
   SystemConfigResponse,
   SystemConfigUpdateRequest,
@@ -51,7 +51,7 @@ export default function SystemSettingsPage() {
     setConfigs(prev =>
       prev.map(c => (c.config_key === configKey ? { ...c, config_value: configValue } : c))
     );
-    toast.success('設定を更新しました');
+    notify.success('設定を更新しました');
   };
 
   const handleToggle = async (config: SystemConfigResponse) => {
@@ -60,7 +60,7 @@ export default function SystemSettingsPage() {
       await saveConfig(config.config_key ?? '', config.config_value === 'true' ? 'false' : 'true');
     } catch (error) {
       console.error('設定の更新に失敗しました', error);
-      toast.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
+      notify.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
     } finally {
       setSaving(false);
     }
@@ -85,7 +85,7 @@ export default function SystemSettingsPage() {
       setEditingKey(null);
     } catch (error) {
       console.error('設定の更新に失敗しました', error);
-      toast.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
+      notify.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
     } finally {
       setSaving(false);
     }

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CastScheduleItem, ShiftChangeRequestCreateRequest, shiftApi } from '@/entities/shift';
 import { Button, Dialog, DialogContent, DialogTitle, Input, Label, Textarea } from '@/shared/ui';
 import { formatEndTime, formatTime, toDateStr } from '../lib/week';
@@ -57,10 +57,10 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
     };
     try {
       await shiftApi.submitShiftChangeRequest(payload);
-      toast.success('変更申請を提出しました');
+      notify.success('変更申請を提出しました');
       onClose();
     } catch {
-      toast.error('変更申請の提出に失敗しました');
+      notify.error('変更申請の提出に失敗しました');
     }
   };
 

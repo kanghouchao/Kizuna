@@ -1,12 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { InvitationModal } from '../InvitationModal';
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedToast = toast as jest.Mocked<typeof toast>;
+const mockedNotify = notify as jest.Mocked<typeof notify>;
 const writeText = jest.fn();
 
 const LINK = 'https://store.example.com/cast/invite/abc';
@@ -41,7 +41,7 @@ describe('キャスト招待リンクのモーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: 'コピー' }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(LINK));
-    expect(mockedToast.success).toHaveBeenCalledWith('リンクをコピーしました');
+    expect(mockedNotify.success).toHaveBeenCalledWith('リンクをコピーしました');
   });
 
   it('コピー失敗は失敗トーストを出す', async () => {
@@ -51,7 +51,7 @@ describe('キャスト招待リンクのモーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: 'コピー' }));
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('リンクのコピーに失敗しました')
+      expect(mockedNotify.error).toHaveBeenCalledWith('リンクのコピーに失敗しました')
     );
   });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import {
   StoreProfileResponse,
   StoreProfileUpdateRequest,
@@ -38,9 +38,9 @@ export default function StoreProfilePage() {
     try {
       const updated = await storeProfileApi.update(data);
       setConfig(updated);
-      toast.success('設定を保存しました');
+      notify.success('設定を保存しました');
     } catch (error) {
-      toast.error('設定の保存に失敗しました');
+      notify.error('設定の保存に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

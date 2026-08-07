@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CustomerMemberLinkHistoryResponse, customerApi } from '@/entities/customer';
 import { getApiErrorMessage } from '@/shared/lib';
 import {
@@ -68,11 +68,11 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
     try {
       setIsSubmitting(true);
       await customerApi.linkMember(customerId, memberCode);
-      toast.success('会員を紐づけました');
+      notify.success('会員を紐づけました');
       setMemberCode('');
       await reload();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, '会員の紐づけに失敗しました'));
+      notify.error(getApiErrorMessage(error, '会員の紐づけに失敗しました'));
     } finally {
       setIsSubmitting(false);
     }
@@ -83,10 +83,10 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
     try {
       setIsSubmitting(true);
       await customerApi.unlinkMember(customerId);
-      toast.success('会員の紐づけを解除しました');
+      notify.success('会員の紐づけを解除しました');
       await reload();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, '会員の紐づけ解除に失敗しました'));
+      notify.error(getApiErrorMessage(error, '会員の紐づけ解除に失敗しました'));
     } finally {
       setIsSubmitting(false);
     }

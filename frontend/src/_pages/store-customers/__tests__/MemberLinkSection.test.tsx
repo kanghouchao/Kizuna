@@ -1,11 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { MemberLinkSection } from '../ui/MemberLinkSection';
 import { customerApi } from '@/entities/customer';
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  toast: { error: jest.fn(), success: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('@/entities/customer', () => ({
@@ -17,7 +16,7 @@ jest.mock('@/entities/customer', () => ({
 }));
 
 const mockedApi = customerApi as jest.Mocked<typeof customerApi>;
-const mockedToast = toast as unknown as { error: jest.Mock; success: jest.Mock };
+const mockedNotify = notify as unknown as { error: jest.Mock; success: jest.Mock };
 
 const activeRow = {
   id: 'l2',
@@ -80,7 +79,7 @@ describe('MemberLinkSection', () => {
     await waitFor(() => expect(mockedApi.linkMember).toHaveBeenCalledWith('c1', '123456789012'));
     // 初回ロード + 紐づけ後の取り直し
     await waitFor(() => expect(mockedApi.memberLinkHistory).toHaveBeenCalledTimes(2));
-    expect(mockedToast.success).toHaveBeenCalledWith('会員を紐づけました');
+    expect(mockedNotify.success).toHaveBeenCalledWith('会員を紐づけました');
   });
 
   it('409 のサーバー文言をそのまま toast に出すこと', async () => {
@@ -97,7 +96,7 @@ describe('MemberLinkSection', () => {
     fireEvent.click(screen.getByRole('button', { name: '紐づける' }));
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('この会員は既に他の顧客と紐づいています')
+      expect(mockedNotify.error).toHaveBeenCalledWith('この会員は既に他の顧客と紐づいています')
     );
   });
 
@@ -114,7 +113,7 @@ describe('MemberLinkSection', () => {
     const region = screen.getByRole('alert');
     expect(within(region).getByText('会員紐づけの履歴取得に失敗しました')).toBeInTheDocument();
     expect(within(region).getByRole('button', { name: '再試行' })).toBeInTheDocument();
-    expect(mockedToast.error).not.toHaveBeenCalled();
+    expect(mockedNotify.error).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText('会員コード'), {
       target: { value: '123456789012' },

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { platformAuthApi } from '@/entities/user';
 import { PasswordChangeForm } from '@/features/password-change';
 import {
@@ -52,9 +52,9 @@ export default function AccountPage() {
     try {
       const me = await platformAuthApi.updateMe({ display_name: nickname });
       setNickname(me.display_name ?? '');
-      toast.success('プロフィールを更新しました');
+      notify.success('プロフィールを更新しました');
     } catch {
-      toast.error('プロフィールの更新に失敗しました');
+      notify.error('プロフィールの更新に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { StoreProfileResponse, storeProfileApi } from '@/entities/store-profile';
 import StoreProfilePage from '../ui/ProfilePage';
 
@@ -15,8 +15,8 @@ jest.mock('../ui/StoreProfileForm', () => {
   };
 });
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedApi = storeProfileApi as jest.Mocked<typeof storeProfileApi>;
@@ -37,7 +37,7 @@ describe('店舗情報ページの取得失敗', () => {
     expect(within(region).getByText('店舗情報の取得に失敗しました')).toBeInTheDocument();
     // 取れなかった設定でフォームを描くと、保存がその古い値を本当にしてしまう
     expect(screen.queryByText('店舗情報フォーム')).not.toBeInTheDocument();
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
 
     mockedApi.get.mockResolvedValue(profile);
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));

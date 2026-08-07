@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import CustomerEditPage from '../ui/CustomerEditPage';
 import { customerApi } from '@/entities/customer';
 import { orderApi } from '@/entities/order';
@@ -25,9 +25,8 @@ jest.mock('next/navigation', () => ({
   useParams: () => ({ storeId: '1', id: 'cus-1' }),
 }));
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedCustomerApi = customerApi as jest.Mocked<typeof customerApi>;
@@ -59,7 +58,7 @@ describe('顧客編集ページの取得失敗', () => {
     expect(within(region).getByText('顧客情報の取得に失敗しました')).toBeInTheDocument();
     // 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
     expect(mockPush).not.toHaveBeenCalled();
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
 
     mockedCustomerApi.get.mockResolvedValue(customer);
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
