@@ -15,7 +15,12 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
         // 通常フローに置けば `--toast-offset-y` 等を使わずに済み、段数の計算が要らない。
         // items-center で幅を内容に合わせる。伸ばすと短い一文でも常に最大幅の帯になり、
         // 通知の重さが文の長さではなく枠の大きさで伝わってしまう。
-        'pointer-events-none fixed inset-x-4 top-4 z-50 mx-auto flex w-auto max-w-sm flex-col items-center gap-2 outline-none',
+        //
+        // z は overlay 一式（dialog / popover / select / menu＝どれも z-50）より上へ置く。
+        // 同値だと後から portal した方＝モーダルが勝ち、`error` の段が前提にしている
+        // 「モーダルが開いたまま失敗を伝える」場面で、遮罩が文言を暗くし × への操作も
+        // 奪う。前台の年齢確認（z-[9999]）より下なのは意図——あれは何にも覆われてはならない。
+        'pointer-events-none fixed inset-x-4 top-4 z-[60] mx-auto flex w-auto max-w-sm flex-col items-center gap-2 outline-none',
         className
       )}
       {...props}
@@ -91,7 +96,11 @@ function ToastClose({ className, ...props }: ToastPrimitive.Close.Props) {
         // 不透明度も持たせない。下げた分だけ地の色と合成され、certified な対から外れる
         // ——実測で明モードの error が 4.57 → 2.64 と図形閾 3:1 を割る。休止状態が見え
         // にくいのを hover で補う形は、そもそも見つける前の状態を直していない。
-        'shrink-0 rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        //
+        // 焦点環も `--ring` ではなく currentColor。段の地は admin の面ではないので
+        // `--ring` は不透明でも 1.22〜2.80 しか出ず（`/50` だと 1.04〜1.67）、F6 で
+        // 辿り着いた焦点がどこにあるか見えない。currentColor なら本文と同じ対に乗る。
+        'shrink-0 rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-current',
         className
       )}
       {...props}
