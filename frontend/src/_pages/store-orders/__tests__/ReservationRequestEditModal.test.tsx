@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { ReservationRequestEditModal } from '../ui/ReservationRequestEditModal';
@@ -144,6 +145,40 @@ describe('ReservationRequestEditModal', () => {
       )
     );
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が選択肢をクリアする
+  // 以上、遅れて着いた古い失敗が新しい成功を消してはいけない
+  it('二重 mount で古い失敗が後から着いても、新しい成功を消さないこと', async () => {
+    let failStale = (): void => {};
+    mockedReceptionists
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
+
+    render(
+      <StrictMode>
+        <ReservationRequestEditModal
+          request={{ ...nominationFreeRequest, receptionist_id: 7 }}
+          onClose={jest.fn()}
+          onSaved={jest.fn()}
+        />
+      </StrictMode>
+    );
+
+    // 引き金の文言は候補一覧から引かれるので、これが出ていれば 2 度目の成功が着いている
+    const trigger = await screen.findByRole('combobox', { name: '受付担当' });
+    await waitFor(() => expect(trigger).toHaveTextContent('受付花子'));
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(trigger).toHaveTextContent('受付花子');
+    expect(screen.queryByText('受付担当者の取得に失敗しました')).not.toBeInTheDocument();
   });
 });
 

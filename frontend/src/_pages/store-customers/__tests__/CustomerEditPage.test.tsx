@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import CustomerEditPage from '../ui/CustomerEditPage';
 import { customerApi } from '@/entities/customer';
@@ -65,6 +66,88 @@ describe('顧客編集ページの取得失敗', () => {
 
     expect(await screen.findByDisplayValue('山田太郎')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が顧客・注文履歴を
+  // クリアする以上、遅れて着いた古い失敗が新しい成功を消してはいけない。
+  // 二つの取得は独立に走るので、守衛も別々に確かめる
+  it('二重 mount で古い失敗が後から着いても、顧客の取得結果を消さないこと', async () => {
+    let failStale = (): void => {};
+    mockedCustomerApi.get
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockResolvedValue(customer);
+
+    render(
+      <StrictMode>
+        <CustomerEditPage />
+      </StrictMode>
+    );
+
+    expect(await screen.findByDisplayValue('山田太郎')).toBeInTheDocument();
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByDisplayValue('山田太郎')).toBeInTheDocument();
+    expect(screen.queryByText('顧客情報の取得に失敗しました')).not.toBeInTheDocument();
+  });
+
+  // 上の 1 本は成功・catch の比較しか固定しない（どちらの飛行も着いた後で観測するため、在途の
+  // setIsLoading(false) は既に false の旗へ落ちる）。finally の比較は 2 度目を在途のまま留める
+  // この形でしか赤にならない（注文履歴の取得は finally を持たないので、対象は顧客の取得だけ）
+  it('二度目が在途のまま古い失敗が着いても、読み込み表示を畳まないこと', async () => {
+    let failStale = (): void => {};
+    mockedCustomerApi.get
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    render(
+      <StrictMode>
+        <CustomerEditPage />
+      </StrictMode>
+    );
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+  });
+
+  it('二重 mount で古い失敗が後から着いても、注文履歴の取得結果を消さないこと', async () => {
+    mockedCustomerApi.get.mockResolvedValue(customer);
+    let failStale = (): void => {};
+    mockedOrderApi.list
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockResolvedValue(emptyOrderPage);
+
+    render(
+      <StrictMode>
+        <CustomerEditPage />
+      </StrictMode>
+    );
+
+    expect(await screen.findByText('注文履歴がありません')).toBeInTheDocument();
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByText('注文履歴がありません')).toBeInTheDocument();
+    expect(screen.queryByText('注文履歴の取得に失敗しました')).not.toBeInTheDocument();
   });
 
   it('404 では再試行を出さず、一覧への導線だけを出すこと', async () => {

@@ -1,5 +1,5 @@
-import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import React, { StrictMode } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import SystemSettingsPage from '../ui/SettingsPage';
 
@@ -125,6 +125,58 @@ describe('SystemSettingsPage', () => {
 
     expect(await screen.findByRole('switch', { name: 'maintenance_mode' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が一覧をクリアする
+  // 以上、遅れて着いた古い失敗が新しい成功を消してはいけない
+  it('二重 mount で古い失敗が後から着いても、新しい成功を消さないこと', async () => {
+    let failStale = (): void => {};
+    mockGetAllConfigs.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        failStale = () => reject(new Error('stale'));
+      })
+    );
+
+    render(
+      <StrictMode>
+        <SystemSettingsPage />
+      </StrictMode>
+    );
+
+    expect(await screen.findByRole('switch', { name: 'maintenance_mode' })).toBeInTheDocument();
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByRole('switch', { name: 'maintenance_mode' })).toBeInTheDocument();
+    expect(screen.queryByText('設定の取得に失敗しました')).not.toBeInTheDocument();
+  });
+
+  // 上の 1 本は成功・catch の比較しか固定しない（どちらの飛行も着いた後で観測するため、在途の
+  // setLoading(false) は既に false の旗へ落ちる）。finally の比較は 2 度目を在途のまま留める
+  // この形でしか赤にならない
+  it('二度目が在途のまま古い失敗が着いても、読み込み表示を畳まないこと', async () => {
+    let failStale = (): void => {};
+    mockGetAllConfigs
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    render(
+      <StrictMode>
+        <SystemSettingsPage />
+      </StrictMode>
+    );
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
   });
 
   it('文字列設定は編集時に複数行入力欄になり現在値が初期表示される', async () => {

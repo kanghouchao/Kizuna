@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CustomerMemberLinkHistoryResponse, customerApi } from '@/entities/customer';
 import { getApiErrorMessage } from '@/shared/lib';
@@ -39,6 +39,9 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
   const [memberCode, setMemberCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmingUnlink, setIsConfirmingUnlink] = useState(false);
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
+  // 履歴をクリアするので、在途の古い失敗が新しい成功を消し得る
+  const requestIdRef = useRef(0);
 
   // 現に有効な区間は高々 1 件で、履歴は新しい順に返る
   const activeLink = history.find(row => row.status === 'ACTIVE');
@@ -47,16 +50,22 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
   const isHistoryReady = historyStatus === 'ready';
 
   const reload = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     // 再試行の前に読み込み中へ戻す。同じ姿のまま失敗を繰り返すと role="alert" が挿入されず、
     // 二度目の失敗が読み上げ利用者に届かない
     setHistoryStatus('loading');
     try {
-      setHistory(await customerApi.memberLinkHistory(customerId));
-      setHistoryStatus('ready');
+      const rows = await customerApi.memberLinkHistory(customerId);
+      if (requestId === requestIdRef.current) {
+        setHistory(rows);
+        setHistoryStatus('ready');
+      }
     } catch {
       // 読めなかった履歴を残すと「紐づけ履歴がありません」に化ける。区画自身が失敗を名乗る
-      setHistory([]);
-      setHistoryStatus('error');
+      if (requestId === requestIdRef.current) {
+        setHistory([]);
+        setHistoryStatus('error');
+      }
     }
   }, [customerId]);
 
