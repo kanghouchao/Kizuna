@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { platformAuthApi, useAuth } from '@/entities/user';
 import { getApiErrorMessage } from '@/shared/lib';
 import {
@@ -58,7 +58,7 @@ export function PasswordChangeForm() {
       // 代わりに理由コードを渡し、着地したログイン画面に名乗らせる。
       logout('password-changed');
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'パスワードの変更に失敗しました'));
+      notify.error(getApiErrorMessage(error, 'パスワードの変更に失敗しました'));
     }
   };
 

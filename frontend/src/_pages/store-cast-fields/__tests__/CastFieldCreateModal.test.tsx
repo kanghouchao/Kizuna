@@ -8,8 +8,8 @@ jest.mock('@/entities/cast', () => ({
   },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedApi = castFieldDefinitionApi as jest.Mocked<typeof castFieldDefinitionApi>;

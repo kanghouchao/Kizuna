@@ -6,7 +6,7 @@ import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerFor
 import { MemberLinkSection } from './MemberLinkSection';
 import { CustomerResponse, customerApi } from '@/entities/customer';
 import { Order, orderApi } from '@/entities/order';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { isNotFound, storePath } from '@/shared/lib';
 import {
   RegionError,
@@ -76,10 +76,10 @@ export default function CustomerEditPage() {
     try {
       setIsSubmitting(true);
       await customerApi.update(id, toCustomerRequest(data));
-      toast.success('顧客情報を更新しました');
+      notify.success('顧客情報を更新しました');
       router.push(storePath(storeId, '/customers'));
     } catch {
-      toast.error('顧客情報の更新に失敗しました');
+      notify.error('顧客情報の更新に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

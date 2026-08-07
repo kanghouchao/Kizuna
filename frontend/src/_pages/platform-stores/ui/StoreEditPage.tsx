@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
 import { isNotFound } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
-import toast from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 
 export default function EditStorePage() {
   const id = useParams<{ id: string }>()?.id;
@@ -71,11 +71,11 @@ export default function EditStorePage() {
     setSaving(true);
     try {
       await platformStoreApi.update(store.id ?? '', formData);
-      toast.success('店舗情報を更新しました');
+      notify.success('店舗情報を更新しました');
       router.push('/platform/stores');
     } catch (err: any) {
       if (err.response?.data?.errors) setErrors(err.response.data.errors);
-      toast.error('更新に失敗しました。入力内容をご確認ください');
+      notify.error('更新に失敗しました。入力内容をご確認ください');
     } finally {
       setSaving(false);
     }

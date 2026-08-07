@@ -12,9 +12,8 @@ jest.mock('@/entities/user', () => ({
   useAuth: () => ({ logout: jest.fn() }),
 }));
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  default: Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() }),
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedApi = platformStoreApi as jest.Mocked<typeof platformStoreApi>;

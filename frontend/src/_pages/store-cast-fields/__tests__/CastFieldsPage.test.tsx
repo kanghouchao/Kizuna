@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import type { CastFieldDefinitionResponse } from '@/entities/cast';
 import { castFieldDefinitionApi } from '@/entities/cast';
 import CastFieldsPage from '../ui/CastFieldsPage';
@@ -13,12 +13,12 @@ jest.mock('@/entities/cast', () => ({
   },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedApi = castFieldDefinitionApi as jest.Mocked<typeof castFieldDefinitionApi>;
-const mockedToast = toast as jest.Mocked<typeof toast>;
+const mockedNotify = notify as jest.Mocked<typeof notify>;
 
 const definitions = [
   {
@@ -77,7 +77,7 @@ describe('カスタムフィールド定義の管理ページ', () => {
 
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('def-2'));
     await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
-    expect(mockedToast.success).toHaveBeenCalledWith('フィールドを削除しました');
+    expect(mockedNotify.success).toHaveBeenCalledWith('フィールドを削除しました');
   });
 
   it('削除ボタンのクリックは編集モーダルを開かない', async () => {

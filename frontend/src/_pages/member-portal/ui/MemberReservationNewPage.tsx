@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { useRouter } from 'next/navigation';
 import { memberOrderApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
@@ -144,10 +144,10 @@ export function MemberReservationNewPage() {
         cast_id: values.cast_id || undefined,
         remarks: values.remarks || undefined,
       });
-      toast.success('予約を申請しました');
+      notify.success('予約を申請しました');
       router.push('/member/reservations/');
     } catch {
-      toast.error('予約の申請に失敗しました');
+      notify.error('予約の申請に失敗しました');
     } finally {
       setSubmitting(false);
     }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import SystemSettingsPage from '../ui/SettingsPage';
 
 const mockGetAllConfigs = jest.fn();
@@ -13,8 +13,8 @@ jest.mock('@/entities/system-config', () => ({
   },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const configs = [
@@ -119,7 +119,7 @@ describe('SystemSettingsPage', () => {
     const region = await screen.findByRole('alert');
     expect(within(region).getByText('設定の取得に失敗しました')).toBeInTheDocument();
     expect(screen.queryByText('設定項目がありません。')).not.toBeInTheDocument();
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
 
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 

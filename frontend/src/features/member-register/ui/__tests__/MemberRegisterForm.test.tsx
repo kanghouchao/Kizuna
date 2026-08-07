@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { MemberRegisterForm } from '../MemberRegisterForm';
 import { memberApi } from '@/entities/member';
 import { platformAuthApi } from '@/entities/user';
@@ -8,9 +8,8 @@ import { platformAuthApi } from '@/entities/user';
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  toast: { error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('@/entities/member', () => ({
@@ -30,7 +29,8 @@ jest.mock('@/entities/user', () => {
 
 const mockedRegister = memberApi.register as jest.Mock;
 const mockedLogin = platformAuthApi.login as jest.Mock;
-const mockedToastError = toast.error as jest.Mock;
+const mockedNotifyError = notify.error as jest.Mock;
+const mockedNotifySuccess = notify.success as jest.Mock;
 
 async function submitForm() {
   render(<MemberRegisterForm />);
@@ -70,7 +70,7 @@ describe('MemberRegisterForm', () => {
     );
     expect(Cookies.get('token')).toBe('jwt-token');
     expect(Cookies.get('platform-role')).toBe('member');
-    expect(mockedToastError).not.toHaveBeenCalled();
+    expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 
   it('登録に失敗したらエラートーストを出し、ログインは試みない', async () => {
@@ -78,7 +78,7 @@ describe('MemberRegisterForm', () => {
 
     await submitForm();
 
-    await waitFor(() => expect(mockedToastError).toHaveBeenCalled());
+    await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
     expect(mockedLogin).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
@@ -90,6 +90,8 @@ describe('MemberRegisterForm', () => {
     await submitForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/login'));
-    expect(mockedToastError).toHaveBeenCalledWith('登録が完了しました。ログインしてください');
+    // 登録自体は完了しているので成功の段。行き先は同じ root layout なので通知は生き残る。
+    expect(mockedNotifySuccess).toHaveBeenCalledWith('登録が完了しました。ログインしてください');
+    expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 });

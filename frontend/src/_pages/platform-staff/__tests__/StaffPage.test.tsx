@@ -31,8 +31,8 @@ jest.mock('@/features/staff-management', () => {
   };
 });
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;

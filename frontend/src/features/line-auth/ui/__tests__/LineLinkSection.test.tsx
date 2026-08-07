@@ -4,9 +4,8 @@ import { platformAuthApi, platformLineApi } from '@/entities/user';
 import { startLineAuthorization } from '@/shared/lib';
 import type { PlatformMeResponse } from '@/entities/user';
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  toast: { error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('@/entities/user', () => {

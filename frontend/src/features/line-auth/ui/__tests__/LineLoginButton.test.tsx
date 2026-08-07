@@ -3,9 +3,8 @@ import { LineLoginButton } from '../LineLoginButton';
 import { platformLineApi } from '@/entities/user';
 import { startLineAuthorization } from '@/shared/lib';
 
-jest.mock('react-hot-toast', () => ({
-  __esModule: true,
-  default: { error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('@/entities/user', () => {

@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import toast from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { platformAuthApi, PlatformLoginRequest } from '@/entities/user';
 import { getApiErrorMessage } from '@/shared/lib';
 import { completePlatformLogin } from '../model/completePlatformLogin';
@@ -22,13 +22,13 @@ export default function PlatformLoginForm() {
     try {
       const completion = await completePlatformLogin(await platformAuthApi.login(data));
       if (completion.status === 'unsupported') {
-        toast.error('この利用者種別のポータルは準備中です');
+        notify.error('この利用者種別のポータルは準備中です');
         return;
       }
       router.push(completion.path);
     } catch (error) {
       console.error('Platform login failed:', error);
-      toast.error(
+      notify.error(
         getApiErrorMessage(error, 'ログインに失敗しました。しばらくしてから再度お試しください')
       );
     }

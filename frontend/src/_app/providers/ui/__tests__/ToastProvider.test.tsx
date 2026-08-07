@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { notify } from '@/shared/notify';
 
-import { ToastProvider, legacyToastOptions } from '../ToastProvider';
+import { ToastProvider } from '../ToastProvider';
 
 const show = (emit: () => void) => {
   render(<ToastProvider />);
@@ -69,20 +69,5 @@ describe('ToastProvider', () => {
     fireEvent.click(toast.querySelector('[data-slot="toast-close"]')!);
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  });
-
-  it('語義層へ移り切っていない呼び出しの姿も規範値に揃っている', () => {
-    // 旧ライブラリを直接呼ぶ箇所が残る間だけの暫定。移行が終われば丸ごと消える。
-    expect(legacyToastOptions.success?.duration).toBe(3000);
-    expect(legacyToastOptions.error?.duration).toBe(5000);
-    // 既定のアイコン配色は図形閾 3:1 に届かず、どちらの色も測定外。形は変えず色だけ移す。
-    expect(legacyToastOptions.success?.iconTheme).toEqual({
-      primary: 'transparent',
-      secondary: 'var(--success-foreground)',
-    });
-    expect(legacyToastOptions.error?.iconTheme).toEqual({
-      primary: 'transparent',
-      secondary: 'var(--destructive-foreground)',
-    });
   });
 });

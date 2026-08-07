@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CastFieldDefinitionCreateRequest, castFieldDefinitionApi } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
 import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
@@ -42,11 +42,11 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
         is_public: values.is_public,
       };
       await castFieldDefinitionApi.create(request);
-      toast.success('フィールドを追加しました');
+      notify.success('フィールドを追加しました');
       onCreated();
       onClose();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'フィールドの追加に失敗しました'));
+      notify.error(getApiErrorMessage(error, 'フィールドの追加に失敗しました'));
     }
   };
 

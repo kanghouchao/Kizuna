@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { CastInvitationStatus, castApi } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
 import { Button } from '@/shared/ui';
@@ -34,7 +34,7 @@ export function InvitationButton({ castId, status, onIssued }: InvitationButtonP
       const response = await castApi.issueInvitation(castId ?? '');
       onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' });
     } catch (error) {
-      toast.error(getApiErrorMessage(error, '招待の発行に失敗しました'));
+      notify.error(getApiErrorMessage(error, '招待の発行に失敗しました'));
     } finally {
       setIssuing(false);
     }

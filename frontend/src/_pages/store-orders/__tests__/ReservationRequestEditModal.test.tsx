@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { ReservationRequestEditModal } from '../ui/ReservationRequestEditModal';
 import { Order, orderApi } from '@/entities/order';
 
@@ -11,8 +11,8 @@ jest.mock('@/entities/order', () => ({
   },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedUpdate = orderApi.updateReservationRequest as jest.Mock;
@@ -139,7 +139,7 @@ describe('ReservationRequestEditModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
 
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(
+      expect(notify.error).toHaveBeenCalledWith(
         '指名できるキャストではありません。在籍中のキャストを選ぶか、指名を外してください'
       )
     );
@@ -330,7 +330,7 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     const region = screen.getByRole('alert');
     expect(within(region).getByText('キャスト候補の取得に失敗しました')).toBeInTheDocument();
     expect(screen.queryByText('該当するキャストがいません')).not.toBeInTheDocument();
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
 
     // 再試行は同じ検索語のまま取り直す
     mockedCastCandidates.mockResolvedValueOnce([{ id: 'cast-3', name: 'あやか' }]);

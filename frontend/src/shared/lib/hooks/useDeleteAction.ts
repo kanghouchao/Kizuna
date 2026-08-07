@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { getApiErrorMessage } from '../apiError';
 
 interface DeleteActionOptions<T> {
@@ -32,10 +32,10 @@ export function useDeleteAction<T>({
     if (!target) return;
     try {
       await remove(target);
-      toast.success(successMessage);
+      notify.success(successMessage);
       onDeleted();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, errorMessage));
+      notify.error(getApiErrorMessage(error, errorMessage));
     }
   };
 

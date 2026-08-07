@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import {
   CastShiftRequestItem,
   ShiftRequestStatus,
@@ -150,11 +150,11 @@ export function CastRequestsPage() {
     };
     try {
       await shiftApi.submitShiftRequest(payload);
-      toast.success('出勤希望を提出しました');
+      notify.success('出勤希望を提出しました');
       reset(defaultValues(values.store_id));
       loadHistory();
     } catch {
-      toast.error('出勤希望の提出に失敗しました');
+      notify.error('出勤希望の提出に失敗しました');
     }
   };
 

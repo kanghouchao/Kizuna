@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { castApi } from '@/entities/cast';
 import { InvitationButton } from '../InvitationButton';
 
@@ -7,12 +7,12 @@ jest.mock('@/entities/cast', () => ({
   castApi: { issueInvitation: jest.fn() },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
-const mockedToast = toast as jest.Mocked<typeof toast>;
+const mockedNotify = notify as jest.Mocked<typeof notify>;
 
 describe('キャスト招待の行内発行ボタン', () => {
   beforeEach(() => {
@@ -63,7 +63,9 @@ describe('キャスト招待の行内発行ボタン', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '招待を発行' }));
 
-    await waitFor(() => expect(mockedToast.error).toHaveBeenCalledWith('招待の発行に失敗しました'));
+    await waitFor(() =>
+      expect(mockedNotify.error).toHaveBeenCalledWith('招待の発行に失敗しました')
+    );
     expect(onIssued).not.toHaveBeenCalled();
   });
 });

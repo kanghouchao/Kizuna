@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import type { PlatformStaffResponse } from '@/entities/user';
 import { platformRoleApi, platformStaffApi } from '@/entities/user';
 import { StaffEditModal } from '../StaffEditModal';
@@ -9,13 +9,13 @@ jest.mock('@/entities/user', () => ({
   platformStaffApi: { update: jest.fn() },
 }));
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
 const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
-const mockedToast = toast as jest.Mocked<typeof toast>;
+const mockedNotify = notify as jest.Mocked<typeof notify>;
 
 const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResponse => ({
   id: 42,
@@ -100,7 +100,7 @@ describe('スタッフ授権編集モーダル', () => {
     fireEvent.click(submitButton);
 
     const message = await screen.findByText('ロールを 1 つ以上選択してください');
-    expect(mockedToast.error).not.toHaveBeenCalled();
+    expect(mockedNotify.error).not.toHaveBeenCalled();
     expect(mockedStaffApi.update).not.toHaveBeenCalled();
     const group = screen.getByRole('group', { name: 'ロール' });
     expect(group).toHaveAttribute('aria-invalid', 'true');
@@ -115,7 +115,7 @@ describe('スタッフ授権編集モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1));
-    expect(mockedToast.success).toHaveBeenCalledWith('権限を更新しました');
+    expect(mockedNotify.success).toHaveBeenCalledWith('権限を更新しました');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -127,7 +127,7 @@ describe('スタッフ授権編集モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith(
+      expect(mockedNotify.warning).toHaveBeenCalledWith(
         '他の管理者が更新しました。最新の内容を確認してください'
       )
     );
@@ -143,10 +143,8 @@ describe('スタッフ授権編集モーダル', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
-    await waitFor(() => expect(mockedToast.error).toHaveBeenCalled());
-    expect(mockedToast.error).not.toHaveBeenCalledWith(
-      '他の管理者が更新しました。最新の内容を確認してください'
-    );
+    await waitFor(() => expect(mockedNotify.error).toHaveBeenCalled());
+    expect(mockedNotify.warning).not.toHaveBeenCalled();
     expect(onUpdated).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });

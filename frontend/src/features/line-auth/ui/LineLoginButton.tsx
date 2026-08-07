@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { platformLineApi } from '@/entities/user';
 import { isLinePlatformHost, startLineAuthorization } from '@/shared/lib';
 
@@ -39,7 +39,7 @@ export function LineLoginButton() {
     } catch {
       // PKCE の生成には SubtleCrypto が要り、安全な接続でないと利用できない
       setIsRedirecting(false);
-      toast.error('LINEログインを開始できませんでした。安全な接続でお試しください');
+      notify.error('LINEログインを開始できませんでした。安全な接続でお試しください');
     }
   };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { OrderForm, OrderFormData } from './OrderForm';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { OrderCreateRequest, orderApi } from '@/entities/order';
@@ -52,11 +52,11 @@ export default function CreateOrderPage() {
 
       await orderApi.create(request);
 
-      toast.success('オーダーを登録しました');
+      notify.success('オーダーを登録しました');
       router.push(storePath(storeId, '/orders'));
     } catch (error) {
       console.error(error);
-      toast.error('オーダーの登録に失敗しました');
+      notify.error('オーダーの登録に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

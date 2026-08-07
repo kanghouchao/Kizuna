@@ -1,9 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import { useDeleteAction } from '@/shared/lib';
 
-jest.mock('react-hot-toast', () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 interface Row {
@@ -45,7 +45,7 @@ describe('useDeleteAction', () => {
     });
 
     expect(remove).toHaveBeenCalledWith({ id: '1' });
-    expect(toast.success).toHaveBeenCalledWith('削除しました');
+    expect(notify.success).toHaveBeenCalledWith('削除しました');
     expect(onDeleted).toHaveBeenCalledTimes(1);
   });
 
@@ -60,8 +60,8 @@ describe('useDeleteAction', () => {
       await result.current.confirm();
     });
 
-    expect(toast.error).toHaveBeenCalledWith('このロールは付与中のため削除できません');
-    expect(toast.success).not.toHaveBeenCalled();
+    expect(notify.error).toHaveBeenCalledWith('このロールは付与中のため削除できません');
+    expect(notify.success).not.toHaveBeenCalled();
     expect(onDeleted).not.toHaveBeenCalled();
   });
 
@@ -76,7 +76,7 @@ describe('useDeleteAction', () => {
       await result.current.confirm();
     });
 
-    expect(toast.error).toHaveBeenCalledWith('削除に失敗しました');
+    expect(notify.error).toHaveBeenCalledWith('削除に失敗しました');
   });
 
   it('対象がないまま confirm しても削除しない', async () => {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { notify } from '@/shared/notify';
 import {
   PermissionConsole,
   PermissionResponse,
@@ -140,10 +140,10 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
           // 楽観ロック用バージョン（詳細応答の version をそのまま往復する）
           version: editingRole.version,
         });
-        toast.success('ロールを更新しました');
+        notify.success('ロールを更新しました');
       } else {
         await platformRoleApi.create({ name: values.name, permissions: values.permissions });
-        toast.success('ロールを追加しました');
+        notify.success('ロールを追加しました');
       }
       onSaved();
       onClose();
@@ -151,11 +151,11 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
       if (isConflict(error)) {
         // 楽観ロック競合。詳細を取り直さないと古い version を抱えたままになり、
         // 再試行が同じ 409 を繰り返す。一覧側も権限数・名称が変わりうるので再取得する。
-        toast.error('他の管理者が更新しました。最新の内容を確認してください');
+        notify.warning('他の管理者が更新しました。最新の内容を確認してください');
         onSaved();
         void reloadEditingRole();
       } else {
-        toast.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
+        notify.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
       }
     }
   };
