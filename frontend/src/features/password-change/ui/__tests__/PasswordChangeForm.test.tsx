@@ -16,6 +16,7 @@ jest.mock('@/entities/user', () => ({
 
 const mockedChangePassword = platformAuthApi.changePassword as jest.Mock;
 const mockedToastError = toast.error as jest.Mock;
+const mockedToastSuccess = toast.success as jest.Mock;
 
 /** autoComplete 属性でフィールドを特定する（ラベル関連付けの有無に依存しない）。 */
 function fields(container: HTMLElement) {
@@ -34,7 +35,7 @@ describe('パスワード変更フォーム', () => {
     jest.clearAllMocks();
   });
 
-  it('入力が揃うと current_password / new_password のみで API を呼びログアウトすること', async () => {
+  it('入力が揃うと current_password / new_password のみで API を呼び、理由を添えてログアウトすること', async () => {
     mockedChangePassword.mockResolvedValue(undefined);
     const { container } = render(<PasswordChangeForm />);
     const { current, next, confirm } = fields(container);
@@ -48,7 +49,10 @@ describe('パスワード変更フォーム', () => {
     const body = mockedChangePassword.mock.calls[0][0] as Record<string, unknown>;
     expect(Object.keys(body).sort()).toEqual(['current_password', 'new_password']);
     expect(body).toEqual({ current_password: 'oldpass123', new_password: 'newpass123' });
-    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+    // 成功を通知で言うと、直後のログアウトでこの画面ごと破棄され誰にも読まれない。
+    // 名乗るのは着地したログイン画面の仕事で、この画面は理由コードを渡すだけ。
+    await waitFor(() => expect(mockLogout).toHaveBeenCalledWith('password-changed'));
+    expect(mockedToastSuccess).not.toHaveBeenCalled();
   });
 
   it('確認用パスワードが一致しない場合は、その欄の傍に文言を出し API を呼ばないこと', async () => {

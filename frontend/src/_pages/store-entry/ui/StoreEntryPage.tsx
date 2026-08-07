@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { toast } from 'react-hot-toast';
 import { MenuVO, menuApi } from '@/entities/menu';
 import { useAuth, useStoreContext } from '@/entities/user';
 import {
@@ -42,8 +41,9 @@ function readNext(): string | undefined {
 }
 
 /**
- * 店舗コンソールの入口。UI を持たない中継点で、
+ * 店舗コンソールの入口。解決できる限り UI を持たない中継点で、
  * 「授権店舗を選ぶ → 到達可能な最初の画面を決める → そこへ差し替え遷移する」だけを行う。
+ * 解決できない場合だけ、行き止まりの理由をこの画面自身が名乗って留まる。
  *
  * 到達経路は3つ: ログイン直後・レガシーな id 無し店舗 URL の収容・コンソール/エリア不一致の差し戻し。
  * 着地先をメニュー由来にするのは、権限を絞ったカスタムロールでも必ず自分が見られる画面に着くため
@@ -57,14 +57,16 @@ export default function StoreEntryPage() {
   // メニュー取得が失敗した回。再試行のたびに増やして解決を再走させる。
   const [attempt, setAttempt] = useState(0);
   const [menuFailed, setMenuFailed] = useState(false);
+  // 「行ける場所が無い」が確定したときの文言。立つとこの画面は遷移せず、ここで名乗る。
+  const [deadEnd, setDeadEnd] = useState<string | null>(null);
 
   useEffect(() => {
     if (resolved.current) return;
     // 文脈の取得失敗（loadFailed）も読み込み中（null）も「授権の答えがまだ無い」状態。
     // 前者は再試行 UI が受け持つので、どちらでも解決は進めない。
     if (loadFailed || stores === null || storeBridge === null) return;
-    // 解決は一度だけ。useAuth の logout は毎レンダー新しい関数なので、この旗で閉じないと
-    // 遷移待ちの再レンダーのたびにメニュー取得が走る。
+    // 解決は一度だけ。文脈が取り直されて依存が入れ替わっても、決着済みの画面で
+    // メニュー取得や遷移をもう一度走らせない。
     resolved.current = true;
 
     // 店舗コンソール資格が無い利用者（PLATFORM 権限のみの HQ 管理者など）は、
@@ -74,15 +76,10 @@ export default function StoreEntryPage() {
       return;
     }
 
-    // 「行ける場所が無い」がサーバの答えとして確定した場合だけセッションを畳む。
+    // 「行ける場所が無い」がサーバの答えとして確定した場合だけ行き止まりを名乗る。
     // 文言は店舗が無いのか画面が無いのかを言い分ける — 管理者が直す先が別（授権 か ロールの権限）なので。
-    const deadEnd = (message: string) => {
-      toast.error(message);
-      void logout();
-    };
-
     if (stores.length === 0) {
-      deadEnd('アクセス可能な店舗がありません。管理者にお問い合わせください');
+      setDeadEnd('アクセス可能な店舗がありません。管理者にお問い合わせください');
       return;
     }
 
@@ -106,7 +103,7 @@ export default function StoreEntryPage() {
         if (!target) {
           // 取得は成功していて、その上で行ける画面が 1 つも無い＝授権の答えが空。
           // 店舗はあるので原因はロール側（店舗メニューの標識権限を欠いた権限組合せ）。
-          deadEnd('アクセスできる画面がありません。管理者にお問い合わせください');
+          setDeadEnd('アクセスできる画面がありません。管理者にお問い合わせください');
           return;
         }
         setPlatformStore(storeId);
@@ -118,7 +115,7 @@ export default function StoreEntryPage() {
         resolved.current = false;
         setMenuFailed(true);
       });
-  }, [stores, storeBridge, loadFailed, router, logout, attempt]);
+  }, [stores, storeBridge, loadFailed, router, attempt]);
 
   if (loadFailed || menuFailed) {
     return (
@@ -135,6 +132,21 @@ export default function StoreEntryPage() {
           }}
         >
           再試行
+        </Button>
+      </div>
+    );
+  }
+
+  if (deadEnd) {
+    // 行き止まりは読まれてから終わる。自動でログアウトすると遷移でこの画面ごと破棄され、
+    // 説明は誰にも読まれないまま消えるので、セッションを畳むかは利用者がボタンで決める。
+    // 文言はこの領域がマウントされた後に差し替わるため、role="alert" が無いと読み上げ利用者には
+    //「読み込み中...」のまま何も届かない。
+    return (
+      <div role="alert" className="mx-auto max-w-md space-y-3">
+        <p className="text-sm text-foreground">{deadEnd}</p>
+        <Button type="button" variant="outline" onClick={() => logout()}>
+          ログアウト
         </Button>
       </div>
     );

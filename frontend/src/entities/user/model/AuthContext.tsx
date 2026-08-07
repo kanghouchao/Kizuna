@@ -4,10 +4,15 @@ import React, { createContext, useContext } from 'react';
 import { platformAuthApi } from '../api/platform';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
-import { clearPlatformSession } from '@/shared/lib';
+import { clearPlatformSession, loginPath } from '@/shared/lib';
 
 interface AuthContextType {
-  logout: () => void;
+  /**
+   * 理由を渡すと、ログイン画面が着地の理由を名乗る（白名単の理由コード）。
+   * 既定の行き先は動かさない — 利用者が自分で押したログアウトが身に覚えのない説明の
+   * 画面に着地しないよう、理由は呼び出し側が明示したときだけ載る。
+   */
+  logout: (reason?: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,7 +32,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const router = useRouter();
 
-  const logout = async () => {
+  const logout = async (reason?: string) => {
     try {
       await platformAuthApi.logout();
     } catch (error) {
@@ -35,7 +40,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       Cookies.remove('token');
       clearPlatformSession();
-      router.push('/platform/login');
+      router.push(loginPath(reason));
     }
   };
 

@@ -11,7 +11,7 @@ jest.mock('next/navigation', () => ({
 
 function Consumer() {
   const { logout } = useAuth();
-  return <button onClick={logout}>logout</button>;
+  return <button onClick={() => logout()}>logout</button>;
 }
 
 describe('AuthProvider', () => {

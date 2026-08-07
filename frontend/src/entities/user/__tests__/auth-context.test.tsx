@@ -14,12 +14,15 @@ jest.mock('../api/platform', () => ({ platformAuthApi: { logout: jest.fn() } }))
 
 const mockClearPlatformSession = jest.fn();
 jest.mock('@/shared/lib', () => ({
+  // loginPath は本物を使う。差し替えると着地先の組み立てを試験が自前で持つことになり、
+  // 実装がずれても緑のままになる。
+  ...jest.requireActual('@/shared/lib'),
   clearPlatformSession: () => mockClearPlatformSession(),
 }));
 
-function Consumer() {
+function Consumer({ reason }: { reason?: string } = {}) {
   const { logout } = useAuth();
-  return (<button onClick={() => logout()}>out</button>) as React.ReactElement;
+  return (<button onClick={() => logout(reason)}>out</button>) as React.ReactElement;
 }
 
 describe('AuthProvider', () => {
@@ -42,6 +45,21 @@ describe('AuthProvider', () => {
     expect(removeSpy).toHaveBeenCalledWith('token');
     expect(mockClearPlatformSession).toHaveBeenCalled();
     expect(mockPush).toHaveBeenCalledWith('/platform/login');
+  });
+
+  // 利用者が自分で押したログアウトが、身に覚えのない説明の書かれた画面に着地しないこと。
+  // 理由は呼び出し側が明示したときだけ載る。
+  it('理由を渡したときだけログイン画面へ理由コードを載せる', async () => {
+    (platformAuthApi.logout as jest.Mock).mockResolvedValueOnce({});
+    const { getByText } = render(
+      <AuthProvider>
+        <Consumer reason="password-changed" />
+      </AuthProvider>
+    );
+    getByText('out').click();
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith('/platform/login?reason=password-changed')
+    );
   });
 
   it('provides logout function via context', () => {

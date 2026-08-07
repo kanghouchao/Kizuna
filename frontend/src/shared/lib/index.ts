@@ -1,5 +1,5 @@
 export * from './config';
-export { default as redirectToLogin } from './navigation';
+export { default as redirectToLogin, loginPath } from './navigation';
 export { getApiErrorMessage, isConflict, isNotFound } from './apiError';
 export { useManagedList } from './hooks/useManagedList';
 export { useListPage } from './hooks/useListPage';
