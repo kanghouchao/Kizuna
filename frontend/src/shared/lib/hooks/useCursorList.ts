@@ -34,6 +34,8 @@ export function useCursorList<T>(
   useEffect(() => {
     fetcherRef.current = fetcher;
   });
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する
+  const requestIdRef = useRef(0);
 
   const [rows, setRows] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,27 +43,37 @@ export function useCursorList<T>(
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const load = useCallback((cursor: string | null) => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     // 再読み込み中は失敗表示を畳む。残したままだと、押した再読み込みが効いているのか分からない。
     setFailed(false);
     fetcherRef
       .current(cursor ?? undefined)
       .then(page => {
+        if (requestId !== requestIdRef.current) return;
         setRows(prev => (cursor === null ? page.rows : [...prev, ...page.rows]));
         setNextCursor(page.nextCursor);
       })
       .catch(() => {
+        if (requestId !== requestIdRef.current) return;
         // 追加読み込みの失敗も先頭取得と同じ扱いにする。行と位置の両方を起点へ戻すのは、
         // 途中の位置を残したまま再試行すると 1〜20 行目を欠いた 21 行目以降だけが返るため。
         setRows([]);
         setNextCursor(null);
         setFailed(true);
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (requestId === requestIdRef.current) setIsLoading(false);
+      });
   }, []);
 
   useEffect(() => {
     load(null);
+    return () => {
+      // requestIdRef はリクエストカウンタであり DOM ref ではない
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      requestIdRef.current++;
+    };
   }, [load]);
 
   return {
