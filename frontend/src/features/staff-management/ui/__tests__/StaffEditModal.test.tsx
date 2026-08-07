@@ -91,16 +91,20 @@ describe('スタッフ授権編集モーダル', () => {
     expect(mockedStaffApi.update.mock.calls[0][1]).toMatchObject({ enabled: false });
   });
 
-  it('ロールの選択を全て外すと更新 API を呼ばず警告する', async () => {
+  it('ロールの選択を全て外すと、その組の傍に文言を出し更新 API を呼ばない', async () => {
     renderModal({ staff: staff({ roles: [] }) });
     await screen.findByRole('dialog');
 
-    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    const submitButton = screen.getByRole('button', { name: '保存する' });
+    fireEvent.click(submitButton);
 
-    await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('ロールを 1 つ以上選択してください')
-    );
+    const message = await screen.findByText('ロールを 1 つ以上選択してください');
+    expect(mockedToast.error).not.toHaveBeenCalled();
     expect(mockedStaffApi.update).not.toHaveBeenCalled();
+    const group = screen.getByRole('group', { name: 'ロール' });
+    expect(group).toHaveAttribute('aria-invalid', 'true');
+    expect(group.getAttribute('aria-describedby')).toContain(message.id);
+    expect(submitButton).toBeEnabled();
   });
 
   it('保存成功で完了トーストを出し onUpdated と onClose を呼ぶ', async () => {
