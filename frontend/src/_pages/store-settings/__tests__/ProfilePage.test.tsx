@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { StoreProfileResponse, storeProfileApi } from '@/entities/store-profile';
@@ -70,5 +71,33 @@ describe('店舗情報ページの取得失敗', () => {
       failSecond();
     });
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が設定をクリアする
+  // ようになった以上、遅れて着いた古い失敗が新しい成功を消してはいけない
+  it('二重 mount で古い失敗が後から着いても、新しい成功を消さないこと', async () => {
+    let failStale = (): void => {};
+    mockedApi.get
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockResolvedValueOnce(profile);
+
+    render(
+      <StrictMode>
+        <StoreProfilePage />
+      </StrictMode>
+    );
+
+    expect(await screen.findByText('店舗情報フォーム')).toBeInTheDocument();
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByText('店舗情報フォーム')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

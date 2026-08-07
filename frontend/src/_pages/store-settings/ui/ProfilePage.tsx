@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { notify } from '@/shared/notify';
 import {
   StoreProfileResponse,
@@ -14,18 +14,23 @@ export default function StoreProfilePage() {
   const [config, setConfig] = useState<StoreProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
+  // 設定をクリアするようになったので、在途の古い失敗が新しい成功を消し得る
+  const requestIdRef = useRef(0);
 
   // 再試行から呼び直せるよう effect の外に置く。先頭で読み込み中へ戻すのは、同じ姿のまま
   // 二度目の失敗を迎えると RegionError が mount し直されず読み上げに何も届かないため
   const loadConfig = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     try {
-      setConfig(await storeProfileApi.get());
+      const data = await storeProfileApi.get();
+      if (requestId === requestIdRef.current) setConfig(data);
     } catch {
       // 取れなかった設定でフォームを描くと、保存がその古い値を本当にしてしまう
-      setConfig(null);
+      if (requestId === requestIdRef.current) setConfig(null);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) setIsLoading(false);
     }
   }, []);
 

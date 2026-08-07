@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { platformStoreApi } from '@/entities/store';
 import DashboardPage from '../ui/DashboardPage';
@@ -94,5 +95,33 @@ describe('プラットフォームダッシュボードの取得失敗', () => {
       failSecond();
     });
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が統計をクリアする
+  // ようになった以上、遅れて着いた古い失敗が新しい成功を消してはいけない
+  it('二重 mount で古い失敗が後から着いても、新しい成功を消さないこと', async () => {
+    let failStale = (): void => {};
+    mockedApi.getStats
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockResolvedValueOnce({ total: 12 });
+
+    render(
+      <StrictMode>
+        <DashboardPage />
+      </StrictMode>
+    );
+
+    expect(await screen.findByText('12')).toBeInTheDocument();
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
