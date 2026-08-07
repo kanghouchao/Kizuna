@@ -96,27 +96,53 @@ describe('スタッフ新規作成モーダル', () => {
     });
   });
 
-  it('ロールが未選択なら作成 API を呼ばず警告する', async () => {
+  it('ロールが未選択なら、その組の傍に文言を出し作成 API を呼ばない', async () => {
     renderModal();
     await screen.findByLabelText('店長');
 
     fillBasics();
-    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+    const submitButton = screen.getByRole('button', { name: '追加する' });
+    fireEvent.click(submitButton);
 
-    await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('ロールを 1 つ以上選択してください')
-    );
+    const message = await screen.findByText('ロールを 1 つ以上選択してください');
+    expect(mockedToast.error).not.toHaveBeenCalled();
     expect(mockedStaffApi.create).not.toHaveBeenCalled();
+    // 必須は「N のうち 1 つ以上」＝組の性質なので、指摘も個々の項目ではなく組に紐づく
+    const group = screen.getByRole('group', { name: 'ロール' });
+    expect(group).toHaveAttribute('aria-invalid', 'true');
+    expect(group.getAttribute('aria-describedby')).toContain(message.id);
+    expect(submitButton).toBeEnabled();
+    // handleSubmit は登録済みの ref を焦点にする。組の先頭まで ref が届いていないと、
+    // 他の症状を出さずに焦点移動だけが失われる
+    expect(document.activeElement).toBe(screen.getByLabelText('店長'));
   });
 
-  it('必須項目が空なら作成 API を呼ばない', async () => {
+  it('必須項目が空なら各欄の傍に文言を出し作成 API を呼ばない', async () => {
     renderModal();
     await screen.findByLabelText('店長');
 
     fireEvent.click(screen.getByLabelText('店長'));
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
-    await waitFor(() => expect(mockedRoleApi.list).toHaveBeenCalled());
+    expect(await screen.findByText('メールアドレスを入力してください')).toBeInTheDocument();
+    expect(screen.getByText('初期パスワードを入力してください')).toBeInTheDocument();
+    expect(screen.getByText('氏名を入力してください')).toBeInTheDocument();
+    expect(mockedStaffApi.create).not.toHaveBeenCalled();
+  });
+
+  // noValidate で type="email" の執行が止まるため、同じ検査を規則が引き継ぐ
+  it('メールアドレスの形式が不正なら文言を出し作成 API を呼ばない', async () => {
+    renderModal();
+    await screen.findByLabelText('店長');
+
+    fillBasics();
+    fireEvent.change(screen.getByLabelText('メールアドレス'), {
+      target: { value: 'not-an-email' },
+    });
+    fireEvent.click(screen.getByLabelText('店長'));
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+
+    expect(await screen.findByText('メールアドレスの形式が正しくありません')).toBeInTheDocument();
     expect(mockedStaffApi.create).not.toHaveBeenCalled();
   });
 

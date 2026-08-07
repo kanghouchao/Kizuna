@@ -189,17 +189,36 @@ describe('ロール編集モーダル', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('権限を全て外すと保存 API を呼ばず警告する', async () => {
+  it('権限を全て外すと、その組の傍に文言を出し保存 API を呼ばない', async () => {
     renderModal();
+    await screen.findByLabelText('ORDER_MANAGE');
+
+    fireEvent.click(screen.getByLabelText('ORDER_MANAGE'));
+    const submitButton = screen.getByRole('button', { name: '保存する' });
+    fireEvent.click(submitButton);
+
+    const message = await screen.findByText('権限を 1 つ以上選択してください');
+    expect(mockedToast.error).not.toHaveBeenCalled();
+    expect(mockedRoleApi.update).not.toHaveBeenCalled();
+    // 必須は「N のうち 1 つ以上」＝組の性質なので、指摘も個々の項目ではなく組に紐づく
+    const group = screen.getByRole('group', { name: '権限' });
+    expect(group).toHaveAttribute('aria-invalid', 'true');
+    expect(group.getAttribute('aria-describedby')).toContain(message.id);
+    expect(submitButton).toBeEnabled();
+    // handleSubmit は登録済みの ref を焦点にする。組の先頭まで ref が届いていないと、
+    // 他の症状を出さずに焦点移動だけが失われる
+    expect(document.activeElement).toBe(screen.getByLabelText('STAFF_MANAGE'));
+  });
+
+  it('ロール名が空なら欄の傍に文言を出し保存 API を呼ばない', async () => {
+    renderModal({ editingId: null });
     await screen.findByLabelText('ORDER_MANAGE');
 
     fireEvent.click(screen.getByLabelText('ORDER_MANAGE'));
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
-    await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith('権限を 1 つ以上選択してください')
-    );
-    expect(mockedRoleApi.update).not.toHaveBeenCalled();
+    expect(await screen.findByText('ロール名を入力してください')).toBeInTheDocument();
+    expect(mockedRoleApi.create).not.toHaveBeenCalled();
   });
 
   it('409 は詳細と一覧を取り直してモーダルを開いたままにする（version 固着で詰まないこと）', async () => {

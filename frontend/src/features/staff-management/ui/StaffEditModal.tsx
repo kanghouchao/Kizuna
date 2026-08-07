@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
   PlatformStaffResponse,
@@ -11,7 +12,7 @@ import {
   platformStaffApi,
 } from '@/entities/user';
 import { getApiErrorMessage, isConflict, useManagedList } from '@/shared/lib';
-import { Button, Dialog, DialogContent, DialogTitle, Label } from '@/shared/ui';
+import { Button, Dialog, DialogContent, DialogTitle, Form, FormField, Label } from '@/shared/ui';
 import { roleSetLabel } from '../lib/roleSetLabel';
 import { storeSetLabel } from '../lib/storeSetLabel';
 import { RolePicker } from './RolePicker';
@@ -30,6 +31,26 @@ interface StaffEditModalProps {
   onUpdated: () => void;
 }
 
+/** 値はそのまま更新リクエストになるため（version を除く）、欄名は wire のキーに合わせる。 */
+interface StaffEditFormValues {
+  role_ids: number[];
+  store_scope_type: PlatformStoreScopeType;
+  store_ids: number[];
+  enabled: boolean;
+}
+
+/** 対象スタッフからフォームの初期値を作る。prop が差し替わるたびにこれで組み直す。 */
+function toFormValues(staff: PlatformStaffResponse): StaffEditFormValues {
+  return {
+    role_ids: (staff.roles ?? []).flatMap(role => (role.id === undefined ? [] : [role.id])),
+    // 欠落時は全店舗ではなく個別店舗（storeIds 空 = どの店舗にも及ばない）へ倒す。
+    // 既定を全店舗にすると、保存操作がそのまま作用域の拡大になる。
+    store_scope_type: staff.store_scope_type ?? 'SPECIFIC_STORES',
+    store_ids: staff.store_ids ?? [],
+    enabled: staff.enabled,
+  };
+}
+
 /**
  * スタッフの授権編集モーダル（ロール・店舗集合・停止/再開。「この設定の結果」要約付き）。
  * 開いたときだけ mount される前提。ロール目録の取得は mount 時 = 開いた時点に遅延される。
@@ -42,24 +63,27 @@ export function StaffEditModal({
   onClose,
   onUpdated,
 }: StaffEditModalProps) {
-  const [roleIds, setRoleIds] = useState<number[]>([]);
-  const [storeScopeType, setStoreScopeType] = useState<PlatformStoreScopeType>('ALL_STORES');
-  const [storeIds, setStoreIds] = useState<number[]>([]);
-  const [enabled, setEnabled] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const form = useForm<StaffEditFormValues>({ defaultValues: toFormValues(staff) });
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { isSubmitting },
+  } = form;
+  const roleIds = useWatch({ control, name: 'role_ids' });
+  const storeScopeType = useWatch({ control, name: 'store_scope_type' });
+  const storeIds = useWatch({ control, name: 'store_ids' });
+  const enabled = useWatch({ control, name: 'enabled' });
   const { items: roles, isLoading: rolesLoading } = useManagedList<RoleSummaryResponse>(
     () => platformRoleApi.list(),
     'ロール一覧の取得に失敗しました'
   );
 
+  // 409 の再取得で staff が差し替わったら、ローカル編集は捨てて最新値で組み直す
   useEffect(() => {
-    setRoleIds((staff.roles ?? []).flatMap(role => (role.id === undefined ? [] : [role.id])));
-    // 欠落時は全店舗ではなく個別店舗（storeIds 空 = どの店舗にも及ばない）へ倒す。
-    // 既定を全店舗にすると、保存操作がそのまま作用域の拡大になる。
-    setStoreScopeType(staff.store_scope_type ?? 'SPECIFIC_STORES');
-    setStoreIds(staff.store_ids ?? []);
-    setEnabled(staff.enabled);
-  }, [staff]);
+    reset(toFormValues(staff));
+  }, [staff, reset]);
 
   const summary = useMemo(() => {
     const scopeLabel = storeSetLabel(storeScopeType, storeIds, stores);
@@ -67,18 +91,10 @@ export function StaffEditModal({
     return `${staff.display_name ?? ''}さんは ${roleSetLabel(selectedRoles)} として ${scopeLabel} のデータにアクセスできます`;
   }, [roles, roleIds, storeScopeType, storeIds, stores, staff]);
 
-  const submit = async () => {
-    if (roleIds.length === 0) {
-      toast.error('ロールを 1 つ以上選択してください');
-      return;
-    }
-    setIsSubmitting(true);
+  const submit = async (values: StaffEditFormValues) => {
     try {
       await platformStaffApi.update(staff.id ?? 0, {
-        role_ids: roleIds,
-        store_scope_type: storeScopeType,
-        store_ids: storeIds,
-        enabled,
+        ...values,
         // 楽観ロック用バージョン（応答の version をそのまま往復する）
         version: staff.version,
       });
@@ -88,14 +104,12 @@ export function StaffEditModal({
     } catch (error) {
       if (isConflict(error)) {
         // 楽観ロック競合: 固定文言の toast を出し、一覧を再取得してモーダルの内容を
-        // 最新値へ自動リフレッシュする（staff prop の更新で useEffect が再初期化。ローカル編集は破棄、モーダルは開いたまま）。
+        // 最新値へ自動リフレッシュする（staff prop の更新で上の reset が走る。ローカル編集は破棄、モーダルは開いたまま）。
         toast.error('他の管理者が更新しました。最新の内容を確認してください');
         onUpdated();
       } else {
         toast.error(getApiErrorMessage(error, '権限の更新に失敗しました'));
       }
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -116,63 +130,77 @@ export function StaffEditModal({
         <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
           {staff.display_name} の権限を編集
         </DialogTitle>
-        <div className="space-y-4 px-6 py-5">
-          <RolePicker
-            roles={roles}
-            isLoading={rolesLoading}
-            roleIds={roleIds}
-            onChange={setRoleIds}
-          />
-          <StoreSetPicker
-            stores={stores}
-            isLoading={storesLoading}
-            onReload={onReloadStores}
-            storeScopeType={storeScopeType}
-            storeIds={storeIds}
-            onChange={next => {
-              setStoreScopeType(next.storeScopeType);
-              setStoreIds(next.storeIds);
-            }}
-          />
-          <div>
-            <span className="mb-1 block text-sm font-medium text-foreground">状態</span>
-            <div className="flex items-center gap-4">
-              <Label className="font-normal">
-                <input
-                  type="radio"
-                  name="staff-enabled"
-                  checked={enabled}
-                  onChange={() => setEnabled(true)}
+        <Form {...form}>
+          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+              我々の文言は永久に描かれない。執行は下の rules が担う */}
+          <form onSubmit={handleSubmit(submit)} noValidate className="space-y-4 px-6 py-5">
+            <FormField
+              control={control}
+              name="role_ids"
+              rules={{
+                validate: value => value.length > 0 || 'ロールを 1 つ以上選択してください',
+              }}
+              render={({ field }) => (
+                <RolePicker
+                  roles={roles}
+                  isLoading={rolesLoading}
+                  roleIds={field.value}
+                  onChange={field.onChange}
+                  ref={field.ref}
                 />
-                有効
-              </Label>
-              <Label className="font-normal">
-                <input
-                  type="radio"
-                  name="staff-enabled"
-                  checked={!enabled}
-                  onChange={() => setEnabled(false)}
-                />
-                停止
-              </Label>
+              )}
+            />
+            <StoreSetPicker
+              stores={stores}
+              isLoading={storesLoading}
+              onReload={onReloadStores}
+              storeScopeType={storeScopeType}
+              storeIds={storeIds}
+              onChange={next => {
+                setValue('store_scope_type', next.storeScopeType);
+                setValue('store_ids', next.storeIds);
+              }}
+            />
+            <div>
+              <span className="mb-1 block text-sm font-medium text-foreground">状態</span>
+              <div className="flex items-center gap-4">
+                <Label className="font-normal">
+                  <input
+                    type="radio"
+                    name="staff-enabled"
+                    checked={enabled}
+                    onChange={() => setValue('enabled', true)}
+                  />
+                  有効
+                </Label>
+                <Label className="font-normal">
+                  <input
+                    type="radio"
+                    name="staff-enabled"
+                    checked={!enabled}
+                    onChange={() => setValue('enabled', false)}
+                  />
+                  停止
+                </Label>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                停止してもアカウントは削除されず、過去の操作記録は保持されます。
+              </p>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              停止してもアカウントは削除されず、過去の操作記録は保持されます。
-            </p>
-          </div>
-          <div>
-            <p className="mb-1 text-sm font-medium text-foreground">この設定の結果</p>
-            <p className="rounded-md bg-primary/10 p-3 text-sm text-primary-strong">{summary}</p>
-          </div>
-          <div className="flex justify-end gap-3 border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-              キャンセル
-            </Button>
-            <Button type="button" onClick={submit} disabled={isSubmitting}>
-              {isSubmitting ? '保存中...' : '保存する'}
-            </Button>
-          </div>
-        </div>
+            <div>
+              <p className="mb-1 text-sm font-medium text-foreground">この設定の結果</p>
+              <p className="rounded-md bg-primary/10 p-3 text-sm text-primary-strong">{summary}</p>
+            </div>
+            <div className="flex justify-end gap-3 border-t pt-4">
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? '保存中...' : '保存する'}
+              </Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

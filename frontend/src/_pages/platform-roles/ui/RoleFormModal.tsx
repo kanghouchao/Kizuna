@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import {
@@ -11,10 +11,25 @@ import {
   platformRoleApi,
 } from '@/entities/user';
 import { getApiErrorMessage, isConflict, useManagedList } from '@/shared/lib';
-import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+  Label,
+} from '@/shared/ui';
 
 interface RoleFormValues {
   name: string;
+  permissions: PlatformPermission[];
 }
 
 interface RoleFormModalProps {
@@ -66,13 +81,14 @@ function groupByConsole(
  * mount 時 = 開いた時点に遅延される。
  */
 export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProps) {
+  const form = useForm<RoleFormValues>({ defaultValues: { name: '', permissions: [] } });
   const {
-    register,
+    control,
     handleSubmit,
     reset,
     formState: { isSubmitting },
-  } = useForm<RoleFormValues>({ defaultValues: { name: '' } });
-  const [permissions, setPermissions] = useState<PlatformPermission[]>([]);
+  } = form;
+  const permissionsLabelId = useId();
   const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
   // 初回の詳細取得に失敗したときの再試行導線用。閉じて開き直す以外の回復手段を残す。
   const [detailLoadFailed, setDetailLoadFailed] = useState(false);
@@ -96,8 +112,7 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
       const role = await platformRoleApi.get(editingId);
       if (requestId !== requestIdRef.current) return;
       setEditingRole(role);
-      reset({ name: role.name ?? '' });
-      setPermissions(role.permissions ?? []);
+      reset({ name: role.name ?? '', permissions: role.permissions ?? [] });
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
       toast.error(getApiErrorMessage(error, 'ロール情報の取得に失敗しました'));
@@ -112,29 +127,19 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
   // 編集モードで詳細が未着のうちは保存させない（version 無しで送る事故を防ぐ）
   const editingLoading = editingId !== null && editingRole === null;
 
-  const toggle = (code: PlatformPermission) => {
-    setPermissions(current =>
-      current.includes(code) ? current.filter(item => item !== code) : [...current, code]
-    );
-  };
-
   const submit = async (values: RoleFormValues) => {
-    if (permissions.length === 0) {
-      toast.error('権限を 1 つ以上選択してください');
-      return;
-    }
     try {
       if (editingId !== null) {
         if (editingRole === null) return;
         await platformRoleApi.update(editingId, {
           name: values.name,
-          permissions,
+          permissions: values.permissions,
           // 楽観ロック用バージョン（詳細応答の version をそのまま往復する）
           version: editingRole.version,
         });
         toast.success('ロールを更新しました');
       } else {
-        await platformRoleApi.create({ name: values.name, permissions });
+        await platformRoleApi.create({ name: values.name, permissions: values.permissions });
         toast.success('ロールを追加しました');
       }
       onSaved();
@@ -176,72 +181,135 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
         <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
           {title}
         </DialogTitle>
-        {/* submit は取り直し（requestIdRef を読む）へ繋がるため、handleSubmit の適用を
-            イベント時まで遅らせる — 描画中の適用は react-hooks/refs が ref 読みとして拒む */}
-        <form onSubmit={event => void handleSubmit(submit)(event)} className="space-y-4 px-6 py-5">
-          <div className="grid gap-1">
-            <Label htmlFor="role-name">ロール名</Label>
-            <Input
-              id="role-name"
-              type="text"
-              maxLength={100}
-              // 詳細が届く前に入力させると、到着時の reset が入力を黙って上書きする
-              disabled={editingLoading}
-              {...register('name', { required: true })}
+        <Form {...form}>
+          {/* submit は取り直し（requestIdRef を読む）へ繋がるため、handleSubmit の適用を
+              イベント時まで遅らせる — 描画中の適用は react-hooks/refs が ref 読みとして拒む。
+              noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+              我々の文言は永久に描かれない。執行は下の各 rules が担う */}
+          <form
+            onSubmit={event => void handleSubmit(submit)(event)}
+            noValidate
+            className="space-y-4 px-6 py-5"
+          >
+            <FormField
+              control={control}
+              name="name"
+              rules={{ required: 'ロール名を入力してください' }}
+              render={({ field }) => (
+                <FormItem className="gap-1">
+                  <FormLabel>ロール名</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="text"
+                      maxLength={100}
+                      {...field}
+                      // 詳細が届く前に入力させると、到着時の reset が入力を黙って上書きする
+                      disabled={editingLoading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <div>
-            <span className="mb-1 block text-sm font-medium text-foreground">権限</span>
-            {/* 詳細取得の失敗（初回・409 後の取り直しとも）は「読み込み中」に固着させず、
-                ダイアログ内で再試行できるようにする */}
-            {editingLoading && detailLoadFailed ? (
-              <div className="space-y-2 rounded-md border p-3">
-                <p className="text-sm text-destructive-strong">ロール情報の取得に失敗しました</p>
-                <Button type="button" variant="outline" onClick={() => void reloadEditingRole()}>
-                  再試行
-                </Button>
-              </div>
-            ) : catalogLoading || editingLoading ? (
-              <p className="text-sm text-muted-foreground">読み込み中...</p>
-            ) : (
-              <div className="space-y-4 rounded-md border p-3">
-                {groupByConsole(catalog).map(group => {
-                  return (
-                    <div key={group.key}>
-                      <p className="mb-1 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                        {group.label}
-                      </p>
-                      <div className="space-y-1">
-                        {group.items.map(entry => {
-                          const code = entry.code;
-                          if (code === undefined) return null;
-                          return (
-                            <Label key={code} className="font-normal">
-                              <input
-                                type="checkbox"
-                                checked={permissions.includes(code)}
-                                onChange={() => toggle(code)}
-                              />
-                              {code}
-                            </Label>
-                          );
-                        })}
-                      </div>
-                    </div>
+            <FormField
+              control={control}
+              name="permissions"
+              rules={{ validate: value => value.length > 0 || '権限を 1 つ以上選択してください' }}
+              render={({ field }) => {
+                const groups = groupByConsole(catalog);
+                // 焦点は組の先頭が受ける
+                const firstCode = groups[0]?.items.find(entry => entry.code !== undefined)?.code;
+                const toggle = (code: PlatformPermission) => {
+                  field.onChange(
+                    field.value.includes(code)
+                      ? field.value.filter(item => item !== code)
+                      : [...field.value, code]
                   );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-3 border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-              キャンセル
-            </Button>
-            <Button type="submit" disabled={isSubmitting || editingLoading}>
-              {isSubmitting ? '保存中...' : '保存する'}
-            </Button>
-          </div>
-        </form>
+                };
+                return (
+                  <FormItem className="gap-1">
+                    <span
+                      id={permissionsLabelId}
+                      className="block text-sm font-medium text-foreground"
+                    >
+                      権限
+                    </span>
+                    {/* 詳細取得の失敗（初回・409 後の取り直しとも）は「読み込み中」に固着させず、
+                        ダイアログ内で再試行できるようにする */}
+                    {editingLoading && detailLoadFailed ? (
+                      <div className="space-y-2 rounded-md border p-3">
+                        <p className="text-sm text-destructive-strong">
+                          ロール情報の取得に失敗しました
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void reloadEditingRole()}
+                        >
+                          再試行
+                        </Button>
+                      </div>
+                    ) : (
+                      <FormControl>
+                        {/* 目録の到着前も組そのものは立てる。新規作成では目録の読み込み中でも
+                            保存が押せるため、組が無いと指摘が欄と結び付かないまま出る */}
+                        <div
+                          role="group"
+                          aria-labelledby={permissionsLabelId}
+                          className="space-y-4 rounded-md border p-3"
+                        >
+                          {catalogLoading || editingLoading ? (
+                            // 詳細の到着前に選ばせると、到着時の reset が選択を黙って上書きする
+                            <p className="text-sm text-muted-foreground">読み込み中...</p>
+                          ) : (
+                            groups.map(group => {
+                              return (
+                                <div key={group.key}>
+                                  <p className="mb-1 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                                    {group.label}
+                                  </p>
+                                  <div className="space-y-1">
+                                    {group.items.map(entry => {
+                                      const code = entry.code;
+                                      if (code === undefined) return null;
+                                      return (
+                                        <Label key={code} className="font-normal">
+                                          <input
+                                            type="checkbox"
+                                            checked={field.value.includes(code)}
+                                            onChange={() => toggle(code)}
+                                            ref={code === firstCode ? field.ref : undefined}
+                                          />
+                                          {code}
+                                        </Label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </FormControl>
+                    )}
+                    <FormDescription className="text-xs">
+                      1 つ以上を選択してください。
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
+            />
+            <div className="flex justify-end gap-3 border-t pt-4">
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={isSubmitting || editingLoading}>
+                {isSubmitting ? '保存中...' : '保存する'}
+              </Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
