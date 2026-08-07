@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ShiftsPage from '../ShiftsPage';
 import { castApi } from '@/entities/cast';
 import { shiftApi } from '@/entities/shift';
@@ -99,5 +100,45 @@ describe('ShiftsPage の取得失敗', () => {
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
+  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が名簿をクリアする
+  // 以上、遅れて着いた古い失敗が新しい成功を消してはいけない
+  // （シフト側の同じ守衛は effect 内の ignore が既に担っている）
+  it('二重 mount で古い失敗が後から着いても、名簿を消さないこと', async () => {
+    mockedShiftList.mockResolvedValue([
+      {
+        id: 'sh1',
+        cast_id: 'cast-1',
+        work_date: toDateStr(new Date()),
+        start_time: '18:00:00',
+        end_time: '23:00:00',
+      },
+    ]);
+    let failStale = (): void => {};
+    mockedCastList
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockResolvedValue(castPage([{ id: 'cast-1', name: 'キャストA' }]));
+
+    render(
+      <StrictMode>
+        <ShiftsPage />
+      </StrictMode>
+    );
+
+    // タイムラインの名前解決は名簿を読む。名簿が消えると「不明」に化ける
+    fireEvent.click(await screen.findByRole('button', { name: String(DAY_IN_MONTH) }));
+    expect(await screen.findByText('キャストA')).toBeInTheDocument();
+
+    await act(async () => {
+      failStale();
+    });
+
+    expect(screen.getByText('キャストA')).toBeInTheDocument();
+    expect(screen.queryByText('キャストの取得に失敗しました')).not.toBeInTheDocument();
   });
 });

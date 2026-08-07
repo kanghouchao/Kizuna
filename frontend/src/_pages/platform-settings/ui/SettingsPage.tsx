@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { notify } from '@/shared/notify';
 import {
   SystemConfigResponse,
@@ -21,20 +21,28 @@ export default function SystemSettingsPage() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
+  // 一覧をクリアするので、在途の古い失敗が新しい成功を消し得る
+  const requestIdRef = useRef(0);
 
   const fetchConfigs = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await systemConfigService.getAllConfigs();
-      setConfigs(data);
-      setFailed(false);
+      if (requestId === requestIdRef.current) {
+        setConfigs(data);
+        setFailed(false);
+      }
     } catch (error) {
       console.error('設定の取得に失敗しました', error);
       // 読めなかった一覧を残すと「設定項目がありません」に化ける
-      setConfigs([]);
-      setFailed(true);
+      if (requestId === requestIdRef.current) {
+        setConfigs([]);
+        setFailed(true);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 

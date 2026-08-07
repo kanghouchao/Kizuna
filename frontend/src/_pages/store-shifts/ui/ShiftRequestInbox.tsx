@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
@@ -20,25 +20,33 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
+  // 一覧をクリアするので、在途の古い失敗が新しい成功を消し得る
+  const requestIdRef = useRef(0);
 
   // castId が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
   const castName = (castId: string | undefined) =>
     (castId === undefined ? undefined : casts.find(c => c.id === castId)?.name) ?? castId;
 
   const load = () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     shiftApi
       .listShiftRequests({ status: 'PENDING' })
       .then(rows => {
+        if (requestId !== requestIdRef.current) return;
         setRequests(rows);
         setFailed(false);
       })
       .catch(() => {
+        if (requestId !== requestIdRef.current) return;
         // 読めなかった一覧を残すと「受付中の出勤希望はありません」に化け、未処理の希望を見落とす
         setRequests([]);
         setFailed(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
   };
 
   useEffect(() => {

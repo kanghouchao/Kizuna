@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { platformAuthApi } from '@/entities/user';
 import { PasswordChangeForm } from '@/features/password-change';
@@ -23,22 +23,30 @@ export default function AccountPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
+  // 欄をクリアするので、在途の古い失敗が新しい成功を消し得る
+  const requestIdRef = useRef(0);
 
   // 再試行から呼び直せるよう effect の外に置く
   const fetchMe = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     try {
       const me = await platformAuthApi.me();
-      setNickname(me.display_name ?? '');
-      setEmail(me.email ?? '');
-      setFailed(false);
+      if (requestId === requestIdRef.current) {
+        setNickname(me.display_name ?? '');
+        setEmail(me.email ?? '');
+        setFailed(false);
+      }
     } catch {
       // 空欄のまま出すと「ニックネーム未設定」に見え、保存するとその空欄が本当になる
-      setNickname('');
-      setEmail('');
-      setFailed(true);
+      if (requestId === requestIdRef.current) {
+        setNickname('');
+        setEmail('');
+        setFailed(true);
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) setIsLoading(false);
     }
   }, []);
 

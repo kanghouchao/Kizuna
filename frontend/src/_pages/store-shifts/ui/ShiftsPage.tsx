@@ -1,7 +1,7 @@
 'use client';
 
 import { CalendarDaysIcon, ClockIcon, InboxIcon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CastResponse, castApi } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
 import { RegionError, Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
@@ -30,9 +30,14 @@ export default function ShiftsPage() {
   const [castsFailed, setCastsFailed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
+  // 名簿をクリアするので、在途の古い失敗が新しい成功を消し得る
+  // （シフト側の同じ守衛は effect 内の ignore が担う）
+  const castsRequestIdRef = useRef(0);
 
   // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）。101 人以上でも氏名を解決できるよう全ページ取得する。
   const loadAllCasts = useCallback(async () => {
+    const requestId = ++castsRequestIdRef.current;
     // 再試行の前に畳む。同じ姿のまま失敗を繰り返すと role="alert" が挿入されず、二度目の
     // 失敗が読み上げ利用者に届かない
     setCastsFailed(false);
@@ -44,12 +49,16 @@ export default function ShiftsPage() {
         all.push(...res.rows);
         if (res.rows.length < size) break; // 最終ページ
       }
-      setCasts(all);
-      setCastsFailed(false);
+      if (requestId === castsRequestIdRef.current) {
+        setCasts(all);
+        setCastsFailed(false);
+      }
     } catch {
       // 途中まで読めた分も捨てる — 欠けた名簿は「そのキャストは居ない」と読める
-      setCasts([]);
-      setCastsFailed(true);
+      if (requestId === castsRequestIdRef.current) {
+        setCasts([]);
+        setCastsFailed(true);
+      }
     }
   }, []);
 

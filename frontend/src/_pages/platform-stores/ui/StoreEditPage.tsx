@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
 import { isNotFound } from '@/shared/lib';
@@ -20,27 +20,35 @@ export default function EditStorePage() {
   });
   const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
   const [loadFailure, setLoadFailure] = useState<'notFound' | 'error' | null>(null);
+  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
+  // 店舗をクリアするので、在途の古い失敗が新しい成功を消し得る
+  const requestIdRef = useRef(0);
 
   // 再試行から呼び直せるよう effect の外に置く。取得できなかったこの頁自身が失敗を名乗るので、
   // 一覧へは送り返さない
   const loadStore = useCallback(async (storeId: string) => {
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       const res = await platformStoreApi.getById(storeId);
       const t = res as unknown as Store;
-      setStore(t);
-      setFormData({
-        name: t.name ?? '',
-        email: t.email ?? '',
-      });
-      setLoadFailure(null);
+      if (requestId === requestIdRef.current) {
+        setStore(t);
+        setFormData({
+          name: t.name ?? '',
+          email: t.email ?? '',
+        });
+        setLoadFailure(null);
+      }
     } catch (e) {
       console.error('Error loading store:', e);
-      setStore(null);
-      // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
-      setLoadFailure(isNotFound(e) ? 'notFound' : 'error');
+      if (requestId === requestIdRef.current) {
+        setStore(null);
+        // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
+        setLoadFailure(isNotFound(e) ? 'notFound' : 'error');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 

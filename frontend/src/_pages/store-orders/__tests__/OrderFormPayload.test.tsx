@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
 import * as castEntity from '@/entities/cast';
@@ -273,5 +274,39 @@ describe('オーダーフォームの受付候補の取得失敗', () => {
     await selectReceptionist();
     const body = await submitAndGetBody(onSubmit);
     expect(body.receptionistId).toBe('7');
+  });
+
+  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が選択肢をクリアする
+  // 以上、遅れて着いた古い失敗が新しい成功を消してはいけない
+  it('二重 mount で古い失敗が後から着いても、新しい成功を消さないこと', async () => {
+    let failStale = (): void => {};
+    mockedOrderApi.listReceptionists
+      .mockReturnValueOnce(
+        new Promise((_, reject) => {
+          failStale = () => reject(new Error('stale'));
+        })
+      )
+      .mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
+
+    render(
+      <StrictMode>
+        <OrderForm
+          initialData={{ castId: 'cast-1' }}
+          onSubmit={jest.fn<void, [OrderFormData]>()}
+          isSubmitting={false}
+        />
+      </StrictMode>
+    );
+
+    // 候補から選べた時点で、2 度目の成功が着いている
+    await selectReceptionist();
+
+    await act(async () => {
+      failStale();
+    });
+
+    // 引き金の文言は候補一覧から引かれる。古い失敗が候補を消すと選択ごと表示が戻る
+    expect(screen.getByRole('combobox', { name: /受付(?!経路)/ })).toHaveTextContent('受付花子');
+    expect(screen.queryByText('受付担当者の取得に失敗しました')).not.toBeInTheDocument();
   });
 });
