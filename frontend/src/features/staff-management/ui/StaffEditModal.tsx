@@ -24,6 +24,8 @@ interface StaffEditModalProps {
   /** 店舗目録（一覧ページが取得済みのものを共有する）。 */
   stores: PlatformStore[];
   storesLoading: boolean;
+  /** 店舗目録の取得に失敗した状態。 */
+  storesFailed: boolean;
   /** 店舗目録の取り直し（取得失敗からの手動回復導線）。 */
   onReloadStores: () => void;
   onClose: () => void;
@@ -59,6 +61,7 @@ export function StaffEditModal({
   staff,
   stores,
   storesLoading,
+  storesFailed,
   onReloadStores,
   onClose,
   onUpdated,
@@ -75,10 +78,12 @@ export function StaffEditModal({
   const storeScopeType = useWatch({ control, name: 'store_scope_type' });
   const storeIds = useWatch({ control, name: 'store_ids' });
   const enabled = useWatch({ control, name: 'enabled' });
-  const { items: roles, isLoading: rolesLoading } = useManagedList<RoleSummaryResponse>(
-    () => platformRoleApi.list(),
-    'ロール一覧の取得に失敗しました'
-  );
+  const {
+    items: roles,
+    isLoading: rolesLoading,
+    failed: rolesFailed,
+    refetch: refetchRoles,
+  } = useManagedList<RoleSummaryResponse>(() => platformRoleApi.list());
 
   // 409 の再取得で staff が差し替わったら、ローカル編集は捨てて最新値で組み直す
   useEffect(() => {
@@ -144,6 +149,8 @@ export function StaffEditModal({
                 <RolePicker
                   roles={roles}
                   isLoading={rolesLoading}
+                  failed={rolesFailed}
+                  onReload={() => void refetchRoles()}
                   roleIds={field.value}
                   onChange={field.onChange}
                   ref={field.ref}
@@ -153,6 +160,7 @@ export function StaffEditModal({
             <StoreSetPicker
               stores={stores}
               isLoading={storesLoading}
+              failed={storesFailed}
               onReload={onReloadStores}
               storeScopeType={storeScopeType}
               storeIds={storeIds}

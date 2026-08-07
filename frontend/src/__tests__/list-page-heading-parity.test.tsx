@@ -47,9 +47,12 @@ describe('ListPage の見出し markup と PageHeader の一致', () => {
           pageCount: 1,
           total: 1,
           isLoading: false,
+          failed: false,
           onPageChange: jest.fn(),
         }}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table</div>
       </ListPage>

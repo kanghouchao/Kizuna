@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { PageResult } from '@/shared/api';
 
 const EMPTY_PAGE: PageResult<never> = { rows: [], page: 0, pageCount: 0, total: 0 };
 
 interface ListPageResult<T, C> extends PageResult<T> {
   isLoading: boolean;
+  /** 取得に失敗した状態。行が無いだけの空表示（＝0 件）と区別するために分ける。 */
+  failed: boolean;
   /** 検索条件を適用して 1 ページ目から取り直す（関数形は適用済み条件からの差分更新） */
   search: (criteria: C | ((prev: C) => C)) => Promise<void>;
   onPageChange: (page: number) => Promise<void>;
@@ -15,23 +16,23 @@ interface ListPageResult<T, C> extends PageResult<T> {
 }
 
 /**
- * ListPage 向けの取得ライフサイクル（page・適用済み検索条件・失敗トースト・順不同レスポンス守衛）。
+ * ListPage 向けの取得ライフサイクル（page・適用済み検索条件・失敗・順不同レスポンス守衛）。
  * 検索条件は fetcher の引数として渡す。呼び出し側の state を fetcher のクロージャから読ませると、
  * 条件を更新した同一ハンドラ内で再取得したとき再レンダー前の古い値で取得してしまうため、
  * 「どの条件で取得するか」は hook が持つ。検索条件を持たない一覧は C を省略してよい。
+ *
+ * <p>失敗は failed で伝えるだけで、提示は行わない。取得に失敗した領域が自分で名乗るのか
+ * 通知に出すのかは呼び出し側の場面が決めることで、フックの内側に隠れてはならない。
  */
 export function useListPage<T>(
-  fetcher: (page: number) => Promise<PageResult<T>>,
-  errorMessage: string
+  fetcher: (page: number) => Promise<PageResult<T>>
 ): ListPageResult<T, void>;
 export function useListPage<T, C>(
   fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
-  errorMessage: string,
   initialCriteria: C
 ): ListPageResult<T, C>;
 export function useListPage<T, C>(
   fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
-  errorMessage: string,
   initialCriteria?: C
 ): ListPageResult<T, C> {
   const fetcherRef = useRef(fetcher);
@@ -45,22 +46,27 @@ export function useListPage<T, C>(
   const criteriaRef = useRef(initialCriteria as C);
   const [pageResult, setPageResult] = useState<PageResult<T>>(EMPTY_PAGE);
   const [isLoading, setIsLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-  const load = useCallback(
-    async (page: number) => {
-      const requestId = ++requestIdRef.current;
-      setIsLoading(true);
-      try {
-        const result = await fetcherRef.current(page, criteriaRef.current);
-        if (requestId === requestIdRef.current) setPageResult(result);
-      } catch {
-        if (requestId === requestIdRef.current) toast.error(errorMessage);
-      } finally {
-        if (requestId === requestIdRef.current) setIsLoading(false);
+  const load = useCallback(async (page: number) => {
+    const requestId = ++requestIdRef.current;
+    setIsLoading(true);
+    // 再取得中は失敗表示を畳む。残したままだと、押した再試行が効いているのか分からない。
+    setFailed(false);
+    try {
+      const result = await fetcherRef.current(page, criteriaRef.current);
+      if (requestId === requestIdRef.current) setPageResult(result);
+    } catch {
+      // 行も現在ページも起点へ戻す。位置を残すと再試行が 21〜40 行目だけの欠番一覧を返す。
+      // 適用済みの検索条件は利用者の指定なので保つ（戻すのは位置だけ）。
+      if (requestId === requestIdRef.current) {
+        setPageResult(EMPTY_PAGE);
+        setFailed(true);
       }
-    },
-    [errorMessage]
-  );
+    } finally {
+      if (requestId === requestIdRef.current) setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void load(0);
@@ -85,8 +91,9 @@ export function useListPage<T, C>(
     [load]
   );
   const onPageChange = useCallback((page: number) => load(page), [load]);
-  // 削除・発行など一覧を書き換える操作の後始末。現在のページをそのまま取り直す
+  // 削除・発行など一覧を書き換える操作の後始末。現在のページをそのまま取り直す。
+  // 失敗時は現在ページが 0 に戻っているので、同じ関数がそのまま失敗の再試行にもなる。
   const reload = useCallback(() => load(pageResult.page), [load, pageResult.page]);
 
-  return { ...pageResult, isLoading, search, onPageChange, reload };
+  return { ...pageResult, isLoading, failed, search, onPageChange, reload };
 }

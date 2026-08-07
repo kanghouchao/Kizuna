@@ -59,10 +59,11 @@ describe('useCursorList', () => {
     const { result } = renderHook(() => useCursorList(fetcher));
 
     await waitFor(() => expect(result.current.failed).toBe(true));
-    expect(result.current.loadMoreFailed).toBe(false);
+    expect(result.current.rows).toEqual([]);
   });
 
-  it('追加読み込みに失敗しても表示中の行を消さず、同じ位置から再試行できる', async () => {
+  it('追加読み込みの失敗も領域ごと失敗させ、表示中の行を消す', async () => {
+    // 表示中の行を残すと、読めなかった領域に前回の内容が居座り「これが最新」に見える
     const server = cursorServer(5, 2);
     const fetcher = jest.fn((cursor?: string) =>
       cursor ? Promise.reject(new Error('network')) : server(cursor)
@@ -72,16 +73,29 @@ describe('useCursorList', () => {
 
     act(() => result.current.loadMore());
 
-    await waitFor(() => expect(result.current.loadMoreFailed).toBe(true));
-    expect(result.current.failed).toBe(false);
-    expect(result.current.rows).toEqual(['row0', 'row1']);
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.rows).toEqual([]);
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it('追加読み込みに失敗した後の再取得は先頭から取り直す', async () => {
+    // 失敗した位置から再開すると、1〜20 行目を欠いたまま 21 行目以降だけが返る
+    const server = cursorServer(5, 2);
+    const fetcher = jest.fn((cursor?: string) =>
+      cursor ? Promise.reject(new Error('network')) : server(cursor)
+    );
+    const { result } = renderHook(() => useCursorList(fetcher));
+    await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.failed).toBe(true));
 
     fetcher.mockImplementation(server);
-    act(() => result.current.loadMore());
+    act(() => result.current.reload());
 
-    // 続きの位置を進めていないので、失敗した続きと同じ位置から取り直す
-    await waitFor(() => expect(result.current.rows).toHaveLength(4));
-    expect(fetcher).toHaveBeenLastCalledWith('2');
+    await waitFor(() => expect(result.current.rows).toEqual(['row0', 'row1']));
+    expect(fetcher).toHaveBeenLastCalledWith(undefined);
+    expect(result.current.failed).toBe(false);
   });
 
   it('reload は先頭から取り直し、失敗表示を畳む', async () => {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Order, orderApi } from '@/entities/order';
 import { getApiErrorMessage, useCursorList } from '@/shared/lib';
-import { Badge, Button } from '@/shared/ui';
+import { Badge, Button, RegionError } from '@/shared/ui';
 import { ReservationRequestEditModal } from './ReservationRequestEditModal';
 
 interface ReservationRequestInboxProps {
@@ -32,7 +32,6 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
     setRows: setRequests,
     isLoading: loading,
     failed,
-    loadMoreFailed,
     hasMore,
     reload,
     loadMore,
@@ -70,14 +69,7 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
   }
   // 取得失敗を空表示と区別する — 「申請なし」に見せると未処理の申請を見落とす
   if (failed) {
-    return (
-      <div className="flex items-center gap-3">
-        <p className="text-sm text-destructive-strong">予約申請を取得できませんでした。</p>
-        <Button type="button" variant="outline" size="sm" onClick={reload}>
-          再読み込み
-        </Button>
-      </div>
-    );
+    return <RegionError message="予約申請を取得できませんでした。" onRetry={reload} />;
   }
   // 続きが残っているうちは「申請なし」と言い切らない — 表示中をすべて処理し終えただけで、
   // まだ読んでいない申請がある状態と区別できなくなる。
@@ -147,17 +139,7 @@ export function ReservationRequestInbox({ onProcessed }: ReservationRequestInbox
           </li>
         ))}
       </ul>
-      {loadMoreFailed && (
-        <div className="mt-3 flex items-center gap-3">
-          <p className="text-sm text-destructive-strong">
-            予約申請を取得できませんでした。表示は前回の取得内容です。
-          </p>
-          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={loadMore}>
-            再試行
-          </Button>
-        </div>
-      )}
-      {hasMore && !loadMoreFailed && (
+      {hasMore && (
         <Button
           type="button"
           variant="outline"

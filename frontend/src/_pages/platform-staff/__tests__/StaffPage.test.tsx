@@ -359,6 +359,41 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByLabelText('スタッフを検索')).toHaveValue('下書き');
   });
 
+  // 取得失敗は目録を空にする。「消えた」と同じに扱うと、1 回の通信エラーが利用者の
+  // 絞り込みを黙って「すべての店舗」へ戻してしまう（読めなかったことは目録の事実ではない）。
+  it('店舗目録の取得に失敗しても、選択中の店舗の絞り込みを解除しないこと', async () => {
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+
+    render(<StaffPage />);
+    await screen.findByText('山田太郎');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+    await pickStore('店舗A');
+    await waitFor(() =>
+      expect(mockedStaffApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 9 }))
+    );
+    const listCallsBeforeFailure = mockedStaffApi.list.mock.calls.length;
+
+    // モーダルを開くと目録を取り直す既存挙動を使い、その取り直しを落とす
+    mockedAuthApi.stores.mockRejectedValue(new Error('network'));
+    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+    await screen.findByText('作成モーダル表示中');
+
+    // 適用済みの絞り込みは動かない = 一覧を取り直していない
+    expect(mockedStaffApi.list).toHaveBeenCalledTimes(listCallsBeforeFailure);
+    expect(mockedStaffApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 9 }));
+    // 黙らせない。目録が読めないことは選択肢の領域が自分で名乗る
+    expect(screen.getByRole('alert')).toHaveTextContent('店舗一覧の取得に失敗しました');
+
+    mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: '店舗で絞り込む' })).toHaveTextContent('店舗A')
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('ページ番号のクリックで該当ページを取得すること', async () => {
     mockedStaffApi.list.mockImplementation(({ page }) =>
       Promise.resolve(

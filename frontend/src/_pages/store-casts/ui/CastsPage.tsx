@@ -56,7 +56,6 @@ export default function CastListPage() {
         sort: 'displayOrder,id,asc',
         search: criteria || undefined,
       }),
-    'キャスト一覧の取得に失敗しました',
     ''
   );
   const casts = list.rows;
@@ -135,6 +134,8 @@ export default function CastListPage() {
         }}
         state={list}
         emptyMessage="キャストが登録されていません"
+        errorMessage="キャスト一覧の取得に失敗しました"
+        onRetry={list.reload}
       >
         <Table>
           <TableHeader>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'react-hot-toast';
 import { platformRoleApi, platformStaffApi } from '@/entities/user';
 import { StaffCreateModal } from '../StaffCreateModal';
@@ -26,6 +26,7 @@ const renderModal = (props: Partial<React.ComponentProps<typeof StaffCreateModal
     <StaffCreateModal
       stores={stores}
       storesLoading={false}
+      storesFailed={false}
       onReloadStores={onReloadStores}
       onClose={onClose}
       onCreated={onCreated}
@@ -179,6 +180,39 @@ describe('スタッフ新規作成モーダル', () => {
     fireEvent.click(await screen.findByRole('button', { name: '再読み込み' }));
 
     expect(onReloadStores).toHaveBeenCalledTimes(1);
+  });
+
+  // 「選択肢がありません」と言い切ると、読めなかっただけの状態が目録の事実に化ける
+  it('店舗目録の取得に失敗したら、個別店舗の欄が失敗を名乗り再試行できる', async () => {
+    const { onReloadStores } = renderModal({ stores: [], storesFailed: true });
+    await screen.findByLabelText('店長');
+
+    fireEvent.click(screen.getByLabelText('個別店舗'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('店舗一覧の取得に失敗しました');
+    expect(screen.queryByText('店舗の選択肢がありません。')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    expect(onReloadStores).toHaveBeenCalledTimes(1);
+  });
+
+  it('ロール目録の取得に失敗したら、その組が失敗を名乗り再試行できる', async () => {
+    // 空の組は「ロールが 1 つも無い」に見える
+    mockedRoleApi.list.mockRejectedValueOnce(new Error('network'));
+    mockedRoleApi.list.mockResolvedValueOnce([
+      { id: 3, name: '店長', system: true, permission_count: 0 },
+    ]);
+    renderModal();
+
+    const group = await screen.findByRole('group', { name: 'ロール' });
+    expect(await within(group).findByRole('alert')).toHaveTextContent(
+      'ロール一覧の取得に失敗しました'
+    );
+
+    fireEvent.click(within(group).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByLabelText('店長')).toBeInTheDocument();
+    expect(within(group).queryByRole('alert')).not.toBeInTheDocument();
   });
 
   // 閉じると unmount で isSubmitting が消え、開き直した複製から二重送信できてしまうため、

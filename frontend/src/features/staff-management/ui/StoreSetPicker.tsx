@@ -1,12 +1,14 @@
 'use client';
 
 import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
-import { Button, Label } from '@/shared/ui';
+import { Button, Label, RegionError } from '@/shared/ui';
 
 interface StoreSetPickerProps {
   /** 店舗目録。取得は呼び出し元（一覧ページ）が 1 回だけ行い、ここでは取得しない。 */
   stores: PlatformStore[];
   isLoading: boolean;
+  /** 目録の取得に失敗した状態。選択肢が無いのが事実なのか読めなかったのかを区別する。 */
+  failed: boolean;
   /** 目録の取り直し。取得失敗が続いた場合の手動回復導線（空の SPECIFIC_STORES はサーバが 400 で拒む）。 */
   onReload: () => void;
   storeScopeType: PlatformStoreScopeType;
@@ -18,6 +20,7 @@ interface StoreSetPickerProps {
 export function StoreSetPicker({
   stores,
   isLoading,
+  failed,
   onReload,
   storeScopeType,
   storeIds,
@@ -56,6 +59,9 @@ export function StoreSetPicker({
           <div className="ml-6 space-y-1 rounded-md border p-3">
             {isLoading ? (
               <p className="text-sm text-muted-foreground">読み込み中...</p>
+            ) : failed ? (
+              // 「選択肢がありません」と言い切ると、読めなかっただけの状態が事実に化ける
+              <RegionError message="店舗一覧の取得に失敗しました" onRetry={onReload} />
             ) : stores.length === 0 ? (
               // 空のままでは選べる店舗が無く、SPECIFIC_STORES の空提出はサーバが拒む。
               // 自動再試行が尽きても閉じ直さずに回復できる手動導線を残す

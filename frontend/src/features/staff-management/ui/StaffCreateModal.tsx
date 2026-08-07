@@ -30,6 +30,8 @@ interface StaffCreateModalProps {
   /** 店舗目録（一覧ページが取得済みのものを共有する）。 */
   stores: PlatformStore[];
   storesLoading: boolean;
+  /** 店舗目録の取得に失敗した状態。 */
+  storesFailed: boolean;
   /** 店舗目録の取り直し（取得失敗からの手動回復導線）。 */
   onReloadStores: () => void;
   onClose: () => void;
@@ -58,6 +60,7 @@ const EMAIL_PATTERN = /^([^\s@])+@([^\s@])+\.[^\s@]+$/;
 export function StaffCreateModal({
   stores,
   storesLoading,
+  storesFailed,
   onReloadStores,
   onClose,
   onCreated,
@@ -81,10 +84,12 @@ export function StaffCreateModal({
   // 店舗集合は検証を持たないが、値は他の欄と同じ場所に置く（送信も初期化も一箇所で済む）
   const storeScopeType = useWatch({ control, name: 'store_scope_type' });
   const storeIds = useWatch({ control, name: 'store_ids' });
-  const { items: roles, isLoading: rolesLoading } = useManagedList<RoleSummaryResponse>(
-    () => platformRoleApi.list(),
-    'ロール一覧の取得に失敗しました'
-  );
+  const {
+    items: roles,
+    isLoading: rolesLoading,
+    failed: rolesFailed,
+    refetch: refetchRoles,
+  } = useManagedList<RoleSummaryResponse>(() => platformRoleApi.list());
 
   const submit = async (values: StaffCreateFormValues) => {
     try {
@@ -176,6 +181,8 @@ export function StaffCreateModal({
                 <RolePicker
                   roles={roles}
                   isLoading={rolesLoading}
+                  failed={rolesFailed}
+                  onReload={() => void refetchRoles()}
                   roleIds={field.value}
                   onChange={field.onChange}
                   ref={field.ref}
@@ -185,6 +192,7 @@ export function StaffCreateModal({
             <StoreSetPicker
               stores={stores}
               isLoading={storesLoading}
+              failed={storesFailed}
               onReload={onReloadStores}
               storeScopeType={storeScopeType}
               storeIds={storeIds}

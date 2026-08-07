@@ -17,6 +17,7 @@ import {
   ImageUpload,
   Input,
   Label,
+  RegionError,
   Select,
   SelectContent,
   SelectItem,
@@ -88,11 +89,14 @@ export function CastForm({
   // カスタムフィールドの動的欄は編集時のみ表示する（値の入力自体は既存 PUT のまま、
   // 作成時は付与するキャストがまだ無いため定義取得自体を行わない）。
   const isEdit = initialData !== undefined;
-  const { items: definitions, isLoading: isLoadingDefinitions } =
-    useManagedList<CastFieldDefinitionResponse>(
-      () => (isEdit ? castFieldDefinitionApi.list() : Promise.resolve([])),
-      'カスタムフィールド定義の取得に失敗しました'
-    );
+  const {
+    items: definitions,
+    isLoading: isLoadingDefinitions,
+    failed: definitionsFailed,
+    refetch: refetchDefinitions,
+  } = useManagedList<CastFieldDefinitionResponse>(() =>
+    isEdit ? castFieldDefinitionApi.list() : Promise.resolve([])
+  );
 
   return (
     <Form {...form}>
@@ -222,6 +226,14 @@ export function CastForm({
             <CardContent>
               {isLoadingDefinitions ? (
                 <div className="p-6 text-center text-sm text-muted-foreground">読み込み中...</div>
+              ) : definitionsFailed ? (
+                // 「登録されていません」と言い切ると、読めなかっただけの状態が事実に化ける。
+                // 定義が取れないまま保存しても custom_fields 自体を送らないので既存値は消えない
+                <RegionError
+                  message="カスタムフィールド定義の取得に失敗しました"
+                  onRetry={() => void refetchDefinitions()}
+                  className="justify-center p-6"
+                />
               ) : definitions.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                   カスタムフィールドは登録されていません

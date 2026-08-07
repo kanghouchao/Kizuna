@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
 import { useListPage } from '@/shared/lib';
 import { PageResult } from '@/shared/api';
-
-jest.mock('react-hot-toast', () => ({
-  toast: { error: jest.fn() },
-}));
 
 const pageOf = (page: number, rows: string[] = ['a']): PageResult<string> => ({
   rows,
@@ -18,7 +13,7 @@ const pageOf = (page: number, rows: string[] = ['a']): PageResult<string> => ({
 describe('useListPage', () => {
   it('マウント時に 0 ページ目を取得し pageResult と isLoading を管理する', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page, ['a', 'b']));
-    const { result } = renderHook(() => useListPage(fetcher, '取得失敗'));
+    const { result } = renderHook(() => useListPage(fetcher));
 
     expect(result.current.isLoading).toBe(true);
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -29,7 +24,7 @@ describe('useListPage', () => {
 
   it('onPageChange は指定ページで再取得する', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
-    const { result } = renderHook(() => useListPage(fetcher, '取得失敗'));
+    const { result } = renderHook(() => useListPage(fetcher));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
@@ -42,7 +37,7 @@ describe('useListPage', () => {
 
   it('reload は現在のページのまま再取得する', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
-    const { result } = renderHook(() => useListPage(fetcher, '取得失敗'));
+    const { result } = renderHook(() => useListPage(fetcher));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
@@ -59,7 +54,7 @@ describe('useListPage', () => {
 
   it('search は現在ページに関わらず 0 ページ目へ戻して再取得する', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
-    const { result } = renderHook(() => useListPage(fetcher, '取得失敗'));
+    const { result } = renderHook(() => useListPage(fetcher));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
@@ -77,14 +72,14 @@ describe('useListPage', () => {
 
   it('初回取得には初期条件を使う', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
-    renderHook(() => useListPage<string, string>(fetcher, '取得失敗', 'あ'));
+    renderHook(() => useListPage<string, string>(fetcher, 'あ'));
 
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith(0, 'あ'));
   });
 
   it('search に渡した条件はページ送り・再取得にも引き継がれる', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
-    const { result } = renderHook(() => useListPage<string, string>(fetcher, '取得失敗', ''));
+    const { result } = renderHook(() => useListPage<string, string>(fetcher, ''));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
@@ -107,7 +102,7 @@ describe('useListPage', () => {
   it('search の関数形は適用済み条件を基にした差分更新で取得する', async () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
     const { result } = renderHook(() =>
-      useListPage<string, { term: string; storeId?: number }>(fetcher, '取得失敗', { term: '' })
+      useListPage<string, { term: string; storeId?: number }>(fetcher, { term: '' })
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -128,7 +123,7 @@ describe('useListPage', () => {
     const fetcher = jest.fn(async (page: number) => pageOf(page));
     const { result } = renderHook(() => {
       const [term, setTerm] = useState('');
-      const list = useListPage<string, string>(fetcher, '取得失敗', '');
+      const list = useListPage<string, string>(fetcher, '');
       return { list, term, setTerm };
     });
     await waitFor(() => expect(result.current.list.isLoading).toBe(false));
@@ -146,7 +141,7 @@ describe('useListPage', () => {
     const fetcher = jest.fn(
       () => new Promise<PageResult<string>>(resolve => resolvers.push(resolve))
     );
-    const { result } = renderHook(() => useListPage(fetcher, '取得失敗'));
+    const { result } = renderHook(() => useListPage(fetcher));
 
     act(() => {
       void result.current.onPageChange(1);
@@ -162,31 +157,101 @@ describe('useListPage', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('アンマウント後に失敗したリクエストはトーストを出さない', async () => {
-    let rejectRequest!: (reason?: unknown) => void;
-    const fetcher = () =>
-      new Promise<PageResult<string>>((_, reject) => {
-        rejectRequest = reject;
-      });
-    const { unmount } = renderHook(() => useListPage(fetcher, '取得失敗'));
+  it('古いリクエストの遅延失敗は新しい結果を消さない', async () => {
+    // 失敗が rows を空にするようになったため、守衛を落とすと在途の古い失敗が
+    // 新しく届いたページを丸ごと消し、領域をエラー態へ倒してしまう
+    const settlers: Array<{
+      resolve: (value: PageResult<string>) => void;
+      reject: (reason?: unknown) => void;
+    }> = [];
+    const fetcher = jest.fn(
+      () => new Promise<PageResult<string>>((resolve, reject) => settlers.push({ resolve, reject }))
+    );
+    const { result } = renderHook(() => useListPage(fetcher));
 
-    unmount();
+    act(() => {
+      void result.current.onPageChange(1);
+    });
     await act(async () => {
-      rejectRequest(new Error('boom'));
+      settlers[1].resolve(pageOf(1, ['newer']));
+    });
+    await act(async () => {
+      settlers[0].reject(new Error('boom'));
     });
 
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(result.current.rows).toEqual(['newer']);
+    expect(result.current.failed).toBe(false);
   });
 
-  it('失敗時はトーストを出し loading を解除する', async () => {
-    const { result } = renderHook(() =>
-      useListPage(async () => {
-        throw new Error('boom');
-      }, '取得失敗')
-    );
+  it('失敗時は failed を立てて行と現在ページを起点へ戻す', async () => {
+    // 古い行を残すと「読めなかった」が「これが最新」に化ける
+    let succeed = true;
+    const fetcher = jest.fn(async (page: number) => {
+      if (!succeed) throw new Error('boom');
+      return pageOf(page);
+    });
+    const { result } = renderHook(() => useListPage(fetcher));
+    await act(async () => {
+      await result.current.onPageChange(2);
+    });
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(toast.error).toHaveBeenCalledWith('取得失敗');
+    succeed = false;
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.failed).toBe(true);
     expect(result.current.rows).toEqual([]);
+    expect(result.current.page).toBe(0);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('失敗後の再取得は 1 ページ目から取り直す', async () => {
+    // 失敗したページから再開すると、21〜40 行目だけが返る欠番だらけの一覧になる
+    let succeed = true;
+    const fetcher = jest.fn(async (page: number) => {
+      if (!succeed) throw new Error('boom');
+      return pageOf(page);
+    });
+    const { result } = renderHook(() => useListPage(fetcher));
+    await act(async () => {
+      await result.current.onPageChange(2);
+    });
+
+    succeed = false;
+    await act(async () => {
+      await result.current.reload();
+    });
+    succeed = true;
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(fetcher).toHaveBeenLastCalledWith(0, undefined);
+    expect(result.current.failed).toBe(false);
+  });
+
+  it('失敗しても適用済みの検索条件は保つ', async () => {
+    // 起点へ戻すのは位置であって、利用者が適用した絞り込みではない
+    let succeed = true;
+    const fetcher = jest.fn(async (page: number) => {
+      if (!succeed) throw new Error('boom');
+      return pageOf(page);
+    });
+    const { result } = renderHook(() => useListPage<string, string>(fetcher, ''));
+    await act(async () => {
+      await result.current.search('やまだ');
+    });
+
+    succeed = false;
+    await act(async () => {
+      await result.current.reload();
+    });
+    succeed = true;
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(fetcher).toHaveBeenLastCalledWith(0, 'やまだ');
   });
 });
