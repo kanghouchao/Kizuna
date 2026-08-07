@@ -50,7 +50,6 @@ export default function CustomersPage() {
         rank: criteria.rank || undefined,
         classification: criteria.classification || undefined,
       }),
-    '顧客一覧の取得に失敗しました',
     { search: '', rank: '', classification: '' }
   );
   const customers = list.rows;
@@ -111,6 +110,8 @@ export default function CustomersPage() {
         }}
         state={list}
         emptyMessage="顧客が登録されていません"
+        errorMessage="顧客一覧の取得に失敗しました"
+        onRetry={list.reload}
       >
         <Table>
           <TableHeader>

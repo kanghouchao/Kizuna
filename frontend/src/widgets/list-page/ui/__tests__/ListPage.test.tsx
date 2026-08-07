@@ -7,6 +7,7 @@ const baseState = (override: Partial<ListPageState> = {}): ListPageState => ({
   pageCount: 1,
   total: 2,
   isLoading: false,
+  failed: false,
   onPageChange: jest.fn(),
   ...override,
 });
@@ -16,7 +17,13 @@ describe('ListPage', () => {
   // この 1 本が唯一のアンカーになる
   it('外枠は space-y-6、テーブルカードは py-0 overflow-hidden であること', () => {
     const { container } = render(
-      <ListPage title="顧客管理" state={baseState()} emptyMessage="empty">
+      <ListPage
+        title="顧客管理"
+        state={baseState()}
+        emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
+      >
         <div>table-content</div>
       </ListPage>
     );
@@ -33,6 +40,8 @@ describe('ListPage', () => {
         actions={<button type="button">新規顧客登録</button>}
         state={baseState()}
         emptyMessage="顧客が登録されていません"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table</div>
       </ListPage>
@@ -49,6 +58,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ isLoading: true, rows: [] })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -60,7 +71,13 @@ describe('ListPage', () => {
 
   it('rows が空なら emptyMessage を表示すること', () => {
     render(
-      <ListPage title="顧客管理" state={baseState({ rows: [], total: 0 })} emptyMessage="empty">
+      <ListPage
+        title="顧客管理"
+        state={baseState({ rows: [], total: 0 })}
+        emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
+      >
         <div>table-content</div>
       </ListPage>
     );
@@ -69,9 +86,38 @@ describe('ListPage', () => {
     expect(screen.queryByText('table-content')).not.toBeInTheDocument();
   });
 
+  it('failed なら emptyMessage ではなく領域エラー態を描き、再試行が再取得を呼ぶこと', () => {
+    // 空表示より先に見ないと、読めなかった一覧が「登録されていません」を名乗る
+    const onRetry = jest.fn();
+    render(
+      <ListPage
+        title="顧客管理"
+        state={baseState({ rows: [], total: 0, failed: true })}
+        emptyMessage="顧客が登録されていません"
+        errorMessage="顧客一覧の取得に失敗しました"
+        onRetry={onRetry}
+      >
+        <div>table-content</div>
+      </ListPage>
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('顧客一覧の取得に失敗しました');
+    expect(screen.queryByText('顧客が登録されていません')).not.toBeInTheDocument();
+    expect(screen.queryByText('table-content')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it('rows があれば children をそのまま描くこと', () => {
     render(
-      <ListPage title="顧客管理" state={baseState()} emptyMessage="empty">
+      <ListPage
+        title="顧客管理"
+        state={baseState()}
+        emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
+      >
         <div>table-content</div>
       </ListPage>
     );
@@ -82,7 +128,13 @@ describe('ListPage', () => {
 
   it('pageCount が 1 以下ならページネーションを描かないこと', () => {
     render(
-      <ListPage title="顧客管理" state={baseState({ pageCount: 1 })} emptyMessage="empty">
+      <ListPage
+        title="顧客管理"
+        state={baseState({ pageCount: 1 })}
+        emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
+      >
         <div>table-content</div>
       </ListPage>
     );
@@ -94,8 +146,10 @@ describe('ListPage', () => {
     render(
       <ListPage
         title="スタッフ管理"
-        state={{ rows: ['a', 'b'], isLoading: false }}
+        state={{ rows: ['a', 'b'], isLoading: false, failed: false }}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -111,6 +165,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ page: 0, pageCount: 3, total: 21, rows: Array(10).fill('x') })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -129,6 +185,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ page: 1, pageCount: 3, total: 25, rows: Array(10).fill('x') })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -143,6 +201,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ page: 2, pageCount: 3, total: 25, rows: Array(5).fill('x') })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -164,6 +224,8 @@ describe('ListPage', () => {
           onPageChange,
         })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -181,6 +243,8 @@ describe('ListPage', () => {
         search={{ content: <input aria-label="検索" />, onSearch }}
         state={baseState()}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -195,7 +259,13 @@ describe('ListPage', () => {
 
   it('search を渡さなければフォームを描かないこと', () => {
     const { container } = render(
-      <ListPage title="顧客管理" state={baseState()} emptyMessage="empty">
+      <ListPage
+        title="顧客管理"
+        state={baseState()}
+        emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
+      >
         <div>table-content</div>
       </ListPage>
     );
@@ -209,6 +279,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ page: 2, pageCount: 3, total: 25, rows: [] })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -226,6 +298,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ page: 1, pageCount: 1, total: 10, rows: [], onPageChange })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -244,6 +318,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ page: 0, pageCount: 3, total: 21, rows: Array(10).fill('x') })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -265,6 +341,8 @@ describe('ListPage', () => {
           onPageChange,
         })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>
@@ -279,6 +357,8 @@ describe('ListPage', () => {
         title="顧客管理"
         state={baseState({ page: 1, pageCount: 3, total: 21, rows: Array(10).fill('x') })}
         emptyMessage="empty"
+        errorMessage="一覧の取得に失敗しました"
+        onRetry={jest.fn()}
       >
         <div>table-content</div>
       </ListPage>

@@ -15,6 +15,7 @@ import {
   Badge,
   Button,
   Input,
+  RegionError,
   Select,
   SelectContent,
   SelectItem,
@@ -54,7 +55,6 @@ export default function StaffPage() {
         search: criteria.search || undefined,
         storeId: criteria.storeId,
       }),
-    'スタッフ一覧の取得に失敗しました',
     { search: '' }
   );
   const staff = list.rows;
@@ -62,8 +62,9 @@ export default function StaffPage() {
   const {
     items: stores,
     isLoading: storesLoading,
+    failed: storesFailed,
     refetch: refetchStores,
-  } = useManagedList<PlatformStore>(() => platformAuthApi.stores(), '店舗一覧の取得に失敗しました');
+  } = useManagedList<PlatformStore>(() => platformAuthApi.stores());
 
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
@@ -74,8 +75,8 @@ export default function StaffPage() {
 
   // モーダルを開くたびに目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
   // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
-  // 確定する時序では、settle 後の空を検知して 1 回だけ取り直す（失敗が続く環境で無限に
-  // 叩かない — それ以降の回復は StoreSetPicker の再読み込み導線が担う）。
+  // 確定する時序では、settle 後の失敗を検知して 1 回だけ取り直す（失敗が続く環境で無限に
+  // 叩かない — それ以降の回復は StoreSetPicker の再試行導線が担う）。
   const modalOpen = createOpen || editingStaff !== null;
   const prevModalOpenRef = useRef(false);
   const storesRetriedRef = useRef(false);
@@ -84,31 +85,32 @@ export default function StaffPage() {
     prevModalOpenRef.current = modalOpen;
     if (justOpened) {
       if (storesLoading) {
-        // まだ読み込み中: settle 後の空にそなえて自動再試行の権利を残す
+        // まだ読み込み中: settle 後の失敗にそなえて自動再試行の権利を残す
         storesRetriedRef.current = false;
       } else {
-        // 開幕の取り直し自体を 1 回目と数え、直後に空で settle しても連打しない
+        // 開幕の取り直し自体を 1 回目と数え、直後に失敗で settle しても連打しない
         storesRetriedRef.current = true;
         void refetchStores();
       }
       return;
     }
-    if (modalOpen && !storesLoading && stores.length === 0 && !storesRetriedRef.current) {
+    if (modalOpen && !storesLoading && storesFailed && !storesRetriedRef.current) {
       storesRetriedRef.current = true;
       void refetchStores();
     }
-  }, [modalOpen, storesLoading, stores.length, refetchStores]);
+  }, [modalOpen, storesLoading, storesFailed, refetchStores]);
 
   // 取り直した目録から選択中の店舗が消えたら（他管理者の削除）、トリガー表示が空白のまま
   // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す。
-  // 取得失敗は既存目録を保つ（useManagedList）ので、失敗でここが誤発火することはない。
+  // 取得失敗は目録を空にするため、失敗を除かないと 1 回の通信エラーが利用者の絞り込みを
+  // 黙って解除してしまう（「消えた」と「読めなかった」は別物で、後者は目録の事実ではない）。
   // 背景処理のため入力欄の下書き（searchTerm）は読まず、適用済み条件から店舗だけを外す。
   useEffect(() => {
-    if (storeFilter === ALL_STORES || storesLoading) return;
+    if (storeFilter === ALL_STORES || storesLoading || storesFailed) return;
     if (stores.some(store => String(store.id) === storeFilter)) return;
     setStoreFilter(ALL_STORES);
     void list.search(prev => ({ ...prev, storeId: undefined }));
-  }, [stores, storesLoading, storeFilter, list]);
+  }, [stores, storesLoading, storesFailed, storeFilter, list]);
 
   // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
   const storeFilterOptions = [
@@ -193,6 +195,14 @@ export default function StaffPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {/* 目録が読めないと引き金は店舗名を引けず id を出す。黙って劣化させず、
+                  選択肢の領域として自分の失敗を名乗る（絞り込み自体は解除しない） */}
+              {storesFailed && (
+                <RegionError
+                  message="店舗一覧の取得に失敗しました"
+                  onRetry={() => void refetchStores()}
+                />
+              )}
               <Button type="submit">検索</Button>
               {searchTerm && (
                 <Button
@@ -216,6 +226,8 @@ export default function StaffPage() {
             ? '該当するスタッフが見つかりません'
             : 'スタッフが登録されていません'
         }
+        errorMessage="スタッフ一覧の取得に失敗しました"
+        onRetry={list.reload}
       >
         <Table>
           <TableHeader>
@@ -274,6 +286,7 @@ export default function StaffPage() {
         <StaffCreateModal
           stores={stores}
           storesLoading={storesLoading}
+          storesFailed={storesFailed}
           onReloadStores={() => void refetchStores()}
           onClose={() => setCreateOpen(false)}
           onCreated={list.reload}
@@ -284,6 +297,7 @@ export default function StaffPage() {
           staff={editingStaff}
           stores={stores}
           storesLoading={storesLoading}
+          storesFailed={storesFailed}
           onReloadStores={() => void refetchStores()}
           onClose={() => setEditingStaff(null)}
           onUpdated={handleEditUpdated}

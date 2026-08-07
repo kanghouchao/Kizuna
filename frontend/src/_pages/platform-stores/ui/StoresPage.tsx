@@ -31,7 +31,6 @@ export default function StoresPage() {
         size: PAGE_SIZE,
         search: search || undefined,
       }),
-    '店舗一覧の読み込みに失敗しました',
     ''
   );
   const stores = list.rows;
@@ -103,6 +102,8 @@ export default function StoresPage() {
             </div>
           </>
         }
+        errorMessage="店舗一覧の読み込みに失敗しました"
+        onRetry={list.reload}
       >
         <Table>
           <TableHeader>

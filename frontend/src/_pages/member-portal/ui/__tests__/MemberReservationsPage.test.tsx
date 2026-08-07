@@ -87,17 +87,23 @@ describe('MemberReservationsPage', () => {
     expect(mockedList).toHaveBeenCalledTimes(1);
   });
 
-  it('取得に失敗したらエラーメッセージを表示する', async () => {
-    mockedList.mockRejectedValue(new Error('failed'));
+  it('取得に失敗したら領域エラー態を出し、再試行で復帰できる', async () => {
+    mockedList.mockRejectedValueOnce(new Error('failed'));
+    mockedList.mockImplementation(cursorServer(1));
 
     render(<MemberReservationsPage />);
 
-    expect(
-      await screen.findByText('予約を取得できませんでした。再読み込みしてください。')
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('予約を取得できませんでした。');
+    expect(screen.queryByText('予約はまだありません。')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('店舗0')).toBeInTheDocument();
   });
 
-  it('追加読み込みに失敗しても既に読み込んだ予約は消さず、その続きだけ再試行できる', async () => {
+  it('追加読み込みに失敗したら領域ごとエラー態になり、再試行は先頭から取り直す', async () => {
+    // 古い行を残すと、読めなかった一覧に前回の内容が居座って「これが最新」に見える。
+    // 途中の位置から再開すると、1〜20 件目を欠いた 21 件目以降だけが返る。
     const server = cursorServer(25);
     mockedList.mockImplementation(server);
 
@@ -110,23 +116,21 @@ describe('MemberReservationsPage', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
 
-    expect(
-      await screen.findByText('予約を追加で取得できませんでした。表示は前回の取得内容です。')
-    ).toBeInTheDocument();
-    // 全体を失敗表示に置き換えない — 既に読み込めていた予約は取り下げられるままにする
-    expect(screen.getByText('店舗0')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(20);
-    expect(
-      screen.queryByText('予約を取得できませんでした。再読み込みしてください。')
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('予約を取得できませんでした。');
+    // 表示中だった予約も消える — 領域は丸ごとエラー態になる
+    expect(screen.queryByText('店舗0')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: '取り下げる' })).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'もっと見る' })).not.toBeInTheDocument();
 
     mockedList.mockImplementation(server);
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
-    // 失敗した続きと同じ位置から取り直す（続きの位置を進めていない）
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ cursor: '20', size: 20 }));
+    // 位置も起点へ戻っているので、取り直しは先頭から
     await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(25)
+      expect(mockedList).toHaveBeenLastCalledWith({ cursor: undefined, size: 20 })
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(20)
     );
   });
 

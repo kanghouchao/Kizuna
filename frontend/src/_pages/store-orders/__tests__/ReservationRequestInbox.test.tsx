@@ -175,10 +175,10 @@ describe('ReservationRequestInbox', () => {
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
 
-    expect(await screen.findByText('予約申請を取得できませんでした。')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('予約申請を取得できませんでした。');
     expect(screen.queryByText('未確定の予約申請はありません')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByText('2026-08-10')).toBeInTheDocument();
   });
@@ -190,10 +190,10 @@ describe('ReservationRequestInbox', () => {
 
     render(<ReservationRequestInbox onProcessed={jest.fn()} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '再読み込み' }));
+    fireEvent.click(await screen.findByRole('button', { name: '再試行' }));
 
     expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
-    expect(screen.queryByText('予約申請を取得できませんでした。')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('どこまで広げても 1 回の取得件数は上限のまま', async () => {
@@ -258,7 +258,9 @@ describe('ReservationRequestInbox', () => {
     expect(screen.getByRole('button', { name: 'もっと見る' })).toBeInTheDocument();
   });
 
-  it('追加読み込みに失敗しても既に読み込んだ申請は消さず、その続きだけ再試行できる', async () => {
+  it('追加読み込みに失敗したら領域ごとエラー態になり、再試行は先頭から取り直す', async () => {
+    // 古い行を残すと、読めなかった一覧に前回の内容が居座って「これが最新」に見える。
+    // 途中の位置から再開すると、1〜20 件目を欠いた 21 件目以降だけが返る。
     const server = cursorServer(25);
     mockedList.mockImplementation(server);
 
@@ -271,17 +273,18 @@ describe('ReservationRequestInbox', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
 
-    expect(
-      await screen.findByText('予約申請を取得できませんでした。表示は前回の取得内容です。')
-    ).toBeInTheDocument();
-    // 見えていた未処理の申請が消えない
-    expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(20);
+    expect(await screen.findByRole('alert')).toHaveTextContent('予約申請を取得できませんでした。');
+    // 表示中だった申請も消える — 領域は丸ごとエラー態になる
+    expect(screen.queryAllByRole('button', { name: '確定' })).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'もっと見る' })).not.toBeInTheDocument();
 
     mockedList.mockImplementation(server);
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
-    // 失敗した続きと同じ位置から取り直す（続きの位置を進めていない）
-    await waitFor(() => expect(mockedList).toHaveBeenCalledWith({ cursor: '20', size: 20 }));
-    await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(25));
+    // 位置も起点へ戻っているので、取り直しは先頭から
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith({ cursor: undefined, size: 20 })
+    );
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '確定' })).toHaveLength(20));
   });
 });

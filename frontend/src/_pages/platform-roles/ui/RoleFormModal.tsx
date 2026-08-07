@@ -25,6 +25,7 @@ import {
   FormMessage,
   Input,
   Label,
+  RegionError,
 } from '@/shared/ui';
 
 interface RoleFormValues {
@@ -92,10 +93,12 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
   const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
   // 初回の詳細取得に失敗したときの再試行導線用。閉じて開き直す以外の回復手段を残す。
   const [detailLoadFailed, setDetailLoadFailed] = useState(false);
-  const { items: catalog, isLoading: catalogLoading } = useManagedList<PermissionResponse>(
-    () => platformRoleApi.permissions(),
-    '権限目録の取得に失敗しました'
-  );
+  const {
+    items: catalog,
+    isLoading: catalogLoading,
+    failed: catalogFailed,
+    refetch: refetchCatalog,
+  } = useManagedList<PermissionResponse>(() => platformRoleApi.permissions());
 
   // 再試行の連打などで取得が並行しても、最新のリクエストだけがフォームを更新する
   const requestIdRef = useRef(0);
@@ -261,6 +264,12 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
                           {catalogLoading || editingLoading ? (
                             // 詳細の到着前に選ばせると、到着時の reset が選択を黙って上書きする
                             <p className="text-sm text-muted-foreground">読み込み中...</p>
+                          ) : catalogFailed ? (
+                            // 空の組は「権限が 1 つも無い」に見える。読めなかったことを名乗る
+                            <RegionError
+                              message="権限目録の取得に失敗しました"
+                              onRetry={() => void refetchCatalog()}
+                            />
                           ) : (
                             groups.map(group => {
                               return (

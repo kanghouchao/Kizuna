@@ -24,11 +24,9 @@ export default function RolesPage() {
   const {
     items: allRoles,
     isLoading,
+    failed,
     refetch,
-  } = useManagedList<RoleSummaryResponse>(
-    () => platformRoleApi.list(),
-    'ロール一覧の取得に失敗しました'
-  );
+  } = useManagedList<RoleSummaryResponse>(() => platformRoleApi.list());
   const [searchTerm, setSearchTerm] = useState('');
   // ロールは定義数が限られ、GET /platform/roles も全量を返す（付与 UI のロール目録が同じ端点を
   // 使うため分頁できない）。絞り込みは取得済みの配列に対して行い、送信で確定させる。
@@ -93,10 +91,12 @@ export default function RolesPage() {
             </>
           ),
         }}
-        state={{ rows: roles, isLoading }}
+        state={{ rows: roles, isLoading, failed }}
         emptyMessage={
           appliedSearch ? '該当するロールが見つかりません' : 'ロールが登録されていません'
         }
+        errorMessage="ロール一覧の取得に失敗しました"
+        onRetry={refetch}
       >
         <Table>
           <TableHeader>

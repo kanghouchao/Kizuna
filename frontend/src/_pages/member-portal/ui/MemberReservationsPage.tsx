@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { MEMBER_ORDER_STATUS_LABELS, MemberOrder, memberOrderApi } from '@/entities/order';
 import { useCursorList } from '@/shared/lib';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/shared/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
 
 /** 予約の状態バッジ。確定前だけが取り下げ可能なので、申請中を強調する。 */
 function StatusBadge({ status }: { status: MemberOrder['status'] }) {
@@ -37,8 +37,8 @@ export function MemberReservationsPage() {
     setRows: setReservations,
     isLoading: loading,
     failed,
-    loadMoreFailed,
     hasMore,
+    reload,
     loadMore,
   } = useCursorList<MemberOrder>(cursor => memberOrderApi.list({ cursor, size: PAGE_SIZE }));
 
@@ -69,9 +69,7 @@ export function MemberReservationsPage() {
         </CardHeader>
         <CardContent>
           {failed ? (
-            <p className="text-sm text-destructive-strong">
-              予約を取得できませんでした。再読み込みしてください。
-            </p>
+            <RegionError message="予約を取得できませんでした。" onRetry={reload} />
           ) : loading && reservations.length === 0 ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : reservations.length === 0 ? (
@@ -111,25 +109,7 @@ export function MemberReservationsPage() {
               ))}
             </ul>
           )}
-          {/* 追加読み込みの失敗は、失敗した拡張だけを再試行できる形で出す。全体を失敗表示に
-              置き換えると、すでに読み込めていた予約（取り下げられるもの）まで消えてしまう。 */}
-          {loadMoreFailed && (
-            <div className="mt-4 space-y-2">
-              <p className="text-sm text-destructive-strong">
-                予約を追加で取得できませんでした。表示は前回の取得内容です。
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={loadMore}
-                disabled={loading}
-              >
-                再試行
-              </Button>
-            </div>
-          )}
-          {hasMore && !loadMoreFailed && (
+          {hasMore && (
             <Button
               type="button"
               variant="outline"

@@ -24,11 +24,9 @@ export default function CastFieldsPage() {
   const {
     items: definitions,
     isLoading,
+    failed,
     refetch,
-  } = useManagedList<CastFieldDefinitionResponse>(
-    () => castFieldDefinitionApi.list(),
-    'フィールド定義一覧の取得に失敗しました'
-  );
+  } = useManagedList<CastFieldDefinitionResponse>(() => castFieldDefinitionApi.list());
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CastFieldDefinitionResponse | null>(null);
   const deletion = useDeleteAction<CastFieldDefinitionResponse>({
@@ -49,8 +47,10 @@ export default function CastFieldsPage() {
             フィールドを追加
           </Button>
         }
-        state={{ rows: definitions, isLoading }}
+        state={{ rows: definitions, isLoading, failed }}
         emptyMessage="フィールドが登録されていません"
+        errorMessage="フィールド定義一覧の取得に失敗しました"
+        onRetry={refetch}
       >
         <Table>
           <TableHeader>

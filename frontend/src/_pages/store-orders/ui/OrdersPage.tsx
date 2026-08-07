@@ -31,8 +31,7 @@ export default function OrderListPage() {
   const list = useListPage(
     // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
     // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
-    page => orderApi.list({ page, size: PAGE_SIZE, sort: 'createdAt,id,desc' }),
-    'オーダーの取得に失敗しました'
+    page => orderApi.list({ page, size: PAGE_SIZE, sort: 'createdAt,id,desc' })
   );
   const orders = list.rows;
 
@@ -59,6 +58,8 @@ export default function OrderListPage() {
         }
         state={list}
         emptyMessage="オーダーがありません"
+        errorMessage="オーダーの取得に失敗しました"
+        onRetry={list.reload}
       >
         <Table>
           <TableHeader>
