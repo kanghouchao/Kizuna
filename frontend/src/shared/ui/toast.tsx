@@ -59,10 +59,19 @@ function ToastContent({ className, ...props }: ToastPrimitive.Content.Props) {
   );
 }
 
+/**
+ * 通知の文言。`Toast.Root` はこれを `aria-labelledby` で指すので、支援技術へ届く名前は
+ * ここに入れるしかない——`Description` へ回すと dialog が名前を持たないまま出る。
+ *
+ * ただし既定の描画要素は `<h2>` で、そのままだと通知の文言がページの見出し階層へ紛れ込む
+ * （見出し送りで「保存に失敗しました」が節見出しとして拾われる）。通知はページの節ではない
+ * ので `<span>` へ倒す。id は render 先へ載るため、名前の紐付けは保たれる。
+ */
 function ToastTitle({ className, ...props }: ToastPrimitive.Title.Props) {
   return (
     <ToastPrimitive.Title
       data-slot="toast-title"
+      render={<span />}
       className={cn('min-w-0 flex-1 text-sm font-medium', className)}
       {...props}
     />
@@ -76,9 +85,13 @@ function ToastClose({ className, ...props }: ToastPrimitive.Close.Props) {
       aria-label="通知を閉じる"
       className={cn(
         // 共有の Button を被せない。ghost の hover は `bg-accent` を塗るが、これは段の
-        // 配色の上に乗る対として測っていない。色を持たず currentColor と不透明度だけで
-        // 出せば、どの段でも本文と同じ certified な対に留まる。
-        'shrink-0 rounded-md p-1 opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        // 配色の上に乗る対として測っていない。素の currentColor なら、どの段でも本文と
+        // 同じ certified な対に留まる。
+        //
+        // 不透明度も持たせない。下げた分だけ地の色と合成され、certified な対から外れる
+        // ——実測で明モードの error が 4.57 → 2.64 と図形閾 3:1 を割る。休止状態が見え
+        // にくいのを hover で補う形は、そもそも見つける前の状態を直していない。
+        'shrink-0 rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
         className
       )}
       {...props}

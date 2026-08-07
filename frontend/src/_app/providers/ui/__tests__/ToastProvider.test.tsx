@@ -22,6 +22,15 @@ describe('ToastProvider', () => {
     expect(toast).toHaveTextContent('警告：他の担当者が先に更新しました');
   });
 
+  it('文言は dialog の名前になるが、ページの見出し階層には入らない', () => {
+    const toast = show(() => notify.error('保存に失敗しました'));
+
+    // 名前は届く（`aria-labelledby` の指す先が文言）。
+    expect(toast).toHaveAccessibleName('保存に失敗しました');
+    // それでいて見出しではない——通知はページの節ではないため。
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+  });
+
   it('段の記号は潰れ防止の shrink-0 を持つ', () => {
     const toast = show(() => notify.error('保存に失敗しました'));
 
