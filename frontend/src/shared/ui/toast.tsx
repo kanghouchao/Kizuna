@@ -13,7 +13,9 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
         // 通知は積み重ねず素直な縦並びで出す。ライブラリの見本はカードを重ねる演出のため
         // Root を絶対配置して `--toast-index` から変形を組むが、こちらの規範は一覧表示。
         // 通常フローに置けば `--toast-offset-y` 等を使わずに済み、段数の計算が要らない。
-        'pointer-events-none fixed inset-x-4 top-4 z-50 mx-auto flex w-auto max-w-sm flex-col items-stretch gap-2 outline-none',
+        // items-center で幅を内容に合わせる。伸ばすと短い一文でも常に最大幅の帯になり、
+        // 通知の重さが文の長さではなく枠の大きさで伝わってしまう。
+        'pointer-events-none fixed inset-x-4 top-4 z-50 mx-auto flex w-auto max-w-sm flex-col items-center gap-2 outline-none',
         className
       )}
       {...props}
@@ -29,7 +31,7 @@ function Toast({ className, ...props }: ToastPrimitive.Root.Props) {
       // 引き下ろす動きになってしまう。
       swipeDirection="up"
       className={cn(
-        'pointer-events-auto rounded-[10px] p-4 shadow-lg outline-none select-none',
+        'pointer-events-auto max-w-full rounded-[10px] p-4 shadow-lg outline-none select-none',
         'focus-visible:ring-[3px] focus-visible:ring-ring/50',
         // 段ごとの配色。いずれも既に測ってある組み合わせで、新しい対を作らない。
         // 型を持たない通知は基底の対（card）に落ちる。
