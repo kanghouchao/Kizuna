@@ -6,7 +6,8 @@ const clearPlatformSessionMock = jest.fn();
 const rememberMemberReturnPathMock = jest.fn();
 let platformConsoleValue: string | undefined;
 jest.mock('@/shared/lib', () => ({
-  redirectToLogin: () => redirectMock(),
+  // 引数をそのまま渡す。握り潰すと理由コードが未配線でもテストが緑のままになる。
+  redirectToLogin: (reason?: string) => redirectMock(reason),
   clearPlatformSession: () => clearPlatformSessionMock(),
   rememberMemberReturnPath: (value: string) => rememberMemberReturnPathMock(value),
   getPlatformConsole: () => platformConsoleValue,
@@ -60,7 +61,8 @@ describe('apiClient 401/403 interceptor', () => {
 
     expect(removeSpy).toHaveBeenCalledWith('token');
     // assert that our navigation helper was called (no real navigation in jsdom)
-    expect(redirectMock).toHaveBeenCalled();
+    // 何も言わずに送り返すと、締め出されたのか自分が何かしたのか分からないまま再入力になる。
+    expect(redirectMock).toHaveBeenCalledWith('expired');
   });
 
   it('401 でログインへ差し戻す前に、会員ポータルの現在地を戻り先として覚える', async () => {
@@ -95,7 +97,8 @@ describe('apiClient 401/403 interceptor', () => {
 
     expect(removeSpy).toHaveBeenCalledWith('token');
     expect(clearPlatformSessionMock).toHaveBeenCalled();
-    expect(redirectMock).toHaveBeenCalled();
+    // 401 と同じ理由コード。こちらのトークンは期限内で、古いのは cookie の形式である。
+    expect(redirectMock).toHaveBeenCalledWith('expired');
   });
 
   it('does nothing on 403 when the platform-role cookie holds a console value (正当な権限不足はセッションを壊さない)', async () => {

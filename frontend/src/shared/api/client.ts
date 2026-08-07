@@ -87,7 +87,7 @@ apiClient.interceptors.response.use(
         // 会員ポータルの現在地（店舗つき）を覚えないと、ログイン後の戻り先を失う。
         // 白名単の外（店舗コンソール等）は rememberMemberReturnPath が黙って捨てる。
         rememberMemberReturnPath(`${window.location.pathname}${window.location.search}`);
-        redirectToLogin();
+        redirectToLogin('expired');
       }
     }
     if (error.response?.status === 403) {
@@ -106,7 +106,7 @@ apiClient.interceptors.response.use(
         Cookies.remove('token');
         clearPlatformSession();
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          redirectToLogin();
+          redirectToLogin('expired');
         }
       }
     }

@@ -94,7 +94,7 @@ export function Header() {
               {/* 原語の destructive 変種は淡色地の上で既定の赤を使い明モードで 4.5 を割るため、
                   文字は -strong 側を指定する。 */}
               <DropdownMenuItem
-                onClick={logout}
+                onClick={() => logout()}
                 className="text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong"
               >
                 ログアウト

@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { toast } from 'react-hot-toast';
 import { menuApi } from '@/entities/menu';
 import { useAuth, useStoreContext } from '@/entities/user';
 import { getPlatformStoreId, setPlatformStore } from '@/shared/lib';
@@ -15,14 +14,12 @@ jest.mock('@/shared/lib', () => ({
   getPlatformStoreId: jest.fn(),
   setPlatformStore: jest.fn(),
 }));
-jest.mock('react-hot-toast', () => ({ toast: { error: jest.fn() } }));
 
 const mockedMenuApi = menuApi as jest.Mocked<typeof menuApi>;
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
 const mockedGetStoreId = getPlatformStoreId as jest.MockedFunction<typeof getPlatformStoreId>;
 const mockedSetStore = setPlatformStore as jest.MockedFunction<typeof setPlatformStore>;
-const mockedToast = toast as jest.Mocked<typeof toast>;
 
 const logout = jest.fn();
 
@@ -126,33 +123,45 @@ describe('店舗コンソール入口', () => {
 
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/platform/dashboard'));
     expect(logout).not.toHaveBeenCalled();
-    expect(mockedToast.error).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('店舗コンソール資格はあるが授権店舗が 0 件なら fail-closed でログアウトする', async () => {
+  it('店舗コンソール資格はあるが授権店舗が 0 件なら、原地で行き止まりを名乗る', async () => {
     mockedUseStoreContext.mockReturnValue(storeContext({ stores: [], storeBridge: true }));
 
     render(<StoreEntryPage />);
 
-    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
-    expect(mockedToast.error).toHaveBeenCalledWith(
-      'アクセス可能な店舗がありません。管理者にお問い合わせください'
-    );
+    expect(
+      await screen.findByText('アクセス可能な店舗がありません。管理者にお問い合わせください')
+    ).toBeInTheDocument();
+    // 自動でログアウトすると遷移で画面ごと消え、説明は読まれないまま終わる
+    expect(logout).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('店舗スコープのメニュー項目が 1 つも無ければ fail-closed でログアウトする', async () => {
+  it('行き止まりのログアウトは利用者が押したときだけ走る', async () => {
+    mockedUseStoreContext.mockReturnValue(storeContext({ stores: [], storeBridge: true }));
+
+    render(<StoreEntryPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'ログアウト' }));
+
+    expect(logout).toHaveBeenCalledTimes(1);
+    // 自分で押したログアウトなので、着地するログイン画面は理由を名乗らない
+    expect(logout).toHaveBeenCalledWith();
+  });
+
+  it('店舗スコープのメニュー項目が 1 つも無ければ、原地で行き止まりを名乗る', async () => {
     mockedMenuApi.getMenus.mockResolvedValue([
       { name: 'メイン', items: [{ name: 'ダッシュボード', path: '/platform/dashboard' }] },
     ]);
 
     render(<StoreEntryPage />);
 
-    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
     // 店舗はあるので「店舗が無い」と言ってはいけない。管理者が直す先が授権ではなくロールの権限のため。
-    expect(mockedToast.error).toHaveBeenCalledWith(
-      'アクセスできる画面がありません。管理者にお問い合わせください'
-    );
+    expect(
+      await screen.findByText('アクセスできる画面がありません。管理者にお問い合わせください')
+    ).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

@@ -75,7 +75,7 @@ export function MemberHomePage() {
       <Button render={<Link href="/member/reservations/" />} className="mt-4 w-full">
         予約を見る
       </Button>
-      <Button type="button" variant="outline" onClick={logout} className="mt-6 w-full">
+      <Button type="button" variant="outline" onClick={() => logout()} className="mt-6 w-full">
         ログアウト
       </Button>
     </div>

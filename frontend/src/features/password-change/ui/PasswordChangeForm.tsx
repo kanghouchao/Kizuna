@@ -53,9 +53,10 @@ export function PasswordChangeForm() {
         current_password: values.current_password,
         new_password: values.new_password,
       });
-      toast.success('パスワードを変更しました。再度ログインしてください');
       setChanged(true);
-      logout();
+      // 成功の知らせは出さない。直後のログアウトでこの画面ごと破棄され、通知は読まれる前に消える。
+      // 代わりに理由コードを渡し、着地したログイン画面に名乗らせる。
+      logout('password-changed');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'パスワードの変更に失敗しました'));
     }

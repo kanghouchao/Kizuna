@@ -35,7 +35,7 @@ export function CastAccountPage() {
           <p className="mt-1 text-lg font-semibold text-foreground">
             {displayName ?? '読み込み中...'}
           </p>
-          <Button type="button" variant="outline" onClick={logout} className="mt-6 w-full">
+          <Button type="button" variant="outline" onClick={() => logout()} className="mt-6 w-full">
             ログアウト
           </Button>
         </CardContent>

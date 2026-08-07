@@ -15,6 +15,13 @@ describe('navigation helper', () => {
     expect(navMock).toHaveBeenCalledWith('/platform/login');
   });
 
+  it('理由を渡すと理由コードを載せたログイン画面へ送る', () => {
+    const navMock = jest.fn();
+    __setNavigatorForTests(navMock);
+    redirectToLogin('expired');
+    expect(navMock).toHaveBeenCalledWith('/platform/login?reason=expired');
+  });
+
   it('does not throw when provided navigator throws (caught)', () => {
     const badNav = jest.fn(() => {
       throw new Error('boom');
