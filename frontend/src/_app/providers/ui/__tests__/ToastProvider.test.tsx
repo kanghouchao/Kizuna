@@ -40,6 +40,26 @@ describe('ToastProvider', () => {
     expect(icon).toHaveClass('shrink-0');
   });
 
+  it('本体の焦点環は段の地の上へ内向きに描かれる', () => {
+    const toast = show(() => notify.error('保存に失敗しました'));
+
+    // <kbd>F6</kbd> のあと最初に焦点が載るのがこの本体。環は既定で外側＝下の画面の上に
+    // 描かれるので、内向きにしないと測れない色の上に乗る（機序は toast.tsx の注記が持つ）。
+    // 焦点の描画自体は jsdom では起きないため、指定を固定する。
+    expect(toast).toHaveClass('focus-visible:ring-inset', 'focus-visible:ring-current');
+  });
+
+  it('ビューポートは焦点の輪郭をブラウザ既定に委ねる', () => {
+    render(<ToastProvider />);
+    act(() => notify.error('保存に失敗しました'));
+
+    // 器は透明で、環が乗る地は下にある画面の中身＝書く時点では未知の色。自前の環を置けない
+    // ので二色で描かれるブラウザ既定に任せる。`outline-none` を足すと F6 が画面上で何も
+    // 起こさなくなり、キーが効いていないように見える。
+    const viewport = document.querySelector('[data-slot="toast-viewport"]');
+    expect(viewport).not.toHaveClass('outline-none');
+  });
+
   it('閉じるボタンで閉じられる——時間切れを待たずに済む唯一の手段', async () => {
     const toast = show(() => notify.error('保存に失敗しました'));
 

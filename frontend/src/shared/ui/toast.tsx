@@ -20,7 +20,13 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
         // 同値だと後から portal した方＝モーダルが勝ち、`error` の段が前提にしている
         // 「モーダルが開いたまま失敗を伝える」場面で、遮罩が文言を暗くし × への操作も
         // 奪う。前台の年齢確認（z-[9999]）より下なのは意図——あれは何にも覆われてはならない。
-        'pointer-events-none fixed inset-x-4 top-4 z-[60] mx-auto flex w-auto max-w-sm flex-col items-center gap-2 outline-none',
+        //
+        // ここだけ焦点の輪郭をブラウザ既定に任せる（`outline-none` を書かない）。<kbd>F6</kbd>
+        // が最初に焦点を移すのはこの器で、押しても何も変わらなければ効いたことが分からない。
+        // かといって自前の環は置けない——器自身は透明で、環が乗る地は下にある画面の中身、
+        // つまり書く時点では何色か分からない面になる。ブラウザ既定の輪郭は二色で描かれ、
+        // まさにその「地が分からない」場合のために設計されている。
+        'pointer-events-none fixed inset-x-4 top-4 z-[60] mx-auto flex w-auto max-w-sm flex-col items-center gap-2',
         className
       )}
       {...props}
@@ -37,7 +43,11 @@ function Toast({ className, ...props }: ToastPrimitive.Root.Props) {
       swipeDirection="up"
       className={cn(
         'pointer-events-auto max-w-full rounded-[10px] p-4 shadow-lg outline-none select-none',
-        'focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        // <kbd>F6</kbd> のあと最初に焦点が載るのはこの本体で、× はその次。だから環は ×
+        // と同じ答え——`currentColor` を内側へ。`ring` は既定で外側に描かれるため、内側へ
+        // 倒さないと環が乗る地はこの通知の下にある画面の中身になり、書く時点では何色か
+        // 分からない。内側なら段の地＝測定済みの対の上に乗る。
+        'focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-current',
         // 段ごとの配色。いずれも既に測ってある組み合わせで、新しい対を作らない。
         // 型を持たない通知は基底の対（card）に落ちる。
         'bg-card text-card-foreground',
