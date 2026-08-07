@@ -6,10 +6,16 @@ import { toastManager } from '@/shared/notify';
 import { Toaster } from '@/shared/ui';
 
 /**
- * 語義層へ移り切っていない呼び出しの姿。移行が終われば旧ライブラリごと消えるが、それまでは
- * 現役の通知がここを通るため、規範値との差は直しておく。テストから直接読めるよう公開する。
+ * **旧ライブラリ側**の姿。語義層へ移り切っていない呼び出しがまだ 100 箇所以上あり、それらは
+ * 全てここを通る——移行が終われば旧ライブラリごと消えるが、それまでは現役なので規範値との
+ * 差は直しておく。テストから直接読めるよう公開する。
+ *
+ * 段が二つしか無いのは移行の取りこぼしではなく、旧ライブラリの `ToastType` が閉じた union で
+ * `warning` を持ち得ないため。呼び出し側にも warning 段は一つも無い（第三段になる予定の
+ * 409 二箇所は、今はまだ error として出ている）。**新しい側の三段は対称で、その姿はこの
+ * ファイルではなく `shared/ui/toast.tsx` が `data-type` から引く。**
  */
-export const toastOptions: DefaultToastOptions = {
+export const legacyToastOptions: DefaultToastOptions = {
   duration: 4000,
   // 色は token class ではなくインライン style の CSS 変数で渡す。旧ライブラリが生成 class で
   // 背景を当てるため、class を重ねると勝敗がソース順に依存する。
@@ -43,7 +49,7 @@ export const toastOptions: DefaultToastOptions = {
 export function ToastProvider() {
   return (
     <>
-      <LegacyToaster position="top-center" toastOptions={toastOptions} />
+      <LegacyToaster position="top-center" toastOptions={legacyToastOptions} />
       <Toaster toastManager={toastManager} />
     </>
   );
