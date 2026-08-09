@@ -62,7 +62,7 @@ export default function ShiftsPage() {
   useEffect(() => {
     let ignore = false;
     setLoading(true);
-    // 取り直しの前に畳む（役割は上の setCastsFailed(false) と同じ）
+    // 取り直しの前に畳む。残したままだと、押した再試行が効いているのか分からない
     setShiftsFailed(false);
     shiftApi
       .list(range)

@@ -36,6 +36,11 @@ interface ResourceResult<T> {
  *
  * <p>失敗は failure で伝えるだけで、提示は行わない。取得に失敗した領域が自分で名乗るのか
  * 通知に出すのかは呼び出し側の場面が決めることで、フックの内側に隠れてはならない。
+ *
+ * <p>既知の限界：読み込み中の表示は 1 コミット遅れる。deps の変化と fetcher の有効化は
+ * どちらもそのレンダーを終えた効果で取得を始めるため、切り替わったフレームは取得前の姿
+ * （data 無し・isLoading false）で一度描かれる。常時 mount のモーダルを開いた最初のフレームが
+ * これに当たる。
  */
 export function useResource<T>(
   fetcher: (() => Promise<T>) | null,
