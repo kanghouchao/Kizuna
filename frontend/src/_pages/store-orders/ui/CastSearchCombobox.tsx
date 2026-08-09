@@ -26,6 +26,12 @@ interface CastSearchComboboxProps {
   /** FormControl が差し込む欄の状態。引き金は button で原生の制約を持てないため props で受ける。 */
   'aria-invalid'?: boolean;
   'aria-describedby'?: string;
+  /**
+   * 必須の指名かどうか。引き金へ aria-required として手で載せる。
+   * Combobox.Root の required は使えない——この構成は value を null に固定して選択を出来事としてだけ
+   * 受け取るため、Root 側の必須は永久に未充足のままになり、実測で送信そのものが通らなくなった。
+   */
+  required?: boolean;
 }
 
 /**
@@ -43,6 +49,7 @@ export function CastSearchCombobox({
   triggerRef,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedby,
+  required,
 }: CastSearchComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -132,6 +139,7 @@ export function CastSearchCombobox({
               ref={triggerRef}
               aria-invalid={ariaInvalid}
               aria-describedby={ariaDescribedby}
+              aria-required={required}
             />
           }
         >
