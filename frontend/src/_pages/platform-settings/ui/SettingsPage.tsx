@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import {
   SystemConfigResponse,
   SystemConfigUpdateRequest,
   systemConfigService,
 } from '@/entities/system-config';
-import { getApiErrorMessage } from '@/shared/lib';
+import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { Badge, Button, Card, Input, RegionError, Switch, Textarea } from '@/shared/ui';
 
 type ConfigGroup = {
@@ -15,40 +15,16 @@ type ConfigGroup = {
 };
 
 export default function SystemSettingsPage() {
-  const [configs, setConfigs] = useState<SystemConfigResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const {
+    data: configs,
+    setData: setConfigs,
+    isLoading: loading,
+    failure,
+    reload: fetchConfigs,
+  } = useResource(() => systemConfigService.getAllConfigs());
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 一覧をクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
-
-  const fetchConfigs = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    try {
-      const data = await systemConfigService.getAllConfigs();
-      if (requestId === requestIdRef.current) {
-        setConfigs(data);
-        setFailed(false);
-      }
-    } catch (error) {
-      console.error('設定の取得に失敗しました', error);
-      // 読めなかった一覧を残すと「設定項目がありません」に化ける
-      if (requestId === requestIdRef.current) {
-        setConfigs([]);
-        setFailed(true);
-      }
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchConfigs();
-  }, [fetchConfigs]);
 
   const saveConfig = async (configKey: string, configValue: string) => {
     const request: SystemConfigUpdateRequest = {
@@ -56,8 +32,11 @@ export default function SystemSettingsPage() {
       config_value: configValue,
     };
     await systemConfigService.updateConfig(request);
-    setConfigs(prev =>
-      prev.map(c => (c.config_key === configKey ? { ...c, config_value: configValue } : c))
+    // 更新できた 1 件だけを差し替える。一覧ごと取り直すと編集中の欄が読み込み表示で消える
+    setConfigs(
+      prev =>
+        prev?.map(c => (c.config_key === configKey ? { ...c, config_value: configValue } : c)) ??
+        null
     );
     notify.success('設定を更新しました');
   };
@@ -100,7 +79,7 @@ export default function SystemSettingsPage() {
   };
 
   // カテゴリごとにグループ化
-  const groupedConfigs: ConfigGroup = configs.reduce((acc, config) => {
+  const groupedConfigs: ConfigGroup = (configs ?? []).reduce((acc, config) => {
     const category = config.category || 'その他';
     if (!acc[category]) {
       acc[category] = [];
@@ -122,7 +101,8 @@ export default function SystemSettingsPage() {
         </p>
       </div>
 
-      {failed ? (
+      {/* 読めなかった一覧を残すと「設定項目がありません」に化ける */}
+      {failure !== null ? (
         <Card className="p-8">
           <RegionError
             message="設定の取得に失敗しました"

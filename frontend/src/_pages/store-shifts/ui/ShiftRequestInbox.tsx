@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
-import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
+import { shiftApi } from '@/entities/shift';
+import { useResource } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
@@ -16,49 +17,25 @@ interface ShiftRequestInboxProps {
  * 出勤希望 inbox。受付済み(PENDING)のみを表示する — 処理済みの閲覧は cast 側履歴の責務。 新規希望（NEW）と確定シフトへの変更申請（CHANGE）を種別表示し、変更申請は現行→申請の日時を併記する。
  */
 export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps) {
-  const [requests, setRequests] = useState<StoreShiftRequestItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const {
+    data,
+    isLoading: loading,
+    failure,
+    reload: load,
+  } = useResource(() => shiftApi.listShiftRequests({ status: 'PENDING' }));
+  const requests = data ?? [];
   const [processingId, setProcessingId] = useState<string | null>(null);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 一覧をクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
 
   // castId が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
   const castName = (castId: string | undefined) =>
     (castId === undefined ? undefined : casts.find(c => c.id === castId)?.name) ?? castId;
-
-  const load = () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    shiftApi
-      .listShiftRequests({ status: 'PENDING' })
-      .then(rows => {
-        if (requestId !== requestIdRef.current) return;
-        setRequests(rows);
-        setFailed(false);
-      })
-      .catch(() => {
-        if (requestId !== requestIdRef.current) return;
-        // 読めなかった一覧を残すと「受付中の出勤希望はありません」に化け、未処理の希望を見落とす
-        setRequests([]);
-        setFailed(true);
-      })
-      .finally(() => {
-        if (requestId === requestIdRef.current) setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
 
   const approve = async (id: string) => {
     setProcessingId(id);
     try {
       await shiftApi.approveShiftRequest(id);
       notify.success('出勤希望を承認しました');
-      load();
+      void load();
       onApproved();
     } catch {
       notify.error('承認に失敗しました');
@@ -72,7 +49,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
     try {
       await shiftApi.declineShiftRequest(id);
       notify.success('出勤希望を却下しました');
-      load();
+      void load();
     } catch {
       notify.error('却下に失敗しました');
     } finally {
@@ -83,8 +60,9 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
   }
-  if (failed) {
-    return <RegionError message="出勤希望の取得に失敗しました" onRetry={load} />;
+  // 読めなかった一覧を残すと「受付中の出勤希望はありません」に化け、未処理の希望を見落とす
+  if (failure !== null) {
+    return <RegionError message="出勤希望の取得に失敗しました" onRetry={() => void load()} />;
   }
   if (requests.length === 0) {
     return <p className="text-sm text-muted-foreground">受付中の出勤希望はありません</p>;

@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { Order, OrderReceptionist, orderApi } from '@/entities/order';
-import { getApiErrorMessage, integerRule } from '@/shared/lib';
+import { Order, orderApi } from '@/entities/order';
+import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
@@ -74,17 +74,19 @@ export function ReservationRequestEditModal({
     setValue,
     formState: { isSubmitting },
   } = form;
-  const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
-  const [receptionistsFailed, setReceptionistsFailed] = useState(false);
+  // 閉じている間は取りに行かない（開いた時点で取り直す）
+  const {
+    data: receptionistOptions,
+    isLoading: receptionistsLoading,
+    failure: receptionistsFailure,
+    reload: loadReceptionists,
+  } = useResource(request === null ? null : () => orderApi.listReceptionists(), [request]);
   const receptionistItems = [
     { value: SELECT_NONE, label: '未設定' },
-    ...receptionistOptions
+    ...(receptionistOptions ?? [])
       .filter(o => o.id !== undefined)
       .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
   ];
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 選択肢をクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
 
   const castName = request?.cast_name ?? request?.cast_id ?? '';
 
@@ -98,31 +100,6 @@ export function ReservationRequestEditModal({
       clear_cast: false,
     });
   }, [request, reset]);
-
-  // 再試行から呼び直せるよう effect の外に置く。取り直しの前に失敗を畳むのは、同じ姿のまま
-  // 失敗を繰り返すと role="alert" が挿入されず二度目の失敗が読み上げ利用者に届かないため
-  const loadReceptionists = useCallback(async () => {
-    if (!request) return;
-    const requestId = ++requestIdRef.current;
-    setReceptionistsFailed(false);
-    try {
-      const receptionists = await orderApi.listReceptionists();
-      if (requestId === requestIdRef.current) {
-        setReceptionistOptions(receptionists);
-        setReceptionistsFailed(false);
-      }
-    } catch {
-      // 選択肢が「未設定」だけの状態は「受付が 1 人も居ない」と区別がつかない
-      if (requestId === requestIdRef.current) {
-        setReceptionistOptions([]);
-        setReceptionistsFailed(true);
-      }
-    }
-  }, [request]);
-
-  useEffect(() => {
-    void loadReceptionists();
-  }, [loadReceptionists]);
 
   const submit = async (values: ReservationRequestEditFormValues) => {
     if (!request?.id) return;
@@ -188,11 +165,16 @@ export function ReservationRequestEditModal({
                     </SelectContent>
                   </Select>
                   {/* 送信は塞がない。受付担当は任意項目で、サーバ側の再検証が最終権威 */}
-                  {receptionistsFailed && (
-                    <RegionError
-                      message="受付担当者の取得に失敗しました"
-                      onRetry={() => void loadReceptionists()}
-                    />
+                  {receptionistsLoading ? (
+                    // 候補が「未設定」だけの状態は「受付が 1 人も居ない」と区別がつかない
+                    <p className="text-sm text-muted-foreground">読み込み中...</p>
+                  ) : (
+                    receptionistsFailure !== null && (
+                      <RegionError
+                        message="受付担当者の取得に失敗しました"
+                        onRetry={() => void loadReceptionists()}
+                      />
+                    )
                   )}
                 </FormItem>
               )}

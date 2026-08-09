@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { MemberLinkSection } from './MemberLinkSection';
-import { CustomerResponse, customerApi } from '@/entities/customer';
-import { Order, orderApi } from '@/entities/order';
+import { customerApi } from '@/entities/customer';
+import { orderApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
-import { isNotFound, storePath } from '@/shared/lib';
+import { storePath, useResource } from '@/shared/lib';
 import {
   RegionError,
   Table,
@@ -25,67 +25,27 @@ export default function CustomerEditPage() {
   const id = params.id as string;
   const storeId = params.storeId as string;
   const router = useRouter();
-  const [customer, setCustomer] = useState<CustomerResponse | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailure, setLoadFailure] = useState<'notFound' | 'error' | null>(null);
-  const [ordersStatus, setOrdersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const {
+    data: customer,
+    isLoading,
+    failure,
+    reload: reloadCustomer,
+  } = useResource(() => customerApi.get(id), [id]);
+  // 注文履歴は附属区画。プロフィールの取得とは独立に取り、独立に再試行できる
+  const {
+    data: ordersData,
+    isLoading: ordersLoading,
+    failure: ordersFailure,
+    reload: reloadOrders,
+  } = useResource(
+    () =>
+      orderApi
+        .list({ customer_id: id, size: 20, sort: 'businessDate,desc' })
+        .then(page => page.rows),
+    [id]
+  );
+  const orders = ordersData ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 顧客・注文履歴をクリアするので、在途の古い失敗が新しい成功を消し得る。
-  // 二つの取得は独立に走るので、カウンタも取得ごとに持つ
-  const customerRequestIdRef = useRef(0);
-  const ordersRequestIdRef = useRef(0);
-
-  // 再試行から呼び直せるよう effect の外に置く。取得できなかったこの頁自身が失敗を名乗るので、
-  // 一覧へ送り返さない — 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
-  const fetchCustomer = useCallback(async () => {
-    const requestId = ++customerRequestIdRef.current;
-    setIsLoading(true);
-    try {
-      const data = await customerApi.get(id);
-      if (requestId === customerRequestIdRef.current) {
-        setCustomer(data);
-        setLoadFailure(null);
-      }
-    } catch (error) {
-      if (requestId === customerRequestIdRef.current) {
-        setCustomer(null);
-        // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
-        setLoadFailure(isNotFound(error) ? 'notFound' : 'error');
-      }
-    } finally {
-      if (requestId === customerRequestIdRef.current) setIsLoading(false);
-    }
-  }, [id]);
-
-  // 注文履歴は附属区画。プロフィールの取得とは独立に取り、独立に再試行できる。
-  // 再試行の前に読み込み中へ戻す — 同じ姿のまま失敗を繰り返すと role="alert" が挿入されず、
-  // 二度目の失敗が読み上げ利用者に届かない
-  const fetchOrders = useCallback(async () => {
-    const requestId = ++ordersRequestIdRef.current;
-    setOrdersStatus('loading');
-    try {
-      const page = await orderApi.list({ customer_id: id, size: 20, sort: 'businessDate,desc' });
-      if (requestId === ordersRequestIdRef.current) {
-        setOrders(page.rows);
-        setOrdersStatus('ready');
-      }
-    } catch {
-      if (requestId === ordersRequestIdRef.current) {
-        setOrders([]);
-        setOrdersStatus('error');
-      }
-    }
-  }, [id]);
-
-  useEffect(() => {
-    void fetchCustomer();
-  }, [fetchCustomer]);
-
-  useEffect(() => {
-    void fetchOrders();
-  }, [fetchOrders]);
 
   const handleSubmit = async (data: CustomerFormData) => {
     try {
@@ -104,11 +64,14 @@ export default function CustomerEditPage() {
     return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
   }
 
-  if (loadFailure !== null) {
+  // 取得できなかったこの頁自身が失敗を名乗るので、一覧へ送り返さない — 離脱すると説明責任が
+  // 着地先へ移り、開いていた頁で再試行できなくなる
+  if (failure !== null) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">顧客編集</h1>
-        {loadFailure === 'notFound' ? (
+        {failure === 'notFound' ? (
+          // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="この顧客は見つかりませんでした"
             fallback={{ href: storePath(storeId, '/customers'), label: '顧客一覧へ' }}
@@ -116,7 +79,7 @@ export default function CustomerEditPage() {
         ) : (
           <RegionError
             message="顧客情報の取得に失敗しました"
-            onRetry={() => void fetchCustomer()}
+            onRetry={() => void reloadCustomer()}
           />
         )}
       </div>
@@ -165,14 +128,14 @@ export default function CustomerEditPage() {
         <div className="border-b bg-muted/50 px-6 py-4">
           <h2 className="text-lg font-medium text-foreground">注文履歴</h2>
         </div>
-        {ordersStatus === 'loading' ? (
+        {ordersLoading ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
-        ) : ordersStatus === 'error' ? (
+        ) : ordersFailure !== null ? (
           // 「注文履歴がありません」と言い切ると、読めなかっただけの状態が事実に化ける。
           // 失敗を名乗るのはこの区画だけで、頁の他の部分は編集できるまま残る
           <RegionError
             message="注文履歴の取得に失敗しました"
-            onRetry={() => void fetchOrders()}
+            onRetry={() => void reloadOrders()}
             className="justify-center p-8"
           />
         ) : orders.length === 0 ? (

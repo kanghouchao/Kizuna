@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -10,7 +10,7 @@ import {
   RoleResponse,
   platformRoleApi,
 } from '@/entities/user';
-import { getApiErrorMessage, isConflict, useManagedList } from '@/shared/lib';
+import { getApiErrorMessage, isConflict, useManagedList, useResource } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -82,6 +82,15 @@ function groupByConsole(
  * mount 時 = 開いた時点に遅延される。
  */
 export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProps) {
+  // 編集対象の詳細取得。409 の後にも取り直し、最新の name / permissions / version でフォームを
+  // 初期化し直す（version 固着で再試行が同じ 409 を繰り返さないように）。
+  const {
+    data: editingRole,
+    isLoading: detailLoading,
+    failure: detailFailure,
+    reload: reloadEditingRole,
+  } = useResource(editingId === null ? null : () => platformRoleApi.get(editingId), [editingId]);
+
   const form = useForm<RoleFormValues>({ defaultValues: { name: '', permissions: [] } });
   const {
     control,
@@ -90,45 +99,29 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
     formState: { isSubmitting },
   } = form;
   const permissionsLabelId = useId();
-  const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
-  // 初回の詳細取得に失敗したときの再試行導線用。閉じて開き直す以外の回復手段を残す。
-  const [detailLoadFailed, setDetailLoadFailed] = useState(false);
   const {
     items: catalog,
     isLoading: catalogLoading,
     failed: catalogFailed,
     refetch: refetchCatalog,
   } = useManagedList<PermissionResponse>(() => platformRoleApi.permissions());
-
-  // 再試行の連打などで取得が並行しても、最新のリクエストだけがフォームを更新する
-  const requestIdRef = useRef(0);
-
-  // 編集対象の詳細取得。409 の後にも呼び、最新の name / permissions / version でフォームを
-  // 初期化し直す（version 固着で再試行が同じ 409 を繰り返さないように）。取り直し中は
-  // editingRole を空にして保存を止める — 残したままだと完了前の再送が陳腐な version で走る。
-  const reloadEditingRole = useCallback(async () => {
-    if (editingId === null) return;
-    const requestId = ++requestIdRef.current;
-    setEditingRole(null);
-    setDetailLoadFailed(false);
-    try {
-      const role = await platformRoleApi.get(editingId);
-      if (requestId !== requestIdRef.current) return;
-      setEditingRole(role);
-      reset({ name: role.name ?? '', permissions: role.permissions ?? [] });
-    } catch {
-      if (requestId !== requestIdRef.current) return;
-      // 取得できなかった詳細は区画自身が名乗る。モーダルは開いたままなので toast は要らない
-      setDetailLoadFailed(true);
-    }
-  }, [editingId, reset]);
+  // 届いた詳細をフォームへ移し終えたか。移した相手を持つのは、409 後の取り直しで届く別の
+  // 詳細も同じ経路で載せ直すため
+  const [seededRole, setSeededRole] = useState<RoleResponse | null>(null);
 
   useEffect(() => {
-    void reloadEditingRole();
-  }, [reloadEditingRole]);
+    if (editingRole !== null && editingRole !== seededRole) {
+      reset({ name: editingRole.name ?? '', permissions: editingRole.permissions ?? [] });
+      setSeededRole(editingRole);
+    }
+  }, [editingRole, seededRole, reset]);
 
-  // 編集モードで詳細が未着のうちは保存させない（version 無しで送る事故を防ぐ）
-  const editingLoading = editingId !== null && editingRole === null;
+  // 編集モードで詳細が未着のうちは保存させない（version 無しで送る事故を防ぐ）。取り直し中も
+  // 同じ — 完了前の再送は陳腐な version で走る。詳細をフォームへ移すのは効果なので、移し
+  // 終えるまでも「未着」に含める — 先に欄を出すと、その 1 回の描画が空の選択のまま残り
+  // 「権限が 1 つも付いていない」に見える
+  const editingLoading =
+    editingId !== null && (detailLoading || editingRole === null || seededRole !== editingRole);
 
   const submit = async (values: RoleFormValues) => {
     try {
@@ -185,7 +178,7 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
           {title}
         </DialogTitle>
         <Form {...form}>
-          {/* submit は取り直し（requestIdRef を読む）へ繋がるため、handleSubmit の適用を
+          {/* submit は取り直し（フックがリクエストカウンタを読む）へ繋がるため、handleSubmit の適用を
               イベント時まで遅らせる — 描画中の適用は react-hooks/refs が ref 読みとして拒む。
               noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。執行は下の各 rules が担う */}
@@ -238,8 +231,8 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
                       権限
                     </span>
                     {/* 詳細取得の失敗（初回・409 後の取り直しとも）は「読み込み中」に固着させず、
-                        ダイアログ内で再試行できるようにする */}
-                    {editingLoading && detailLoadFailed ? (
+                        ダイアログ内で再試行できるようにする。閉じて開き直す以外の回復手段を残す */}
+                    {editingLoading && detailFailure !== null ? (
                       <RegionError
                         message="ロール情報の取得に失敗しました"
                         onRetry={() => void reloadEditingRole()}

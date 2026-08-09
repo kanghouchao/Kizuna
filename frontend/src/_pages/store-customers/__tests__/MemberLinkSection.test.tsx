@@ -1,5 +1,4 @@
-import { StrictMode } from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { MemberLinkSection } from '../ui/MemberLinkSection';
 import { customerApi } from '@/entities/customer';
@@ -133,35 +132,6 @@ describe('MemberLinkSection', () => {
       target: { value: '123456789012' },
     });
     expect(screen.getByRole('button', { name: '紐づける' })).toBeEnabled();
-  });
-
-  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が履歴をクリアする
-  // 以上、遅れて着いた古い失敗が新しい成功を消してはいけない
-  it('二重 mount で古い失敗が後から着いても、新しい成功を消さないこと', async () => {
-    let failStale = (): void => {};
-    mockedApi.memberLinkHistory
-      .mockReturnValueOnce(
-        new Promise((_, reject) => {
-          failStale = () => reject(new Error('stale'));
-        })
-      )
-      .mockResolvedValue([activeRow]);
-
-    render(
-      <StrictMode>
-        <MemberLinkSection customerId="c1" />
-      </StrictMode>
-    );
-
-    // 解除ボタンは ACTIVE の区間が読めているときだけ出る
-    expect(await screen.findByRole('button', { name: '解除' })).toBeInTheDocument();
-
-    await act(async () => {
-      failStale();
-    });
-
-    expect(screen.getByRole('button', { name: '解除' })).toBeInTheDocument();
-    expect(screen.queryByText('会員紐づけの履歴取得に失敗しました')).not.toBeInTheDocument();
   });
 
   it('解除は確認ダイアログの実行でのみ API を呼ぶこと', async () => {

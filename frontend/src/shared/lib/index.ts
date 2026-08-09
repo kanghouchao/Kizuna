@@ -4,6 +4,7 @@ export { getApiErrorMessage, isConflict, isNotFound } from './apiError';
 export { useManagedList } from './hooks/useManagedList';
 export { useListPage } from './hooks/useListPage';
 export { useCursorList } from './hooks/useCursorList';
+export { useResource } from './hooks/useResource';
 export { useDeleteAction } from './hooks/useDeleteAction';
 export {
   clearPlatformSession,
