@@ -177,6 +177,20 @@ describe('useResource', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('本体の無い応答は成功として通さない', async () => {
+    // 例外にならない空応答（204・本文なし）でも呼び出し側に渡せる中身は無い。成功として
+    // 通すと、failure だけを見ている呼び出し側が「空の中身」を本物として描く — 空欄の
+    // フォームが保存でき、0 件が事実になる
+    const { result } = renderHook(() =>
+      useResource(async () => undefined as unknown as { id: string })
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.failure).toBe('error');
+    // undefined のまま持つと `!== null` の判定を素通りして、参照した先で落ちる
+    expect(result.current.data).toBeNull();
+  });
+
   it('404 は notFound として分類する', async () => {
     // 何度押しても取れない 404 と、押し直せば取れる失敗を呼び出し側が区別できるようにする
     const { result } = renderHook(() =>

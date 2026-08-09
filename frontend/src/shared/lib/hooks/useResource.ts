@@ -70,7 +70,14 @@ export function useResource<T>(
     setFailure(null);
     try {
       const result = await currentFetcher();
-      if (requestId === requestIdRef.current) setData(result);
+      if (requestId === requestIdRef.current) {
+        // 本体の無い応答（204・空ボディ）は「取れた」ではない。data の null は「取れて
+        // いない」を意味するので、成功として通すと failure だけを見ている呼び出し側が
+        // 中身の無い姿を本物として描く。undefined のまま持たないのも同じ理由で、
+        // `!== null` の判定を素通りして参照した先で落ちる。
+        if (result == null) setFailure('error');
+        setData(result ?? null);
+      }
     } catch (error) {
       // 読めなかった値は残さない — 領域に前回の内容が居座ると、それが最新に見える
       if (requestId === requestIdRef.current) {
