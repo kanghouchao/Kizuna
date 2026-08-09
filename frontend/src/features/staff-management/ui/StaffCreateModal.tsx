@@ -9,7 +9,12 @@ import {
   platformRoleApi,
   platformStaffApi,
 } from '@/entities/user';
-import { getApiErrorMessage, useManagedList } from '@/shared/lib';
+import {
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
+  getApiErrorMessage,
+  useManagedList,
+} from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -48,10 +53,6 @@ interface StaffCreateFormValues {
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
 }
-
-// noValidate で type="email" の執行が止まるぶんを規則で引き継ぐ。ドメインに .
-// を求める点で原生より厳しいが、これは既に StoreEditPage が採っている形。
-const EMAIL_PATTERN = /^([^\s@])+@([^\s@])+\.[^\s@]+$/;
 
 /**
  * スタッフの新規作成モーダル（メール・初期パスワード・氏名・ロール・担当店舗）。
@@ -128,10 +129,7 @@ export function StaffCreateModal({
               name="email"
               rules={{
                 required: 'メールアドレスを入力してください',
-                pattern: {
-                  value: EMAIL_PATTERN,
-                  message: 'メールアドレスの形式が正しくありません',
-                },
+                pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
               }}
               render={({ field }) => (
                 <FormItem className="gap-1">
