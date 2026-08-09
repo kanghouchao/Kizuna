@@ -330,6 +330,28 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("検証エラーの details のキーが、要求で送ったのと同じ綴り（snake_case）で返ること")
+  void validationDetailKeysMatchRequestSpelling() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    // display_name は複数語なので、Bean のプロパティ名（displayName）で返れば往復で綴りが食い違う。
+    String body =
+        String.format(
+            "{\"email\":\"staff-it-wire-name@kizuna.test\",\"password\":\"%s\","
+                + "\"display_name\":\"\",\"role_ids\":%s,"
+                + "\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[]}",
+            PASSWORD, rolesJson("店舗スタッフ"));
+
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/staff", new HttpEntity<>(body, bearerJson(hq)), JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    JsonNode details = res.getBody().path("details");
+    assertThat(details.has("display_name")).as("送信時と同じキーで返ること").isTrue();
+    assertThat(details.has("displayName")).as("Bean のプロパティ名を並記もしないこと").isFalse();
+  }
+
+  @Test
   @DisplayName("存在しない能力束 id での作成は 400 で拒否")
   void unknownRoleRejected() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);

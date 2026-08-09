@@ -1,12 +1,21 @@
 package com.kizuna.shared.exception;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.MAP;
 
+import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
+import com.kizuna.storeprofile.domain.SnsLink;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.MethodParameter;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +24,9 @@ import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
+import org.springframework.validation.BeanPropertyBindingResult;
+import org.springframework.validation.beanvalidation.SpringValidatorAdapter;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
@@ -23,6 +35,20 @@ import tools.jackson.databind.json.JsonMapper;
 class CommonExceptionHandlerTest {
 
   private final CommonExceptionHandler handler = new CommonExceptionHandler();
+
+  private static ValidatorFactory factory;
+  private static SpringValidatorAdapter validator;
+
+  @BeforeAll
+  static void setUpValidator() {
+    factory = Validation.buildDefaultValidatorFactory();
+    validator = new SpringValidatorAdapter(factory.getValidator());
+  }
+
+  @AfterAll
+  static void tearDownValidator() {
+    factory.close();
+  }
 
   @Test
   @DisplayName("DisabledException は 401 かつ固定文言「アカウントが無効化されています」")
@@ -150,6 +176,57 @@ class CommonExceptionHandlerTest {
     assertThat(response.getBody()).extracting("details").isEqualTo(Map.of("domain", "必須です"));
     assertThat(response.getBody().toString()).doesNotContain("java.lang.String");
   }
+
+  @Test
+  @DisplayName("検証エラーの details のキーは、要求で送るのと同じ snake_case になる")
+  void validationDetailKeysUseWireNames() {
+    PlatformStaffCreateRequest request = new PlatformStaffCreateRequest();
+    request.setEmail("staff@kizuna.test");
+    request.setPassword("password");
+    request.setDisplayName("");
+
+    ResponseEntity<Map<String, Object>> response = handler.handle(invalid(request));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(response.getBody())
+        .extracting("details", MAP)
+        .containsKeys("display_name", "role_ids", "store_scope_type")
+        .doesNotContainKeys("displayName", "roleIds", "storeScopeType");
+  }
+
+  @Test
+  @DisplayName("入れ子の検証エラーでも、details のキーは要素の添字を保ったまま snake_case になる")
+  void nestedValidationDetailKeysUseWireNames() {
+    StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
+    request.setSnsLinks(List.of(SnsLink.builder().platform("x").url("").build()));
+
+    ResponseEntity<Map<String, Object>> response = handler.handle(invalid(request));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(response.getBody()).extracting("details", MAP).containsKey("sns_links[0].url");
+  }
+
+  /**
+   * 実際に Bean Validation を走らせて、本番と同じ束縛結果を持つ {@link MethodArgumentNotValidException} を組み立てる。
+   *
+   * <p>フィールドパスが Bean のプロパティ名（camelCase）で来ることがこの検証の対象そのものなので、束縛結果を手で組まず 実物の検証器に作らせる。
+   */
+  private MethodArgumentNotValidException invalid(Object request) {
+    BeanPropertyBindingResult binding = new BeanPropertyBindingResult(request, "request");
+    validator.validate(request, binding);
+    try {
+      return new MethodArgumentNotValidException(
+          new MethodParameter(
+              CommonExceptionHandlerTest.class.getDeclaredMethod("requestBody", Object.class), 0),
+          binding);
+    } catch (NoSuchMethodException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /** {@link MethodArgumentNotValidException} が要求する {@link MethodParameter} の実体を得るためだけの宣言。 */
+  @SuppressWarnings("unused")
+  private void requestBody(Object body) {}
 
   /**
    * 実際に Jackson へ解釈させて、本番と同じ原因例外を持つ {@link HttpMessageNotReadableException} を組み立てる。
