@@ -77,6 +77,25 @@ describe('ロール編集モーダル', () => {
     expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
   });
 
+  it('他の管理者に消されたロールは行き止まりを述べ、再試行を出さないこと', async () => {
+    // 404 に再試行を出しても押した先で永久に成功しない（DESIGN.md「領域内エラー態」）
+    mockedRoleApi.get.mockRejectedValue({ response: { status: 404 } });
+    const { onClose, onSaved } = renderModal();
+
+    const region = await screen.findByRole('alert');
+    expect(
+      within(region).getByText('このロールは削除されました。一覧を最新の状態に戻しました。')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
+
+    // 消えた行が一覧に残ると、閉じた先で同じ行き止まりへ入り直せてしまう
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+
+    fireEvent.click(within(region).getByRole('button', { name: '閉じる' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('詳細が届くまで名称入力を無効化する（到着時の reset が入力を上書きしないように）', async () => {
     let resolveGet: (r: RoleResponse) => void = () => {};
     mockedRoleApi.get.mockImplementationOnce(
