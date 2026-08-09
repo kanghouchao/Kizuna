@@ -63,4 +63,18 @@ describe('新規オーダー登録の送信ペイロード', () => {
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
     expect(mockedOrderApi.create.mock.calls[0][0].pax).toBe(3);
   });
+
+  // 指名の焦点要素は popup の中の入力ではなく引き金の button。文言を出すだけでは
+  // 「どの欄が」が読み上げ環境へ届かず、焦点も動かない。
+  it('キャスト未選択の文言が引き金と結び付き、焦点がそこへ移ること', async () => {
+    render(<CreateOrderPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+
+    const message = await screen.findByText('キャストを候補から選択してください');
+    const trigger = screen.getByRole('combobox', { name: /キャスト/ });
+    expect(trigger).toHaveAttribute('aria-invalid', 'true');
+    expect(trigger).toHaveAttribute('aria-describedby', expect.stringContaining(message.id));
+    expect(mockedOrderApi.create).not.toHaveBeenCalled();
+  });
 });

@@ -18,6 +18,14 @@ interface CastSearchComboboxProps {
   /** 候補を選んだときだけ鳴る。 */
   onChange: (castId: string) => void;
   disabled?: boolean;
+  /**
+   * handleSubmit の焦点移動が叩く先。焦点要素は popup の中の入力ではなく引き金の button なので、
+   * ここへ届かないと文言だけ出て焦点が動かない（他に症状が出ない）。
+   */
+  triggerRef?: React.Ref<HTMLButtonElement>;
+  /** FormControl が差し込む欄の状態。引き金は button で原生の制約を持てないため props で受ける。 */
+  'aria-invalid'?: boolean;
+  'aria-describedby'?: string;
 }
 
 /**
@@ -32,6 +40,9 @@ export function CastSearchCombobox({
   castName,
   onChange,
   disabled,
+  triggerRef,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedby,
 }: CastSearchComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -118,6 +129,9 @@ export function CastSearchCombobox({
               type="button"
               variant="outline"
               className="w-full justify-between font-normal"
+              ref={triggerRef}
+              aria-invalid={ariaInvalid}
+              aria-describedby={ariaDescribedby}
             />
           }
         >

@@ -16,6 +16,12 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
   Input,
   Label,
   Textarea,
@@ -53,13 +59,7 @@ export function MemberReservationNewPage() {
   const [castsReloadNonce, setCastsReloadNonce] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<ReservationFormValues>({
+  const form = useForm<ReservationFormValues>({
     defaultValues: {
       business_date: '',
       arrival_scheduled_start_time: '',
@@ -68,6 +68,7 @@ export function MemberReservationNewPage() {
       remarks: '',
     },
   });
+  const { register, handleSubmit, setValue, watch, control } = form;
 
   const businessDate = watch('business_date');
 
@@ -182,109 +183,121 @@ export function MemberReservationNewPage() {
               店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。
             </p>
           ) : (
-            <form onSubmit={handleSubmit(submit)} className="space-y-4">
-              <div>
-                <Label htmlFor="business_date">利用日</Label>
-                <Input
-                  id="business_date"
-                  type="date"
-                  {...register('business_date', { required: '利用日を選択してください' })}
+            <Form {...form}>
+              {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+                  我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
+              <form onSubmit={handleSubmit(submit)} className="space-y-4" noValidate>
+                <FormField
+                  control={control}
+                  name="business_date"
+                  rules={{ required: '利用日を選択してください' }}
+                  render={({ field }) => (
+                    <FormItem className="gap-1">
+                      <FormLabel>利用日</FormLabel>
+                      <FormControl>
+                        <Input type="date" required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {errors.business_date && (
-                  <p className="mt-1 text-xs text-destructive-strong">
-                    {errors.business_date.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="arrival_scheduled_start_time">希望時刻</Label>
-                <Input
-                  id="arrival_scheduled_start_time"
-                  type="time"
-                  {...register('arrival_scheduled_start_time')}
-                />
-              </div>
-              <div>
-                <Label htmlFor="pax">人数</Label>
-                <Input
-                  id="pax"
-                  type="number"
-                  min={1}
-                  {...register('pax', {
+                <div>
+                  <Label htmlFor="arrival_scheduled_start_time">希望時刻</Label>
+                  <Input
+                    id="arrival_scheduled_start_time"
+                    type="time"
+                    {...register('arrival_scheduled_start_time')}
+                  />
+                </div>
+                <FormField
+                  control={control}
+                  name="pax"
+                  rules={{
                     required: '人数を入力してください',
                     min: { value: 1, message: '人数は 1 以上です' },
-                  })}
+                  }}
+                  render={({ field }) => (
+                    <FormItem className="gap-1">
+                      <FormLabel>人数</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {errors.pax && (
-                  <p className="mt-1 text-xs text-destructive-strong">{errors.pax.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="cast_id">指名（任意）</Label>
-                {/* 指名候補はその日の確定シフトに限る。ネイティブ select を使うのは、フォーム値をそのまま扱えるため。 */}
-                <select
-                  id="cast_id"
-                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                  {...register('cast_id')}
-                >
-                  <option value="">指名なし</option>
-                  {casts.map(cast => (
-                    <option key={cast.cast_id} value={cast.cast_id}>
-                      {cast.cast_name}
-                      {cast.start_time ? `（${cast.start_time.slice(0, 5)}〜）` : ''}
-                    </option>
-                  ))}
-                </select>
-                {businessDate && castsLoading && (
-                  <p className="mt-1 text-xs text-muted-foreground">出勤情報を確認しています...</p>
-                )}
-                {businessDate && !castsLoading && castsFailed && (
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className="text-xs text-destructive-strong">
-                      出勤情報を取得できませんでした。
+                <div>
+                  <Label htmlFor="cast_id">指名（任意）</Label>
+                  {/* 指名候補はその日の確定シフトに限る。ネイティブ select を使うのは、フォーム値をそのまま扱えるため。 */}
+                  <select
+                    id="cast_id"
+                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    {...register('cast_id')}
+                  >
+                    <option value="">指名なし</option>
+                    {casts.map(cast => (
+                      <option key={cast.cast_id} value={cast.cast_id}>
+                        {cast.cast_name}
+                        {cast.start_time ? `（${cast.start_time.slice(0, 5)}〜）` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {businessDate && castsLoading && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      出勤情報を確認しています...
                     </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCastsReloadNonce(nonce => nonce + 1)}
-                    >
-                      再読み込み
-                    </Button>
-                  </div>
-                )}
-                {/* 取得が終わるまで「出勤なし」と言い切らない — 未解決の間に空表示を出すと、
+                  )}
+                  {businessDate && !castsLoading && castsFailed && (
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-xs text-destructive-strong">
+                        出勤情報を取得できませんでした。
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCastsReloadNonce(nonce => nonce + 1)}
+                      >
+                        再読み込み
+                      </Button>
+                    </div>
+                  )}
+                  {/* 取得が終わるまで「出勤なし」と言い切らない — 未解決の間に空表示を出すと、
                     指名するつもりの会員が誤った空き情報のまま指名なしで申請してしまう。 */}
-                {businessDate && !castsLoading && !castsFailed && casts.length === 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    この日に出勤予定のキャストはいません。
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="remarks">ご要望（任意）</Label>
-                <Textarea
-                  id="remarks"
-                  rows={3}
-                  {...register('remarks', {
+                  {businessDate && !castsLoading && !castsFailed && casts.length === 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      この日に出勤予定のキャストはいません。
+                    </p>
+                  )}
+                </div>
+                <FormField
+                  control={control}
+                  name="remarks"
+                  rules={{
                     maxLength: { value: 500, message: 'ご要望は 500 文字以内で入力してください' },
-                  })}
+                  }}
+                  render={({ field }) => (
+                    <FormItem className="gap-1">
+                      <FormLabel>ご要望（任意）</FormLabel>
+                      <FormControl>
+                        <Textarea rows={3} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {errors.remarks && (
-                  <p className="mt-1 text-xs text-destructive-strong">{errors.remarks.message}</p>
-                )}
-              </div>
-              {/* 候補が確定するまで送信させない。取得中も失敗中も「その日に誰が出勤するか」は
+                {/* 候補が確定するまで送信させない。取得中も失敗中も「その日に誰が出勤するか」は
                   未確定であり、指名を選ぶ機会が無いまま「指名なし」で申請が通ってしまう。
                   失敗のときは再読み込みが復帰の手段になる。 */}
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={submitting || castsLoading || castsFailed}
-              >
-                この内容で申請する
-              </Button>
-            </form>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={submitting || castsLoading || castsFailed}
+                >
+                  この内容で申請する
+                </Button>
+              </form>
+            </Form>
           )}
         </CardContent>
       </Card>
