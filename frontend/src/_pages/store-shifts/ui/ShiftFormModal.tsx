@@ -17,8 +17,8 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -83,7 +83,6 @@ export function ShiftFormModal({
     },
   });
   const {
-    register,
     handleSubmit,
     reset,
     control,
@@ -172,11 +171,13 @@ export function ShiftFormModal({
           {editing ? 'シフトを編集' : 'シフトを追加'}
         </DialogTitle>
         <Form {...form}>
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
+          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+              我々の文言は永久に描かれない。執行は各 rules が担う */}
+          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
             <FormField
               control={control}
               name="cast_id"
-              rules={{ required: true }}
+              rules={{ required: 'キャストを選択してください' }}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>キャスト</FormLabel>
@@ -184,9 +185,12 @@ export function ShiftFormModal({
                     items={castOptions}
                     value={castValue(field.value, castOptions)}
                     onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                    required
                   >
                     <FormControl>
-                      <SelectTrigger className="w-full">
+                      {/* handleSubmit の焦点移動は登録された ref を叩く。ref が trigger へ
+                          届かないと、文言だけ出て焦点が動かない。 */}
+                      <SelectTrigger className="w-full" ref={field.ref}>
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -198,26 +202,53 @@ export function ShiftFormModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
                 </FormItem>
               )}
             />
-            <div className="grid gap-2">
-              <Label htmlFor="work_date">日付</Label>
-              <Input id="work_date" type="date" {...register('work_date', { required: true })} />
-            </div>
+            <FormField
+              control={control}
+              name="work_date"
+              rules={{ required: '日付を入力してください' }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>日付</FormLabel>
+                  <FormControl>
+                    <Input type="date" required {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="start_time">開始</Label>
-                <Input
-                  id="start_time"
-                  type="time"
-                  {...register('start_time', { required: true })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="end_time">終了</Label>
-                <Input id="end_time" type="time" {...register('end_time', { required: true })} />
-              </div>
+              <FormField
+                control={control}
+                name="start_time"
+                rules={{ required: '開始時刻を入力してください' }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>開始</FormLabel>
+                    <FormControl>
+                      <Input type="time" required {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name="end_time"
+                rules={{ required: '終了時刻を入力してください' }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>終了</FormLabel>
+                    <FormControl>
+                      <Input type="time" required {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             <p className="text-xs text-muted-foreground">
               終了が開始以前のときは翌日にまたがる勤務として扱います。

@@ -109,3 +109,46 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 });
+
+describe('PlatformLoginForm のクライアント検証（#598）', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('未入力のまま押すと欄ごとの文言が出て、送信は行われないこと', async () => {
+    render(<PlatformLoginForm />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
+
+    expect(await screen.findByText('メールアドレスを入力してください')).toBeInTheDocument();
+    expect(screen.getByText('パスワードを入力してください')).toBeInTheDocument();
+    expect(mockedAuthApi.login).not.toHaveBeenCalled();
+    // 検証を理由にボタンを塞がない（押させて文言を出す）
+    expect(screen.getByRole('button', { name: 'ログイン' })).toBeEnabled();
+  });
+
+  it('文言が欄と結び付いていること（読み上げ環境で「どの欄が」まで届く）', async () => {
+    render(<PlatformLoginForm />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
+
+    const message = await screen.findByText('メールアドレスを入力してください');
+    const input = screen.getByLabelText('メールアドレス');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', message.id);
+    expect(message.id).toBeTruthy();
+  });
+
+  it('形式違反のメールアドレスは送信せず形式の文言を出すこと（noValidate で原生 type=email は執行されない）', async () => {
+    render(<PlatformLoginForm />);
+
+    fireEvent.change(screen.getByLabelText('メールアドレス'), {
+      target: { value: 'not-an-email' },
+    });
+    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'pass' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
+
+    expect(await screen.findByText('メールアドレスの形式が正しくありません')).toBeInTheDocument();
+    expect(mockedAuthApi.login).not.toHaveBeenCalled();
+  });
+});

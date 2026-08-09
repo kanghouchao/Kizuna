@@ -117,13 +117,7 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
       ...initialData,
     },
   });
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    control,
-    formState: { errors },
-  } = form;
+  const { register, handleSubmit, control } = form;
 
   const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
   const [receptionistsFailed, setReceptionistsFailed] = useState(false);
@@ -323,24 +317,23 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="grid gap-2">
-                <CastSearchCombobox
-                  id="castName"
-                  label="キャスト *"
-                  castName={castName ?? ''}
-                  onChange={castId =>
-                    setValue('castId', castId, { shouldValidate: true, shouldDirty: true })
-                  }
-                />
-                {/* キャストはサーバ側が @NotBlank。候補から選ばないと 400 になるため送信前に止める */}
-                <input
-                  type="hidden"
-                  {...register('castId', { required: 'キャストを候補から選択してください' })}
-                />
-                {errors.castId && (
-                  <p className="text-sm text-destructive">{errors.castId.message}</p>
+              {/* キャストはサーバ側が @NotBlank。候補から選ばないと 400 になるため送信前に止める */}
+              <FormField
+                control={control}
+                name="castId"
+                rules={{ required: 'キャストを候補から選択してください' }}
+                render={({ field }) => (
+                  <FormItem>
+                    <CastSearchCombobox
+                      id="castName"
+                      label="キャスト *"
+                      castName={castName ?? ''}
+                      onChange={field.onChange}
+                    />
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </div>
+              />
               <FormField
                 control={control}
                 name="courseMinutes"

@@ -59,7 +59,6 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
     mockedCustomerApi.create.mockResolvedValue({} as never);
 
     render(<CustomerCreatePage />);
-    // name は required のため、未入力だと create が呼ばれない
     fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '田中花子' } });
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -76,6 +75,21 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
     expect(body).not.toHaveProperty('phoneNumber');
     expect(body).not.toHaveProperty('hasPet');
     expect(body).not.toHaveProperty('lineId');
+  });
+
+  it('名前が未入力なら文言を欄の傍に出し、create を呼ばないこと', async () => {
+    mockedCustomerApi.create.mockResolvedValue({} as never);
+
+    render(<CustomerCreatePage />);
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    const message = await screen.findByText('名前を入力してください');
+    const input = screen.getByLabelText('名前 *');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', expect.stringContaining(message.id));
+    expect(mockedCustomerApi.create).not.toHaveBeenCalled();
+    // 検証を理由にボタンを塞がない
+    expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
   });
 
   it('編集時の has_pet:true が controlled チェックボックスに反映されること', () => {

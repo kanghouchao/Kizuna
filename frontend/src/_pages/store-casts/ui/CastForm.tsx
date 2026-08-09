@@ -14,6 +14,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
   ImageUpload,
   Input,
   Label,
@@ -100,7 +101,9 @@ export function CastForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          我々の文言は永久に描かれない。執行は各 rules が担う */}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         {/* 基本情報 */}
         <Card>
           <CardHeader>
@@ -119,10 +122,20 @@ export function CastForm({
                 />
               </div>
               <div className="flex-1 space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">名前 *</Label>
-                  <Input id="name" type="text" {...register('name', { required: true })} />
-                </div>
+                <FormField
+                  control={control}
+                  name="name"
+                  rules={{ required: '名前を入力してください' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>名前 *</FormLabel>
+                      <FormControl>
+                        <Input type="text" required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={control}
                   name="status"

@@ -15,6 +15,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
   Input,
   Label,
   Textarea,
@@ -87,7 +88,9 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          我々の文言は永久に描かれない。執行は各 rules が担う */}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         {/* 基本情報 */}
         <Card>
           <CardHeader>
@@ -97,10 +100,20 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="name">名前 *</Label>
-                <Input id="name" type="text" {...register('name', { required: true })} />
-              </div>
+              <FormField
+                control={control}
+                name="name"
+                rules={{ required: '名前を入力してください' }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>名前 *</FormLabel>
+                    <FormControl>
+                      <Input type="text" required {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div className="grid gap-2">
                 <Label htmlFor="classification">区分</Label>
                 <Input id="classification" type="text" {...register('classification')} />

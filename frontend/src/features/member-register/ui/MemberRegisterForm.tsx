@@ -6,7 +6,12 @@ import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import { memberApi, MemberRegisterRequest } from '@/entities/member';
 import { platformAuthApi } from '@/entities/user';
-import { getApiErrorMessage, startPlatformSession } from '@/shared/lib';
+import {
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
+  getApiErrorMessage,
+  startPlatformSession,
+} from '@/shared/lib';
 
 /**
  * 会員の新規登録フォーム（メール + パスワード + 表示名の 3 項目）。
@@ -17,7 +22,7 @@ export function MemberRegisterForm() {
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<MemberRegisterRequest>({
     defaultValues: { email: '', password: '', display_name: '' },
   });
@@ -47,7 +52,9 @@ export function MemberRegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-7">
+    // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、我々の文言は
+    // 永久に描かれない。type="email" の執行もここで止まるため、下の pattern が引き継ぐ。
+    <form onSubmit={handleSubmit(submit)} className="space-y-7" noValidate>
       <div className="auth-field">
         <label
           htmlFor="register-email"
@@ -63,9 +70,20 @@ export function MemberRegisterForm() {
           maxLength={127}
           className="auth-field__input"
           placeholder="example@mail.com"
-          {...register('email', { required: true, maxLength: 127 })}
+          aria-invalid={!!errors.email}
+          aria-describedby={errors.email ? 'register-email-error' : undefined}
+          {...register('email', {
+            required: 'メールアドレスを入力してください',
+            pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
+            maxLength: { value: 127, message: 'メールアドレスは127文字以内で入力してください' },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.email && (
+          <p id="register-email-error" className="auth-field__error">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       <div className="auth-field">
@@ -75,17 +93,28 @@ export function MemberRegisterForm() {
         >
           パスワード
         </label>
+        {/* 原生 minLength は外す。noValidate の下では何も執行せず何も告知しないため、
+            残すと「まだ何かを守っている」と読者を誤解させるだけになる。 */}
         <input
           id="register-password"
           type="password"
           autoComplete="new-password"
           required
-          minLength={8}
           className="auth-field__input"
           placeholder="8文字以上のパスワード"
-          {...register('password', { required: true, minLength: 8 })}
+          aria-invalid={!!errors.password}
+          aria-describedby={errors.password ? 'register-password-error' : undefined}
+          {...register('password', {
+            required: 'パスワードを入力してください',
+            minLength: { value: 8, message: 'パスワードは8文字以上で入力してください' },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.password && (
+          <p id="register-password-error" className="auth-field__error">
+            {errors.password.message}
+          </p>
+        )}
       </div>
 
       <div className="auth-field">
@@ -102,9 +131,19 @@ export function MemberRegisterForm() {
           maxLength={150}
           className="auth-field__input"
           placeholder="表示名を入力"
-          {...register('display_name', { required: true, maxLength: 150 })}
+          aria-invalid={!!errors.display_name}
+          aria-describedby={errors.display_name ? 'register-display-name-error' : undefined}
+          {...register('display_name', {
+            required: '表示名を入力してください',
+            maxLength: { value: 150, message: '表示名は150文字以内で入力してください' },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.display_name && (
+          <p id="register-display-name-error" className="auth-field__error">
+            {errors.display_name.message}
+          </p>
+        )}
       </div>
 
       <div className="pt-2">

@@ -5,7 +5,21 @@ import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CastFieldDefinitionCreateRequest, castFieldDefinitionApi } from '@/entities/cast';
 import { getApiErrorMessage } from '@/shared/lib';
-import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+  Label,
+} from '@/shared/ui';
 
 interface CastFieldCreateModalProps {
   open: boolean;
@@ -22,12 +36,14 @@ interface CastFieldCreateFormValues {
 
 /** カスタムフィールド定義の新規作成モーダル(key・label・公開設定)。 */
 export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCreateModalProps) {
+  const form = useForm<CastFieldCreateFormValues>();
   const {
+    control,
     register,
     handleSubmit,
     reset,
     formState: { isSubmitting },
-  } = useForm<CastFieldCreateFormValues>();
+  } = form;
 
   useEffect(() => {
     if (!open) return;
@@ -65,41 +81,65 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
         <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
           フィールドを追加
         </DialogTitle>
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5">
-          <div className="grid gap-1">
-            <Label htmlFor="field-key">key</Label>
-            <Input
-              id="field-key"
-              type="text"
-              {...register('key', {
-                required: true,
+        <Form {...form}>
+          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+              我々の文言は永久に描かれない。執行は各 rules が担う */}
+          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
+            <FormField
+              control={control}
+              name="key"
+              rules={{
+                required: 'key を入力してください',
                 // バックエンドの @Pattern と同期。constructor・prototype は
                 // react-hook-form の register 内部予約名で、定義化するとキャスト
                 // 編集フォームの描画をクラッシュさせるため作成時に拒否する。
-                pattern: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
-              })}
+                pattern: {
+                  value: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
+                  message:
+                    'key は英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(constructor・prototype は使えません)',
+                },
+              }}
+              render={({ field }) => (
+                <FormItem className="gap-1">
+                  <FormLabel>key</FormLabel>
+                  <FormControl>
+                    <Input type="text" required {...field} />
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(作成後は変更できません)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <p className="text-xs text-muted-foreground">
-              英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(作成後は変更できません)
-            </p>
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="field-label">label</Label>
-            <Input id="field-label" type="text" {...register('label', { required: true })} />
-          </div>
-          <Label className="font-normal">
-            <input type="checkbox" {...register('is_public')} />
-            公開する(公開詳細ページに表示)
-          </Label>
-          <div className="flex justify-end gap-3 border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              キャンセル
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? '追加中...' : '追加する'}
-            </Button>
-          </div>
-        </form>
+            <FormField
+              control={control}
+              name="label"
+              rules={{ required: 'label を入力してください' }}
+              render={({ field }) => (
+                <FormItem className="gap-1">
+                  <FormLabel>label</FormLabel>
+                  <FormControl>
+                    <Input type="text" required {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Label className="font-normal">
+              <input type="checkbox" {...register('is_public')} />
+              公開する(公開詳細ページに表示)
+            </Label>
+            <div className="flex justify-end gap-3 border-t pt-4">
+              <Button type="button" variant="outline" onClick={onClose}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? '追加中...' : '追加する'}
+              </Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

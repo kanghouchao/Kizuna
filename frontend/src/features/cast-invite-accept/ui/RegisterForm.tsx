@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
-import { getApiErrorMessage } from '@/shared/lib';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
 
 interface RegisterFormProps {
   token: string;
@@ -24,7 +24,7 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     defaultValues: { email: '', password: '', display_name: initialDisplayName },
   });
@@ -39,7 +39,9 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
   };
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-7">
+    // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、我々の文言は
+    // 永久に描かれない。type="email" の執行もここで止まるため、下の pattern が引き継ぐ。
+    <form onSubmit={handleSubmit(submit)} className="space-y-7" noValidate>
       <div className="auth-field">
         <label
           htmlFor="invite-email"
@@ -55,9 +57,19 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
           maxLength={127}
           className="auth-field__input"
           placeholder="example@mail.com"
-          {...register('email', { required: true })}
+          aria-invalid={!!errors.email}
+          aria-describedby={errors.email ? 'invite-email-error' : undefined}
+          {...register('email', {
+            required: 'メールアドレスを入力してください',
+            pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.email && (
+          <p id="invite-email-error" className="auth-field__error">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       <div className="auth-field">
@@ -74,9 +86,16 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
           required
           className="auth-field__input"
           placeholder="パスワードを入力"
-          {...register('password', { required: true })}
+          aria-invalid={!!errors.password}
+          aria-describedby={errors.password ? 'invite-password-error' : undefined}
+          {...register('password', { required: 'パスワードを入力してください' })}
         />
         <span className="auth-field__accent" />
+        {errors.password && (
+          <p id="invite-password-error" className="auth-field__error">
+            {errors.password.message}
+          </p>
+        )}
       </div>
 
       <div className="auth-field">
@@ -91,9 +110,16 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
           type="text"
           required
           className="auth-field__input"
-          {...register('display_name', { required: true })}
+          aria-invalid={!!errors.display_name}
+          aria-describedby={errors.display_name ? 'invite-display-name-error' : undefined}
+          {...register('display_name', { required: '表示名を入力してください' })}
         />
         <span className="auth-field__accent" />
+        {errors.display_name && (
+          <p id="invite-display-name-error" className="auth-field__error">
+            {errors.display_name.message}
+          </p>
+        )}
       </div>
 
       <div className="pt-2 space-y-3">
