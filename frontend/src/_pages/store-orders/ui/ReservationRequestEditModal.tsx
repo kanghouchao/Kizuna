@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderReceptionist, orderApi } from '@/entities/order';
-import { getApiErrorMessage } from '@/shared/lib';
+import { getApiErrorMessage, integerRule } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
@@ -205,6 +205,9 @@ export function ReservationRequestEditModal({
               rules={{
                 required: '人数を入力してください',
                 min: { value: 1, message: '人数は 1 以上です' },
+                // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
+                // Integer の pax へ届く
+                validate: integerRule('人数'),
               }}
               render={({ field }) => (
                 <FormItem>

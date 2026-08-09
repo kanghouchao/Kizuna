@@ -169,4 +169,23 @@ describe('カスタムフィールド定義の編集モーダル', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockedApi.update).not.toHaveBeenCalled();
   });
+
+  // noValidate は type="number" の暗黙の step=1 まで止める。引き継ぎが無いと 1.5 が
+  // Integer の displayOrder へ届き、欄の傍ではなくサーバから返ってくる。
+  it('表示順に小数を入れると文言を出して更新を呼ばないこと', async () => {
+    render(
+      <CastFieldEditModal
+        open
+        definition={definition()}
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('表示順'), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('表示順は整数で入力してください')).toBeInTheDocument();
+    expect(mockedApi.update).not.toHaveBeenCalled();
+  });
 });

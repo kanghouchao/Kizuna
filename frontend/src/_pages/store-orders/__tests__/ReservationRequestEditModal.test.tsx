@@ -378,3 +378,36 @@ describe('ReservationRequestEditModal の指名の差し替え', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * noValidate は type="number" の暗黙の step=1 まで止める。引き継ぎが無いと 1.5 が Integer の
+ * pax へ届き、欄の傍ではなくサーバからの失敗として返ってくる。
+ */
+describe('人数は整数のみ受け付ける', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedReceptionists.mockResolvedValue([]);
+    mockedCastCandidates.mockResolvedValue([]);
+    mockedUpdate.mockResolvedValue(nominationFreeRequest);
+  });
+
+  it('小数を入れると文言を出して更新を呼ばないこと', async () => {
+    renderModal(nominationFreeRequest);
+
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('人数は整数で入力してください')).toBeInTheDocument();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('整数なら従来どおり更新できること', async () => {
+    renderModal(nominationFreeRequest);
+
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][1].pax).toBe(4);
+  });
+});

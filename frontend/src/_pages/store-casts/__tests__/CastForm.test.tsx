@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CastForm } from '../ui/CastForm';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
 
@@ -67,5 +67,58 @@ describe('カスタムフィールドの初期値は自身が所有するキー�
 
     const input = (await screen.findByLabelText('血液型')) as HTMLInputElement;
     expect(input.value).toBe('A');
+  });
+});
+
+/**
+ * noValidate は type="number" の暗黙の step=1 まで止める。プロフィールの数値欄はいずれも
+ * サーバ側が Integer なので、引き継ぎが無いと小数がそのまま届く。
+ */
+describe('プロフィールの数値欄は整数のみ受け付ける', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedApi.list.mockResolvedValue([]);
+  });
+
+  it.each([
+    ['年齢', '年齢は整数で入力してください'],
+    ['身長 (cm)', '身長は整数で入力してください'],
+    ['バスト (cm)', 'バストは整数で入力してください'],
+    ['ウエスト (cm)', 'ウエストは整数で入力してください'],
+    ['ヒップ (cm)', 'ヒップは整数で入力してください'],
+    ['表示順', '表示順は整数で入力してください'],
+  ])('%s に小数を入れると文言を出して送信しないこと', async (label, message) => {
+    const onSubmit = jest.fn();
+    render(<CastForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText(label), { target: { value: '1.5' } });
+    fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '花子' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('整数なら従来どおり送信できること', async () => {
+    const onSubmit = jest.fn();
+    render(<CastForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '花子' } });
+    fireEvent.change(screen.getByLabelText('年齢'), { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].age).toBe(25);
+  });
+
+  it('空欄のままなら整数規則は黙っていること（任意項目を塞がない）', async () => {
+    const onSubmit = jest.fn();
+    render(<CastForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '花子' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/整数で入力してください/)).not.toBeInTheDocument();
   });
 });
