@@ -44,12 +44,42 @@ describe('CastSchedulePage', () => {
   });
 
   it('取得に失敗した場合はエラー文言を表示し、空状態文言とは区別する', async () => {
-    mockedMySchedule.mockRejectedValue(new Error('network error'));
+    mockedMySchedule.mockRejectedValueOnce(new Error('network error'));
+    mockedMySchedule.mockResolvedValueOnce([]);
 
     render(<CastSchedulePage />);
 
     expect(await screen.findByText('スケジュールの取得に失敗しました')).toBeInTheDocument();
     expect(screen.queryByText('今週の確定シフトはありません')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('今週の確定シフトはありません')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('週を送っている間は前の週の行を残さない', async () => {
+    // 見出しの範囲は即座に新しい週へ動くため、行だけ前の週のまま残ると別の週の予定に読める
+    mockedMySchedule.mockResolvedValueOnce([
+      {
+        work_date: '2026-07-20',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+        status: 'CONFIRMED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+
+    render(<CastSchedulePage />);
+    expect(await screen.findByText('店舗A')).toBeInTheDocument();
+
+    // 次週の取得は解決させない（取得中の相を保ったまま観測する）
+    mockedMySchedule.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByRole('button', { name: '次週' }));
+
+    await waitFor(() => expect(screen.queryByText('店舗A')).not.toBeInTheDocument());
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
   });
 
   it('日付ごとにグルーピングし、店舗チップと時間帯を表示する', async () => {

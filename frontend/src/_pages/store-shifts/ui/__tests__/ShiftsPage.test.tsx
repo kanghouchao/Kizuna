@@ -63,6 +63,17 @@ describe('ShiftsPage のタブ遷移', () => {
     );
     expect(await screen.findByText(`${expected} の出勤`)).toBeInTheDocument();
   });
+
+  it('月を切り替えると新しい区間で取り直すこと', async () => {
+    render(<ShiftsPage />);
+    await waitFor(() => expect(mockedShiftList).toHaveBeenCalledTimes(1));
+    const firstFrom = mockedShiftList.mock.calls[0][0].from;
+
+    fireEvent.click(screen.getByRole('button', { name: '前の月' }));
+
+    await waitFor(() => expect(mockedShiftList).toHaveBeenCalledTimes(2));
+    expect(mockedShiftList.mock.calls[1][0].from < firstFrom).toBe(true);
+  });
 });
 
 describe('ShiftsPage の取得失敗', () => {

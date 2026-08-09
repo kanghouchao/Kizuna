@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CastAccountPage } from '../CastAccountPage';
 import { platformAuthApi, platformLineApi, useAuth } from '@/entities/user';
 
@@ -36,6 +36,22 @@ describe('CastAccountPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }));
 
     await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+  });
+
+  it('表示名が取れなければ読み込み表示に固着せず、失敗を名乗って再試行できる', async () => {
+    // LINE 連携ブロックも同じ me() を叩くため、Once では意図しない側が消費する
+    mockedMe.mockRejectedValue(new Error('boom'));
+
+    render(<CastAccountPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('表示名を取得できませんでした')).toBeInTheDocument();
+    expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
+
+    mockedMe.mockResolvedValue({ display_name: '田中一郎' });
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('田中一郎')).toBeInTheDocument();
   });
 
   it('LINE 連携が有効なら連携ブロックを表示する', async () => {

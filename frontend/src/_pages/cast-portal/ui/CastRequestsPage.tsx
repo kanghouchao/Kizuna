@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
   CastShiftRequestItem,
   ShiftRequestStatus,
-  CastStoreItem,
   ShiftRequestCreateRequest,
   shiftApi,
 } from '@/entities/shift';
+import { useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -22,6 +22,7 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  RegionError,
   Select,
   SelectContent,
   SelectItem,
@@ -87,9 +88,21 @@ function defaultValues(storeId: string): RequestFormValues {
 
 /** 出勤希望の提出フォームと提出履歴。所属店を跨いで全量・新しい順に表示する。 */
 export function CastRequestsPage() {
-  const [stores, setStores] = useState<CastStoreItem[]>([]);
-  const [history, setHistory] = useState<CastShiftRequestItem[] | null>(null);
-  const [hasError, setHasError] = useState(false);
+  // 所属店と履歴は別々の読み口。まとめて 1 つの失敗にすると、店舗が読めなかったときに
+  // 「履歴の取得に失敗しました」と名乗ることになる
+  const {
+    data: storesData,
+    isLoading: storesLoading,
+    failure: storesFailure,
+    reload: reloadStores,
+  } = useResource(() => shiftApi.myStores());
+  const stores = storesData ?? [];
+  const {
+    data: history,
+    isLoading: historyLoading,
+    failure: historyFailure,
+    reload: reloadHistory,
+  } = useResource(() => shiftApi.myShiftRequests());
 
   // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
   const storeOptions = stores.map(s => ({
@@ -106,38 +119,13 @@ export function CastRequestsPage() {
     formState: { isSubmitting },
   } = form;
 
-  const loadHistory = () => {
-    setHistory(null);
-    shiftApi
-      .myShiftRequests()
-      .then(res => setHistory(res))
-      .catch(() => setHasError(true));
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    shiftApi
-      .myStores()
-      .then(res => {
-        if (cancelled) return;
-        setStores(res);
-      })
-      .catch(() => {
-        if (!cancelled) setHasError(true);
-      });
-    loadHistory();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // 初期店舗の流し込みは選択肢が描画され終えた次のコミットで行う。Select は
   // form 内で隠し input を併走させており、選択肢が未登録のまま値だけ変わると
   // その隠し要素が値を保持できず change を打ち返して選択を空へ巻き戻すため。
   useEffect(() => {
-    const first = stores[0];
+    const first = storesData?.[0];
     if (first) setValue('store_id', String(first.store_id));
-  }, [stores, setValue]);
+  }, [storesData, setValue]);
 
   const submit = async (values: RequestFormValues) => {
     const payload: ShiftRequestCreateRequest = {
@@ -151,7 +139,7 @@ export function CastRequestsPage() {
       await shiftApi.submitShiftRequest(payload);
       notify.success('出勤希望を提出しました');
       reset(defaultValues(values.store_id));
-      loadHistory();
+      void reloadHistory();
     } catch {
       notify.error('出勤希望の提出に失敗しました');
     }
@@ -199,6 +187,18 @@ export function CastRequestsPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {/* placeholder の「所属店舗がありません」は取得中も失敗時も同じ顔をする。
+                        どちらなのかを欄の傍で述べる */}
+                    {storesLoading ? (
+                      <p className="text-sm text-muted-foreground">読み込み中...</p>
+                    ) : (
+                      storesFailure !== null && (
+                        <RegionError
+                          message="所属店舗の取得に失敗しました"
+                          onRetry={() => void reloadStores()}
+                        />
+                      )
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -280,11 +280,12 @@ export function CastRequestsPage() {
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-foreground">提出履歴</h2>
-        {hasError ? (
-          <p className="text-sm text-destructive-strong">履歴の取得に失敗しました</p>
-        ) : history === null ? (
+        {historyLoading ? (
           <p className="text-sm text-muted-foreground">読み込み中...</p>
-        ) : history.length === 0 ? (
+        ) : historyFailure !== null ? (
+          // 読めなかった履歴を空に見せると、提出済みの希望が消えたと読める
+          <RegionError message="履歴の取得に失敗しました" onRetry={() => void reloadHistory()} />
+        ) : history === null || history.length === 0 ? (
           <p className="text-sm text-muted-foreground">提出履歴はありません</p>
         ) : (
           <ul className="space-y-2">

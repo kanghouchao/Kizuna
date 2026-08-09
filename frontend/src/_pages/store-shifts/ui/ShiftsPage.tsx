@@ -1,7 +1,7 @@
 'use client';
 
 import { CalendarDaysIcon, ClockIcon, InboxIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CastResponse, castApi } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
 import { useResource } from '@/shared/lib';
@@ -24,9 +24,6 @@ export default function ShiftsPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(() => toDateStr(new Date()));
-  const [shifts, setShifts] = useState<ShiftResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [shiftsFailed, setShiftsFailed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
 
@@ -55,39 +52,17 @@ export default function ShiftsPage() {
     [tab, month, selectedDate]
   );
 
-  // range 変更や保存後の再取得。素早い月切替・日クリックで古いリクエストが後から解決しても、
-  // 現在の range に対応する応答だけを反映する（stale 応答による上書き防止）。
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let ignore = false;
-    setLoading(true);
-    // 取り直しの前に畳む。残したままだと、押した再試行が効いているのか分からない
-    setShiftsFailed(false);
-    shiftApi
-      .list(range)
-      .then(result => {
-        if (!ignore) {
-          setShifts(result);
-          setShiftsFailed(false);
-        }
-      })
-      .catch(() => {
-        // 読めなかった区間を空のまま見せると「この月は誰も出勤しない」に化ける
-        if (!ignore) {
-          setShifts([]);
-          setShiftsFailed(true);
-        }
-      })
-      .finally(() => {
-        if (!ignore) setLoading(false);
-      });
-    return () => {
-      ignore = true;
-    };
-  }, [range, reloadKey]);
-
-  const reloadShifts = () => setReloadKey(key => key + 1);
+  // 素早い月切替・日クリックで古いリクエストが後から解決しても、現在の range に対応する
+  // 応答だけが反映される（フックのリクエスト連番による stale 応答の破棄）。
+  const {
+    data: shiftsData,
+    isLoading: loading,
+    failure: shiftsFailure,
+    reload: reloadShifts,
+  } = useResource(() => shiftApi.list(range), [range]);
+  // 読めなかった区間を空のまま見せると「この月は誰も出勤しない」に化けるため、失敗時は
+  // 一覧そのものを出さない（下の失敗態へ倒す）
+  const shifts = shiftsData ?? [];
 
   const openAdd = () => {
     setEditing(null);
@@ -107,7 +82,7 @@ export default function ShiftsPage() {
   const shiftsError = (
     <RegionError
       message="シフトの取得に失敗しました"
-      onRetry={reloadShifts}
+      onRetry={() => void reloadShifts()}
       className="justify-center p-8"
     />
   );
@@ -156,7 +131,7 @@ export default function ShiftsPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value={CALENDAR_TAB} className="mt-6">
-          {shiftsFailed ? (
+          {shiftsFailure !== null ? (
             shiftsError
           ) : (
             <ShiftCalendar
@@ -169,7 +144,7 @@ export default function ShiftsPage() {
           )}
         </TabsContent>
         <TabsContent value={TIMELINE_TAB} className="mt-6">
-          {shiftsFailed ? (
+          {shiftsFailure !== null ? (
             shiftsError
           ) : (
             <ShiftTimeline
@@ -183,7 +158,7 @@ export default function ShiftsPage() {
           )}
         </TabsContent>
         <TabsContent value={REQUESTS_TAB} className="mt-6">
-          <ShiftRequestInbox casts={casts} onApproved={reloadShifts} />
+          <ShiftRequestInbox casts={casts} onApproved={() => void reloadShifts()} />
         </TabsContent>
       </Tabs>
 
@@ -193,7 +168,7 @@ export default function ShiftsPage() {
         casts={casts}
         editing={editing}
         defaultDate={selectedDate}
-        onSaved={reloadShifts}
+        onSaved={() => void reloadShifts()}
       />
     </div>
   );

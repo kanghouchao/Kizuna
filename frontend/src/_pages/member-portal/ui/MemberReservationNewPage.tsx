@@ -8,8 +8,8 @@ import { notify } from '@/shared/notify';
 import { useRouter } from 'next/navigation';
 import { memberOrderApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
-import { Store, platformStoreApi } from '@/entities/store';
-import { integerRule, isNotFound } from '@/shared/lib';
+import { platformStoreApi } from '@/entities/store';
+import { integerRule, useResource } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -24,6 +24,7 @@ import {
   FormMessage,
   Input,
   Label,
+  RegionError,
   Textarea,
 } from '@/shared/ui';
 
@@ -46,18 +47,18 @@ export function MemberReservationNewPage() {
   const searchParams = useSearchParams();
   const domain = searchParams.get('store');
 
-  const [store, setStore] = useState<Store | null>(null);
-  const [storeResolved, setStoreResolved] = useState(false);
-  // 照会そのものの失敗。「その店舗が無い」と同じ表示にすると、瞬断のときに再試行する手段が無くなる。
-  const [storeLookupFailed, setStoreLookupFailed] = useState(false);
-  // 取得失敗時の再試行用。ドメインが同じままでも effect を引き直せるようにする。
-  const [storeReloadNonce, setStoreReloadNonce] = useState(0);
-  const [casts, setCasts] = useState<ConfirmedShiftCast[]>([]);
-  const [castsLoading, setCastsLoading] = useState(false);
-  const [castsFailed, setCastsFailed] = useState(false);
-  // 取得失敗時の再試行用。日付・店舗が同じままでも effect を引き直せるようにする。
-  const [castsReloadNonce, setCastsReloadNonce] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+
+  const {
+    data: storeData,
+    isLoading: storeLoading,
+    failure: storeFailure,
+    reload: reloadStore,
+  } = useResource(domain ? () => platformStoreApi.lookupByDomain(domain) : null, [domain]);
+  // 取りに行かない間もフックは前の店舗を持ち続ける。ここで捨てないと、?store= の外れた URL で
+  // 前の店舗宛のフォームが送信できてしまう。
+  const store = domain ? storeData : null;
+  const storeId = store?.id ? Number(store.id) : null;
 
   const form = useForm<ReservationFormValues>({
     defaultValues: {
@@ -72,66 +73,26 @@ export function MemberReservationNewPage() {
 
   const businessDate = watch('business_date');
 
-  useEffect(() => {
-    // ドメインが変わった時点で前の店舗を捨てる。照会の完了を待つと、その間だけ前の店舗宛の
-    // フォームが送信可能なまま残る。
-    setStore(null);
-    setStoreLookupFailed(false);
-    if (!domain) {
-      setStoreResolved(true);
-      return;
-    }
-    setStoreResolved(false);
-    let cancelled = false;
-    platformStoreApi
-      .lookupByDomain(domain)
-      .then(resolved => {
-        if (!cancelled) setStore(resolved);
-      })
-      .catch(error => {
-        // 「そのドメインの店舗が無い」（404）と照会自体の失敗を区別する。後者は再試行で復帰しうる。
-        if (!cancelled && !isNotFound(error)) setStoreLookupFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setStoreResolved(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [domain, storeReloadNonce]);
-
-  const storeId = store?.id ? Number(store.id) : null;
+  const castsRequested = storeId !== null && businessDate !== '';
+  const {
+    data: castsData,
+    isLoading: castsLoading,
+    failure: castsFailure,
+    reload: reloadCasts,
+  } = useResource(
+    castsRequested
+      ? () => shiftApi.confirmedCasts({ store_id: storeId, date: businessDate })
+      : null,
+    [storeId, businessDate]
+  );
+  // 候補はその日その店舗の確定シフトに紐づく。フックは取得中も前の値を持ち続けるので、
+  // 待っている間に読むと前の日付のキャストを指名したまま送信できてしまう。
+  const casts: ConfirmedShiftCast[] = castsRequested && !castsLoading ? (castsData ?? []) : [];
 
   useEffect(() => {
-    // 候補はその日その店舗の確定シフトに紐づくため、日付・店舗が変わった時点で選択も候補も捨てる。
-    // 非同期の取得完了を待つと、その間だけ前の日付のキャストを指名したまま送信できてしまう。
-    setCasts([]);
-    setCastsFailed(false);
+    // 候補が入れ替わる契機では選択も捨てる。残すと、その日に出勤しないキャストの指名が通る。
     setValue('cast_id', '');
-    if (storeId === null || !businessDate) {
-      // 取得するものが無い＝待っているものも無い。読み込み中として送信を止めない。
-      setCastsLoading(false);
-      return;
-    }
-    setCastsLoading(true);
-    let cancelled = false;
-    shiftApi
-      .confirmedCasts({ store_id: storeId, date: businessDate })
-      .then(list => {
-        if (!cancelled) setCasts(list);
-      })
-      .catch(() => {
-        // 取得失敗を空候補と区別する — 「出勤なし」に見せると、指名するつもりの会員が
-        // 誤った空き情報のまま指名なしで申請してしまう
-        if (!cancelled) setCastsFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setCastsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [storeId, businessDate, setValue, castsReloadNonce]);
+  }, [storeId, businessDate, setValue]);
 
   const submit = async (values: ReservationFormValues) => {
     if (storeId === null) return;
@@ -164,20 +125,15 @@ export function MemberReservationNewPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {!storeResolved ? (
+          {storeLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : storeLookupFailed ? (
-            <div className="space-y-2">
-              <p className="text-sm text-destructive-strong">店舗情報を取得できませんでした。</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setStoreReloadNonce(nonce => nonce + 1)}
-              >
-                再読み込み
-              </Button>
-            </div>
+          ) : storeFailure === 'error' ? (
+            // 「そのドメインの店舗が無い」（404）と照会自体の失敗を区別する。後者は再試行で
+            // 復帰しうるので、下の案内と同じ行き止まりに見せない。
+            <RegionError
+              message="店舗情報を取得できませんでした"
+              onRetry={() => void reloadStore()}
+            />
           ) : !store ? (
             <p className="text-sm text-muted-foreground">
               店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。
@@ -250,24 +206,16 @@ export function MemberReservationNewPage() {
                       出勤情報を確認しています...
                     </p>
                   )}
-                  {businessDate && !castsLoading && castsFailed && (
-                    <div className="mt-1 flex items-center gap-2">
-                      <p className="text-xs text-destructive-strong">
-                        出勤情報を取得できませんでした。
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCastsReloadNonce(nonce => nonce + 1)}
-                      >
-                        再読み込み
-                      </Button>
-                    </div>
+                  {businessDate && !castsLoading && castsFailure !== null && (
+                    <RegionError
+                      message="出勤情報を取得できませんでした"
+                      onRetry={() => void reloadCasts()}
+                      className="mt-1"
+                    />
                   )}
                   {/* 取得が終わるまで「出勤なし」と言い切らない — 未解決の間に空表示を出すと、
                     指名するつもりの会員が誤った空き情報のまま指名なしで申請してしまう。 */}
-                  {businessDate && !castsLoading && !castsFailed && casts.length === 0 && (
+                  {businessDate && !castsLoading && castsFailure === null && casts.length === 0 && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       この日に出勤予定のキャストはいません。
                     </p>
@@ -295,7 +243,7 @@ export function MemberReservationNewPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={submitting || castsLoading || castsFailed}
+                  disabled={submitting || castsLoading || castsFailure !== null}
                 >
                   この内容で申請する
                 </Button>
