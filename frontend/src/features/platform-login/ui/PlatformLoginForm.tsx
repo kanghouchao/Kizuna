@@ -39,28 +39,32 @@ export default function PlatformLoginForm() {
     // 永久に描かれない。type="email" の執行もここで止まるため、下の pattern が引き継ぐ。
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-7" noValidate>
       {/* メールアドレス */}
-      <div className="auth-field">
-        <label
-          htmlFor="email"
-          className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-        >
-          メールアドレス
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          className="auth-field__input"
-          placeholder="example@mail.com"
-          aria-invalid={!!errors.email}
-          aria-describedby={errors.email ? 'email-error' : undefined}
-          {...register('email', {
-            required: 'メールアドレスを入力してください',
-            pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
-          })}
-        />
-        <span className="auth-field__accent" />
+      {/* 文言は .auth-field の外に置く。中に入れると下線（bottom:0 の絶対配置）が
+          伸びた入れ物の底へ移り、文言を貫いて描かれる */}
+      <div>
+        <div className="auth-field">
+          <label
+            htmlFor="email"
+            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
+          >
+            メールアドレス
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            className="auth-field__input"
+            placeholder="example@mail.com"
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? 'email-error' : undefined}
+            {...register('email', {
+              required: 'メールアドレスを入力してください',
+              pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
+            })}
+          />
+          <span className="auth-field__accent" />
+        </div>
         {errors.email && (
           <p id="email-error" className="auth-field__error">
             {errors.email.message}
@@ -69,25 +73,27 @@ export default function PlatformLoginForm() {
       </div>
 
       {/* パスワード */}
-      <div className="auth-field">
-        <label
-          htmlFor="password"
-          className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-        >
-          パスワード
-        </label>
-        <input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className="auth-field__input"
-          placeholder="パスワードを入力"
-          aria-invalid={!!errors.password}
-          aria-describedby={errors.password ? 'password-error' : undefined}
-          {...register('password', { required: 'パスワードを入力してください' })}
-        />
-        <span className="auth-field__accent" />
+      <div>
+        <div className="auth-field">
+          <label
+            htmlFor="password"
+            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
+          >
+            パスワード
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            className="auth-field__input"
+            placeholder="パスワードを入力"
+            aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? 'password-error' : undefined}
+            {...register('password', { required: 'パスワードを入力してください' })}
+          />
+          <span className="auth-field__accent" />
+        </div>
         {errors.password && (
           <p id="password-error" className="auth-field__error">
             {errors.password.message}

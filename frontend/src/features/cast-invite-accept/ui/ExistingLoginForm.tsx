@@ -81,28 +81,32 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
     // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、我々の文言は
     // 永久に描かれない。type="email" の執行もここで止まるため、下の pattern が引き継ぐ。
     <form onSubmit={handleSubmit(submit)} className="space-y-7" noValidate>
-      <div className="auth-field">
-        <label
-          htmlFor="invite-login-email"
-          className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-        >
-          メールアドレス
-        </label>
-        <input
-          id="invite-login-email"
-          type="email"
-          autoComplete="email"
-          required
-          className="auth-field__input"
-          placeholder="example@mail.com"
-          aria-invalid={!!errors.email}
-          aria-describedby={errors.email ? 'invite-login-email-error' : undefined}
-          {...register('email', {
-            required: 'メールアドレスを入力してください',
-            pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
-          })}
-        />
-        <span className="auth-field__accent" />
+      {/* 文言は .auth-field の外に置く。中に入れると下線（bottom:0 の絶対配置）が
+          伸びた入れ物の底へ移り、文言を貫いて描かれる */}
+      <div>
+        <div className="auth-field">
+          <label
+            htmlFor="invite-login-email"
+            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
+          >
+            メールアドレス
+          </label>
+          <input
+            id="invite-login-email"
+            type="email"
+            autoComplete="email"
+            required
+            className="auth-field__input"
+            placeholder="example@mail.com"
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? 'invite-login-email-error' : undefined}
+            {...register('email', {
+              required: 'メールアドレスを入力してください',
+              pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
+            })}
+          />
+          <span className="auth-field__accent" />
+        </div>
         {errors.email && (
           <p id="invite-login-email-error" className="auth-field__error">
             {errors.email.message}
@@ -110,25 +114,27 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
         )}
       </div>
 
-      <div className="auth-field">
-        <label
-          htmlFor="invite-login-password"
-          className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-        >
-          パスワード
-        </label>
-        <input
-          id="invite-login-password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className="auth-field__input"
-          placeholder="パスワードを入力"
-          aria-invalid={!!errors.password}
-          aria-describedby={errors.password ? 'invite-login-password-error' : undefined}
-          {...register('password', { required: 'パスワードを入力してください' })}
-        />
-        <span className="auth-field__accent" />
+      <div>
+        <div className="auth-field">
+          <label
+            htmlFor="invite-login-password"
+            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
+          >
+            パスワード
+          </label>
+          <input
+            id="invite-login-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            className="auth-field__input"
+            placeholder="パスワードを入力"
+            aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? 'invite-login-password-error' : undefined}
+            {...register('password', { required: 'パスワードを入力してください' })}
+          />
+          <span className="auth-field__accent" />
+        </div>
         {errors.password && (
           <p id="invite-login-password-error" className="auth-field__error">
             {errors.password.message}
