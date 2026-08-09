@@ -39,8 +39,9 @@ export default function StoreProfilePage() {
   }
 
   // 取れなかった設定でフォームを描くと、保存がその古い値を本当にしてしまう。出口の無い
-  // 赤字ではなく、頁自身が失敗を名乗って再試行を持つ
-  if (failure !== null) {
+  // 赤字ではなく、頁自身が失敗を名乗って再試行を持つ。例外にならない空応答も同じ扱い —
+  // 描くものが無いのに白紙を返すと、失敗の告知と再試行の導線が同時に消える
+  if (failure !== null || !config) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold text-foreground">店舗情報</h1>
@@ -48,8 +49,6 @@ export default function StoreProfilePage() {
       </div>
     );
   }
-
-  if (!config) return null;
 
   return (
     <div className="max-w-4xl mx-auto">
