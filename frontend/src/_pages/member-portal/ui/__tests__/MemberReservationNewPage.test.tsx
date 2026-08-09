@@ -224,6 +224,44 @@ describe('MemberReservationNewPage', () => {
     expect(screen.getByText('出勤情報を確認しています...')).toBeInTheDocument();
   });
 
+  it('利用日を消したら、前の日の取得失敗が送信を塞いだままにならない', async () => {
+    // 失敗の文言は利用日が入っている間しか出ない。抑止だけ残ると、押せない理由がどこにも
+    // 書かれていない送信ボタンになる（日付を選び直すのは普通の操作）
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+    mockedCasts.mockRejectedValue(new Error('network'));
+
+    render(<MemberReservationNewPage />);
+
+    const date = await screen.findByLabelText('利用日');
+    fireEvent.change(date, { target: { value: '2026-08-10' } });
+
+    expect(await screen.findByText('出勤情報を取得できませんでした')).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+
+    fireEvent.change(date, { target: { value: '' } });
+
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    expect(screen.queryByText('出勤情報を取得できませんでした')).not.toBeInTheDocument();
+  });
+
+  it('店舗パラメータが外れたら、前の照会の失敗が居座らない', async () => {
+    // 取りに行く先が無いまま再試行を出しても、押した先で何も起きない行き止まりになる
+    mockedLookup.mockRejectedValue(new Error('network'));
+
+    const { rerender } = render(<MemberReservationNewPage />);
+    expect(await screen.findByText('店舗情報を取得できませんでした')).toBeInTheDocument();
+
+    searchParams = new URLSearchParams();
+    rerender(<MemberReservationNewPage />);
+
+    expect(
+      await screen.findByText(
+        '店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText('店舗情報を取得できませんでした')).not.toBeInTheDocument();
+  });
+
   it('指名候補の取得中は「出勤なし」を出さず、送信も抑止する', async () => {
     // 未解決のまま空表示にすると、指名するつもりの会員が候補を見ないまま指名なしで申請できてしまう
     mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });

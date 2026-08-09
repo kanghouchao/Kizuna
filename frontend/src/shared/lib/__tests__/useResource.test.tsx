@@ -89,6 +89,23 @@ describe('useResource', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('無効化されたら前の失敗は畳む（押しても取りに行かない再試行を残さない）', async () => {
+    // 値と違い、前の失敗が「取りに行かなくなった今」を説明することは無い。残すと呼び出し側は
+    // 失敗の姿と再試行を出し続け、その再試行は fetcher が null なので永久に何も起こさない
+    const fetcher = jest.fn(async () => {
+      throw new Error('boom');
+    });
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useResource(enabled ? fetcher : null, [enabled]),
+      { initialProps: { enabled: true } }
+    );
+    await waitFor(() => expect(result.current.failure).toBe('error'));
+
+    rerender({ enabled: false });
+
+    await waitFor(() => expect(result.current.failure).toBeNull());
+  });
+
   it('古いリクエストの遅延応答は新しい結果を上書きしない', async () => {
     const resolvers: Array<(value: string) => void> = [];
     const fetcher = jest.fn(() => new Promise<string>(resolve => resolvers.push(resolve)));

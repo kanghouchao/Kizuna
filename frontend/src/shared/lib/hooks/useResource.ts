@@ -61,13 +61,15 @@ export function useResource<T>(
     const currentFetcher = fetcherRef.current;
     // 在途のリクエストは、これから取りに行くかどうかに関わらず無効化する
     const requestId = ++requestIdRef.current;
+    // 失敗も同じく、取りに行くかどうかに関わらず畳む。再取得中に残すと押した再試行が効いて
+    // いるのか分からず、取りに行かなくなった後に残すと、押しても何も起きない再試行が出たまま
+    // になる（値と違って、前の失敗が今の状態を説明することは無い）。
+    setFailure(null);
     if (currentFetcher === null) {
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
-    // 再取得中は失敗表示を畳む。残したままだと、押した再試行が効いているのか分からない。
-    setFailure(null);
     try {
       const result = await currentFetcher();
       if (requestId === requestIdRef.current) {
