@@ -37,8 +37,10 @@ export function MemberHomePage() {
           {isLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : failure !== null || memberCode === null ? (
-            // コードの無い応答も「取れなかった」と同じ扱いにする。会員証として提示できない
-            // 姿にコードだけ抜けた見た目を与えると、読み取れないのが店舗側の問題に見える
+            // 読めなかったカードに「再読み込みしてください」と書いても、それは頁ごと読み直せと
+            // 言っているだけ。領域が自分で失敗を名乗り、自分の再試行を持つ。
+            // `memberCode === null` は型の絞り込み — 会員コードは非 null 制約と生成時検証を
+            // 通っており、中身の無い応答はフックが失敗へ倒すので、ここには失敗の姿として届く
             <RegionError message="会員コードを取得できませんでした" onRetry={() => void reload()} />
           ) : (
             <div className="flex flex-col items-center gap-4">

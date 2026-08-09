@@ -55,8 +55,11 @@ export function MemberReservationNewPage() {
     failure: storeFailure,
     reload: reloadStore,
   } = useResource(domain ? () => platformStoreApi.lookupByDomain(domain) : null, [domain]);
-  // 取りに行かない間もフックは前の店舗を持ち続ける。ここで捨てないと、?store= の外れた URL で
-  // 前の店舗宛のフォームが送信できてしまう。
+  // フックが持つのは「最後に取れた店舗」であって「今の ?store= の店舗」ではない。取りに行く
+  // 理由が無くなっても値は残るので、ここで捨てないと ?store= の外れた URL で前の店舗宛の
+  // フォームが送信できてしまう。ドメインが別の値へ変わる場合は取得中の相（読み込み中）が
+  // 引き取る — フックの読み込み表示が 1 コミット遅れる分だけ前の店舗が残るが、この頁へは
+  // 公式サイトからの遷移で入り直すため、頁に留まったまま ?store= が変わる経路は無い。
   const store = domain ? storeData : null;
   const storeId = store?.id ? Number(store.id) : null;
 
@@ -85,8 +88,9 @@ export function MemberReservationNewPage() {
       : null,
     [storeId, businessDate]
   );
-  // 候補はその日その店舗の確定シフトに紐づく。フックは取得中も前の値を持ち続けるので、
-  // 待っている間に読むと前の日付のキャストを指名したまま送信できてしまう。
+  // 候補はその日その店舗の確定シフトに紐づく。日付は頁に留まったまま何度でも変わり、フックは
+  // 次が届くまで前の値を持ち続けるので、取得中も読み込み表示だけで済ませると、選択肢には前の
+  // 日付のキャストが並び続ける（選べてしまう）。取りに行っていない間・待っている間は空にする。
   const casts: ConfirmedShiftCast[] = castsRequested && !castsLoading ? (castsData ?? []) : [];
 
   useEffect(() => {
