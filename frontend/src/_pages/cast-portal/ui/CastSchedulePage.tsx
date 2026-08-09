@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CastScheduleItem, shiftApi } from '@/entities/shift';
-import { Badge, Button, Card, CardContent } from '@/shared/ui';
+import { useResource } from '@/shared/lib';
+import { Badge, Button, Card, CardContent, RegionError } from '@/shared/ui';
 import { groupByWorkDate } from '../lib/groupSchedule';
 import { ShiftChangeRequestModal } from './ShiftChangeRequestModal';
 import {
@@ -26,26 +27,16 @@ function formatDateLabel(dateStr: string): string {
 /** 全所属店の確定シフトを週集約で表示する（cast_id 単層自限）。日曜起点の週ナビ付き。 */
 export function CastSchedulePage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => weekStart(new Date()));
-  const [items, setItems] = useState<CastScheduleItem[] | null>(null);
-  const [hasError, setHasError] = useState(false);
   const [changeTarget, setChangeTarget] = useState<CastScheduleItem | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setItems(null);
-    setHasError(false);
-    const dates = weekDates(currentWeekStart);
-    shiftApi
-      .mySchedule({ from: toDateStr(dates[0]), to: toDateStr(dates[6]) })
-      .then(res => {
-        if (!cancelled) setItems(res);
-      })
-      .catch(() => {
-        if (!cancelled) setHasError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const {
+    data: items,
+    isLoading,
+    failure,
+    reload,
+  } = useResource(() => {
+    const week = weekDates(currentWeekStart);
+    return shiftApi.mySchedule({ from: toDateStr(week[0]), to: toDateStr(week[6]) });
   }, [currentWeekStart]);
 
   const dates = weekDates(currentWeekStart);
@@ -72,10 +63,12 @@ export function CastSchedulePage() {
         </Button>
       </div>
 
-      {hasError ? (
-        <p className="text-sm text-destructive-strong">スケジュールの取得に失敗しました</p>
-      ) : items === null ? (
+      {/* 読み込み中を先に置く。週送りでは見出しの範囲だけが先に動くので、取得中に items を
+          読むと新しい週の見出しの下へ前の週の行が並ぶ */}
+      {isLoading ? (
         <p className="text-sm text-muted-foreground">読み込み中...</p>
+      ) : failure !== null ? (
+        <RegionError message="スケジュールの取得に失敗しました" onRetry={() => void reload()} />
       ) : groups.length === 0 ? (
         <p className="text-sm text-muted-foreground">今週の確定シフトはありません</p>
       ) : (

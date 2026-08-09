@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { memberApi } from '@/entities/member';
 import { useAuth } from '@/entities/user';
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@/shared/ui';
+import { useResource } from '@/shared/lib';
+import { Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
 
 /** 会員コードを 4 桁区切りで読みやすく整形する（例: 1234 5678 9012）。 */
 function formatMemberCode(code: string): string {
@@ -18,26 +18,9 @@ function formatMemberCode(code: string): string {
  */
 export function MemberHomePage() {
   const { logout } = useAuth();
-  const [displayName, setDisplayName] = useState<string | null>(null);
-  const [memberCode, setMemberCode] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    memberApi
-      .home()
-      .then(home => {
-        if (cancelled) return;
-        setDisplayName(home.display_name ?? null);
-        setMemberCode(home.member_code ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data: home, isLoading, failure, reload } = useResource(() => memberApi.home());
+  const displayName = home?.display_name ?? null;
+  const memberCode = home?.member_code ?? null;
 
   return (
     <div className="mx-auto w-full max-w-md p-4">
@@ -51,11 +34,13 @@ export function MemberHomePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {failed ? (
-            <p className="text-sm text-destructive-strong">
-              会員コードを取得できませんでした。再読み込みしてください。
-            </p>
-          ) : memberCode ? (
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : failure !== null || memberCode === null ? (
+            // コードの無い応答も「取れなかった」と同じ扱いにする。会員証として提示できない
+            // 姿にコードだけ抜けた見た目を与えると、読み取れないのが店舗側の問題に見える
+            <RegionError message="会員コードを取得できませんでした" onRetry={() => void reload()} />
+          ) : (
             <div className="flex flex-col items-center gap-4">
               <div className="rounded-xl border bg-card p-4">
                 <QRCodeSVG value={memberCode} size={192} aria-label="会員コードQR" role="img" />
@@ -67,8 +52,6 @@ export function MemberHomePage() {
                 来店時にこのコードを提示すると、店舗があなたの利用をこのアカウントに紐づけます。
               </p>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
           )}
         </CardContent>
       </Card>

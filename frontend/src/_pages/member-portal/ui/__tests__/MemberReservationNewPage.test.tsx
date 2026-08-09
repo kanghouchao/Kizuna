@@ -64,14 +64,14 @@ describe('MemberReservationNewPage', () => {
 
     render(<MemberReservationNewPage />);
 
-    expect(await screen.findByText('店舗情報を取得できませんでした。')).toBeInTheDocument();
+    expect(await screen.findByText('店舗情報を取得できませんでした')).toBeInTheDocument();
     expect(
       screen.queryByText(
         '店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。'
       )
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByRole('button', { name: 'この内容で申請する' })).toBeInTheDocument();
   });
@@ -91,6 +91,26 @@ describe('MemberReservationNewPage', () => {
       expect(screen.queryByRole('button', { name: 'この内容で申請する' })).not.toBeInTheDocument()
     );
     expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+  });
+
+  it('店舗パラメータが外れたら前の店舗のフォームを残さない', async () => {
+    // 取りに行く理由が無くなっても、直前に読めた店舗宛のフォームが送信可能なまま残ってはいけない
+    mockedLookup.mockResolvedValueOnce({ id: '1', name: 'サンプル店舗' });
+
+    const { rerender } = render(<MemberReservationNewPage />);
+    expect(await screen.findByRole('button', { name: 'この内容で申請する' })).toBeInTheDocument();
+
+    searchParams = new URLSearchParams();
+    rerender(<MemberReservationNewPage />);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'この内容で申請する' })).not.toBeInTheDocument()
+    );
+    expect(
+      await screen.findByText(
+        '店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。'
+      )
+    ).toBeInTheDocument();
   });
 
   it('店舗パラメータが無いときも案内だけ表示する', async () => {
@@ -167,18 +187,41 @@ describe('MemberReservationNewPage', () => {
 
     fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
 
-    expect(await screen.findByText('出勤情報を取得できませんでした。')).toBeInTheDocument();
+    expect(await screen.findByText('出勤情報を取得できませんでした')).toBeInTheDocument();
     expect(screen.queryByText('この日に出勤予定のキャストはいません。')).not.toBeInTheDocument();
 
     // 誰が出勤するか不明のまま送信できると、指名するつもりの会員が「指名なし」で申請してしまう
     expect(submitButton()).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }));
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
-    expect(screen.queryByText('出勤情報を取得できませんでした。')).not.toBeInTheDocument();
+    expect(screen.queryByText('出勤情報を取得できませんでした')).not.toBeInTheDocument();
     // 再読み込みが通れば送信できる（失敗が行き止まりにならない）
     expect(submitButton()).toBeEnabled();
+  });
+
+  it('利用日を変えたら、次の候補が届くまで前の日のキャストを残さない', async () => {
+    // 前の日の候補が残ると、その日に出勤しないキャストを指名したまま申請できてしまう
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+    mockedCasts.mockResolvedValueOnce([
+      { cast_id: 'c1', cast_name: 'さくら', start_time: '18:00:00' },
+    ]);
+
+    render(<MemberReservationNewPage />);
+
+    const date = await screen.findByLabelText('利用日');
+    fireEvent.change(date, { target: { value: '2026-08-10' } });
+    expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
+
+    // 次の日の取得は解決させない（取得中の相を保ったまま観測する）
+    mockedCasts.mockReturnValue(new Promise(() => {}));
+    fireEvent.change(date, { target: { value: '2026-08-11' } });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: 'さくら（18:00〜）' })).not.toBeInTheDocument()
+    );
+    expect(screen.getByText('出勤情報を確認しています...')).toBeInTheDocument();
   });
 
   it('指名候補の取得中は「出勤なし」を出さず、送信も抑止する', async () => {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CastRequestsPage } from '../CastRequestsPage';
 import { shiftApi } from '@/entities/shift';
 
@@ -180,11 +180,45 @@ describe('CastRequestsPage', () => {
     expect(screen.queryByText('却下')).not.toBeInTheDocument();
   });
 
-  it('取得に失敗した場合はエラー文言を表示すること', async () => {
-    mockedMyShiftRequests.mockRejectedValue(new Error('network error'));
+  it('取得に失敗した場合はエラー文言を表示し、再試行で復帰できること', async () => {
+    mockedMyShiftRequests.mockRejectedValueOnce(new Error('network error'));
+    mockedMyShiftRequests.mockResolvedValueOnce([]);
 
     render(<CastRequestsPage />);
 
-    expect(await screen.findByText('履歴の取得に失敗しました')).toBeInTheDocument();
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('履歴の取得に失敗しました')).toBeInTheDocument();
+
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('提出履歴はありません')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('所属店舗が取れなければ履歴ではなく店舗欄が失敗を名乗り、再試行できること', async () => {
+    // 空の候補は placeholder の「所属店舗がありません」と区別がつかない
+    mockedMyStores.mockRejectedValueOnce(new Error('network error'));
+    mockedMyStores.mockResolvedValueOnce(STORES);
+
+    render(<CastRequestsPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('所属店舗の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('履歴の取得に失敗しました')).not.toBeInTheDocument();
+
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    await waitStoresLoaded();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('所属店舗の取得中は「所属店舗がありません」と言い切らないこと', async () => {
+    mockedMyStores.mockReturnValue(new Promise(() => {}));
+
+    render(<CastRequestsPage />);
+
+    // 履歴側の読み込み表示は先に解けるので、残る読み込み中は店舗欄のもの
+    expect(await screen.findByText('提出履歴はありません')).toBeInTheDocument();
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
   });
 });
