@@ -77,4 +77,13 @@ describe('新規オーダー登録の送信ペイロード', () => {
     expect(trigger).toHaveAttribute('aria-describedby', expect.stringContaining(message.id));
     expect(mockedOrderApi.create).not.toHaveBeenCalled();
   });
+
+  // aria-invalid は「今まちがっている」しか言わない。「入れる必要がある」は誤りが起きる前から
+  // 要る情報で、引き金は button なので原生 required では持てない。
+  it('キャストの引き金が最初から必須を名乗ること', async () => {
+    render(<CreateOrderPage />);
+
+    const trigger = await screen.findByRole('combobox', { name: /キャスト/ });
+    expect(trigger).toHaveAttribute('aria-required', 'true');
+  });
 });

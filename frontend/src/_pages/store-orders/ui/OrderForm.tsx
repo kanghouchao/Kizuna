@@ -331,6 +331,7 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                         castName={castName ?? ''}
                         onChange={field.onChange}
                         triggerRef={field.ref}
+                        required
                       />
                     </FormControl>
                     <FormMessage />
