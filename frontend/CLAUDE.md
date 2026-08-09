@@ -25,7 +25,8 @@ frontend/src/
 │                 #   each slice = model (types) / api (requests) / index (public API)
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (shadcn/ui barrel + hand-written generics),
                   #   notify (the toast severity tiers — call sites write the meaning, never the colour/duration/icon;
-                  #   importing `@base-ui/react/toast` directly is ESLint-banned — always go through this slice)
+                  #   importing `@base-ui/react/toast` directly is ESLint-banned — the only whitelisted files are
+                  #   this slice's index and the `shared/ui/toast.tsx` renderer; everything else goes through notify)
 ```
 
 Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice), `proxy.ts` + `proxy.test.ts` (the Next proxy entry — Host-based store/platform dispatch, delegating to `shared/lib/proxy`), and `__tests__/` (cross-cutting invariant tests).
