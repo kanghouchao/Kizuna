@@ -65,8 +65,9 @@ export default function CustomerEditPage() {
   }
 
   // 取得できなかったこの頁自身が失敗を名乗るので、一覧へ送り返さない — 離脱すると説明責任が
-  // 着地先へ移り、開いていた頁で再試行できなくなる
-  if (failure !== null) {
+  // 着地先へ移り、開いていた頁で再試行できなくなる。例外にならない空応答も同じ扱いで、
+  // 404 ではないので再試行を持つ側へ落ちる（白紙で返すと告知も導線も同時に消える）
+  if (failure !== null || !customer) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">顧客編集</h1>
@@ -85,8 +86,6 @@ export default function CustomerEditPage() {
       </div>
     );
   }
-
-  if (!customer) return null;
 
   return (
     <div className="space-y-6">

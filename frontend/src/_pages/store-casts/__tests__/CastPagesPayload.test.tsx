@@ -197,6 +197,20 @@ describe('キャスト編集の取得失敗', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('応答が空でも白紙にせず、再試行できる失敗として名乗ること', async () => {
+    // 例外にならない空応答（204・本文なし）でも描くものは無い。白紙で返すと失敗の告知も
+    // 再試行の導線も同時に消える。404 ではないので、出すのは再試行を持つ側の姿
+    mockedCastApi.get.mockResolvedValueOnce(undefined as never);
+
+    render(<CastEditPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('キャスト情報の取得に失敗しました')).toBeInTheDocument();
+    expect(within(region).getByRole('button', { name: '再試行' })).toBeInTheDocument();
+    expect(screen.queryByText('このキャストは見つかりませんでした')).not.toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('404 では再試行を出さず、一覧への導線だけを出すこと', async () => {
     mockedCastApi.get.mockRejectedValueOnce({ response: { status: 404 } });
 
