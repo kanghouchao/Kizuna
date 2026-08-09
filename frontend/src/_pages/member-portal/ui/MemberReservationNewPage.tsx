@@ -56,10 +56,9 @@ export function MemberReservationNewPage() {
     reload: reloadStore,
   } = useResource(domain ? () => platformStoreApi.lookupByDomain(domain) : null, [domain]);
   // フックが持つのは「最後に取れた店舗」であって「今の ?store= の店舗」ではない。取りに行く
-  // 理由が無くなっても値は残るので、ここで捨てないと ?store= の外れた URL で前の店舗宛の
-  // フォームが送信できてしまう。ドメインが別の値へ変わる場合は取得中の相（読み込み中）が
-  // 引き取る — フックの読み込み表示が 1 コミット遅れる分だけ前の店舗が残るが、この頁へは
-  // 公式サイトからの遷移で入り直すため、頁に留まったまま ?store= が変わる経路は無い。
+  // 理由が無くなっても値は残る（フックの既定 — 開き直した区画に生の id を出さないため）ので、
+  // この頁では捨てる。残すと ?store= の外れた URL で前の店舗宛のフォームが送信できてしまう。
+  // ドメインが別の値へ変わる場合は取得中の相（読み込み中）が引き取る。
   const store = domain ? storeData : null;
   const storeId = store?.id ? Number(store.id) : null;
 
