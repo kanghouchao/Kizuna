@@ -85,4 +85,32 @@ export default [
       'no-undef': 'off', // Last resort if globals fail
     },
   },
+  // 通知は語義層を通す。toast マネージャへ直接届くと、呼び出し側が段・色・duration を自分で
+  // 書けてしまい、段の体系を黙って抜けられる。塞ぐのは `toast` サブパスだけ——`@base-ui/react`
+  // の他のプリミティブは shared/ui が使い続ける。
+  // この規則が見るのは静的な `import` と `export … from` だけ。動的 `import()` や `require()`、
+  // `jest.mock` の文字列は素通りするので、そこは規約とレビューで見る。
+  {
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@base-ui/react/toast'],
+              message: '通知は @/shared/notify の notify.* を通す。段の一覧は DESIGN.md。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // 実体に触れてよいのは語義層と、それを描くプリミティブだけ。テストも例外にしない——
+  // 例外が一つ増えるたびに、段を書かずに通知を出せる場所が一つ増える。
+  {
+    files: ['src/shared/notify/**', 'src/shared/ui/toast.tsx'],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
 ];
