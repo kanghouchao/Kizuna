@@ -24,7 +24,8 @@ frontend/src/
 │                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift, member
 │                 #   each slice = model (types) / api (requests) / index (public API)
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (shadcn/ui barrel + hand-written generics),
-                  #   notify (the toast severity tiers — call sites write the meaning, never the colour/duration/icon)
+                  #   notify (the toast severity tiers — call sites write the meaning, never the colour/duration/icon;
+                  #   importing `@base-ui/react/toast` directly is ESLint-banned — always go through this slice)
 ```
 
 Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice), `proxy.ts` + `proxy.test.ts` (the Next proxy entry — Host-based store/platform dispatch, delegating to `shared/lib/proxy`), and `__tests__/` (cross-cutting invariant tests).
@@ -50,5 +51,5 @@ Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice),
   - API-related types (interface/type) and their property names: **snake_case** (matching the backend JSON keys; existing camelCase types are a known mismatch tracked in a separate issue)
   - Internal variables/functions: normal TypeScript conventions, but data coming from the API keeps snake_case
   - Store-side vocabulary uses the Store prefix: StoreProfile*. The unified account type is PlatformUser (`entities/user/api/platform.ts`)
-- **Coverage**: Jest threshold of 70% lines/statements. Targets are shared/api, shared/lib, and entities (pages and templates are excluded).
+- **Coverage**: Jest thresholds of 70% lines/statements, 60% branches, 55% functions. Targets are shared/api, shared/lib, and entities (pages and templates are excluded).
 - **Disabling a Steiger rule requires a reason comment in steiger.config.mjs** (typo-in-layer-name / repetitive-naming / insignificant-slice are off by design decision or rule specification).
