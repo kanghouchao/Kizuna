@@ -1,35 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { StoreStats, platformStoreApi } from '@/entities/store';
+import { platformStoreApi } from '@/entities/store';
+import { useResource } from '@/shared/lib';
 import { Card, CardContent, RegionError, Skeleton } from '@/shared/ui';
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<StoreStats | null>(null);
-  const [loadingStats, setLoadingStats] = useState(true);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 統計をクリアするようになったので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
-
-  // 再試行から呼び直せるよう effect の外に置く。先頭で読み込み中へ戻すのは、同じ姿のまま
-  // 二度目の失敗を迎えると RegionError が mount し直されず読み上げに何も届かないため
-  const loadStats = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoadingStats(true);
-    try {
-      const data = await platformStoreApi.getStats();
-      if (requestId === requestIdRef.current) setStats(data);
-    } catch {
-      // 取れなかった統計を残すと 0 と表示され、店舗が 1 つも無い状態と見分けがつかない
-      if (requestId === requestIdRef.current) setStats(null);
-    } finally {
-      if (requestId === requestIdRef.current) setLoadingStats(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadStats();
-  }, [loadStats]);
+  const {
+    data: stats,
+    isLoading: loadingStats,
+    failure,
+    reload: loadStats,
+  } = useResource(() => platformStoreApi.getStats());
 
   return (
     // 外殻（サイドバー・ヘッダー・幅制約・余白）は (admin) の layout が供給するため、
@@ -42,8 +23,8 @@ export default function AdminDashboard() {
               <Skeleton className="h-4 w-3/4 mb-2" />
               <Skeleton className="h-8 w-1/2" />
             </>
-          ) : !stats ? (
-            // 読み込みを終えて統計が無いのは取得に失敗したときだけ
+          ) : failure !== null ? (
+            // 取れなかった統計を残すと 0 と表示され、店舗が 1 つも無い状態と見分けがつかない
             <RegionError message="店舗数の取得に失敗しました" onRetry={() => void loadStats()} />
           ) : (
             <div className="flex items-center">

@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { OrderReceptionist, ReceptionRoute, orderApi } from '@/entities/order';
+import { ReceptionRoute, orderApi } from '@/entities/order';
+import { useResource } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
@@ -119,41 +119,18 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
   });
   const { register, handleSubmit, control } = form;
 
-  const [receptionistOptions, setReceptionistOptions] = useState<OrderReceptionist[]>([]);
-  const [receptionistsFailed, setReceptionistsFailed] = useState(false);
+  const {
+    data: receptionistOptions,
+    isLoading: receptionistsLoading,
+    failure: receptionistsFailure,
+    reload: loadReceptionists,
+  } = useResource(() => orderApi.listReceptionists());
   const receptionistItems = [
     { value: SELECT_NONE, label: '－－－' },
-    ...receptionistOptions
+    ...(receptionistOptions ?? [])
       .filter(o => o.id !== undefined)
       .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
   ];
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 選択肢をクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
-
-  // 再試行から呼び直せるよう effect の外に置く。取り直しの前に失敗を畳むのは、同じ姿のまま
-  // 失敗を繰り返すと role="alert" が挿入されず二度目の失敗が読み上げ利用者に届かないため
-  const loadReceptionists = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setReceptionistsFailed(false);
-    try {
-      const receptionists = await orderApi.listReceptionists();
-      if (requestId === requestIdRef.current) {
-        setReceptionistOptions(receptionists);
-        setReceptionistsFailed(false);
-      }
-    } catch {
-      // 選択肢が「－－－」だけの状態は「受付が 1 人も居ない」と区別がつかない
-      if (requestId === requestIdRef.current) {
-        setReceptionistOptions([]);
-        setReceptionistsFailed(true);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadReceptionists();
-  }, [loadReceptionists]);
 
   return (
     <Form {...form}>
@@ -194,11 +171,17 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                       </SelectContent>
                     </Select>
                     {/* 送信は塞がない。選べないまま押せば上の rules が欄の傍で止める */}
-                    {receptionistsFailed && (
-                      <RegionError
-                        message="受付担当者の取得に失敗しました"
-                        onRetry={() => void loadReceptionists()}
-                      />
+                    {receptionistsLoading ? (
+                      // 候補が「－－－」だけの状態は「受付が 1 人も居ない」と区別がつかない。
+                      // 取得中であることを欄の傍で述べる
+                      <p className="text-sm text-muted-foreground">読み込み中...</p>
+                    ) : (
+                      receptionistsFailure !== null && (
+                        <RegionError
+                          message="受付担当者の取得に失敗しました"
+                          onRetry={() => void loadReceptionists()}
+                        />
+                      )
                     )}
                     <FormMessage />
                   </FormItem>

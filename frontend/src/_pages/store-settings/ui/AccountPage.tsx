@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { platformAuthApi } from '@/entities/user';
 import { PasswordChangeForm } from '@/features/password-change';
+import { useResource } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -18,48 +19,28 @@ import {
 
 /** アカウント設定ページ（プロフィール + パスワード変更） */
 export default function AccountPage() {
-  const [nickname, setNickname] = useState('');
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const {
+    data: me,
+    setData: setMe,
+    isLoading,
+    failure,
+    reload: fetchMe,
+  } = useResource(() => platformAuthApi.me());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 欄をクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
-
-  // 再試行から呼び直せるよう effect の外に置く
-  const fetchMe = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setIsLoading(true);
-    try {
-      const me = await platformAuthApi.me();
-      if (requestId === requestIdRef.current) {
-        setNickname(me.display_name ?? '');
-        setEmail(me.email ?? '');
-        setFailed(false);
-      }
-    } catch {
-      // 空欄のまま出すと「ニックネーム未設定」に見え、保存するとその空欄が本当になる
-      if (requestId === requestIdRef.current) {
-        setNickname('');
-        setEmail('');
-        setFailed(true);
-      }
-    } finally {
-      if (requestId === requestIdRef.current) setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchMe();
-  }, [fetchMe]);
+  // 欄の起点は取得した自分の情報で、編集を始めたらその下書きが優先する。効果で写すと、
+  // 届いたレンダーで欄が空のまま一度描かれる。下書きは書き始めた時点の取得結果に結び付ける
+  // — 取り直しが届いたら、その値で描き直す（失敗して消えたときは空欄へ戻る）
+  const [draft, setDraft] = useState<{ me: typeof me; nickname: string } | null>(null);
+  const nickname = draft !== null && draft.me === me ? draft.nickname : (me?.display_name ?? '');
+  const email = me?.email ?? '';
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const me = await platformAuthApi.updateMe({ display_name: nickname });
-      setNickname(me.display_name ?? '');
+      const updated = await platformAuthApi.updateMe({ display_name: nickname });
+      // 保存できた値をそのまま欄の起点にする。取り直すと、直した欄が読み込み表示で一瞬消える
+      setMe(updated);
       notify.success('プロフィールを更新しました');
     } catch {
       notify.error('プロフィールの更新に失敗しました');
@@ -90,7 +71,7 @@ export default function AccountPage() {
             </CardTitle>
           </CardHeader>
           {/* 取得できなかった値で欄を埋めない。空欄のまま保存できると表示名が空文字に化ける */}
-          {failed ? (
+          {failure !== null ? (
             <CardContent>
               <RegionError
                 message="アカウント情報の取得に失敗しました"
@@ -110,7 +91,7 @@ export default function AccountPage() {
                     id="account-nickname"
                     type="text"
                     value={nickname}
-                    onChange={e => setNickname(e.target.value)}
+                    onChange={e => setDraft({ me, nickname: e.target.value })}
                     required
                     maxLength={150}
                   />

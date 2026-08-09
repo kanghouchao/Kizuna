@@ -482,6 +482,25 @@ One shape covers every case — a list, a `Select`'s options, a whole detail pag
 - The shape lives in **one hand-written component in `shared/ui`** (the side without `data-slot`) with three **semantic** props — the copy, a retry handler, and the alternative link for 404 — **plus a `className` passed through**, since placement is the caller's and every hand-written component in that directory already accepts one. Three is the number of decisions the component makes, not the number of attributes it accepts.
   - **Exactly one recovery affordance, always.** Two independently optional props would let a caller pass **neither** — an error with no way out, which the retry rule above forbids — or **both**, which the single-button shape and the 404 rule forbid. Those two states should be unrepresentable in the type rather than left to review: a discriminated union on the recovery arm is the obvious shape, and choosing its exact signature belongs to the ticket that builds the component. Adding to or editing `shared/ui` is a shared-file change and goes through the parallel-PR contract below.
 
+### Where the state behind clause ① comes from
+
+Clause ① says what a failed region shows. **The lifecycle that produces that state is not written per page.** A single resource — a detail page's own body, a `Select`'s options, a sub-region's history or statistics — is fetched through **`useResource`** in `shared/lib`, the one-value sibling of `useListPage` / `useManagedList` / `useCursorList`. It returns `{ data, setData, isLoading, failure, reload }` and owns the four invariants that hand-written copies of it drifted on:
+
+- **A request counter discards out-of-order responses.** A stale in-flight failure must not erase a newer success, and StrictMode's double mount produces exactly that order on every load, so this is not a rare race.
+- **A failure clears the data**, which is what makes ①'s "the region clears completely" true rather than aspirational.
+- **The failure folds when a retry starts**, so a second failure re-mounts `RegionError` and the live region announces again.
+- **404 is classified apart** — `failure` is `'notFound' | 'error' | null`, decided by `isNotFound` — because the two get different recovery affordances.
+
+Three rules bind the call site:
+
+- **Branch on `failure !== null`, never on `data === null`.** "Not loaded yet" and "could not be loaded" are different states and only the second one names a failure. `failure === 'notFound'` selects the list link; everything else gets the retry button. A sub-region that has no 404 copy of its own still branches on `failure !== null` — otherwise a 404 falls through to nothing at all.
+- **A region that has not loaded yet says so.** `isLoading` gets a visible state of its own even where the region is small: a `Select` whose options are still in flight is not "no receptionists", exactly as a failed one is not "no receptionists". That is ①'s defect one moment earlier, and it is not answered by the failure state.
+- **The render that reveals a form already carries its values.** An effect that copies `data` into form state lands _one render after_ the fields appear, so that render draws them empty — the same "wrong content" defect ① is about, one moment earlier and easy to miss because the correct values arrive a frame later. Two shapes satisfy this, and which one applies is decided by where the form's state lives: for plain `useState`, **derive** rather than copy (`draft ?? data`, with the draft tied to the `data` it was started from, so a later fetch is not shadowed by a stale draft); for **react-hook-form**, whose values live inside the form, seeding is necessarily an effect, so **hold the fields back until the seed has landed** rather than revealing them a render early. Where a successful write returns the new value, `setData` puts it in place instead of a re-read that blanks the region.
+
+A `null` fetcher means "no reason to fetch yet" — a modal that is closed, a detail id the URL does not carry. Nothing is requested and nothing already read is thrown away.
+
+The hook presents nothing, by the same rule the list hooks state: whether a failure is named in place or carried to a toast is the call site's decision, taken with the table above.
+
 ### Client-side validation (clause ②'s shape)
 
 - **The browser's own bubble does not satisfy ②.** Only text we draw does.

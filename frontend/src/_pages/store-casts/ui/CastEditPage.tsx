@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
-import { CastResponse, CastUpdateRequest, castApi } from '@/entities/cast';
+import { CastUpdateRequest, castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
-import { isNotFound, storePath } from '@/shared/lib';
+import { storePath, useResource } from '@/shared/lib';
 import { RegionError } from '@/shared/ui';
 
 /** キャスト編集ページ */
@@ -14,39 +14,13 @@ export default function CastEditPage() {
   const id = params.id as string;
   const storeId = params.storeId as string;
   const router = useRouter();
-  const [cast, setCast] = useState<CastResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailure, setLoadFailure] = useState<'notFound' | 'error' | null>(null);
+  const {
+    data: cast,
+    isLoading,
+    failure,
+    reload: reloadCast,
+  } = useResource(() => castApi.get(id), [id]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // キャストをクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
-
-  // 再試行から呼び直せるよう effect の外に置く。取得できなかったこの頁自身が失敗を名乗るので、
-  // 一覧へ送り返さない — 離脱すると説明責任が着地先へ移り、開いていた頁で再試行できなくなる
-  const fetchCast = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setIsLoading(true);
-    try {
-      const data = await castApi.get(id);
-      if (requestId === requestIdRef.current) {
-        setCast(data);
-        setLoadFailure(null);
-      }
-    } catch (error) {
-      if (requestId === requestIdRef.current) {
-        setCast(null);
-        // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
-        setLoadFailure(isNotFound(error) ? 'notFound' : 'error');
-      }
-    } finally {
-      if (requestId === requestIdRef.current) setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    void fetchCast();
-  }, [fetchCast]);
 
   const handleSubmit = async (data: CastFormData) => {
     try {
@@ -78,11 +52,15 @@ export default function CastEditPage() {
     return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
   }
 
-  if (loadFailure !== null) {
+  // 取得できなかったこの頁自身が失敗を名乗るので、一覧へ送り返さない — 離脱すると説明責任が
+  // 着地先へ移り、開いていた頁で再試行できなくなる。`!cast` は型の絞り込み — 中身の無い
+  // 応答はフックが失敗へ倒すので、ここには失敗の姿として届く
+  if (failure !== null || !cast) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">キャスト編集</h1>
-        {loadFailure === 'notFound' ? (
+        {failure === 'notFound' ? (
+          // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="このキャストは見つかりませんでした"
             fallback={{ href: storePath(storeId, '/casts'), label: 'キャスト一覧へ' }}
@@ -90,14 +68,12 @@ export default function CastEditPage() {
         ) : (
           <RegionError
             message="キャスト情報の取得に失敗しました"
-            onRetry={() => void fetchCast()}
+            onRetry={() => void reloadCast()}
           />
         )}
       </div>
     );
   }
-
-  if (!cast) return null;
 
   return (
     <div className="space-y-6">

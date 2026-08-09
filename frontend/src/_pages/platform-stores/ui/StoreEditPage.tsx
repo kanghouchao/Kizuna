@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
-import { isNotFound } from '@/shared/lib';
+import { useResource } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
@@ -12,55 +12,26 @@ export default function EditStorePage() {
   const router = useRouter();
 
   const [saving, setSaving] = useState(false);
-  const [store, setStore] = useState<Store | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState<UpdateStoreRequest>({
-    name: '',
-    email: '',
-  });
+  const {
+    data: store,
+    isLoading: loading,
+    failure,
+    reload: reloadStore,
+  } = useResource(id ? () => platformStoreApi.getById(id) : null, [id]);
+  // 欄の起点は取得した店舗で、編集を始めたらその下書きが優先する。効果で写すと、店舗が
+  // 届いたレンダーで欄が空のまま一度描かれる。下書きは書き始めた時点の店舗に結び付ける —
+  // 別の店舗が届いたら、その店舗の値で描き直す
+  const [draft, setDraft] = useState<{ store: Store | null; values: UpdateStoreRequest } | null>(
+    null
+  );
+  const formData: UpdateStoreRequest =
+    draft !== null && draft.store === store
+      ? draft.values
+      : { name: store?.name ?? '', email: store?.email ?? '' };
+  const edit = (values: UpdateStoreRequest) => setDraft({ store, values });
   const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
-  const [loadFailure, setLoadFailure] = useState<'notFound' | 'error' | null>(null);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 店舗をクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
-
-  // 再試行から呼び直せるよう effect の外に置く。取得できなかったこの頁自身が失敗を名乗るので、
-  // 一覧へは送り返さない
-  const loadStore = useCallback(async (storeId: string) => {
-    const requestId = ++requestIdRef.current;
-    try {
-      setLoading(true);
-      const res = await platformStoreApi.getById(storeId);
-      const t = res as unknown as Store;
-      if (requestId === requestIdRef.current) {
-        setStore(t);
-        setFormData({
-          name: t.name ?? '',
-          email: t.email ?? '',
-        });
-        setLoadFailure(null);
-      }
-    } catch (e) {
-      console.error('Error loading store:', e);
-      if (requestId === requestIdRef.current) {
-        setStore(null);
-        // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
-        setLoadFailure(isNotFound(e) ? 'notFound' : 'error');
-      }
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (id) {
-      loadStore(id);
-      return;
-    }
-    // id を持たない URL で開かれた＝指せる店舗が無い。取りに行けないので再試行も置けない
-    setLoading(false);
-    setLoadFailure('notFound');
-  }, [id, loadStore]);
+  // id を持たない URL で開かれた＝指せる店舗が無い。取りに行けないので再試行も置けない
+  const loadFailure = id ? failure : 'notFound';
 
   const validate = (): boolean => {
     const next: Partial<UpdateStoreRequest> = {};
@@ -93,22 +64,19 @@ export default function EditStorePage() {
     return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
   }
 
+  // 取得できなかったこの頁自身が失敗を名乗るので、一覧へは送り返さない
   if (loadFailure !== null) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">店舗編集</h1>
         {loadFailure === 'notFound' ? (
+          // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="この店舗は見つかりませんでした"
             fallback={{ href: '/platform/stores', label: '店舗一覧へ' }}
           />
         ) : (
-          <RegionError
-            message="店舗情報の取得に失敗しました"
-            onRetry={() => {
-              if (id) void loadStore(id);
-            }}
-          />
+          <RegionError message="店舗情報の取得に失敗しました" onRetry={() => void reloadStore()} />
         )}
       </div>
     );
@@ -135,7 +103,7 @@ export default function EditStorePage() {
                 id="name"
                 type="text"
                 value={formData.name}
-                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
+                onChange={e => edit({ ...formData, name: e.target.value })}
                 aria-invalid={!!errors.name}
               />
               {errors.name && <p className="text-sm text-destructive-strong">{errors.name}</p>}
@@ -150,7 +118,7 @@ export default function EditStorePage() {
                 id="email"
                 type="email"
                 value={formData.email}
-                onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                onChange={e => edit({ ...formData, email: e.target.value })}
                 aria-invalid={!!errors.email}
               />
               {errors.email && <p className="text-sm text-destructive-strong">{errors.email}</p>}

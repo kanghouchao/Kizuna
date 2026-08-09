@@ -1,8 +1,8 @@
-import { StrictMode } from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
 import * as castEntity from '@/entities/cast';
 import { orderApi } from '@/entities/order';
+import type { OrderReceptionist } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
   orderApi: {
@@ -253,6 +253,23 @@ describe('オーダーフォームの受付候補の取得失敗', () => {
     mockedOrderApi.listCastCandidates.mockResolvedValue([]);
   });
 
+  it('候補の取得中は欄の傍で読み込み中を名乗ること', async () => {
+    // 候補が「－－－」だけの状態は、まだ読んでいるのか受付が 1 人も居ないのか区別がつかない
+    let resolveList: (rows: OrderReceptionist[]) => void = () => {};
+    mockedOrderApi.listReceptionists.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveList = resolve;
+      })
+    );
+    renderForm();
+
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+
+    await act(async () => resolveList([{ id: 7, display_name: '受付花子' }]));
+
+    expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
+  });
+
   it('候補が取れなければ欄の傍で失敗を名乗り、送信は塞がず、再試行で回復すること', async () => {
     mockedOrderApi.listReceptionists.mockRejectedValueOnce(new Error('boom'));
     const { onSubmit } = renderForm();
@@ -274,39 +291,5 @@ describe('オーダーフォームの受付候補の取得失敗', () => {
     await selectReceptionist();
     const body = await submitAndGetBody(onSubmit);
     expect(body.receptionistId).toBe('7');
-  });
-
-  // Strict Mode は mount effect を二度走らせるので取得が二重に飛ぶ。失敗が選択肢をクリアする
-  // 以上、遅れて着いた古い失敗が新しい成功を消してはいけない
-  it('二重 mount で古い失敗が後から着いても、新しい成功を消さないこと', async () => {
-    let failStale = (): void => {};
-    mockedOrderApi.listReceptionists
-      .mockReturnValueOnce(
-        new Promise((_, reject) => {
-          failStale = () => reject(new Error('stale'));
-        })
-      )
-      .mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
-
-    render(
-      <StrictMode>
-        <OrderForm
-          initialData={{ castId: 'cast-1' }}
-          onSubmit={jest.fn<void, [OrderFormData]>()}
-          isSubmitting={false}
-        />
-      </StrictMode>
-    );
-
-    // 候補から選べた時点で、2 度目の成功が着いている
-    await selectReceptionist();
-
-    await act(async () => {
-      failStale();
-    });
-
-    // 引き金の文言は候補一覧から引かれる。古い失敗が候補を消すと選択ごと表示が戻る
-    expect(screen.getByRole('combobox', { name: /受付(?!経路)/ })).toHaveTextContent('受付花子');
-    expect(screen.queryByText('受付担当者の取得に失敗しました')).not.toBeInTheDocument();
   });
 });

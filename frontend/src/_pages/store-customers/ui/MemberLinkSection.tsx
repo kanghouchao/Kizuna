@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { notify } from '@/shared/notify';
-import { CustomerMemberLinkHistoryResponse, customerApi } from '@/entities/customer';
-import { getApiErrorMessage } from '@/shared/lib';
+import { customerApi } from '@/entities/customer';
+import { getApiErrorMessage, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -34,44 +34,20 @@ function actorCell(name?: string, at?: string) {
 
 /** 顧客編集ページの会員紐づけ区画。紐づけ・変更・解除と、その履歴を扱う。 */
 export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
-  const [history, setHistory] = useState<CustomerMemberLinkHistoryResponse[]>([]);
-  const [historyStatus, setHistoryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const { data, isLoading, failure, reload } = useResource(
+    () => customerApi.memberLinkHistory(customerId),
+    [customerId]
+  );
+  const history = data ?? [];
   const [memberCode, setMemberCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmingUnlink, setIsConfirmingUnlink] = useState(false);
-  // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する。失敗が
-  // 履歴をクリアするので、在途の古い失敗が新しい成功を消し得る
-  const requestIdRef = useRef(0);
 
   // 現に有効な区間は高々 1 件で、履歴は新しい順に返る
   const activeLink = history.find(row => row.status === 'ACTIVE');
   // 履歴が読めていない間は現況が不明。紐づけ POST は既存の有効区間を置き換えるため、
   // 未読込のまま操作させると読み取り失敗が誤解除に化ける — 読めるまで操作を止める
-  const isHistoryReady = historyStatus === 'ready';
-
-  const reload = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    // 再試行の前に読み込み中へ戻す。同じ姿のまま失敗を繰り返すと role="alert" が挿入されず、
-    // 二度目の失敗が読み上げ利用者に届かない
-    setHistoryStatus('loading');
-    try {
-      const rows = await customerApi.memberLinkHistory(customerId);
-      if (requestId === requestIdRef.current) {
-        setHistory(rows);
-        setHistoryStatus('ready');
-      }
-    } catch {
-      // 読めなかった履歴を残すと「紐づけ履歴がありません」に化ける。区画自身が失敗を名乗る
-      if (requestId === requestIdRef.current) {
-        setHistory([]);
-        setHistoryStatus('error');
-      }
-    }
-  }, [customerId]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const isHistoryReady = !isLoading && failure === null;
 
   const handleLink = async () => {
     try {
@@ -114,7 +90,7 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
                 回復手段を持たない二つ目の告知になる */}
             {!isHistoryReady ? (
               <span className="text-muted-foreground">
-                {historyStatus === 'loading' ? '読み込み中...' : '紐づけ状態は不明です'}
+                {isLoading ? '読み込み中...' : '紐づけ状態は不明です'}
               </span>
             ) : activeLink ? (
               <>
@@ -159,9 +135,10 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
           </div>
         </div>
 
-        {historyStatus === 'loading' ? (
+        {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
-        ) : historyStatus === 'error' ? (
+        ) : failure !== null ? (
+          // 読めなかった履歴を残すと「紐づけ履歴がありません」に化ける。区画自身が失敗を名乗る
           <RegionError
             message="会員紐づけの履歴取得に失敗しました"
             onRetry={() => void reload()}
