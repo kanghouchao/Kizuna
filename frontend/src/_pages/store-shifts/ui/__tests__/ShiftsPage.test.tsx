@@ -11,6 +11,7 @@ jest.mock('@/entities/cast', () => ({
 jest.mock('@/entities/shift', () => ({
   shiftApi: {
     list: jest.fn(),
+    create: jest.fn(),
     listShiftRequests: jest.fn(),
     approveShiftRequest: jest.fn(),
     declineShiftRequest: jest.fn(),
@@ -23,6 +24,7 @@ jest.mock('@/shared/notify', () => ({
 
 const mockedCastList = castApi.list as jest.Mock;
 const mockedShiftList = shiftApi.list as jest.Mock;
+const mockedShiftCreate = shiftApi.create as jest.Mock;
 
 /** 月グリッドの先頭 6 セル・末尾 14 セルにしか他月は現れないため、15 日は常に当月で一意。 */
 const DAY_IN_MONTH = 15;
@@ -73,6 +75,23 @@ describe('ShiftsPage のタブ遷移', () => {
 
     await waitFor(() => expect(mockedShiftList).toHaveBeenCalledTimes(2));
     expect(mockedShiftList.mock.calls[1][0].from < firstFrom).toBe(true);
+  });
+
+  it('保存後はシフトを取り直すこと', async () => {
+    // 保存の反映は再取得でしか起きない。配線が切れても保存自体は成功するので症状が出ない
+    mockedCastList.mockResolvedValue(castPage([{ id: 'c1', name: 'さくら' }]));
+    mockedShiftCreate.mockResolvedValue({});
+    render(<ShiftsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: String(DAY_IN_MONTH) }));
+    fireEvent.click(await screen.findByRole('button', { name: 'シフト追加' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const callsBeforeSave = mockedShiftList.mock.calls.length;
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedShiftCreate).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockedShiftList.mock.calls.length).toBeGreaterThan(callsBeforeSave));
   });
 });
 

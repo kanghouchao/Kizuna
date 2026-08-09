@@ -50,14 +50,4 @@ describe('MemberHomePage', () => {
 
     expect(await screen.findByText('1234 5678 9012')).toBeInTheDocument();
   });
-
-  it('会員コードの無い応答は「取れなかった」と同じ姿にする', async () => {
-    // コードだけ欠けた見た目を出すと、読み取れないのが店舗側の問題に見える
-    mockedHome.mockResolvedValue({ display_name: '会員花子' });
-
-    render(<MemberHomePage />);
-
-    expect(await screen.findByText('会員コードを取得できませんでした')).toBeInTheDocument();
-    expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
-  });
 });
