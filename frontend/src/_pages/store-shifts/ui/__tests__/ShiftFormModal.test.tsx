@@ -248,6 +248,32 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it('時刻を消して保存すると欄ごとの文言を出し、作成を呼ばないこと', async () => {
+    renderModal();
+
+    fireEvent.change(screen.getByLabelText('開始'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('終了'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('開始時刻を入力してください')).toBeInTheDocument();
+    expect(screen.getByText('終了時刻を入力してください')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+    // 検証を理由にボタンを塞がない
+    expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+  });
+
+  // Select は button が焦点要素で、field.ref が trigger へ届かないと handleSubmit の
+  // 焦点移動だけが静かに落ちる（文言は出るので他の症状が無い）。
+  it('キャストが未登録なら理由を名乗り、その trigger へ焦点が移ること', async () => {
+    renderModal({ casts: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('キャストを選択してください')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(selectAt(CAST_SELECT)).toHaveFocus();
+  });
+
   it('削除は確認を経て呼ばれ、取り消すと呼ばれないこと', async () => {
     const { onSaved } = renderModal({ editing: EDITING });
 

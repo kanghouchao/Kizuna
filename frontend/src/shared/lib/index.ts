@@ -28,6 +28,7 @@ export {
   storeEntryPath,
 } from './store-route';
 export { cn } from './utils';
+export { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE } from './email';
 export { isPublicPlatformPath } from './app-area';
 export {
   LINE_AUTHORIZE_ENDPOINT,

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import { platformAuthApi, PlatformLoginRequest } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/lib';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
 import { completePlatformLogin } from '../model/completePlatformLogin';
 
 /** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する。 */
@@ -14,7 +14,7 @@ export default function PlatformLoginForm() {
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<PlatformLoginRequest>({ defaultValues: { email: '', password: '' } });
 
   const onSubmit = async (data: PlatformLoginRequest) => {
@@ -35,7 +35,9 @@ export default function PlatformLoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-7">
+    // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、我々の文言は
+    // 永久に描かれない。type="email" の執行もここで止まるため、下の pattern が引き継ぐ。
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-7" noValidate>
       {/* メールアドレス */}
       <div className="auth-field">
         <label
@@ -51,9 +53,19 @@ export default function PlatformLoginForm() {
           required
           className="auth-field__input"
           placeholder="example@mail.com"
-          {...register('email', { required: true })}
+          aria-invalid={!!errors.email}
+          aria-describedby={errors.email ? 'email-error' : undefined}
+          {...register('email', {
+            required: 'メールアドレスを入力してください',
+            pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.email && (
+          <p id="email-error" className="auth-field__error">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       {/* パスワード */}
@@ -71,9 +83,16 @@ export default function PlatformLoginForm() {
           required
           className="auth-field__input"
           placeholder="パスワードを入力"
-          {...register('password', { required: true })}
+          aria-invalid={!!errors.password}
+          aria-describedby={errors.password ? 'password-error' : undefined}
+          {...register('password', { required: 'パスワードを入力してください' })}
         />
         <span className="auth-field__accent" />
+        {errors.password && (
+          <p id="password-error" className="auth-field__error">
+            {errors.password.message}
+          </p>
+        )}
       </div>
 
       {/* ログインボタン */}

@@ -6,6 +6,8 @@ import { notify } from '@/shared/notify';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
 import { PlatformLoginRequest, platformAuthApi } from '@/entities/user';
 import {
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
   clearPlatformSession,
   getApiErrorMessage,
   getPlatformConsole,
@@ -28,7 +30,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<PlatformLoginRequest>({ defaultValues: { email: '', password: '' } });
 
   const submit = async (values: PlatformLoginRequest) => {
@@ -76,7 +78,9 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   };
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-7">
+    // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、我々の文言は
+    // 永久に描かれない。type="email" の執行もここで止まるため、下の pattern が引き継ぐ。
+    <form onSubmit={handleSubmit(submit)} className="space-y-7" noValidate>
       <div className="auth-field">
         <label
           htmlFor="invite-login-email"
@@ -91,9 +95,19 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
           required
           className="auth-field__input"
           placeholder="example@mail.com"
-          {...register('email', { required: true })}
+          aria-invalid={!!errors.email}
+          aria-describedby={errors.email ? 'invite-login-email-error' : undefined}
+          {...register('email', {
+            required: 'メールアドレスを入力してください',
+            pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.email && (
+          <p id="invite-login-email-error" className="auth-field__error">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       <div className="auth-field">
@@ -110,9 +124,16 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
           required
           className="auth-field__input"
           placeholder="パスワードを入力"
-          {...register('password', { required: true })}
+          aria-invalid={!!errors.password}
+          aria-describedby={errors.password ? 'invite-login-password-error' : undefined}
+          {...register('password', { required: 'パスワードを入力してください' })}
         />
         <span className="auth-field__accent" />
+        {errors.password && (
+          <p id="invite-login-password-error" className="auth-field__error">
+            {errors.password.message}
+          </p>
+        )}
       </div>
 
       <div className="pt-2 space-y-3">

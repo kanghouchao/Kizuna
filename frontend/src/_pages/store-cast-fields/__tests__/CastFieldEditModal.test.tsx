@@ -104,7 +104,7 @@ describe('カスタムフィールド定義の編集モーダル', () => {
     expect(body.is_public).toBe(true);
   });
 
-  it('label が空なら更新 API を呼ばない', async () => {
+  it('label が空なら文言を欄の傍に出し、更新 API を呼ばない', async () => {
     render(
       <CastFieldEditModal
         open
@@ -117,7 +117,30 @@ describe('カスタムフィールド定義の編集モーダル', () => {
     fireEvent.change(screen.getByLabelText('label'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled());
+    const message = await screen.findByText('label を入力してください');
+    expect(screen.getByLabelText('label')).toHaveAttribute(
+      'aria-describedby',
+      expect.stringContaining(message.id)
+    );
+    expect(mockedApi.update).not.toHaveBeenCalled();
+  });
+
+  // 空欄の数値入力は NaN であって null でも空文字でもないため required 単独では素通りし、
+  // display_order: null が送信されてしまう。文言を出せているのは validate の側。
+  it('表示順が空なら文言を出し、display_order を欠いたまま送らないこと', async () => {
+    render(
+      <CastFieldEditModal
+        open
+        definition={definition()}
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('表示順'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('表示順を入力してください')).toBeInTheDocument();
     expect(mockedApi.update).not.toHaveBeenCalled();
   });
 

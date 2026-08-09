@@ -1,6 +1,7 @@
 'use client';
 
 import { useForm } from 'react-hook-form';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE } from '@/shared/lib';
 
 export interface LineRegisterValues {
   display_name: string;
@@ -27,7 +28,9 @@ export default function LineRegisterStep({ defaultDisplayName, onSubmit }: LineR
   });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-7">
+    // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、我々の文言は
+    // 永久に描かれない。type="email" の執行もここで止まるため、下の pattern が引き継ぐ。
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-7" noValidate>
       <div className="auth-field">
         <label
           htmlFor="line-register-display-name"
@@ -42,9 +45,19 @@ export default function LineRegisterStep({ defaultDisplayName, onSubmit }: LineR
           maxLength={150}
           className="auth-field__input"
           placeholder="表示名を入力"
-          {...register('display_name', { required: true, maxLength: 150 })}
+          aria-invalid={!!errors.display_name}
+          aria-describedby={errors.display_name ? 'line-register-display-name-error' : undefined}
+          {...register('display_name', {
+            required: '表示名を入力してください',
+            maxLength: { value: 150, message: '表示名は150文字以内で入力してください' },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.display_name && (
+          <p id="line-register-display-name-error" className="auth-field__error">
+            {errors.display_name.message}
+          </p>
+        )}
       </div>
 
       <div className="auth-field">
@@ -62,9 +75,20 @@ export default function LineRegisterStep({ defaultDisplayName, onSubmit }: LineR
           maxLength={127}
           className="auth-field__input"
           placeholder="example@mail.com"
-          {...register('email', { required: true, maxLength: 127 })}
+          aria-invalid={!!errors.email}
+          aria-describedby={errors.email ? 'line-register-email-error' : undefined}
+          {...register('email', {
+            required: 'メールアドレスを入力してください',
+            pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
+            maxLength: { value: 127, message: 'メールアドレスは127文字以内で入力してください' },
+          })}
         />
         <span className="auth-field__accent" />
+        {errors.email && (
+          <p id="line-register-email-error" className="auth-field__error">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -76,12 +100,17 @@ export default function LineRegisterStep({ defaultDisplayName, onSubmit }: LineR
             id="line-register-consent"
             type="checkbox"
             className="auth-check mt-0.5"
-            {...register('consent', { required: true })}
+            required
+            aria-invalid={!!errors.consent}
+            aria-describedby={errors.consent ? 'line-register-consent-error' : undefined}
+            {...register('consent', { required: '同意いただける場合のみ登録できます' })}
           />
           <span>利用規約およびプライバシーポリシーに同意します</span>
         </label>
         {errors.consent && (
-          <p className="text-xs text-[#dc2626]">同意いただける場合のみ登録できます</p>
+          <p id="line-register-consent-error" className="auth-field__error">
+            {errors.consent.message}
+          </p>
         )}
       </div>
 

@@ -20,8 +20,8 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -99,12 +99,11 @@ export function CastRequestsPage() {
 
   const form = useForm<RequestFormValues>({ defaultValues: defaultValues('') });
   const {
-    register,
     handleSubmit,
     reset,
     setValue,
     control,
-    formState: { errors, isSubmitting },
+    formState: { isSubmitting },
   } = form;
 
   const loadHistory = () => {
@@ -166,13 +165,15 @@ export function CastRequestsPage() {
       </div>
 
       <Form {...form}>
-        <form onSubmit={handleSubmit(submit)}>
+        {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+            我々の文言は永久に描かれない。執行は各 rules が担う */}
+        <form onSubmit={handleSubmit(submit)} noValidate>
           <Card>
             <CardContent className="space-y-4">
               <FormField
                 control={control}
                 name="store_id"
-                rules={{ required: true }}
+                rules={{ required: '店舗を選択してください' }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>店舗</FormLabel>
@@ -180,9 +181,12 @@ export function CastRequestsPage() {
                       items={storeOptions}
                       value={field.value || null}
                       onValueChange={field.onChange}
+                      required
                     >
                       <FormControl>
-                        <SelectTrigger className="w-full">
+                        {/* handleSubmit の焦点移動は登録された ref を叩く。ref が trigger へ
+                            届かないと、文言だけ出て焦点が動かない。 */}
+                        <SelectTrigger className="w-full" ref={field.ref}>
                           {/* 所属店舗が無いときは選択肢自体が無く、値は空のままなので placeholder が出る。 */}
                           <SelectValue placeholder="所属店舗がありません" />
                         </SelectTrigger>
@@ -195,54 +199,73 @@ export function CastRequestsPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
-              <div className="grid gap-2">
-                <Label htmlFor="request-work-date">日付</Label>
-                <Input
-                  id="request-work-date"
-                  type="date"
-                  {...register('work_date', {
-                    required: true,
-                    validate: v => v >= todayStr() || '本日以降の日付を指定してください',
-                  })}
-                />
-                {errors.work_date && (
-                  <p className="text-xs text-destructive-strong">{errors.work_date.message}</p>
+              <FormField
+                control={control}
+                name="work_date"
+                rules={{
+                  required: '希望する日付を指定してください',
+                  validate: v => v >= todayStr() || '本日以降の日付を指定してください',
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>日付</FormLabel>
+                    <FormControl>
+                      <Input type="date" required {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </div>
+              />
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="request-start-time">開始</Label>
-                  <Input
-                    id="request-start-time"
-                    type="time"
-                    {...register('start_time', { required: true })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="request-end-time">終了</Label>
-                  <Input
-                    id="request-end-time"
-                    type="time"
-                    {...register('end_time', { required: true })}
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="request-note">備考</Label>
-                <Textarea
-                  id="request-note"
-                  {...register('note', {
-                    maxLength: { value: 500, message: '備考は500文字以内で入力してください' },
-                  })}
-                  rows={3}
+                <FormField
+                  control={control}
+                  name="start_time"
+                  rules={{ required: '開始時刻を入力してください' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>開始</FormLabel>
+                      <FormControl>
+                        <Input type="time" required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                {errors.note && (
-                  <p className="text-xs text-destructive-strong">{errors.note.message}</p>
-                )}
+                <FormField
+                  control={control}
+                  name="end_time"
+                  rules={{ required: '終了時刻を入力してください' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>終了</FormLabel>
+                      <FormControl>
+                        <Input type="time" required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
+              <FormField
+                control={control}
+                name="note"
+                rules={{
+                  maxLength: { value: 500, message: '備考は500文字以内で入力してください' },
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>備考</FormLabel>
+                    <FormControl>
+                      <Textarea rows={3} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <Button
                 type="submit"
                 className="w-full"

@@ -264,6 +264,21 @@
   width: 100%;
 }
 
+/* 欄ごとの検証文言。ページ全体に掛かる .auth-alert--error は流用しない——あちらは
+   #dc2626 on #fef2f2 で 4.42 しかなく、この寸法（13px）の普通文字が要る 4.5 に届かない。
+   #b91c1c on #faf9f7（フォーム面の地色）は 6.15。 */
+.auth-field__error {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #b91c1c;
+}
+
+/* 文言だけだと誤りの在り処が下の一行にしか無い。下線を同じ赤へ倒して欄自身にも持たせる。 */
+.auth-field__input[aria-invalid='true'] {
+  border-bottom-color: #b91c1c;
+}
+
 /* ========== ボタン ========== */
 
 .auth-btn {
