@@ -7,7 +7,7 @@ import { isNotFound } from '../apiError';
  * 取得の失敗。404 は何度押しても取れないため、再試行を出せる失敗と分けて渡す
  * （提示の形が違う — DESIGN.md「領域内エラー態」）。
  */
-export type ResourceFailure = 'notFound' | 'error';
+type ResourceFailure = 'notFound' | 'error';
 
 interface ResourceResult<T> {
   /** 取得できていないとき（未取得・失敗）は null。 */
