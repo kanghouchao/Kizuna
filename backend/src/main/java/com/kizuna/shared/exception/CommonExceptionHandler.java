@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.util.NamingStrategyImpls;
 
 @Slf4j
 @ControllerAdvice
@@ -46,6 +47,15 @@ public class CommonExceptionHandler {
     return "認証に失敗しました";
   }
 
+  /**
+   * 検証違反を 400 へ映射する。{@code details} のキーは、同じフィールドを要求で送るときの綴り（snake_case）へ揃える。
+   *
+   * <p>束縛結果が持つのは Bean のプロパティパス（camelCase）である。Jackson の命名戦略は POJO のプロパティにしか 効かず {@code Map}
+   * のキーには設計上効かないため、そのまま載せると同一フィールドが方向によって別名になる。
+   *
+   * <p>直しはこの組み立て時に閉じる。{@code Map} のキーを一律に変換する形（{@code addKeySerializer}）を採ると、 キー自体が利用者の定義したデータである
+   * {@code CastResponse.customFields}／{@code StoreProfileResponse.customTexts} が静かに壊れる。
+   */
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<Map<String, Object>> handle(MethodArgumentNotValidException ex) {
     log.warn(ex.getMessage());
@@ -55,9 +65,25 @@ public class CommonExceptionHandler {
     Map<String, String> fieldErrors = new HashMap<>();
     ex.getBindingResult()
         .getFieldErrors()
-        .forEach(fe -> fieldErrors.put(fe.getField(), fe.getDefaultMessage()));
+        .forEach(fe -> fieldErrors.put(wireNameOf(fe.getField()), fe.getDefaultMessage()));
     body.put("details", fieldErrors);
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+  }
+
+  /**
+   * Bean のプロパティパスをワイヤ上の名前へ写す。
+   *
+   * <p>{@code spring.jackson.property-naming-strategy: SNAKE_CASE} が使うのと同一の実装を呼ぶので、綴りは Jackson
+   * が実際に出す名前と一致する。前提は命名戦略が唯一の写像源であること — 個別に {@code @JsonProperty} で 別名を与えた項目があれば、その項目だけ一致しなくなる。
+   *
+   * <p>入れ子や添字を含むパス（{@code snsLinks[0].url}）も構造を保ったまま変換される。パスは丸ごと変換するので、
+   * これが安全なのは束縛パスに利用者の定義したキーが現れないことが前提 — キー自体がデータである {@code Map} の
+   * 要素へ制約を足すと、束縛パスの添字にそのキーが載り、書き換わってしまう。
+   *
+   * <p>他の {@code details} を返すハンドラはここを通さない — それらが持つのはクエリ／パス変数の宣言名や Jackson 適用後の名前で、いずれも既にワイヤ名だからである。
+   */
+  private static String wireNameOf(String propertyPath) {
+    return NamingStrategyImpls.SNAKE_CASE.translate(propertyPath);
   }
 
   /**
