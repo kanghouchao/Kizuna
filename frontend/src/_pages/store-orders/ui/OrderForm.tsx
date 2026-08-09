@@ -324,12 +324,15 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
                 rules={{ required: 'キャストを候補から選択してください' }}
                 render={({ field }) => (
                   <FormItem>
-                    <CastSearchCombobox
-                      id="castName"
-                      label="キャスト *"
-                      castName={castName ?? ''}
-                      onChange={field.onChange}
-                    />
+                    <FormControl>
+                      <CastSearchCombobox
+                        id="castName"
+                        label="キャスト *"
+                        castName={castName ?? ''}
+                        onChange={field.onChange}
+                        triggerRef={field.ref}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
