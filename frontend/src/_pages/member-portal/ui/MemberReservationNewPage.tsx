@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { memberOrderApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
 import { Store, platformStoreApi } from '@/entities/store';
-import { isNotFound } from '@/shared/lib';
+import { integerRule, isNotFound } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -215,6 +215,9 @@ export function MemberReservationNewPage() {
                   rules={{
                     required: '人数を入力してください',
                     min: { value: 1, message: '人数は 1 以上です' },
+                    // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
+                    // Integer の pax へ届く
+                    validate: integerRule('人数'),
                   }}
                   render={({ field }) => (
                     <FormItem className="gap-1">

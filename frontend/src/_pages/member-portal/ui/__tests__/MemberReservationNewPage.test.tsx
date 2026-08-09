@@ -219,4 +219,35 @@ describe('MemberReservationNewPage', () => {
     expect(await screen.findByText('ご要望は 500 文字以内で入力してください')).toBeInTheDocument();
     expect(mockedCreate).not.toHaveBeenCalled();
   });
+
+  // noValidate は type="number" の暗黙の step=1 まで止める。引き継ぎが無いと 1.5 が Integer の
+  // pax へ届き、欄の傍ではなくサーバからの失敗として返ってくる。
+  it('人数に小数を入れると文言を出して申請しないこと', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '1.5' } });
+    fireEvent.click(submitButton());
+
+    expect(await screen.findByText('人数は整数で入力してください')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('人数が整数なら従来どおり申請できること', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+    mockedCreate.mockResolvedValue({});
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '2' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][0].pax).toBe(2);
+  });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { Control, useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
 import {
@@ -26,7 +26,7 @@ import {
   SelectValue,
   Textarea,
 } from '@/shared/ui';
-import { useManagedList } from '@/shared/lib';
+import { integerRule, useManagedList } from '@/shared/lib';
 
 /** キャストフォームのデータ型 */
 export interface CastFormData {
@@ -59,6 +59,48 @@ const STATUS_OPTIONS = [
   { value: 'ACTIVE', label: '在籍中' },
   { value: 'INACTIVE', label: '在籍停止' },
 ];
+
+/**
+ * プロフィールの任意数値欄。いずれもサーバ側は Integer で、noValidate によって原生の step=1 が
+ * 執行されなくなったぶんを規則で引き継ぐ。
+ *
+ * 空欄の valueAsNumber は NaN で、そのまま value に載せるとブラウザが警告を出すため表示だけ
+ * 空文字へ戻す。未入力は許すので required は持たない。
+ */
+function NumericProfileField({
+  control,
+  name,
+  label,
+  unit,
+}: {
+  control: Control<CastFormData>;
+  name: 'age' | 'height' | 'bust' | 'waist' | 'hip';
+  label: string;
+  unit?: string;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      rules={{ validate: integerRule(label) }}
+      render={({ field }) => (
+        <FormItem className="gap-2">
+          <FormLabel>{unit ? `${label} (${unit})` : label}</FormLabel>
+          <FormControl>
+            {/* id は FormControl が持つ。ここで与えると FormLabel の htmlFor と食い違う */}
+            <Input
+              type="number"
+              {...field}
+              value={field.value === null || Number.isNaN(field.value) ? '' : field.value}
+              onChange={event => field.onChange(event.target.valueAsNumber)}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
 
 /** キャスト登録・編集フォームコンポーネント */
 export function CastForm({
@@ -163,14 +205,25 @@ export function CastForm({
                     </FormItem>
                   )}
                 />
-                <div className="grid gap-2">
-                  <Label htmlFor="display_order">表示順</Label>
-                  <Input
-                    id="display_order"
-                    type="number"
-                    {...register('display_order', { valueAsNumber: true })}
-                  />
-                </div>
+                <FormField
+                  control={control}
+                  name="display_order"
+                  rules={{ validate: integerRule('表示順') }}
+                  render={({ field }) => (
+                    <FormItem className="gap-2">
+                      <FormLabel>表示順</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          {...field}
+                          value={Number.isNaN(field.value) ? '' : field.value}
+                          onChange={event => field.onChange(event.target.valueAsNumber)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </div>
           </CardContent>
@@ -185,28 +238,13 @@ export function CastForm({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="age">年齢</Label>
-                <Input id="age" type="number" {...register('age', { valueAsNumber: true })} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="height">身長 (cm)</Label>
-                <Input id="height" type="number" {...register('height', { valueAsNumber: true })} />
-              </div>
+              <NumericProfileField control={control} name="age" label="年齢" />
+              <NumericProfileField control={control} name="height" label="身長" unit="cm" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="bust">バスト (cm)</Label>
-                <Input id="bust" type="number" {...register('bust', { valueAsNumber: true })} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="waist">ウエスト (cm)</Label>
-                <Input id="waist" type="number" {...register('waist', { valueAsNumber: true })} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="hip">ヒップ (cm)</Label>
-                <Input id="hip" type="number" {...register('hip', { valueAsNumber: true })} />
-              </div>
+              <NumericProfileField control={control} name="bust" label="バスト" unit="cm" />
+              <NumericProfileField control={control} name="waist" label="ウエスト" unit="cm" />
+              <NumericProfileField control={control} name="hip" label="ヒップ" unit="cm" />
             </div>
           </CardContent>
         </Card>

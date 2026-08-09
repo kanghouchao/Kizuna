@@ -8,7 +8,7 @@ import {
   CastFieldDefinitionUpdateRequest,
   castFieldDefinitionApi,
 } from '@/entities/cast';
-import { getApiErrorMessage } from '@/shared/lib';
+import { getApiErrorMessage, integerRule } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -125,9 +125,14 @@ export function CastFieldEditModal({
               name="display_order"
               rules={{
                 required: DISPLAY_ORDER_REQUIRED,
-                // 空欄は NaN であって null でも空文字でもないため required は素通りする。
-                // 実測で、required だけだと空欄のまま display_order: null が送信される。
-                validate: value => !Number.isNaN(value) || DISPLAY_ORDER_REQUIRED,
+                validate: {
+                  // 空欄は NaN であって null でも空文字でもないため required は素通りする。
+                  // 実測で、required だけだと空欄のまま display_order: null が送信される。
+                  notEmpty: value => !Number.isNaN(value) || DISPLAY_ORDER_REQUIRED,
+                  // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
+                  // Integer の displayOrder へ届く
+                  integer: integerRule('表示順'),
+                },
               }}
               render={({ field }) => (
                 <FormItem className="gap-1">
