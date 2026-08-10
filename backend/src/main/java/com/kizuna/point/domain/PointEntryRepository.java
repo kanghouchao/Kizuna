@@ -32,4 +32,10 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       "select e from com.kizuna.point.domain.PointEntry e where e.orderId = :orderId"
           + " and e.amount > 0")
   List<PointEntry> findCreditsByOrderId(@Param("orderId") String orderId);
+
+  /** 指定店舗に帰属する仕訳が 1 件でも存在するか。符号は問わない（取消も含めて記録の存在そのものを見る）。 */
+  @Query(
+      "select count(e) > 0 from com.kizuna.point.domain.PointEntry e"
+          + " where e.originatingStoreId = :storeId")
+  boolean existsByOriginatingStoreId(@Param("storeId") Long storeId);
 }
