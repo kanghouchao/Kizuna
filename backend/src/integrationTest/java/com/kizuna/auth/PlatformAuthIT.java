@@ -51,8 +51,12 @@ class PlatformAuthIT {
   private static final String DISABLED_EMAIL = "disabled@kizuna.test";
   private static final String DISABLED_PASSWORD = "pass";
 
+  private static final String ORPHAN_EMAIL = "orphan@kizuna.test";
+  private static final String ORPHAN_PASSWORD = "pass";
+
   private static final String INVALID_CREDENTIALS_MESSAGE = "メールアドレスまたはパスワードが正しくありません";
   private static final String DISABLED_ACCOUNT_MESSAGE = "アカウントが無効化されています";
+  private static final String STALE_SESSION_MESSAGE = "セッションが無効です。再度ログインしてください";
 
   @Autowired private TestRestTemplate rest;
   @Autowired private RoleRepository roleRepository;
@@ -239,6 +243,37 @@ class PlatformAuthIT {
         rest.exchange("/store/orders", HttpMethod.GET, new HttpEntity<>(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName(
+      "利用者行の消えた有効トークンの GET /platform/me は 401 + セッション無効文言を返すこと"
+          + "（404 でないこと = 無効なのはセッションで、前端の全域 401 経路が再ログインへ差し戻す）")
+  void meWithValidTokenForVanishedUserReturns401StaleSession() {
+    platformUserRepository
+        .findByEmail(ORPHAN_EMAIL)
+        .orElseGet(
+            () ->
+                platformUserRepository.save(
+                    PlatformUser.builder()
+                        .email(ORPHAN_EMAIL)
+                        .password(passwordEncoder.encode(ORPHAN_PASSWORD))
+                        .displayName("行削除対象")
+                        .enabled(true)
+                        .userType(UserType.STAFF)
+                        .roleIds(managerRoleIds())
+                        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                        .storeIds(Set.of(1L))
+                        .build()));
+    String token = platformToken(ORPHAN_EMAIL, ORPHAN_PASSWORD);
+    // アプリに利用者行の削除経路は無い（無効化は行を残す）ため、DB 直接操作で消えた状態を
+    // リポジトリ直削で模擬する。
+    platformUserRepository.findByEmail(ORPHAN_EMAIL).ifPresent(platformUserRepository::delete);
+
+    ResponseEntity<JsonNode> res = getPlatformMe(token);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(res.getBody().path("error").asString()).isEqualTo(STALE_SESSION_MESSAGE);
   }
 
   /** 種子の既定束「店長」を名称で解決する（束はデータ — id を決め打ちしない）。 */
