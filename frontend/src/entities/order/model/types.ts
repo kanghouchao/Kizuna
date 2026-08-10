@@ -46,8 +46,11 @@ export interface Order {
   manual_discount?: number;
   carrier?: string;
   media_name?: string;
+  /** 会計金額。完了処理でのみ確定する。 */
+  total_fee?: number;
   used_points?: number;
-  manual_grant_points?: number;
+  /** 会計金額から自動計算された付与ポイント。完了処理でのみ確定する。 */
+  auto_grant_points?: number;
   remarks?: string;
   cast_driver_message?: string;
   status?: OrderStatus;
@@ -92,8 +95,6 @@ export interface OrderCreateRequest {
   reception_route?: ReceptionRoute;
   carrier?: string;
   media_name?: string;
-  used_points?: number;
-  manual_grant_points?: number;
   remarks?: string;
   cast_driver_message?: string;
   // Customer Creation Fields
@@ -117,6 +118,29 @@ export interface ReservationRequestUpdateRequest {
   // Java 側が @NotNull @Min(1)
   pax: number;
   remarks?: string;
+}
+
+/**
+ * 受注完了（会計）の内容（POST /store/orders/{id}/completion）。
+ *
+ * ポイント利用は任意だが、送るなら 1 以上（Java 側が @Min(1)）。利用しない完了では項目ごと省略する — 0 は撥ねられる。
+ */
+export interface OrderCompletionRequest {
+  total_fee: number;
+  use_points?: number;
+}
+
+/**
+ * 完了処理の事前計算（GET /store/orders/{id}/completion-preview）。
+ *
+ * 残高だけが可空。他の 3 つは Java 側が primitive のため、応答から消えることはない。
+ */
+export interface OrderCompletionPreview {
+  member_linked: boolean;
+  /** 未紐づけではキーごと応答から消える。 */
+  point_balance?: number;
+  usage_unit: number;
+  grant_points: number;
 }
 
 // 会員本人の予約1件（GET /platform/me/orders）。店舗の顧客台帳の項目は含まない。

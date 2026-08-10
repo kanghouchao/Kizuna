@@ -12,6 +12,8 @@ import {
   MemberOrderCreateRequest,
   Order,
   OrderCastCandidate,
+  OrderCompletionPreview,
+  OrderCompletionRequest,
   OrderCreateRequest,
   OrderReceptionist,
   ReservationRequestUpdateRequest,
@@ -68,6 +70,25 @@ export const orderApi = {
   /** 予約申請を謝絶する。 */
   decline: async (id: string): Promise<Order> => {
     const response = await apiClient.post(`/store/orders/${id}/decline`);
+    return response.data;
+  },
+  /**
+   * 受注を完了する（会計の確定）。ポイントの利用と自動付与が台帳へ入るのはこの経路だけ。
+   *
+   * 対象は確定済みの受注に限られ、それ以外の状態はサーバ側が撥ねる。
+   */
+  complete: async (id: string, data: OrderCompletionRequest): Promise<Order> => {
+    const response = await apiClient.post(`/store/orders/${id}/completion`, data);
+    return response.data;
+  },
+  /**
+   * 完了処理の事前計算。付与見込みも利用単位も確定と同じ計算元から引くため、
+   * 画面が独自に計算してはならない（設定変更のたびに見込みと結果が食い違う）。
+   */
+  completionPreview: async (id: string, totalFee: number): Promise<OrderCompletionPreview> => {
+    const response = await apiClient.get(`/store/orders/${id}/completion-preview`, {
+      params: { total_fee: totalFee },
+    });
     return response.data;
   },
 };
