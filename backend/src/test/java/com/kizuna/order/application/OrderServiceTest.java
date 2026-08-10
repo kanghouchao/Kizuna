@@ -1050,6 +1050,7 @@ class OrderServiceTest {
         .build();
   }
 
+  /** 読み口（事前計算）が引く紐づけ。 */
   private void stubLink(CustomerMemberLink link) {
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
@@ -1057,6 +1058,17 @@ class OrderServiceTest {
 
   private void stubActiveLink(Long memberId) {
     stubLink(activeLink(memberId));
+  }
+
+  /** 記帳の経路（完了）が引く紐づけ。積み先を決めた行はコミットまで押さえる。 */
+  private void stubLockedLink(CustomerMemberLink link) {
+    when(customerMemberLinkRepository.findByCustomerIdAndStatusForUpdate(
+            "cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.of(link));
+  }
+
+  private void stubLockedActiveLink(Long memberId) {
+    stubLockedLink(activeLink(memberId));
   }
 
   private void stubActor() {
@@ -1077,7 +1089,7 @@ class OrderServiceTest {
     // 順序が逆だと、その受注の付与で同じ受注の利用を賄えてしまう
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    stubActiveLink(MEMBER_ID);
+    stubLockedActiveLink(MEMBER_ID);
     stubActor();
     when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
         .thenReturn(120);
@@ -1099,7 +1111,7 @@ class OrderServiceTest {
   void completeWithoutPointUsageDoesNotTouchTheUsageLedger() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    stubActiveLink(MEMBER_ID);
+    stubLockedActiveLink(MEMBER_ID);
     stubActor();
     when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
         .thenReturn(120);
@@ -1116,7 +1128,8 @@ class OrderServiceTest {
     // 非会員には台帳そのものが存在しない。利用の指定は黙って 0 に丸めず撥ねる
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByCustomerIdAndStatusForUpdate(
+            "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
@@ -1140,7 +1153,7 @@ class OrderServiceTest {
     assertThat(order.getAutoGrantPoints()).isZero();
     verifyNoInteractions(pointLedgerService);
     // 顧客が未設定なら紐づけを引くまでもない
-    verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
+    verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatusForUpdate(any(), any());
   }
 
   @Test
@@ -1152,7 +1165,7 @@ class OrderServiceTest {
     // 集約の構築時検証は会員 ID を必須にしており、この状態は FK の SET NULL による読み込みでしか生じない
     CustomerMemberLink detached = mock(CustomerMemberLink.class);
     when(detached.getMemberId()).thenReturn(null);
-    stubLink(detached);
+    stubLockedLink(detached);
 
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
         .isInstanceOf(ServiceException.class)
@@ -1166,7 +1179,7 @@ class OrderServiceTest {
     // その形で残さず、台帳を触る前に落とす
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    stubActiveLink(MEMBER_ID);
+    stubLockedActiveLink(MEMBER_ID);
     when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
@@ -1196,6 +1209,37 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.complete("nope", completion(12000, null), "staff@kizuna.test"))
         .isInstanceOf(NotFoundException.class);
     verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
+  void completeResolvesTheMemberUnderARowLock() {
+    // 完了は積み先の会員を決めた行をコミットまで押さえる。ロック無しで解決すると、並行する紐づけ解除とは
+    // 何も競合せずに双方が commit でき、受注は取り消せないまま解除済みの会員へ利用と付与が残る
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubLockedActiveLink(MEMBER_ID);
+    stubActor();
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, 300), "staff@kizuna.test");
+
+    verify(customerMemberLinkRepository)
+        .findByCustomerIdAndStatusForUpdate("cust-1", LinkStatus.ACTIVE);
+    verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
+  }
+
+  @Test
+  void completionPreviewResolvesTheMemberWithoutARowLock() {
+    // 事前計算は台帳へ積まない読み口。行を押さえると、画面を開いただけの照会が並行する紐づけ解除を
+    // コミットまで待たせる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+
+    service.completionPreview("o1", 12000);
+
+    verify(customerMemberLinkRepository).findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
+    verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatusForUpdate(any(), any());
   }
 
   @Test
