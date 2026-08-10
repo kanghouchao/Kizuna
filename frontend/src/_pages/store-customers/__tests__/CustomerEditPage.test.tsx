@@ -17,6 +17,8 @@ jest.mock('@/entities/customer', () => ({
 }));
 
 jest.mock('@/entities/order', () => ({
+  // 表示ラベル等の定数は本物を使う（API だけを差し替える）
+  ...jest.requireActual('@/entities/order/model/types'),
   orderApi: { list: jest.fn() },
 }));
 
@@ -114,5 +116,27 @@ describe('顧客編集ページの取得失敗', () => {
 
     expect(await screen.findByText('注文履歴がありません')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('顧客編集ページの注文履歴', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedCustomerApi.get.mockResolvedValue(customer);
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue([]);
+  });
+
+  it('受注ステータスを enum 生値ではなく受注一覧と同じ日本語ラベルで表示すること', async () => {
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [{ id: 'ord-1', business_date: '2026-08-01', status: 'CONFIRMED', used_points: 0 }],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
+
+    render(<CustomerEditPage />);
+
+    expect(await screen.findByText('確定')).toBeInTheDocument();
+    expect(screen.queryByText('CONFIRMED')).not.toBeInTheDocument();
   });
 });
