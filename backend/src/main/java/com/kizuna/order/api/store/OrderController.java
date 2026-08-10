@@ -1,6 +1,8 @@
 package com.kizuna.order.api.store;
 
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
+import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
+import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
@@ -102,6 +104,24 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> confirm(@PathVariable String id, Principal principal) {
     return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
+  }
+
+  /** 受注を完了する（会計の確定）。ポイントの付与・利用はこの経路でのみ台帳へ入る。 */
+  @PostMapping("/{id}/completion")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderResponse> complete(
+      @PathVariable String id,
+      @Valid @RequestBody OrderCompletionRequest request,
+      Principal principal) {
+    return ResponseEntity.ok(orderService.complete(id, request, principal.getName()));
+  }
+
+  /** 完了処理の事前計算（会計金額に対する付与見込みと、会員なら残高）。 */
+  @GetMapping("/{id}/completion-preview")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderCompletionPreviewResponse> completionPreview(
+      @PathVariable String id, @RequestParam(name = "total_fee") int totalFee) {
+    return ResponseEntity.ok(orderService.completionPreview(id, totalFee));
   }
 
   /** 予約申請を謝絶する。 */

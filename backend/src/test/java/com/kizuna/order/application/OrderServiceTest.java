@@ -3,13 +3,17 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.Cast;
@@ -19,6 +23,8 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
+import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
+import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
@@ -32,8 +38,10 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.domain.ReceptionRoute;
+import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -54,6 +62,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -71,6 +80,7 @@ class OrderServiceTest {
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock NominatableCastLookup nominatableCast;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
+  @Mock PointLedgerService pointLedgerService;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock RoleRepository roleRepository;
   @Mock StoreContext storeContext;
@@ -88,7 +98,7 @@ class OrderServiceTest {
       OffsetDateTime.parse("2026-08-04T10:00:00+09:00");
 
   private OrderPatch emptyPatch() {
-    return new OrderPatch(null, null, null, null, null, null, null, null, null, null, null, null);
+    return new OrderPatch(null, null, null, null, null, null, null, null, null, null);
   }
 
   /** 受付担当ヘルパーが持つ既定ロール id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
@@ -386,9 +396,9 @@ class OrderServiceTest {
   }
 
   @Test
-  void updateAllowsLifecycleTransitionsAfterConfirmation() {
+  void updateAllowsCancellationAfterConfirmation() {
     // 受付経路と申請者スナップショットは確定後も残るため、「申請かどうか」だけで遷移を塞ぐと
-    // 会員起点の受注が完了・キャンセルへ一切進めなくなる。ガードは未確定（CREATED）に限る
+    // 会員起点の受注がキャンセルへ一切進めなくなる。ガードは未確定（CREATED）に限る
     Order confirmedOrder =
         reservationRequest().status(OrderStatus.CONFIRMED).receptionistId(3L).build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
@@ -404,11 +414,30 @@ class OrderServiceTest {
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
     req.setReceptionistId(2L);
-    req.setStatus("COMPLETED");
+    req.setStatus("CANCELLED");
 
     service.update("o1", req);
 
-    assertThat(confirmedOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(confirmedOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+  }
+
+  @Test
+  void updateRejectsTransitionToCompleted() {
+    // 完了は会計金額の確定とポイント台帳への記帳と不可分。汎用更新から遷移できると、会計もポイントも
+    // 入らないまま完了した受注が成立する
+    Order confirmedOrder = Order.builder().status(OrderStatus.CONFIRMED).castId("g1").build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmedOrder));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g1");
+    req.setStatus("COMPLETED");
+
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("完了処理でのみ");
+    assertThat(confirmedOrder.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verify(orderRepository, never()).save(any(Order.class));
+    verify(pointLedgerService, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
   }
 
   @Test
@@ -442,9 +471,7 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
-        .thenReturn(
-            new OrderPatch(
-                null, null, null, null, null, null, "新しい割引名", null, null, null, null, null));
+        .thenReturn(new OrderPatch(null, null, null, null, null, null, "新しい割引名", null, null, null));
     when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -486,7 +513,9 @@ class OrderServiceTest {
 
   @Test
   void updateRejectsIllegalStatusTransition() {
-    Order existing = Order.builder().status(OrderStatus.CREATED).build();
+    // 遷移表そのものの判定が汎用更新に残っていること（完了の専用ガードとは別経路）。
+    // 完了で試すと専用ガードが先に撥ねてしまい、遷移表を通らなくなる
+    Order existing = Order.builder().status(OrderStatus.CANCELLED).build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
@@ -496,10 +525,11 @@ class OrderServiceTest {
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
     req.setReceptionistId(2L);
-    req.setStatus("COMPLETED");
+    req.setStatus("CONFIRMED");
 
-    assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
-    assertThat(existing.getStatus()).isEqualTo(OrderStatus.CREATED);
+    assertThatThrownBy(() -> service.update("o1", req))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThat(existing.getStatus()).isEqualTo(OrderStatus.CANCELLED);
   }
 
   @Test
@@ -613,7 +643,7 @@ class OrderServiceTest {
 
   /** 人数と備考だけを差し替える部分更新コマンド（汎用更新の典型的な編集）。 */
   private static OrderPatch paxAndRemarksPatch(Integer pax, String remarks) {
-    return new OrderPatch(null, null, pax, null, null, null, null, null, null, null, remarks, null);
+    return new OrderPatch(null, null, pax, null, null, null, null, null, remarks, null);
   }
 
   @Test
@@ -998,6 +1028,287 @@ class OrderServiceTest {
     verify(orderRepository, never()).save(any(Order.class));
   }
 
+  private static final long MEMBER_ID = 100L;
+  private static final long ACTOR_ID = 7L;
+
+  /** 完了の対象になる確定済みの受注（顧客つき）。 */
+  private static Order confirmedOrderWithCustomer() {
+    Order order =
+        Order.builder().status(OrderStatus.CONFIRMED).customerId("cust-1").castId("cast-1").build();
+    order.setStoreId(STORE_ID);
+    return order;
+  }
+
+  /** 顧客に張られた有効な会員紐づけ。 */
+  private static CustomerMemberLink activeLink(Long memberId) {
+    return CustomerMemberLink.builder()
+        .customerId("cust-1")
+        .memberId(memberId)
+        .memberCode("123456789012")
+        .linkedBy(3L)
+        .linkedAt(OffsetDateTime.now())
+        .build();
+  }
+
+  private void stubLink(CustomerMemberLink link) {
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.of(link));
+  }
+
+  private void stubActiveLink(Long memberId) {
+    stubLink(activeLink(memberId));
+  }
+
+  private void stubActor() {
+    PlatformUser actor = authorizedReceptionist();
+    actor.setId(ACTOR_ID);
+    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
+  }
+
+  private static OrderCompletionRequest completion(Integer totalFee, Integer usePoints) {
+    OrderCompletionRequest request = new OrderCompletionRequest();
+    request.setTotalFee(totalFee);
+    request.setUsePoints(usePoints);
+    return request;
+  }
+
+  @Test
+  void completeUsesPointsBeforeGrantingThem() {
+    // 順序が逆だと、その受注の付与で同じ受注の利用を賄えてしまう
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
+        .thenReturn(120);
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, 300), "staff@kizuna.test");
+
+    InOrder inOrder = inOrder(pointLedgerService);
+    inOrder.verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
+    inOrder.verify(pointLedgerService).grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getTotalFee()).isEqualTo(12000);
+    assertThat(order.getUsedPoints()).isEqualTo(300);
+    // 実際に付与された数を受注へ書く。要求された金額から再計算すると、設定変更で台帳とずれる
+    assertThat(order.getAutoGrantPoints()).isEqualTo(120);
+  }
+
+  @Test
+  void completeWithoutPointUsageDoesNotTouchTheUsageLedger() {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
+        .thenReturn(120);
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    verify(pointLedgerService, never()).useForOrder(anyLong(), any(), any(), anyInt(), any());
+    assertThat(order.getUsedPoints()).isZero();
+  }
+
+  @Test
+  void completeRejectsPointUsageOnANonMemberOrder() {
+    // 非会員には台帳そのものが存在しない。利用の指定は黙って 0 に丸めず撥ねる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("非会員の受注ではポイントを利用できません");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void completeRejectsPointUsageBeyondTheTotalFee() {
+    // 請求を超える割引に相当する利用を台帳へ残さない。完了は取り消せないので、積んでから気づいても戻せない
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+
+    assertThatThrownBy(() -> service.complete("o1", completion(0, 100), "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("利用ポイントは会計金額を超えられません");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void completeAcceptsPointUsageEqualToTheTotalFee() {
+    // 全額のポイント払いは通す。境界を閉じると、残高で払い切れる会計だけが完了できなくなる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(300, 300), "staff@kizuna.test");
+
+    verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getUsedPoints()).isEqualTo(300);
+  }
+
+  @Test
+  void completeOfANonMemberOrderGrantsNothing() {
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
+    order.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getAutoGrantPoints()).isZero();
+    verifyNoInteractions(pointLedgerService);
+    // 顧客が未設定なら押さえる行も引く紐づけも無い
+    verify(customerRepository, never()).findByIdForUpdate(any());
+    verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
+  }
+
+  @Test
+  void completeTreatsALinkWhoseMemberIsGoneAsNonMember() {
+    // 会員行が消えると FK の SET NULL で紐づけの会員 ID が欠落する。残高の所在が辿れない以上、
+    // 紐づけが無いのと同じに扱う（利用の指定は撥ね、付与も起こさない）
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    // 集約の構築時検証は会員 ID を必須にしており、この状態は FK の SET NULL による読み込みでしか生じない
+    CustomerMemberLink detached = mock(CustomerMemberLink.class);
+    when(detached.getMemberId()).thenReturn(null);
+    stubLink(detached);
+
+    assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("非会員の受注ではポイントを利用できません");
+    verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
+  void completeFailsWhenTheActorIsNoLongerAPlatformUser() {
+    // 追記型の台帳では実行者 null が「機構が起こした仕訳」の形。失効した認証セッションによる人手の完了を
+    // その形で残さず、台帳を触る前に落とす
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
+        .isInstanceOf(StaleSessionException.class);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void completeRejectsAnOrderThatIsNotConfirmed() {
+    // 検証は台帳を触るより先。撥ねる要求が仕訳を積んだ後だと、拒否の健全さが巻き戻しだけに掛かる
+    Order created = Order.builder().status(OrderStatus.CREATED).customerId("cust-1").build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(created));
+
+    assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThat(created.getStatus()).isEqualTo(OrderStatus.CREATED);
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void completeThrowsWhenOrderMissing() {
+    when(orderRepository.findById("nope")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.complete("nope", completion(12000, null), "staff@kizuna.test"))
+        .isInstanceOf(NotFoundException.class);
+    verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
+  void completeResolvesTheMemberUnderTheCustomerRowLock() {
+    // 完了は顧客行を押さえてから紐づけを解決する。押さえずに解決すると並行する紐づけの解除・変更とは
+    // 何も競合せずに双方が commit でき、受注は取り消せないまま利用と付与だけがずれた会員に残る
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, 300), "staff@kizuna.test");
+
+    InOrder inOrder = inOrder(customerRepository, customerMemberLinkRepository);
+    inOrder.verify(customerRepository).findByIdForUpdate("cust-1");
+    // 紐づけ自体はロック取得後の新しい問い合わせで引く。置換の commit 後ならその新しい行が必ず見える
+    inOrder
+        .verify(customerMemberLinkRepository)
+        .findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
+  }
+
+  @Test
+  void completionPreviewResolvesTheMemberWithoutTheCustomerRowLock() {
+    // 事前計算は台帳へ積まない読み口。行を押さえると、画面を開いただけの照会が並行する紐づけ解除を
+    // コミットまで待たせる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+
+    service.completionPreview("o1", 12000);
+
+    verify(customerMemberLinkRepository).findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
+    verify(customerRepository, never()).findByIdForUpdate(any());
+  }
+
+  @Test
+  void completionPreviewOfALinkedOrderCarriesTheBalance() {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
+    when(pointLedgerService.usageUnit()).thenReturn(100);
+    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
+
+    OrderCompletionPreviewResponse preview = service.completionPreview("o1", 12000);
+
+    assertThat(preview.isMemberLinked()).isTrue();
+    assertThat(preview.getPointBalance()).isEqualTo(800);
+    assertThat(preview.getUsageUnit()).isEqualTo(100);
+    // 見込みは確定と同じサービスから引く。独自に計算すると設定変更のたびに結果が食い違う
+    assertThat(preview.getGrantPoints()).isEqualTo(120);
+  }
+
+  @Test
+  void completionPreviewOfAnUnlinkedOrderOmitsTheBalance() {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    when(pointLedgerService.usageUnit()).thenReturn(100);
+
+    OrderCompletionPreviewResponse preview = service.completionPreview("o1", 12000);
+
+    assertThat(preview.isMemberLinked()).isFalse();
+    assertThat(preview.getPointBalance()).as("非会員に残高は存在しない").isNull();
+    // 確定は非会員へ付与しない。見込みが付与を返すと、画面の予定と確定の結果が食い違う
+    assertThat(preview.getGrantPoints()).isZero();
+    verify(pointLedgerService, never()).previewGrant(anyInt());
+    verify(pointLedgerService, never()).balance(anyLong());
+  }
+
+  @Test
+  void completionPreviewRejectsANegativeFee() {
+    // 会計金額は要求パラメータのため契約の下限を持てない。素通りすると負の付与が見込みとして返る
+    assertThatThrownBy(() -> service.completionPreview("o1", -1))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("会計金額は 0 以上");
+    verifyNoInteractions(pointLedgerService);
+  }
+
   /** 編集後の応答組み立て（読み口 → DTO）だけを満たす stub。編集そのものの検証は集約の状態で行う。 */
   private void stubReservationRequestUpdateResponse() {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -1163,6 +1474,19 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.delete("o1"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("謝絶で扱ってください");
+    verify(orderRepository, never()).deleteById(anyString());
+  }
+
+  @Test
+  void deleteRejectsCompletedOrders() {
+    // 完了済みの受注はポイント台帳の仕訳が order_id で参照している。削除すると FK の SET NULL で
+    // 付与・利用の根拠だけが静かに失われる
+    Order completed = Order.builder().status(OrderStatus.COMPLETED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(completed));
+
+    assertThatThrownBy(() -> service.delete("o1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("完了済みの受注は削除できません");
     verify(orderRepository, never()).deleteById(anyString());
   }
 

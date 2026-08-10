@@ -13,7 +13,6 @@ public interface CustomerMapper {
   @Mapping(target = "linkedMemberCode", ignore = true)
   CustomerResponse toResponse(Customer customer);
 
-  @Mapping(target = "points", constant = "0")
   @Mapping(target = "landmark", ignore = true)
   // rank は DB デフォルト（'SILVER'）と同義。エンティティに列をマッピングしたため明示的に補完する
   @Mapping(target = "rank", source = "rank", defaultValue = "SILVER")

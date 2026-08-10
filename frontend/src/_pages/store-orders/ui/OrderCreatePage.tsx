@@ -44,8 +44,6 @@ export default function CreateOrderPage() {
         manual_discount: Number(data.manualDiscount),
         carrier: data.carrier,
         media_name: data.mediaName,
-        used_points: Number(data.usedPoints),
-        manual_grant_points: Number(data.manualGrantPoints),
         remarks: data.remarks,
         cast_driver_message: data.castDriverMessage,
       };

@@ -13,7 +13,5 @@ public record OrderPatch(
     List<String> optionCodes,
     String discountName,
     Integer manualDiscount,
-    Integer usedPoints,
-    Integer manualGrantPoints,
     String remarks,
     String castDriverMessage) {}

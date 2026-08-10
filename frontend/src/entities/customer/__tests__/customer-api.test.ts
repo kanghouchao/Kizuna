@@ -71,4 +71,29 @@ describe('customerApi', () => {
     ]);
     expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-link/history');
   });
+  it('memberPointBalance は member-point-balance を GET する', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { linked: true, balance: 120 } });
+
+    await expect(customerApi.memberPointBalance('c1')).resolves.toEqual({
+      linked: true,
+      balance: 120,
+    });
+    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-point-balance');
+  });
+  it('adjustPoints は point-adjustments を snake_case の本文で POST する', async () => {
+    mockedPost.mockResolvedValueOnce({ data: { linked: true, balance: 220 } });
+
+    await expect(
+      customerApi.adjustPoints('c1', {
+        delta: 100,
+        reason: '手動付与',
+        expires_on: '2026-12-31',
+      })
+    ).resolves.toEqual({ linked: true, balance: 220 });
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/point-adjustments', {
+      delta: 100,
+      reason: '手動付与',
+      expires_on: '2026-12-31',
+    });
+  });
 });

@@ -134,6 +134,42 @@ class SystemConfigServiceImplTest {
   }
 
   @Test
+  @DisplayName("数値型の設定に int の範囲を超える値を指定すると例外が発生すること")
+  void updateConfig_numberBeyondIntRange() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder()
+            .configKey("point_usage_unit")
+            .configValue("9999999999")
+            .build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("point_usage_unit").valueType("NUMBER").build();
+    when(systemConfigRepository.findByConfigKey("point_usage_unit"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+  }
+
+  @Test
+  @DisplayName("int の上限ちょうどの数値は保存できること")
+  void updateConfig_numberAtIntMax() {
+    String value = String.valueOf(Integer.MAX_VALUE);
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder()
+            .configKey("point_usage_unit")
+            .configValue(value)
+            .build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("point_usage_unit").valueType("NUMBER").build();
+    when(systemConfigRepository.findByConfigKey("point_usage_unit"))
+        .thenReturn(Optional.of(config));
+    when(systemConfigRepository.save(config)).thenReturn(config);
+    when(systemConfigMapper.toResponse(config))
+        .thenReturn(SystemConfigResponse.builder().configValue(value).build());
+
+    assertEquals(value, systemConfigService.updateConfig(request).getConfigValue());
+  }
+
+  @Test
   @DisplayName("秘匿設定の値はレスポンスでマスクされること")
   void getAllConfigs_masksSecret() {
     SystemConfig config =
@@ -242,6 +278,50 @@ class SystemConfigServiceImplTest {
         .thenReturn(Optional.empty());
 
     assertThat(systemConfigService.lineChannelSettings().configured()).isFalse();
+  }
+
+  @Test
+  void pointSettings_buildsTypedSnapshotFromKeys() {
+    when(systemConfigRepository.findByConfigKey("point_grant_unit_amount"))
+        .thenReturn(Optional.of(config("point_grant_unit_amount", "100")));
+    when(systemConfigRepository.findByConfigKey("point_grant_points_per_unit"))
+        .thenReturn(Optional.of(config("point_grant_points_per_unit", "2")));
+    when(systemConfigRepository.findByConfigKey("point_usage_unit"))
+        .thenReturn(Optional.of(config("point_usage_unit", "500")));
+
+    PointSettings point = systemConfigService.pointSettings();
+
+    assertThat(point.grantUnitAmount()).isEqualTo(100);
+    assertThat(point.grantPointsPerUnit()).isEqualTo(2);
+    assertThat(point.usageUnit()).isEqualTo(500);
+  }
+
+  @Test
+  void pointSettings_defaultsWhenUnset() {
+    when(systemConfigRepository.findByConfigKey(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(Optional.empty());
+
+    PointSettings point = systemConfigService.pointSettings();
+
+    assertThat(point.grantUnitAmount()).isZero();
+    assertThat(point.grantPointsPerUnit()).isZero();
+    assertThat(point.usageUnit()).isEqualTo(1);
+  }
+
+  @Test
+  void pointSettings_defaultsWhenUnparsable() {
+    when(systemConfigRepository.findByConfigKey("point_grant_unit_amount"))
+        .thenReturn(Optional.of(config("point_grant_unit_amount", "abc")));
+    when(systemConfigRepository.findByConfigKey("point_grant_points_per_unit"))
+        .thenReturn(Optional.of(config("point_grant_points_per_unit", " ")));
+    when(systemConfigRepository.findByConfigKey("point_usage_unit"))
+        .thenReturn(Optional.of(config("point_usage_unit", "1e3")));
+
+    PointSettings point = systemConfigService.pointSettings();
+
+    assertThat(point.grantUnitAmount()).isZero();
+    assertThat(point.grantPointsPerUnit()).isZero();
+    assertThat(point.usageUnit()).isEqualTo(1);
   }
 
   private SystemConfig config(String key, String value) {

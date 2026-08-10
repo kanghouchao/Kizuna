@@ -46,6 +46,9 @@ public enum PermissionCode {
   /** 顧客の閲覧・登録・更新・削除（CustomerController）。 */
   CUSTOMER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
+  /** 会員ポイントの手動調整（確定系操作 — CustomerPointController の調整端点）。準金銭的な確定操作のため店長限定。 */
+  POINT_ADJUST(Console.STORE, SystemRole.STORE_MANAGER),
+
   /** 出勤（シフト）の閲覧・登録・更新（ShiftController）。 */
   SHIFT_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 

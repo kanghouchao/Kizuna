@@ -3,14 +3,15 @@
 |Base package
 |`com.kizuna.order`
 |Bean references
-|* `c.k.c.domain.CastRepository` (in Cast)
-* `c.k.c.domain.CustomerMemberLinkRepository` (in Customer)
+|* `c.k.c.domain.CustomerMemberLinkRepository` (in Customer)
 * `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.m.application.MemberLookupService` (in Member)
 * `c.k.s.application.ConfirmedShiftLookupService` (in Shift)
 * `c.k.s.storescope.StoreExistenceCheck` (in Shared)
 * `c.k.s.config.AppProperties` (in Shared)
+* `c.k.c.domain.CastRepository` (in Cast)
 * `c.k.c.domain.CustomerRepository` (in Customer)
+* `c.k.p.application.PointLedgerService` (in Point)
 * `c.k.u.domain.RoleRepository` (in User)
 * `c.k.s.storescope.StoreContext` (in Shared)
 * `c.k.s.storescope.StoreScopeExecutor` (in Shared)

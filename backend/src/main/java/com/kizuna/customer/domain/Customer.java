@@ -44,9 +44,6 @@ public class Customer extends StoreScopedEntity {
   @Column(name = "has_pet")
   private Boolean hasPet;
 
-  @Column(name = "points")
-  private Integer points;
-
   @Column(name = "rank")
   private String rank;
 
@@ -112,8 +109,6 @@ public class Customer extends StoreScopedEntity {
         + phoneNumber
         + ", classification="
         + classification
-        + ", points="
-        + points
         + ")";
   }
 }

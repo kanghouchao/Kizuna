@@ -6,18 +6,23 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
+import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
+import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
+import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
+import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
@@ -51,6 +56,7 @@ public class OrderService {
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final NominatableCastLookup nominatableCast;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
+  private final PointLedgerService pointLedgerService;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final StoreContext storeContext;
@@ -135,9 +141,15 @@ public class OrderService {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
+    // 完了は会計金額の確定とポイント台帳への記帳と不可分のため、専用の完了処理だけが入口になる。
+    // 汎用更新から遷移できると、会計もポイントも入らないまま完了した受注が成立してしまう。
+    if (OrderStatus.COMPLETED.name().equals(request.getStatus())) {
+      throw new ServiceException("完了への変更は完了処理でのみ行えます");
+    }
+
     // 未確定（CREATED）の申請に限り、状態遷移の入口は確定・謝絶の専用操作ただ一つ。汎用更新でも
     // 遷移できると、確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう。
-    // 確定後は通常の受注としてのライフサイクル（完了・キャンセル）を汎用更新が引き続き受け持つ —
+    // 確定後のキャンセルは通常の受注のライフサイクルとして汎用更新が引き続き受け持つ —
     // 受付経路と申請者スナップショットは追跡のため残り続けるので、申請かどうかだけで判定してはならない。
     if (request.getStatus() != null
         && order.isReservationRequest()
@@ -222,6 +234,116 @@ public class OrderService {
     }
     orderRepository.save(order);
     return toResponse(id);
+  }
+
+  /**
+   * 受注を完了する（会計の確定）。会計金額を確定し、会員に紐づく受注ならポイントの利用と自動付与を台帳へ記帳する。
+   *
+   * <p>ポイントが台帳へ入る経路をこの操作（と手動調整）に限るため、汎用更新は完了への遷移を受け付けない。
+   *
+   * <p>利用は付与より先に記帳する。順序が逆だと、その受注の付与で同じ受注の利用を賄えてしまう。
+   *
+   * <p>非会員の受注ではポイントの利用も付与も起こらない。会員に紐づかない顧客には台帳そのものが存在しない。
+   */
+  @StoreScoped
+  @Transactional
+  public OrderResponse complete(String id, OrderCompletionRequest request, String actorEmail) {
+    Order order =
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+
+    // 検証は台帳を触るより先に済ませる。撥ねる要求が仕訳を積んだ後だと、拒否の健全さがトランザクションの
+    // 巻き戻しだけに掛かる（同一トランザクション内の後続の読みには積んだ仕訳が見えてしまう）。
+    if (order.getStatus() != OrderStatus.CONFIRMED) {
+      throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
+    }
+
+    int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
+    if (order.getCustomerId() != null) {
+      // 積み先を決める前に顧客行を押さえ、紐づけの解除・変更と直列化する。引けない顧客はそのまま
+      // 非会員として進む。契約は CustomerRepository#findByIdForUpdate に記す。
+      customerRepository.findByIdForUpdate(order.getCustomerId());
+    }
+    Long memberId = linkedMemberId(order).orElse(null);
+    if (memberId == null && usePoints > 0) {
+      throw new ServiceException("非会員の受注ではポイントを利用できません");
+    }
+    // 会計金額を超える利用は、請求より大きい割引に相当する仕訳を台帳へ残す。意図してポイントを減らすなら
+    // 理由の付く手動調整の経路があり、取り消せない完了に混ぜない。同額までは全額のポイント払いとして通す。
+    if (usePoints > request.getTotalFee()) {
+      throw new ServiceException("利用ポイントは会計金額を超えられません");
+    }
+
+    int granted = 0;
+    if (memberId != null) {
+      Long actorId = resolveActorId(actorEmail);
+      // 単位の制約と残高の充足は台帳側が判定する（利用の入口が増えても規則が分かれないため）。
+      if (usePoints > 0) {
+        pointLedgerService.useForOrder(memberId, id, order.getStoreId(), usePoints, actorId);
+      }
+      granted =
+          pointLedgerService.grantForOrder(
+              memberId, id, order.getStoreId(), request.getTotalFee(), actorId);
+    }
+
+    order.completeWith(request.getTotalFee(), usePoints, granted);
+    orderRepository.save(order);
+    return toResponse(id);
+  }
+
+  /**
+   * 完了処理の事前計算。入力された会計金額でいくら付与されるか、会員なら残高がいくらかを返す。
+   *
+   * <p>付与額も利用単位も確定と同じサービス（{@link PointLedgerService}）から引く。事前計算が独自に計算すると、
+   * 画面に出した見込みと確定の結果が設定変更のたびに食い違う。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public OrderCompletionPreviewResponse completionPreview(String id, int totalFee) {
+    // 会計金額は要求パラメータのため、契約の下限を持てない。負の金額は付与の計算を素通りして
+    // 負の付与になるので、台帳へ問い合わせる前に撥ねる。
+    if (totalFee < 0) {
+      throw new ServiceException("会計金額は 0 以上で指定してください");
+    }
+    Order order =
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+
+    Long memberId = linkedMemberId(order).orElse(null);
+    return OrderCompletionPreviewResponse.builder()
+        .memberLinked(memberId != null)
+        .pointBalance(memberId == null ? null : pointLedgerService.balance(memberId))
+        .usageUnit(pointLedgerService.usageUnit())
+        // 非会員の受注は確定でも付与しない。見込みだけ付与を返すと、同じ画面が出した予定と確定の結果が食い違う。
+        .grantPoints(memberId == null ? 0 : pointLedgerService.previewGrant(totalFee))
+        .build();
+  }
+
+  /**
+   * 受注の顧客に紐づく会員。顧客が未設定、紐づけが無い、または会員行が消えて紐づけの会員 ID が欠落した場合は空を返す。
+   *
+   * <p>会員 ID の欠落を紐づけの不在と同じに扱うのは、残高の所在が会員 ID でしか辿れないため。
+   *
+   * <p>この問い合わせ自体はロックを取らない。完了は取り消せない一方で紐づけの解除・変更はいつでも起こりうるため、 完了は呼ぶ前に顧客行を押さえる。事前計算は台帳へ積まないので押さえない。
+   */
+  private Optional<Long> linkedMemberId(Order order) {
+    if (order.getCustomerId() == null) {
+      return Optional.empty();
+    }
+    return customerMemberLinkRepository
+        .findByCustomerIdAndStatus(order.getCustomerId(), LinkStatus.ACTIVE)
+        .map(CustomerMemberLink::getMemberId);
+  }
+
+  /**
+   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
+   *
+   * <p>解決できない認証主体は黙って null にせず失敗させる — 追記型の台帳では実行者 null が「機構が起こした仕訳」の形であり、
+   * 失効した認証セッションによる人手の操作がそれと区別できなくなる。
+   */
+  private Long resolveActorId(String actorEmail) {
+    return platformUserRepository
+        .findByEmail(actorEmail)
+        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
+        .getId();
   }
 
   /**
@@ -400,6 +522,11 @@ public class OrderService {
     // 通常の受注として削除の管理操作を受け付ける。
     if (order.isReservationRequest() && order.getStatus() == OrderStatus.CREATED) {
       throw new ServiceException("未確定の予約申請は削除できません。謝絶で扱ってください");
+    }
+    // 完了済みの受注はポイント台帳の仕訳が order_id で参照している。削除すると FK の SET NULL で
+    // 付与・利用の根拠だけが静かに失われ、残高は残ったまま出所を辿れなくなる。
+    if (order.getStatus() == OrderStatus.COMPLETED) {
+      throw new ServiceException("完了済みの受注は削除できません");
     }
     orderRepository.deleteById(id);
   }

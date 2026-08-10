@@ -8,7 +8,6 @@ export interface CustomerResponse {
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  points?: number;
   rank?: string;
   line_id?: string;
   usage_areas?: string;
@@ -33,6 +32,22 @@ export interface CustomerMemberLinkResponse {
   linked: boolean;
   member_code?: string;
   linked_at?: string;
+}
+
+/** 会員ポイント残高。customer/api/dto/CustomerPointBalanceResponse.java に対応。 */
+export interface CustomerPointBalanceResponse {
+  // 顧客が会員に紐づいているか。Java 側が primitive の boolean のため、キーは必ず応答に含まれる
+  linked: boolean;
+  // 紐づく会員の現在残高。未紐づけの顧客には台帳そのものが無いため欠落する
+  balance?: number;
+}
+
+/** 会員ポイントの手動調整。customer/api/dto/CustomerPointAdjustmentRequest.java に対応。 */
+export interface CustomerPointAdjustmentRequest {
+  delta: number;
+  reason: string;
+  /** 加算するポイントの有効期限。無期限なら省略する（減算に指定するとサーバが撥ねる）。 */
+  expires_on?: string;
 }
 
 /** 会員紐づけ履歴 1 件。customer/api/dto/CustomerMemberLinkHistoryResponse.java に対応。 */

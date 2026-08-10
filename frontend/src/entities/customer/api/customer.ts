@@ -3,6 +3,8 @@ import {
   CustomerCreateRequest,
   CustomerMemberLinkHistoryResponse,
   CustomerMemberLinkResponse,
+  CustomerPointAdjustmentRequest,
+  CustomerPointBalanceResponse,
   CustomerResponse,
   CustomerUpdateRequest,
 } from '../model/types';
@@ -52,6 +54,19 @@ export const customerApi = {
   /** 会員紐づけの履歴を新しい順に取得する */
   memberLinkHistory: async (id: string): Promise<CustomerMemberLinkHistoryResponse[]> => {
     const response = await apiClient.get(`/store/customers/${id}/member-link/history`);
+    return response.data;
+  },
+  /** 紐づく会員のポイント残高を取得する（残高は顧客ではなく会員の台帳が持つ） */
+  memberPointBalance: async (id: string): Promise<CustomerPointBalanceResponse> => {
+    const response = await apiClient.get(`/store/customers/${id}/member-point-balance`);
+    return response.data;
+  },
+  /** 会員ポイントを手動で調整し、調整後の残高を受け取る */
+  adjustPoints: async (
+    id: string,
+    data: CustomerPointAdjustmentRequest
+  ): Promise<CustomerPointBalanceResponse> => {
+    const response = await apiClient.post(`/store/customers/${id}/point-adjustments`, data);
     return response.data;
   },
 };

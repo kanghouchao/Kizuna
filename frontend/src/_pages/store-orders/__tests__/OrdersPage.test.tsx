@@ -14,6 +14,8 @@ jest.mock('@/entities/order', () => ({
     listReservationRequests: jest.fn(),
     confirm: jest.fn(),
     decline: jest.fn(),
+    complete: jest.fn(),
+    completionPreview: jest.fn(),
   },
 }));
 
@@ -48,8 +50,6 @@ describe('店側オーダー画面の描画', () => {
           extension_minutes: 0,
           option_codes: [],
           manual_discount: 0,
-          used_points: 0,
-          manual_grant_points: 0,
           status: 'CREATED',
         },
       ],
@@ -88,8 +88,6 @@ describe('店側オーダー画面の描画', () => {
           extension_minutes: 0,
           option_codes: [],
           manual_discount: 0,
-          used_points: 0,
-          manual_grant_points: 0,
           status: 'CREATED',
         },
       ],
@@ -138,8 +136,6 @@ describe('店側オーダー画面の描画', () => {
           extension_minutes: 0,
           option_codes: [],
           manual_discount: 0,
-          used_points: 0,
-          manual_grant_points: 0,
           status: 'CREATED',
         },
       ],
@@ -200,6 +196,73 @@ describe('店側オーダー画面の描画', () => {
     expect(body).not.toHaveProperty('store_name');
     expect(body).not.toHaveProperty('storeName');
     expect(body).not.toHaveProperty('businessDate');
+  });
+});
+
+describe('オーダー一覧の完了処理', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedOrderApi.listReservationRequests.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedOrderApi.completionPreview.mockResolvedValue({
+      member_linked: false,
+      usage_unit: 100,
+      grant_points: 0,
+    });
+  });
+
+  it('完了は確定済みの行にだけ出ること', async () => {
+    // 確定済み以外への完了はサーバ側が撥ねる。押せる形で出すと必ず失敗する操作を勧めることになる
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [
+        { id: 'a', business_date: '2026-08-01', status: 'CONFIRMED' },
+        { id: 'b', business_date: '2026-08-02', status: 'CREATED' },
+        { id: 'c', business_date: '2026-08-03', status: 'COMPLETED' },
+        { id: 'd', business_date: '2026-08-04', status: 'CANCELLED' },
+      ],
+      page: 0,
+      pageCount: 1,
+      total: 4,
+    });
+
+    render(<OrderListPage />);
+    await screen.findByText('2026-08-01');
+
+    expect(screen.getAllByRole('button', { name: '完了' })).toHaveLength(1);
+  });
+
+  it('完了を押すと、その受注の完了処理モーダルが開くこと', async () => {
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [{ id: 'a', business_date: '2026-08-01', status: 'CONFIRMED', total_fee: 0 }],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
+
+    render(<OrderListPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '完了' }));
+
+    expect(await screen.findByText('完了処理')).toBeInTheDocument();
+    await waitFor(() => expect(mockedOrderApi.completionPreview).toHaveBeenCalledWith('a', 0));
+  });
+
+  it('状態バッジは状態ごとに塗り分けること', async () => {
+    // 一律で成功の緑に塗ると、キャンセルまで正常終了に見える
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [
+        { id: 'a', business_date: '2026-08-01', status: 'CONFIRMED' },
+        { id: 'd', business_date: '2026-08-04', status: 'CANCELLED' },
+      ],
+      page: 0,
+      pageCount: 1,
+      total: 2,
+    });
+
+    render(<OrderListPage />);
+
+    expect(await screen.findByText('確定')).toHaveClass('bg-success/10');
+    const cancelled = screen.getByText('キャンセル');
+    expect(cancelled).toHaveClass('bg-destructive/10');
+    expect(cancelled).not.toHaveClass('bg-success/10');
   });
 });
 

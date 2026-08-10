@@ -75,8 +75,6 @@ export interface OrderFormData {
   manualDiscount: number;
   carrier: string;
   mediaName: string;
-  usedPoints: number;
-  manualGrantPoints: number;
   remarks: string;
   castDriverMessage: string;
   ngType: string;
@@ -110,8 +108,6 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
       extensionMinutes: 0,
       discountName: '',
       manualDiscount: 0,
-      usedPoints: 0,
-      manualGrantPoints: 0,
       hasPet: false,
       ngType: 'NG無し',
       ...initialData,

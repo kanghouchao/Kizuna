@@ -39,7 +39,9 @@ public class CustomerMemberLinkService {
   @Transactional
   public CustomerMemberLinkResponse link(String customerId, String memberCode, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    requireCustomer(customerId);
+    // 紐づけを読む前に顧客行を押さえ、記帳（受注完了・手動調整）と同じ直列化点に載せる。
+    // 契約は CustomerRepository#findByIdForUpdate に記す。
+    lockCustomer(customerId);
     MemberLookup member =
         memberLookupService
             .findByMemberCode(memberCode)
@@ -85,7 +87,9 @@ public class CustomerMemberLinkService {
   @Transactional
   public void unlink(String customerId, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    requireCustomer(customerId);
+    // 解除も紐づけと同じく顧客行を押さえてから現在の紐づけを読む。
+    // 契約は CustomerRepository#findByIdForUpdate に記す。
+    lockCustomer(customerId);
     CustomerMemberLink current =
         customerMemberLinkRepository
             .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
@@ -107,6 +111,13 @@ public class CustomerMemberLinkService {
     if (!customerRepository.existsById(customerId)) {
       throw new NotFoundException("顧客が見つかりません");
     }
+  }
+
+  /** 紐づけを書き換える経路の直列化点。取得できない顧客は他店舗の顧客も含めて 404。 */
+  private void lockCustomer(String customerId) {
+    customerRepository
+        .findByIdForUpdate(customerId)
+        .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
   }
 
   /** JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。 */

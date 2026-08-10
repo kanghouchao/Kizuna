@@ -1,0 +1,14 @@
+# v0.10.0 = 会員ポイント台帳とオーダー完了処理。platform / store / seed の 3 層。
+databaseChangeLog:
+  - include:
+      file: platform/01-point-ledger.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: store/01-order-drop-manual-grant-points.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: store/02-customer-drop-points.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: seed/01-point-configs.yaml
+      relativeToChangelogFile: true

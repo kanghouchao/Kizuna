@@ -34,6 +34,10 @@ public interface OrderMapper {
   @Mapping(target = "surveyStatus", ignore = true)
   @Mapping(target = "actualArrivalTime", ignore = true)
   @Mapping(target = "actualEndTime", ignore = true)
+  // 会計とポイントは完了処理でのみ確定する（作成の契約は受け付けない）
+  @Mapping(target = "totalFee", ignore = true)
+  @Mapping(target = "usedPoints", ignore = true)
+  @Mapping(target = "autoGrantPoints", ignore = true)
   // 関連 ID - サービス層で存在確認後に割り当て
   @Mapping(target = "customerId", ignore = true)
   @Mapping(target = "castId", ignore = true)
@@ -50,7 +54,6 @@ public interface OrderMapper {
 
   // ==================== CreateRequest -> Customer（電話番号からの顧客スマートリンク用） ====================
 
-  @Mapping(target = "points", constant = "0")
   @Mapping(target = "name", source = "customerName")
   // rank は DB デフォルト（'SILVER'）と同義。注文経由の顧客作成でも通常作成と揃える
   @Mapping(target = "rank", constant = "SILVER")

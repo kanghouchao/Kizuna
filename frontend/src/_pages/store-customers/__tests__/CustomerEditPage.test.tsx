@@ -13,6 +13,7 @@ jest.mock('@/entities/customer', () => ({
     linkMember: jest.fn(),
     unlinkMember: jest.fn(),
     memberLinkHistory: jest.fn(),
+    memberPointBalance: jest.fn(),
   },
 }));
 
@@ -37,7 +38,6 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 const customer = {
   id: 'cus-1',
   name: '山田太郎',
-  points: 120,
   created_at: '2026-07-01T00:00:00Z',
   updated_at: '2026-07-01T00:00:00Z',
 };
@@ -48,6 +48,7 @@ describe('顧客編集ページの取得失敗', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedCustomerApi.memberLinkHistory.mockResolvedValue([]);
+    mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
 

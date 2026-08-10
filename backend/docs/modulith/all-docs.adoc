@@ -5,10 +5,6 @@ plantuml::components.puml[,,format=svg]
 plantuml::module-shared.puml[,,format=svg]
 include::module-shared.adoc[]
 
-== Customer
-plantuml::module-customer.puml[,,format=svg]
-include::module-customer.adoc[]
-
 == Settings
 plantuml::module-settings.puml[,,format=svg]
 include::module-settings.adoc[]
@@ -20,10 +16,6 @@ include::module-storeprofile.adoc[]
 == User
 plantuml::module-user.puml[,,format=svg]
 include::module-user.adoc[]
-
-== Auth
-plantuml::module-auth.puml[,,format=svg]
-include::module-auth.adoc[]
 
 == Member
 plantuml::module-member.puml[,,format=svg]
@@ -37,6 +29,10 @@ include::module-menu.adoc[]
 plantuml::module-notification.puml[,,format=svg]
 include::module-notification.adoc[]
 
+== Point
+plantuml::module-point.puml[,,format=svg]
+include::module-point.adoc[]
+
 == Storage
 plantuml::module-storage.puml[,,format=svg]
 include::module-storage.adoc[]
@@ -45,15 +41,23 @@ include::module-storage.adoc[]
 plantuml::module-store.puml[,,format=svg]
 include::module-store.adoc[]
 
+== Auth
+plantuml::module-auth.puml[,,format=svg]
+include::module-auth.adoc[]
+
 == Cast
 plantuml::module-cast.puml[,,format=svg]
 include::module-cast.adoc[]
 
-== Order
-plantuml::module-order.puml[,,format=svg]
-include::module-order.adoc[]
+== Customer
+plantuml::module-customer.puml[,,format=svg]
+include::module-customer.adoc[]
 
 == Shift
 plantuml::module-shift.puml[,,format=svg]
 include::module-shift.adoc[]
+
+== Order
+plantuml::module-order.puml[,,format=svg]
+include::module-order.adoc[]
 

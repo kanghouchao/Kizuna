@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { PlusIcon, SquarePenIcon } from 'lucide-react';
-import { ORDER_STATUS_LABELS, orderApi } from '@/entities/order';
+import { useState } from 'react';
+import { CircleCheckIcon, PlusIcon, SquarePenIcon } from 'lucide-react';
+import { ORDER_STATUS_LABELS, Order, OrderStatus, orderApi } from '@/entities/order';
 import { storePath, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
+import { OrderCompletionModal } from './OrderCompletionModal';
 import { ReservationRequestInbox } from './ReservationRequestInbox';
 import {
   Badge,
@@ -25,9 +27,23 @@ import {
 /** 一覧 1 ページあたりの件数 */
 const PAGE_SIZE = 20;
 
+/**
+ * 状態バッジの色。全状態を同じ色で塗ると、キャンセルまで成功の緑で出る。
+ *
+ * 未確定は中立（bg-muted に muted の文字を重ねると光量比が足りないため、文字は foreground）。
+ * 申請中の黄は使わない — 未確定は店舗が手入力した受注でも起きるので、店舗側では中立に呼ぶ。
+ */
+const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
+  CREATED: 'border-transparent bg-muted text-foreground',
+  CONFIRMED: 'border-transparent bg-success/10 text-success-strong',
+  COMPLETED: 'border-transparent bg-primary/10 text-primary-strong',
+  CANCELLED: 'border-transparent bg-destructive/10 text-destructive-strong',
+};
+
 export default function OrderListPage() {
   const params = useParams();
   const storeId = params.storeId as string;
+  const [completing, setCompleting] = useState<Order | null>(null);
   const list = useListPage(
     // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
     // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
@@ -100,7 +116,11 @@ export default function OrderListPage() {
                   <div className="flex items-center gap-1">
                     <Badge
                       variant="outline"
-                      className="border-transparent bg-success/10 text-success-strong"
+                      className={
+                        order.status
+                          ? STATUS_BADGE_CLASS[order.status]
+                          : 'border-transparent bg-muted text-foreground'
+                      }
                     >
                       {order.status ? ORDER_STATUS_LABELS[order.status] : '-'}
                     </Badge>
@@ -118,6 +138,19 @@ export default function OrderListPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    {/* 完了できるのは確定済みの受注だけ（それ以外はサーバ側が遷移を撥ねる）。
+                        会計金額とポイントを決める操作なので、遷移ではなくこの場で開く */}
+                    {order.status === 'CONFIRMED' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCompleting(order)}
+                      >
+                        <CircleCheckIcon aria-hidden="true" />
+                        完了
+                      </Button>
+                    )}
                     <Button
                       render={<Link href={storePath(storeId, `/orders/${order.id}/edit`)} />}
                       variant="ghost"
@@ -132,6 +165,13 @@ export default function OrderListPage() {
           </TableBody>
         </Table>
       </ListPage>
+      <OrderCompletionModal
+        order={completing}
+        onClose={() => setCompleting(null)}
+        // 完了した受注は状態も会計欄も変わって一覧に残る。useListPage は行の差し替え口を
+        // 持たないため、現在のページをそのまま取り直す。
+        onCompleted={list.reload}
+      />
     </div>
   );
 }
