@@ -4,6 +4,8 @@ export interface Store {
   name?: string;
   email?: string;
   domain?: string;
+  /** 稼働状態。準備中の店舗だけが削除できる */
+  status?: 'PREPARING' | 'ACTIVE';
   created_at?: string;
 }
 

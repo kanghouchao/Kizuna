@@ -35,6 +35,7 @@ const store = (override: Partial<Store>): Store => ({
   name: 'アルファ店',
   email: 'alpha@example.com',
   domain: 'alpha.example.com',
+  status: 'PREPARING',
   created_at: '2026-01-01T00:00:00Z',
   ...override,
 });
@@ -173,6 +174,48 @@ describe('店舗管理 3 画面の挙動', () => {
     // 最終ページでは「次へ」が押せない
     await waitFor(() => expect(within(nav()).getByRole('button', { name: '次へ' })).toBeDisabled());
     expect(within(nav()).getByRole('button', { name: '前へ' })).toBeEnabled();
+  });
+
+  it('一覧は稼働状態をバッジで表示すること', async () => {
+    mockedApi.getList.mockResolvedValue(
+      paginated([
+        store({ id: '1', name: 'アルファ店', status: 'PREPARING' }),
+        store({ id: '2', name: 'ベータ店', status: 'ACTIVE' }),
+      ])
+    );
+
+    render(<StoresPage />);
+
+    expect(await screen.findByText('準備中')).toBeInTheDocument();
+    expect(screen.getByText('稼働中')).toBeInTheDocument();
+  });
+
+  // 稼働を始めた店舗は消せない。押せば必ず断られる導線を出すと、断りの文言でしか理由を伝えられない。
+  it('削除ボタンは準備中の行にだけ出ること', async () => {
+    mockedApi.getList.mockResolvedValue(
+      paginated([
+        store({ id: '1', name: 'アルファ店', status: 'PREPARING' }),
+        store({ id: '2', name: 'ベータ店', status: 'ACTIVE' }),
+      ])
+    );
+
+    render(<StoresPage />);
+    await screen.findByText('アルファ店');
+
+    // 準備中の行にだけ削除ボタンがあり、稼働中の行には無い（編集はどちらの行にも残る）
+    expect(screen.getAllByRole('button', { name: '削除' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '編集' })).toHaveLength(2);
+  });
+
+  it('稼働中の店舗だけの一覧には削除ボタンが出ないこと', async () => {
+    mockedApi.getList.mockResolvedValue(
+      paginated([store({ id: '2', name: 'ベータ店', status: 'ACTIVE' })])
+    );
+
+    render(<StoresPage />);
+    await screen.findByText('ベータ店');
+
+    expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
   });
 
   it('削除は確認ダイアログで承諾されたときだけ実行されること', async () => {
