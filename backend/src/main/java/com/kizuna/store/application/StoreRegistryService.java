@@ -127,6 +127,11 @@ public class StoreRegistryService {
 
   private StoreVO toDto(Store t) {
     return new StoreVO(
-        String.valueOf(t.getId()), t.getName(), t.getDomain(), t.getEmail(), t.getCreatedAt());
+        String.valueOf(t.getId()),
+        t.getName(),
+        t.getDomain(),
+        t.getEmail(),
+        t.getStatus(),
+        t.getCreatedAt());
   }
 }
