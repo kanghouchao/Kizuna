@@ -7,6 +7,7 @@ import com.kizuna.auth.api.dto.PlatformMeUpdateRequest;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.auth.application.PlatformAuthService;
+import com.kizuna.shared.exception.StaleSessionException;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -50,10 +51,12 @@ public class PlatformAuthController {
     if (principal == null || principal.getName() == null) {
       return ResponseEntity.status(401).build();
     }
+    // 行が引けない＝無効なのはセッション（トークンの指す主体が存在しない）。404 にすると
+    // 前端の全域 401 経路（再ログインへの差し戻し）に乗らないため、updateMe と同じ例外へ揃える。
     return authService
         .me(principal.getName())
         .map(ResponseEntity::ok)
-        .orElseGet(() -> ResponseEntity.status(404).build());
+        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 
   @PutMapping("/me")
