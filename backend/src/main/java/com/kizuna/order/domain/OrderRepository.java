@@ -15,6 +15,13 @@ import org.springframework.data.repository.query.Param;
 public interface OrderRepository
     extends JpaRepository<Order, String>, JpaSpecificationExecutor<Order> {
 
+  /** 指定店舗に指定状態の受注が 1 件でも存在するか。 */
+  @Query(
+      "select count(o) > 0 from com.kizuna.order.domain.Order o"
+          + " where o.storeId = :storeId and o.status = :status")
+  boolean existsByStoreIdAndStatus(
+      @Param("storeId") Long storeId, @Param("status") OrderStatus status);
+
   // 関連集約の表示名は ID 参照のため JPQL join で取得する。
   // Order / Cast は HQL の予約語と衝突しうるため FQCN でエンティティを参照する。
   String VIEW_SELECT =

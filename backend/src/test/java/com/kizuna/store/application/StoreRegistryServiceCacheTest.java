@@ -7,6 +7,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
@@ -47,7 +49,11 @@ class StoreRegistryServiceCacheTest {
 
     @Bean
     StoreRegistryService storeRegistryService(StoreRepository storeRepository) {
-      return new StoreRegistryService(storeRepository, mock(StoreProfileRepository.class));
+      return new StoreRegistryService(
+          storeRepository,
+          mock(StoreProfileRepository.class),
+          mock(CompletedOrderCheck.class),
+          mock(PointLedgerService.class));
     }
   }
 

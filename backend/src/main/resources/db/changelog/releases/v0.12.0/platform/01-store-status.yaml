@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v01100-001-store-status
+      author: kanghouchao
+      # 店舗の稼働状態。PREPARING（準備中）は開店前の下ごしらえ期間で、この間だけ店舗を削除できる。
+      # 店舗側の利用者が初めて店舗コンソールへ入った時点で ACTIVE（稼働中）へ一方向に遷移し、以後は戻らない。
+      #
+      # 既存行は ACTIVE で埋める。ここまでに登録された店舗は既に運用されており、準備中として扱うと
+      # 削除できる状態へ後退してしまうため。列の既定値は追加後に PREPARING へ付け替え、
+      # 以後の新規登録が準備中から始まるようにする（既存行の埋め草と将来の既定値は別物）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_stores
+            columns:
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  defaultValue: ACTIVE
+                  constraints:
+                    nullable: false
+                  remarks: 稼働状態（PREPARING=準備中/ACTIVE=稼働中）
+        - addDefaultValue:
+            tableName: t_stores
+            columnName: status
+            defaultValue: PREPARING
+      rollback:
+        - dropColumn:
+            tableName: t_stores
+            columns:
+              - column:
+                  name: status

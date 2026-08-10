@@ -37,21 +37,21 @@ include::module-point.adoc[]
 plantuml::module-storage.puml[,,format=svg]
 include::module-storage.adoc[]
 
-== Store
-plantuml::module-store.puml[,,format=svg]
-include::module-store.adoc[]
-
 == Auth
 plantuml::module-auth.puml[,,format=svg]
 include::module-auth.adoc[]
 
-== Cast
-plantuml::module-cast.puml[,,format=svg]
-include::module-cast.adoc[]
-
 == Customer
 plantuml::module-customer.puml[,,format=svg]
 include::module-customer.adoc[]
+
+== Store
+plantuml::module-store.puml[,,format=svg]
+include::module-store.adoc[]
+
+== Cast
+plantuml::module-cast.puml[,,format=svg]
+include::module-cast.adoc[]
 
 == Shift
 plantuml::module-shift.puml[,,format=svg]

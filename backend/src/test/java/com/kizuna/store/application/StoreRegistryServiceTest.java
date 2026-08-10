@@ -8,12 +8,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
 import com.kizuna.store.api.dto.StoreUpdateDTO;
 import com.kizuna.store.api.dto.StoreVO;
+import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
@@ -34,6 +36,8 @@ class StoreRegistryServiceTest {
 
   @Mock private StoreRepository storeRepository;
   @Mock private StoreProfileRepository storeProfileRepository;
+  @Mock private CompletedOrderCheck completedOrderCheck;
+  @Mock private PointLedgerService pointLedgerService;
   @InjectMocks private StoreRegistryService storeRegistryService;
 
   @Test
@@ -179,9 +183,60 @@ class StoreRegistryServiceTest {
   }
 
   @Test
-  void delete_deletesById() {
+  void delete_preparingStoreWithoutRecords_deletesById() {
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
+    when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
+
     storeRegistryService.delete("1");
+
     verify(storeRepository).deleteById(1L);
+  }
+
+  // 稼働中の店舗は、確定した記録の有無に関わらず消せない。開店した事実そのものが削除を止める。
+  @Test
+  void delete_activeStore_isRejected() {
+    Store active = preparingStore(1L);
+    active.activate();
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(active));
+
+    assertThatThrownBy(() -> storeRegistryService.delete("1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("稼働中の店舗は削除できません");
+    verify(storeRepository, never()).deleteById(any());
+  }
+
+  @Test
+  void delete_storeWithCompletedOrder_isRejected() {
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(completedOrderCheck.existsForStore(1L)).thenReturn(true);
+
+    assertThatThrownBy(() -> storeRegistryService.delete("1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
+    verify(storeRepository, never()).deleteById(any());
+  }
+
+  // 台帳は会員が持つが、発生店舗の帰属が残る限りその店舗は消せない（消すと帰属だけが静かに外れる）。
+  @Test
+  void delete_storeWithPointEntry_isRejected() {
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
+    when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(true);
+
+    assertThatThrownBy(() -> storeRegistryService.delete("1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
+    verify(storeRepository, never()).deleteById(any());
+  }
+
+  @Test
+  void delete_missingStore_throwsNotFound() {
+    when(storeRepository.findById(99L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> storeRegistryService.delete("99"))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("店舗が見つかりません");
   }
 
   @Test
@@ -189,6 +244,12 @@ class StoreRegistryServiceTest {
     assertThatThrownBy(() -> storeRegistryService.delete("invalid"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("店舗 ID の形式が不正です");
+  }
+
+  private Store preparingStore(Long id) {
+    Store store = new Store("削除検証店舗", "delete-check.example.com", null);
+    store.setId(id);
+    return store;
   }
 
   @Test

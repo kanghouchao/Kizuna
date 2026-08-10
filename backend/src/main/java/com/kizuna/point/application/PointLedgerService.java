@@ -78,6 +78,17 @@ public class PointLedgerService {
     return ledgerOf(pointEntryRepository.findCredits(memberId)).balance();
   }
 
+  /**
+   * 指定店舗に帰属する仕訳が存在するか。
+   *
+   * <p>返すのは有無だけで、仕訳そのものは公開しない — 店舗の削除可否を判定する側は「その店舗で起きた記録があるか」しか
+   * 必要とせず、行を渡すと追加型台帳の不変条件が外から触れるようになるため。
+   */
+  @Transactional(readOnly = true)
+  public boolean hasEntriesForStore(long storeId) {
+    return pointEntryRepository.existsByOriginatingStoreId(storeId);
+  }
+
   /** 受注完了に伴う付与。付与が 0 なら台帳へ何も書かない。戻り値は実際に付与したポイント数。 */
   public int grantForOrder(
       long memberId, String orderId, Long storeId, int totalFee, Long actorUserId) {

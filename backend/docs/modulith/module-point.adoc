@@ -8,4 +8,5 @@
 * `c.k.p.application.PointLedgerService`
 |Bean references
 |* `c.k.s.application.SystemConfigService` (in Settings)
+* `c.k.s.config.AppProperties` (in Shared)
 |===
