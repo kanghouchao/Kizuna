@@ -7,6 +7,7 @@ import { Store, isStoreDomain, platformStoreApi } from '@/entities/store';
 import { useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
+  Badge,
   Button,
   ConfirmDialog,
   Input,
@@ -110,6 +111,7 @@ export default function StoresPage() {
             <TableRow>
               <TableHead>店舗名</TableHead>
               <TableHead>ドメイン</TableHead>
+              <TableHead>稼働状態</TableHead>
               <TableHead>登録日</TableHead>
               <TableHead className="text-right">アクション</TableHead>
             </TableRow>
@@ -137,6 +139,18 @@ export default function StoresPage() {
                     <span className="text-muted-foreground">{store.domain}</span>
                   )}
                 </TableCell>
+                <TableCell>
+                  {/* 準備中は素の outline、稼働中は肯定側の tint（DESIGN.md のステータスピル） */}
+                  {store.status === 'PREPARING' && <Badge variant="outline">準備中</Badge>}
+                  {store.status === 'ACTIVE' && (
+                    <Badge
+                      variant="outline"
+                      className="border-transparent bg-success/10 text-success-strong"
+                    >
+                      稼働中
+                    </Badge>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {store.created_at ? new Date(store.created_at).toLocaleDateString('ja-JP') : ''}
                 </TableCell>
@@ -150,14 +164,17 @@ export default function StoresPage() {
                     >
                       <SquarePenIcon />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="削除"
-                      onClick={() => deletion.ask(store)}
-                    >
-                      <Trash2Icon />
-                    </Button>
+                    {/* 稼働を始めた店舗は消せない。押せば必ず断られる導線は出さない */}
+                    {store.status === 'PREPARING' && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="削除"
+                        onClick={() => deletion.ask(store)}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
