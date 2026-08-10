@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { MemberLinkSection } from './MemberLinkSection';
 import { customerApi } from '@/entities/customer';
-import { orderApi } from '@/entities/order';
+import { ORDER_STATUS_LABELS, orderApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
 import { storePath, useResource } from '@/shared/lib';
 import {
@@ -160,7 +160,9 @@ export default function CustomerEditPage() {
                     {(order.extension_minutes ?? 0) > 0 && ` (+延長${order.extension_minutes}分)`}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{order.used_points}</TableCell>
-                  <TableCell className="text-muted-foreground">{order.status}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {order.status ? ORDER_STATUS_LABELS[order.status] : '-'}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
