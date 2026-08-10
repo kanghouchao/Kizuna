@@ -321,8 +321,8 @@ class RoleServiceTest {
             "delete failed",
             new ConstraintViolationException(
                 "delete failed",
-                new SQLException("new row violates check constraint"),
-                "ck_t_roles_name_not_blank"));
+                new SQLException("update or delete violates foreign key constraint"),
+                "fk_t_role_permissions_role"));
     doThrow(violation).when(roleRepository).flush();
 
     assertThatThrownBy(() -> service.delete(7L)).isSameAs(violation);
