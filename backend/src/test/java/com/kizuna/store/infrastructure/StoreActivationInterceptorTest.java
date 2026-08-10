@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.kizuna.shared.storescope.StoreContext;
@@ -105,10 +106,27 @@ class StoreActivationInterceptorTest {
     verify(storeActivationService, never()).activateOnConsoleAccess(STORE_ID);
   }
 
-  // 遷移は要求の目的ではない副作用なので、競合で書き負けても要求そのものは通す。
+  // 競合の相手は同時着地の活性化とは限らず、HQ の店舗更新でも版は進む。相手が稼働中を書いたとは
+  // 限らないため、一度だけ取り直して再試行する。
   @Test
-  @DisplayName("遷移が競合しても要求そのものは通ること")
-  void preHandle_whenActivationConflicts_stillProceeds() {
+  @DisplayName("遷移が競合したら一度だけ取り直して再試行すること")
+  void preHandle_whenActivationConflicts_retriesOnce() {
+    storeContext.setStoreId(STORE_ID);
+    authenticateWith(PermissionCode.ORDER_MANAGE.authority());
+    doThrow(new OptimisticLockingFailureException("競合"))
+        .doNothing()
+        .when(storeActivationService)
+        .activateOnConsoleAccess(STORE_ID);
+
+    assertThat(preHandle()).isTrue();
+
+    verify(storeActivationService, times(2)).activateOnConsoleAccess(STORE_ID);
+  }
+
+  // 遷移は要求の目的ではない副作用なので、再試行まで書き負けても要求そのものは通す。
+  @Test
+  @DisplayName("再試行まで競合しても要求そのものは通り、それ以上は粘らないこと")
+  void preHandle_whenRetryAlsoConflicts_stillProceeds() {
     storeContext.setStoreId(STORE_ID);
     authenticateWith(PermissionCode.ORDER_MANAGE.authority());
     doThrow(new OptimisticLockingFailureException("競合"))
@@ -116,6 +134,8 @@ class StoreActivationInterceptorTest {
         .activateOnConsoleAccess(STORE_ID);
 
     assertThat(preHandle()).isTrue();
+
+    verify(storeActivationService, times(2)).activateOnConsoleAccess(STORE_ID);
   }
 
   // SHARED 権限は HQ と店舗の双方が持つため、これで HQ を判定すると店舗側利用者まで除かれる。
