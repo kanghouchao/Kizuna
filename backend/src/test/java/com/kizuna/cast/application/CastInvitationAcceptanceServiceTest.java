@@ -23,15 +23,18 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -206,6 +209,32 @@ class CastInvitationAcceptanceServiceTest {
         .hasMessageContaining("既に登録されています");
     assertThat(invitation.getStatus()).isEqualTo(CastInvitation.Status.PENDING);
     verify(platformUserRepository, never()).save(any());
+  }
+
+  @Test
+  void acceptAsNewUser_translatesConcurrentDuplicateEmailViolationToServiceException() {
+    CastInvitation invitation =
+        invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+    when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
+    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(platformUserRepository.findByEmail("race@example.com")).thenReturn(Optional.empty());
+    when(castInvitationRepository.claimPending(
+            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+        .thenReturn(1);
+    when(passwordEncoder.encode("password1")).thenReturn("encoded");
+    // 事前チェックを擦り抜けた並行登録の敗者側。email 一意制約違反が事前チェックと同じ重複エラーへ写像される。
+    when(platformUserRepository.save(any()))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "save failed",
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_users_email")));
+
+    assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("race@example.com")))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("既に登録されています");
   }
 
   @Test

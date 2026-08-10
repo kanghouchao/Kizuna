@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * {@link PermissionLiteralTests} と同型の fitness test で注解の不在そのものを固定する。
  *
  * <p>検出は {@code @JsonProperty} の import 宣言で行う。裸の字面照合では javadoc 中の言及（{@code CommonExceptionHandler}
- * のワイヤ名解説）を誤検知するため。この方式が成立する前提は 2 つとも本倉のコード規約である — 行内 FQCN を書かないこと、 ワイルドカード import
+ * のワイヤ名解説）を誤検知するため。この方式が成立する前提は 2 つとも本リポジトリのコード規約である — 行内 FQCN を書かないこと、 ワイルドカード import
  * を使わないこと。どちらかが崩れると、この検査は注解の使用を見落とす。
  */
 class JsonPropertyAbsenceTests {
