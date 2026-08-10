@@ -109,7 +109,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         intValue("point_usage_unit", 1));
   }
 
-  /** 数値設定の読み取り。未設定・不正値は既定値へ倒す（更新時に NUMBER 検証済みのため不正値は通常は到達しない）。 */
+  /** 数値設定の読み取り。未設定・不正値は既定値へ倒す（更新時に NUMBER として int の範囲まで検証済みのため不正値は通常は到達しない）。 */
   private int intValue(String configKey, int fallback) {
     String raw = rawValue(configKey);
     if (raw.isBlank()) {
@@ -141,10 +141,17 @@ public class SystemConfigServiceImpl implements SystemConfigService {
       throw new ServiceException("真偽値（true / false）を指定してください: " + config.getConfigKey());
     }
     if ("NUMBER".equals(config.getValueType())) {
+      long parsed;
       try {
-        Long.parseLong(value.trim());
+        parsed = Long.parseLong(value.trim());
       } catch (NumberFormatException e) {
         throw new ServiceException("数値を指定してください: " + config.getConfigKey());
+      }
+      // NUMBER の読み手はいずれも int で読み、解釈できない値は既定値へ倒す。int に収まらない値を通すと
+      // 保存だけが成功し、読み取りでは利用単位 1・付与 0 という別の意味へ静かに入れ替わる。
+      if (parsed < Integer.MIN_VALUE || parsed > Integer.MAX_VALUE) {
+        throw new ServiceException(
+            "数値は -2147483648 から 2147483647 の範囲で指定してください: " + config.getConfigKey());
       }
     }
   }

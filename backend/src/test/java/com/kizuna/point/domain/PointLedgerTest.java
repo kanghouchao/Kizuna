@@ -24,6 +24,19 @@ class PointLedgerTest {
   }
 
   @Test
+  @DisplayName("合計が int に収まらないロットでも残高が回り込まないこと")
+  void balanceDoesNotWrapAroundAcrossLots() {
+    // 1 件ずつは受け入れられる上限でも、合計は int を超える。int で足すと残高が負に転じ、
+    // 残高不足の判定も引き当ての可否も逆さまになる。
+    PointLedger ledger =
+        ledger(
+            new PointLot(1L, Integer.MAX_VALUE, null, 0),
+            new PointLot(2L, Integer.MAX_VALUE, null, 0));
+
+    assertThat(ledger.balance()).isEqualTo(2L * Integer.MAX_VALUE);
+  }
+
+  @Test
   @DisplayName("期限当日のロットはまだ使えること")
   void lotExpiringTodayIsStillUsable() {
     assertThat(ledger(new PointLot(1L, 100, TODAY, 0)).balance()).isEqualTo(100);

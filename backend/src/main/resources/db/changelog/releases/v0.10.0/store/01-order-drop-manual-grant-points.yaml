@@ -5,8 +5,16 @@ databaseChangeLog:
       # 手動付与は受注の欄ではなくポイント台帳の手動調整で扱う。欄を残すと、台帳を経由しない
       # 付与の入口が受注側に残り続け、残高と受注の記録が食い違う。
       preConditions:
+        # 実データの帯掛けとして、0 以外の手動付与が乗った行があれば止める。
         - dbms:
             type: postgresql
+        - onFail: HALT
+        - onFailMessage: >-
+            t_orders.manual_grant_points に 0 以外の手動付与を持つ行があります。
+            列を落とすとその付与記録は復元できないため、会員ポイント台帳の手動調整へ移してから再実行してください。
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM t_orders WHERE manual_grant_points <> 0
       changes:
         - dropColumn:
             tableName: t_orders

@@ -218,6 +218,29 @@ class PointLedgerServiceTest {
   }
 
   @Test
+  @DisplayName("加算の手動調整に過去の有効期限は指定できないこと")
+  void adjustPositiveRejectsPastExpiry() {
+    LocalDate yesterday = LocalDate.now(ZoneId.of(TIMEZONE)).minusDays(1);
+
+    assertThatThrownBy(
+            () -> pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", yesterday, ACTOR_ID))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("過去の日付");
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("有効期限が本日ちょうどの加算調整は記録されること")
+  void adjustPositiveAllowsExpiryOfToday() {
+    LocalDate today = LocalDate.now(ZoneId.of(TIMEZONE));
+
+    pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", today, ACTOR_ID);
+
+    verify(pointEntryRepository).save(savedEntry.capture());
+    assertThat(savedEntry.getValue().getExpiresOn()).isEqualTo(today);
+  }
+
+  @Test
   @DisplayName("減算の手動調整に有効期限は指定できないこと")
   void adjustNegativeRejectsExpiry() {
     assertThatThrownBy(

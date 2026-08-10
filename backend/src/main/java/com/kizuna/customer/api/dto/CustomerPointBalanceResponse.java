@@ -19,6 +19,6 @@ public class CustomerPointBalanceResponse {
   /** 顧客が会員に紐づいているか。偽なら残高は載らない。 */
   private boolean linked;
 
-  /** 紐づく会員の現在残高。未紐づけでは null。 */
-  private Integer balance;
+  /** 紐づく会員の現在残高。未紐づけでは null。台帳の合計は 1 件の仕訳と違い int を超えうる。 */
+  private Long balance;
 }

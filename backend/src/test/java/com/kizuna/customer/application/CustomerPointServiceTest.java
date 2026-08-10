@@ -89,7 +89,7 @@ class CustomerPointServiceTest {
   void balanceOfLinkedCustomerComesFromTheLedger() {
     givenCustomerExists();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(1500);
+    Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(1500L);
 
     CustomerPointBalanceResponse response = service.balance(CUSTOMER_ID);
 
@@ -129,7 +129,7 @@ class CustomerPointServiceTest {
     givenActiveLink(MEMBER_ID);
     Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
     Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
-    Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(300);
+    Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(300L);
     LocalDate expiresOn = LocalDate.of(2099, 12, 31);
 
     CustomerPointBalanceResponse response =

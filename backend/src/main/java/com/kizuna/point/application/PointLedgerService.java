@@ -70,9 +70,9 @@ public class PointLedgerService {
     return unit <= 0 ? 1 : unit;
   }
 
-  /** 会員の現在残高。 */
+  /** 会員の現在残高。1 件の仕訳は int でも、台帳全体の合計は int を超えうる。 */
   @Transactional(readOnly = true)
-  public int balance(long memberId) {
+  public long balance(long memberId) {
     return ledgerOf(pointEntryRepository.findCredits(memberId)).balance();
   }
 
@@ -113,6 +113,11 @@ public class PointLedgerService {
       throw new ServiceException("増減は 0 以外で指定してください");
     }
     if (delta > 0) {
+      // 期限当日はまだ使えるため撥ねるのは本日より前だけ。過去の期限を通すと、記帳は成功したのに
+      // その加算が一度も残高に現れない仕訳が積まれる。
+      if (expiresOn != null && expiresOn.isBefore(businessToday())) {
+        throw new ServiceException("有効期限に過去の日付は指定できません");
+      }
       pointEntryRepository.save(
           PointEntry.manualAdjust(
               memberId, storeId, delta, reason, expiresOn, List.of(), actorUserId));
@@ -174,9 +179,13 @@ public class PointLedgerService {
     return ledgerOf(pointEntryRepository.findCreditsForUpdate(memberId));
   }
 
-  /** 期限の判定は業務のタイムゾーンの「本日」で行う — JVM のタイムゾーンで判じると、業務日と 1 日ずれる。 */
   private PointLedger ledgerOf(List<PointEntry> credits) {
-    return new PointLedger(lotsOf(credits), LocalDate.now(ZoneId.of(appProperties.getTimezone())));
+    return new PointLedger(lotsOf(credits), businessToday());
+  }
+
+  /** 期限の判定は業務のタイムゾーンの「本日」で行う — JVM のタイムゾーンで判じると、業務日と 1 日ずれる。 */
+  private LocalDate businessToday() {
+    return LocalDate.now(ZoneId.of(appProperties.getTimezone()));
   }
 
   private List<PointLot> lotsOf(List<PointEntry> credits) {

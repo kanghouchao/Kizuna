@@ -20,9 +20,9 @@ public final class PointLedger {
     this.today = today;
   }
 
-  /** 基準日時点で利用できるポイントの合計。 */
-  public int balance() {
-    return lots.stream().filter(this::usable).mapToInt(PointLedger::remaining).sum();
+  /** 基準日時点で利用できるポイントの合計。1 ロットの量は int でも、ロットを跨いだ合計は int を超えうるため long で持つ。 */
+  public long balance() {
+    return lots.stream().filter(this::usable).mapToLong(PointLedger::remaining).sum();
   }
 
   /**

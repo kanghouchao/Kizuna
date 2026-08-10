@@ -19,8 +19,8 @@ public class OrderCompletionPreviewResponse {
   /** 受注の顧客が会員に紐づいているか。偽ならポイントの利用も付与も起こらない。 */
   private boolean memberLinked;
 
-  /** 会員の現在残高。未紐づけでは null。 */
-  private Integer pointBalance;
+  /** 会員の現在残高。未紐づけでは null。台帳の合計は 1 件の仕訳と違い int を超えうる。 */
+  private Long pointBalance;
 
   /** ポイント利用の単位。 */
   private int usageUnit;

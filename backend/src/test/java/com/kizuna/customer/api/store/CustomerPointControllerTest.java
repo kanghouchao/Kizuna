@@ -93,7 +93,7 @@ class CustomerPointControllerTest {
   void adjustmentIsReachableWithThePointPermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(customerPointService.adjust(anyString(), any(), anyString()))
-        .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(100).build());
+        .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(100L).build());
 
     mockMvc
         .perform(

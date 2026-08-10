@@ -19,7 +19,14 @@ databaseChangeLog:
         - dropColumn:
             tableName: t_customers
             columnName: points
+      # 巻き戻しは同じ release の台帳作成まで連なり、この列を戻した直後に台帳表そのものが落ちる。
+      # 仕訳が 1 件でもあれば、戻した列は既定値 0 のまま残高だけが消えるため、成功と報せずに止める。
       rollback:
+        - sql:
+            splitStatements: false
+            sql: >-
+              DO $$ BEGIN IF EXISTS (SELECT 1 FROM t_point_entries) THEN
+              RAISE EXCEPTION 'ポイント台帳に仕訳が残っているため巻き戻せません。戻した t_customers.points は 0 のままで、台帳の削除により残高が失われます'; END IF; END $$;
         - addColumn:
             tableName: t_customers
             columns:

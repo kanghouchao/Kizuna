@@ -1203,7 +1203,7 @@ class OrderServiceTest {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
-    when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800);
+    when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
     when(pointLedgerService.usageUnit()).thenReturn(100);
     when(pointLedgerService.previewGrant(12000)).thenReturn(120);
 

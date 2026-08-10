@@ -9,7 +9,7 @@ import com.kizuna.shared.exception.ServiceException;
  */
 public class InsufficientPointBalanceException extends ServiceException {
 
-  public InsufficientPointBalanceException(int balance) {
+  public InsufficientPointBalanceException(long balance) {
     super("ポイント残高が不足しています（残高: " + balance + "）");
   }
 }
