@@ -26,8 +26,10 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.SQLException;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -234,9 +236,10 @@ class LineAuthServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "could not execute statement",
-                new RuntimeException(
-                    "ERROR: duplicate key value violates unique constraint"
-                        + " \"uq_t_users_line_user_id\"")));
+                new ConstraintViolationException(
+                    "could not execute statement",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_users_line_user_id")));
 
     assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationRequest()))
         .isInstanceOf(ConflictException.class);

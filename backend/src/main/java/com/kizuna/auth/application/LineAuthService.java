@@ -12,11 +12,14 @@ import com.kizuna.auth.infrastructure.LineIdentity;
 import com.kizuna.auth.infrastructure.LineRegistrationTicketStore;
 import com.kizuna.member.application.MemberRegistrationService;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.DisabledException;
@@ -39,7 +42,6 @@ public class LineAuthService {
   private static final String LINE_DISABLED_MESSAGE = "LINE ログインは利用できません";
   private static final String INVALID_TICKET_MESSAGE = "登録チケットが無効または期限切れです。最初からやり直してください";
   private static final String LINE_TAKEN_MESSAGE = "この LINE アカウントは既に別の身分と連携済みです";
-  private static final String LINE_USER_UNIQUE_CONSTRAINT = "uq_t_users_line_user_id";
 
   private final LineChannelResolver channelResolver;
   private final LineApiClient lineApiClient;
@@ -104,11 +106,11 @@ public class LineAuthService {
     } catch (DataIntegrityViolationException ex) {
       // 事前チェックを擦り抜けた並行連携。ここで違反し得る一意制約は LINE ユーザー ID だけであり、
       // 「先に確定した別要求と衝突した」なので 409 に写像する。
-      String cause = ex.getMostSpecificCause().getMessage();
-      if (cause != null && cause.contains(LINE_USER_UNIQUE_CONSTRAINT)) {
-        throw new ConflictException(LINE_TAKEN_MESSAGE);
-      }
-      throw ex;
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.UQ_T_USERS_LINE_USER_ID,
+              () -> new ConflictException(LINE_TAKEN_MESSAGE)));
     }
   }
 

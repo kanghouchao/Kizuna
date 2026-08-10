@@ -16,11 +16,13 @@ import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.NotFoundException;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -111,7 +113,12 @@ class CastInvitationServiceTest {
     // サービス層で 400 に変換すると FK 等の実装欠陥まで「競合」に化けてしまう。
     when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
     DataIntegrityViolationException violation =
-        new DataIntegrityViolationException("uq_t_cast_invitations_pending_cast");
+        new DataIntegrityViolationException(
+            "save failed",
+            new ConstraintViolationException(
+                "save failed",
+                new SQLException("duplicate key value violates unique constraint"),
+                "uq_t_cast_invitations_pending_cast"));
     when(castInvitationRepository.saveAndFlush(any())).thenThrow(violation);
 
     assertThatThrownBy(() -> castInvitationService.issue("c1")).isSameAs(violation);
@@ -127,9 +134,10 @@ class CastInvitationServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
-                new RuntimeException(
-                    "ERROR: insert or update on table \"t_cast_invitations\" violates foreign key"
-                        + " constraint \"fk_t_cast_invitations_cast\"")));
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("insert or update violates foreign key constraint"),
+                    "fk_t_cast_invitations_cast")));
 
     assertThatThrownBy(() -> castInvitationService.issue("c1"))
         .isInstanceOf(NotFoundException.class)

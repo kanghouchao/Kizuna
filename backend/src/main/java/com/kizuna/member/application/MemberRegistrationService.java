@@ -6,6 +6,8 @@ import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberCodes;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -14,6 +16,7 @@ import com.kizuna.user.domain.UserType;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,8 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberRegistrationService {
 
-  private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_t_users_email";
-  private static final String LINE_USER_UNIQUE_CONSTRAINT = "uq_t_users_line_user_id";
   private static final String DUPLICATE_EMAIL_MESSAGE = "このメールアドレスは既に登録されています。ログインしてご利用ください";
   private static final String DUPLICATE_LINE_USER_MESSAGE = "この LINE アカウントは既に別の身分と連携済みです";
 
@@ -131,11 +132,10 @@ public class MemberRegistrationService {
     try {
       return platformUserRepository.saveAndFlush(user);
     } catch (DataIntegrityViolationException ex) {
-      String cause = ex.getMostSpecificCause().getMessage();
-      if (cause != null && cause.contains(EMAIL_UNIQUE_CONSTRAINT)) {
-        throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
-      }
-      throw ex;
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.UQ_T_USERS_EMAIL, () -> new ServiceException(DUPLICATE_EMAIL_MESSAGE)));
     }
   }
 
@@ -147,14 +147,13 @@ public class MemberRegistrationService {
     try {
       return platformUserRepository.saveAndFlush(user);
     } catch (DataIntegrityViolationException ex) {
-      String cause = ex.getMostSpecificCause().getMessage();
-      if (cause != null && cause.contains(EMAIL_UNIQUE_CONSTRAINT)) {
-        throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
-      }
-      if (cause != null && cause.contains(LINE_USER_UNIQUE_CONSTRAINT)) {
-        throw new ConflictException(DUPLICATE_LINE_USER_MESSAGE);
-      }
-      throw ex;
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.UQ_T_USERS_EMAIL,
+              () -> new ConflictException(DUPLICATE_EMAIL_MESSAGE),
+              DbConstraint.UQ_T_USERS_LINE_USER_ID,
+              () -> new ConflictException(DUPLICATE_LINE_USER_MESSAGE)));
     }
   }
 }
