@@ -267,6 +267,11 @@ public class OrderService {
     if (memberId == null && usePoints > 0) {
       throw new ServiceException("非会員の受注ではポイントを利用できません");
     }
+    // 会計金額を超える利用は、請求より大きい割引に相当する仕訳を台帳へ残す。意図してポイントを減らすなら
+    // 理由の付く手動調整の経路があり、取り消せない完了に混ぜない。同額までは全額のポイント払いとして通す。
+    if (usePoints > request.getTotalFee()) {
+      throw new ServiceException("利用ポイントは会計金額を超えられません");
+    }
 
     int granted = 0;
     if (memberId != null) {

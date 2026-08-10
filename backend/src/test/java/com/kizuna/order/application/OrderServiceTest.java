@@ -1128,6 +1128,37 @@ class OrderServiceTest {
   }
 
   @Test
+  void completeRejectsPointUsageBeyondTheTotalFee() {
+    // 請求を超える割引に相当する利用を台帳へ残さない。完了は取り消せないので、積んでから気づいても戻せない
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+
+    assertThatThrownBy(() -> service.complete("o1", completion(0, 100), "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("利用ポイントは会計金額を超えられません");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void completeAcceptsPointUsageEqualToTheTotalFee() {
+    // 全額のポイント払いは通す。境界を閉じると、残高で払い切れる会計だけが完了できなくなる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(300, 300), "staff@kizuna.test");
+
+    verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getUsedPoints()).isEqualTo(300);
+  }
+
+  @Test
   void completeOfANonMemberOrderGrantsNothing() {
     Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
     order.setStoreId(STORE_ID);

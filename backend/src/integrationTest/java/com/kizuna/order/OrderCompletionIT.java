@@ -124,6 +124,29 @@ class OrderCompletionIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("会計金額を超える利用が撥ねられ、同額の利用は通ること")
+  void usageBeyondTheTotalFeeIsRejected() {
+    String memberCode = registerMember("overfee");
+    String customerId = createCustomer("会計超過");
+    linkMember(STORE_A, token, customerId, memberCode);
+    String earning = confirmedOrder(STORE_A, token, SEED_RECEPTIONIST_ID, customerId, "会計超過・獲得");
+    assertThat(complete(STORE_A, token, earning, TOTAL_FEE, null).getStatusCode())
+        .as("前提: 利用に足りる残高（%d ポイント）を用意できること", EXPECTED_GRANT)
+        .isEqualTo(HttpStatus.OK);
+
+    // 残高（120）は足りているので、撥ねる理由は会計金額（50 円）を超える利用であること
+    String spending = confirmedOrder(STORE_A, token, SEED_RECEPTIONIST_ID, customerId, "会計超過・利用");
+    assertThat(complete(STORE_A, token, spending, 50, 100).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(statusOf(STORE_A, token, spending)).as("撥ねた完了は受注を進めないこと").isEqualTo("CONFIRMED");
+
+    // 正向対照: 同額なら全額のポイント払いとして通る（負向 400 が経路の不在でない証明）
+    ResponseEntity<JsonNode> completed = complete(STORE_A, token, spending, 100, 100);
+    assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(completed.getBody().path("used_points").asInt()).isEqualTo(100);
+  }
+
+  @Test
   @DisplayName("非会員の受注はポイントを利用できず、付与 0 で完了すること")
   void nonMemberOrderCannotUsePointsAndGrantsNothing() {
     String orderId =

@@ -174,6 +174,23 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete).not.toHaveBeenCalled();
   });
 
+  it('利用ポイントが会計金額を超えたら送信せず理由を出す', async () => {
+    // 請求より大きい割引に相当する利用を台帳へ積ませない。残高では引っ掛からない額で確かめる
+    mockedPreview.mockResolvedValue({
+      member_linked: true,
+      point_balance: 5000,
+      usage_unit: 100,
+      grant_points: 10,
+    });
+    renderModal();
+
+    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '2000' } });
+    await completeWith('1000');
+
+    expect(await screen.findByText('会計金額を超えています（会計金額: 1000）')).toBeInTheDocument();
+    expect(mockedComplete).not.toHaveBeenCalled();
+  });
+
   it('利用ポイントが空欄なら、利用の項目ごと送らない', async () => {
     // サーバ側は @Min(1)。0 を送ると撥ねられるので、利用しない完了ではキーごと落とす
     const onCompleted = jest.fn();

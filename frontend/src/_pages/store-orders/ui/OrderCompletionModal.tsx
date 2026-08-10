@@ -230,6 +230,13 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
                       preview.point_balance === undefined ||
                       value <= preview.point_balance ||
                       `残高を超えています（残高: ${preview.point_balance}）`,
+                    // 請求より大きい割引に相当する利用は台帳へ積ませない。同額までは全額のポイント払い。
+                    // 金額が未入力（NaN）なら会計金額側の規則が名乗るので、ここでは重ねて名乗らない
+                    withinTotalFee: (value, values) =>
+                      Number.isNaN(value) ||
+                      Number.isNaN(values.total_fee) ||
+                      value <= values.total_fee ||
+                      `会計金額を超えています（会計金額: ${values.total_fee}）`,
                   },
                 }}
                 render={({ field }) => (
