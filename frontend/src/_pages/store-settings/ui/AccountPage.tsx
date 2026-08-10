@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
-import { platformAuthApi } from '@/entities/user';
+import { platformAuthApi, useMe } from '@/entities/user';
 import { PasswordChangeForm } from '@/features/password-change';
-import { useResource } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -19,13 +18,9 @@ import {
 
 /** アカウント設定ページ（プロフィール + パスワード変更） */
 export default function AccountPage() {
-  const {
-    data: me,
-    setData: setMe,
-    isLoading,
-    failure,
-    reload: fetchMe,
-  } = useResource(() => platformAuthApi.me());
+  // 自分の情報は /platform/me の共有 seam から読む。保存の応答は同じ seam の setMe で
+  // 差し替え、持久 layout 側のヘッダー表示も再取得なしで追随させる。
+  const { me, setMe, isLoading, failure, reload: fetchMe } = useMe();
   const [isSubmitting, setIsSubmitting] = useState(false);
   // 欄の起点は取得した自分の情報で、編集を始めたらその下書きが優先する。効果で写すと、
   // 届いたレンダーで欄が空のまま一度描かれる。下書きは書き始めた時点の取得結果に結び付ける

@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { platformAuthApi, useAuth, useStoreContext } from '@/entities/user';
-import { isStoreDomain, storePath, useResource } from '@/shared/lib';
+import { useAuth, useMe, useStoreContext } from '@/entities/user';
+import { isStoreDomain, storePath } from '@/shared/lib';
 import {
   Button,
   DropdownMenu,
@@ -24,12 +24,9 @@ export function Header() {
   const currentStoreName = stores?.find(store => String(store.id) === currentStoreId)?.name;
 
   // 表示名は token claim に無い（wire 契約は authorities / userType / storeBridge のみ）ため、
-  // token 外のデータの読み口である /platform/me から取る。
-  const {
-    data: me,
-    failure: meFailure,
-    reload: reloadMe,
-  } = useResource(() => platformAuthApi.me());
+  // /platform/me の共有 seam（両コンソール layout に搭載）から読む。アカウント設定ページの
+  // プロフィール更新は同じ seam の setMe で差し替わるため、この表示も再取得なしで追随する。
+  const { me, failure: meFailure, reload: reloadMe } = useMe();
 
   // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す。
   // currentStoreId が未確定（pathname 由来 id も cookie ヒントも無い）場合は

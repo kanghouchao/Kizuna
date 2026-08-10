@@ -1,12 +1,12 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Header } from '../Header';
-import { useStoreContext } from '@/entities/user';
+import { useMe, useStoreContext } from '@/entities/user';
 import { isStoreDomain } from '@/shared/lib';
-import type { PlatformStore } from '@/entities/user';
+import type { PlatformMeResponse, PlatformStore } from '@/entities/user';
 
 // 現在店舗・授権店舗・切替は店舗コンテキストが担い、その全ケースは StoreContext.test.tsx で検証する。
-// ここでは context 出力（stores / currentStoreId）に対する Header 自身の表示条件・ラベル・
-// accountHref・切替クリックの委譲を検証する。
+// 自分の情報も同じく共有 seam（MeContext.test.tsx）が担う。ここでは context 出力に対する
+// Header 自身の表示条件・ラベル・accountHref・クリックの委譲を検証する。
 jest.mock('@/entities/user', () => {
   const logout = jest.fn();
   return {
@@ -14,7 +14,7 @@ jest.mock('@/entities/user', () => {
     __logout: logout,
     useAuth: () => ({ logout }),
     useStoreContext: jest.fn(),
-    platformAuthApi: { me: jest.fn() },
+    useMe: jest.fn(),
   };
 });
 
@@ -24,11 +24,11 @@ jest.mock('@/shared/lib', () => ({
 }));
 
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
 const mockedIsStoreDomain = isStoreDomain as jest.MockedFunction<typeof isStoreDomain>;
 const mockSwitchStore = jest.fn();
+const mockReloadMe = jest.fn();
 const mockedLogout = (jest.requireMock('@/entities/user') as { __logout: jest.Mock }).__logout;
-const mockedMe = (jest.requireMock('@/entities/user') as { platformAuthApi: { me: jest.Mock } })
-  .platformAuthApi.me;
 
 const meFixture = {
   email: 'tanaka.hanako@example.com',
@@ -48,11 +48,21 @@ function withContext(stores: PlatformStore[] | null, currentStoreId?: string) {
   });
 }
 
+function withMe(me: PlatformMeResponse | null, failure: 'error' | null = null) {
+  mockedUseMe.mockReturnValue({
+    me,
+    isLoading: me === null && failure === null,
+    failure,
+    reload: mockReloadMe,
+    setMe: jest.fn(),
+  });
+}
+
 describe('Header 店舗切替の常設化（店舗コンテキスト集約）', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedIsStoreDomain.mockReturnValue(false);
-    mockedMe.mockResolvedValue(meFixture);
+    withMe(meFixture);
     withContext([]);
   });
 
@@ -188,43 +198,41 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
   });
 });
 
-// 利用者表示は /platform/me から取る（display_name は token claim に無い — wire 契約は
-// authorities / userType / storeBridge のみ）。ここでは取得結果の表示・失敗時の名乗り・
-// 再試行の配線を検証する。
-describe('Header 利用者表示（/platform/me）', () => {
+// 利用者表示は /platform/me の共有 seam から読む（display_name は token claim に無い —
+// wire 契約は authorities / userType / storeBridge のみ）。取得・差し替えのライフサイクルは
+// MeContext.test.tsx が担い、ここでは seam 出力に対する表示・失敗時の名乗り・再試行の委譲を
+// 検証する。
+describe('Header 利用者表示（/platform/me の共有 seam）', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedIsStoreDomain.mockReturnValue(false);
-    mockedMe.mockResolvedValue(meFixture);
+    withMe(meFixture);
     withContext([]);
   });
 
-  it('ログイン中の利用者の表示名とメールアドレスを表示する', async () => {
+  it('ログイン中の利用者の表示名とメールアドレスを表示する', () => {
     render(<Header />);
 
-    expect(await screen.findByText('田中花子')).toBeInTheDocument();
+    expect(screen.getByText('田中花子')).toBeInTheDocument();
     expect(screen.getByText('tanaka.hanako@example.com')).toBeInTheDocument();
   });
 
-  it('表示名とメールアドレスは上限付きで切り詰められる（行の固有幅に上界を与えるため）', async () => {
+  it('表示名とメールアドレスは上限付きで切り詰められる（行の固有幅に上界を与えるため）', () => {
     render(<Header />);
 
     // 表示名は 150 字まで許されるため、店舗名と同じく class 文字列を規格の錨にする。
-    expect(await screen.findByText('田中花子')).toHaveClass('max-w-40', 'truncate');
+    expect(screen.getByText('田中花子')).toHaveClass('max-w-40', 'truncate');
     expect(screen.getByText('tanaka.hanako@example.com')).toHaveClass('max-w-40', 'truncate');
   });
 
-  it('取得に失敗した領域は自分で失敗を名乗り、再試行で取り直せる', async () => {
-    mockedMe.mockReset();
-    mockedMe.mockRejectedValueOnce(new Error('network'));
-    mockedMe.mockResolvedValue(meFixture);
+  it('取得に失敗した領域は自分で失敗を名乗り、再試行は seam の reload に委譲する', () => {
+    withMe(null, 'error');
 
     render(<Header />);
 
-    expect(await screen.findByText('アカウント情報の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.getByText('アカウント情報の取得に失敗しました')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
-    expect(await screen.findByText('田中花子')).toBeInTheDocument();
-    expect(screen.queryByText('アカウント情報の取得に失敗しました')).not.toBeInTheDocument();
+    expect(mockReloadMe).toHaveBeenCalledTimes(1);
   });
 });
