@@ -27,9 +27,11 @@ import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -251,9 +253,10 @@ class PlatformStaffServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
-                new RuntimeException(
-                    "ERROR: insert or update on table \"t_user_stores\" violates foreign key"
-                        + " constraint \"fk_t_user_stores_store\"")));
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("insert or update violates foreign key constraint"),
+                    "fk_t_user_stores_store")));
 
     assertThatThrownBy(() -> service.create(req)).isInstanceOf(InvalidStoreScopeException.class);
   }
@@ -275,7 +278,12 @@ class PlatformStaffServiceTest {
     when(repository.findByEmail("fk@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
     DataIntegrityViolationException violation =
-        new DataIntegrityViolationException("save failed", new RuntimeException("NOT NULL 違反"));
+        new DataIntegrityViolationException(
+            "save failed",
+            new ConstraintViolationException(
+                "save failed",
+                new SQLException("null value violates not-null constraint"),
+                "display_name"));
     when(repository.saveAndFlush(any())).thenThrow(violation);
 
     assertThatThrownBy(() -> service.create(req)).isSameAs(violation);
@@ -301,9 +309,10 @@ class PlatformStaffServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
-                new RuntimeException(
-                    "ERROR: insert or update on table \"t_user_roles\" violates foreign key"
-                        + " constraint \"fk_t_user_roles_role\"")));
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("insert or update violates foreign key constraint"),
+                    "fk_t_user_roles_role")));
 
     assertThatThrownBy(() -> service.create(req))
         .isInstanceOf(ServiceException.class)
@@ -328,9 +337,10 @@ class PlatformStaffServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
-                new RuntimeException(
-                    "ERROR: duplicate key value violates unique constraint"
-                        + " \"uq_t_users_email\"")));
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_users_email")));
 
     assertThatThrownBy(() -> service.create(req)).isInstanceOf(DuplicateStaffEmailException.class);
   }
@@ -442,9 +452,10 @@ class PlatformStaffServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
-                new RuntimeException(
-                    "ERROR: insert or update on table \"t_user_stores\" violates foreign key"
-                        + " constraint \"fk_t_user_stores_store\"")));
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("insert or update violates foreign key constraint"),
+                    "fk_t_user_stores_store")));
 
     assertThatThrownBy(
             () ->
@@ -467,9 +478,10 @@ class PlatformStaffServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
-                new RuntimeException(
-                    "ERROR: duplicate key value violates unique constraint"
-                        + " \"uq_t_users_email\"")));
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_users_email")));
 
     assertThatThrownBy(
             () ->

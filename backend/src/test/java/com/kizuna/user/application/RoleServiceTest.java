@@ -24,9 +24,11 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -184,8 +186,10 @@ class RoleServiceTest {
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
-                new RuntimeException(
-                    "ERROR: duplicate key value violates unique constraint \"uq_t_roles_name\"")));
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_roles_name")));
 
     assertThatThrownBy(() -> service.create(createRequest("店長", Set.of("ORDER_MANAGE"))))
         .isInstanceOf(ServiceException.class)
@@ -292,7 +296,13 @@ class RoleServiceTest {
     Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
     when(platformUserRepository.existsByRoleId(7L)).thenReturn(false);
-    doThrow(new DataIntegrityViolationException("fk_t_user_roles_role"))
+    doThrow(
+            new DataIntegrityViolationException(
+                "delete failed",
+                new ConstraintViolationException(
+                    "delete failed",
+                    new SQLException("update or delete violates foreign key constraint"),
+                    "fk_t_user_roles_role")))
         .when(roleRepository)
         .flush();
 
@@ -307,7 +317,12 @@ class RoleServiceTest {
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
     when(platformUserRepository.existsByRoleId(7L)).thenReturn(false);
     DataIntegrityViolationException violation =
-        new DataIntegrityViolationException("delete failed", new RuntimeException("CHECK 制約違反"));
+        new DataIntegrityViolationException(
+            "delete failed",
+            new ConstraintViolationException(
+                "delete failed",
+                new SQLException("new row violates check constraint"),
+                "ck_t_roles_name_not_blank"));
     doThrow(violation).when(roleRepository).flush();
 
     assertThatThrownBy(() -> service.delete(7L)).isSameAs(violation);
@@ -321,7 +336,12 @@ class RoleServiceTest {
     when(permissionRepository.findByCodeIn(Set.of("ORDER_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE)));
     DataIntegrityViolationException violation =
-        new DataIntegrityViolationException("save failed", new RuntimeException("NOT NULL 違反"));
+        new DataIntegrityViolationException(
+            "save failed",
+            new ConstraintViolationException(
+                "save failed",
+                new SQLException("null value violates not-null constraint"),
+                "name"));
     when(roleRepository.saveAndFlush(any())).thenThrow(violation);
 
     assertThatThrownBy(() -> service.create(createRequest("店長", Set.of("ORDER_MANAGE"))))

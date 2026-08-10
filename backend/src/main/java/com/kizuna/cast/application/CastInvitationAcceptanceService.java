@@ -8,6 +8,8 @@ import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
@@ -19,6 +21,7 @@ import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -36,7 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastInvitationAcceptanceService {
 
-  private static final String EMAIL_UNIQUE_CONSTRAINT = "uq_t_users_email";
   private static final String DUPLICATE_EMAIL_MESSAGE =
       "このメールアドレスは既に登録されています。既存アカウントでログインして受諾してください";
 
@@ -169,11 +171,10 @@ public class CastInvitationAcceptanceService {
     try {
       return platformUserRepository.save(user);
     } catch (DataIntegrityViolationException ex) {
-      String cause = ex.getMostSpecificCause().getMessage();
-      if (cause != null && cause.contains(EMAIL_UNIQUE_CONSTRAINT)) {
-        throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
-      }
-      throw ex;
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.UQ_T_USERS_EMAIL, () -> new ServiceException(DUPLICATE_EMAIL_MESSAGE)));
     }
   }
 }

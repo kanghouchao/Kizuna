@@ -19,8 +19,10 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.SQLException;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -109,7 +111,11 @@ class MemberRegistrationServiceTest {
     when(platformUserRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
-                "duplicate key value violates unique constraint \"uq_t_users_email\""));
+                "save failed",
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_users_email")));
 
     assertThatThrownBy(() -> service.register(request())).isInstanceOf(ServiceException.class);
 
@@ -177,7 +183,11 @@ class MemberRegistrationServiceTest {
     when(platformUserRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
-                "duplicate key value violates unique constraint \"uq_t_users_line_user_id\""));
+                "save failed",
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_users_line_user_id")));
 
     assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
         .isInstanceOf(ConflictException.class);
@@ -194,7 +204,11 @@ class MemberRegistrationServiceTest {
     when(platformUserRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
-                "duplicate key value violates unique constraint \"uq_t_users_email\""));
+                "save failed",
+                new ConstraintViolationException(
+                    "save failed",
+                    new SQLException("duplicate key value violates unique constraint"),
+                    "uq_t_users_email")));
 
     assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
         .isInstanceOf(ConflictException.class);

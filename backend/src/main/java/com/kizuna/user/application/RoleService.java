@@ -1,5 +1,7 @@
 package com.kizuna.user.application;
 
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleCreateRequest;
@@ -32,11 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RoleService {
-
-  private static final String NAME_UNIQUE_CONSTRAINT = "uq_t_roles_name";
-
-  /** 授与中ロールの削除を拒否する t_user_roles の RESTRICT 制約。FK 違反は全域ハンドラで 409 にならないため、ここで照合して変換する。 */
-  private static final String ROLE_IN_USE_FK_CONSTRAINT = "fk_t_user_roles_role";
 
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
@@ -103,12 +100,12 @@ public class RoleService {
       roleRepository.delete(role);
       roleRepository.flush();
     } catch (DataIntegrityViolationException ex) {
-      String cause = ex.getMostSpecificCause().getMessage();
-      if (cause != null && cause.contains(ROLE_IN_USE_FK_CONSTRAINT)) {
-        throw new RoleInUseException("授与中のロールは削除できません");
-      }
+      // 授与 FK 違反は全域ハンドラでは 409 にならない（一意違反のみが兜底の対象）ため、ここで写像する。
       // 授与 FK 以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
-      throw ex;
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.FK_T_USER_ROLES_ROLE, () -> new RoleInUseException("授与中のロールは削除できません")));
     }
   }
 
@@ -135,11 +132,8 @@ public class RoleService {
     try {
       return roleRepository.saveAndFlush(role);
     } catch (DataIntegrityViolationException ex) {
-      String cause = ex.getMostSpecificCause().getMessage();
-      if (cause != null && cause.contains(NAME_UNIQUE_CONSTRAINT)) {
-        throw new ServiceException("このロール名は既に使われています");
-      }
-      throw ex;
+      throw IntegrityViolations.translate(
+          ex, Map.of(DbConstraint.UQ_T_ROLES_NAME, () -> new ServiceException("このロール名は既に使われています")));
     }
   }
 

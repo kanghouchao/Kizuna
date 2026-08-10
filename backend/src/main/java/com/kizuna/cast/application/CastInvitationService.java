@@ -7,6 +7,8 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.security.SecureRandom;
@@ -29,9 +31,6 @@ public class CastInvitationService {
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private static final int TOKEN_BYTES = 32;
   private static final String ALREADY_LINKED_MESSAGE = "この档案は既に平台身分と連携済みのため招待を発行できません";
-
-  /** 招待の宛先档案が実在することを保証する t_cast_invitations の FK。冒頭の findById 通過後の並行档案削除で当たる。 */
-  private static final String CAST_FK_CONSTRAINT = "fk_t_cast_invitations_cast";
 
   private final CastRepository castRepository;
   private final CastInvitationRepository castInvitationRepository;
@@ -91,11 +90,11 @@ public class CastInvitationService {
       CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
       return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
     } catch (DataIntegrityViolationException ex) {
-      String cause = ex.getMostSpecificCause().getMessage();
-      if (cause != null && cause.contains(CAST_FK_CONSTRAINT)) {
-        throw new NotFoundException("キャストが見つかりません: " + castId);
-      }
-      throw ex;
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.FK_T_CAST_INVITATIONS_CAST,
+              () -> new NotFoundException("キャストが見つかりません: " + castId)));
     }
   }
 
