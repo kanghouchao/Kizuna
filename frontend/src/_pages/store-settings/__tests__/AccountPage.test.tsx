@@ -1,14 +1,20 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import AccountPage from '../ui/AccountPage';
-import { platformAuthApi } from '@/entities/user';
+import { MeProvider, platformAuthApi } from '@/entities/user';
 
-jest.mock('@/entities/user', () => ({
+// AccountPage は /platform/me の共有 seam（MeProvider）越しに自分の情報を読む。seam は
+// 実物を張って取得・再試行・差し替えの配線ごと検証し、その先の API だけを差し替える
+// （MeContext 内部の相対 import も同じモジュールへ解決されるため、この mock が効く）。
+jest.mock('@/entities/user/api/platform', () => ({
   platformAuthApi: {
     me: jest.fn(),
     updateMe: jest.fn(),
     changePassword: jest.fn(),
   },
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
   useAuth: () => ({ logout: jest.fn() }),
 }));
 
@@ -20,6 +26,14 @@ const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
 
 const me = { display_name: '店長太郎', email: 'tencho@example.com' };
 
+function renderPage() {
+  return render(
+    <MeProvider>
+      <AccountPage />
+    </MeProvider>
+  );
+}
+
 describe('店舗アカウント設定の取得失敗', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -28,7 +42,7 @@ describe('店舗アカウント設定の取得失敗', () => {
   it('取得に失敗したら空欄のフォームを出さず、区画が失敗を名乗って再試行できること', async () => {
     mockedAuthApi.me.mockRejectedValueOnce(new Error('boom'));
 
-    render(<AccountPage />);
+    renderPage();
 
     const region = await screen.findByRole('alert');
     expect(within(region).getByText('アカウント情報の取得に失敗しました')).toBeInTheDocument();
@@ -46,7 +60,7 @@ describe('店舗アカウント設定の取得失敗', () => {
   it('取得に失敗してもパスワード変更は使えたままであること', async () => {
     mockedAuthApi.me.mockRejectedValueOnce(new Error('boom'));
 
-    render(<AccountPage />);
+    renderPage();
 
     await screen.findByRole('alert');
     expect(screen.getByRole('button', { name: 'パスワードを変更する' })).toBeEnabled();
@@ -58,7 +72,7 @@ describe('店舗アカウント設定の取得失敗', () => {
     mockedAuthApi.me.mockImplementation(async () => ({ ...me }) as never);
     mockedAuthApi.updateMe.mockResolvedValue({ ...me, display_name: '新しい名前' } as never);
 
-    render(<AccountPage />);
+    renderPage();
     const nickname = await screen.findByLabelText('ニックネーム *');
 
     fireEvent.change(nickname, { target: { value: '新しい名前' } });
