@@ -26,4 +26,10 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       "select e from com.kizuna.point.domain.PointEntry e where e.memberId = :memberId"
           + " and e.amount > 0")
   List<PointEntry> findCreditsForUpdate(@Param("memberId") Long memberId);
+
+  /** 受注を根拠とする加算ロット。受注からその付与を辿って取り消す経路の入口。 */
+  @Query(
+      "select e from com.kizuna.point.domain.PointEntry e where e.orderId = :orderId"
+          + " and e.amount > 0")
+  List<PointEntry> findCreditsByOrderId(@Param("orderId") String orderId);
 }

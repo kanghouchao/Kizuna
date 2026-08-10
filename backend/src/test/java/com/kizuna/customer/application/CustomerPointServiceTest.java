@@ -16,6 +16,7 @@ import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -138,6 +139,22 @@ class CustomerPointServiceTest {
         .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", expiresOn, ACTOR_ID);
     assertThat(response.isLinked()).isTrue();
     assertThat(response.getBalance()).isEqualTo(300);
+  }
+
+  @Test
+  @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外で、台帳へ何も積まれないこと")
+  void adjustFailsWhenActorMissing() {
+    // 追記型の台帳では実行者 null が「機構が起こした仕訳」の形。失効した認証セッションによる手動調整を
+    // その形で残さない
+    givenCustomerExists();
+    givenActiveLink(MEMBER_ID);
+    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+        .isInstanceOf(StaleSessionException.class);
+    Mockito.verify(pointLedgerService, Mockito.never())
+        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any());
   }
 
   private void givenCustomerExists() {

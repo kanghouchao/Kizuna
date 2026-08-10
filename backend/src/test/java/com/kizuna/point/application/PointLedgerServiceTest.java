@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -292,6 +295,75 @@ class PointLedgerServiceTest {
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("加算の仕訳だけ");
     verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("受注単位の取消は、その受注を根拠とするすべての付与を打ち消すこと")
+  void cancelForOrderCancelsEveryGrantOfTheOrder() {
+    when(pointEntryRepository.findCreditsByOrderId("o1"))
+        .thenReturn(List.of(orderGrant(11L, "o1", 500), orderGrant(12L, "o1", 300)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L, 12L)))
+        .thenReturn(List.of());
+
+    pointLedgerService.cancelForOrder("o1", ACTOR_ID);
+
+    verify(pointEntryRepository, times(2)).save(savedEntry.capture());
+    assertThat(savedEntry.getAllValues())
+        .extracting(PointEntry::getEntryType, PointEntry::getAmount, PointEntry::getOriginalEntryId)
+        .containsExactly(
+            tuple(PointEntryType.CANCEL, -500, 11L), tuple(PointEntryType.CANCEL, -300, 12L));
+  }
+
+  @Test
+  @DisplayName("消費し切った付与は飛ばし、残余のある付与だけを打ち消すこと")
+  void cancelForOrderSkipsDrainedGrants() {
+    when(pointEntryRepository.findCreditsByOrderId("o1"))
+        .thenReturn(List.of(orderGrant(11L, "o1", 500), orderGrant(12L, "o1", 500)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L, 12L)))
+        .thenReturn(List.of(consumption(11L, 500), consumption(12L, 200)));
+
+    pointLedgerService.cancelForOrder("o1", ACTOR_ID);
+
+    verify(pointEntryRepository).save(savedEntry.capture());
+    PointEntry entry = savedEntry.getValue();
+    assertThat(entry.getOriginalEntryId()).isEqualTo(12L);
+    assertThat(entry.getAmount()).isEqualTo(-300);
+    assertThat(entry.getAllocations())
+        .extracting(PointAllocation::getSourceEntryId, PointAllocation::getAmount)
+        .containsExactly(tuple(12L, 300));
+  }
+
+  @Test
+  @DisplayName("付与の無い受注の取消は何もしないこと（存在しない受注 ID も同じ）")
+  void cancelForOrderIsNoOpWithoutGrants() {
+    when(pointEntryRepository.findCreditsByOrderId("unknown")).thenReturn(List.of());
+
+    pointLedgerService.cancelForOrder("unknown", ACTOR_ID);
+
+    verify(pointEntryRepository, never()).findCreditsForUpdate(anyLong());
+    verify(pointAllocationRepository, never()).findConsumedBySourceEntryIds(any());
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("受注単位の取消も未消費分を数える前に消費経路と同じ行ロックを取ること")
+  void cancelForOrderLocksBeforeCountingConsumption() {
+    when(pointEntryRepository.findCreditsByOrderId("o1"))
+        .thenReturn(List.of(orderGrant(11L, "o1", 500)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
+        .thenReturn(List.of());
+
+    pointLedgerService.cancelForOrder("o1", ACTOR_ID);
+
+    InOrder inOrder = inOrder(pointEntryRepository, pointAllocationRepository);
+    inOrder.verify(pointEntryRepository).findCreditsForUpdate(MEMBER_ID);
+    inOrder.verify(pointAllocationRepository).findConsumedBySourceEntryIds(List.of(11L));
+  }
+
+  private static PointEntry orderGrant(long id, String orderId, int amount) {
+    PointEntry entry = PointEntry.grantForOrder(MEMBER_ID, orderId, STORE_ID, amount, ACTOR_ID);
+    entry.setId(id);
+    return entry;
   }
 
   private static PointEntry credit(long id, int amount, LocalDate expiresOn) {

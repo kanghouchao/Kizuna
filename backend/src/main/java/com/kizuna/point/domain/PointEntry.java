@@ -250,7 +250,12 @@ public class PointEntry extends BaseEntity {
         List.of(PointAllocation.of(original.getId(), available)));
   }
 
-  /** 有効期限切れによる失効。実行者を持たない（機構が起こす仕訳）。 */
+  /**
+   * 有効期限切れによる失効。実行者を持たない（機構が起こす仕訳）。
+   *
+   * <p>発生店舗も持たない — 失効は複数店舗発生の lot に跨る系統イベントのため単一の発生店舗を持たない。店舗帰属は充当行から源 lot を辿って照会する（取消は打ち消す対象が 1
+   * つなので元の仕訳の発生店舗を引き継ぐ）。
+   */
   public static PointEntry expire(Long memberId, int points, List<PointAllocation> allocations) {
     return new PointEntry(
         PointEntryType.EXPIRE, memberId, -points, null, null, null, null, null, null, allocations);

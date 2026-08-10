@@ -41,6 +41,7 @@ import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -1157,6 +1158,22 @@ class OrderServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("非会員の受注ではポイントを利用できません");
     verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
+  void completeFailsWhenTheActorIsNoLongerAPlatformUser() {
+    // 追記型の台帳では実行者 null が「機構が起こした仕訳」の形。失効した認証セッションによる人手の完了を
+    // その形で残さず、台帳を触る前に落とす
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
+        .isInstanceOf(StaleSessionException.class);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test

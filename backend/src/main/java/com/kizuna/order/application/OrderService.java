@@ -22,6 +22,7 @@ import com.kizuna.order.domain.OrderView;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
@@ -264,8 +265,7 @@ public class OrderService {
 
     int granted = 0;
     if (memberId != null) {
-      Long actorId =
-          platformUserRepository.findByEmail(actorEmail).map(PlatformUser::getId).orElse(null);
+      Long actorId = resolveActorId(actorEmail);
       // 単位の制約と残高の充足は台帳側が判定する（利用の入口が増えても規則が分かれないため）。
       if (usePoints > 0) {
         pointLedgerService.useForOrder(memberId, id, order.getStoreId(), usePoints, actorId);
@@ -318,6 +318,19 @@ public class OrderService {
     return customerMemberLinkRepository
         .findByCustomerIdAndStatus(order.getCustomerId(), LinkStatus.ACTIVE)
         .map(CustomerMemberLink::getMemberId);
+  }
+
+  /**
+   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
+   *
+   * <p>解決できない認証主体は黙って null にせず失敗させる — 追記型の台帳では実行者 null が「機構が起こした仕訳」の形であり、
+   * 失効した認証セッションによる人手の操作がそれと区別できなくなる。
+   */
+  private Long resolveActorId(String actorEmail) {
+    return platformUserRepository
+        .findByEmail(actorEmail)
+        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
+        .getId();
   }
 
   /**

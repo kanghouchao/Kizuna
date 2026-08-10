@@ -131,6 +131,32 @@ public class PointLedgerService {
     pointEntryRepository.save(PointEntry.cancel(original, available, actorUserId));
   }
 
+  /**
+   * 受注を根拠とするすべての付与（別経路の付与が order_id を持つ場合を含む）を取消仕訳で無効化する。利用（USE）の再付与は 完了後訂正の意味論が定まってから —
+   * 取消できるのは残余のある付与のみ。
+   *
+   * <p>消費し切った付与と取消済みの付与は残余が 0 なので黙って飛ばす。付与の無い受注も同じく何もしない。
+   */
+  public void cancelForOrder(String orderId, Long actorUserId) {
+    List<PointEntry> credits = pointEntryRepository.findCreditsByOrderId(orderId);
+    if (credits.isEmpty()) {
+      return;
+    }
+    // 単発の取消と同じく、未消費分を数える前に消費経路と同じ行ロックを取る。
+    credits.stream()
+        .map(PointEntry::getMemberId)
+        .distinct()
+        .forEach(pointEntryRepository::findCreditsForUpdate);
+    Map<Long, Integer> consumed = consumedBy(credits.stream().map(PointEntry::getId).toList());
+    for (PointEntry credit : credits) {
+      int available = credit.getAmount() - consumed.getOrDefault(credit.getId(), 0);
+      if (available <= 0) {
+        continue;
+      }
+      pointEntryRepository.save(PointEntry.cancel(credit, available, actorUserId));
+    }
+  }
+
   /** 消費のために加算ロットを行ロック付きで読み直した台帳。 */
   private PointLedger lockedLedgerOf(long memberId) {
     return ledgerOf(pointEntryRepository.findCreditsForUpdate(memberId));

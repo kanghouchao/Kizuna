@@ -9,9 +9,9 @@ import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -60,9 +60,7 @@ public class CustomerPointService {
       throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");
     }
 
-    // JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
-    Long actorId =
-        platformUserRepository.findByEmail(actorEmail).map(PlatformUser::getId).orElse(null);
+    Long actorId = resolveActorId(actorEmail);
     pointLedgerService.adjust(
         memberId,
         storeContext.getStoreId(),
@@ -84,6 +82,19 @@ public class CustomerPointService {
     if (!customerRepository.existsById(customerId)) {
       throw new NotFoundException("顧客が見つかりません: " + customerId);
     }
+  }
+
+  /**
+   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
+   *
+   * <p>解決できない認証主体は黙って null にせず失敗させる — 追記型の台帳では実行者 null が「機構が起こした仕訳」の形であり、
+   * 失効した認証セッションによる人手の操作がそれと区別できなくなる。
+   */
+  private Long resolveActorId(String actorEmail) {
+    return platformUserRepository
+        .findByEmail(actorEmail)
+        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
+        .getId();
   }
 
   /**
