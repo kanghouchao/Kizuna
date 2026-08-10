@@ -11,12 +11,14 @@ import com.kizuna.point.domain.PointLot;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -101,14 +103,27 @@ public class PointLedgerService {
             memberId, orderId, storeId, points, allocationsOf(plan), actorUserId));
   }
 
-  /** 運用者による手動調整。加算は新しいロットになり、減算は既存ロットを期限の早い順に引き当てる。 */
+  /**
+   * 運用者による手動調整。加算は新しいロットになり、減算は既存ロットを期限の早い順に引き当てる。
+   *
+   * <p>冪等キーが既に記帳済みなら再送とみなし、内容が一致すれば何も書かずに戻る（残高は呼出側が読み直す）。 内容が異なれば 409 —
+   * 初回の成立を知らない利用者の「修正のつもりの再送」を静黙な二重記帳にしない（ADR 0007）。
+   *
+   * <p>再送の判定は入力検証より先に行う。初回の記帳後に業務日が進むと、同じ内容の再送が期限検証で 撥ねられてしまう（正当な再送が 400 になる）ため。
+   */
   public void adjust(
       long memberId,
       Long storeId,
       int delta,
       String reason,
       LocalDate expiresOn,
-      Long actorUserId) {
+      Long actorUserId,
+      String idempotencyKey) {
+    PointEntry committed = pointEntryRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
+    if (committed != null) {
+      requireSameContent(committed, memberId, storeId, delta, reason, expiresOn);
+      return;
+    }
     if (delta == 0) {
       throw new ServiceException("増減は 0 以外で指定してください");
     }
@@ -120,7 +135,7 @@ public class PointLedgerService {
       }
       pointEntryRepository.save(
           PointEntry.manualAdjust(
-              memberId, storeId, delta, reason, expiresOn, List.of(), actorUserId));
+              memberId, storeId, delta, reason, expiresOn, List.of(), actorUserId, idempotencyKey));
       return;
     }
     if (expiresOn != null) {
@@ -129,7 +144,33 @@ public class PointLedgerService {
     List<PlannedAllocation> plan = lockedLedgerOf(memberId).planConsumption(-delta);
     pointEntryRepository.save(
         PointEntry.manualAdjust(
-            memberId, storeId, delta, reason, null, allocationsOf(plan), actorUserId));
+            memberId,
+            storeId,
+            delta,
+            reason,
+            null,
+            allocationsOf(plan),
+            actorUserId,
+            idempotencyKey));
+  }
+
+  /** 同一キーの再送は、初回と内容が一致するときだけ再送と認める。実行者は比較しない — 操作の同一性はキーが表す。 */
+  private static void requireSameContent(
+      PointEntry committed,
+      long memberId,
+      Long storeId,
+      int delta,
+      String reason,
+      LocalDate expiresOn) {
+    boolean same =
+        committed.getMemberId() == memberId
+            && Objects.equals(committed.getOriginatingStoreId(), storeId)
+            && committed.getAmount() == delta
+            && Objects.equals(committed.getReason(), reason)
+            && Objects.equals(committed.getExpiresOn(), expiresOn);
+    if (!same) {
+      throw new ConflictException("初回の調整は既に成立しています。残高を確認のうえ、必要なら新しい調整として実行してください");
+    }
   }
 
   /**

@@ -23,6 +23,7 @@ import com.kizuna.point.domain.PointEntryType;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
@@ -61,6 +62,7 @@ class PointLedgerServiceTest {
   @BeforeEach
   void stubBusinessTimezone() {
     lenient().when(appProperties.getTimezone()).thenReturn(TIMEZONE);
+    lenient().when(pointEntryRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
   }
 
   @Test
@@ -198,22 +200,23 @@ class PointLedgerServiceTest {
   @DisplayName("増減 0 の手動調整は拒否されること")
   void adjustRejectsZeroDelta() {
     assertThatThrownBy(
-            () -> pointLedgerService.adjust(MEMBER_ID, STORE_ID, 0, "理由", null, ACTOR_ID))
+            () -> pointLedgerService.adjust(MEMBER_ID, STORE_ID, 0, "理由", null, ACTOR_ID, "key-1"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("増減は 0 以外");
     verify(pointEntryRepository, never()).save(any());
   }
 
   @Test
-  @DisplayName("加算の手動調整は新しいロットとして記録されること")
+  @DisplayName("加算の手動調整は冪等キーを持つ新しいロットとして記録されること")
   void adjustPositiveSavesNewLot() {
-    pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", FAR_FUTURE, ACTOR_ID);
+    pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", FAR_FUTURE, ACTOR_ID, "key-1");
 
     verify(pointEntryRepository).save(savedEntry.capture());
     PointEntry entry = savedEntry.getValue();
     assertThat(entry.getEntryType()).isEqualTo(PointEntryType.MANUAL_ADJUST);
     assertThat(entry.getAmount()).isEqualTo(500);
     assertThat(entry.getExpiresOn()).isEqualTo(FAR_FUTURE);
+    assertThat(entry.getIdempotencyKey()).isEqualTo("key-1");
     assertThat(entry.getAllocations()).isEmpty();
   }
 
@@ -223,7 +226,9 @@ class PointLedgerServiceTest {
     LocalDate yesterday = LocalDate.now(ZoneId.of(TIMEZONE)).minusDays(1);
 
     assertThatThrownBy(
-            () -> pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", yesterday, ACTOR_ID))
+            () ->
+                pointLedgerService.adjust(
+                    MEMBER_ID, STORE_ID, 500, "お詫び", yesterday, ACTOR_ID, "key-1"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("過去の日付");
     verify(pointEntryRepository, never()).save(any());
@@ -234,7 +239,7 @@ class PointLedgerServiceTest {
   void adjustPositiveAllowsExpiryOfToday() {
     LocalDate today = LocalDate.now(ZoneId.of(TIMEZONE));
 
-    pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", today, ACTOR_ID);
+    pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", today, ACTOR_ID, "key-1");
 
     verify(pointEntryRepository).save(savedEntry.capture());
     assertThat(savedEntry.getValue().getExpiresOn()).isEqualTo(today);
@@ -244,7 +249,9 @@ class PointLedgerServiceTest {
   @DisplayName("減算の手動調整に有効期限は指定できないこと")
   void adjustNegativeRejectsExpiry() {
     assertThatThrownBy(
-            () -> pointLedgerService.adjust(MEMBER_ID, STORE_ID, -500, "訂正", FAR_FUTURE, ACTOR_ID))
+            () ->
+                pointLedgerService.adjust(
+                    MEMBER_ID, STORE_ID, -500, "訂正", FAR_FUTURE, ACTOR_ID, "key-1"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("有効期限");
     verify(pointEntryRepository, never()).save(any());
@@ -258,7 +265,7 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L)))
         .thenReturn(List.of(consumption(1L, 200)));
 
-    pointLedgerService.adjust(MEMBER_ID, STORE_ID, -300, "訂正", null, ACTOR_ID);
+    pointLedgerService.adjust(MEMBER_ID, STORE_ID, -300, "訂正", null, ACTOR_ID, "key-1");
 
     verify(pointEntryRepository).save(savedEntry.capture());
     PointEntry entry = savedEntry.getValue();
@@ -267,6 +274,44 @@ class PointLedgerServiceTest {
     assertThat(entry.getAllocations())
         .extracting(PointAllocation::getSourceEntryId, PointAllocation::getAmount)
         .containsExactly(tuple(1L, 300));
+  }
+
+  @Test
+  @DisplayName("同一キー・同一内容の再送は記帳せずに戻ること")
+  void adjustReplaysCommittedAdjustmentWithSameKey() {
+    PointEntry committed = adjustEntry(11L, 500, "お詫び", FAR_FUTURE, "key-1");
+    when(pointEntryRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(committed));
+
+    pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", FAR_FUTURE, ACTOR_ID, "key-1");
+
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("同一キー・内容不一致の要求は初回の成立を明告して 409 になること")
+  void adjustRejectsSameKeyWithDifferentContent() {
+    PointEntry committed = adjustEntry(11L, 500, "お詫び", FAR_FUTURE, "key-1");
+    when(pointEntryRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(committed));
+
+    assertThatThrownBy(
+            () ->
+                pointLedgerService.adjust(
+                    MEMBER_ID, STORE_ID, 300, "お詫び", FAR_FUTURE, ACTOR_ID, "key-1"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("初回の調整は既に成立");
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("再送の判定は入力検証より先に行われること（期限が過去になった再送も再送として扱う）")
+  void adjustReplayPrecedesInputValidation() {
+    LocalDate yesterday = LocalDate.now(ZoneId.of(TIMEZONE)).minusDays(1);
+    PointEntry committed = adjustEntry(11L, 500, "お詫び", yesterday, "key-1");
+    when(pointEntryRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(committed));
+
+    pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", yesterday, ACTOR_ID, "key-1");
+
+    verify(pointEntryRepository, never()).save(any());
   }
 
   @Test
@@ -434,9 +479,14 @@ class PointLedgerServiceTest {
   }
 
   private static PointEntry credit(long id, int amount, LocalDate expiresOn) {
+    return adjustEntry(id, amount, "seed", expiresOn, "seed-key-" + id);
+  }
+
+  private static PointEntry adjustEntry(
+      long id, int amount, String reason, LocalDate expiresOn, String idempotencyKey) {
     PointEntry entry =
         PointEntry.manualAdjust(
-            MEMBER_ID, STORE_ID, amount, "seed", expiresOn, List.of(), ACTOR_ID);
+            MEMBER_ID, STORE_ID, amount, reason, expiresOn, List.of(), ACTOR_ID, idempotencyKey);
     entry.setId(id);
     return entry;
   }

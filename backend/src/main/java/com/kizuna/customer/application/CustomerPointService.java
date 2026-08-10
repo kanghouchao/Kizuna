@@ -70,7 +70,36 @@ public class CustomerPointService {
         request.getDelta(),
         request.getReason(),
         request.getExpiresOn(),
-        actorId);
+        actorId,
+        request.getIdempotencyKey());
+    return linkedBalance(memberId);
+  }
+
+  /**
+   * 同時再送で冪等キーの一意制約に敗れた要求の再送処理。敗者の書き込みトランザクションは制約違反の時点で作廃されて
+   * いるため、呼出側（controller）はトランザクションの外から本メソッドを呼び、新しい読み取り専用トランザクションで 初回の仕訳を読み直す（ADR 0007）。
+   *
+   * <p>検証は書き込み経路と同じ順序で通すが、顧客行はロックしない — 読み取り専用トランザクションでは行ロックが 取れず、勝者は既に commit
+   * 済みで直列化する相手もいない。台帳側の再送判定（内容一致なら何も書かず戻る／不一致は 409）に落ちることで、逐次再送と同一の応答になる。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public CustomerPointBalanceResponse replayAdjust(
+      String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
+    requireCustomer(customerId);
+    Long memberId = activeMemberId(customerId);
+    if (memberId == null) {
+      throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");
+    }
+    Long actorId = resolveActorId(actorEmail);
+    pointLedgerService.adjust(
+        memberId,
+        storeContext.getStoreId(),
+        request.getDelta(),
+        request.getReason(),
+        request.getExpiresOn(),
+        actorId,
+        request.getIdempotencyKey());
     return linkedBalance(memberId);
   }
 

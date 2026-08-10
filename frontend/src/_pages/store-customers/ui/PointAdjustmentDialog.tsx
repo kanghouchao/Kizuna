@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CustomerPointBalanceResponse, customerApi } from '@/entities/customer';
@@ -69,8 +69,13 @@ export function PointAdjustmentDialog({
   // 有効期限は加算のときだけ意味を持つ。減算に添えるとサーバが 400 を返す
   const isGrant = watch('delta') > 0;
 
+  // 開くたびに 1 回の人間の操作としてキーを発行する。失敗後の再送信・入力変更では変えない —
+  // サーバはこのキーで「commit 済みの初回への再送」を見分けて二重記帳を遮断する（ADR 0007）。
+  const idempotencyKeyRef = useRef('');
+
   useEffect(() => {
     if (!open) return;
+    idempotencyKeyRef.current = crypto.randomUUID();
     reset({ delta: NaN, reason: '', expires_on: '' });
   }, [open, reset]);
 
@@ -82,6 +87,7 @@ export function PointAdjustmentDialog({
         // 欄が消えても react-hook-form は値を保つ。減算へ切り替えた後の持ち越しを送らないよう、
         // 送信可否は入力の有無ではなく今の増減で決める（undefined は JSON 化の段でキーごと消える）。
         expires_on: isGrant && values.expires_on ? values.expires_on : undefined,
+        idempotency_key: idempotencyKeyRef.current,
       });
       notify.success('ポイントを調整しました');
       onAdjusted(balance);

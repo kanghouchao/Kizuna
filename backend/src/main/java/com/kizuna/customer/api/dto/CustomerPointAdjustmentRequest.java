@@ -25,4 +25,9 @@ public class CustomerPointAdjustmentRequest {
 
   /** 加算するポイントの有効期限。無期限なら省略する。 */
   private LocalDate expiresOn;
+
+  /** クライアント生成の冪等キー。応答喪失後の再送を初回と同じ操作として識別する（ADR 0007）。 サーバは形式を解釈しない不透明な文字列として扱う。 */
+  @NotBlank(message = "冪等キーは必須です")
+  @Size(max = 64, message = "冪等キーは64文字以内です")
+  private String idempotencyKey;
 }

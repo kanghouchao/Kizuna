@@ -82,6 +82,26 @@ class IntegrityViolationsTest {
   }
 
   @Test
+  @DisplayName("violates は違反した制約が指定の制約かどうかだけを答える")
+  void violatesAnswersWhetherTheNamedConstraintWasViolated() {
+    DataIntegrityViolationException ex =
+        new DataIntegrityViolationException(
+            "save failed", hibernateViolation(DbConstraint.UQ_T_USERS_EMAIL.sqlName()));
+
+    assertThat(IntegrityViolations.violates(ex, DbConstraint.UQ_T_USERS_EMAIL)).isTrue();
+    assertThat(IntegrityViolations.violates(ex, DbConstraint.UQ_T_ROLES_NAME)).isFalse();
+  }
+
+  @Test
+  @DisplayName("violates は制約名の取れない違反を「違反していない」と答える")
+  void violatesIsFalseWhenConstraintNameIsUnknown() {
+    DataIntegrityViolationException ex =
+        new DataIntegrityViolationException("save failed", new SQLException("integrity violation"));
+
+    assertThat(IntegrityViolations.violates(ex, DbConstraint.UQ_T_USERS_EMAIL)).isFalse();
+  }
+
+  @Test
   @DisplayName("対応表に無い制約の違反は元の例外をそのまま返す（写像先の無い違反を握りつぶさない）")
   void returnsOriginalWhenConstraintIsNotMapped() {
     DataIntegrityViolationException ex =

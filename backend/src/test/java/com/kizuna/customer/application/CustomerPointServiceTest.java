@@ -43,6 +43,7 @@ class CustomerPointServiceTest {
   private static final long ACTOR_ID = 42L;
   private static final long MEMBER_ID = 777L;
   private static final long STORE_ID = 3L;
+  private static final String IDEMPOTENCY_KEY = "op-key-1";
 
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
@@ -120,7 +121,7 @@ class CustomerPointServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会員に紐づいていない顧客");
     Mockito.verify(pointLedgerService, Mockito.never())
-        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any());
+        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any(), anyString());
   }
 
   @Test
@@ -137,7 +138,7 @@ class CustomerPointServiceTest {
         service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", expiresOn), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
-        .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", expiresOn, ACTOR_ID);
+        .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", expiresOn, ACTOR_ID, IDEMPOTENCY_KEY);
     assertThat(response.isLinked()).isTrue();
     assertThat(response.getBalance()).isEqualTo(300);
   }
@@ -155,7 +156,7 @@ class CustomerPointServiceTest {
             () -> service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
     Mockito.verify(pointLedgerService, Mockito.never())
-        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any());
+        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any(), anyString());
   }
 
   @Test
@@ -172,6 +173,42 @@ class CustomerPointServiceTest {
 
     Mockito.verify(customerRepository).findByIdForUpdate(CUSTOMER_ID);
     Mockito.verify(customerRepository, Mockito.never()).existsById(anyString());
+  }
+
+  @Test
+  @DisplayName("競合敗者の再送処理は顧客行を押さえずに台帳の再送判定へ委譲すること")
+  void replayDelegatesToTheLedgerWithoutTheCustomerRowLock() {
+    // 読み取り専用トランザクションでは行ロックが取れない。勝者は commit 済みで直列化する相手もいない
+    givenCustomerExists();
+    givenActiveLink(MEMBER_ID);
+    Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
+    Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
+
+    CustomerPointBalanceResponse response =
+        service.replayAdjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
+
+    Mockito.verify(pointLedgerService)
+        .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", null, ACTOR_ID, IDEMPOTENCY_KEY);
+    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(anyString());
+    assertThat(response.isLinked()).isTrue();
+    assertThat(response.getBalance()).isEqualTo(800);
+  }
+
+  @Test
+  @DisplayName("競合敗者の再送処理も未紐づけの顧客は受け付けないこと")
+  void replayOfAnUnlinkedCustomerIsRefused() {
+    givenCustomerExists();
+    Mockito.when(
+            customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.replayAdjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("会員に紐づいていない顧客");
+    Mockito.verify(pointLedgerService, Mockito.never())
+        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any(), anyString());
   }
 
   @Test
@@ -240,6 +277,7 @@ class CustomerPointServiceTest {
     request.setDelta(delta);
     request.setReason(reason);
     request.setExpiresOn(expiresOn);
+    request.setIdempotencyKey(IDEMPOTENCY_KEY);
     return request;
   }
 }

@@ -68,6 +68,10 @@ public class PointEntry extends BaseEntity {
   @Column(name = "reason", updatable = false, length = 500)
   private String reason;
 
+  /** 手動調整の冪等キー（クライアント生成）。一意制約により応答喪失後の再送が二重記帳になるのを遮断する（ADR 0007）。 手動調整以外の種別は持たない。 */
+  @Column(name = "idempotency_key", updatable = false, length = 64)
+  private String idempotencyKey;
+
   /**
    * この減算がどの加算ロットを消費したか。減算仕訳集約の一部として一緒に永続化される。
    *
@@ -88,6 +92,7 @@ public class PointEntry extends BaseEntity {
       Long originalEntryId,
       Long actorUserId,
       String reason,
+      String idempotencyKey,
       List<PointAllocation> allocations) {
     if (memberId == null) {
       throw new InvalidPointEntryException("会員 ID は必須です");
@@ -97,7 +102,7 @@ public class PointEntry extends BaseEntity {
     }
     validateSign(entryType, amount);
     validateExpiryAndAllocations(amount, expiresOn, allocations);
-    validateReferences(entryType, orderId, originalEntryId, reason);
+    validateReferences(entryType, orderId, originalEntryId, reason, idempotencyKey);
 
     this.entryType = entryType;
     this.memberId = memberId;
@@ -108,6 +113,7 @@ public class PointEntry extends BaseEntity {
     this.originalEntryId = originalEntryId;
     this.actorUserId = actorUserId;
     this.reason = reason;
+    this.idempotencyKey = idempotencyKey;
     this.allocations = new ArrayList<>(allocations);
   }
 
@@ -140,7 +146,11 @@ public class PointEntry extends BaseEntity {
   }
 
   private static void validateReferences(
-      PointEntryType entryType, String orderId, Long originalEntryId, String reason) {
+      PointEntryType entryType,
+      String orderId,
+      Long originalEntryId,
+      String reason,
+      String idempotencyKey) {
     if ((entryType == PointEntryType.ORDER_GRANT || entryType == PointEntryType.USE)
         && (orderId == null || orderId.isBlank())) {
       throw new InvalidPointEntryException("受注 ID は必須です");
@@ -150,6 +160,10 @@ public class PointEntry extends BaseEntity {
     }
     if (entryType == PointEntryType.MANUAL_ADJUST && (reason == null || reason.isBlank())) {
       throw new InvalidPointEntryException("手動調整の理由は必須です");
+    }
+    if (entryType == PointEntryType.MANUAL_ADJUST
+        && (idempotencyKey == null || idempotencyKey.isBlank())) {
+      throw new InvalidPointEntryException("手動調整の冪等キーは必須です");
     }
   }
 
@@ -172,6 +186,7 @@ public class PointEntry extends BaseEntity {
         orderId,
         null,
         actorUserId,
+        null,
         null,
         List.of());
   }
@@ -197,10 +212,15 @@ public class PointEntry extends BaseEntity {
         null,
         actorUserId,
         null,
+        null,
         allocations);
   }
 
-  /** 運用者による手動調整。{@code delta} は符号付きで、加算なら有効期限を付けられ、減算なら引き当てが要る。 */
+  /**
+   * 運用者による手動調整。{@code delta} は符号付きで、加算なら有効期限を付けられ、減算なら引き当てが要る。
+   *
+   * <p>冪等キーは必須。応答喪失後の再送が二重記帳になるのを一意制約で遮断する（ADR 0007）。
+   */
   public static PointEntry manualAdjust(
       Long memberId,
       Long storeId,
@@ -208,7 +228,8 @@ public class PointEntry extends BaseEntity {
       String reason,
       LocalDate expiresOn,
       List<PointAllocation> allocations,
-      Long actorUserId) {
+      Long actorUserId,
+      String idempotencyKey) {
     return new PointEntry(
         PointEntryType.MANUAL_ADJUST,
         memberId,
@@ -219,6 +240,7 @@ public class PointEntry extends BaseEntity {
         null,
         actorUserId,
         reason,
+        idempotencyKey,
         allocations);
   }
 
@@ -247,6 +269,7 @@ public class PointEntry extends BaseEntity {
         original.getId(),
         actorUserId,
         null,
+        null,
         List.of(PointAllocation.of(original.getId(), available)));
   }
 
@@ -258,7 +281,17 @@ public class PointEntry extends BaseEntity {
    */
   public static PointEntry expire(Long memberId, int points, List<PointAllocation> allocations) {
     return new PointEntry(
-        PointEntryType.EXPIRE, memberId, -points, null, null, null, null, null, null, allocations);
+        PointEntryType.EXPIRE,
+        memberId,
+        -points,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        allocations);
   }
 
   /** 退会に伴う残高消去。 */
@@ -273,6 +306,7 @@ public class PointEntry extends BaseEntity {
         null,
         null,
         actorUserId,
+        null,
         null,
         allocations);
   }
