@@ -33,13 +33,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 店舗削除が platform_user_stores（プラットフォームユーザーの店舗授権集合）まで ON DELETE CASCADE で従うことを 本物の PostgreSQL
- * で検証する統合テスト。
+ * 店舗削除の可否を本物の PostgreSQL で検証する統合テスト。
  *
- * <p>店舗削除は既存の全店舗参照 FK が CASCADE で従う確立済みセマンティクスであり、店舗授権行も店舗と共に消えるのが整合的。
+ * <p>消せるのは、まだ開店しておらず確定した記録も持たない店舗だけ。消せる場合は店舗授権行（platform_user_stores）まで ON DELETE CASCADE
+ * で従い、ユーザー本体は残る（授権集合が空になるだけの fail-closed）。
  *
- * <p>ポイント台帳だけは従わない。台帳は会員が持ち、発生店舗は帰属情報にすぎないため、店舗が消えても仕訳の行は残って 帰属だけが外れる（SET
- * NULL）。従わせると店舗の削除が会員の残高を書き換えてしまう。
+ * <p>消せない場合の断りは 2 種類で、稼働中そのものと、確定した記録の存在（完了済み受注またはポイント仕訳の帰属）である。 記録による拒否はアプリケーション層でしか成立しない — 台帳の
+ * originating_store_id は SET NULL のままで、DB は店舗の削除を 止めず帰属だけを外すため、止める場所はここしかない。
  *
  * <p>様式は {@link SeedSequenceAlignmentIT}（HQ 管理者の平台ログイン + JdbcTemplate による実 DB 断言）に倣う。使い捨て tmpfs DB
  * のためシード store 1 は決して削除せず、第二店舗を直挿して検証する。
@@ -71,14 +71,26 @@ class StoreDeletionCascadeIT {
     return token;
   }
 
+  /** 新規登録した店舗は準備中から始まる（＝削除できる状態）。 */
+  private Store freshStore(String name, String domainPrefix) {
+    return storeRepository.save(
+        new Store(name, domainPrefix + "-" + UUID.randomUUID() + ".kizuna.test", null));
+  }
+
+  private ResponseEntity<JsonNode> deleteStore(long storeId) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(platformLogin());
+    return rest.exchange(
+        "/platform/stores/" + storeId,
+        HttpMethod.DELETE,
+        new HttpEntity<>(headers),
+        JsonNode.class);
+  }
+
   @Test
-  @DisplayName("店舗削除で SPECIFIC_STORES ユーザーの店舗授権行が CASCADE 消去され、ユーザー本体は残ること")
+  @DisplayName("準備中で記録の無い店舗は削除でき、SPECIFIC_STORES ユーザーの店舗授権行が CASCADE 消去されユーザー本体は残ること")
   void deletingStoreCascadesStoreGrantButKeepsPlatformUser() {
-    // 第二店舗を直挿（シード store 1 は他 IT が依存するため決して削除しない）。
-    Store store =
-        storeRepository.save(
-            new Store(
-                "削除カスケード検証店舗", "store-delete-it-" + UUID.randomUUID() + ".kizuna.test", null));
+    Store store = freshStore("削除カスケード検証店舗", "store-delete-it");
     long storeId = store.getId();
 
     // その店舗のみを授権集合に持つ SPECIFIC_STORES ユーザーを直挿（ログインは行わないため password はエンコード済みダミー）。
@@ -99,15 +111,7 @@ class StoreDeletionCascadeIT {
     // 前提: 削除前は授権行が 1 件存在する（空振りで緑にならないことを固定）。
     assertThat(countStoreGrants(storeId)).as("削除前は店舗授権行が存在すること").isEqualTo(1L);
 
-    // 実削除フロー: プラットフォーム admin トークンで DELETE /platform/stores/{id}。
-    HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(platformLogin());
-    ResponseEntity<Void> res =
-        rest.exchange(
-            "/platform/stores/" + storeId,
-            HttpMethod.DELETE,
-            new HttpEntity<>(headers),
-            Void.class);
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
 
     // FK が ON DELETE CASCADE でなければ店舗削除は FK 違反で失敗する。
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
@@ -118,15 +122,41 @@ class StoreDeletionCascadeIT {
   }
 
   @Test
-  @DisplayName("店舗削除でポイント台帳の仕訳は残り、発生店舗だけが NULL になること")
-  void deletingStoreKeepsPointEntriesAndNullsTheOriginatingStore() {
-    Store store =
-        storeRepository.save(
-            new Store(
-                "台帳存続検証店舗", "point-store-delete-it-" + UUID.randomUUID() + ".kizuna.test", null));
+  @DisplayName("稼働中の店舗は記録が無くても削除できず、店舗が残ること")
+  void activeStoreCannotBeDeleted() {
+    Store store = freshStore("稼働中検証店舗", "active-store-delete-it");
+    long storeId = store.getId();
+    // 遷移そのものは StoreActivationIT が固定する。ここでは稼働中という状態だけを作る。
+    jdbcTemplate.update("UPDATE t_stores SET status = 'ACTIVE' WHERE id = ?", storeId);
+
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("稼働中の店舗は削除できません");
+    assertThat(countStore(storeId)).as("拒否された店舗は残存すること").isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("完了済みの受注を持つ店舗は準備中でも削除できないこと")
+  void storeWithCompletedOrderCannotBeDeleted() {
+    Store store = freshStore("完了受注検証店舗", "order-store-delete-it");
+    long storeId = store.getId();
+    insertCompletedOrder(storeId);
+
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
+    assertThat(countStore(storeId)).as("拒否された店舗は残存すること").isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("ポイント仕訳の帰属を持つ店舗は削除できず、仕訳の発生店舗も外れないこと")
+  void storeWithPointEntryCannotBeDeleted() {
+    Store store = freshStore("台帳帰属検証店舗", "point-store-delete-it");
     long storeId = store.getId();
 
-    // 台帳は会員が持つ。発生店舗は帰属情報にすぎず、店舗が消えても残高そのものは会員に残らなければならない。
+    // 台帳は会員が持つ。発生店舗は帰属情報だが、その帰属が読めなくなること自体を削除の拒否理由とする。
     long memberId = registerMember();
     long entryId =
         pointEntryRepository
@@ -137,19 +167,14 @@ class StoreDeletionCascadeIT {
     // 前提: 削除前は発生店舗が入っている（空振りで緑にならないことを固定）。
     assertThat(originatingStoreIdOf(entryId)).as("削除前は発生店舗が入っていること").isEqualTo(storeId);
 
-    HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(platformLogin());
-    ResponseEntity<Void> res =
-        rest.exchange(
-            "/platform/stores/" + storeId,
-            HttpMethod.DELETE,
-            new HttpEntity<>(headers),
-            Void.class);
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-    // 仕訳の行は消えない（消えると会員の残高が店舗の削除で書き換わってしまう）。
-    assertThat(countPointEntry(entryId)).as("ポイント仕訳は店舗削除後も残存すること").isEqualTo(1L);
-    assertThat(originatingStoreIdOf(entryId)).as("発生店舗は SET NULL で外れること").isNull();
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
+    assertThat(countPointEntry(entryId)).as("ポイント仕訳は残存すること").isEqualTo(1L);
+    // 削除に至っていないので SET NULL の外部キーは働かない。帰属が外れていれば削除が通ってしまった証拠になる。
+    assertThat(originatingStoreIdOf(entryId)).as("発生店舗は元のまま外れないこと").isEqualTo(storeId);
+    assertThat(countStore(storeId)).as("拒否された店舗は残存すること").isEqualTo(1L);
   }
 
   /** 台帳の持ち主となる会員を公開端点から用意し、その id を返す。 */
@@ -173,6 +198,15 @@ class StoreDeletionCascadeIT {
         .orElseThrow();
   }
 
+  /** 会員も顧客も伴わない最小の完了済み受注を直挿する（判定に効くのは店舗と状態だけ）。 */
+  private void insertCompletedOrder(long storeId) {
+    jdbcTemplate.update(
+        "INSERT INTO t_orders (id, store_id, business_date, status, created_at, updated_at, version)"
+            + " VALUES (?, ?, CURRENT_DATE, 'COMPLETED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+        "order-delete-it-" + UUID.randomUUID(),
+        storeId);
+  }
+
   private Long originatingStoreIdOf(long entryId) {
     return jdbcTemplate.queryForObject(
         "SELECT originating_store_id FROM t_point_entries WHERE id = ?", Long.class, entryId);
@@ -181,6 +215,11 @@ class StoreDeletionCascadeIT {
   private long countPointEntry(long entryId) {
     return jdbcTemplate.queryForObject(
         "SELECT count(*) FROM t_point_entries WHERE id = ?", Long.class, entryId);
+  }
+
+  private long countStore(long storeId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM t_stores WHERE id = ?", Long.class, storeId);
   }
 
   private long countStoreGrants(long storeId) {
