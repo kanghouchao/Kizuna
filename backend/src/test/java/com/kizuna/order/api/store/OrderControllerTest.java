@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -174,6 +175,49 @@ class OrderControllerTest {
   }
 
   @Test
+  @DisplayName("受注管理権限があれば完了処理と事前計算を呼べること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionAndPreviewAreAllowedForOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.complete(any(), any(), any())).thenReturn(OrderResponse.builder().build());
+    when(orderService.completionPreview(any(), anyInt()))
+        .thenReturn(OrderCompletionPreviewResponse.builder().build());
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .andExpect(status().isOk());
+    mockMvc
+        .perform(storeGet("/store/orders/o1/completion-preview?total_fee=12000"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("受注管理権限が無ければ完了処理と事前計算が拒否されること")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void completionAndPreviewAreRejectedWithoutOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(storeGet("/store/orders/o1/completion-preview?total_fee=12000"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("会計金額を伴わない完了要求は契約で撥ねられること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionRequiresTheTotalFee() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    // 未指定を 0 として黙って通すと、付与なしの完了が事故として成立する
+    mockMvc
+        .perform(storePost("/store/orders/o1/completion", "{\"use_points\": 100}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   @DisplayName("汎用更新の契約はキャスト・受付担当の省略を受け付けること（可否は受注の状態が決める）")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderUpdateContractAcceptsAnOmittedCastAndReceptionist() throws Exception {
@@ -207,6 +251,17 @@ class OrderControllerTest {
         .header("X-Store-ID", "1")
         .principal(() -> "staff@kizuna.test")
         .with(csrf());
+  }
+
+  private MockHttpServletRequestBuilder storePost(String path, String body) {
+    return storePost(path).contentType(MediaType.APPLICATION_JSON).content(body);
+  }
+
+  private MockHttpServletRequestBuilder storeGet(String path) {
+    return get(path)
+        .header("X-Role", "store")
+        .header("X-Store-ID", "1")
+        .principal(() -> "staff@kizuna.test");
   }
 
   private MockHttpServletRequestBuilder storePut(String path, String body) {

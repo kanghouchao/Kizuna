@@ -22,22 +22,52 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("確認済みの注文を完了できること")
-  void complete_fromConfirmed() {
+  @DisplayName("確認済みの注文を完了すると会計金額とポイントが確定すること")
+  void completeWith_fromConfirmed() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
-    order.complete();
+
+    order.completeWith(12000, 500, 120);
+
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getTotalFee()).isEqualTo(12000);
+    assertThat(order.getUsedPoints()).isEqualTo(500);
+    assertThat(order.getAutoGrantPoints()).isEqualTo(120);
   }
 
   @Test
   @DisplayName("確認を飛ばして注文を完了できないこと")
-  void complete_fromCreated_isRejected() {
+  void completeWith_fromCreated_isRejected() {
     Order order = orderWithStatus(OrderStatus.CREATED);
-    assertThatThrownBy(order::complete)
+    assertThatThrownBy(() -> order.completeWith(12000, 0, 120))
         .isInstanceOf(IllegalOrderStateTransitionException.class)
         .hasMessageContaining("CREATED")
         .hasMessageContaining("COMPLETED");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED);
+    assertThat(order.getTotalFee()).as("撥ねた完了は会計金額を書かないこと").isNull();
+  }
+
+  @Test
+  @DisplayName("キャンセル済みの注文は完了できないこと")
+  void completeWith_fromCancelled_isRejected() {
+    Order order = orderWithStatus(OrderStatus.CANCELLED);
+    assertThatThrownBy(() -> order.completeWith(12000, 0, 120))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+  }
+
+  @Test
+  @DisplayName("完了済みの注文を再度完了できず、確定済みの会計も上書きされないこと")
+  void completeWith_isNotIdempotent() {
+    // 完了は台帳記帳と不可分のため、同一状態への静默冪等（transitionTo）に委ねると二重記帳になる
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.completeWith(12000, 500, 120);
+
+    assertThatThrownBy(() -> order.completeWith(9999, 100, 99))
+        .isInstanceOf(IllegalOrderStateTransitionException.class)
+        .hasMessageContaining("COMPLETED");
+    assertThat(order.getTotalFee()).isEqualTo(12000);
+    assertThat(order.getUsedPoints()).isEqualTo(500);
+    assertThat(order.getAutoGrantPoints()).isEqualTo(120);
   }
 
   @Test
@@ -64,7 +94,8 @@ class OrderTest {
   void transitions_fromCancelled_areRejected() {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
     assertThatThrownBy(order::confirm).isInstanceOf(IllegalOrderStateTransitionException.class);
-    assertThatThrownBy(order::complete).isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThatThrownBy(() -> order.transitionTo(OrderStatus.COMPLETED))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
   }
 
   @Test
@@ -127,7 +158,7 @@ class OrderTest {
   }
 
   private OrderPatch patchWithPax(Integer pax) {
-    return new OrderPatch(null, null, pax, null, null, null, null, null, null, null, null, null);
+    return new OrderPatch(null, null, pax, null, null, null, null, null, null, null);
   }
 
   @Test

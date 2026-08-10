@@ -70,11 +70,17 @@ public class Order extends StoreScopedEntity {
   @Column(name = "media_name")
   private String mediaName;
 
+  /** 会計金額。完了処理でのみ確定する。 */
+  @Column(name = "total_fee")
+  private Integer totalFee;
+
+  /** 会計で利用したポイント。完了処理でのみ確定する（台帳の減算仕訳と対になる記録）。 */
   @Column(name = "used_points")
   private Integer usedPoints;
 
-  @Column(name = "manual_grant_points")
-  private Integer manualGrantPoints;
+  /** 会計に伴い自動付与したポイント。完了処理でのみ確定する（台帳の加算仕訳と対になる記録）。 */
+  @Column(name = "auto_grant_points")
+  private Integer autoGrantPoints;
 
   @Column(name = "survey_status")
   private String surveyStatus;
@@ -188,12 +194,6 @@ public class Order extends StoreScopedEntity {
     if (patch.manualDiscount() != null) {
       this.manualDiscount = patch.manualDiscount();
     }
-    if (patch.usedPoints() != null) {
-      this.usedPoints = patch.usedPoints();
-    }
-    if (patch.manualGrantPoints() != null) {
-      this.manualGrantPoints = patch.manualGrantPoints();
-    }
     if (patch.remarks() != null) {
       this.remarks = patch.remarks();
     }
@@ -207,8 +207,19 @@ public class Order extends StoreScopedEntity {
     transitionTo(OrderStatus.CONFIRMED);
   }
 
-  /** 注文を完了する。確認済みの注文のみ完了できる。 */
-  public void complete() {
+  /**
+   * 会計を確定して注文を完了する。確認済みの注文のみ完了でき、会計金額・利用ポイント・自動付与ポイントはこの経路でのみ確定する。
+   *
+   * <p>同一状態への静默冪等（{@link #transitionTo}）に委ねず、完了済みを明示的に撥ねる。完了は台帳記帳と不可分のため、
+   * 二度目の呼出を黙って通すと同じ受注で付与・利用が二重に記帳される。
+   */
+  public void completeWith(int totalFee, int usedPoints, int autoGrantPoints) {
+    if (status != OrderStatus.CONFIRMED) {
+      throw new IllegalOrderStateTransitionException(status, OrderStatus.COMPLETED);
+    }
+    this.totalFee = totalFee;
+    this.usedPoints = usedPoints;
+    this.autoGrantPoints = autoGrantPoints;
     transitionTo(OrderStatus.COMPLETED);
   }
 

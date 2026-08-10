@@ -11,6 +11,7 @@
 * `c.k.s.config.AppProperties` (in Shared)
 * `c.k.c.domain.CastRepository` (in Cast)
 * `c.k.c.domain.CustomerRepository` (in Customer)
+* `c.k.p.application.PointLedgerService` (in Point)
 * `c.k.u.domain.RoleRepository` (in User)
 * `c.k.s.storescope.StoreContext` (in Shared)
 * `c.k.s.storescope.StoreScopeExecutor` (in Shared)

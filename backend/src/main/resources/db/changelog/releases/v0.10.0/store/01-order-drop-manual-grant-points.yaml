@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v01000-001-order-drop-manual-grant-points
+      author: kanghouchao
+      # 手動付与は受注の欄ではなくポイント台帳の手動調整で扱う。欄を残すと、台帳を経由しない
+      # 付与の入口が受注側に残り続け、残高と受注の記録が食い違う。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - dropColumn:
+            tableName: t_orders
+            columnName: manual_grant_points
+      rollback:
+        - addColumn:
+            tableName: t_orders
+            columns:
+              - column:
+                  name: manual_grant_points
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: 手動付与ポイント

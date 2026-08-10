@@ -32,8 +32,6 @@ public class OrderUpdateRequest {
   private List<String> optionCodes;
   private String discountName;
   private Integer manualDiscount;
-  private Integer usedPoints;
-  private Integer manualGrantPoints;
   private String remarks;
   private String castDriverMessage;
   private String status;

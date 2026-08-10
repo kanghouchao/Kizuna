@@ -31,8 +31,9 @@ public class OrderResponse {
   private Integer manualDiscount;
   private String carrier;
   private String mediaName;
+  private Integer totalFee;
   private Integer usedPoints;
-  private Integer manualGrantPoints;
+  private Integer autoGrantPoints;
   private String remarks;
   private String castDriverMessage;
   private String status;

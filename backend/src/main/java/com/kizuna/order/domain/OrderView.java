@@ -44,9 +44,11 @@ public interface OrderView {
 
   String getMediaName();
 
+  Integer getTotalFee();
+
   Integer getUsedPoints();
 
-  Integer getManualGrantPoints();
+  Integer getAutoGrantPoints();
 
   String getRemarks();
 

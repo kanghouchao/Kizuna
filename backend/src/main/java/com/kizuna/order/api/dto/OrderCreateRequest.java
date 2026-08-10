@@ -48,8 +48,6 @@ public class OrderCreateRequest {
 
   private String carrier;
   private String mediaName;
-  private Integer usedPoints;
-  private Integer manualGrantPoints;
   private String remarks;
   private String castDriverMessage;
 }
