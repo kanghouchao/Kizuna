@@ -26,6 +26,7 @@ export type PlatformPermission =
   | 'ORDER_SET_MANAGE'
   | 'ORDER_MANAGE'
   | 'CUSTOMER_MANAGE'
+  | 'POINT_ADJUST'
   | 'SHIFT_MANAGE'
   | 'CAST_MANAGE'
   | 'CAST_INVITE'

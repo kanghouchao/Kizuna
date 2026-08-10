@@ -37,7 +37,6 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
           line_id: 'yamada',
           rank: 'GOLD',
           classification: '常連',
-          points: 120,
           ng_type: '注意',
         },
       ],

@@ -121,7 +121,6 @@ export default function CustomersPage() {
               <TableHead>LINE ID</TableHead>
               <TableHead>ランク</TableHead>
               <TableHead>区分</TableHead>
-              <TableHead>ポイント</TableHead>
               <TableHead>会員</TableHead>
               <TableHead>NG</TableHead>
               <TableHead className="text-right">アクション</TableHead>
@@ -139,7 +138,6 @@ export default function CustomersPage() {
                 <TableCell className="text-muted-foreground">
                   {customer.classification || '-'}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{customer.points ?? 0}</TableCell>
                 <TableCell>
                   {customer.member_linked ? (
                     <Badge

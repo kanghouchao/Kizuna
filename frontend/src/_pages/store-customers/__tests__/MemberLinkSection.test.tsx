@@ -2,9 +2,16 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { notify } from '@/shared/notify';
 import { MemberLinkSection } from '../ui/MemberLinkSection';
 import { customerApi } from '@/entities/customer';
+import { TokenClaims, readTokenClaims } from '@/shared/lib';
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
+}));
+
+// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
 }));
 
 jest.mock('@/entities/customer', () => ({
@@ -12,11 +19,23 @@ jest.mock('@/entities/customer', () => ({
     linkMember: jest.fn(),
     unlinkMember: jest.fn(),
     memberLinkHistory: jest.fn(),
+    memberPointBalance: jest.fn(),
+    adjustPoints: jest.fn(),
   },
 }));
 
 const mockedApi = customerApi as jest.Mocked<typeof customerApi>;
 const mockedNotify = notify as unknown as { error: jest.Mock; success: jest.Mock };
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
+
+/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
+function claimsWith(permissions: string[]): TokenClaims {
+  return {
+    authorities: permissions.map(permission => `PERM_${permission}`),
+    userType: 'STAFF',
+    storeBridge: true,
+  };
+}
 
 const activeRow = {
   id: 'l2',
@@ -40,6 +59,8 @@ describe('MemberLinkSection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedApi.memberLinkHistory.mockResolvedValue([]);
+    mockedApi.memberPointBalance.mockResolvedValue({ linked: false });
+    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE']));
   });
 
   it('紐づけが無ければ未紐づけを示し、履歴も空表示になること', async () => {
@@ -79,6 +100,8 @@ describe('MemberLinkSection', () => {
     await waitFor(() => expect(mockedApi.linkMember).toHaveBeenCalledWith('c1', '123456789012'));
     // 初回ロード + 紐づけ後の取り直し
     await waitFor(() => expect(mockedApi.memberLinkHistory).toHaveBeenCalledTimes(2));
+    // 紐づく先が変われば残高の指す台帳も変わる
+    expect(mockedApi.memberPointBalance).toHaveBeenCalledTimes(2);
     expect(mockedNotify.success).toHaveBeenCalledWith('会員を紐づけました');
   });
 
@@ -148,5 +171,91 @@ describe('MemberLinkSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: '解除する' }));
 
     await waitFor(() => expect(mockedApi.unlinkMember).toHaveBeenCalledWith('c1'));
+    // 解除で残高の指す台帳が無くなる
+    await waitFor(() => expect(mockedApi.memberPointBalance).toHaveBeenCalledTimes(2));
+  });
+
+  it('紐づけ済みなら会員台帳の残高を表示すること', async () => {
+    mockedApi.memberLinkHistory.mockResolvedValue([activeRow]);
+    mockedApi.memberPointBalance.mockResolvedValue({ linked: true, balance: 120 });
+
+    render(<MemberLinkSection customerId="c1" />);
+
+    expect(await screen.findByText('120 ポイント')).toBeInTheDocument();
+  });
+
+  it('未紐づけなら残高の数を出さないこと', async () => {
+    render(<MemberLinkSection customerId="c1" />);
+
+    // 台帳そのものが無いので、残高は 0 ではなく「無い」
+    expect(await screen.findByText('—')).toBeInTheDocument();
+  });
+
+  it('残高を取得している間は、未紐づけの姿を先に出さないこと', async () => {
+    // 「まだ読めていない」と「台帳が無い」は別の状態。読み込み中に — を出すと、
+    // 到着の 1 フレーム手前で残高が無いと読める
+    mockedApi.memberPointBalance.mockReturnValue(new Promise<never>(() => {}));
+
+    render(<MemberLinkSection customerId="c1" />);
+
+    // 履歴は先に着く。残り 1 つの「読み込み中...」は残高のもの
+    await screen.findByText('紐づけ履歴がありません');
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
+  });
+
+  it('残高が読めないときは未紐づけの姿にせず、区画が自分で名乗って再試行できること', async () => {
+    mockedApi.memberPointBalance.mockRejectedValueOnce(new Error('boom'));
+
+    render(<MemberLinkSection customerId="c1" />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('ポイント残高の取得に失敗しました')).toBeInTheDocument();
+    // 読めなかっただけの状態を「台帳が無い」と読ませない
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
+    expect(mockedNotify.error).not.toHaveBeenCalled();
+
+    mockedApi.memberPointBalance.mockResolvedValue({ linked: true, balance: 80 });
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('80 ポイント')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('POINT_ADJUST を持たなければ調整の導線を出さないこと', async () => {
+    mockedApi.memberLinkHistory.mockResolvedValue([activeRow]);
+    mockedApi.memberPointBalance.mockResolvedValue({ linked: true, balance: 120 });
+
+    render(<MemberLinkSection customerId="c1" />);
+
+    await screen.findByText('120 ポイント');
+    expect(screen.queryByRole('button', { name: 'ポイント調整' })).not.toBeInTheDocument();
+  });
+
+  it('紐づけが無ければ、権限があっても調整の導線を出さないこと', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE', 'POINT_ADJUST']));
+
+    render(<MemberLinkSection customerId="c1" />);
+
+    await screen.findByText('紐づけ履歴がありません');
+    expect(screen.queryByRole('button', { name: 'ポイント調整' })).not.toBeInTheDocument();
+  });
+
+  it('調整に成功したら、取り直さずに残高の表示を差し替えること', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE', 'POINT_ADJUST']));
+    mockedApi.memberLinkHistory.mockResolvedValue([activeRow]);
+    mockedApi.memberPointBalance.mockResolvedValue({ linked: true, balance: 120 });
+    mockedApi.adjustPoints.mockResolvedValue({ linked: true, balance: 220 });
+
+    render(<MemberLinkSection customerId="c1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'ポイント調整' }));
+    fireEvent.change(await screen.findByLabelText('増減ポイント'), { target: { value: '100' } });
+    fireEvent.change(screen.getByLabelText('事由'), { target: { value: '手動付与' } });
+    fireEvent.click(screen.getByRole('button', { name: '調整する' }));
+
+    expect(await screen.findByText('220 ポイント')).toBeInTheDocument();
+    // 応答が調整後の残高を持つので読み直さない（読み込み表示で一瞬消えない）
+    expect(mockedApi.memberPointBalance).toHaveBeenCalledTimes(1);
   });
 });
