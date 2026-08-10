@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.store.application.StoreActivationService;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
 import com.kizuna.user.application.PlatformStaffService;
 import java.util.List;
@@ -45,6 +46,7 @@ class PlatformStaffControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean private StoreActivationService storeActivationService;
 
   @Test
   @DisplayName("GET /platform/staff?sort=displayName でも id が副キーとして補われること")
