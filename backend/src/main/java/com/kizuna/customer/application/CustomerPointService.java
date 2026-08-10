@@ -54,8 +54,11 @@ public class CustomerPointService {
   @Transactional
   public CustomerPointBalanceResponse adjust(
       String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
-    requireCustomer(customerId);
-    Long memberId = lockedActiveMemberId(customerId);
+    // 積み先を決める前に顧客行を押さえる。契約は CustomerRepository#findByIdForUpdate に記す。
+    customerRepository
+        .findByIdForUpdate(customerId)
+        .orElseThrow(() -> new NotFoundException("顧客が見つかりません: " + customerId));
+    Long memberId = activeMemberId(customerId);
     if (memberId == null) {
       throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");
     }
@@ -98,26 +101,15 @@ public class CustomerPointService {
   }
 
   /**
-   * 顧客に紐づく会員（読み取り専用の経路用、ロックなし）。紐づけが無い場合と、会員行が消えて紐づけの会員 ID が欠落した場合はいずれも null。
+   * 顧客に紐づく会員。紐づけが無い場合と、会員行が消えて紐づけの会員 ID が欠落した場合はいずれも null。
    *
    * <p>会員 ID の欠落を紐づけの不在と同じに扱うのは、残高の所在が会員 ID でしか辿れないため。
+   *
+   * <p>この問い合わせ自体はロックを取らない。台帳へ積む経路では、呼ぶ前に顧客行を押さえることで紐づけの書き換えと直列化する。
    */
   private Long activeMemberId(String customerId) {
     return customerMemberLinkRepository
         .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
-        .map(CustomerMemberLink::getMemberId)
-        .orElse(null);
-  }
-
-  /**
-   * 台帳へ積むために、紐づけの行を排他ロックしたうえで解決する会員。null の意味は {@link #activeMemberId} と同じ。
-   *
-   * <p>ロックを取らずに解決すると、並行する紐づけ解除とは何も競合せずに双方が commit でき、解除済みの会員へ調整だけが残る。 対になる守りと既知の境界は {@link
-   * CustomerMemberLinkRepository#findByCustomerIdAndStatusForUpdate} に記す。
-   */
-  private Long lockedActiveMemberId(String customerId) {
-    return customerMemberLinkRepository
-        .findByCustomerIdAndStatusForUpdate(customerId, LinkStatus.ACTIVE)
         .map(CustomerMemberLink::getMemberId)
         .orElse(null);
   }

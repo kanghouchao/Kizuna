@@ -258,7 +258,12 @@ public class OrderService {
     }
 
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
-    Long memberId = lockedLinkedMemberId(order).orElse(null);
+    if (order.getCustomerId() != null) {
+      // 積み先を決める前に顧客行を押さえ、紐づけの解除・変更と直列化する。引けない顧客はそのまま
+      // 非会員として進む。契約は CustomerRepository#findByIdForUpdate に記す。
+      customerRepository.findByIdForUpdate(order.getCustomerId());
+    }
+    Long memberId = linkedMemberId(order).orElse(null);
     if (memberId == null && usePoints > 0) {
       throw new ServiceException("非会員の受注ではポイントを利用できません");
     }
@@ -308,9 +313,11 @@ public class OrderService {
   }
 
   /**
-   * 受注の顧客に紐づく会員（読み取り専用の経路用、ロックなし）。顧客が未設定、紐づけが無い、または会員行が消えて紐づけの会員 ID が 欠落した場合は空を返す。
+   * 受注の顧客に紐づく会員。顧客が未設定、紐づけが無い、または会員行が消えて紐づけの会員 ID が欠落した場合は空を返す。
    *
    * <p>会員 ID の欠落を紐づけの不在と同じに扱うのは、残高の所在が会員 ID でしか辿れないため。
+   *
+   * <p>この問い合わせ自体はロックを取らない。完了は取り消せない一方で紐づけの解除・変更はいつでも起こりうるため、 完了は呼ぶ前に顧客行を押さえる。事前計算は台帳へ積まないので押さえない。
    */
   private Optional<Long> linkedMemberId(Order order) {
     if (order.getCustomerId() == null) {
@@ -318,22 +325,6 @@ public class OrderService {
     }
     return customerMemberLinkRepository
         .findByCustomerIdAndStatus(order.getCustomerId(), LinkStatus.ACTIVE)
-        .map(CustomerMemberLink::getMemberId);
-  }
-
-  /**
-   * 台帳へ積むために、紐づけの行を排他ロックしたうえで解決する会員。空の意味は {@link #linkedMemberId} と同じ。
-   *
-   * <p>完了は取り消せない一方、紐づけの解除はいつでも起こりうる。ロックを取らずに解決すると解除とは何も競合せず、
-   * 受注は完了したのに利用と付与だけが解除済みの会員に残る。対になる守りと既知の境界は {@link
-   * CustomerMemberLinkRepository#findByCustomerIdAndStatusForUpdate} に記す。
-   */
-  private Optional<Long> lockedLinkedMemberId(Order order) {
-    if (order.getCustomerId() == null) {
-      return Optional.empty();
-    }
-    return customerMemberLinkRepository
-        .findByCustomerIdAndStatusForUpdate(order.getCustomerId(), LinkStatus.ACTIVE)
         .map(CustomerMemberLink::getMemberId);
   }
 

@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 
 import com.kizuna.customer.api.dto.CustomerPointAdjustmentRequest;
 import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
+import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
@@ -110,10 +111,9 @@ class CustomerPointServiceTest {
   @Test
   @DisplayName("未紐づけの顧客は調整できず、台帳へ何も積まれないこと")
   void adjustingAnUnlinkedCustomerIsRefused() {
-    givenCustomerExists();
+    givenCustomerLocked();
     Mockito.when(
-            customerMemberLinkRepository.findByCustomerIdAndStatusForUpdate(
-                CUSTOMER_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.adjust(CUSTOMER_ID, request(100, "誤記帳の訂正", null), ACTOR_EMAIL))
@@ -126,8 +126,8 @@ class CustomerPointServiceTest {
   @Test
   @DisplayName("調整は操作中の店舗を発生店舗として台帳へ委譲され、調整後の残高が返ること")
   void adjustDelegatesToTheLedgerWithTheCurrentStore() {
-    givenCustomerExists();
-    givenLockedActiveLink(MEMBER_ID);
+    givenCustomerLocked();
+    givenActiveLink(MEMBER_ID);
     Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
     Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(300L);
@@ -147,8 +147,8 @@ class CustomerPointServiceTest {
   void adjustFailsWhenActorMissing() {
     // 追記型の台帳では実行者 null が「機構が起こした仕訳」の形。失効した認証セッションによる手動調整を
     // その形で残さない
-    givenCustomerExists();
-    givenLockedActiveLink(MEMBER_ID);
+    givenCustomerLocked();
+    givenActiveLink(MEMBER_ID);
     Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(
@@ -159,26 +159,24 @@ class CustomerPointServiceTest {
   }
 
   @Test
-  @DisplayName("調整は積み先の会員を行ロック付きで解決すること")
-  void adjustResolvesTheMemberUnderARowLock() {
+  @DisplayName("調整は顧客行を排他ロックしてから会員を解決すること")
+  void adjustResolvesTheMemberUnderTheCustomerRowLock() {
     // ロック無しで解決すると、並行する紐づけ解除とは何も競合せずに双方が commit でき、
     // 解除済みの会員へ調整だけが残る
-    givenCustomerExists();
-    givenLockedActiveLink(MEMBER_ID);
+    givenCustomerLocked();
+    givenActiveLink(MEMBER_ID);
     Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
     Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
 
     service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
 
-    Mockito.verify(customerMemberLinkRepository)
-        .findByCustomerIdAndStatusForUpdate(CUSTOMER_ID, LinkStatus.ACTIVE);
-    Mockito.verify(customerMemberLinkRepository, Mockito.never())
-        .findByCustomerIdAndStatus(anyString(), any());
+    Mockito.verify(customerRepository).findByIdForUpdate(CUSTOMER_ID);
+    Mockito.verify(customerRepository, Mockito.never()).existsById(anyString());
   }
 
   @Test
-  @DisplayName("残高照会は行ロックを取らずに会員を解決すること")
-  void balanceResolvesTheMemberWithoutARowLock() {
+  @DisplayName("残高照会は顧客行を押さえずに会員を解決すること")
+  void balanceResolvesTheMemberWithoutTheCustomerRowLock() {
     // 読むだけの照会が行を押さえると、残高を見ただけで並行する紐づけ解除をコミットまで待たせる
     givenCustomerExists();
     givenActiveLink(MEMBER_ID);
@@ -187,12 +185,17 @@ class CustomerPointServiceTest {
 
     Mockito.verify(customerMemberLinkRepository)
         .findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE);
-    Mockito.verify(customerMemberLinkRepository, Mockito.never())
-        .findByCustomerIdAndStatusForUpdate(anyString(), any());
+    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(anyString());
   }
 
   private void givenCustomerExists() {
     Mockito.when(customerRepository.existsById(CUSTOMER_ID)).thenReturn(true);
+  }
+
+  /** 記帳の経路（手動調整）が引く顧客。紐づけを解決する前にこの行を押さえる。 */
+  private void givenCustomerLocked() {
+    Mockito.when(customerRepository.findByIdForUpdate(CUSTOMER_ID))
+        .thenReturn(Optional.of(Customer.builder().build()));
   }
 
   private static CustomerMemberLink activeLink(long memberId) {
@@ -209,19 +212,10 @@ class CustomerPointServiceTest {
     givenActiveLink(activeLink(memberId));
   }
 
-  /** 読み口（残高照会）が引く紐づけ。 */
   private void givenActiveLink(CustomerMemberLink link) {
     Mockito.when(
             customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
-  }
-
-  /** 記帳の経路（手動調整）が引く紐づけ。積み先を決めた行はコミットまで押さえる。 */
-  private void givenLockedActiveLink(long memberId) {
-    Mockito.when(
-            customerMemberLinkRepository.findByCustomerIdAndStatusForUpdate(
-                CUSTOMER_ID, LinkStatus.ACTIVE))
-        .thenReturn(Optional.of(activeLink(memberId)));
   }
 
   private static PlatformUser actor() {
