@@ -2,6 +2,10 @@ package com.kizuna.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.member.domain.Member;
+import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.point.domain.PointEntry;
+import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -9,6 +13,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +38,9 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>店舗削除は既存の全店舗参照 FK が CASCADE で従う確立済みセマンティクスであり、店舗授権行も店舗と共に消えるのが整合的。
  *
+ * <p>ポイント台帳だけは従わない。台帳は会員が持ち、発生店舗は帰属情報にすぎないため、店舗が消えても仕訳の行は残って 帰属だけが外れる（SET
+ * NULL）。従わせると店舗の削除が会員の残高を書き換えてしまう。
+ *
  * <p>様式は {@link SeedSequenceAlignmentIT}（HQ 管理者の平台ログイン + JdbcTemplate による実 DB 断言）に倣う。使い捨て tmpfs DB
  * のためシード store 1 は決して削除せず、第二店舗を直挿して検証する。
  */
@@ -46,6 +54,8 @@ class StoreDeletionCascadeIT {
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RoleRepository roleRepository;
+  @Autowired private PointEntryRepository pointEntryRepository;
+  @Autowired private MemberRepository memberRepository;
 
   private String platformLogin() {
     HttpHeaders headers = new HttpHeaders();
@@ -105,6 +115,72 @@ class StoreDeletionCascadeIT {
     assertThat(countStoreGrants(storeId)).as("削除後は店舗授権行が CASCADE 消去されること").isZero();
     // ユーザー本体は残る（授権集合が空になるだけ = authorizes() 全 false の fail-closed）。
     assertThat(countPlatformUser(userId)).as("プラットフォームユーザー本体は残存すること").isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("店舗削除でポイント台帳の仕訳は残り、発生店舗だけが NULL になること")
+  void deletingStoreKeepsPointEntriesAndNullsTheOriginatingStore() {
+    Store store =
+        storeRepository.save(
+            new Store(
+                "台帳存続検証店舗", "point-store-delete-it-" + UUID.randomUUID() + ".kizuna.test", null));
+    long storeId = store.getId();
+
+    // 台帳は会員が持つ。発生店舗は帰属情報にすぎず、店舗が消えても残高そのものは会員に残らなければならない。
+    long memberId = registerMember();
+    long entryId =
+        pointEntryRepository
+            .save(
+                PointEntry.manualAdjust(memberId, storeId, 500, "店舗削除検証の付与", null, List.of(), null))
+            .getId();
+
+    // 前提: 削除前は発生店舗が入っている（空振りで緑にならないことを固定）。
+    assertThat(originatingStoreIdOf(entryId)).as("削除前は発生店舗が入っていること").isEqualTo(storeId);
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(platformLogin());
+    ResponseEntity<Void> res =
+        rest.exchange(
+            "/platform/stores/" + storeId,
+            HttpMethod.DELETE,
+            new HttpEntity<>(headers),
+            Void.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    // 仕訳の行は消えない（消えると会員の残高が店舗の削除で書き換わってしまう）。
+    assertThat(countPointEntry(entryId)).as("ポイント仕訳は店舗削除後も残存すること").isEqualTo(1L);
+    assertThat(originatingStoreIdOf(entryId)).as("発生店舗は SET NULL で外れること").isNull();
+  }
+
+  /** 台帳の持ち主となる会員を公開端点から用意し、その id を返す。 */
+  private long registerMember() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/members",
+            new HttpEntity<>(
+                "{\"email\": \"point-cascade-it-"
+                    + UUID.randomUUID()
+                    + "@kizuna.test\", \"password\": \"password1234\","
+                    + " \"display_name\": \"台帳存続検証会員\"}",
+                headers),
+            JsonNode.class);
+    assertThat(res.getStatusCode()).as("前提: 会員登録が成功すること").isEqualTo(HttpStatus.CREATED);
+    return memberRepository
+        .findByMemberCode(res.getBody().path("member_code").asString())
+        .map(Member::getId)
+        .orElseThrow();
+  }
+
+  private Long originatingStoreIdOf(long entryId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT originating_store_id FROM t_point_entries WHERE id = ?", Long.class, entryId);
+  }
+
+  private long countPointEntry(long entryId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM t_point_entries WHERE id = ?", Long.class, entryId);
   }
 
   private long countStoreGrants(long storeId) {

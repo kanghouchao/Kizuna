@@ -29,8 +29,17 @@ System_Boundary("Application_boundary", "Application", $tags="") {
 
 }
 
-Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Application.Application.Shift, Application.Application.User, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Shift, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Shift, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Point, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Application.Application.Customer, Application.Application.Member, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Customer, Application.Application.User, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Customer, Application.Application.Point, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Customer, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Member, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Application.Application.Member, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Cast, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Cast, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.Customer, "uses", $techn="", $tags="", $link="")
@@ -40,14 +49,6 @@ Rel(Application.Application.Order, Application.Application.Shift, "uses", $techn
 Rel(Application.Application.Order, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Order, Application.Application.Point, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Shift, Application.Application.User, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Shift, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Shift, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Member, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
-Rel(Application.Application.Member, Application.Application.User, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Customer, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
-Rel(Application.Application.Customer, Application.Application.Member, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Customer, Application.Application.User, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

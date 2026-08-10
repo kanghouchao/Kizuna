@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.member.domain.Member;
+import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.point.domain.PointEntry;
+import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -24,8 +28,10 @@ import tools.jackson.databind.JsonNode;
 /**
  * 会員側の応答に店舗顧客台帳の内部項目が一切乗らないことを本物の PostgreSQL で検証する統合テスト。
  *
- * <p>紐づけは店舗が会員を自店舗の台帳に結び付ける操作であって、会員に台帳を開くものではない。ランク・区分・NG・ポイント・ 連絡先などの内部評価は店舗の内部情報であり、本人であっても
- * 会員側の経路からは到達できてはならない。
+ * <p>紐づけは店舗が会員を自店舗の台帳に結び付ける操作であって、会員に台帳を開くものではない。ランク・区分・NG・連絡先などの内部評価は 店舗の内部情報であり、本人であっても
+ * 会員側の経路からは到達できてはならない。ポイント残高は会員自身のものだが、現時点で会員側に読み口は無く、 店舗コンソールの照会だけが持つ。
+ *
+ * <p>数値のカナリアは会員の台帳へ仕込む。顧客の保有ポイント列は廃止され、残高は台帳の合計としてのみ存在する。
  *
  * <p>断言は 2 段。生ボディに対しては、実データそのもの（カナリア文字列）と<b>引用符付きの項目名</b>（{@code "rank"} 等）の 非混入を見る — 応答には JWT
  * が含まれ、base64url の字母表に {@code "} は無いため、引用符付きなら token
@@ -45,7 +51,9 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private static final String CANARY_LINE_ID = "CANARY-LINEID-ecb1f0d4-8a2c";
   private static final String CANARY_ADDRESS = "CANARY-ADDRESS-ecb1f0d4-8a2c";
   private static final String CANARY_USAGE_AREAS = "CANARY-USAGEAREAS-ecb1f0d4-8a2c";
-  private static final int CANARY_POINTS = 987654321;
+
+  /** 会員のポイント台帳へ仕込む残高。店舗側の残高照会からは読めるが、会員側の経路には現れてはならない。 */
+  private static final int CANARY_BALANCE = 987654321;
 
   private static final List<String> CANARY_VALUES =
       List.of(
@@ -66,6 +74,8 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           "\"ng_type\"",
           "\"ng_content\"",
           "\"points\"",
+          "\"point_balance\"",
+          "\"balance\"",
           "\"phone_number\"",
           "\"phone_number2\"",
           "\"line_id\"",
@@ -93,7 +103,10 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           "status");
 
   @Autowired private CustomerRepository customerRepository;
+  @Autowired private MemberRepository memberRepository;
+  @Autowired private PointEntryRepository pointEntryRepository;
 
+  private String customerId;
   private String memberEmail;
   private String memberCode;
   private String memberToken;
@@ -102,7 +115,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
 
   @BeforeEach
   void seedLinkedLedgerCustomer() {
-    // storeFilter を経由しない直挿しで店舗1 の顧客を用意する（points は更新 API に項目が無いため）。
+    // storeFilter を経由しない直挿しで店舗1 の顧客を用意する（NG 等は作成 API に項目が無いため）。
     // store_id を明示すると StoreScopeStampListener は採番せず尊重する。
     Customer customer =
         Customer.builder()
@@ -113,7 +126,6 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             .buildingName(CANARY_ADDRESS)
             .classification(CANARY_CLASSIFICATION)
             .hasPet(true)
-            .points(CANARY_POINTS)
             .rank(CANARY_RANK)
             .lineId(CANARY_LINE_ID)
             .usageAreas(CANARY_USAGE_AREAS)
@@ -121,7 +133,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             .ngContent(CANARY_NG_CONTENT)
             .build();
     customer.setStoreId(STORE_A);
-    String customerId = customerRepository.save(customer).getId();
+    customerId = customerRepository.save(customer).getId();
 
     memberEmail = "ledger-leak-it-" + System.nanoTime() + "@kizuna.test";
     ResponseEntity<String> registration =
@@ -147,6 +159,12 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(linked.getStatusCode()).as("前提: 紐づけが成功すること").isEqualTo(HttpStatus.OK);
+
+    // 残高は顧客ではなく会員の台帳が持つため、数値のカナリアは台帳の仕訳として積む。
+    long memberId = memberRepository.findByMemberCode(memberCode).map(Member::getId).orElseThrow();
+    pointEntryRepository.save(
+        PointEntry.manualAdjust(
+            memberId, STORE_A, CANARY_BALANCE, "台帳漏洩検証の残高", null, List.of(), null));
 
     // ログインは紐づけの後に行う。紐づけ前の応答への断言は紐づけ由来の混入を検出しようがないため、
     // 断言対象は必ず紐づけ済み状態で取得する（登録応答だけは会員作成そのものなので紐づけ前が本質）。
@@ -174,6 +192,16 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             String.class);
     assertThat(storeList.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(storeList.getBody()).contains(CANARY_RANK).contains(CANARY_NG_CONTENT);
+
+    // 残高も同じく、店舗側の照会からは読める（数値のカナリアが台帳へ届いていることの証明でもある）
+    ResponseEntity<String> storeBalance =
+        rest.exchange(
+            "/store/customers/" + customerId + "/member-point-balance",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            String.class);
+    assertThat(storeBalance.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(storeBalance.getBody()).contains(String.valueOf(CANARY_BALANCE));
 
     ResponseEntity<String> me =
         rest.exchange(
@@ -271,8 +299,8 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
       assertThat(body).as("%s に台帳の実データ %s が現れないこと", endpoint, canary).doesNotContain(canary);
     }
     assertThat(body)
-        .as("%s に台帳のポイントが現れないこと", endpoint)
-        .doesNotContain(String.valueOf(CANARY_POINTS));
+        .as("%s にポイント残高が現れないこと", endpoint)
+        .doesNotContain(String.valueOf(CANARY_BALANCE));
     for (String fieldName : LEDGER_FIELD_NAMES) {
       // 引用符付きで見る: JWT の base64url 本体には " が現れないため偶然一致で赤くならない
       assertThat(body).as("%s に台帳の項目名 %s が現れないこと", endpoint, fieldName).doesNotContain(fieldName);

@@ -2,7 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: seed-v0100-001-roles
       author: kanghouchao
-      # 権限目録（PermissionCode enum 名 16 件）と平台既定ロール 3 件、および既定ロールへの授与。
+      # 権限目録（PermissionCode enum 名 17 件）と平台既定ロール 3 件、および既定ロールへの授与。
       # 既定ロールは is_system=true で改廃を拒否する。id は採番に委ね、中間表は自然キー
       # （ロール名・権限コード）の部分問い合わせで解決する。
       # 権限目録行と既定授与の供給は PermissionCode の宣言からの導出（reconcile/permission-catalogue.yaml）

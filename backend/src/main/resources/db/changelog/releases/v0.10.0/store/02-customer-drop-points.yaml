@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v01000-002-customer-drop-points
+      author: kanghouchao
+      # 保有ポイントは店舗の顧客ではなくプラットフォーム級の会員が持つ。店舗ごとに残高を持つと、
+      # 同じ会員の残高が店舗の数だけ生まれ、どれが本当の残高か決まらなくなる。
+      preConditions:
+        # コード上の書き手は定数 0 のみだが、実データの帯掛けとして残高が乗った行があれば止める。
+        - dbms:
+            type: postgresql
+        - onFail: HALT
+        - onFailMessage: >-
+            t_customers.points に 0 以外の残高を持つ行があります。
+            列を落とすとその残高は復元できないため、会員ポイント台帳へ移してから再実行してください。
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM t_customers WHERE points <> 0
+      changes:
+        - dropColumn:
+            tableName: t_customers
+            columnName: points
+      rollback:
+        - addColumn:
+            tableName: t_customers
+            columns:
+              - column:
+                  name: points
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: 保有ポイント

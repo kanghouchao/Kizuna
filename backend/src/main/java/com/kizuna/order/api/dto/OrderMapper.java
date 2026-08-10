@@ -54,7 +54,6 @@ public interface OrderMapper {
 
   // ==================== CreateRequest -> Customer（電話番号からの顧客スマートリンク用） ====================
 
-  @Mapping(target = "points", constant = "0")
   @Mapping(target = "name", source = "customerName")
   // rank は DB デフォルト（'SILVER'）と同義。注文経由の顧客作成でも通常作成と揃える
   @Mapping(target = "rank", constant = "SILVER")
