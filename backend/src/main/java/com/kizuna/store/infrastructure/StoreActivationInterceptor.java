@@ -31,7 +31,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * <p>引き金を引かない要求が 2 種類ある。ひとつは未認証で、公開サイトの閲覧はヘッダだけで店舗文脈を名乗れるため、 これを数えると誰も入っていない店舗が開店してしまう。もうひとつは HQ
  * 利用者で、運営側の下見は店舗の開店ではない。 HQ の判定は保持権限がプラットフォームコンソールに属するかで行い、ログイン時の着地先導出と同じ規則に揃える。
  *
- * <p>遷移は要求の目的ではなく副作用なので、書き込みに失敗しても要求そのものは通す。同時に届いた最初の 2 要求は どちらも同じ稼働中を書こうとするため、負けた側が諦めても結果は変わらない。
+ * <p>遷移は要求の目的ではなく副作用なので、書き込みに失敗しても要求そのものは通す。ただし版の競合の相手は 同時着地の活性化とは限らず、HQ
+ * の店舗更新（名称・メール）でも版は進む。相手が稼働中を書いたとは限らないため、 競合したら一度だけ取り直して再試行し、それでも競合するなら次の着地の再試行に委ねる。
  */
 @Log4j2
 @Component
@@ -59,7 +60,11 @@ public class StoreActivationInterceptor implements HandlerInterceptor {
     try {
       storeActivationService.activateOnConsoleAccess(storeContext.getStoreId());
     } catch (OptimisticLockingFailureException e) {
-      log.debug("店舗の稼働中への遷移が競合したため見送る storeId: {}", storeContext.getStoreId());
+      try {
+        storeActivationService.activateOnConsoleAccess(storeContext.getStoreId());
+      } catch (OptimisticLockingFailureException retryFailure) {
+        log.debug("店舗の稼働中への遷移が再競合したため次の着地に委ねる storeId: {}", storeContext.getStoreId());
+      }
     }
     return true;
   }
