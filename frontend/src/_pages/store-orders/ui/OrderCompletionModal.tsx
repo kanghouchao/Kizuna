@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { Order, orderApi } from '@/entities/order';
+import { Order, OrderCompletionPreview, orderApi } from '@/entities/order';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import {
   Button,
@@ -28,6 +28,15 @@ interface OrderCompletionFormValues {
   total_fee: number;
   /** 空欄（NaN）は利用なし。 */
   use_points: number;
+}
+
+/**
+ * 取得した見込みと、その取得元の受注。取得フックは取り直しの間も前の値を保つため、
+ * 値だけでは別の受注の見込みと見分けられない。
+ */
+interface PreviewSnapshot {
+  orderId: string;
+  body: OrderCompletionPreview;
 }
 
 interface OrderCompletionModalProps {
@@ -62,25 +71,33 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
 
   const orderId = order?.id ?? '';
   // 見込みは打鍵ごとではなく、欄を離れた時点の金額で取り直す。確定値を「どの受注で確定したか」
-  // ごと持つのは、開き直した直後の 1 フレームで前の受注の金額の見込みを出さないため
+  // ごと持つのは、別の受注へ切り替わったフレームで前の受注の金額の見込みを出さないため
   // （欄は空に戻っているので、金額だけ残ると付与予定が嘘になる）。
   const [committed, setCommitted] = useState<{ orderId: string; fee: number } | null>(null);
   const committedFee = committed !== null && committed.orderId === orderId ? committed.fee : 0;
 
   // 閉じている間は取りに行かない（開いた時点で取り直す）
   const {
-    data: preview,
+    data: snapshot,
     isLoading: previewLoading,
     failure: previewFailure,
     reload: reloadPreview,
-  } = useResource(order === null ? null : () => orderApi.completionPreview(orderId, committedFee), [
-    orderId,
-    committedFee,
-  ]);
+  } = useResource<PreviewSnapshot>(
+    order === null
+      ? null
+      : async () => ({ orderId, body: await orderApi.completionPreview(orderId, committedFee) }),
+    [orderId, committedFee]
+  );
+  // 別の受注へ切り替わった瞬間は見込みを持たない状態から始める（レンダー期の判定なので、前の受注の
+  // 紐づけで欄の可否や送信可否を決めるフレームが 1 つも無い）。同じ受注で金額を取り直している間だけ
+  // 前の値を出したままにする。
+  const preview = snapshot !== null && snapshot.orderId === orderId ? snapshot.body : null;
 
   useEffect(() => {
     if (!order) return;
     reset({ total_fee: NaN, use_points: NaN });
+    // 確定値も欄と一緒に戻す。同じ受注を開き直したとき、空の欄のまま前回の金額で付与予定が出る
+    setCommitted(null);
   }, [order, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
@@ -180,17 +197,21 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
                   {preview.point_balance !== undefined && (
                     <p>残高: {preview.point_balance} ポイント</p>
                   )}
-                  <p>付与予定: {preview.grant_points} ポイント</p>
+                  {/* 非会員の受注には付与も利用も無い。予定を出すと、完了しても増えないポイントを約束することになる */}
                   {preview.member_linked && (
-                    <p className="text-muted-foreground">
-                      利用は {preview.usage_unit} ポイント単位で指定できます
-                    </p>
+                    <>
+                      <p>付与予定: {preview.grant_points} ポイント</p>
+                      <p className="text-muted-foreground">
+                        利用は {preview.usage_unit} ポイント単位で指定できます
+                      </p>
+                    </>
                   )}
                 </div>
               )
             )}
-            {/* 非会員の受注にはポイントそのものが存在しないので、欄を出さない。取り直しの最中は
-                直前の見込みのまま出したままにする（消えると打ちかけの値が視界から外れる） */}
+            {/* 非会員の受注にはポイントそのものが存在しないので、欄を出さない。同じ受注で金額を
+                取り直している最中は直前の見込みのまま出したままにする（消えると打ちかけの値が
+                視界から外れる） */}
             {preview !== null && preview.member_linked && (
               <FormField
                 control={control}

@@ -172,7 +172,8 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     assertThat(unlinked.getBody().path("member_linked").asBoolean()).isFalse();
     // 応答は non_null 包含のため、残高の無い受注では項目ごと落ちる
     assertThat(unlinked.getBody().hasNonNull("point_balance")).isFalse();
-    assertThat(unlinked.getBody().path("grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
+    // 確定は非会員へ付与しないので、見込みの付与も 0（食い違うと画面が出した予定が嘘になる）
+    assertThat(unlinked.getBody().path("grant_points").asInt()).isZero();
   }
 
   // ==================== 受注の用意 ====================

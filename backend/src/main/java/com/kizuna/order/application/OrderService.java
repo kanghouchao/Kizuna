@@ -302,7 +302,8 @@ public class OrderService {
         .memberLinked(memberId != null)
         .pointBalance(memberId == null ? null : pointLedgerService.balance(memberId))
         .usageUnit(pointLedgerService.usageUnit())
-        .grantPoints(pointLedgerService.previewGrant(totalFee))
+        // 非会員の受注は確定でも付与しない。見込みだけ付与を返すと、同じ画面が出した予定と確定の結果が食い違う。
+        .grantPoints(memberId == null ? 0 : pointLedgerService.previewGrant(totalFee))
         .build();
   }
 

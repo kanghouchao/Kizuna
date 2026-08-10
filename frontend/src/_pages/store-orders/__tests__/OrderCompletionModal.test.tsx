@@ -72,6 +72,44 @@ describe('OrderCompletionModal', () => {
     await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 8000));
   });
 
+  it('別の受注へ切り替えたら、前の受注の見込みで欄の可否を決めない', async () => {
+    // 取得フックは取り直しの間も前の値を保つ。値だけを見ると、会員だった前の受注の規則で
+    // 次の受注の利用ポイントを受け付けてしまう
+    const otherOrder: Order = { ...confirmedOrder, id: 'o2', customer_name: '鈴木花子' };
+    const { rerender } = render(
+      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+    );
+    await screen.findByLabelText('利用ポイント');
+
+    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    mockedPreview.mockReturnValue(new Promise(() => {}));
+    rerender(
+      <OrderCompletionModal order={otherOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+    );
+
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(mockedPreview).toHaveBeenLastCalledWith('o2', 0);
+    expect(screen.queryByLabelText('利用ポイント')).not.toBeInTheDocument();
+  });
+
+  it('同じ受注を開き直したら、前回確定した会計金額で見込みを取り直さない', async () => {
+    // 欄は空に戻るので、確定値だけ残ると空欄のまま前回の金額の付与予定が出る
+    const { rerender } = render(
+      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+    );
+    const input = await screen.findByLabelText('会計金額');
+    fireEvent.change(input, { target: { value: '8000' } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 8000));
+
+    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    rerender(
+      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+    );
+
+    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 0));
+  });
+
   it('未紐づけの受注では利用ポイント欄を出さず、未紐づけと名乗る', async () => {
     // 非会員に台帳は存在しない。欄を出すと、必ず失敗する入力を勧めることになる
     mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
@@ -80,6 +118,8 @@ describe('OrderCompletionModal', () => {
     expect(await screen.findByText('未紐づけ')).toBeInTheDocument();
     expect(screen.queryByLabelText('利用ポイント')).not.toBeInTheDocument();
     expect(screen.queryByText(/残高:/)).not.toBeInTheDocument();
+    // 非会員には付与もされない。予定だけ出すと、完了しても増えないポイントを約束することになる
+    expect(screen.queryByText(/付与予定:/)).not.toBeInTheDocument();
   });
 
   it('紐づけ済みの受注では残高と付与予定を出し、利用ポイントを受け付ける', async () => {

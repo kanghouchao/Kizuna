@@ -1223,12 +1223,14 @@ class OrderServiceTest {
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
     when(pointLedgerService.usageUnit()).thenReturn(100);
-    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
 
     OrderCompletionPreviewResponse preview = service.completionPreview("o1", 12000);
 
     assertThat(preview.isMemberLinked()).isFalse();
     assertThat(preview.getPointBalance()).as("非会員に残高は存在しない").isNull();
+    // 確定は非会員へ付与しない。見込みが付与を返すと、画面の予定と確定の結果が食い違う
+    assertThat(preview.getGrantPoints()).isZero();
+    verify(pointLedgerService, never()).previewGrant(anyInt());
     verify(pointLedgerService, never()).balance(anyLong());
   }
 

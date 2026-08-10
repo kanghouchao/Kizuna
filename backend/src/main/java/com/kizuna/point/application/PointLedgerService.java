@@ -10,9 +10,11 @@ import com.kizuna.point.domain.PointLedger;
 import com.kizuna.point.domain.PointLot;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,6 +36,7 @@ public class PointLedgerService {
   private final PointEntryRepository pointEntryRepository;
   private final PointAllocationRepository pointAllocationRepository;
   private final SystemConfigService systemConfigService;
+  private final AppProperties appProperties;
 
   /**
    * 会計金額に対して付与されるポイント数。台帳へは書き込まない。
@@ -41,6 +44,8 @@ public class PointLedgerService {
    * <p>付与基準は入力された会計金額そのもので、ポイント利用による控除は差し引かない。
    *
    * <p>設定が未投入（単位金額または単位あたり付与が 0 以下）なら 0 を返す — 設定の不備で受注完了そのものが失敗しないようにする。
+   *
+   * <p>算出した付与が int で表せないほど大きい場合は例外で拒否する — 0 や上限へ黙って丸めると、台帳か画面に出した見込みのどちらかが嘘になる。
    */
   @Transactional(readOnly = true)
   public int previewGrant(int totalFee) {
@@ -48,7 +53,14 @@ public class PointLedgerService {
     if (settings.grantUnitAmount() <= 0 || settings.grantPointsPerUnit() <= 0) {
       return 0;
     }
-    return Math.floorDiv(totalFee, settings.grantUnitAmount()) * settings.grantPointsPerUnit();
+    // 単位あたりの付与が大きい設定では int の乗算が回り込み、負の付与や桁違いの付与が台帳へ入る。
+    // 入力の会計金額は非負なので、long で計算すれば回り込まずに上限の超過だけを見分けられる。
+    long granted =
+        (long) Math.floorDiv(totalFee, settings.grantUnitAmount()) * settings.grantPointsPerUnit();
+    if (granted > Integer.MAX_VALUE) {
+      throw new ServiceException("付与ポイントが扱える上限を超えています。付与設定か会計金額を確認してください");
+    }
+    return (int) granted;
   }
 
   /** ポイント利用の単位。設定が 0 以下なら 1（＝単位の制約なし）とみなす。 */
@@ -162,8 +174,9 @@ public class PointLedgerService {
     return ledgerOf(pointEntryRepository.findCreditsForUpdate(memberId));
   }
 
+  /** 期限の判定は業務のタイムゾーンの「本日」で行う — JVM のタイムゾーンで判じると、業務日と 1 日ずれる。 */
   private PointLedger ledgerOf(List<PointEntry> credits) {
-    return new PointLedger(lotsOf(credits), LocalDate.now());
+    return new PointLedger(lotsOf(credits), LocalDate.now(ZoneId.of(appProperties.getTimezone())));
   }
 
   private List<PointLot> lotsOf(List<PointEntry> credits) {

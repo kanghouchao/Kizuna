@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,11 +22,14 @@ import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,14 +47,21 @@ class PointLedgerServiceTest {
   private static final long STORE_ID = 3L;
   private static final long ACTOR_ID = 9L;
   private static final LocalDate FAR_FUTURE = LocalDate.of(2099, 12, 31);
+  private static final String TIMEZONE = "Asia/Tokyo";
 
   @Mock private PointEntryRepository pointEntryRepository;
   @Mock private PointAllocationRepository pointAllocationRepository;
   @Mock private SystemConfigService systemConfigService;
+  @Mock private AppProperties appProperties;
 
   @InjectMocks private PointLedgerService pointLedgerService;
 
   @Captor private ArgumentCaptor<PointEntry> savedEntry;
+
+  @BeforeEach
+  void stubBusinessTimezone() {
+    lenient().when(appProperties.getTimezone()).thenReturn(TIMEZONE);
+  }
 
   @Test
   @DisplayName("付与は単位金額で切り捨てた回数ぶんだけ計算されること")
@@ -70,6 +81,24 @@ class PointLedgerServiceTest {
 
     assertThat(pointLedgerService.previewGrant(12345)).isZero();
     assertThat(pointLedgerService.previewGrant(12345)).isZero();
+  }
+
+  @Test
+  @DisplayName("int の範囲を超える付与は、回り込んだ値を返さずに拒否されること")
+  void previewGrantRejectsOverflowingGrant() {
+    when(systemConfigService.pointSettings()).thenReturn(new PointSettings(1, 2, 100));
+
+    assertThatThrownBy(() -> pointLedgerService.previewGrant(Integer.MAX_VALUE))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("付与ポイント");
+  }
+
+  @Test
+  @DisplayName("int の範囲に収まる付与はそのまま返ること")
+  void previewGrantAllowsTheLargestRepresentableGrant() {
+    when(systemConfigService.pointSettings()).thenReturn(new PointSettings(1, 1, 100));
+
+    assertThat(pointLedgerService.previewGrant(Integer.MAX_VALUE)).isEqualTo(Integer.MAX_VALUE);
   }
 
   @Test
@@ -236,6 +265,21 @@ class PointLedgerServiceTest {
 
     assertThat(pointLedgerService.balance(MEMBER_ID)).isZero();
     verify(pointAllocationRepository, never()).findConsumedBySourceEntryIds(any());
+  }
+
+  @Test
+  @DisplayName("期限の判定は設定のタイムゾーンの本日で行うこと")
+  void balanceJudgesExpiryInTheConfiguredTimezone() {
+    // 日界線の両端（UTC-12 と UTC+14）は「本日」が常に 1 日以上ずれるため、同じロットの可否が
+    // タイムゾーンだけで分かれる。JVM のタイムゾーンで判定していると両者が同じ結果になる。
+    LocalDate todayAtDateLineWest = LocalDate.now(ZoneId.of("Etc/GMT+12"));
+    when(pointEntryRepository.findCredits(MEMBER_ID))
+        .thenReturn(List.of(credit(1L, 500, todayAtDateLineWest)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L))).thenReturn(List.of());
+    when(appProperties.getTimezone()).thenReturn("Etc/GMT+12").thenReturn("Pacific/Kiritimati");
+
+    assertThat(pointLedgerService.balance(MEMBER_ID)).as("期限当日はまだ使える").isEqualTo(500);
+    assertThat(pointLedgerService.balance(MEMBER_ID)).as("期限を過ぎたロットは残高に入らない").isZero();
   }
 
   @Test
