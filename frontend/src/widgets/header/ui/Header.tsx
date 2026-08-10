@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuth, useStoreContext } from '@/entities/user';
-import { isStoreDomain, storePath } from '@/shared/lib';
+import { platformAuthApi, useAuth, useStoreContext } from '@/entities/user';
+import { isStoreDomain, storePath, useResource } from '@/shared/lib';
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  RegionError,
 } from '@/shared/ui';
 import { BellIcon, CircleUserRoundIcon, StoreIcon } from 'lucide-react';
 import { ModeToggle } from './ModeToggle';
@@ -21,6 +22,14 @@ export function Header() {
   const { stores, currentStoreId, switchStore } = useStoreContext();
 
   const currentStoreName = stores?.find(store => String(store.id) === currentStoreId)?.name;
+
+  // 表示名は token claim に無い（wire 契約は authorities / userType / storeBridge のみ）ため、
+  // token 外のデータの読み口である /platform/me から取る。
+  const {
+    data: me,
+    failure: meFailure,
+    reload: reloadMe,
+  } = useResource(() => platformAuthApi.me());
 
   // アカウント設定リンクは店舗別ドメイン経由でも移設後の店舗ルートを指す。
   // currentStoreId が未確定（pathname 由来 id も cookie ヒントも無い）場合は
@@ -71,8 +80,22 @@ export function Header() {
 
         <div className="flex items-center space-x-4">
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-foreground">管理者</p>
-            <p className="text-xs text-muted-foreground">Platform Admin</p>
+            {meFailure !== null ? (
+              <RegionError
+                message="アカウント情報の取得に失敗しました"
+                onRetry={() => void reloadMe()}
+              />
+            ) : (
+              me !== null && (
+                <>
+                  {/* 表示名は 150 字まで許されるため、店舗名と同じく行の固有幅に上界を与える。 */}
+                  <p className="max-w-40 truncate text-sm font-semibold text-foreground">
+                    {me.display_name}
+                  </p>
+                  <p className="max-w-40 truncate text-xs text-muted-foreground">{me.email}</p>
+                </>
+              )
+            )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger

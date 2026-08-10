@@ -14,6 +14,7 @@ jest.mock('@/entities/user', () => {
     __logout: logout,
     useAuth: () => ({ logout }),
     useStoreContext: jest.fn(),
+    platformAuthApi: { me: jest.fn() },
   };
 });
 
@@ -26,6 +27,15 @@ const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useS
 const mockedIsStoreDomain = isStoreDomain as jest.MockedFunction<typeof isStoreDomain>;
 const mockSwitchStore = jest.fn();
 const mockedLogout = (jest.requireMock('@/entities/user') as { __logout: jest.Mock }).__logout;
+const mockedMe = (jest.requireMock('@/entities/user') as { platformAuthApi: { me: jest.Mock } })
+  .platformAuthApi.me;
+
+const meFixture = {
+  email: 'tanaka.hanako@example.com',
+  display_name: '田中花子',
+  store_bridge: false,
+  line_linked: false,
+};
 
 function withContext(stores: PlatformStore[] | null, currentStoreId?: string) {
   mockedUseStoreContext.mockReturnValue({
@@ -42,6 +52,7 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
   beforeEach(() => {
     jest.clearAllMocks();
     mockedIsStoreDomain.mockReturnValue(false);
+    mockedMe.mockResolvedValue(meFixture);
     withContext([]);
   });
 
@@ -174,5 +185,46 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     // 店名は 200 字まで許されるため、上限が無いとシェルの下限幅では守れなくなる。
     // 幅は jsdom では測れないので、規格として定めた class 文字列そのものを錨にする。
     expect(screen.getByText('店舗A')).toHaveClass('max-w-40', 'truncate');
+  });
+});
+
+// 利用者表示は /platform/me から取る（display_name は token claim に無い — wire 契約は
+// authorities / userType / storeBridge のみ）。ここでは取得結果の表示・失敗時の名乗り・
+// 再試行の配線を検証する。
+describe('Header 利用者表示（/platform/me）', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedIsStoreDomain.mockReturnValue(false);
+    mockedMe.mockResolvedValue(meFixture);
+    withContext([]);
+  });
+
+  it('ログイン中の利用者の表示名とメールアドレスを表示する', async () => {
+    render(<Header />);
+
+    expect(await screen.findByText('田中花子')).toBeInTheDocument();
+    expect(screen.getByText('tanaka.hanako@example.com')).toBeInTheDocument();
+  });
+
+  it('表示名とメールアドレスは上限付きで切り詰められる（行の固有幅に上界を与えるため）', async () => {
+    render(<Header />);
+
+    // 表示名は 150 字まで許されるため、店舗名と同じく class 文字列を規格の錨にする。
+    expect(await screen.findByText('田中花子')).toHaveClass('max-w-40', 'truncate');
+    expect(screen.getByText('tanaka.hanako@example.com')).toHaveClass('max-w-40', 'truncate');
+  });
+
+  it('取得に失敗した領域は自分で失敗を名乗り、再試行で取り直せる', async () => {
+    mockedMe.mockReset();
+    mockedMe.mockRejectedValueOnce(new Error('network'));
+    mockedMe.mockResolvedValue(meFixture);
+
+    render(<Header />);
+
+    expect(await screen.findByText('アカウント情報の取得に失敗しました')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('田中花子')).toBeInTheDocument();
+    expect(screen.queryByText('アカウント情報の取得に失敗しました')).not.toBeInTheDocument();
   });
 });
