@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: platform-v01100-001-store-status
+      id: platform-v01200-001-store-status
       author: kanghouchao
       # 店舗の稼働状態。PREPARING（準備中）は開店前の下ごしらえ期間で、この間だけ店舗を削除できる。
       # 店舗側の利用者が初めて店舗コンソールへ入った時点で ACTIVE（稼働中）へ一方向に遷移し、以後は戻らない。
