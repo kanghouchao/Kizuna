@@ -407,6 +407,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   void unknownStoreIdRejected() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
+    // create は店舗 id を事前検証しないため、実 DB の FK 違反が決定的に踏める。制約名の抽出が失灵すれば
+    // 兜底へ溢れて 500 になり、誤った制約へ帰属すれば文言が変わる — 実ドライバから制約名が取れることの機械証明。
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/platform/staff",
@@ -419,6 +421,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("指定された店舗が存在しません");
   }
 
   // 検索語は STAFF 限定と AND で重なる。両者の email に共通する接頭辞で引くことで、
