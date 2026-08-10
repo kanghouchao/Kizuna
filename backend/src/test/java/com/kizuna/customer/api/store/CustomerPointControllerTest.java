@@ -14,6 +14,7 @@ import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.store.application.StoreActivationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ class CustomerPointControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean private StoreActivationService storeActivationService;
 
   @Test
   @DisplayName("残高照会は CUSTOMER_MANAGE で到達できること")

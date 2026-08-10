@@ -1,5 +1,6 @@
 package com.kizuna.store.api.dto;
 
+import com.kizuna.store.domain.StoreStatus;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
@@ -19,5 +20,6 @@ public class StoreVO implements Serializable {
   private String name;
   private String domain;
   private String email;
+  private StoreStatus status;
   private OffsetDateTime createdAt;
 }

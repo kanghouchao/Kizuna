@@ -10,6 +10,7 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
+import com.kizuna.store.application.StoreActivationService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ class PlatformShiftControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean private StoreActivationService storeActivationService;
 
   @Test
   @DisplayName("会員は指定店舗・指定日の確定シフトを引けること")

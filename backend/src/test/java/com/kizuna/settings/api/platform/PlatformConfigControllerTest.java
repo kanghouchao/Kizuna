@@ -14,6 +14,7 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.store.application.StoreActivationService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ class PlatformConfigControllerTest {
   // StoreExistenceInterceptor（HandlerInterceptor）の依存。@WebMvcTest は HandlerInterceptor を
   // 取り込むため、MaintenanceModeInterceptor の SystemConfigService と同様にポートのモックを用意する。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean private StoreActivationService storeActivationService;
 
   @Test
   @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限があれば設定一覧を取得できること")

@@ -15,6 +15,7 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
+import com.kizuna.store.application.StoreActivationService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,7 @@ class PlatformMemberOrderControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean private StoreActivationService storeActivationService;
 
   @Test
   @DisplayName("会員は予約の申請・一覧・取り下げができること")
