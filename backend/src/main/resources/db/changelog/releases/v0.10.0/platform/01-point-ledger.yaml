@@ -1,0 +1,230 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v01000-001-point-ledger
+      author: kanghouchao
+      # 会員ポイント台帳。追加型で、訂正も取消も新しい行として積み既存行は書き換えない。残高は行の合計として
+      # 都度求めるため、残高列は持たない。会員はプラットフォーム級の身分なので台帳も店舗で分割せず、
+      # originating_store_id は「どの店舗で起きたか」の帰属だけを表す（store_id という名は作用域を意味するため使わない）。
+      # t_point_usage_allocations は減算 1 件がどの加算ロットを消費したかの明細で、消費済み量はこの表の
+      # source_entry_id 別合計だけで求まる。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_point_entries
+            remarks: 会員ポイント台帳の仕訳（追加型。残高は行の合計）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_point_entries
+              - column:
+                  name: member_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 台帳の持ち主である会員
+              - column:
+                  name: entry_type
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+                  remarks: 仕訳種別（ORDER_GRANT/USE/MANUAL_ADJUST/CANCEL/EXPIRE/WITHDRAWAL_CLEAR）
+              - column:
+                  name: amount
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  remarks: 符号付きの増減。加算は正、減算は負で 0 は取らない
+              - column:
+                  name: expires_on
+                  type: DATE
+                  remarks: 加算ロットの有効期限。期限なしと減算は NULL
+              - column:
+                  name: originating_store_id
+                  type: BIGINT
+                  remarks: 発生店舗（帰属情報。残高の作用域ではなく、店舗を跨いだ利用も成立する）
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  remarks: 付与・利用の元になった受注
+              - column:
+                  name: original_entry_id
+                  type: BIGINT
+                  remarks: 取消対象の加算仕訳。CANCEL のみ設定される
+              - column:
+                  name: actor_user_id
+                  type: BIGINT
+                  remarks: 仕訳を起こした操作者。機構が起こす失効では NULL
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+                  remarks: 手動調整の理由（MANUAL_ADJUST では必須）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - createTable:
+            tableName: t_point_usage_allocations
+            remarks: 減算仕訳がどの加算ロットから引き当てたかの明細
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_point_usage_allocations
+              - column:
+                  name: entry_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 引き当てを行った減算仕訳
+              - column:
+                  name: source_entry_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 引き当て元の加算仕訳（ロット）
+              - column:
+                  name: amount
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  remarks: 引き当て量（常に正）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_member
+            baseTableName: t_point_entries
+            baseColumnNames: member_id
+            referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_store
+            baseTableName: t_point_entries
+            baseColumnNames: originating_store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_order
+            baseTableName: t_point_entries
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: SET NULL
+        # 取消の連鎖は禁止する。仕訳は消さない前提なので削除は起きないが、起きたときに取消の指し先だけが
+        # 静かに消えて「何を取り消したか分からない行」が残るのを防ぐ。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_original
+            baseTableName: t_point_entries
+            baseColumnNames: original_entry_id
+            referencedTableName: t_point_entries
+            referencedColumnNames: id
+            onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_actor
+            baseTableName: t_point_entries
+            baseColumnNames: actor_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_usage_allocations_entry
+            baseTableName: t_point_usage_allocations
+            baseColumnNames: entry_id
+            referencedTableName: t_point_entries
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_usage_allocations_source
+            baseTableName: t_point_usage_allocations
+            baseColumnNames: source_entry_id
+            referencedTableName: t_point_entries
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 増減 0 の仕訳と 0 以下の引き当ては台帳の意味を壊すため DB 側でも塞ぐ。
+        # Liquibase OSS は CHECK 制約の宣言的な変更を持たないため裸 SQL。
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_entries
+              ADD CONSTRAINT ck_t_point_entries_amount_nonzero CHECK (amount <> 0)
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_usage_allocations
+              ADD CONSTRAINT ck_t_point_usage_allocations_amount_positive CHECK (amount > 0)
+        - createIndex:
+            indexName: idx_t_point_entries_member_expires
+            tableName: t_point_entries
+            columns:
+              - column:
+                  name: member_id
+              - column:
+                  name: expires_on
+        - createIndex:
+            indexName: idx_t_point_entries_member_created
+            tableName: t_point_entries
+            columns:
+              - column:
+                  name: member_id
+              - column:
+                  name: created_at
+        - createIndex:
+            indexName: idx_t_point_entries_order
+            tableName: t_point_entries
+            columns:
+              - column:
+                  name: order_id
+        - createIndex:
+            indexName: idx_t_point_usage_allocations_source
+            tableName: t_point_usage_allocations
+            columns:
+              - column:
+                  name: source_entry_id
+      # 明細が仕訳を参照しているため、明細から先に落とす。
+      rollback:
+        - dropTable:
+            tableName: t_point_usage_allocations
+        - dropTable:
+            tableName: t_point_entries

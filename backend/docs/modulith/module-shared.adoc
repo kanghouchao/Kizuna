@@ -27,6 +27,9 @@ _Others_
 |* `app.domain` -- `java.lang.String`
 * `app.jwt.expiration` -- `java.lang.Long`
 * `app.jwt.secret` -- `java.lang.String`
+* `app.line.api-base-url` -- `java.lang.String`
+* `app.line.channel-id` -- `java.lang.String`
+* `app.line.channel-secret` -- `java.lang.String`
 * `app.timezone` -- `java.lang.String`
 * `app.upload.access-key` -- `java.lang.String`
 * `app.upload.allowed-types` -- `java.util.List<java.lang.String>`

@@ -244,6 +244,50 @@ class SystemConfigServiceImplTest {
     assertThat(systemConfigService.lineChannelSettings().configured()).isFalse();
   }
 
+  @Test
+  void pointSettings_buildsTypedSnapshotFromKeys() {
+    when(systemConfigRepository.findByConfigKey("point_grant_unit_amount"))
+        .thenReturn(Optional.of(config("point_grant_unit_amount", "100")));
+    when(systemConfigRepository.findByConfigKey("point_grant_points_per_unit"))
+        .thenReturn(Optional.of(config("point_grant_points_per_unit", "2")));
+    when(systemConfigRepository.findByConfigKey("point_usage_unit"))
+        .thenReturn(Optional.of(config("point_usage_unit", "500")));
+
+    PointSettings point = systemConfigService.pointSettings();
+
+    assertThat(point.grantUnitAmount()).isEqualTo(100);
+    assertThat(point.grantPointsPerUnit()).isEqualTo(2);
+    assertThat(point.usageUnit()).isEqualTo(500);
+  }
+
+  @Test
+  void pointSettings_defaultsWhenUnset() {
+    when(systemConfigRepository.findByConfigKey(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(Optional.empty());
+
+    PointSettings point = systemConfigService.pointSettings();
+
+    assertThat(point.grantUnitAmount()).isZero();
+    assertThat(point.grantPointsPerUnit()).isZero();
+    assertThat(point.usageUnit()).isEqualTo(1);
+  }
+
+  @Test
+  void pointSettings_defaultsWhenUnparsable() {
+    when(systemConfigRepository.findByConfigKey("point_grant_unit_amount"))
+        .thenReturn(Optional.of(config("point_grant_unit_amount", "abc")));
+    when(systemConfigRepository.findByConfigKey("point_grant_points_per_unit"))
+        .thenReturn(Optional.of(config("point_grant_points_per_unit", " ")));
+    when(systemConfigRepository.findByConfigKey("point_usage_unit"))
+        .thenReturn(Optional.of(config("point_usage_unit", "1e3")));
+
+    PointSettings point = systemConfigService.pointSettings();
+
+    assertThat(point.grantUnitAmount()).isZero();
+    assertThat(point.grantPointsPerUnit()).isZero();
+    assertThat(point.usageUnit()).isEqualTo(1);
+  }
+
   private SystemConfig config(String key, String value) {
     return SystemConfig.builder().configKey(key).configValue(value).build();
   }

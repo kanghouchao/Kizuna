@@ -94,6 +94,34 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     return new LineChannelSettings(rawValue("line_channel_id"), rawValue("line_channel_secret"));
   }
 
+  /**
+   * ポイント制度の設定は都度読む（キャッシュしない）。理由は {@link #smtpSettings} と同じで、record は {@code Serializable} でないため既定の
+   * JDK 直列化キャッシュに載せられない。
+   *
+   * <p>既定値は「付与しない・利用単位 1」で、未設定や不正値のまま受注完了が落ちることはない。
+   */
+  @Override
+  @Transactional(readOnly = true)
+  public PointSettings pointSettings() {
+    return new PointSettings(
+        intValue("point_grant_unit_amount", 0),
+        intValue("point_grant_points_per_unit", 0),
+        intValue("point_usage_unit", 1));
+  }
+
+  /** 数値設定の読み取り。未設定・不正値は既定値へ倒す（更新時に NUMBER 検証済みのため不正値は通常は到達しない）。 */
+  private int intValue(String configKey, int fallback) {
+    String raw = rawValue(configKey);
+    if (raw.isBlank()) {
+      return fallback;
+    }
+    try {
+      return Integer.parseInt(raw.trim());
+    } catch (NumberFormatException e) {
+      return fallback;
+    }
+  }
+
   /** {@code getConfigValue} のキャッシュを経由しない内部読み取り（設定スナップショットは都度 DB から組み立てる）。 */
   private String rawValue(String configKey) {
     return systemConfigRepository

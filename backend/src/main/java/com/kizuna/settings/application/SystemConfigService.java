@@ -20,4 +20,7 @@ public interface SystemConfigService {
 
   /** LINE ログインチャネル資格情報の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
   LineChannelSettings lineChannelSettings();
+
+  /** ポイント制度の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
+  PointSettings pointSettings();
 }
