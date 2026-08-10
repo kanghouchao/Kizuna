@@ -11,6 +11,12 @@ import com.kizuna.point.domain.PointEntryType;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -150,6 +156,131 @@ class CustomerPointAdjustmentIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("commit 成立後の同一キー再送は記帳せず現在残高を返すこと")
+  void replayAfterCommitDoesNotAppendASecondEntry() {
+    String managerToken = loginAs("tanaka.hanako@kizuna.test");
+    String memberCode = registerMember("replay");
+    String customerId = linkedCustomer(managerToken, "再送", memberCode);
+    String key = UUID.randomUUID().toString();
+
+    assertThat(adjust(STORE_A, managerToken, customerId, 500, "回復再送の検証", null, key).getStatusCode())
+        .as("前提: 初回の調整が成立すること")
+        .isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<JsonNode> replay =
+        adjust(STORE_A, managerToken, customerId, 500, "回復再送の検証", null, key);
+
+    assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(replay.getBody().path("balance").asInt()).isEqualTo(500);
+    List<PointEntry> entries = entriesOf(memberCode);
+    assertThat(entries).as("再送は 2 件目を積まないこと").hasSize(1);
+    assertThat(entries.get(0).getIdempotencyKey()).isEqualTo(key);
+  }
+
+  @Test
+  @DisplayName("再送までに他の記帳が挟まっても、再送はスナップショットでなく現在残高を返すこと")
+  void replayReturnsTheCurrentBalanceNotASnapshot() {
+    String managerToken = loginAs("tanaka.hanako@kizuna.test");
+    String memberCode = registerMember("current");
+    String customerId = linkedCustomer(managerToken, "現在残高", memberCode);
+    String key = UUID.randomUUID().toString();
+
+    assertThat(adjust(STORE_A, managerToken, customerId, 500, "初回の付与", null, key).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(adjust(STORE_A, managerToken, customerId, -200, "間に挟まる減算", null).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<JsonNode> replay =
+        adjust(STORE_A, managerToken, customerId, 500, "初回の付与", null, key);
+
+    assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(replay.getBody().path("balance").asInt()).as("初回時点の 500 ではなく現在の 300").isEqualTo(300);
+    assertThat(entriesOf(memberCode)).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("同一キーで内容の異なる要求は 409 になり、初回の成立が文言で伝わること")
+  void sameKeyWithDifferentContentIsRefusedWithConflict() {
+    String managerToken = loginAs("tanaka.hanako@kizuna.test");
+    String memberCode = registerMember("mismatch");
+    String customerId = linkedCustomer(managerToken, "不一致", memberCode);
+    String key = UUID.randomUUID().toString();
+
+    assertThat(adjust(STORE_A, managerToken, customerId, 500, "初回の付与", null, key).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<JsonNode> mismatched =
+        adjust(STORE_A, managerToken, customerId, 300, "初回の付与", null, key);
+
+    assertThat(mismatched.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(mismatched.getBody().path("error").asString()).contains("初回の調整は既に成立");
+    assertThat(entriesOf(memberCode)).as("内容不一致の要求は記帳しないこと").hasSize(1);
+  }
+
+  @Test
+  @DisplayName("同じ内容でも異なるキーなら正当な 2 回目として積まれること")
+  void sameContentWithADifferentKeyIsALegitimateSecondAdjustment() {
+    String managerToken = loginAs("tanaka.hanako@kizuna.test");
+    String memberCode = registerMember("second");
+    String customerId = linkedCustomer(managerToken, "二回目", memberCode);
+
+    assertThat(adjust(STORE_A, managerToken, customerId, 500, "同内容の調整", null).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    ResponseEntity<JsonNode> second =
+        adjust(STORE_A, managerToken, customerId, 500, "同内容の調整", null);
+
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(second.getBody().path("balance").asInt()).isEqualTo(1000);
+    assertThat(entriesOf(memberCode)).hasSize(2);
+  }
+
+  @Test
+  @DisplayName("同一顧客への同時再送でも台帳には 1 件しか積まれず、双方が成功応答になること")
+  void concurrentReplayOnTheSameCustomerAppendsExactlyOnce() throws Exception {
+    String managerToken = loginAs("tanaka.hanako@kizuna.test");
+    String memberCode = registerMember("race");
+    String customerId = linkedCustomer(managerToken, "同時", memberCode);
+    String key = UUID.randomUUID().toString();
+
+    List<ResponseEntity<JsonNode>> responses =
+        inParallel(
+            () -> adjust(STORE_A, managerToken, customerId, 500, "同時再送の検証", null, key),
+            () -> adjust(STORE_A, managerToken, customerId, 500, "同時再送の検証", null, key));
+
+    assertThat(responses)
+        .extracting(ResponseEntity::getStatusCode)
+        .containsExactly(HttpStatus.OK, HttpStatus.OK);
+    assertThat(entriesOf(memberCode)).as("同時再送でも記帳は 1 件だけ").hasSize(1);
+  }
+
+  @Test
+  @DisplayName("顧客を跨いだ同一キーの衝突は一方だけが記帳され、他方は 5xx でなく 409 になること")
+  void crossCustomerKeyCollisionNeverYieldsAServerError() throws Exception {
+    String managerToken = loginAs("tanaka.hanako@kizuna.test");
+    String memberCodeX = registerMember("collide-x");
+    String memberCodeY = registerMember("collide-y");
+    String customerX = linkedCustomer(managerToken, "衝突X", memberCodeX);
+    String customerY = linkedCustomer(managerToken, "衝突Y", memberCodeY);
+    String key = UUID.randomUUID().toString();
+
+    // 顧客が異なると行ロックの直列化が効かず、勝者だけが記帳される。敗者は事前検査（逐次化した場合）
+    // でも一意制約の敗北（真の同時）でも、同じ内容比較に落ちて会員不一致の 409 になる。
+    List<ResponseEntity<JsonNode>> responses =
+        inParallel(
+            () -> adjust(STORE_A, managerToken, customerX, 500, "衝突検証", null, key),
+            () -> adjust(STORE_A, managerToken, customerY, 500, "衝突検証", null, key));
+
+    assertThat(responses)
+        .extracting(response -> response.getStatusCode().value())
+        .containsExactlyInAnyOrder(200, 409);
+    long entriesWithKey =
+        pointEntryRepository.findAll().stream()
+            .filter(entry -> key.equals(entry.getIdempotencyKey()))
+            .count();
+    assertThat(entriesWithKey).as("キーを持つ記帳は 1 件だけ").isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("他店舗の顧客 ID は不可視のため残高照会でも調整でも 404 になること")
   void foreignStoreCustomerIsInvisible() {
     String managerToken = loginAs("tanaka.hanako@kizuna.test");
@@ -172,6 +303,7 @@ class CustomerPointAdjustmentIT extends CrossStoreTestSupport {
         JsonNode.class);
   }
 
+  /** 冪等キーを明示しない調整。1 回きりの操作として毎回新しいキーを載せる。 */
   private ResponseEntity<JsonNode> adjust(
       long storeId,
       String bearerToken,
@@ -179,6 +311,18 @@ class CustomerPointAdjustmentIT extends CrossStoreTestSupport {
       int delta,
       String reason,
       LocalDate expiresOn) {
+    return adjust(
+        storeId, bearerToken, customerId, delta, reason, expiresOn, UUID.randomUUID().toString());
+  }
+
+  private ResponseEntity<JsonNode> adjust(
+      long storeId,
+      String bearerToken,
+      String customerId,
+      int delta,
+      String reason,
+      LocalDate expiresOn,
+      String idempotencyKey) {
     String body =
         "{\"delta\": "
             + delta
@@ -186,7 +330,9 @@ class CustomerPointAdjustmentIT extends CrossStoreTestSupport {
             + reason
             + "\""
             + (expiresOn == null ? "" : ", \"expires_on\": \"" + expiresOn + "\"")
-            + "}";
+            + ", \"idempotency_key\": \""
+            + idempotencyKey
+            + "\"}";
     return rest.exchange(
         "/store/customers/" + customerId + "/point-adjustments",
         HttpMethod.POST,
@@ -248,6 +394,32 @@ class CustomerPointAdjustmentIT extends CrossStoreTestSupport {
     return pointEntryRepository.findAll().stream()
         .filter(entry -> entry.getMemberId() == memberId)
         .toList();
+  }
+
+  /** 2 つの呼出を同時に開始して両方の応答を返す。 */
+  private List<ResponseEntity<JsonNode>> inParallel(
+      Callable<ResponseEntity<JsonNode>> first, Callable<ResponseEntity<JsonNode>> second)
+      throws Exception {
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      CountDownLatch start = new CountDownLatch(1);
+      Future<ResponseEntity<JsonNode>> a =
+          pool.submit(
+              () -> {
+                start.await();
+                return first.call();
+              });
+      Future<ResponseEntity<JsonNode>> b =
+          pool.submit(
+              () -> {
+                start.await();
+                return second.call();
+              });
+      start.countDown();
+      return List.of(a.get(), b.get());
+    } finally {
+      pool.shutdownNow();
+    }
   }
 
   // ==================== 認証 ====================

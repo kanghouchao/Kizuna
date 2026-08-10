@@ -26,7 +26,10 @@ public enum DbConstraint {
   FK_T_USER_STORES_STORE("fk_t_user_stores_store"),
 
   /** t_cast_invitations → t_casts の FK。 */
-  FK_T_CAST_INVITATIONS_CAST("fk_t_cast_invitations_cast");
+  FK_T_CAST_INVITATIONS_CAST("fk_t_cast_invitations_cast"),
+
+  /** t_point_entries.idempotency_key の一意制約（ADR 0007）。 */
+  UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key");
 
   private final String sqlName;
 

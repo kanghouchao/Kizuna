@@ -89,7 +89,9 @@ describe('PointAdjustmentDialog', () => {
       delta: 100,
       reason: 'キャンペーン付与',
       expires_on: '2026-12-31',
+      idempotency_key: expect.any(String),
     });
+    expect(mockedAdjust.mock.calls[0][1].idempotency_key).not.toBe('');
   });
 
   it('有効期限が空欄なら、その項目ごと送らない', async () => {
@@ -117,7 +119,11 @@ describe('PointAdjustmentDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '調整する' }));
 
     await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(1));
-    expect(mockedAdjust.mock.calls[0][1]).toEqual({ delta: -100, reason: '失効の補正' });
+    expect(mockedAdjust.mock.calls[0][1]).toEqual({
+      delta: -100,
+      reason: '失効の補正',
+      idempotency_key: expect.any(String),
+    });
   });
 
   it('成功したら調整後の残高を渡して閉じる', async () => {
@@ -128,6 +134,59 @@ describe('PointAdjustmentDialog', () => {
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('ポイントを調整しました'));
     expect(onAdjusted).toHaveBeenCalledWith({ linked: true, balance: 220 });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('失敗後の再送信では同じ冪等キーを送る（サーバが commit 済みの初回を見分ける鍵）', async () => {
+    // 応答喪失のとき、この再送信こそが二重記帳の入り口。キーが同じである限りサーバは 2 件目を積まない
+    mockedAdjust.mockRejectedValueOnce({
+      response: { status: 500, data: { error: '応答がありません' } },
+    });
+    renderDialog();
+
+    await submitWith('100');
+    await waitFor(() => expect(notify.error).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: '調整する' }));
+
+    await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(2));
+    const firstKey = mockedAdjust.mock.calls[0][1].idempotency_key;
+    expect(firstKey).toEqual(expect.any(String));
+    expect(mockedAdjust.mock.calls[1][1].idempotency_key).toBe(firstKey);
+  });
+
+  it('失敗後に内容を変えて再送信しても冪等キーは変えない（初回が成立していればサーバが 409 で明告する）', async () => {
+    // キーを振り直すと「修正のつもりの再送」が新しい操作になり、初回と合わせて静黙な二重記帳になる
+    mockedAdjust.mockRejectedValueOnce({
+      response: { status: 500, data: { error: '応答がありません' } },
+    });
+    renderDialog();
+
+    await submitWith('100');
+    await waitFor(() => expect(notify.error).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText('増減ポイント'), { target: { value: '300' } });
+    fireEvent.click(screen.getByRole('button', { name: '調整する' }));
+
+    await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(2));
+    expect(mockedAdjust.mock.calls[1][1].delta).toBe(300);
+    expect(mockedAdjust.mock.calls[1][1].idempotency_key).toBe(
+      mockedAdjust.mock.calls[0][1].idempotency_key
+    );
+  });
+
+  it('閉じて開き直したら新しい冪等キーになる（別の操作として 2 件とも成立してよい）', async () => {
+    const props = { customerId: 'c1', onClose: jest.fn(), onAdjusted: jest.fn() };
+    const { rerender } = render(<PointAdjustmentDialog {...props} open />);
+
+    await submitWith('100');
+    await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(1));
+
+    rerender(<PointAdjustmentDialog {...props} open={false} />);
+    rerender(<PointAdjustmentDialog {...props} open />);
+    await submitWith('100');
+
+    await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(2));
+    expect(mockedAdjust.mock.calls[1][1].idempotency_key).not.toBe(
+      mockedAdjust.mock.calls[0][1].idempotency_key
+    );
   });
 
   it('失敗したら、対処方法を含むサーバの文言をそのまま出す', async () => {

@@ -42,6 +42,13 @@ public final class IntegrityViolations {
   }
 
   /**
+   * 違反した制約が {@code constraint} かどうか。例外を投げ替えるのではなく、違反の種別で処理を分岐したい呼出側 （冪等キーの競合敗者を再送処理へ回す等）のための問い口。
+   */
+  public static boolean violates(DataIntegrityViolationException ex, DbConstraint constraint) {
+    return constraint.sqlName().equals(violatedConstraintName(ex));
+  }
+
+  /**
    * 違反した制約の名前を取り出す。Spring の変換で包まれた層数は経路によって異なるため、原因連鎖を辿って Hibernate の例外を探す（最深層は JDBC
    * ドライバの例外であり、制約名を型で持たない）。
    *

@@ -2,6 +2,7 @@ package com.kizuna.point.domain;
 
 import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -32,4 +33,7 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       "select e from com.kizuna.point.domain.PointEntry e where e.orderId = :orderId"
           + " and e.amount > 0")
   List<PointEntry> findCreditsByOrderId(@Param("orderId") String orderId);
+
+  /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
+  Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
 }

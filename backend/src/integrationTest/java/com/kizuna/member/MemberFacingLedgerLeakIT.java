@@ -164,7 +164,14 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     long memberId = memberRepository.findByMemberCode(memberCode).map(Member::getId).orElseThrow();
     pointEntryRepository.save(
         PointEntry.manualAdjust(
-            memberId, STORE_A, CANARY_BALANCE, "台帳漏洩検証の残高", null, List.of(), null));
+            memberId,
+            STORE_A,
+            CANARY_BALANCE,
+            "台帳漏洩検証の残高",
+            null,
+            List.of(),
+            null,
+            "ledger-leak-" + memberId));
 
     // ログインは紐づけの後に行う。紐づけ前の応答への断言は紐づけ由来の混入を検出しようがないため、
     // 断言対象は必ず紐づけ済み状態で取得する（登録応答だけは会員作成そのものなので紐づけ前が本質）。

@@ -102,12 +102,14 @@ class PointEntryTest {
   @Test
   @DisplayName("加算の手動調整は有効期限を持てて引き当てを持たないこと")
   void positiveManualAdjustCarriesExpiry() {
-    PointEntry entry = PointEntry.manualAdjust(7L, 3L, 500, "お詫び", EXPIRES_ON, List.of(), 9L);
+    PointEntry entry =
+        PointEntry.manualAdjust(7L, 3L, 500, "お詫び", EXPIRES_ON, List.of(), 9L, "key-1");
 
     assertThat(entry.getEntryType()).isEqualTo(PointEntryType.MANUAL_ADJUST);
     assertThat(entry.getAmount()).isEqualTo(500);
     assertThat(entry.getExpiresOn()).isEqualTo(EXPIRES_ON);
     assertThat(entry.getReason()).isEqualTo("お詫び");
+    assertThat(entry.getIdempotencyKey()).isEqualTo("key-1");
     assertThat(entry.getAllocations()).isEmpty();
   }
 
@@ -116,13 +118,16 @@ class PointEntryTest {
   void negativeManualAdjustConsumesLots() {
     List<PointAllocation> allocations = List.of(PointAllocation.of(11L, 500));
 
-    PointEntry entry = PointEntry.manualAdjust(7L, 3L, -500, "誤付与の訂正", null, allocations, 9L);
+    PointEntry entry =
+        PointEntry.manualAdjust(7L, 3L, -500, "誤付与の訂正", null, allocations, 9L, "key-1");
 
     assertThat(entry.getAmount()).isEqualTo(-500);
     assertThat(entry.getAllocations()).hasSize(1);
 
     assertThatThrownBy(
-            () -> PointEntry.manualAdjust(7L, 3L, -500, "誤付与の訂正", EXPIRES_ON, allocations, 9L))
+            () ->
+                PointEntry.manualAdjust(
+                    7L, 3L, -500, "誤付与の訂正", EXPIRES_ON, allocations, 9L, "key-2"))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("有効期限");
   }
@@ -130,15 +135,27 @@ class PointEntryTest {
   @Test
   @DisplayName("理由の無い手動調整は記録できないこと")
   void manualAdjustWithoutReasonIsRejected() {
-    assertThatThrownBy(() -> PointEntry.manualAdjust(7L, 3L, 500, " ", null, List.of(), 9L))
+    assertThatThrownBy(
+            () -> PointEntry.manualAdjust(7L, 3L, 500, " ", null, List.of(), 9L, "key-1"))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("理由");
   }
 
   @Test
+  @DisplayName("冪等キーの無い手動調整は記録できないこと")
+  void manualAdjustWithoutIdempotencyKeyIsRejected() {
+    assertThatThrownBy(() -> PointEntry.manualAdjust(7L, 3L, 500, "理由", null, List.of(), 9L, null))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("冪等キー");
+    assertThatThrownBy(() -> PointEntry.manualAdjust(7L, 3L, 500, "理由", null, List.of(), 9L, " "))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("冪等キー");
+  }
+
+  @Test
   @DisplayName("増減 0 の仕訳は記録できないこと")
   void zeroAmountIsRejected() {
-    assertThatThrownBy(() -> PointEntry.manualAdjust(7L, 3L, 0, "理由", null, List.of(), 9L))
+    assertThatThrownBy(() -> PointEntry.manualAdjust(7L, 3L, 0, "理由", null, List.of(), 9L, "key-1"))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("増減が 0");
   }
@@ -148,7 +165,8 @@ class PointEntryTest {
   void creditWithAllocationsIsRejected() {
     List<PointAllocation> allocations = List.of(PointAllocation.of(11L, 100));
 
-    assertThatThrownBy(() -> PointEntry.manualAdjust(7L, 3L, 500, "理由", null, allocations, 9L))
+    assertThatThrownBy(
+            () -> PointEntry.manualAdjust(7L, 3L, 500, "理由", null, allocations, 9L, "key-1"))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("加算の仕訳は引き当てを持ちません");
   }

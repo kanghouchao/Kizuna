@@ -131,7 +131,15 @@ class StoreDeletionCascadeIT {
     long entryId =
         pointEntryRepository
             .save(
-                PointEntry.manualAdjust(memberId, storeId, 500, "店舗削除検証の付与", null, List.of(), null))
+                PointEntry.manualAdjust(
+                    memberId,
+                    storeId,
+                    500,
+                    "店舗削除検証の付与",
+                    null,
+                    List.of(),
+                    null,
+                    "store-cascade-" + memberId))
             .getId();
 
     // 前提: 削除前は発生店舗が入っている（空振りで緑にならないことを固定）。

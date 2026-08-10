@@ -48,6 +48,8 @@ export interface CustomerPointAdjustmentRequest {
   reason: string;
   /** 加算するポイントの有効期限。無期限なら省略する（減算に指定するとサーバが撥ねる）。 */
   expires_on?: string;
+  /** クライアント生成の冪等キー。応答喪失後の再送を初回と同じ操作として識別する（ADR 0007）。 */
+  idempotency_key: string;
 }
 
 /** 会員紐づけ履歴 1 件。customer/api/dto/CustomerMemberLinkHistoryResponse.java に対応。 */

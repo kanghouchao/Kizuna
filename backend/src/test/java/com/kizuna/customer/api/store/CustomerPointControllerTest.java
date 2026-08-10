@@ -14,12 +14,16 @@ import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import java.sql.SQLException;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -81,9 +85,7 @@ class CustomerPointControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(
-            storePost(
-                "/store/customers/c1/point-adjustments", "{\"delta\": 100, \"reason\": \"訂正\"}"))
+        .perform(storePost("/store/customers/c1/point-adjustments", adjustmentBody("訂正")))
         .andExpect(status().isForbidden());
   }
 
@@ -96,9 +98,7 @@ class CustomerPointControllerTest {
         .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(100L).build());
 
     mockMvc
-        .perform(
-            storePost(
-                "/store/customers/c1/point-adjustments", "{\"delta\": 100, \"reason\": \"訂正\"}"))
+        .perform(storePost("/store/customers/c1/point-adjustments", adjustmentBody("訂正")))
         .andExpect(status().isOk());
   }
 
@@ -109,9 +109,7 @@ class CustomerPointControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(
-            storePost(
-                "/store/customers/c1/point-adjustments", "{\"delta\": 100, \"reason\": \"   \"}"))
+        .perform(storePost("/store/customers/c1/point-adjustments", adjustmentBody("   ")))
         .andExpect(status().isBadRequest());
   }
 
@@ -122,8 +120,69 @@ class CustomerPointControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/store/customers/c1/point-adjustments", "{\"reason\": \"訂正\"}"))
+        .perform(
+            storePost(
+                "/store/customers/c1/point-adjustments",
+                "{\"reason\": \"訂正\", \"idempotency_key\": \"op-key-1\"}"))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("冪等キーの無い調整は契約で撥ねられること")
+  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
+  void adjustmentRequiresTheIdempotencyKey() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            storePost(
+                "/store/customers/c1/point-adjustments", "{\"delta\": 100, \"reason\": \"訂正\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("冪等キーの競合に敗れた要求は再送処理へ回り、成功応答になること")
+  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
+  void adjustmentLosingTheKeyRaceIsReplayed() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(customerPointService.adjust(anyString(), any(), anyString()))
+        .thenThrow(integrityViolation("uq_t_point_entries_idempotency_key"));
+    when(customerPointService.replayAdjust(anyString(), any(), anyString()))
+        .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(800L).build());
+
+    mockMvc
+        .perform(storePost("/store/customers/c1/point-adjustments", adjustmentBody("訂正")))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("冪等キー以外の一意制約違反は再送処理へ回さないこと")
+  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
+  void otherIntegrityViolationsAreNotReplayed() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(customerPointService.adjust(anyString(), any(), anyString()))
+        .thenThrow(integrityViolation("uq_t_users_email"));
+
+    mockMvc
+        .perform(storePost("/store/customers/c1/point-adjustments", adjustmentBody("訂正")))
+        .andExpect(status().isConflict());
+    Mockito.verify(customerPointService, Mockito.never())
+        .replayAdjust(anyString(), any(), anyString());
+  }
+
+  /** 冪等キー付きの正常な調整ボディ。 */
+  private static String adjustmentBody(String reason) {
+    return "{\"delta\": 100, \"reason\": \"" + reason + "\", \"idempotency_key\": \"op-key-1\"}";
+  }
+
+  /** 制約名を持つ整合性違反。全域ハンドラの一意違反判定（SQLSTATE 23505）も通る形にする。 */
+  private static DataIntegrityViolationException integrityViolation(String constraintName) {
+    return new DataIntegrityViolationException(
+        "duplicate",
+        new ConstraintViolationException(
+            "could not execute statement",
+            new SQLException("duplicate key value", "23505"),
+            constraintName));
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {

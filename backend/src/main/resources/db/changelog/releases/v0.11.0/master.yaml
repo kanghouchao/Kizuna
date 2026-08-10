@@ -1,0 +1,5 @@
+# v0.11.0 = 手動ポイント調整の冪等キー（ADR 0007）。platform 層のみ。
+databaseChangeLog:
+  - include:
+      file: platform/01-point-entry-idempotency-key.yaml
+      relativeToChangelogFile: true
