@@ -168,8 +168,11 @@ export function MemberReservationNewPage() {
                       <FormControl>
                         <Input required {...field} />
                       </FormControl>
+                      {/* 名乗りが台帳に載るのは、その店舗に自分の記録がまだ無いときだけ（既にあれば
+                          店舗が持つ記録の氏名がそのまま使われる）。「必ず店舗に伝わる」と読める文言は
+                          置かない */}
                       <FormDescription>
-                        この店舗にお伝えするお名前です。ご登録の表示名・メールアドレスは店舗に伝わりません。
+                        初めてのご利用なら、このお名前で店舗の台帳に登録されます。ご登録の表示名・メールアドレスは店舗に伝わりません。
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
