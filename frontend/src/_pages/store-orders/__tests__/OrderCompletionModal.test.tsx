@@ -54,6 +54,18 @@ describe('OrderCompletionModal', () => {
     expect(mockedPreview).not.toHaveBeenCalled();
   });
 
+  it('顧客未設定の受注は録入された連絡先で見出しに出す', async () => {
+    // 会計の相手が誰か分からないまま完了させないため、台帳に着かなかった受注でも呼び名を出す
+    const unlinked: Order = {
+      ...confirmedOrder,
+      customer_name: undefined,
+      contact_name: '重複照合の来客',
+    };
+    render(<OrderCompletionModal order={unlinked} onClose={jest.fn()} onCompleted={jest.fn()} />);
+
+    expect(await screen.findByText(/重複照合の来客（顧客未設定）/)).toBeInTheDocument();
+  });
+
   it('開いた時点の事前計算は会計金額 0 で取る', async () => {
     renderModal();
 

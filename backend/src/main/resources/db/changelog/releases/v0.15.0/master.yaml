@@ -1,0 +1,5 @@
+# v0.15.0 = 受付で録入された連絡先の受注側への写し。store 層のみ。
+databaseChangeLog:
+  - include:
+      file: store/01-order-reported-contact.yaml
+      relativeToChangelogFile: true

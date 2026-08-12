@@ -149,6 +149,53 @@ describe('店側オーダー画面の描画', () => {
     expect(await screen.findByText('フリー')).toBeInTheDocument();
   });
 
+  it('顧客未設定の受注は録入された連絡先で呼ぶこと', async () => {
+    // 電話番号が同店で複数の顧客に一致すると自動照合は断念され、受注は顧客未設定で成立する。
+    // 台帳の顧客名が無いからと '-' で出すと、受付が録入した連絡先がどこにも見えなくなる。
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [
+        {
+          id: '10',
+          business_date: '2026-08-12',
+          // customer_name は顧客未設定なのでキーごと応答から消える
+          contact_name: '重複照合の来客',
+          contact_phone_number: '09012345678',
+          status: 'CREATED',
+        },
+      ],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
+
+    render(<OrderListPage />);
+
+    expect(await screen.findByText('重複照合の来客')).toBeInTheDocument();
+    // 台帳に行を持たない申告のままの値なので、注記は他を説明する文字の体裁で添える
+    expect(screen.getByText('（顧客未設定）')).toHaveClass('text-muted-foreground');
+  });
+
+  it('連絡先が氏名を持たなければ電話番号で呼ぶこと', async () => {
+    mockedOrderApi.list.mockResolvedValue({
+      rows: [
+        {
+          id: '11',
+          business_date: '2026-08-12',
+          contact_phone_number: '09012345678',
+          status: 'CREATED',
+        },
+      ],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
+
+    render(<OrderListPage />);
+
+    expect(await screen.findByText('09012345678')).toBeInTheDocument();
+    expect(screen.getByText('（顧客未設定）')).toBeInTheDocument();
+  });
+
   it('オーダーが0件なら不在メッセージを表示すること', async () => {
     mockedOrderApi.list.mockResolvedValue({
       rows: [],

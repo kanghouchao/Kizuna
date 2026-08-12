@@ -21,6 +21,9 @@ public class OrderResponse {
   private LocalTime arrivalScheduledEndTime;
   private String customerId;
   private String customerName; // Helper
+  // 受付で録入された連絡先。顧客が着かなかった受注にだけ入る（着いた受注では台帳の行が名乗りを持つ）
+  private String contactName;
+  private String contactPhoneNumber;
   private String castId;
   private String castName; // Helper
   private Integer pax;

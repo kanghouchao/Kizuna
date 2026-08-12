@@ -59,6 +59,12 @@ export interface Order {
   requester_member_code?: string;
   location_address?: string;
   location_building?: string;
+  /**
+   * 受付で録入された連絡先。台帳の顧客に着かなかった受注にだけ残る（顧客が着いた受注では
+   * 台帳の行が連絡先を持つため、応答から消える）。
+   */
+  contact_name?: string;
+  contact_phone_number?: string;
 }
 
 export interface OrderReceptionist {
