@@ -50,4 +50,20 @@ describe('MemberHomePage', () => {
 
     expect(await screen.findByText('1234 5678 9012')).toBeInTheDocument();
   });
+
+  it('予約とポイントへの導線を張る', async () => {
+    mockedHome.mockResolvedValue({ member_code: '123456789012', display_name: '会員花子' });
+
+    render(<MemberHomePage />);
+
+    // href は Link が末尾の / を落とした形で描かれる（next.config の trailingSlash 既定）。
+    expect(await screen.findByRole('link', { name: '予約を見る' })).toHaveAttribute(
+      'href',
+      '/member/reservations'
+    );
+    expect(screen.getByRole('link', { name: 'ポイントを見る' })).toHaveAttribute(
+      'href',
+      '/member/points'
+    );
+  });
 });
