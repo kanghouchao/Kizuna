@@ -11,7 +11,7 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
 
   // 会員本人の来店一覧。帰属記録が正本で、表示に要る属性は受注へ join して導出する（ADR 0003 と同じ扱い。
   // 帰属記録は台帳と同じく platform 帰属なので同 ADR が名指す店舗作用域エンティティそのものではない）。店舗は
-  // 内部結合でよい — 削除できる店舗は準備中に限られ完了受注を持たないため、来店の店舗が欠けることはない。
+  // 内部結合でよい — 完了受注を持つ店舗は削除ガードが明示的に拒むため、来店の店舗が欠けることはない。
   // キャストだけは指名も割り当ても無い受注があるので外部結合にする。
   String MEMBER_VISIT_SELECT =
       """
