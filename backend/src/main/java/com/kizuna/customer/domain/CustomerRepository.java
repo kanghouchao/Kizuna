@@ -1,6 +1,7 @@
 package com.kizuna.customer.domain;
 
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -44,5 +45,13 @@ public interface CustomerRepository
 
   Optional<Customer> findByPhoneNumber(String phoneNumber);
 
-  Optional<Customer> findByPhoneNumberAndStoreId(String phoneNumber, Long storeId);
+  /**
+   * 店舗台帳のうち電話番号が一致する顧客。索引 {@code idx_t_customers_phone (phone_number, store_id)}
+   * は非一意で、同店同号の行は正規に起こりうる — 同伴者が連絡先を共有する場合や旧システムからの移行分がそれにあたる。
+   *
+   * <p>だから戻り値は複数行を許す形でなければならない。1 件に絞る形（{@code Optional}）で受けると、重複のある番号を引いた瞬間に {@code
+   * IncorrectResultSizeDataAccessException} で呼出側ごと落ちる。複数一致をどう扱うかは呼出側の判断で、 電話番号は台帳内の検索の手がかりに留まる（ADR
+   * 0009）。
+   */
+  List<Customer> findByPhoneNumberAndStoreId(String phoneNumber, Long storeId);
 }

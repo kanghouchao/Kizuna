@@ -32,6 +32,7 @@ public interface OrderRepository
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,
              o.customerId as customerId, c.name as customerName,
+             o.contactName as contactName, o.contactPhoneNumber as contactPhoneNumber,
              o.castId as castId, k.name as castName,
              o.pax as pax,
              o.courseMinutes as courseMinutes, o.extensionMinutes as extensionMinutes,

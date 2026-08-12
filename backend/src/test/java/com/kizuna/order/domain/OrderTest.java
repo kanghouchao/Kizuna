@@ -162,6 +162,23 @@ class OrderTest {
   }
 
   @Test
+  @DisplayName("連絡先の写しは顧客が着いていない受注にだけ入ること")
+  void recordContactIfUnlinked_onlyWhenNoCustomer() {
+    Order unlinked = Order.builder().build();
+
+    unlinked.recordContactIfUnlinked("重複照合の来客", "09012345678");
+    assertThat(unlinked.getContactName()).isEqualTo("重複照合の来客");
+    assertThat(unlinked.getContactPhoneNumber()).isEqualTo("09012345678");
+
+    // 台帳の行が名乗りを持つ受注に写しを重ねると、どちらが正本かが読み手から消える
+    Order linked = Order.builder().customerId("c1").build();
+
+    linked.recordContactIfUnlinked("重複照合の来客", "09012345678");
+    assertThat(linked.getContactName()).isNull();
+    assertThat(linked.getContactPhoneNumber()).isNull();
+  }
+
+  @Test
   @DisplayName("申請の書き換えは渡した値で置き換え、null は未設定にすること")
   void revise_replacesInsteadOfPatching() {
     Order order =

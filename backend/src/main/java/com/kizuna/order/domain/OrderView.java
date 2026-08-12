@@ -24,6 +24,11 @@ public interface OrderView {
 
   String getCustomerName();
 
+  /** 受付で録入された連絡先の氏名。顧客が着いた受注では空（名乗りの正本は台帳の側にある）。 */
+  String getContactName();
+
+  String getContactPhoneNumber();
+
   String getCastId();
 
   String getCastName();

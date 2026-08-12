@@ -42,6 +42,18 @@ public class Order extends StoreScopedEntity {
   @Column(name = "customer_id")
   private String customerId;
 
+  /**
+   * 受付で録入された連絡先の氏名。台帳の顧客に着かなかった受注にだけ入る。
+   *
+   * <p>顧客が着いた受注では台帳の行が連絡先を持つのでここは空のままで、名乗りの正本は常に台帳の側にある。
+   */
+  @Column(name = "contact_name")
+  private String contactName;
+
+  /** 受付で録入された連絡先の電話番号。{@link #contactName} と同じく顧客が着かなかった受注にだけ入る。 */
+  @Column(name = "contact_phone_number", length = 50)
+  private String contactPhoneNumber;
+
   @Column(name = "cast_id")
   private String castId;
 
@@ -132,6 +144,23 @@ public class Order extends StoreScopedEntity {
   /** 顧客を紐付ける（存在確認・検索/作成は application 層の責務）。 */
   public void linkCustomer(String customerId) {
     this.customerId = customerId;
+  }
+
+  /**
+   * 顧客が着いていなければ、受付で録入された連絡先を受注に写す。着いている受注では何もしない。
+   *
+   * <p>受注は本来 連絡先を自身に持たず、顧客の名乗りは台帳の行が引き受ける。それでも写しを残すのは、 電話番号が同店の複数の顧客に一致して自動照合を断念した受注（無帰属受注は正規の状態）で、
+   * 写しが無いと録入された氏名・電話番号がどこにも残らず、店舗が折り返す手立てを失うため。
+   *
+   * <p>着いているかの判定を呼び手に委ねず自分で見るのは、判定の材料である顧客参照をこの集約が持っているから。
+   * 委ねると「台帳の行と受注の写しが両方名乗る」状態を誰でも作れてしまい、どちらが正本かが読み手から消える。
+   */
+  public void recordContactIfUnlinked(String name, String phoneNumber) {
+    if (customerId != null) {
+      return;
+    }
+    this.contactName = name;
+    this.contactPhoneNumber = phoneNumber;
   }
 
   /**

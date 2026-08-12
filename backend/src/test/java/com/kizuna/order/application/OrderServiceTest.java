@@ -228,11 +228,12 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     Customer newCustomer = Customer.builder().phoneNumber("09012345678").build();
+    // 保存で採番される id（@SnowflakeId）。受注はこの id で顧客に着く
+    newCustomer.setId("c-new");
 
     when(storeContext.getStoreId()).thenReturn(1L);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", 1L))
-        .thenReturn(Optional.empty());
+    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", 1L)).thenReturn(List.of());
     when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
 
@@ -248,6 +249,97 @@ class OrderServiceTest {
 
     verify(customerRepository).save(customerCaptor.capture());
     assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09012345678");
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c-new");
+    // 台帳に行を起こした以上、受注側の写しは要らない
+    assertThat(orderCaptor.getValue().getContactName()).isNull();
+    assertThat(orderCaptor.getValue().getContactPhoneNumber()).isNull();
+  }
+
+  @Test
+  void createLinksTheOnlyCustomerMatchingThePhone() {
+    OrderCreateRequest req = phoneOrderRequest("09012345678", "常連さん");
+
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", STORE_ID))
+        .thenReturn(List.of(customerWithId("c1")));
+    stubCreateHappyPath();
+
+    service.create(req);
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c1");
+    // 台帳の行が連絡先を持つので、受注側の写しは残さない
+    assertThat(orderCaptor.getValue().getContactName()).isNull();
+    verify(customerRepository, never()).save(any());
+  }
+
+  @Test
+  void createLeavesTheCustomerUnsetWhenThePhoneMatchesSeveral() {
+    // 同店同号は正規に起こりうる（同伴者の連絡先共有・移行データ）。一致行に会員関連付きの行が
+    // あり得る以上、機械が 1 行を選ぶのは誤帰属の入口なので、自動照合を断念して顧客未設定で成立させる
+    OrderCreateRequest req = phoneOrderRequest("09012345678", "重複照合の来客");
+
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", STORE_ID))
+        .thenReturn(List.of(customerWithId("c1"), customerWithId("c2")));
+    stubCreateHappyPath();
+
+    service.create(req);
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomerId()).isNull();
+    // 顧客を起こして重複を増やすこともしない
+    verify(customerRepository, never()).save(any());
+    // 顧客未設定で成立させる以上、録入された連絡先は受注側に残さないと消える
+    assertThat(orderCaptor.getValue().getContactName()).isEqualTo("重複照合の来客");
+    assertThat(orderCaptor.getValue().getContactPhoneNumber()).isEqualTo("09012345678");
+  }
+
+  @Test
+  void createKeepsTheReportedContactWhenNoPhoneIsGiven() {
+    // 電話番号を録入しなければ照合も顧客の作成も起きない。名前だけの録入もこの経路を通るので、
+    // 写しの条件は「照合が複数一致したか」ではなく「顧客が着いたか」で決める
+    OrderCreateRequest req = phoneOrderRequest(null, "電話番号なしの来客");
+
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    stubCreateHappyPath();
+
+    service.create(req);
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomerId()).isNull();
+    assertThat(orderCaptor.getValue().getContactName()).isEqualTo("電話番号なしの来客");
+    assertThat(orderCaptor.getValue().getContactPhoneNumber()).isNull();
+    verifyNoInteractions(customerRepository);
+  }
+
+  private OrderCreateRequest phoneOrderRequest(String phoneNumber, String customerName) {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setPhoneNumber(phoneNumber);
+    req.setCustomerName(customerName);
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+    return req;
+  }
+
+  private Customer customerWithId(String id) {
+    Customer customer = Customer.builder().phoneNumber("09012345678").build();
+    customer.setId(id);
+    return customer;
+  }
+
+  /** 顧客照合の後に続く検証（指名・受付担当）と応答の組み立てを通す stub。 */
+  private void stubCreateHappyPath() {
+    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
   }
 
   @Test

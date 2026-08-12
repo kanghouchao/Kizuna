@@ -4,6 +4,7 @@ import com.kizuna.order.domain.ReceptionRoute;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -20,8 +21,16 @@ public class OrderCreateRequest {
   private LocalTime arrivalScheduledEndTime;
 
   private String customerId;
+
+  // 上限は行き先の列と同じ（t_customers.name / t_orders.contact_name = VARCHAR(255)、
+  // t_customers.phone_number / t_orders.contact_phone_number = VARCHAR(50)）。契約で撥ねないと、
+  // 溢れた値が挿入時の SQLSTATE 22001 になり、理由の分かる 400 ではなく 500 で返る。
+  @Size(max = 255, message = "お客様名は 255 文字以内です")
   private String customerName;
+
+  @Size(max = 50, message = "電話番号は 50 文字以内です")
   private String phoneNumber;
+
   private String phoneNumber2;
   private String address;
   private String buildingName;

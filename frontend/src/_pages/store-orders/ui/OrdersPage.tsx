@@ -7,6 +7,7 @@ import { CircleCheckIcon, PlusIcon, SquarePenIcon } from 'lucide-react';
 import { ORDER_STATUS_LABELS, Order, OrderStatus, orderApi } from '@/entities/order';
 import { storePath, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
+import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import { OrderCompletionModal } from './OrderCompletionModal';
 import { ReservationRequestInbox } from './ReservationRequestInbox';
 import {
@@ -39,6 +40,23 @@ const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
   COMPLETED: 'border-transparent bg-primary/10 text-primary-strong',
   CANCELLED: 'border-transparent bg-destructive/10 text-destructive-strong',
 };
+
+/**
+ * 一覧の「お客様名」欄。台帳の顧客名が無ければ受付で録入された連絡先で呼び、台帳に行を持たない
+ * 申告のままの値であることを注記で添える（注記は他を説明する文字なので muted）。
+ */
+function CustomerCell({ order }: { order: Order }) {
+  const label = customerLabel(order);
+  if (label === null) {
+    return <>-</>;
+  }
+  return (
+    <>
+      <span>{label.name}</span>
+      {label.unlinked && <span className="text-muted-foreground">{UNLINKED_NOTE}</span>}
+    </>
+  );
+}
 
 export default function OrderListPage() {
   const params = useParams();
@@ -93,7 +111,9 @@ export default function OrderListPage() {
             {orders.map(order => (
               <TableRow key={order.id}>
                 <TableCell className="text-muted-foreground">{order.business_date}</TableCell>
-                <TableCell className="text-foreground">{order.customer_name || '-'}</TableCell>
+                <TableCell className="text-foreground">
+                  <CustomerCell order={order} />
+                </TableCell>
                 <TableCell>
                   <Badge
                     variant="outline"

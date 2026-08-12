@@ -544,24 +544,35 @@ public class OrderService {
     orderRepository.deleteById(id);
   }
 
+  /**
+   * 受注を店舗台帳の顧客に着ける。顧客 ID の指定があればそれを、無ければ電話番号で当店の台帳を照合する。
+   *
+   * <p>電話番号の照合は一致件数で 3 分岐する。0 件なら録入内容で顧客を起こして紐づけ、1 件ならその顧客に紐づけ、 <b>2
+   * 件以上なら自動照合を断念して顧客未設定のまま成立させる</b>（無帰属受注は正規の状態）。同店同号は正規に起こりうる —
+   * 同伴者の連絡先共有や旧システムからの移行分がそれで、一致行の中に会員関連付きの行があり得る以上、機械が 1 行を選ぶことは 誤帰属の入口になる（ADR 0009）。並び順で 1
+   * 行に決める形も同じ理由で採らない。
+   *
+   * <p>顧客に着かなかった受注には、録入された連絡先を受注側へ写す。写さないと、台帳にも受注にも残らないまま入力が消える。
+   */
   private void handleCustomerLinking(OrderCreateRequest req, Order order) {
     if (req.getCustomerId() != null && !req.getCustomerId().isEmpty()) {
       if (!customerRepository.existsById(req.getCustomerId())) {
         throw new NotFoundException("顧客が見つかりません: " + req.getCustomerId());
       }
       order.linkCustomer(req.getCustomerId());
-    } else if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
-      // 顧客の検索または作成
-      Customer customer =
-          customerRepository
-              .findByPhoneNumberAndStoreId(req.getPhoneNumber(), storeContext.getStoreId())
-              .orElseGet(
-                  () -> {
-                    // store_id は StoreScopeStampListener が @PrePersist で採番する
-                    Customer newCustomer = orderMapper.toCustomer(req);
-                    return customerRepository.save(newCustomer);
-                  });
-      order.linkCustomer(customer.getId());
+      return;
     }
+    if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
+      List<Customer> matched =
+          customerRepository.findByPhoneNumberAndStoreId(
+              req.getPhoneNumber(), storeContext.getStoreId());
+      if (matched.isEmpty()) {
+        // store_id は StoreScopeStampListener が @PrePersist で採番する
+        order.linkCustomer(customerRepository.save(orderMapper.toCustomer(req)).getId());
+      } else if (matched.size() == 1) {
+        order.linkCustomer(matched.get(0).getId());
+      }
+    }
+    order.recordContactIfUnlinked(req.getCustomerName(), req.getPhoneNumber());
   }
 }

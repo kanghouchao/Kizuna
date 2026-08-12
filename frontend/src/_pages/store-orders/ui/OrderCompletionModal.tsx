@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderCompletionPreview, orderApi } from '@/entities/order';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
+import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import {
   Button,
   Dialog,
@@ -22,6 +23,18 @@ import {
 
 /** 空欄と 0 は別物なので、未入力の文言は 1 箇所に持って両方の規則から指す。 */
 const TOTAL_FEE_REQUIRED = '会計金額を入力してください';
+
+/**
+ * 見出しに出す顧客の呼び名。会計の相手が誰か分からないまま完了させないため、顧客未設定の受注も
+ * 録入された連絡先で呼ぶ。見出しの行はすでに全体が注記の体裁なので、注記だけを分けて装飾しない。
+ */
+function customerText(order: Order | null): string {
+  const label = order === null ? null : customerLabel(order);
+  if (label === null) {
+    return 'お客様名なし';
+  }
+  return label.unlinked ? `${label.name}${UNLINKED_NOTE}` : label.name;
+}
 
 interface OrderCompletionFormValues {
   /** 空欄は NaN。「未入力」と 0 円の会計を取り違えないため、valueAsNumber の写像をそのまま持つ。 */
@@ -137,7 +150,7 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
         <div className="border-b px-6 py-4">
           <DialogTitle>完了処理</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            {order?.business_date ?? '-'} / {order?.customer_name || 'お客様名なし'}
+            {order?.business_date ?? '-'} / {customerText(order)}
           </p>
         </div>
         <Form {...form}>
