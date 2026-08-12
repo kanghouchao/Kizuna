@@ -10,6 +10,7 @@ import {
 import {
   MemberOrder,
   MemberOrderCreateRequest,
+  MemberVisit,
   Order,
   OrderCastCandidate,
   OrderCompletionPreview,
@@ -106,5 +107,13 @@ export const memberOrderApi = {
   cancel: async (id: string): Promise<MemberOrder> => {
     const response = await apiClient.post(`/platform/me/orders/${id}/cancellation`);
     return response.data;
+  },
+};
+
+/** 会員本人の来店履歴 API。申請の追跡（memberOrderApi）とは別の読み口で、確定した来店だけを返す。 */
+export const memberVisitApi = {
+  list: async (params?: CursorParams): Promise<CursorPageResult<MemberVisit>> => {
+    const response = await apiClient.get('/platform/me/visits', { params });
+    return fromCursorPage(response.data);
   },
 };

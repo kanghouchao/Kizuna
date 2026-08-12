@@ -155,6 +155,19 @@ export interface MemberOrder {
   status?: OrderStatus;
 }
 
+// 会員本人の来店1件（GET /platform/me/visits）。確定した来店の記録で、申請の追跡（MemberOrder）とは別。
+// 会計金額・利用ポイント・顧客台帳の項目は含まない。
+export interface MemberVisit {
+  /** 来店日（受注の業務日）。 */
+  visited_on?: string;
+  store_name?: string;
+  pax?: number;
+  /** 担当キャスト名。指名も割り当ても無い来店では応答から消える。 */
+  cast_name?: string;
+  /** Java 側が primitive の int のため、キーは必ず応答に含まれる。付与の無い来店は 0。 */
+  granted_points: number;
+}
+
 // 会員本人の予約申請（POST /platform/me/orders）。受付担当・顧客・受付経路はサーバ側が決める。
 export interface MemberOrderCreateRequest {
   store_id: number;
