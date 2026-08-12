@@ -16,6 +16,7 @@ class CustomerMemberLinkTest {
         .customerId("c1")
         .memberId(7L)
         .memberCode("123456789012")
+        .reason(LinkReason.MEMBER_CODE)
         .linkedBy(3L)
         .linkedAt(LINKED_AT);
   }
@@ -29,6 +30,7 @@ class CustomerMemberLinkTest {
     assertThat(link.getCustomerId()).isEqualTo("c1");
     assertThat(link.getMemberId()).isEqualTo(7L);
     assertThat(link.getMemberCode()).isEqualTo("123456789012");
+    assertThat(link.getReason()).isEqualTo(LinkReason.MEMBER_CODE);
     assertThat(link.getLinkedBy()).isEqualTo(3L);
     assertThat(link.getLinkedAt()).isEqualTo(LINKED_AT);
     assertThat(link.getReleasedBy()).isNull();
@@ -57,6 +59,14 @@ class CustomerMemberLinkTest {
     assertThatThrownBy(() -> validLink().memberCode("").build())
         .isInstanceOf(InvalidCustomerMemberLinkException.class)
         .hasMessageContaining("会員コード");
+  }
+
+  @Test
+  @DisplayName("成立根拠が無い紐づけは構築できないこと（どの機構で成立したかの事実が欠ける）")
+  void missingReasonIsRejected() {
+    assertThatThrownBy(() -> validLink().reason(null).build())
+        .isInstanceOf(InvalidCustomerMemberLinkException.class)
+        .hasMessageContaining("成立根拠");
   }
 
   @Test
@@ -89,6 +99,7 @@ class CustomerMemberLinkTest {
     // 紐づけ側の記録は解除で書き換わらない（区間の始点として履歴に残る）
     assertThat(link.getLinkedBy()).isEqualTo(3L);
     assertThat(link.getLinkedAt()).isEqualTo(LINKED_AT);
+    assertThat(link.getReason()).isEqualTo(LinkReason.MEMBER_CODE);
   }
 
   @Test

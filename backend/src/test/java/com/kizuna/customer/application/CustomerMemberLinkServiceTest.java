@@ -11,6 +11,7 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkView;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
@@ -87,6 +88,7 @@ class CustomerMemberLinkServiceTest {
         .customerId(CUSTOMER_ID)
         .memberId(memberId)
         .memberCode(memberCode)
+        .reason(LinkReason.MEMBER_CODE)
         .linkedBy(1L)
         .linkedAt(OffsetDateTime.parse("2026-07-01T10:00:00+09:00"))
         .build();
@@ -98,7 +100,7 @@ class CustomerMemberLinkServiceTest {
   }
 
   @Test
-  @DisplayName("未紐づけの顧客に会員コードを紐づけると ACTIVE の区間が 1 件作られること")
+  @DisplayName("未紐づけの顧客に会員コードを紐づけると ACTIVE の区間が 1 件作られ、成立根拠が MEMBER_CODE で記録されること")
   void linkCreatesActiveLink() {
     givenActor();
     givenCustomerLocked();
@@ -118,6 +120,7 @@ class CustomerMemberLinkServiceTest {
     Mockito.verify(customerMemberLinkRepository).saveAndFlush(saved.capture());
     assertThat(saved.getValue().getStatus()).isEqualTo(LinkStatus.ACTIVE);
     assertThat(saved.getValue().getMemberId()).isEqualTo(7L);
+    assertThat(saved.getValue().getReason()).isEqualTo(LinkReason.MEMBER_CODE);
     assertThat(saved.getValue().getLinkedBy()).isEqualTo(ACTOR_ID);
   }
 

@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
@@ -163,6 +164,7 @@ class MemberOrderServiceTest {
             .customerId("cust-1")
             .memberId(MEMBER_ID)
             .memberCode(MEMBER_CODE)
+            .reason(LinkReason.MEMBER_CODE)
             .linkedBy(9L)
             .linkedAt(OffsetDateTime.now())
             .build();

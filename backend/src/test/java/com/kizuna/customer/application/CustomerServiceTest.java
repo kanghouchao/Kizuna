@@ -15,6 +15,7 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.NotFoundException;
 import java.time.OffsetDateTime;
@@ -225,6 +226,7 @@ class CustomerServiceTest {
         .customerId(customerId)
         .memberId(7L)
         .memberCode(memberCode)
+        .reason(LinkReason.MEMBER_CODE)
         .linkedBy(1L)
         .linkedAt(OffsetDateTime.parse("2026-07-01T10:00:00+09:00"))
         .build();

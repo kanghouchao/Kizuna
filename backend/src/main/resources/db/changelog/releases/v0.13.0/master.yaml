@@ -1,0 +1,5 @@
+# v0.13.0 = 関連（会員紐づけ）の成立根拠。store 層のみ。
+databaseChangeLog:
+  - include:
+      file: store/01-customer-member-link-reason.yaml
+      relativeToChangelogFile: true
