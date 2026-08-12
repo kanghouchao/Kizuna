@@ -65,6 +65,7 @@ class MemberOrderServiceTest {
   private static final long PLATFORM_USER_ID = 50L;
   private static final String EMAIL = "member@kizuna.test";
   private static final String MEMBER_CODE = "123456789012";
+  private static final String DECLARED_NAME = "名乗り太郎";
   private static final String TIMEZONE = "Asia/Tokyo";
 
   @Mock OrderRepository orderRepository;
@@ -111,6 +112,7 @@ class MemberOrderServiceTest {
     request.setBusinessDate(date);
     request.setPax(2);
     request.setCastId(castId);
+    request.setDeclaredName(DECLARED_NAME);
     return request;
   }
 
@@ -153,6 +155,9 @@ class MemberOrderServiceTest {
     assertThat(saved.getStoreId()).as("店舗文脈が無い経路でも店舗が確定していること").isEqualTo(STORE_ID);
     assertThat(saved.getReceptionistId()).as("申請時点では受付担当がいないこと").isNull();
     assertThat(saved.getCustomerId()).as("紐づけが無ければ顧客は空のままであること").isNull();
+    assertThat(saved.getRequesterDeclaredName())
+        .as("店舗へ名乗る名前が受注に残ること（確定時の自動整備が台帳行の氏名に使う）")
+        .isEqualTo(DECLARED_NAME);
   }
 
   @Test

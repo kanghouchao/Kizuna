@@ -457,7 +457,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
                     + STORE_A
                     + ", \"business_date\": \""
                     + LocalDate.now(ZoneId.of("Asia/Tokyo"))
-                    + "\", \"pax\": 2}",
+                    + "\", \"pax\": 2, \"declared_name\": \"名乗り太郎\"}",
                 headers),
             JsonNode.class);
     assertThat(requested.getStatusCode()).as("前提: 会員が予約を申請できること").isEqualTo(HttpStatus.CREATED);

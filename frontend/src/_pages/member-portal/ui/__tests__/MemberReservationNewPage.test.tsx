@@ -28,6 +28,10 @@ const mockedCreate = memberOrderApi.create as jest.Mock;
 
 const submitButton = () => screen.getByRole('button', { name: 'この内容で申請する' });
 
+/** 名乗る名前は必須。既存の検証・送信の観測はこの欄を埋めた状態から始める。 */
+const fillDeclaredName = (value = '名乗り太郎') =>
+  fireEvent.change(screen.getByLabelText('店舗へ名乗るお名前'), { target: { value } });
+
 describe('MemberReservationNewPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -140,13 +144,14 @@ describe('MemberReservationNewPage', () => {
     expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
   });
 
-  it('照会で得た店舗 ID と人数を添えて申請する', async () => {
+  it('照会で得た店舗 ID・名乗る名前・人数を添えて申請する', async () => {
     mockedLookup.mockResolvedValue({ id: '7', name: 'サンプル店舗' });
     mockedCreate.mockResolvedValue({});
 
     render(<MemberReservationNewPage />);
 
     fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
     await waitFor(() => expect(submitButton()).toBeEnabled());
     const pax = screen.getByLabelText('人数');
     fireEvent.change(pax, { target: { value: '' } });
@@ -155,10 +160,46 @@ describe('MemberReservationNewPage', () => {
 
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ store_id: 7, business_date: '2026-08-10', pax: 3 })
+        expect.objectContaining({
+          store_id: 7,
+          declared_name: '名乗り太郎',
+          business_date: '2026-08-10',
+          pax: 3,
+        })
       )
     );
     expect(mockPush).toHaveBeenCalledWith('/member/reservations/');
+  });
+
+  // 名乗る名前は確定時に店舗の顧客台帳行の氏名になる。空で通すとサーバ側の 400 として
+  // 返ってきて、どの欄が足りないのか画面に現れない。
+  it('名乗る名前が未入力なら申請せずに検証エラーを出す', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+
+    expect(await screen.findByText('店舗へ名乗るお名前を入力してください')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  // required は空白だけを「入っている」と見る。サーバ側の @NotBlank へ届かせると、欄の傍ではなく
+  // 送信失敗の通知として返り、どこを直せばよいのか画面に現れない。
+  it('名乗る名前が空白だけなら申請せずに検証エラーを出す', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName('　  ');
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+
+    expect(await screen.findByText('店舗へ名乗るお名前を入力してください')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
   });
 
   it('人数が未入力なら申請せずに検証エラーを出す', async () => {
@@ -167,6 +208,7 @@ describe('MemberReservationNewPage', () => {
     render(<MemberReservationNewPage />);
 
     fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
     await waitFor(() => expect(submitButton()).toBeEnabled());
     fireEvent.change(screen.getByLabelText('人数'), { target: { value: '' } });
     fireEvent.click(submitButton());
@@ -291,6 +333,7 @@ describe('MemberReservationNewPage', () => {
     render(<MemberReservationNewPage />);
 
     fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
     await waitFor(() => expect(submitButton()).toBeEnabled());
     fireEvent.change(screen.getByLabelText('ご要望（任意）'), {
       target: { value: 'あ'.repeat(501) },
@@ -309,6 +352,7 @@ describe('MemberReservationNewPage', () => {
     render(<MemberReservationNewPage />);
 
     fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
     await waitFor(() => expect(submitButton()).toBeEnabled());
     fireEvent.change(screen.getByLabelText('人数'), { target: { value: '1.5' } });
     fireEvent.click(submitButton());
@@ -324,6 +368,7 @@ describe('MemberReservationNewPage', () => {
     render(<MemberReservationNewPage />);
 
     fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
     await waitFor(() => expect(submitButton()).toBeEnabled());
     fireEvent.change(screen.getByLabelText('人数'), { target: { value: '2' } });
     fireEvent.click(submitButton());

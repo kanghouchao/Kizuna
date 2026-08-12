@@ -131,6 +131,16 @@ public class Order extends StoreScopedEntity {
   @Column(name = "requester_member_code", length = 20)
   private String requesterMemberCode;
 
+  /**
+   * 申請時に本人が店舗へ名乗った名前。確定時の自動整備で起こす台帳行の氏名になる。
+   *
+   * <p>店舗はプラットフォーム側プロフィール（表示名・メール）へ到達しないため、店舗が知る名前は本人がその店舗へ名乗ると決めたこの名前だけになる。
+   *
+   * <p>氏名の正本は成立した台帳行だが、確定まで台帳行は存在しない。その間の名乗りをこの列が預かる。
+   */
+  @Column(name = "requester_declared_name")
+  private String requesterDeclaredName;
+
   /** キャストを割り当てる（存在確認は application 層の責務）。 */
   public void assignCast(String castId) {
     this.castId = castId;

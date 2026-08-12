@@ -9,11 +9,14 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -99,11 +102,28 @@ public class OrderController {
     return ResponseEntity.ok(orderService.updateReservationRequest(id, request));
   }
 
-  /** 予約申請を確定する（受注として受け付ける）。 */
+  /**
+   * 予約申請を確定する（受注として受け付ける）。
+   *
+   * <p>確定は当店の台帳行と関連を自動で整えるため、同一会員・同一店舗の申請 2 件が同時に確定すると双方が「関連なし」を観測し、遅い側が関連の部分一意索引に敗れる。 敗者は取り直す —
+   * 勝者の関連は既に commit されているので、2 度目の確定は自動整備の再利用の枝へ落ちて収束する。
+   *
+   * <p>この分岐はサービスのトランザクション境界の外に置かなければならない（ADR 0007 と同じ紀律）— 制約違反の時点で敗者のトランザクションは作廃されており、内側で catch
+   * しても勝者の関連を読み直せない。取り直しは 1 度だけで、それでも敗れる場合（勝者の関連がその間に解除される等）は一意違反として 409
+   * に落ちる。他の整合性違反は実装欠陥なのでそのまま上げる。
+   */
   @PostMapping("/{id}/confirmation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> confirm(@PathVariable String id, Principal principal) {
-    return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
+    try {
+      return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
+    } catch (DataIntegrityViolationException ex) {
+      if (!IntegrityViolations.violates(
+          ex, DbConstraint.UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER)) {
+        throw ex;
+      }
+      return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
+    }
   }
 
   /** 受注を完了する（会計の確定）。ポイントの付与・利用はこの経路でのみ台帳へ入る。 */

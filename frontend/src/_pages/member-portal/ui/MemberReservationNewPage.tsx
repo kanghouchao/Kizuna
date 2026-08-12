@@ -18,6 +18,7 @@ import {
   CardTitle,
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -29,6 +30,7 @@ import {
 } from '@/shared/ui';
 
 interface ReservationFormValues {
+  declared_name: string;
   business_date: string;
   arrival_scheduled_start_time: string;
   pax: number;
@@ -64,6 +66,7 @@ export function MemberReservationNewPage() {
 
   const form = useForm<ReservationFormValues>({
     defaultValues: {
+      declared_name: '',
       business_date: '',
       arrival_scheduled_start_time: '',
       pax: 1,
@@ -103,6 +106,7 @@ export function MemberReservationNewPage() {
     try {
       await memberOrderApi.create({
         store_id: storeId,
+        declared_name: values.declared_name,
         business_date: values.business_date,
         pax: Number(values.pax),
         arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
@@ -146,6 +150,34 @@ export function MemberReservationNewPage() {
               {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
                   我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
               <form onSubmit={handleSubmit(submit)} className="space-y-4" noValidate>
+                {/* 店舗が知る名前はここで名乗る名前だけ。ご登録の表示名・メールは店舗へ渡らない */}
+                <FormField
+                  control={control}
+                  name="declared_name"
+                  rules={{
+                    required: '店舗へ名乗るお名前を入力してください',
+                    maxLength: { value: 255, message: 'お名前は 255 文字以内で入力してください' },
+                    // required は空白だけの入力を「入っている」と見る。サーバ側の @NotBlank が
+                    // 弾く形をそのまま通すと、欄の傍ではなく送信失敗の通知として返ってくる。
+                    validate: value =>
+                      value.trim().length > 0 || '店舗へ名乗るお名前を入力してください',
+                  }}
+                  render={({ field }) => (
+                    <FormItem className="gap-1">
+                      <FormLabel>店舗へ名乗るお名前</FormLabel>
+                      <FormControl>
+                        <Input required {...field} />
+                      </FormControl>
+                      {/* 名乗りが台帳に載るのは、その店舗に自分の記録がまだ無いときだけ（既にあれば
+                          店舗が持つ記録の氏名がそのまま使われる）。「必ず店舗に伝わる」と読める文言は
+                          置かない */}
+                      <FormDescription>
+                        初めてのご利用なら、このお名前で店舗の台帳に登録されます。ご登録の表示名・メールアドレスは店舗に伝わりません。
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={control}
                   name="business_date"
