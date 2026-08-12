@@ -75,7 +75,10 @@ export function MemberPointsPage() {
         </CardHeader>
         <CardContent>
           {balanceFailure !== null ? (
-            <RegionError message="残高を取得できませんでした。" onRetry={() => void reloadBalance()} />
+            <RegionError
+              message="残高を取得できませんでした。"
+              onRetry={() => void reloadBalance()}
+            />
           ) : balanceLoading || balance === null ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : (
