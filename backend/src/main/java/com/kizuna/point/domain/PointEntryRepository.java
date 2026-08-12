@@ -2,6 +2,7 @@ package com.kizuna.point.domain;
 
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
@@ -35,6 +36,17 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       "select e from com.kizuna.point.domain.PointEntry e where e.orderId = :orderId"
           + " and e.amount > 0")
   List<PointEntry> findCreditsByOrderId(@Param("orderId") String orderId);
+
+  /**
+   * 受注ごとの付与合計。加算で受注 ID を持つ仕訳だけを足す — 付与の経路（完了時・事後申領）を種別で区別せず、{@link #findCreditsByOrderId}
+   * と同じ読み方で拾う。取消は元の付与を打ち消す減算として別の行に積まれ、この合計には現れない。
+   */
+  @Query(
+      "select e.orderId as orderId, sum(e.amount) as total"
+          + " from com.kizuna.point.domain.PointEntry e"
+          + " where e.orderId in :orderIds and e.amount > 0"
+          + " group by e.orderId")
+  List<OrderGrantTotalView> sumGrantsByOrderIds(@Param("orderIds") Collection<String> orderIds);
 
   /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
