@@ -58,9 +58,11 @@ public class MemberVisitService {
     CursorPage<MemberVisitView> page = CursorPage.of(fetched, size, MemberVisitService::cursorOf);
     // 獲得ポイントは台帳にしか無いので、返す行の分だけをまとめて引く。行ごとに引くと来店が増えるほど
     // 問い合わせが線形に増え、余分に取った 1 件（続きの有無を判るためだけの行）まで引いてしまう。
-    Map<String, Integer> grantedPoints =
+    // 本人の一致は台帳側の問い合わせにも載せる — 誤帰属を無効化しても付与行は残るため、受注 ID だけで
+    // 足すと、その受注を申領した本人の来店に前の会員の付与が現れる。
+    Map<String, Long> grantedPoints =
         pointLedgerService.grantedPointsByOrder(
-            page.content().stream().map(MemberVisitView::getOrderId).toList());
+            memberId, page.content().stream().map(MemberVisitView::getOrderId).toList());
     return page.map(view -> toResponse(view, grantedPoints));
   }
 
@@ -88,12 +90,12 @@ public class MemberVisitService {
   }
 
   /** 付与行の無い受注は台帳に現れないので 0 とみなす — 0 円完了でも帰属記録は生まれ、来店としては見える。 */
-  private MemberVisitResponse toResponse(MemberVisitView view, Map<String, Integer> grantedPoints) {
+  private MemberVisitResponse toResponse(MemberVisitView view, Map<String, Long> grantedPoints) {
     return new MemberVisitResponse(
         view.getVisitedOn(),
         view.getStoreName(),
         view.getPax(),
         view.getCastName(),
-        grantedPoints.getOrDefault(view.getOrderId(), 0));
+        grantedPoints.getOrDefault(view.getOrderId(), 0L));
   }
 }

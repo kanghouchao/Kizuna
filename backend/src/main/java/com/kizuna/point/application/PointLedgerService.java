@@ -92,22 +92,25 @@ public class PointLedgerService {
   }
 
   /**
-   * 受注ごとの付与ポイント。付与の無い受注は結果に現れない（呼出側が 0 とみなす）。
+   * 指定した会員に対する、受注ごとの付与ポイント。付与の無い受注は結果に現れない（呼出側が 0 とみなす）。
    *
    * <p>返すのは合計だけで、仕訳そのものは公開しない — 来店 1 件に添える「その来店で得たポイント」は台帳の付与行からしか
    * 導けないが、行を渡すと追加型台帳の不変条件が外から触れるようになる。
    *
+   * <p>会員 ID を要求するのは、1 件の受注に別々の会員の付与が並びうるため。誤帰属を無効化しても付与行は台帳に残る（清算は手動調整）ので、 受注 ID
+   * だけで足すと、その受注を申領した正しい本人の来店に前の会員の付与が現れる。
+   *
+   * <p>合計が long なのは残高と同じ理由 — 1 件の仕訳は int でも、積み上げた合計は int を超えうる。読み取りで丸めて例外にするより、 台帳が表せる値をそのまま返す。
+   *
    * <p>一覧の 1 ページ分をまとめて引く。行ごとに引くと、来店が増えるほど問い合わせが線形に増える。
    */
   @Transactional(readOnly = true)
-  public Map<String, Integer> grantedPointsByOrder(Collection<String> orderIds) {
+  public Map<String, Long> grantedPointsByOrder(long memberId, Collection<String> orderIds) {
     if (orderIds.isEmpty()) {
       return Map.of();
     }
-    return pointEntryRepository.sumGrantsByOrderIds(orderIds).stream()
-        .collect(
-            Collectors.toMap(
-                OrderGrantTotalView::getOrderId, view -> Math.toIntExact(view.getTotal())));
+    return pointEntryRepository.sumGrantsByOrderIds(memberId, orderIds).stream()
+        .collect(Collectors.toMap(OrderGrantTotalView::getOrderId, OrderGrantTotalView::getTotal));
   }
 
   /** 受注完了に伴う付与。付与が 0 なら台帳へ何も書かない。戻り値は実際に付与したポイント数。 */

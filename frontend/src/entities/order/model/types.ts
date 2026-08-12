@@ -164,7 +164,7 @@ export interface MemberVisit {
   pax?: number;
   /** 担当キャスト名。指名も割り当ても無い来店では応答から消える。 */
   cast_name?: string;
-  /** Java 側が primitive の int のため、キーは必ず応答に含まれる。付与の無い来店は 0。 */
+  /** Java 側が primitive の long のため、キーは必ず応答に含まれる。付与の無い来店は 0。 */
   granted_points: number;
 }
 

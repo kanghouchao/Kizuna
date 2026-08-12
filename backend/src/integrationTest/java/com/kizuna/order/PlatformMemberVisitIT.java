@@ -59,6 +59,9 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
   /** 店舗B の来店に直挿しする付与。店舗A の付与と見分けが付く値にする。 */
   private static final int GRANTED_AT_STORE_B = 777;
 
+  /** 同じ受注に積まれた他会員の付与。本人の獲得ポイントに混ざってはならない。 */
+  private static final int OTHER_MEMBER_GRANT = 5000;
+
   @Autowired private OrderRepository orderRepository;
   @Autowired private OrderAttributionRepository orderAttributionRepository;
   @Autowired private PointEntryRepository pointEntryRepository;
@@ -108,6 +111,24 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
 
     assertThat(content).hasSize(1);
     assertThat(content.path(0).path("granted_points").asInt()).isZero();
+  }
+
+  @Test
+  @DisplayName("同じ受注に別会員の付与が積まれていても、獲得ポイントは本人の分だけを足すこと")
+  void countsOnlyTheViewersOwnGrantsForTheSameOrder() {
+    // 誤帰属を無効化しても付与行は台帳に残る（清算は手動調整）。その受注が正しい本人へ申領されると、
+    // 1 件の受注に 2 人分の付与が並ぶ。受注 ID だけで足すと前の会員の付与まで本人の来店に現れる。
+    String orderId = completedVisitAtStoreA("同一受注担当-" + nonce, 2, TOTAL_FEE);
+    RegisteredMember other = registerAndLogin("other");
+    pointEntryRepository.save(
+        PointEntry.grantForOrder(other.id(), orderId, STORE_A, OTHER_MEMBER_GRANT, null));
+
+    JsonNode content = visits(null).path("content");
+
+    assertThat(content).hasSize(1);
+    assertThat(content.path(0).path("granted_points").asInt())
+        .as("他会員の付与を足し込まないこと")
+        .isEqualTo(GRANTED_FOR_TOTAL_FEE);
   }
 
   @Test

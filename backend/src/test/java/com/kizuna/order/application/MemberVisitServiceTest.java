@@ -156,8 +156,8 @@ class MemberVisitServiceTest {
                     "店舗A",
                     2,
                     null)));
-    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.any()))
-        .thenReturn(Map.of("order-b", 120, "order-a", 80));
+    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
+        .thenReturn(Map.of("order-b", 120L, "order-a", 80L));
 
     CursorPage<MemberVisitResponse> page = service.list(EMAIL, null, 20);
 
@@ -169,8 +169,8 @@ class MemberVisitServiceTest {
             MemberVisitResponse::castName,
             MemberVisitResponse::grantedPoints)
         .containsExactly(
-            tuple(LocalDate.parse("2026-08-11"), "店舗B", 3, "キャスト太郎", 120),
-            tuple(LocalDate.parse("2026-08-10"), "店舗A", 2, null, 80));
+            tuple(LocalDate.parse("2026-08-11"), "店舗B", 3, "キャスト太郎", 120L),
+            tuple(LocalDate.parse("2026-08-10"), "店舗A", 2, null, 80L));
     assertThat(page.nextCursor()).as("続きが無ければ位置は返さない").isNull();
   }
 
@@ -181,11 +181,29 @@ class MemberVisitServiceTest {
     Mockito.when(
             orderAttributionRepository.findMemberVisitViews(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(List.of(visit(1L, "2026-08-10T20:00:00+09:00")));
-    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.any())).thenReturn(Map.of());
+    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
+        .thenReturn(Map.of());
 
     assertThat(service.list(EMAIL, null, 20).content())
         .extracting(MemberVisitResponse::storeName, MemberVisitResponse::grantedPoints)
-        .containsExactly(tuple("店舗A", 0));
+        .containsExactly(tuple("店舗A", 0L));
+  }
+
+  @Test
+  @DisplayName("付与の合計が int を超えても丸めずに返す")
+  void keepsGrantTotalsThatExceedAnInt() {
+    // 1 件の仕訳は int でも、1 受注に積まれた付与の合計は int を超えうる。読み取りで丸めて例外にすると、
+    // 台帳が表せる状態のまま来店履歴だけが開けなくなる。
+    Mockito.when(
+            orderAttributionRepository.findMemberVisitViews(Mockito.eq(MEMBER_ID), Mockito.any()))
+        .thenReturn(List.of(visit(1L, "2026-08-10T20:00:00+09:00")));
+    long beyondInt = Integer.MAX_VALUE + 1L;
+    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
+        .thenReturn(Map.of("order-1", beyondInt));
+
+    assertThat(service.list(EMAIL, null, 20).content())
+        .extracting(MemberVisitResponse::grantedPoints)
+        .containsExactly(beyondInt);
   }
 
   @Test
@@ -200,12 +218,15 @@ class MemberVisitServiceTest {
                 visit(3L, "2026-08-12T20:00:00+09:00"),
                 visit(2L, "2026-08-11T20:00:00+09:00"),
                 visit(1L, "2026-08-10T20:00:00+09:00")));
-    Mockito.when(pointLedgerService.grantedPointsByOrder(orderIdsCaptor.capture()))
+    Mockito.when(
+            pointLedgerService.grantedPointsByOrder(
+                Mockito.eq(MEMBER_ID), orderIdsCaptor.capture()))
         .thenReturn(Map.of());
 
     service.list(EMAIL, null, 2);
 
-    Mockito.verify(pointLedgerService, Mockito.times(1)).grantedPointsByOrder(Mockito.any());
+    Mockito.verify(pointLedgerService, Mockito.times(1))
+        .grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any());
     assertThat(orderIdsCaptor.getValue()).containsExactly("order-3", "order-2");
   }
 
@@ -220,7 +241,8 @@ class MemberVisitServiceTest {
                 visit(3L, "2026-08-12T20:00:00+09:00"),
                 visit(2L, "2026-08-11T20:00:00+09:00"),
                 visit(1L, "2026-08-10T20:00:00+09:00")));
-    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.any())).thenReturn(Map.of());
+    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
+        .thenReturn(Map.of());
 
     CursorPage<MemberVisitResponse> page = service.list(EMAIL, null, 2);
 
@@ -239,7 +261,8 @@ class MemberVisitServiceTest {
             orderAttributionRepository.findMemberVisitViewsAfter(
                 Mockito.eq(MEMBER_ID), Mockito.eq(position), Mockito.eq(2L), Mockito.any()))
         .thenReturn(List.of(visit(1L, "2026-08-10T20:00:00+09:00")));
-    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.any())).thenReturn(Map.of());
+    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
+        .thenReturn(Map.of());
 
     CursorPage<MemberVisitResponse> page =
         service.list(EMAIL, new PageCursor(position.toString(), "2").encode(), 20);
