@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -20,7 +22,9 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.application.StoreActivationService;
+import java.sql.SQLException;
 import java.util.List;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -263,6 +268,46 @@ class OrderControllerTest {
     mockMvc
         .perform(storePut("/store/orders/o1", "{\"pax\": 0}"))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("関連の並行成立に敗れた確定は取り直され、成功応答になること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void confirmationLosingTheLinkRaceIsRetried() throws Exception {
+    // 敗者の収束をここで固定する。統合テストの並行確定は「2 つの確定が実際に競った」ことを
+    // 保証できない（勝者が先に commit すれば敗者は素直に再利用の枝へ落ちる）ため、取り直しの
+    // 配線そのものは決定的なこの単体テストが受け持つ。
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.confirm(any(), any()))
+        .thenThrow(integrityViolation("uq_t_customer_member_links_active_member"))
+        .thenReturn(OrderResponse.builder().id("o1").build());
+
+    mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isOk());
+
+    verify(orderService, times(2)).confirm(any(), any());
+  }
+
+  @Test
+  @DisplayName("関連以外の整合性違反では確定を取り直さないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void confirmationDoesNotRetryOnOtherIntegrityViolations() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.confirm(any(), any())).thenThrow(integrityViolation("uq_t_users_email"));
+
+    // 写像を持たない違反は実装欠陥として全域ハンドラの分類（一意違反 = 409）へ落とす
+    mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isConflict());
+
+    verify(orderService, times(1)).confirm(any(), any());
+  }
+
+  /** 制約名を持つ整合性違反。全域ハンドラの一意違反判定（SQLSTATE 23505）も通る形にする。 */
+  private static DataIntegrityViolationException integrityViolation(String constraintName) {
+    return new DataIntegrityViolationException(
+        "duplicate",
+        new ConstraintViolationException(
+            "could not execute statement",
+            new SQLException("duplicate key value", "23505"),
+            constraintName));
   }
 
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。

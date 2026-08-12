@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v01600-001-order-requester-declared-name
+      author: kanghouchao
+      # 申請時に本人が入力する「店舗へ名乗る名前」。確定時の自動整備が起こす台帳行の氏名になる。
+      #
+      # プラットフォーム側プロフィール（表示名・メール）は店舗へ渡さないため、店舗が知る名前は
+      # 本人がその店舗へ名乗ると決めた名前だけになる。氏名の正本は成立後の台帳行だが、確定まで
+      # 台帳行は存在しないので、申請の時点ではこの列がその名乗りを預かる。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_orders
+            columns:
+              - column:
+                  name: requester_declared_name
+                  type: VARCHAR(255)
+                  remarks: 申請時に本人が店舗へ名乗った名前（確定時の自動整備で台帳行の氏名になる）
+      rollback:
+        - dropColumn:
+            tableName: t_orders
+            columns:
+              - column:
+                  name: requester_declared_name

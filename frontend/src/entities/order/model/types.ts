@@ -179,6 +179,8 @@ export interface MemberOrderCreateRequest {
   store_id: number;
   business_date: string;
   pax: number;
+  /** 店舗へ名乗る名前。確定時に店舗の顧客台帳行の氏名になるため必須。 */
+  declared_name: string;
   arrival_scheduled_start_time?: string;
   cast_id?: string;
   remarks?: string;

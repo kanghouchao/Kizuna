@@ -83,7 +83,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
                     + storeId
                     + ", \"business_date\": \""
                     + LocalDate.now(ZoneId.of("Asia/Tokyo"))
-                    + "\", \"pax\": 3, \"remarks\": \""
+                    + "\", \"pax\": 3, \"declared_name\": \"名乗り太郎\", \"remarks\": \""
                     + remarks
                     + "\"}",
                 bearer(memberToken)),

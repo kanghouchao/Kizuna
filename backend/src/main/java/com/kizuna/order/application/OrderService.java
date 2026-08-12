@@ -4,6 +4,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
@@ -22,6 +23,7 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -53,6 +55,9 @@ public class OrderService {
 
   /** 指名が成立しないことを店舗スタッフへ返すときの文言。列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す。 */
   private static final String NOT_NOMINATABLE_MESSAGE = "指名できるキャストではありません。在籍中のキャストを選んでください";
+
+  /** 台帳行を起こすときの顧客ランク。DB 既定（{@code SILVER}）と同義で、{@code OrderMapper#toCustomer} と揃える。 */
+  private static final String DEFAULT_RANK = "SILVER";
 
   private final OrderRepository orderRepository;
   private final OrderAttributionRepository orderAttributionRepository;
@@ -217,8 +222,8 @@ public class OrderService {
    *
    * <p>条件を満たさない実行者（店舗を授権する HQ 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
    *
-   * <p>顧客も未設定なら、この時点の紐づけを見て補う。申請時に紐づけが無くても、店舗が会員コードを読んで台帳に結び付けてから
-   * 確定するのが初回来店の順序であり、申請時の解決だけでは受注が顧客履歴に載らないまま残る。
+   * <p>顧客も未設定なら、この時点で当店の台帳を整えて着ける（{@link #ensureCustomerForRequester}）。申請時に紐づけが無くても、店舗が会員コードを読んで
+   * 台帳に結び付けてから確定するのが初回来店の順序であり、申請時の解決だけでは受注が顧客履歴に載らないまま残る。
    */
   @StoreScoped
   @Transactional
@@ -230,14 +235,49 @@ public class OrderService {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
     }
     if (order.getCustomerId() == null && order.getRequesterMemberId() != null) {
-      customerMemberLinkRepository
-          .findByStoreIdAndMemberIdAndStatus(
-              order.getStoreId(), order.getRequesterMemberId(), LinkStatus.ACTIVE)
-          .map(CustomerMemberLink::getCustomerId)
-          .ifPresent(order::linkCustomer);
+      order.linkCustomer(ensureCustomerForRequester(order, actorEmail));
     }
     orderRepository.save(order);
     return toResponse(id);
+  }
+
+  /**
+   * 会員申請の受注が着く当店の顧客を用意する。当店に申請者会員の有効な関連があればその顧客を使い、無ければ台帳行と関連（根拠 {@link
+   * LinkReason#MEMBER_REQUEST}）を起こす。
+   *
+   * <p>自動で整えるのは、ログイン態が本人証明・当該店舗への申請が明示の確認であり、帰属の成立要件をこの経路が構造的に満たすため（ADR 0008）。
+   * 来店時の会員コード再提示は要求しない。整備がここで漏れると、完了時の会員解決（顧客 → 有効な関連 → 会員）が空振りしてポイントが記帳されない。
+   *
+   * <p>起こす台帳行の氏名は本人が申請時に名乗った名前で、電話は空。店舗はプラットフォーム側プロフィール（表示名・メール）へ到達しないため、
+   * 店舗が知る名前は本人がその店舗へ名乗ると決めた名前だけになる。関連の会員コードは申請時のスナップショットを写す — 会員コードは発行後に変わらない。
+   *
+   * <p>関連は flush まで進めて書く。同一会員・同一店舗の申請 2 件の並行確定は双方が「関連なし」を観測しうるため、収束は部分一意索引 {@link
+   * DbConstraint#UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER} の違反として現れなければならない（掴む位置は controller —
+   * {@code OrderController#confirm}）。
+   */
+  private String ensureCustomerForRequester(Order order, String actorEmail) {
+    Optional<CustomerMemberLink> established =
+        customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
+            order.getStoreId(), order.getRequesterMemberId(), LinkStatus.ACTIVE);
+    if (established.isPresent()) {
+      return established.get().getCustomerId();
+    }
+    Long actorId = resolveActorId(actorEmail);
+    // store_id は StoreScopeStampListener が @PrePersist で採番する。ランクは他の台帳行の作成経路
+    // （通常作成・電話番号からの作成）と同じ既定を明示する — 列を写像している以上、省略は DB 既定ではなく null になる。
+    Customer customer =
+        customerRepository.save(
+            Customer.builder().name(order.getRequesterDeclaredName()).rank(DEFAULT_RANK).build());
+    customerMemberLinkRepository.saveAndFlush(
+        CustomerMemberLink.builder()
+            .customerId(customer.getId())
+            .memberId(order.getRequesterMemberId())
+            .memberCode(order.getRequesterMemberCode())
+            .reason(LinkReason.MEMBER_REQUEST)
+            .linkedBy(actorId)
+            .linkedAt(OffsetDateTime.now())
+            .build());
+    return customer.getId();
   }
 
   /**

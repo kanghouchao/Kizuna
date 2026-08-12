@@ -43,7 +43,7 @@ class PlatformMemberOrderControllerTest {
 
   private static final String BODY =
       """
-      {"store_id":1,"business_date":"2999-01-01","pax":2}
+      {"store_id":1,"business_date":"2999-01-01","pax":2,"declared_name":"名乗り太郎"}
       """;
 
   @Autowired private MockMvc mockMvc;

@@ -96,6 +96,7 @@ class OrderServiceTest {
 
   @Captor ArgumentCaptor<Order> orderCaptor;
   @Captor ArgumentCaptor<Customer> customerCaptor;
+  @Captor ArgumentCaptor<CustomerMemberLink> linkCaptor;
 
   private static final long STORE_ID = 1L;
 
@@ -1005,6 +1006,123 @@ class OrderServiceTest {
     service.confirm("o1", "staff@kizuna.test");
 
     assertThat(request.getCustomerId()).isEqualTo("cust-1");
+    verify(customerRepository, never()).save(any(Customer.class));
+    verify(customerMemberLinkRepository, never()).saveAndFlush(any(CustomerMemberLink.class));
+  }
+
+  @Test
+  void confirmProvisionsALedgerRowAndLinkWhenTheStoreHasNone() {
+    // 会員コードを読ませずに申請だけで来店する経路。ここで整備しないと、完了時の会員解決
+    // （顧客 → 有効な関連 → 会員）が空振りしてポイントが記帳されない。
+    Order request =
+        reservationRequest()
+            .requesterMemberId(100L)
+            .requesterDeclaredName("名乗り太郎")
+            .receptionistId(3L)
+            .build();
+    request.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
+            STORE_ID, 100L, LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    PlatformUser actor = authorizedReceptionist();
+    actor.setId(7L);
+    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
+    Customer provisioned = Customer.builder().name("名乗り太郎").build();
+    provisioned.setId("cust-new");
+    when(customerRepository.save(any(Customer.class))).thenReturn(provisioned);
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    verify(customerRepository).save(customerCaptor.capture());
+    Customer created = customerCaptor.getValue();
+    assertThat(created.getName()).as("台帳行の氏名は本人が名乗った名前であること").isEqualTo("名乗り太郎");
+    assertThat(created.getPhoneNumber()).as("申請は電話番号を運ばないこと").isNull();
+    assertThat(created.getRank()).as("他の台帳行の作成経路と同じ既定ランクを持つこと").isEqualTo("SILVER");
+
+    verify(customerMemberLinkRepository).saveAndFlush(linkCaptor.capture());
+    CustomerMemberLink link = linkCaptor.getValue();
+    assertThat(link.getCustomerId()).isEqualTo("cust-new");
+    assertThat(link.getMemberId()).isEqualTo(100L);
+    assertThat(link.getMemberCode()).as("関連の会員コードは申請時のスナップショットを写すこと").isEqualTo("123456789012");
+    assertThat(link.getReason()).isEqualTo(LinkReason.MEMBER_REQUEST);
+    assertThat(link.getLinkedBy()).as("確定した実行者が関連の実行者になること").isEqualTo(7L);
+
+    assertThat(request.getCustomerId()).as("受注が整備された顧客に着くこと").isEqualTo("cust-new");
+  }
+
+  @Test
+  void confirmStillProvisionsWhenTheRequestCarriesNoDeclaredName() {
+    // 名乗る名前を持たない申請（この欄の導入前に起きた未確定の申請）でも整備は止めない。氏名の空欄は
+    // 店舗が台帳で直せるが、整備を諦めた受注は完了してもポイントが記帳されず、会員に取り戻す経路が無い。
+    Order request = reservationRequest().requesterMemberId(100L).receptionistId(3L).build();
+    request.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
+            STORE_ID, 100L, LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    PlatformUser actor = authorizedReceptionist();
+    actor.setId(7L);
+    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
+    Customer provisioned = Customer.builder().build();
+    provisioned.setId("cust-new");
+    when(customerRepository.save(any(Customer.class))).thenReturn(provisioned);
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    verify(customerRepository).save(customerCaptor.capture());
+    assertThat(customerCaptor.getValue().getName()).as("名乗りが無ければ氏名は空のままであること").isNull();
+    verify(customerMemberLinkRepository).saveAndFlush(linkCaptor.capture());
+    assertThat(linkCaptor.getValue().getReason()).isEqualTo(LinkReason.MEMBER_REQUEST);
+    assertThat(request.getCustomerId()).as("記帳先が決まるよう受注は顧客に着くこと").isEqualTo("cust-new");
+  }
+
+  @Test
+  void confirmProvisionsNothingForAStoreOriginatedRequestWithoutARequester() {
+    // 会員行が消えて申請者の会員 ID が欠落した申請は、関連の会員参照を作れない。整備を諦めて
+    // 顧客未設定のまま確定させる（無帰属受注は正規の状態）。
+    Order request = reservationRequest().receptionistId(3L).build();
+    request.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(request.getCustomerId()).isNull();
+    verify(customerRepository, never()).save(any(Customer.class));
+    verify(customerMemberLinkRepository, never()).saveAndFlush(any(CustomerMemberLink.class));
+  }
+
+  @Test
+  void declineProvisionsNothing() {
+    // 整備は確定の効果であって申請の効果ではない。謝絶で台帳に行が生えると、来なかった客が
+    // 店舗の台帳に会員として積み上がる。
+    Order request =
+        reservationRequest()
+            .requesterMemberId(100L)
+            .requesterDeclaredName("名乗り太郎")
+            .receptionistId(3L)
+            .build();
+    request.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.decline("o1");
+
+    assertThat(request.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    verify(customerRepository, never()).save(any(Customer.class));
+    verify(customerMemberLinkRepository, never()).saveAndFlush(any(CustomerMemberLink.class));
   }
 
   @Test

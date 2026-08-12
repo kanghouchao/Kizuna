@@ -29,7 +29,10 @@ public enum DbConstraint {
   FK_T_CAST_INVITATIONS_CAST("fk_t_cast_invitations_cast"),
 
   /** t_point_entries.idempotency_key の一意制約（ADR 0007）。 */
-  UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key");
+  UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key"),
+
+  /** t_customer_member_links の「店舗ごと会員 1 人につき有効な関連は高々 1 本」の部分一意索引。 */
+  UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER("uq_t_customer_member_links_active_member");
 
   private final String sqlName;
 

@@ -79,6 +79,7 @@ public class MemberOrderService {
             .receptionRoute(ReceptionRoute.WEB)
             .requesterMemberId(member.memberId())
             .requesterMemberCode(member.memberCode())
+            .requesterDeclaredName(request.getDeclaredName())
             .build();
     // 店舗文脈が無い経路のため store_id を明示する。
     order.setStoreId(storeId);

@@ -402,7 +402,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
                     + STORE_A
                     + ", \"business_date\": \""
                     + LocalDate.now()
-                    + "\", \"pax\": 2}",
+                    + "\", \"pax\": 2, \"declared_name\": \"名乗り太郎\"}",
                 bearer(member.token())),
             JsonNode.class);
     assertThat(requested.getStatusCode()).as("前提: 会員が予約を申請できること").isEqualTo(HttpStatus.CREATED);

@@ -25,6 +25,9 @@ const todayInTokyo = () =>
 
 const MEMBER_PASSWORD = 'pass12345';
 
+// 申請の必須項目。店舗が知る名前はこれだけで、会員の登録情報（表示名・メール）は店舗へ渡らない。
+const DECLARED_NAME = '名乗り太郎';
+
 // 播種した実体の id / 認証情報。MEMBER PlatformUser には削除 API が無いためタイムスタンプ付き
 // メールアドレスで隔離し残留を許容する（顧客・キャスト・シフト・受注は明示削除する）。
 let memberEmail = '';
@@ -137,6 +140,7 @@ Then('指名候補に本日の出勤キャストが出る', async ({ page }) => 
 
 When('人数 {string} で予約を申請する', async ({ page }, pax: string) => {
   await page.getByLabel('利用日').fill(todayInTokyo());
+  await page.getByLabel('店舗へ名乗るお名前').fill(DECLARED_NAME);
   await page.getByLabel('人数').fill(pax);
   const [response] = await Promise.all([
     page.waitForResponse(

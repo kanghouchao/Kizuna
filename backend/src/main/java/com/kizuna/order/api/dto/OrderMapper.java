@@ -48,6 +48,7 @@ public interface OrderMapper {
   // 申請者は会員ポータル経由の受注だけが持つ
   @Mapping(target = "requesterMemberId", ignore = true)
   @Mapping(target = "requesterMemberCode", ignore = true)
+  @Mapping(target = "requesterDeclaredName", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   // ==================== UpdateRequest -> Patch ====================
