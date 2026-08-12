@@ -1,4 +1,4 @@
-import { memberOrderApi, orderApi } from '@/entities/order';
+import { memberOrderApi, memberVisitApi, orderApi } from '@/entities/order';
 import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
@@ -99,5 +99,28 @@ describe('memberOrderApi', () => {
       ok: true,
       url: '/platform/me/orders/o1/cancellation',
     });
+  });
+});
+
+describe('memberVisitApi', () => {
+  it('list は来店履歴を GET し、カーソルページを正規化する', async () => {
+    // 申請の追跡（/platform/me/orders）とは別の読み口で、確定した来店だけを返す
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ granted_points: 120 }], next_cursor: 'c1' },
+    });
+
+    await expect(memberVisitApi.list({ cursor: 'c0', size: 20 })).resolves.toEqual({
+      rows: [{ granted_points: 120 }],
+      nextCursor: 'c1',
+    });
+    expect(mockedGet).toHaveBeenCalledWith('/platform/me/visits', {
+      params: { cursor: 'c0', size: 20 },
+    });
+  });
+
+  it('続きが無い応答では位置を null に畳む', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { content: [] } });
+
+    await expect(memberVisitApi.list()).resolves.toEqual({ rows: [], nextCursor: null });
   });
 });

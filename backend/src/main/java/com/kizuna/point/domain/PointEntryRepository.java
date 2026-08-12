@@ -2,6 +2,7 @@ package com.kizuna.point.domain;
 
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
@@ -35,6 +36,23 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       "select e from com.kizuna.point.domain.PointEntry e where e.orderId = :orderId"
           + " and e.amount > 0")
   List<PointEntry> findCreditsByOrderId(@Param("orderId") String orderId);
+
+  /**
+   * 会員 1 人の、受注ごとの付与合計。加算で受注 ID を持つ仕訳だけを足す — 付与の経路（完了時・事後申領）を種別で区別せず、{@link #findCreditsByOrderId}
+   * と同じ読み方で拾う。取消は元の付与を打ち消す減算として別の行に積まれ、この合計には現れない。
+   *
+   * <p>会員 ID の一致を条件に載せるのは、1 件の受注に別々の会員の付与が並びうるため。誤帰属を無効化しても付与行は台帳に残る（清算は手動調整）ので、その受注が正しい本人へ申領されると
+   * 受注 ID だけでは前の会員の付与まで足してしまう。
+   *
+   * <p>合計は long で返す。1 件の仕訳は int でも、1 受注に複数の付与が積まれた合計は int を超えうる。
+   */
+  @Query(
+      "select e.orderId as orderId, sum(e.amount) as total"
+          + " from com.kizuna.point.domain.PointEntry e"
+          + " where e.memberId = :memberId and e.orderId in :orderIds and e.amount > 0"
+          + " group by e.orderId")
+  List<OrderGrantTotalView> sumGrantsByOrderIds(
+      @Param("memberId") Long memberId, @Param("orderIds") Collection<String> orderIds);
 
   /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);

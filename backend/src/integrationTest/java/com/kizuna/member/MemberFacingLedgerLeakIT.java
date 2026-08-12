@@ -2,14 +2,23 @@ package com.kizuna.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAttribution;
+import com.kizuna.order.domain.OrderAttributionRepository;
+import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,8 +67,26 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   /** 手動調整の理由。店員が書く運用内部の文言であり、本人向けのポイント明細にも現れてはならない。 */
   private static final String CANARY_REASON = "CANARY-REASON-ecb1f0d4-8a2c";
 
-  /** 会員のポイント台帳へ仕込む残高。本人向けのポイント端点だけが返してよく、他の会員側端点には現れてはならない。 */
-  private static final int CANARY_BALANCE = 987654321;
+  /** 会員のポイント台帳へ仕込む加算。本人向けのポイント端点だけが返してよく、他の会員側端点には現れてはならない。 */
+  private static final int CANARY_ADJUSTED = 987654321;
+
+  /**
+   * 来店した受注の会計金額と利用ポイント。店舗の会計の内部事情であり、来店履歴を含むどの会員側端点にも現れてはならない。
+   *
+   * <p>数値は互いに部分文字列にならない値を選び、桁数も残高のカナリアに揃える — 短い数は snowflake の ID の途中に偶然現れうる。
+   */
+  private static final int CANARY_TOTAL_FEE = 483920175;
+
+  private static final int CANARY_USED_POINTS = 271649538;
+
+  /** 来店で得たポイント。来店履歴が返してよい唯一の数値なので、上の 2 つと見分けが付く値にする。 */
+  private static final int CANARY_GRANTED_POINTS = 6318;
+
+  /** 来店の担当キャスト名。来店履歴の担当が実際に埋まっていることの確認に使う。 */
+  private static final String VISIT_CAST_NAME = "来店担当-ecb1f0d4-8a2c";
+
+  /** 仕込んだ加算と来店の付与を合わせた残高。残高を返してよい端点ではこの合計が読める。 */
+  private static final int CANARY_BALANCE = CANARY_ADJUSTED + CANARY_GRANTED_POINTS;
 
   /** 加算ロットの有効期限。ポイント明細の期限表示が実際に通ることの確認に使う。 */
   private static final LocalDate CANARY_EXPIRY = LocalDate.of(2099, 12, 31);
@@ -80,9 +107,12 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private static final List<String> BALANCE_FIELD_NAMES =
       List.of("\"points\"", "\"point_balance\"", "\"balance\"");
 
-  /** 台帳側の項目名。引用符付きで見ることで JWT の base64url 本体との偶然一致を排除する。 */
+  /** 台帳側と会計側の項目名。引用符付きで見ることで JWT の base64url 本体との偶然一致を排除する。 */
   private static final List<String> LEDGER_FIELD_NAMES =
       List.of(
+          "\"total_fee\"",
+          "\"used_points\"",
+          "\"auto_grant_points\"",
           "\"rank\"",
           "\"classification\"",
           "\"ng_type\"",
@@ -124,6 +154,10 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private static final List<String> MEMBER_POINT_ENTRY_ALLOWED_FIELDS =
       List.of("occurred_on", "store_name", "entry_type", "amount", "expires_on");
 
+  /** 来店 1 件が返してよい項目名。増えたら落ちる。 */
+  private static final List<String> MEMBER_VISIT_ALLOWED_FIELDS =
+      List.of("visited_on", "store_name", "pax", "cast_name", "granted_points");
+
   /**
    * 掃き出す会員側の GET 端点。残高系の項目を許すかは端点ごとに決める。
    *
@@ -136,12 +170,16 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           new MemberEndpoint("/platform/me", false),
           new MemberEndpoint("/platform/me/member", false),
           new MemberEndpoint("/platform/me/orders", false),
+          new MemberEndpoint("/platform/me/visits", false),
           new MemberEndpoint("/platform/me/points/balance", true),
           new MemberEndpoint("/platform/me/points/entries", true));
 
   @Autowired private CustomerRepository customerRepository;
   @Autowired private MemberRepository memberRepository;
   @Autowired private PointEntryRepository pointEntryRepository;
+  @Autowired private CastRepository castRepository;
+  @Autowired private OrderRepository orderRepository;
+  @Autowired private OrderAttributionRepository orderAttributionRepository;
 
   private String customerId;
   private String memberEmail;
@@ -204,12 +242,14 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
         PointEntry.manualAdjust(
             memberId,
             STORE_A,
-            CANARY_BALANCE,
+            CANARY_ADJUSTED,
             CANARY_REASON,
             CANARY_EXPIRY,
             List.of(),
             null,
             "ledger-leak-" + memberId));
+
+    seedAttributedVisit(memberId);
 
     // ログインは紐づけの後に行う。紐づけ前の応答への断言は紐づけ由来の混入を検出しようがないため、
     // 断言対象は必ず紐づけ済み状態で取得する（登録応答だけは会員作成そのものなので紐づけ前が本質）。
@@ -309,15 +349,45 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     assertThat(entries.getStatusCode()).isEqualTo(HttpStatus.OK);
-    JsonNode first = entries.getBody().path("content").path(0);
-    assertThat(first.isObject()).as("前提: 仕込んだ仕訳が明細に現れること").isTrue();
-    List<String> fields = new ArrayList<>();
-    first.propertyNames().forEach(fields::add);
     // 値が null の項目は non_null 包含設定で応答から消えるため、白名単は「これ以外が現れないこと」で見る。
-    // 仕込んだ仕訳は発生店舗と有効期限を持つので、この 1 行はすべての項目を埋めている。
+    // 断言対象は手動調整の行に固定する — 発生店舗と有効期限を持つのはこの行だけで、来店の付与行を
+    // 掴むと期限が空のまま白名単を通り、項目の欠落を検出できなくなる。
+    JsonNode adjustment = null;
+    for (JsonNode row : entries.getBody().path("content")) {
+      if ("MANUAL_ADJUST".equals(row.path("entry_type").asString(""))) {
+        adjustment = row;
+      }
+    }
+    assertThat(adjustment).as("前提: 仕込んだ仕訳が明細に現れること").isNotNull();
+    List<String> fields = new ArrayList<>();
+    adjustment.propertyNames().forEach(fields::add);
     assertThat(fields)
         .as("ポイント明細 1 件の応答項目（想定外の項目が増えていないこと）")
         .containsExactlyInAnyOrderElementsOf(MEMBER_POINT_ENTRY_ALLOWED_FIELDS);
+  }
+
+  @Test
+  @DisplayName("来店履歴は日付・店舗・人数・担当・獲得ポイントだけを返すこと（項目名の白名単）")
+  void memberVisitReturnsOnlyWhitelistedFields() {
+    ResponseEntity<JsonNode> visits =
+        rest.exchange(
+            "/platform/me/visits",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(memberToken)),
+            JsonNode.class);
+
+    assertThat(visits.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode first = visits.getBody().path("content").path(0);
+    assertThat(first.isObject()).as("前提: 仕込んだ来店が履歴に現れること").isTrue();
+    List<String> fields = new ArrayList<>();
+    first.propertyNames().forEach(fields::add);
+    // 値が null の項目は non_null 包含設定で応答から消えるため、仕込んだ来店は人数も担当も埋めてある。
+    // 掃き出しの断言が空振りでないことの正向対照も兼ねて、返してよい実データが実際に読めることまで見る。
+    assertThat(fields)
+        .as("来店 1 件の応答項目（想定外の項目が増えていないこと）")
+        .containsExactlyInAnyOrderElementsOf(MEMBER_VISIT_ALLOWED_FIELDS);
+    assertThat(first.path("cast_name").asString()).isEqualTo(VISIT_CAST_NAME);
+    assertThat(first.path("granted_points").asInt()).isEqualTo(CANARY_GRANTED_POINTS);
   }
 
   @Test
@@ -341,6 +411,38 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     assertThat(fields)
         .as("会員の予約 1 件の応答項目（想定外の項目が増えていないこと）")
         .isSubsetOf(MEMBER_ORDER_ALLOWED_FIELDS);
+  }
+
+  /**
+   * 会員へ帰属した来店を 1 件仕込む。会計金額・利用ポイントを埋めた完了受注に帰属記録を添え、来店履歴の項目に会計が回り込む余地を作る。
+   *
+   * <p>完了 API ではなく直挿しにするのは、会計の実データを狙った値で置くため（付与額は付与設定から決まり、利用は残高の 引き当てを伴う）。完了から帰属記録が生まれる経路そのものは
+   * {@code OrderAttributionIT} が固定している。
+   */
+  private void seedAttributedVisit(long memberId) {
+    Cast cast = Cast.builder().name(VISIT_CAST_NAME).build();
+    cast.setStoreId(STORE_A);
+    String castId = castRepository.save(cast).getId();
+
+    Order order =
+        Order.builder()
+            .businessDate(LocalDate.now(ZoneId.of("Asia/Tokyo")))
+            .customerId(customerId)
+            .castId(castId)
+            .pax(2)
+            .status(OrderStatus.COMPLETED)
+            .receptionRoute(ReceptionRoute.PHONE)
+            .totalFee(CANARY_TOTAL_FEE)
+            .usedPoints(CANARY_USED_POINTS)
+            .autoGrantPoints(CANARY_GRANTED_POINTS)
+            .build();
+    order.setStoreId(STORE_A);
+    String orderId = orderRepository.save(order).getId();
+
+    orderAttributionRepository.save(
+        OrderAttribution.onCompletion(orderId, memberId, memberCode, OffsetDateTime.now()));
+    pointEntryRepository.save(
+        PointEntry.grantForOrder(memberId, orderId, STORE_A, CANARY_GRANTED_POINTS, null));
   }
 
   /** 紐づけ済み店舗へ会員本人として予約を申請する（指名なし）。 */
@@ -390,10 +492,20 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     for (String canary : CANARY_VALUES) {
       assertThat(body).as("%s に台帳の実データ %s が現れないこと", endpoint, canary).doesNotContain(canary);
     }
+    // 会計の実データは残高と違って端点ごとの許否が無い — 来店履歴を含め、どの会員側端点にも現れてはならない。
+    assertThat(body)
+        .as("%s に会計金額が現れないこと", endpoint)
+        .doesNotContain(String.valueOf(CANARY_TOTAL_FEE));
+    assertThat(body)
+        .as("%s に利用ポイントが現れないこと", endpoint)
+        .doesNotContain(String.valueOf(CANARY_USED_POINTS));
     if (!exposesBalance) {
       assertThat(body)
           .as("%s にポイント残高が現れないこと", endpoint)
           .doesNotContain(String.valueOf(CANARY_BALANCE));
+      assertThat(body)
+          .as("%s に台帳の増減が現れないこと", endpoint)
+          .doesNotContain(String.valueOf(CANARY_ADJUSTED));
     }
     List<String> deniedFieldNames =
         exposesBalance ? POINT_ENDPOINT_DENIED_FIELD_NAMES : LEDGER_FIELD_NAMES;

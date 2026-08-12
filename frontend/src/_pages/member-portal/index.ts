@@ -2,4 +2,5 @@ export { MemberPortalShell } from './ui/MemberPortalShell';
 export { MemberHomePage } from './ui/MemberHomePage';
 export { MemberReservationsPage } from './ui/MemberReservationsPage';
 export { MemberPointsPage } from './ui/MemberPointsPage';
+export { MemberVisitsPage } from './ui/MemberVisitsPage';
 export { MemberReservationNewPage } from './ui/MemberReservationNewPage';
