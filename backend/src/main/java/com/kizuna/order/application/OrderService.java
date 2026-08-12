@@ -222,8 +222,10 @@ public class OrderService {
    *
    * <p>条件を満たさない実行者（店舗を授権する HQ 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
    *
-   * <p>顧客も未設定なら、この時点で当店の台帳を整えて着ける（{@link #ensureCustomerForRequester}）。申請時に紐づけが無くても、店舗が会員コードを読んで
-   * 台帳に結び付けてから確定するのが初回来店の順序であり、申請時の解決だけでは受注が顧客履歴に載らないまま残る。
+   * <p>顧客は申請時に着いていても<b>この時点で取り直す</b>（{@link
+   * #ensureCustomerForRequester}）。申請時に紐づけが無ければ整えて着けるのが第一の目的だが、 申請時に着いた顧客参照も確定までの間に陳腐化しうる —
+   * 関連が解除・付け替えられると、その顧客行は別の会員を指す行に化けている。完了時の会員解決は顧客の 現在の関連だけを見る（ADR 0008
+   * の一本道）ため、取り直さないと申請者の来店とポイントが別会員へ積まれる。
    */
   @StoreScoped
   @Transactional
@@ -234,7 +236,8 @@ public class OrderService {
     if (order.getReceptionistId() == null) {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
     }
-    if (order.getCustomerId() == null && order.getRequesterMemberId() != null) {
+    // 申請者の会員 ID が欠落した申請（会員行の削除後）は取り直す先が無いため、着いている顧客をそのまま残す。
+    if (order.getRequesterMemberId() != null) {
       order.linkCustomer(ensureCustomerForRequester(order, actorEmail));
     }
     orderRepository.save(order);
@@ -242,8 +245,9 @@ public class OrderService {
   }
 
   /**
-   * 会員申請の受注が着く当店の顧客を用意する。当店に申請者会員の有効な関連があればその顧客を使い、無ければ台帳行と関連（根拠 {@link
-   * LinkReason#MEMBER_REQUEST}）を起こす。
+   * 会員申請の受注が着く当店の顧客を、確定の時点で決め直す。当店に申請者会員の有効な関連があればその顧客を使い、無ければ台帳行と関連（根拠 {@link
+   * LinkReason#MEMBER_REQUEST}）を起こす。判断の材料は「今の関連」だけで、申請時に着いた顧客参照は見ない — 関連が解除された行に着け続けると完了しても
+   * 会員へ達さず、付け替えられた行に着け続けると別会員へ達する。
    *
    * <p>自動で整えるのは、ログイン態が本人証明・当該店舗への申請が明示の確認であり、帰属の成立要件をこの経路が構造的に満たすため（ADR 0008）。
    * 来店時の会員コード再提示は要求しない。整備がここで漏れると、完了時の会員解決（顧客 → 有効な関連 → 会員）が空振りしてポイントが記帳されない。

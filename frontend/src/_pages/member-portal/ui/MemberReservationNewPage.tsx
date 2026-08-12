@@ -157,6 +157,10 @@ export function MemberReservationNewPage() {
                   rules={{
                     required: '店舗へ名乗るお名前を入力してください',
                     maxLength: { value: 255, message: 'お名前は 255 文字以内で入力してください' },
+                    // required は空白だけの入力を「入っている」と見る。サーバ側の @NotBlank が
+                    // 弾く形をそのまま通すと、欄の傍ではなく送信失敗の通知として返ってくる。
+                    validate: value =>
+                      value.trim().length > 0 || '店舗へ名乗るお名前を入力してください',
                   }}
                   render={({ field }) => (
                     <FormItem className="gap-1">

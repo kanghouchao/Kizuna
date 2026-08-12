@@ -178,6 +178,44 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("申請時に着いた顧客が他の会員へ付け替えられていたら、確定が申請者の側へ着け直すこと")
+  void confirmationReResolvesACustomerReassignedAfterTheRequest() {
+    Applicant applicant = register("付替え");
+    Applicant other = register("付替え先");
+    String shared = createCustomer("付け替えられる行");
+    linkByMemberCode(shared, applicant.memberCode());
+
+    // 申請の時点では申請者に紐づく顧客が着く
+    String orderId = request(applicant, STORE_A, "付替えの名乗り-" + nonce);
+
+    // 店舗が同じ台帳行を別の会員へ付け替える（解除 → 別会員で再成立）
+    assertThat(
+            rest.exchange(
+                    "/store/customers/" + shared + "/member-link",
+                    HttpMethod.DELETE,
+                    new HttpEntity<>(storeHeaders(STORE_A)),
+                    Void.class)
+                .getStatusCode())
+        .as("前提: 紐づけを解除できること")
+        .isEqualTo(HttpStatus.OK);
+    linkByMemberCode(shared, other.memberCode());
+
+    ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));
+
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(confirmed.getBody().path("customer_id").asString())
+        .as("別会員を指す行に着け続けないこと（完了すればその会員へ記帳されてしまう）")
+        .isNotEqualTo(shared);
+    List<CustomerMemberLink> links = activeLinks(applicant);
+    assertThat(links).as("申請者には当店の関連が整うこと").hasSize(1);
+    assertThat(links.get(0).getReason()).isEqualTo(LinkReason.MEMBER_REQUEST);
+    assertThat(confirmed.getBody().path("customer_id").asString())
+        .isEqualTo(links.get(0).getCustomerId());
+    assertThat(activeLinks(other)).as("付け替え先の会員の関連は動かないこと").hasSize(1);
+    assertThat(activeLinks(other).get(0).getCustomerId()).isEqualTo(shared);
+  }
+
+  @Test
   @DisplayName("自動整備で作られた顧客の受注を完了するとポイントが記帳されること")
   void completingAProvisionedOrderRecordsPoints() {
     Applicant applicant = register("記帳");

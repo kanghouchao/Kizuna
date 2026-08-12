@@ -1055,6 +1055,41 @@ class OrderServiceTest {
   }
 
   @Test
+  void confirmReResolvesTheCustomerLinkedWhenTheRequestWasSubmitted() {
+    // 申請時に着いた顧客は、確定までの間に関連が付け替えられていると別会員を指す行に化けている。
+    // 完了時の会員解決は顧客の現在の関連しか見ないため、取り直さないと申請者の来店とポイントが
+    // その別会員へ積まれる。
+    Order request =
+        reservationRequest()
+            .requesterMemberId(100L)
+            .customerId("cust-stale")
+            .receptionistId(3L)
+            .build();
+    request.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+    CustomerMemberLink current =
+        CustomerMemberLink.builder()
+            .customerId("cust-current")
+            .memberId(100L)
+            .memberCode("123456789012")
+            .reason(LinkReason.MEMBER_CODE)
+            .linkedBy(3L)
+            .linkedAt(OffsetDateTime.now())
+            .build();
+    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
+            STORE_ID, 100L, LinkStatus.ACTIVE))
+        .thenReturn(Optional.of(current));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.confirm("o1", "staff@kizuna.test");
+
+    assertThat(request.getCustomerId()).as("申請時の顧客参照ではなく今の関連の顧客に着くこと").isEqualTo("cust-current");
+    verify(customerRepository, never()).save(any(Customer.class));
+  }
+
+  @Test
   void confirmStillProvisionsWhenTheRequestCarriesNoDeclaredName() {
     // 名乗る名前を持たない申請（この欄の導入前に起きた未確定の申請）でも整備は止めない。氏名の空欄は
     // 店舗が台帳で直せるが、整備を諦めた受注は完了してもポイントが記帳されず、会員に取り戻す経路が無い。

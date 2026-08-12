@@ -186,6 +186,22 @@ describe('MemberReservationNewPage', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
+  // required は空白だけを「入っている」と見る。サーバ側の @NotBlank へ届かせると、欄の傍ではなく
+  // 送信失敗の通知として返り、どこを直せばよいのか画面に現れない。
+  it('名乗る名前が空白だけなら申請せずに検証エラーを出す', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName('　  ');
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+
+    expect(await screen.findByText('店舗へ名乗るお名前を入力してください')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
   it('人数が未入力なら申請せずに検証エラーを出す', async () => {
     mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
 
