@@ -1,0 +1,125 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v01400-001-order-attribution
+      author: kanghouchao
+      # 受注 1 件が会員へ帰属した事実。完了時（COMPLETION）と事後申領時（RECEIPT_TOKEN）にだけ生まれ、
+      # 成立後は関連（t_customer_member_links）の状態に影響されない。会員の来店履歴はこの表だけから読む。
+      # 会員はプラットフォーム級の身分で、来店履歴が店舗を跨いで読めることが正しさの条件のため、台帳
+      # （t_point_entries）と同じく platform 帰属とし店舗行分離機構には載せない — 店舗列を持たないのは
+      # その意味論の宣言でもあり、店舗名・日付・人数・担当は t_orders への JOIN で導出する。
+      # member_code は帰属時点のスナップショットで、会員行が消えて member_id が欠落した後も誰の来店
+      # だったかを読めるようにする。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_order_attributions
+            remarks: 受注が会員へ帰属した事実の受注単位の記録
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_attributions
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 帰属した受注
+              - column:
+                  name: member_id
+                  type: BIGINT
+                  remarks: 帰属先の会員。会員削除後も記録を残すため SET NULL
+              - column:
+                  name: member_code
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 帰属時点の会員コード（会員削除後も来店の持ち主を読めるようにするスナップショット）
+              - column:
+                  name: source
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+                  remarks: 成立の機構（COMPLETION=完了時の関連解決 / RECEIPT_TOKEN=伝票トークンの事後申領）
+              - column:
+                  name: attributed_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 帰属が確定した日時
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 記録の状態（ACTIVE=有効 / INVALIDATED=無効化済み）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 受注へは CASCADE。削除できる店舗は準備中に限られ完了受注を持たないため、実履歴が消える経路は無い。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_attributions_order
+            baseTableName: t_order_attributions
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 会員へは SET NULL。会員削除後も記録と会員コードのスナップショットは監査のために残る。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_attributions_member
+            baseTableName: t_order_attributions
+            baseColumnNames: member_id
+            referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - createIndex:
+            indexName: idx_t_order_attributions_member_created
+            tableName: t_order_attributions
+            columns:
+              - column:
+                  name: member_id
+              - column:
+                  name: created_at
+      rollback:
+        - dropTable:
+            tableName: t_order_attributions
+
+  - changeSet:
+      id: platform-v01400-002-order-attribution-active-index
+      author: kanghouchao
+      # 「有効な帰属は受注 1 件につき高々 1 件」という業務不変量を DB 側の最終防波堤として固定する。
+      # 無効化済み（INVALIDATED）の行は記録として残り続けるため、対象を status='ACTIVE' に絞った
+      # 部分一意索引にする（Liquibase の addUniqueConstraint は述語付き索引を表現できないため裸 SQL）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_order_attributions_active_order
+              ON t_order_attributions (order_id) WHERE status = 'ACTIVE'
+      rollback:
+        - sql:
+            sql: DROP INDEX uq_t_order_attributions_active_order
