@@ -33,6 +33,10 @@ import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAttribution;
+import com.kizuna.order.domain.OrderAttributionRepository;
+import com.kizuna.order.domain.OrderAttributionSource;
+import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
@@ -78,6 +82,7 @@ class OrderServiceTest {
   @Mock OrderRepository orderRepository;
   @Mock CustomerRepository customerRepository;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
+  @Mock OrderAttributionRepository orderAttributionRepository;
   @Mock NominatableCastLookup nominatableCast;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PointLedgerService pointLedgerService;
@@ -1173,6 +1178,84 @@ class OrderServiceTest {
     // 顧客が未設定なら押さえる行も引く紐づけも無い
     verify(customerRepository, never()).findByIdForUpdate(any());
     verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
+  }
+
+  @Test
+  void completeRecordsTheAttributionOfAMemberOrder() {
+    // 来店履歴は帰属記録だけから読む。完了時に記録が生まれないと、その来店は会員から永久に見えない
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    OrderAttribution attribution = savedAttribution();
+    assertThat(attribution.getOrderId()).isEqualTo("o1");
+    assertThat(attribution.getMemberId()).isEqualTo(MEMBER_ID);
+    // 会員コードは帰属時点のスナップショット。会員行が消えた後も誰の来店だったかを読めるようにする
+    assertThat(attribution.getMemberCode()).isEqualTo("123456789012");
+    assertThat(attribution.getSource()).isEqualTo(OrderAttributionSource.COMPLETION);
+    assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
+    assertThat(attribution.getAttributedAt()).isNotNull();
+  }
+
+  @Test
+  void completeRecordsTheAttributionEvenWhenNothingIsGranted() {
+    // 帰属は来店可視性の事実でポイントとは独立している。0 円完了は台帳へ行を書かないが記録は生まれる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(0, null), "staff@kizuna.test");
+
+    assertThat(order.getAutoGrantPoints()).isZero();
+    assertThat(savedAttribution().getOrderId()).isEqualTo("o1");
+  }
+
+  @Test
+  void completeOfANonMemberOrderRecordsNoAttribution() {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    verifyNoInteractions(orderAttributionRepository);
+  }
+
+  @Test
+  void completeOfAnOrderKnownOnlyByItsRequesterRecordsNoAttribution() {
+    // 申請者の記録は申請の出所であって帰属ではない。顧客 → 有効な関連 → 会員の一本道が会員に達しない限り
+    // 帰属は生まれない（申請者へ fallback すると、台帳行の無い来店ポイントが生まれる）
+    Order order =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .castId("cast-1")
+            .requesterMemberId(MEMBER_ID)
+            .requesterMemberCode("123456789012")
+            .build();
+    order.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    verifyNoInteractions(orderAttributionRepository);
+    verifyNoInteractions(pointLedgerService);
+  }
+
+  private OrderAttribution savedAttribution() {
+    ArgumentCaptor<OrderAttribution> captor = ArgumentCaptor.forClass(OrderAttribution.class);
+    verify(orderAttributionRepository).save(captor.capture());
+    return captor.getValue();
   }
 
   @Test
