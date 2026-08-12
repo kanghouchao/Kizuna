@@ -29,13 +29,16 @@ import tools.jackson.databind.JsonNode;
  * 会員側の応答に店舗顧客台帳の内部項目が一切乗らないことを本物の PostgreSQL で検証する統合テスト。
  *
  * <p>紐づけは店舗が会員を自店舗の台帳に結び付ける操作であって、会員に台帳を開くものではない。ランク・区分・NG・連絡先などの内部評価は 店舗の内部情報であり、本人であっても
- * 会員側の経路からは到達できてはならない。ポイント残高は会員自身のものだが、現時点で会員側に読み口は無く、 店舗コンソールの照会だけが持つ。
+ * 会員側の経路からは到達できてはならない。
+ *
+ * <p>ポイント残高は会員自身のものなので、本人向けのポイント端点<b>だけ</b>が残高系の項目を返してよい。残りの会員側端点では 従来どおり禁止する（端点ごとの許可は {@link
+ * MemberEndpoint#exposesBalance}）。手動調整の理由は店員が書く運用内部の文言なので、 ポイント端点でも禁止のままにする。
  *
  * <p>数値のカナリアは会員の台帳へ仕込む。顧客の保有ポイント列は廃止され、残高は台帳の合計としてのみ存在する。
  *
  * <p>断言は 2 段。生ボディに対しては、実データそのもの（カナリア文字列）と<b>引用符付きの項目名</b>（{@code "rank"} 等）の 非混入を見る — 応答には JWT
  * が含まれ、base64url の字母表に {@code "} は無いため、引用符付きなら token
- * 由来の偶然一致で赤くならない。加えて会員ホームは項目名の白名単反復で、想定外の項目が増えたら落ちるようにする。
+ * 由来の偶然一致で赤くならない。加えて項目を返す端点は項目名の白名単反復で、想定外の項目が増えたら落ちるようにする。
  */
 class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
 
@@ -52,8 +55,14 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private static final String CANARY_ADDRESS = "CANARY-ADDRESS-ecb1f0d4-8a2c";
   private static final String CANARY_USAGE_AREAS = "CANARY-USAGEAREAS-ecb1f0d4-8a2c";
 
-  /** 会員のポイント台帳へ仕込む残高。店舗側の残高照会からは読めるが、会員側の経路には現れてはならない。 */
+  /** 手動調整の理由。店員が書く運用内部の文言であり、本人向けのポイント明細にも現れてはならない。 */
+  private static final String CANARY_REASON = "CANARY-REASON-ecb1f0d4-8a2c";
+
+  /** 会員のポイント台帳へ仕込む残高。本人向けのポイント端点だけが返してよく、他の会員側端点には現れてはならない。 */
   private static final int CANARY_BALANCE = 987654321;
+
+  /** 加算ロットの有効期限。ポイント明細の期限表示が実際に通ることの確認に使う。 */
+  private static final LocalDate CANARY_EXPIRY = LocalDate.of(2099, 12, 31);
 
   private static final List<String> CANARY_VALUES =
       List.of(
@@ -64,7 +73,12 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           CANARY_PHONE,
           CANARY_LINE_ID,
           CANARY_ADDRESS,
-          CANARY_USAGE_AREAS);
+          CANARY_USAGE_AREAS,
+          CANARY_REASON);
+
+  /** 残高そのものを指す項目名。ポイント端点にだけ許し、他の端点では下の一覧の一部として禁止し続ける。 */
+  private static final List<String> BALANCE_FIELD_NAMES =
+      List.of("\"points\"", "\"point_balance\"", "\"balance\"");
 
   /** 台帳側の項目名。引用符付きで見ることで JWT の base64url 本体との偶然一致を排除する。 */
   private static final List<String> LEDGER_FIELD_NAMES =
@@ -86,6 +100,10 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           "\"member_linked\"",
           "\"linked_member_code\"");
 
+  /** ポイント端点で禁止する項目名。残高系だけを上の一覧から差し引いて作る — 2 本の一覧を並べて書くと、 台帳側に項目が増えたときに片方だけが更新されて掃き出しが静かに緩む。 */
+  private static final List<String> POINT_ENDPOINT_DENIED_FIELD_NAMES =
+      LEDGER_FIELD_NAMES.stream().filter(name -> !BALANCE_FIELD_NAMES.contains(name)).toList();
+
   /** 会員ホームが返してよい項目名。増えたら落ちる。 */
   private static final List<String> MEMBER_HOME_ALLOWED_FIELDS =
       List.of("member_code", "display_name");
@@ -101,6 +119,25 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           "pax",
           "cast_name",
           "status");
+
+  /** ポイント明細 1 行が返してよい項目名。増えたら落ちる。 */
+  private static final List<String> MEMBER_POINT_ENTRY_ALLOWED_FIELDS =
+      List.of("occurred_on", "store_name", "entry_type", "amount", "expires_on");
+
+  /**
+   * 掃き出す会員側の GET 端点。残高系の項目を許すかは端点ごとに決める。
+   *
+   * @param exposesBalance 残高系の項目と残高の実値を返してよい端点か
+   */
+  private record MemberEndpoint(String path, boolean exposesBalance) {}
+
+  private static final List<MemberEndpoint> MEMBER_GET_ENDPOINTS =
+      List.of(
+          new MemberEndpoint("/platform/me", false),
+          new MemberEndpoint("/platform/me/member", false),
+          new MemberEndpoint("/platform/me/orders", false),
+          new MemberEndpoint("/platform/me/points/balance", true),
+          new MemberEndpoint("/platform/me/points/entries", true));
 
   @Autowired private CustomerRepository customerRepository;
   @Autowired private MemberRepository memberRepository;
@@ -160,15 +197,16 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(linked.getStatusCode()).as("前提: 紐づけが成功すること").isEqualTo(HttpStatus.OK);
 
-    // 残高は顧客ではなく会員の台帳が持つため、数値のカナリアは台帳の仕訳として積む。
+    // 残高は顧客ではなく会員の台帳が持つため、数値のカナリアは台帳の仕訳として積む。発生店舗と有効期限を
+    // 埋めるのは、明細の store_name / expires_on が non_null 包含で消えたまま素通りしないようにするため。
     long memberId = memberRepository.findByMemberCode(memberCode).map(Member::getId).orElseThrow();
     pointEntryRepository.save(
         PointEntry.manualAdjust(
             memberId,
             STORE_A,
             CANARY_BALANCE,
-            "台帳漏洩検証の残高",
-            null,
+            CANARY_REASON,
+            CANARY_EXPIRY,
             List.of(),
             null,
             "ledger-leak-" + memberId));
@@ -210,34 +248,76 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     assertThat(storeBalance.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(storeBalance.getBody()).contains(String.valueOf(CANARY_BALANCE));
 
-    ResponseEntity<String> me =
-        rest.exchange(
-            "/platform/me", HttpMethod.GET, new HttpEntity<>(bearer(memberToken)), String.class);
-    assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
-
-    ResponseEntity<String> home =
-        rest.exchange(
-            "/platform/me/member",
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(memberToken)),
-            String.class);
-    assertThat(home.getStatusCode()).isEqualTo(HttpStatus.OK);
-
     // 予約申請は紐づけ済み顧客に結び付くため、台帳側の項目が会員側の一覧へ回り込む余地が最も大きい経路になる。
     requestReservation();
-    ResponseEntity<String> reservations =
+
+    for (MemberEndpoint endpoint : MEMBER_GET_ENDPOINTS) {
+      ResponseEntity<String> response =
+          rest.exchange(
+              endpoint.path(), HttpMethod.GET, new HttpEntity<>(bearer(memberToken)), String.class);
+      assertThat(response.getStatusCode())
+          .as("前提: %s が読めること", endpoint.path())
+          .isEqualTo(HttpStatus.OK);
+      assertNoLedgerLeak("GET " + endpoint.path(), response.getBody(), endpoint.exposesBalance());
+    }
+
+    assertNoLedgerLeak("会員登録", registrationBody, false);
+    assertNoLedgerLeak("平台ログイン", loginBody, false);
+  }
+
+  @Test
+  @DisplayName("残高は本人向けのポイント端点だけが返し、他の会員側端点では禁止のままであること")
+  void onlyThePointEndpointsExposeTheBalance() {
+    // 掃き出しの断言（残高がポイント端点以外に現れない）が空振りでないことの正向対照。
+    // 残高系の許可を端点ごとに分けた以上、許した側で実際に読めることまで見ないと、
+    // 「どこにも出ない」状態でも掃き出しは緑のままになる。
+    ResponseEntity<String> balance =
         rest.exchange(
-            "/platform/me/orders",
+            "/platform/me/points/balance",
             HttpMethod.GET,
             new HttpEntity<>(bearer(memberToken)),
             String.class);
-    assertThat(reservations.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-    assertNoLedgerLeak("会員登録", registrationBody);
-    assertNoLedgerLeak("平台ログイン", loginBody);
-    assertNoLedgerLeak("GET /platform/me", me.getBody());
-    assertNoLedgerLeak("GET /platform/me/member", home.getBody());
-    assertNoLedgerLeak("GET /platform/me/orders", reservations.getBody());
+    assertThat(balance.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(balance.getBody()).contains(String.valueOf(CANARY_BALANCE));
+  }
+
+  @Test
+  @DisplayName("ポイント残高は残高だけを返すこと（項目名の白名単）")
+  void memberPointBalanceReturnsOnlyWhitelistedFields() {
+    ResponseEntity<JsonNode> balance =
+        rest.exchange(
+            "/platform/me/points/balance",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(memberToken)),
+            JsonNode.class);
+
+    assertThat(balance.getStatusCode()).isEqualTo(HttpStatus.OK);
+    List<String> fields = new ArrayList<>();
+    balance.getBody().propertyNames().forEach(fields::add);
+    assertThat(fields).as("ポイント残高の応答項目（想定外の項目が増えていないこと）").containsExactly("balance");
+  }
+
+  @Test
+  @DisplayName("ポイント明細は日付・店舗・種別・増減・有効期限だけを返すこと（項目名の白名単）")
+  void memberPointEntryReturnsOnlyWhitelistedFields() {
+    ResponseEntity<JsonNode> entries =
+        rest.exchange(
+            "/platform/me/points/entries",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(memberToken)),
+            JsonNode.class);
+
+    assertThat(entries.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode first = entries.getBody().path("content").path(0);
+    assertThat(first.isObject()).as("前提: 仕込んだ仕訳が明細に現れること").isTrue();
+    List<String> fields = new ArrayList<>();
+    first.propertyNames().forEach(fields::add);
+    // 値が null の項目は non_null 包含設定で応答から消えるため、白名単は「これ以外が現れないこと」で見る。
+    // 仕込んだ仕訳は発生店舗と有効期限を持つので、この 1 行はすべての項目を埋めている。
+    assertThat(fields)
+        .as("ポイント明細 1 件の応答項目（想定外の項目が増えていないこと）")
+        .containsExactlyInAnyOrderElementsOf(MEMBER_POINT_ENTRY_ALLOWED_FIELDS);
   }
 
   @Test
@@ -300,15 +380,24 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     assertThat(home.getBody().path("member_code").asString()).isEqualTo(memberCode);
   }
 
-  private static void assertNoLedgerLeak(String endpoint, String body) {
+  /**
+   * 1 端点分の掃き出し。顧客台帳の実データと項目名は常に禁止で、残高だけが端点ごとに許否が分かれる。
+   *
+   * @param exposesBalance 残高系の項目と残高の実値を返してよい端点か
+   */
+  private static void assertNoLedgerLeak(String endpoint, String body, boolean exposesBalance) {
     assertThat(body).as("%s の応答本文", endpoint).isNotBlank();
     for (String canary : CANARY_VALUES) {
       assertThat(body).as("%s に台帳の実データ %s が現れないこと", endpoint, canary).doesNotContain(canary);
     }
-    assertThat(body)
-        .as("%s にポイント残高が現れないこと", endpoint)
-        .doesNotContain(String.valueOf(CANARY_BALANCE));
-    for (String fieldName : LEDGER_FIELD_NAMES) {
+    if (!exposesBalance) {
+      assertThat(body)
+          .as("%s にポイント残高が現れないこと", endpoint)
+          .doesNotContain(String.valueOf(CANARY_BALANCE));
+    }
+    List<String> deniedFieldNames =
+        exposesBalance ? POINT_ENDPOINT_DENIED_FIELD_NAMES : LEDGER_FIELD_NAMES;
+    for (String fieldName : deniedFieldNames) {
       // 引用符付きで見る: JWT の base64url 本体には " が現れないため偶然一致で赤くならない
       assertThat(body).as("%s に台帳の項目名 %s が現れないこと", endpoint, fieldName).doesNotContain(fieldName);
     }

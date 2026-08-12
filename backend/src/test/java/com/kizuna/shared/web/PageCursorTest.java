@@ -46,6 +46,12 @@ class PageCursorTest {
   }
 
   @Test
+  @DisplayName("数値の副キーを数として読めること")
+  void readsTheNumericId() {
+    assertThat(new PageCursor("2026-08-04T10:00:00+09:00", "42").longId()).isEqualTo(42L);
+  }
+
+  @Test
   @DisplayName("復号できない位置は要求誤りとして撥ねること")
   void rejectsAnUndecodableCursor() {
     // 黙って先頭扱いにすると、続きを求めた呼出側に先頭が返り、取りこぼしが成功に見える。
@@ -68,5 +74,13 @@ class PageCursorTest {
 
     assertThatThrownBy(cursor::timestampKey).isInstanceOf(ServiceException.class);
     assertThatThrownBy(cursor::dateKey).isInstanceOf(ServiceException.class);
+  }
+
+  @Test
+  @DisplayName("副キーが数として読めない位置は要求誤りとして撥ねること")
+  void rejectsANonNumericIdWhereTheListOrdersByNumber() {
+    // 数として読めない副キーをそのまま問い合わせへ渡すと、要求誤りが 500 として出る。
+    assertThatThrownBy(new PageCursor("2026-08-04T10:00:00+09:00", "order-1")::longId)
+        .isInstanceOf(ServiceException.class);
   }
 }
