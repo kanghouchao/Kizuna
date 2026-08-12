@@ -52,6 +52,15 @@ public record PageCursor(String key, String id) {
     }
   }
 
+  /** 副キーが数値の主キーである一覧の id。文字列のまま渡すと問い合わせの型と合わない。 */
+  public Long longId() {
+    try {
+      return Long.valueOf(id);
+    } catch (NumberFormatException e) {
+      throw new ServiceException(MALFORMED_MESSAGE);
+    }
+  }
+
   /** 業務日（{@code business_date}）で並ぶ一覧の鍵。 */
   public LocalDate dateKey() {
     try {

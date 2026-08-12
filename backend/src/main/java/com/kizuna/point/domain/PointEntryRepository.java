@@ -1,8 +1,10 @@
 package com.kizuna.point.domain;
 
 import jakarta.persistence.LockModeType;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -42,4 +44,46 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       "select count(e) > 0 from com.kizuna.point.domain.PointEntry e"
           + " where e.originatingStoreId = :storeId")
   boolean existsByOriginatingStoreId(@Param("storeId") Long storeId);
+
+  // 会員本人の明細一覧。発生店舗名は列に持たず、表示が要るときだけ store から導出する（ADR 0003 と同じ
+  // 扱い。台帳は platform 帰属なので同 ADR が名指す店舗作用域エンティティそのものではない）。left join
+  // なのは、失効のように発生店舗を持たない仕訳と、店舗が消えた後の仕訳（FK は SET NULL）でも行そのものを
+  // 落とさないため。
+  String MEMBER_ENTRY_SELECT =
+      """
+      select e.id as id, e.createdAt as createdAt, e.entryType as entryType,
+             e.amount as amount, e.expiresOn as expiresOn, st.name as storeName
+      from com.kizuna.point.domain.PointEntry e
+        left join com.kizuna.store.domain.Store st on st.id = e.originatingStoreId
+      """;
+
+  // 台帳は店舗で分割しない（ADR 0006）ため storeFilter は働かない。本人の会員 ID の一致が唯一の隔離境界で、
+  // 先頭と続きの問い合わせが同じ条件を共有する。
+  String MEMBER_ENTRY_WHERE = " where e.memberId = :memberId ";
+
+  // 新しい仕訳から。カーソルの比較（下記 AFTER 条件）はこの並びと同じ列の組で行う。
+  String MEMBER_ENTRY_ORDER = " order by e.createdAt desc, e.id desc";
+
+  /**
+   * 会員本人のポイント明細（全種別・跨店集約）の先頭。
+   *
+   * <p>並びは記帳時刻の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
+   */
+  @Query(MEMBER_ENTRY_SELECT + MEMBER_ENTRY_WHERE + MEMBER_ENTRY_ORDER)
+  List<MemberPointEntryView> findMemberEntryViews(@Param("memberId") Long memberId, Limit limit);
+
+  /** 会員本人のポイント明細の続き。渡された位置より後ろ（＝より古い側）だけを返す。 */
+  @Query(
+      MEMBER_ENTRY_SELECT
+          + MEMBER_ENTRY_WHERE
+          + """
+            and (e.createdAt < :cursorCreatedAt
+                 or (e.createdAt = :cursorCreatedAt and e.id < :cursorId))
+            """
+          + MEMBER_ENTRY_ORDER)
+  List<MemberPointEntryView> findMemberEntryViewsAfter(
+      @Param("memberId") Long memberId,
+      @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
+      @Param("cursorId") Long cursorId,
+      Limit limit);
 }
