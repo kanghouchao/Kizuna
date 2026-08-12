@@ -16,6 +16,8 @@ import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAttribution;
+import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
@@ -33,6 +35,7 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.UserType;
+import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -52,6 +55,7 @@ public class OrderService {
   private static final String NOT_NOMINATABLE_MESSAGE = "指名できるキャストではありません。在籍中のキャストを選んでください";
 
   private final OrderRepository orderRepository;
+  private final OrderAttributionRepository orderAttributionRepository;
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final NominatableCastLookup nominatableCast;
@@ -244,6 +248,9 @@ public class OrderService {
    * <p>利用は付与より先に記帳する。順序が逆だと、その受注の付与で同じ受注の利用を賄えてしまう。
    *
    * <p>非会員の受注ではポイントの利用も付与も起こらない。会員に紐づかない顧客には台帳そのものが存在しない。
+   *
+   * <p>会員に達した完了は、記帳と同一トランザクションで受注帰属記録（根拠 COMPLETION）を残す。会員の来店履歴はこの記録だけから読むため、
+   * ここで記録が生まれない受注はその会員から永久に見えない。
    */
   @StoreScoped
   @Transactional
@@ -263,7 +270,8 @@ public class OrderService {
       // 非会員として進む。契約は CustomerRepository#findByIdForUpdate に記す。
       customerRepository.findByIdForUpdate(order.getCustomerId());
     }
-    Long memberId = linkedMemberId(order).orElse(null);
+    CustomerMemberLink link = activeLink(order).orElse(null);
+    Long memberId = link == null ? null : link.getMemberId();
     if (memberId == null && usePoints > 0) {
       throw new ServiceException("非会員の受注ではポイントを利用できません");
     }
@@ -283,6 +291,11 @@ public class OrderService {
       granted =
           pointLedgerService.grantForOrder(
               memberId, id, order.getStoreId(), request.getTotalFee(), actorId);
+      // 帰属は付与の有無と独立している。0 円完了は台帳へ行を書かないが、来店した事実は記録として残す。
+      // 会員コードは解決に使った関連のスナップショットをそのまま写す — 会員コードは発行後に変わらないため、
+      // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
+      orderAttributionRepository.save(
+          OrderAttribution.onCompletion(id, memberId, link.getMemberCode(), OffsetDateTime.now()));
     }
 
     order.completeWith(request.getTotalFee(), usePoints, granted);
@@ -307,7 +320,7 @@ public class OrderService {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
-    Long memberId = linkedMemberId(order).orElse(null);
+    Long memberId = activeLink(order).map(CustomerMemberLink::getMemberId).orElse(null);
     return OrderCompletionPreviewResponse.builder()
         .memberLinked(memberId != null)
         .pointBalance(memberId == null ? null : pointLedgerService.balance(memberId))
@@ -318,19 +331,19 @@ public class OrderService {
   }
 
   /**
-   * 受注の顧客に紐づく会員。顧客が未設定、紐づけが無い、または会員行が消えて紐づけの会員 ID が欠落した場合は空を返す。
+   * 受注の顧客に有効な会員紐づけ。顧客が未設定か紐づけが無ければ空を返す。会員解決はこの一本道（顧客 → 有効な関連 → 会員）だけを通り、 申請者の記録（requester）へは
+   * fallback しない — 申請の出所は帰属ではない。
    *
-   * <p>会員 ID の欠落を紐づけの不在と同じに扱うのは、残高の所在が会員 ID でしか辿れないため。
+   * <p>会員行が消えて紐づけの会員 ID が欠落した行は返るが、呼出側は会員 ID の欠落を紐づけの不在と同じに扱う（残高の所在が会員 ID でしか辿れないため）。
    *
    * <p>この問い合わせ自体はロックを取らない。完了は取り消せない一方で紐づけの解除・変更はいつでも起こりうるため、 完了は呼ぶ前に顧客行を押さえる。事前計算は台帳へ積まないので押さえない。
    */
-  private Optional<Long> linkedMemberId(Order order) {
+  private Optional<CustomerMemberLink> activeLink(Order order) {
     if (order.getCustomerId() == null) {
       return Optional.empty();
     }
-    return customerMemberLinkRepository
-        .findByCustomerIdAndStatus(order.getCustomerId(), LinkStatus.ACTIVE)
-        .map(CustomerMemberLink::getMemberId);
+    return customerMemberLinkRepository.findByCustomerIdAndStatus(
+        order.getCustomerId(), LinkStatus.ACTIVE);
   }
 
   /**
