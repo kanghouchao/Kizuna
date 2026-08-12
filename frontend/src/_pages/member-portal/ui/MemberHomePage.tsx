@@ -60,6 +60,13 @@ export function MemberHomePage() {
       <Button render={<Link href="/member/reservations/" />} className="mt-4 w-full">
         予約を見る
       </Button>
+      <Button
+        render={<Link href="/member/points/" />}
+        variant="outline"
+        className="mt-3 w-full"
+      >
+        ポイントを見る
+      </Button>
       <Button type="button" variant="outline" onClick={() => logout()} className="mt-6 w-full">
         ログアウト
       </Button>

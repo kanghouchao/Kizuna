@@ -21,7 +21,7 @@ frontend/src/
 ├── widgets/      # Composite UI such as sidebar, header
 ├── features/     # Slices per user action: platform-login, staff-management, ...
 ├── entities/     # Mirror of the backend domain modules:
-│                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift, member
+│                 #   store, user, menu, cast, customer, order, store-profile, system-config, shift, member, point
 │                 #   each slice = model (types) / api (requests) / index (public API)
 └── shared/       # api (apiClient, shared types), lib (navigation, config, proxy), ui (shadcn/ui barrel + hand-written generics),
                   #   notify (the toast severity tiers — call sites write the meaning, never the colour/duration/icon;
