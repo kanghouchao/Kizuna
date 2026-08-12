@@ -6,6 +6,7 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkView;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
@@ -72,6 +73,8 @@ public class CustomerMemberLinkService {
             .customerId(customerId)
             .memberId(member.memberId())
             .memberCode(member.memberCode())
+            // この経路の成立根拠は会員コードの提示ただ一つ。他の根拠はそれぞれの機構の書き手が記録する。
+            .reason(LinkReason.MEMBER_CODE)
             .linkedBy(actorId)
             .linkedAt(OffsetDateTime.now())
             .build();

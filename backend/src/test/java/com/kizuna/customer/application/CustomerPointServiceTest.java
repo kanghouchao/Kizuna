@@ -13,6 +13,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
@@ -240,6 +241,7 @@ class CustomerPointServiceTest {
         .customerId(CUSTOMER_ID)
         .memberId(memberId)
         .memberCode("123456789012")
+        .reason(LinkReason.MEMBER_CODE)
         .linkedBy(ACTOR_ID)
         .linkedAt(OffsetDateTime.now())
         .build();

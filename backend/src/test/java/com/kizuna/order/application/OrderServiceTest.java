@@ -21,6 +21,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
@@ -893,6 +894,7 @@ class OrderServiceTest {
             .customerId("cust-1")
             .memberId(100L)
             .memberCode("123456789012")
+            .reason(LinkReason.MEMBER_CODE)
             .linkedBy(3L)
             .linkedAt(OffsetDateTime.now())
             .build();
@@ -1045,6 +1047,7 @@ class OrderServiceTest {
         .customerId("cust-1")
         .memberId(memberId)
         .memberCode("123456789012")
+        .reason(LinkReason.MEMBER_CODE)
         .linkedBy(3L)
         .linkedAt(OffsetDateTime.now())
         .build();

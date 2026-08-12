@@ -1,0 +1,33 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v01300-001-customer-member-link-reason
+      author: kanghouchao
+      # 関連の成立根拠。「どの機構で成立したか」の事実であり、行ごとに不変で挙動を分けない。
+      #
+      # 既存行は MEMBER_CODE で埋める。ここまでに成立した関連は会員コードの提示という唯一の経路で
+      # 作られているため、埋め草がそのまま事実になる。埋めた後に既定値は落とす — 根拠は書き手が
+      # 機構ごとに明示するもので、DB 側の既定値を残すと、明示し忘れた行が MEMBER_CODE を名乗って
+      # 静かに混ざる（既存行の埋め草と将来の既定値は別物）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_customer_member_links
+            columns:
+              - column:
+                  name: reason
+                  type: VARCHAR(20)
+                  defaultValue: MEMBER_CODE
+                  constraints:
+                    nullable: false
+                  remarks: 成立根拠（MEMBER_CODE=会員コード提示/MEMBER_REQUEST=会員申請の確定時自動整備/MIGRATION=旧システム移行由来）
+        - dropDefaultValue:
+            tableName: t_customer_member_links
+            columnName: reason
+      rollback:
+        - dropColumn:
+            tableName: t_customer_member_links
+            columns:
+              - column:
+                  name: reason

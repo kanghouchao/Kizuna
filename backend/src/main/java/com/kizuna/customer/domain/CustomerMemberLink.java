@@ -17,7 +17,9 @@ import org.hibernate.annotations.Filter;
  *
  * <p>{@code memberCode} は紐づけ時点のスナップショットで、会員行が消えて {@code memberId} が欠落した後も履歴を読めるようにする。
  *
- * <p>不変条件（構築時に検証、違反は 400 系ドメイン例外）: 顧客 ID・会員 ID・会員コード・実行者・紐づけ日時が必須で、構築直後は必ず ACTIVE （{@link
+ * <p>{@code reason} はこの区間がどの機構で成立したかの事実（{@link LinkReason}）で、行ごとに不変であり挙動を分けない。
+ *
+ * <p>不変条件（構築時に検証、違反は 400 系ドメイン例外）: 顧客 ID・会員 ID・会員コード・成立根拠・実行者・紐づけ日時が必須で、構築直後は必ず ACTIVE （{@link
  * InvalidCustomerMemberLinkException}）。
  */
 @Entity
@@ -38,6 +40,10 @@ public class CustomerMemberLink extends StoreScopedEntity {
   private String memberCode;
 
   @Enumerated(EnumType.STRING)
+  @Column(name = "reason", nullable = false, updatable = false, length = 20)
+  private LinkReason reason;
+
+  @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 20)
   private LinkStatus status;
 
@@ -55,7 +61,12 @@ public class CustomerMemberLink extends StoreScopedEntity {
 
   @Builder
   public CustomerMemberLink(
-      String customerId, Long memberId, String memberCode, Long linkedBy, OffsetDateTime linkedAt) {
+      String customerId,
+      Long memberId,
+      String memberCode,
+      LinkReason reason,
+      Long linkedBy,
+      OffsetDateTime linkedAt) {
     if (customerId == null || customerId.isBlank()) {
       throw new InvalidCustomerMemberLinkException("顧客 ID は必須です");
     }
@@ -64,6 +75,9 @@ public class CustomerMemberLink extends StoreScopedEntity {
     }
     if (memberCode == null || memberCode.isBlank()) {
       throw new InvalidCustomerMemberLinkException("会員コードは必須です");
+    }
+    if (reason == null) {
+      throw new InvalidCustomerMemberLinkException("成立根拠は必須です");
     }
     if (linkedBy == null) {
       throw new InvalidCustomerMemberLinkException("紐づけの実行者は必須です");
@@ -74,6 +88,7 @@ public class CustomerMemberLink extends StoreScopedEntity {
     this.customerId = customerId;
     this.memberId = memberId;
     this.memberCode = memberCode;
+    this.reason = reason;
     this.linkedBy = linkedBy;
     this.linkedAt = linkedAt;
     this.status = LinkStatus.ACTIVE;

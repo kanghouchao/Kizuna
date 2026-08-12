@@ -2,9 +2,15 @@ package com.kizuna.customer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.CustomerMemberLinkRepository;
+import com.kizuna.customer.domain.LinkReason;
+import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -17,7 +23,7 @@ import tools.jackson.databind.JsonNode;
  * 会員コードによる顧客台帳への紐づけを本物の PostgreSQL で検証する統合テスト。
  *
  * <p>紐づけ・変更・解除がいずれも履歴として残り（実行者・日時が引ける）、変更が中間状態を作らずに 旧区間の解除と新区間の作成をまとめて行うこと、CRM 一覧・詳細に関連状態が投影されることを
- * HTTP 境界で固定する。
+ * HTTP 境界で固定する。成立根拠だけは応答に出さない純記録なので、永続化された行を直接読んで固定する。
  *
  * <p>越境の確認は 2 種類ある。基底クラスの yamada（店舗1 授権）は他店舗ヘッダ自体を拒否されるので 403 になり、これはインターセプタの検証。 対して店舗{1,2} 授権の店長
  * tanaka は両店舗の文脈を確立できるため、同一会員を店舗ごとに別々の顧客へ紐づけられること（会員の一意性が 店舗内に閉じていること）を確かめられる。
@@ -25,6 +31,8 @@ import tools.jackson.databind.JsonNode;
 class CustomerMemberLinkIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "password1234";
+
+  @Autowired private CustomerMemberLinkRepository customerMemberLinkRepository;
 
   private final long nonce = System.nanoTime();
 
@@ -62,6 +70,22 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
     assertThat(row.path("id").asString()).isEqualTo(customerId);
     assertThat(row.path("member_linked").asBoolean()).isTrue();
     assertThat(row.path("linked_member_code").asString()).isEqualTo(memberCode);
+  }
+
+  @Test
+  @DisplayName("会員コードで成立した関連には成立根拠 MEMBER_CODE が記録されること")
+  void linkRecordsMemberCodeReason() {
+    String customerId = createCustomer(STORE_A, "根拠顧客-" + nonce);
+    String memberCode = registerMember("link-reason");
+
+    assertThat(link(STORE_A, customerId, memberCode, token).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    // 成立根拠は応答に出さない純記録なので、永続化された行を直接読む
+    Optional<CustomerMemberLink> stored =
+        customerMemberLinkRepository.findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE);
+    assertThat(stored).as("紐づけで ACTIVE の区間が残ること").isPresent();
+    assertThat(stored.get().getReason()).isEqualTo(LinkReason.MEMBER_CODE);
   }
 
   @Test
