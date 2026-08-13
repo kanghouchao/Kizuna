@@ -316,7 +316,7 @@ describe('OrderCompletionModal', () => {
     // 客が読み取って行き着くのは申領画面。トークンだけを載せると、読み取っても開く先が無い
     expect(screen.getByTestId('qr')).toHaveAttribute(
       'data-value',
-      'http://kizuna.test/member/receipts/raw-receipt-token'
+      'http://kizuna.test/member/receipts#raw-receipt-token'
     );
     expect(onCompleted).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();

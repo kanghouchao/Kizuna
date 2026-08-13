@@ -6,11 +6,14 @@ import { getPlatformDomain } from '@/shared/lib';
  * 会員ポータルは平台ドメイン側にあるので、店舗コンソールが配信されているドメインではなく
  * 平台ドメインへ組み立てる（店舗サイトから会員ポータルへ渡す導線と同じ流儀）。
  *
- * トークンはパスに置く。問い合わせ文字列に載せると Referer や履歴・アクセスログへ素通りするため、
- * 所持そのものが証明になる値は経路に残さない。末尾のスラッシュは付けない — 付けると 308 で
- * 落とされた URL を客の手元に配ることになる。
+ * トークンはフラグメントに置く。パスも問い合わせ文字列もリクエストターゲットとして送られ、
+ * リバースプロキシとアプリのアクセスログに 90 日有効の生値がそのまま残る — 読み取られるたびに
+ * ログへクレデンシャルを書くことになる。フラグメントはサーバへ送られないので、申領画面が
+ * ブラウザ側で読み取って申領要求の本体に載せる形にできる。
+ *
+ * 末尾のスラッシュは付けない — 付けると 308 で落とされた URL を客の手元に配ることになる。
  */
 export function receiptClaimUrl(token: string): string {
   const { protocol } = window.location;
-  return `${protocol}//${getPlatformDomain()}/member/receipts/${encodeURIComponent(token)}`;
+  return `${protocol}//${getPlatformDomain()}/member/receipts#${encodeURIComponent(token)}`;
 }
