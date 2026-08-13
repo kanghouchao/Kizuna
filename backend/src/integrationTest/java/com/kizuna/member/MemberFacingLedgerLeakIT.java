@@ -158,8 +158,15 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private static final List<String> MEMBER_VISIT_ALLOWED_FIELDS =
       List.of("visited_on", "store_name", "pax", "cast_name", "granted_points");
 
+  /** 伝票トークンの申領が返してよい項目名。増えたら落ちる。 */
+  private static final List<String> MEMBER_RECEIPT_CLAIM_ALLOWED_FIELDS = List.of("granted_points");
+
   /**
    * 掃き出す会員側の GET 端点。残高系の項目を許すかは端点ごとに決める。
+   *
+   * <p>申領（{@code POST /platform/me/receipts/claim}）はこの表に入らない — 一覧の掃き出しは同じ要求を何度でも
+   * 撃てることが前提で、トークンの状態を進める操作は載せられない。代わりに専用の 1 件（{@link
+   * #memberReceiptClaimReturnsOnlyWhitelistedFields}）で同じ掃き出しを当てる。
    *
    * @param exposesBalance 残高系の項目と残高の実値を返してよい端点か
    */
@@ -461,6 +468,82 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
                 headers),
             JsonNode.class);
     assertThat(requested.getStatusCode()).as("前提: 会員が予約を申請できること").isEqualTo(HttpStatus.CREATED);
+  }
+
+  @Test
+  @DisplayName("伝票トークンの申領は記帳したポイントだけを返すこと（項目名の白名単＋台帳の掃き出し）")
+  void memberReceiptClaimReturnsOnlyWhitelistedFields() {
+    // 申領は会員が店舗の受注へ触れる唯一の書き込みで、応答に受注や台帳の項目を添えたくなる形をしている。
+    // 帰属しなかった完了（＝トークンが発行される唯一の経路）を本番の完了 API で作って申領する
+    String rawToken = issueReceiptTokenForUnattributedVisit();
+
+    // トークンは 1 度しか使えないため、生ボディの掃き出しと項目名の白名単を同じ 1 応答から見る
+    ResponseEntity<JsonNode> claimed =
+        rest.postForEntity(
+            "/platform/me/receipts/claim",
+            new HttpEntity<>("{\"token\": \"" + rawToken + "\"}", bearer(memberToken)),
+            JsonNode.class);
+
+    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertNoLedgerLeak("POST /platform/me/receipts/claim", claimed.getBody().toString(), false);
+    List<String> fields = new ArrayList<>();
+    claimed.getBody().propertyNames().forEach(fields::add);
+    assertThat(fields)
+        .as("申領の応答項目（想定外の項目が増えていないこと）")
+        .containsExactlyInAnyOrderElementsOf(MEMBER_RECEIPT_CLAIM_ALLOWED_FIELDS);
+  }
+
+  /**
+   * 会員へ帰属しない完了を店舗側の本番経路で 1 件作り、発行された伝票トークンの生値を返す。
+   *
+   * <p>紐づけ済みの顧客に着けると完了時に会員へ帰属してトークンが発行されないため、顧客を着けない受注で作る。
+   */
+  private String issueReceiptTokenForUnattributedVisit() {
+    ResponseEntity<JsonNode> cast =
+        rest.postForEntity(
+            "/store/casts",
+            new HttpEntity<>(
+                "{\"name\": \"申領検証担当-" + System.nanoTime() + "\"}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(cast.getStatusCode().is2xxSuccessful()).as("前提: キャスト作成が成功すること").isTrue();
+    String castId = cast.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/store/orders",
+            new HttpEntity<>(
+                "{\"receptionist_id\": 3, \"business_date\": \""
+                    + LocalDate.now(ZoneId.of("Asia/Tokyo"))
+                    + "\", \"cast_id\": \""
+                    + castId
+                    + "\", \"pax\": 2}",
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
+    String orderId = created.getBody().path("id").asString();
+
+    ResponseEntity<JsonNode> confirmed =
+        rest.exchange(
+            "/store/orders/" + orderId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                "{\"receptionist_id\": 3, \"cast_id\": \""
+                    + castId
+                    + "\", \"status\": \"CONFIRMED\"}",
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(confirmed.getStatusCode().is2xxSuccessful()).as("前提: 受注を確定できること").isTrue();
+
+    ResponseEntity<JsonNode> completed =
+        rest.exchange(
+            "/store/orders/" + orderId + "/completion",
+            HttpMethod.POST,
+            new HttpEntity<>("{\"total_fee\": 3000}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(completed.getStatusCode()).as("前提: 受注を完了できること").isEqualTo(HttpStatus.OK);
+    String rawToken = completed.getBody().path("receipt_token").asString();
+    assertThat(rawToken).as("前提: 会員へ帰属しない完了が伝票トークンを発行すること").isNotBlank();
+    return rawToken;
   }
 
   @Test

@@ -26,6 +26,19 @@ class OrderAttributionTest {
   }
 
   @Test
+  @DisplayName("事後申領の帰属は根拠 RECEIPT_TOKEN の有効な記録になること")
+  void onReceiptClaimIsAnActiveReceiptTokenRecord() {
+    OrderAttribution attribution =
+        OrderAttribution.onReceiptClaim("o1", 7L, "123456789012", ATTRIBUTED_AT);
+
+    assertThat(attribution.getOrderId()).isEqualTo("o1");
+    assertThat(attribution.getMemberId()).isEqualTo(7L);
+    assertThat(attribution.getMemberCode()).isEqualTo("123456789012");
+    assertThat(attribution.getSource()).isEqualTo(OrderAttributionSource.RECEIPT_TOKEN);
+    assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
+  }
+
+  @Test
   @DisplayName("受注 ID の無い帰属は記録できないこと")
   void missingOrderIdIsRejected() {
     assertThatThrownBy(() -> OrderAttribution.onCompletion(" ", 7L, "123456789012", ATTRIBUTED_AT))

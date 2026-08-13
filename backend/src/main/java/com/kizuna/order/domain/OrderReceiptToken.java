@@ -85,6 +85,27 @@ public class OrderReceiptToken extends BaseEntity {
     return new OrderReceiptToken(orderId, tokenDigest, plannedPoints, issuedAt);
   }
 
+  /**
+   * 申領できる状態か（未申領かつ期限内。期限の瞬間は含まない）。
+   *
+   * <p>できない理由は区別しない — 呼出側は無効・期限切れ・使用済み・不在をすべて同形のエラーへ落とし、 応答から受注の存在を辿れないようにする。
+   */
+  public boolean isClaimableAt(OffsetDateTime at) {
+    return status == OrderReceiptTokenStatus.ISSUED && at.isBefore(expiresAt);
+  }
+
+  /**
+   * 申領済みにする。前提状態（未申領）が消えることが申領の再送を遮断する経路そのもので、冪等キーを要さない（ADR 0007）。
+   *
+   * <p>申領できない状態での呼出は呼出側の欠陥。利用者へ返す同形のエラーは、この例外ではなく呼出側が {@link #isClaimableAt} で判じて作る。
+   */
+  public void claim(OffsetDateTime at) {
+    if (!isClaimableAt(at)) {
+      throw new InvalidOrderReceiptTokenException("この伝票トークンは申領できる状態ではありません");
+    }
+    this.status = OrderReceiptTokenStatus.CLAIMED;
+  }
+
   /** 生値もダイジェストも載せない。診断出力がクレデンシャルの漏えい経路にならないようにする。 */
   @Override
   public String toString() {
