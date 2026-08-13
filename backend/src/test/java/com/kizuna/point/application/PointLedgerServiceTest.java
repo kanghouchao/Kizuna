@@ -129,6 +129,31 @@ class PointLedgerServiceTest {
   }
 
   @Test
+  @DisplayName("事後申領の付与は、渡された確定額をそのまま記帳し付与設定を読み直さないこと")
+  void grantPlannedForOrderBooksTheGivenAmountVerbatim() {
+    // 額は完了時点の規則で確定している。ここで読み直すと、同じ会計が申領の早い遅いで別のポイントになる
+    pointLedgerService.grantPlannedForOrder(MEMBER_ID, "o1", STORE_ID, 120, ACTOR_ID);
+
+    verify(pointEntryRepository).save(savedEntry.capture());
+    PointEntry entry = savedEntry.getValue();
+    assertThat(entry.getEntryType()).isEqualTo(PointEntryType.ORDER_GRANT);
+    assertThat(entry.getAmount()).isEqualTo(120);
+    assertThat(entry.getOrderId()).isEqualTo("o1");
+    assertThat(entry.getOriginatingStoreId()).isEqualTo(STORE_ID);
+    assertThat(entry.getActorUserId()).isEqualTo(ACTOR_ID);
+    verify(systemConfigService, never()).pointSettings();
+  }
+
+  @Test
+  @DisplayName("確定額 0 の事後申領は台帳へ何も書かないこと")
+  void grantPlannedForOrderWritesNothingWhenZero() {
+    // 0 円完了の伝票。申領の効果は来店の可視化に閉じ、台帳には行を作らない
+    pointLedgerService.grantPlannedForOrder(MEMBER_ID, "o1", STORE_ID, 0, ACTOR_ID);
+
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
   @DisplayName("利用単位の設定が 0 以下なら 1 として扱うこと")
   void usageUnitNormalizesNonPositive() {
     when(systemConfigService.pointSettings())

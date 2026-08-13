@@ -146,7 +146,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("不在・壊れた値・期限切れ・使用済みのトークンが同形のエラーで返ること")
   void everyUnusableTokenFailsWithTheSameShape() {
-    // 応答を撃ち分けると、受注の存在と完了状態を応答の違いから辿れてしまう（#336 ストーリー 21）
+    // 応答を撃ち分けると、受注の存在と完了状態を応答の違いから辿れてしまう
     Issued expired = completedOrderWithToken(null, "期限切れ担当-" + nonce, TOTAL_FEE);
     jdbcTemplate.update(
         "update t_order_receipt_tokens set expires_at = now() - interval '1 day' where order_id = ?",
