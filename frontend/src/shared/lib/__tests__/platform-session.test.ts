@@ -151,6 +151,28 @@ describe('会員ポータルの戻り先パス', () => {
     expect(takeMemberReturnPath()).toBe('/member/points/');
   });
 
+  // 断片の置き場が使えないことは「元の画面へ戻れない」だけの不便で、呼び元（差し戻し）を
+  // 止めてよい理由にはならない。投げると未認証の利用者がログインへも進めなくなる
+  it('sessionStorage が投げても記憶と取り出しは例外を出さないこと', () => {
+    const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    const getItem = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+    const removeItem = jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+
+    expect(() => rememberMemberReturnPath('/member/receipts', '#tok3n')).not.toThrow();
+    expect(Cookies.get('member-return-path')).toBe('/member/receipts');
+    expect(takeMemberReturnPath()).toBe('/member/receipts');
+
+    setItem.mockRestore();
+    getItem.mockRestore();
+    removeItem.mockRestore();
+  });
+
   it('# で始まらない値はフラグメントとして扱わないこと', () => {
     // 連結してもパスの一部にならないことを形で保証する（遷移先は利用者側の値から組み立てるため）
     rememberMemberReturnPath('/member/receipts', 'evil');

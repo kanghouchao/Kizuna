@@ -58,6 +58,7 @@ describe('LineCallbackPage', () => {
   afterEach(() => {
     Cookies.remove('token');
     Cookies.remove('platform-role');
+    Cookies.remove('member-return-path');
   });
 
   describe('ログイン意図', () => {
@@ -130,6 +131,35 @@ describe('LineCallbackPage', () => {
       await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/'));
       expect(Cookies.get('token')).toBe('jwt-token');
       expect(Cookies.get('platform-role')).toBe('member');
+    });
+
+    it('伝票の QR から未登録で来ていた場合、登録後は申領画面へ戻ること', async () => {
+      // 預かった戻り先を消費しないと、その人は伝票を取り込めないまま、断片は次に同じタブで
+      // ログインした別の会員へ渡ってしまう
+      Cookies.set('member-return-path', '/member/receipts');
+      sessionStorage.setItem('member-return-fragment', '#tok3n');
+      arriveAt('?code=auth-code&state=s1', { state: 's1', verifier: 'v1', intent: 'login' });
+      mockedLineApi.login.mockResolvedValue({
+        registered: false,
+        registration_ticket: 'ticket-1',
+        display_name: 'LINE太郎',
+      });
+      mockedLineApi.register.mockResolvedValue({
+        token: 'jwt-token',
+        expires_at: Date.now() + 3_600_000,
+      });
+
+      render(<LineCallbackPage />);
+
+      fireEvent.change(await screen.findByLabelText('メールアドレス'), {
+        target: { value: 'member@kizuna.test' },
+      });
+      fireEvent.click(screen.getByLabelText('利用規約およびプライバシーポリシーに同意します'));
+      fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/receipts#tok3n'));
+      expect(Cookies.get('member-return-path')).toBeUndefined();
+      expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
     });
 
     it('同意チェックが無ければ登録を送らない', async () => {

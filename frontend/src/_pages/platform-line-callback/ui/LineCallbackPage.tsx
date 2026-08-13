@@ -12,6 +12,7 @@ import {
   getApiErrorMessage,
   lineCallbackRedirectUri,
   startPlatformSession,
+  takeMemberReturnPath,
 } from '@/shared/lib';
 import { AuthLayout } from '@/shared/ui';
 import LineRegisterStep, { LineRegisterValues } from './LineRegisterStep';
@@ -135,8 +136,11 @@ export default function LineCallbackPage() {
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
       Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
       startPlatformSession('member', expires_at);
+      // 会員ポータルで弾かれた人が LINE 登録へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
+      // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
+      // 別の会員がその戻り先へ運ばれる。
       // 消費済みのコールバック URL と使用済みフォームを履歴に残さない
-      router.replace('/member/');
+      router.replace(takeMemberReturnPath() ?? '/member/');
     } catch (error) {
       notify.error(getApiErrorMessage(error, '会員登録に失敗しました'));
     }

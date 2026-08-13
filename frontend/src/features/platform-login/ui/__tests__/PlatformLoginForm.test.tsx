@@ -116,6 +116,21 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
   });
 
+  it('/me が失敗したログインでは預かった戻り先を消費しないこと', async () => {
+    // 取り出しは 1 度きり。ログインが確定する前に消すと、通信の一時的な失敗でやり直したときには
+    // 戻り先が既に無い（伝票の生値はこの断片にしか無く、再取得の口が無い）
+    mockedAuthApi.me.mockRejectedValue(new Error('network'));
+    Cookies.set('member-return-path', '/member/receipts');
+    sessionStorage.setItem('member-return-fragment', '#tok3n');
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(Cookies.get('member-return-path')).toBe('/member/receipts');
+    expect(sessionStorage.getItem('member-return-fragment')).toBe('#tok3n');
+  });
+
   it('戻り先に外部 URL が仕込まれていても既定のホームへ遷移すること', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
     Cookies.set('member-return-path', 'https://evil.test/');
