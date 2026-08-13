@@ -14,7 +14,13 @@ const CONSOLE_AREAS: Record<string, { allowed: readonly string[]; home: string }
   member: { allowed: ['member'], home: '/member' },
 };
 
-/** 伝票トークンの申領画面ちょうど（末尾スラッシュの有無は問わない）。 */
+/**
+ * 伝票トークンの申領画面ちょうど（末尾スラッシュの有無は問わない）。
+ *
+ * <p>この画面だけはサーバ側で差し戻さない。伝票トークンは QR の URL のフラグメントで届き、
+ * フラグメントはサーバへ送られない — 描かずに差し戻すとトークンは読み取られないまま消える。
+ * 未認証も別コンソールのセッションも同じ理由で素通しし、画面自身がトークンを預けてログインへ送る。
+ */
 function isMemberReceiptClaimPath(path: string): boolean {
   return path === '/member/receipts' || path === '/member/receipts/';
 }
@@ -57,10 +63,8 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // /member/** は会員ポータル専用の認証済み領域。入口は /platform/login（キャストと同様、
   // 専用ログイン画面は無い）。厳密一致＋/member/ 配下に限定するのも同じ理由。
   //
-  // 申領画面だけは未認証でも描かせる。伝票トークンは QR の URL のフラグメントで届き、
-  // フラグメントはサーバへ送られない — ここで差し戻すと画面が一度も描かれず、トークンは
-  // 読み取られないまま消える（ログイン後に戻っても申領できない）。描いたうえで画面自身が
-  // トークンを預け、ログインへ送る。免除は正確にこのパスだけで、前綴では緩めない。
+  // 申領画面だけは未認証でも描かせる（理由は isMemberReceiptClaimPath）。免除は正確に
+  // このパスだけで、前綴では緩めない。
   if (
     !isMemberReceiptClaimPath(path) &&
     (path === '/member' || path.startsWith('/member/')) &&
@@ -84,7 +88,14 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 一致しない場合は自コンソールのホームへ差し戻す。cookie 不在（レガシーセッション）や
   // 未知の旧形式値は対象外 — 後者は apiClient の 403 応答経路がセッション破棄で回収する。
   // 共有 platform ルート（自アカウント設定）は店舗コンソールの正当な到達先のため対象外。
-  if (hasToken && !isPublicPlatformRoute && !isSharedPlatformPath(path)) {
+  // 申領画面も対象外 — 別コンソールのセッションが残ったまま QR を開く場面でここが働くと、
+  // 描かれる前に差し戻されてフラグメントのトークンが消える（未認証の免除と同じ理由）。
+  if (
+    hasToken &&
+    !isPublicPlatformRoute &&
+    !isSharedPlatformPath(path) &&
+    !isMemberReceiptClaimPath(path)
+  ) {
     const consoleValue = request.cookies.get('platform-role')?.value ?? '';
     // cookie は利用者が任意値を書ける。素の添字だと 'constructor' 等が原型鎖に当たるため
     // 自有プロパティに限定する。
