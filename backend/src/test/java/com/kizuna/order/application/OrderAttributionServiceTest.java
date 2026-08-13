@@ -87,7 +87,7 @@ class OrderAttributionServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions(activeAttribution());
 
-    OrderAttributionResponse response = service.get(ORDER_ID);
+    OrderAttributionResponse response = service.currentAttribution(ORDER_ID);
 
     assertThat(response.attributed()).isTrue();
     assertThat(response.memberCode()).isEqualTo(MEMBER_CODE);
@@ -103,7 +103,7 @@ class OrderAttributionServiceTest {
     invalidated.invalidate(REASON, ACTOR_ID, OffsetDateTime.now());
     givenAttributions(invalidated);
 
-    OrderAttributionResponse response = service.get(ORDER_ID);
+    OrderAttributionResponse response = service.currentAttribution(ORDER_ID);
 
     assertThat(response.attributed()).isFalse();
     // 誰の来店として記録されていたかは訂正後も読めなければならない（訂正の妥当性を店舗が確かめる材料）
@@ -118,7 +118,7 @@ class OrderAttributionServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions();
 
-    OrderAttributionResponse response = service.get(ORDER_ID);
+    OrderAttributionResponse response = service.currentAttribution(ORDER_ID);
 
     assertThat(response.attributed()).isFalse();
     assertThat(response.memberCode()).isNull();
@@ -130,7 +130,8 @@ class OrderAttributionServiceTest {
   void getRejectsAnOrderOutsideTheStore() {
     Mockito.when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.get(ORDER_ID)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.currentAttribution(ORDER_ID))
+        .isInstanceOf(NotFoundException.class);
     // 帰属記録は platform 帰属で店舗行分離機構に載らない。受注を引けない時点で終えないと他店舗の会員コードが漏れる
     Mockito.verifyNoInteractions(orderAttributionRepository);
   }
@@ -356,8 +357,12 @@ class OrderAttributionServiceTest {
   }
 
   private void givenAttributions(OrderAttribution... rows) {
-    Mockito.when(orderAttributionRepository.findByOrderIdOrderByIdDesc(ORDER_ID))
+    Mockito.lenient()
+        .when(orderAttributionRepository.findByOrderIdOrderByIdDesc(ORDER_ID))
         .thenReturn(List.of(rows));
+    Mockito.lenient()
+        .when(orderAttributionRepository.findFirstByOrderIdOrderByIdDesc(ORDER_ID))
+        .thenReturn(rows.length == 0 ? Optional.empty() : Optional.of(rows[0]));
   }
 
   private void givenTokens(OrderReceiptToken... rows) {

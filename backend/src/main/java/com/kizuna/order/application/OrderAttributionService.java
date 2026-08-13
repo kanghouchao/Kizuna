@@ -50,7 +50,7 @@ public class OrderAttributionService {
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
   @StoreScoped
   @Transactional(readOnly = true)
-  public OrderAttributionResponse get(String orderId) {
+  public OrderAttributionResponse currentAttribution(String orderId) {
     requireScopedOrder(orderId);
     return toResponse(latestAttribution(orderId).orElse(null));
   }
@@ -134,7 +134,7 @@ public class OrderAttributionService {
 
   /** 直近の帰属記録。無効化で行を消さないため複数行を持ちうるが、有効な行は部分一意索引により高々 1 件で、あればそれが直近になる。 */
   private Optional<OrderAttribution> latestAttribution(String orderId) {
-    return orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId).stream().findFirst();
+    return orderAttributionRepository.findFirstByOrderIdOrderByIdDesc(orderId);
   }
 
   /**

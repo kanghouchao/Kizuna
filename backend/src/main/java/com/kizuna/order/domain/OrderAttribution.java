@@ -53,6 +53,12 @@ public class OrderAttribution extends BaseEntity {
   @Column(name = "invalidated_reason", length = 500)
   private String invalidatedReason;
 
+  /**
+   * 無効化を実行した操作者。書き込み時は必須だが、読み出しでは欠落しうる — 操作者の削除で FK が SET NULL になるためで、会員参照（{@code
+   * memberId}）と同じ紀律である。
+   *
+   * <p>非対称なのは意図で、「実行者不明のまま訂正を通す」ことと「訂正の後に操作者の口座が消える」ことは別の事象にあたる。前者は失効した認証セッションによる操作を記録に残せなくするので拒む。
+   */
   @Column(name = "invalidated_by")
   private Long invalidatedBy;
 
