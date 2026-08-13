@@ -1,5 +1,6 @@
 package com.kizuna.order.domain;
 
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -9,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -75,6 +77,20 @@ public interface OrderRepository
    */
   @Query("select o from com.kizuna.order.domain.Order o where o.id = :id")
   Optional<Order> findScopedById(@Param("id") String id);
+
+  /**
+   * 現店舗の受注 1 件を、その受注に紐づく行を書き換える間だけ押さえて引く。
+   *
+   * <p>伝票トークンの再発行は「申領できる伝票がまだ無い」を確かめてから 1 本発行する。トークン表の一意制約はダイジェストにしか 掛からないため、ロックが無いと並行する 2
+   * つの再発行が同じ「無い」を観測して両方成功し、申領できる伝票が 2 本並ぶ。 そうなると後から申領した側は帰属記録の部分一意違反（500 系）で落ち、申領の応答が同形でなくなる。
+   *
+   * <p>押さえるのが受注なのは、帰属記録も伝票トークンも受注 ID でしか辿れず、まだ存在しない行はロックできないため。 受注は両者の親であり、この操作の直列化の単位になる。
+   *
+   * <p>申領（{@code MemberReceiptClaimService}）が押さえるのはトークン行だけで、こちらは受注行だけなので待ちが環にならない。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select o from com.kizuna.order.domain.Order o where o.id = :id")
+  Optional<Order> findScopedByIdForUpdate(@Param("id") String id);
 
   // 未確定の申請の抽出条件。先頭と続きの問い合わせが同じ条件を共有する（片方だけ直すと、続きの取得が
   // 先頭の取得と違う母集合を辿り、到達できない申請を生む）。

@@ -17,6 +17,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -242,6 +247,50 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     assertThat(reissue(orderId).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
     assertThat(tokenCountFor(orderId)).as("生きた伝票は 1 本だけであること").isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("並行する再発行は一方だけが成立し、申領できる伝票が 2 本並ばないこと")
+  void concurrentReissuesLeaveOnlyOneClaimableToken() throws Exception {
+    // 「申領できる伝票が無い」を確かめてから発行するまでが直列化されないと、両者が同じ「無い」を観測して
+    // 2 本とも発行される。そうなると後から申領した側は帰属記録の部分一意違反（500 系）で落ち、#653 が
+    // 意図して作った「申領できない伝票はすべて同形のエラー」が壊れる
+    RegisteredMember wrongMember = registerAndLogin("race");
+    String orderId = completedOrderAttributedTo(wrongMember, "並行再発行担当-" + nonce);
+    assertThat(invalidate(orderId, REASON).getStatusCode())
+        .as("前提: 無効化できること")
+        .isEqualTo(HttpStatus.OK);
+
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch go = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      List<Future<ResponseEntity<JsonNode>>> races = new ArrayList<>();
+      for (int i = 0; i < 2; i++) {
+        races.add(
+            pool.submit(
+                () -> {
+                  ready.countDown();
+                  go.await(10, TimeUnit.SECONDS);
+                  return reissue(orderId);
+                }));
+      }
+      assertThat(ready.await(10, TimeUnit.SECONDS)).as("前提: 2 つの再発行が同時に構えること").isTrue();
+      go.countDown();
+
+      List<ResponseEntity<JsonNode>> responses = new ArrayList<>();
+      for (Future<ResponseEntity<JsonNode>> race : races) {
+        responses.add(race.get(30, TimeUnit.SECONDS));
+      }
+      assertThat(responses)
+          .filteredOn(response -> response.getStatusCode() == HttpStatus.OK)
+          .as("成立するのは一方だけ")
+          .hasSize(1);
+    } finally {
+      pool.shutdownNow();
+    }
+
+    assertThat(tokenCountFor(orderId)).as("発行された伝票は 1 本だけであること").isEqualTo(1);
   }
 
   @Test
