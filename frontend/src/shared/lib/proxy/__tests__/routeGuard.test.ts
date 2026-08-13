@@ -213,6 +213,28 @@ describe('routeGuard', () => {
     expect(unsafe.cookies.set).not.toHaveBeenCalled();
   });
 
+  it.each(['/member/receipts', '/member/receipts/'])(
+    'renders %s without a token (the fragment carries the receipt token)',
+    path => {
+      // 伝票トークンは QR の URL のフラグメントで届き、サーバへは送られない。ここで差し戻すと
+      // 画面が一度も描かれないままトークンが失われ、ログイン後に戻っても申領できない。
+      const res = handleRouteProtection(createRequest(path, false), 'platform');
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    }
+  );
+
+  it('still bounces other /member paths without a token', () => {
+    // 免除は申領画面ちょうどだけ。前綴で緩めると会員ポータル全体が未認証で描かれる
+    const res = handleRouteProtection(createRequest('/member/receipts/other', false), 'platform');
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/platform/login' })
+    );
+    expect(res).not.toBeNull();
+  });
+
   it('allows access to /member with token', () => {
     const req = createRequest('/member', true);
     const res = handleRouteProtection(req, 'platform');

@@ -9,7 +9,8 @@ jest.mock('@/shared/lib', () => ({
   // 引数をそのまま渡す。握り潰すと理由コードが未配線でもテストが緑のままになる。
   redirectToLogin: (reason?: string) => redirectMock(reason),
   clearPlatformSession: () => clearPlatformSessionMock(),
-  rememberMemberReturnPath: (value: string) => rememberMemberReturnPathMock(value),
+  rememberMemberReturnPath: (value: string, fragment?: string) =>
+    rememberMemberReturnPathMock(value, fragment),
   getPlatformConsole: () => platformConsoleValue,
   getPlatformStoreId: () => undefined,
   isStoreConsole: (v: string | undefined) => v === 'store',
@@ -73,7 +74,8 @@ describe('apiClient 401/403 interceptor', () => {
     await withRejectingAdapter(401, () => apiClient.get('/platform/me/orders'));
 
     expect(rememberMemberReturnPathMock).toHaveBeenCalledWith(
-      '/member/reservations/new?store=store1.kizuna.test'
+      '/member/reservations/new?store=store1.kizuna.test',
+      ''
     );
     expect(redirectMock).toHaveBeenCalled();
   });

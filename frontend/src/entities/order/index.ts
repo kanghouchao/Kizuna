@@ -1,2 +1,2 @@
 export * from './model/types';
-export { memberOrderApi, memberVisitApi, orderApi } from './api/order';
+export { memberOrderApi, memberReceiptApi, memberVisitApi, orderApi } from './api/order';

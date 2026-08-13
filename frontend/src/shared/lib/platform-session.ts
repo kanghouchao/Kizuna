@@ -68,17 +68,52 @@ export function isSafeMemberReturnPath(value: string | undefined | null): value 
   return /^\/member\/[A-Za-z0-9/_-]*(\?[A-Za-z0-9=&._%-]*)?$/.test(value);
 }
 
-/** ログイン後に戻る会員ポータル内のパスを覚える。安全でない値は黙って捨てる。 */
-export function rememberMemberReturnPath(value: string): void {
+/**
+ * 戻り先のフラグメントの置き場。cookie ではなく sessionStorage なのは、フラグメントが伝票トークン
+ * （所持そのものが証明になるクレデンシャル）を運ぶため — cookie は毎要求サーバへ送られるので、
+ * サーバへ渡らないことを担保していたフラグメントの性質がそこで失われる。
+ */
+const MEMBER_RETURN_FRAGMENT_KEY = 'member-return-fragment';
+
+/** sessionStorage は環境によって参照そのものが投げる（プライベートモード等）。戻り先の復帰は本質ではないので黙って諦める。 */
+function fragmentStore(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ログイン後に戻る会員ポータル内のパスを覚える。安全でない値は黙って捨てる。
+ *
+ * @param fragment 戻り先のフラグメント（`window.location.hash` をそのまま）。QR から開いた申領画面のように、
+ *     画面が読み取る値がフラグメントにしか無い経路のためにログイン往復で持ち越す。省略・空なら覚えていた分を捨てる
+ *     — 別の画面から入り直したときに前の断片が付いて回らないようにする
+ */
+export function rememberMemberReturnPath(value: string, fragment?: string): void {
+  const store = fragmentStore();
+  store?.removeItem(MEMBER_RETURN_FRAGMENT_KEY);
   if (!isSafeMemberReturnPath(value)) {
     return;
   }
   Cookies.set(MEMBER_RETURN_PATH_COOKIE, value);
+  // `#` で始まるものだけを断片として扱う。連結先はそのまま遷移に渡るため、断片であることが
+  // 形から明らかな値以外は載せない（`#` 以降はホストにもパスにもなり得ない）。
+  if (fragment?.startsWith('#')) {
+    store?.setItem(MEMBER_RETURN_FRAGMENT_KEY, fragment);
+  }
 }
 
 /** 覚えた戻り先を 1 度だけ取り出す（取り出しと同時に消す）。無い・安全でない場合は null。 */
 export function takeMemberReturnPath(): string | null {
   const value = Cookies.get(MEMBER_RETURN_PATH_COOKIE);
   Cookies.remove(MEMBER_RETURN_PATH_COOKIE);
-  return isSafeMemberReturnPath(value) ? value : null;
+  const store = fragmentStore();
+  const fragment = store?.getItem(MEMBER_RETURN_FRAGMENT_KEY);
+  store?.removeItem(MEMBER_RETURN_FRAGMENT_KEY);
+  if (!isSafeMemberReturnPath(value)) {
+    return null;
+  }
+  return fragment?.startsWith('#') ? `${value}${fragment}` : value;
 }

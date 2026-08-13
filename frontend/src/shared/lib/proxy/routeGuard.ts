@@ -14,6 +14,11 @@ const CONSOLE_AREAS: Record<string, { allowed: readonly string[]; home: string }
   member: { allowed: ['member'], home: '/member' },
 };
 
+/** 伝票トークンの申領画面ちょうど（末尾スラッシュの有無は問わない）。 */
+function isMemberReceiptClaimPath(path: string): boolean {
+  return path === '/member/receipts' || path === '/member/receipts/';
+}
+
 export function handleRouteProtection(request: NextRequest, role: 'platform' | 'store') {
   const path = request.nextUrl.pathname;
   const hasToken = request.cookies.has('token');
@@ -51,7 +56,16 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 2.6. Member Portal Route Protection
   // /member/** は会員ポータル専用の認証済み領域。入口は /platform/login（キャストと同様、
   // 専用ログイン画面は無い）。厳密一致＋/member/ 配下に限定するのも同じ理由。
-  if ((path === '/member' || path.startsWith('/member/')) && !hasToken) {
+  //
+  // 申領画面だけは未認証でも描かせる。伝票トークンは QR の URL のフラグメントで届き、
+  // フラグメントはサーバへ送られない — ここで差し戻すと画面が一度も描かれず、トークンは
+  // 読み取られないまま消える（ログイン後に戻っても申領できない）。描いたうえで画面自身が
+  // トークンを預け、ログインへ送る。免除は正確にこのパスだけで、前綴では緩めない。
+  if (
+    !isMemberReceiptClaimPath(path) &&
+    (path === '/member' || path.startsWith('/member/')) &&
+    !hasToken
+  ) {
     console.error('🔒 Unauthorized access to /member, redirecting to login');
     const response = NextResponse.redirect(new URL('/platform/login', request.url));
     // ここで差し戻す時点では会員ポータルの画面は描画されておらず、クライアント側では戻り先を

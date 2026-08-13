@@ -19,7 +19,12 @@ export function MemberPortalShell({ children }: MemberPortalShellProps) {
   useEffect(() => {
     if (readTokenClaims()?.userType !== 'MEMBER') {
       // 公式サイトの予約導線から未ログインで来た場合、ログイン後に元の画面（店舗つき）へ戻せるようにする。
-      rememberMemberReturnPath(`${window.location.pathname}${window.location.search}`);
+      // フラグメントも一緒に預ける — 伝票の QR から開いた申領画面では、申領に要るトークンがそこにしか
+      // 無く、ログインへ送った時点で失われる（フラグメントはサーバへ送られないので他に持ち越す口が無い）。
+      rememberMemberReturnPath(
+        `${window.location.pathname}${window.location.search}`,
+        window.location.hash
+      );
       redirectToLogin();
       return;
     }
