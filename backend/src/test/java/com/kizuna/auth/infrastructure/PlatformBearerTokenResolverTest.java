@@ -23,8 +23,8 @@ class PlatformBearerTokenResolverTest {
   @ValueSource(
       strings = {
         "/platform/login",
-        "/platform/cast-invitations/abc123",
-        "/platform/cast-invitations/abc123/acceptance",
+        "/platform/cast-invitations/view",
+        "/platform/cast-invitations/acceptance",
         "/platform/members",
         "/platform/line/config",
         "/platform/line/login",
@@ -45,7 +45,17 @@ class PlatformBearerTokenResolverTest {
   @DisplayName("既存ユーザーの招待受諾(/acceptance/existing)は免除対象でなく Bearer を解決すること")
   void resolvesTokenForAcceptAsExistingUser() {
     MockHttpServletRequest request =
-        requestWithBearer("POST", "/platform/cast-invitations/abc123/acceptance/existing");
+        requestWithBearer("POST", "/platform/cast-invitations/acceptance/existing");
+
+    assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
+  }
+
+  @Test
+  @DisplayName("招待の免除は view/acceptance の 2 端点限定で、トークンを載せたパスには及ばないこと")
+  void doesNotExemptArbitraryCastInvitationPath() {
+    // 免除はかつて /platform/cast-invitations/* だった。トークンをパスから本文へ移した今、
+    // 招待トークンらしき 1 セグメントが免除に当たってはならない（当たればパス運搬が復活しても気付けない）。
+    MockHttpServletRequest request = requestWithBearer("GET", "/platform/cast-invitations/abc123");
 
     assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
   }

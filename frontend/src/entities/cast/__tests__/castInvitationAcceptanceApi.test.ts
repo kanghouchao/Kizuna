@@ -1,33 +1,55 @@
 import { castInvitationAcceptanceApi } from '@/entities/cast';
+import { apiClient } from '@/shared/api';
 
+// get を生やさない: トークンをパスに載せる GET へ戻した瞬間に「関数でない」で落ちる
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
   default: {
-    get: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
-    post: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
+    post: jest.fn(async (url: string, body?: unknown) => ({ data: { ok: true, url, body } })),
   },
 }));
 
+const mockedPost = apiClient.post as unknown as jest.Mock;
+
+const TOKEN = 'raw-invitation-token';
+const PAYLOAD = { email: 'a@example.com', password: 'pass1234', display_name: '花子' };
+
 describe('castInvitationAcceptanceApi', () => {
-  it('view は /platform/cast-invitations/:token を GET する', async () => {
-    expect(await castInvitationAcceptanceApi.view('tok1')).toEqual({
-      ok: true,
-      url: '/platform/cast-invitations/tok1',
+  beforeEach(() => {
+    mockedPost.mockClear();
+  });
+
+  it('view は /platform/cast-invitations/view へトークンを本文で POST する', async () => {
+    await castInvitationAcceptanceApi.view(TOKEN);
+
+    expect(mockedPost).toHaveBeenCalledWith('/platform/cast-invitations/view', { token: TOKEN });
+  });
+
+  it('acceptAsNewUser は /platform/cast-invitations/acceptance へ登録内容とトークンを本文で POST する', async () => {
+    await castInvitationAcceptanceApi.acceptAsNewUser(TOKEN, PAYLOAD);
+
+    expect(mockedPost).toHaveBeenCalledWith('/platform/cast-invitations/acceptance', {
+      ...PAYLOAD,
+      token: TOKEN,
     });
   });
 
-  it('acceptAsNewUser は /platform/cast-invitations/:token/acceptance を POST する', async () => {
-    const payload = { email: 'a@example.com', password: 'pass1234', display_name: '花子' };
-    expect(await castInvitationAcceptanceApi.acceptAsNewUser('tok1', payload)).toEqual({
-      ok: true,
-      url: '/platform/cast-invitations/tok1/acceptance',
+  it('acceptAsExistingUser は /platform/cast-invitations/acceptance/existing へトークンを本文で POST する', async () => {
+    await castInvitationAcceptanceApi.acceptAsExistingUser(TOKEN);
+
+    expect(mockedPost).toHaveBeenCalledWith('/platform/cast-invitations/acceptance/existing', {
+      token: TOKEN,
     });
   });
 
-  it('acceptAsExistingUser は /platform/cast-invitations/:token/acceptance/existing を POST する', async () => {
-    expect(await castInvitationAcceptanceApi.acceptAsExistingUser('tok1')).toEqual({
-      ok: true,
-      url: '/platform/cast-invitations/tok1/acceptance/existing',
-    });
+  it('どの呼び出しもリクエストターゲットにトークンを載せない', async () => {
+    // パスも問い合わせ文字列もリクエストターゲットとして送られ、アクセスログへ 72 時間有効の
+    // 生値が残る。招待は所持だけで受諾が通るため、ログがそのままクレデンシャル置き場になる
+    await castInvitationAcceptanceApi.view(TOKEN);
+    await castInvitationAcceptanceApi.acceptAsNewUser(TOKEN, PAYLOAD);
+    await castInvitationAcceptanceApi.acceptAsExistingUser(TOKEN);
+
+    expect(mockedPost).toHaveBeenCalledTimes(3);
+    mockedPost.mock.calls.forEach(([url]) => expect(url).not.toContain(TOKEN));
   });
 });

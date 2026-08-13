@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
+import { castInviteUrl } from '../lib/castInviteUrl';
 
 /** 一覧 1 ページあたりの件数 */
 const PAGE_SIZE = 20;
@@ -226,7 +227,7 @@ export default function CastListPage() {
         open={issuedInvitation !== null}
         link={
           issuedInvitation && typeof window !== 'undefined'
-            ? `${window.location.origin}/platform/invite/${issuedInvitation.token}`
+            ? castInviteUrl(issuedInvitation.token)
             : ''
         }
         expiresAt={issuedInvitation?.expiresAt ?? null}

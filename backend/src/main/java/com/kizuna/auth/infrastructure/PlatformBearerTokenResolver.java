@@ -23,10 +23,10 @@ public class PlatformBearerTokenResolver implements BearerTokenResolver {
 
   private static final RequestMatcher[] BEARER_EXEMPT_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/platform/login"),
-    // 招待閲覧（GET /{token}）と新規登録受諾（POST /{token}/acceptance）。既存ユーザーの
-    // /acceptance/existing は ROLE_CAST を要求するため対象外（別 matcher で拾われない）。
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*"),
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/*/acceptance"),
+    // 招待閲覧と新規登録受諾。既存ユーザーの /acceptance/existing は ROLE_CAST を要求するため対象外
+    // （2 セグメントなのでここのどの matcher にも当たらない）。
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/view"),
+    PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/acceptance"),
     // 会員の自助登録（POST）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。
     PathPatternRequestMatcher.withDefaults().matcher("/platform/members"),
     // LINE ログインの公開端点（設定照会・ログイン・登録確定）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。

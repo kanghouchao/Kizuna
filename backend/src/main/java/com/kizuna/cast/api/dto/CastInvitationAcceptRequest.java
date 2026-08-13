@@ -9,6 +9,12 @@ import lombok.Data;
 @Data
 public class CastInvitationAcceptRequest {
 
+  // トークンはパスではなく本文に載せる（理由は CastInvitationTokenRequest の javadoc）。
+  @NotBlank(message = "token is required")
+  // t_cast_invitations.token VARCHAR(64) と同じ上限。
+  @Size(max = 64)
+  private String token;
+
   @NotBlank(message = "email is required")
   @Email(message = "email format is invalid")
   // 永続化前の小文字化で最大2倍に伸長する文字(U+0130 等)があっても t_users.email VARCHAR(255) に収まる上限。
