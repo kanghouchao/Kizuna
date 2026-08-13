@@ -1,13 +1,17 @@
 package com.kizuna.order.api.store;
 
+import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
+import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
+import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
@@ -38,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
   private final OrderService orderService;
+  private final OrderAttributionService orderAttributionService;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
@@ -134,6 +139,38 @@ public class OrderController {
       @Valid @RequestBody OrderCompletionRequest request,
       Principal principal) {
     return ResponseEntity.ok(orderService.complete(id, request, principal.getName()));
+  }
+
+  /** 受注 1 件の帰属の現況（会員コード・成立の機構・無効化の理由）。無効化と再発行のどちらを提示するかはこの読み口で決まる。 */
+  @GetMapping("/{id}/attribution")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderAttributionResponse> attribution(@PathVariable String id) {
+    return ResponseEntity.ok(orderAttributionService.get(id));
+  }
+
+  /**
+   * 帰属記録を理由付きで無効化する（誤帰属の訂正）。帰属記録に対する唯一の訂正操作で、行は削除しない。
+   *
+   * <p>ポイント台帳へは波及しない。誤って付与されたポイントの清算は理由の残る手動調整で行う。
+   */
+  @PostMapping("/{id}/attribution/invalidation")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderAttributionResponse> invalidateAttribution(
+      @PathVariable String id,
+      @Valid @RequestBody OrderAttributionInvalidationRequest request,
+      Principal principal) {
+    return ResponseEntity.ok(orderAttributionService.invalidate(id, request, principal.getName()));
+  }
+
+  /**
+   * 無効化された受注へ伝票トークンを再発行する。正しい本人が所持証明で来店を取り戻すための唯一の経路。
+   *
+   * <p>申領期限は再発行から 90 日で数え直す。生値はこの応答にしか現れない。
+   */
+  @PostMapping("/{id}/receipt-token")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderReceiptTokenResponse> reissueReceiptToken(@PathVariable String id) {
+    return ResponseEntity.ok(orderAttributionService.reissueReceiptToken(id));
   }
 
   /** 完了処理の事前計算（会計金額に対する付与見込みと、会員なら残高）。 */

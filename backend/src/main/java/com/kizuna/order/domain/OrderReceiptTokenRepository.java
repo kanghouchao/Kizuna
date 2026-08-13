@@ -1,6 +1,7 @@
 package com.kizuna.order.domain;
 
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -15,4 +16,14 @@ public interface OrderReceiptTokenRepository extends JpaRepository<OrderReceiptT
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   Optional<OrderReceiptToken> findByTokenDigest(String tokenDigest);
+
+  /**
+   * 受注に対して発行された伝票トークンを新しい順に。再発行があるため 1 受注が複数行を持ちうる。
+   *
+   * <p>「申領できる行が既にあるか」の判定は取得した行に {@link OrderReceiptToken#isClaimableAt} を当てて行う —
+   * 状態と期限を問い合わせ側で書き下すと、 申領できるかの定義が二箇所に分かれる。
+   *
+   * <p>この読み口は店舗行分離機構に載らない（伝票トークンは platform 帰属）。店舗の所有は受注を先に引いて確かめること。
+   */
+  List<OrderReceiptToken> findByOrderIdOrderByIdDesc(String orderId);
 }

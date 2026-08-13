@@ -11,6 +11,8 @@ class OrderAttributionTest {
 
   private static final OffsetDateTime ATTRIBUTED_AT = OffsetDateTime.parse("2026-08-12T19:00:00Z");
 
+  private static final OffsetDateTime INVALIDATED_AT = OffsetDateTime.parse("2026-08-20T10:00:00Z");
+
   @Test
   @DisplayName("完了時の帰属は根拠 COMPLETION の有効な記録になり、会員コードを帰属時点のまま持つこと")
   void onCompletionIsAnActiveCompletionRecord() {
@@ -69,5 +71,61 @@ class OrderAttributionTest {
     assertThatThrownBy(() -> OrderAttribution.onCompletion("o1", 7L, "123456789012", null))
         .isInstanceOf(InvalidOrderAttributionException.class)
         .hasMessageContaining("帰属の日時");
+  }
+
+  @Test
+  @DisplayName("無効化は理由・実行者・時刻を残し、帰属そのものの記録は書き換えないこと")
+  void invalidateRecordsTheReasonActorAndTime() {
+    OrderAttribution attribution =
+        OrderAttribution.onCompletion("o1", 7L, "123456789012", ATTRIBUTED_AT);
+
+    attribution.invalidate("別人の来店を取り違えたため", 42L, INVALIDATED_AT);
+
+    assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.INVALIDATED);
+    assertThat(attribution.getInvalidatedReason()).isEqualTo("別人の来店を取り違えたため");
+    assertThat(attribution.getInvalidatedBy()).isEqualTo(42L);
+    assertThat(attribution.getInvalidatedAt()).isEqualTo(INVALIDATED_AT);
+    // 誰の来店として記録されていたかは訂正後も読めなければならない（監査の対象そのもの）
+    assertThat(attribution.getMemberId()).isEqualTo(7L);
+    assertThat(attribution.getMemberCode()).isEqualTo("123456789012");
+    assertThat(attribution.getSource()).isEqualTo(OrderAttributionSource.COMPLETION);
+    assertThat(attribution.getAttributedAt()).isEqualTo(ATTRIBUTED_AT);
+  }
+
+  @Test
+  @DisplayName("理由の無い無効化は拒まれること（訂正の根拠が残らない）")
+  void invalidateWithoutReasonIsRejected() {
+    OrderAttribution attribution =
+        OrderAttribution.onCompletion("o1", 7L, "123456789012", ATTRIBUTED_AT);
+
+    assertThatThrownBy(() -> attribution.invalidate(" ", 42L, INVALIDATED_AT))
+        .isInstanceOf(InvalidOrderAttributionException.class)
+        .hasMessageContaining("無効化の理由");
+    assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
+  }
+
+  @Test
+  @DisplayName("実行者の無い無効化は拒まれること")
+  void invalidateWithoutActorIsRejected() {
+    OrderAttribution attribution =
+        OrderAttribution.onCompletion("o1", 7L, "123456789012", ATTRIBUTED_AT);
+
+    assertThatThrownBy(() -> attribution.invalidate("取り違え", null, INVALIDATED_AT))
+        .isInstanceOf(InvalidOrderAttributionException.class)
+        .hasMessageContaining("無効化の実行者");
+  }
+
+  @Test
+  @DisplayName("無効化済みの記録は二度目の無効化を受け付けないこと（初回の理由と実行者が上書きされる）")
+  void invalidatingTwiceIsRejected() {
+    OrderAttribution attribution =
+        OrderAttribution.onCompletion("o1", 7L, "123456789012", ATTRIBUTED_AT);
+    attribution.invalidate("初回の理由", 42L, INVALIDATED_AT);
+
+    assertThatThrownBy(() -> attribution.invalidate("二度目の理由", 43L, INVALIDATED_AT.plusDays(1)))
+        .isInstanceOf(InvalidOrderAttributionException.class)
+        .hasMessageContaining("既に無効化");
+    assertThat(attribution.getInvalidatedReason()).isEqualTo("初回の理由");
+    assertThat(attribution.getInvalidatedBy()).isEqualTo(42L);
   }
 }

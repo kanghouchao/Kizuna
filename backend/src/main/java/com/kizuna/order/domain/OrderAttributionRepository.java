@@ -9,6 +9,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderAttributionRepository extends JpaRepository<OrderAttribution, Long> {
 
+  /**
+   * 受注の帰属記録を新しい順に。無効化で行を消さないため 1 受注が複数行を持ちうるが、有効な行は部分一意索引により高々 1 件。
+   *
+   * <p>この読み口は店舗行分離機構に載らない（帰属記録は platform 帰属）。店舗の所有は受注を先に引いて確かめること。
+   */
+  List<OrderAttribution> findByOrderIdOrderByIdDesc(String orderId);
+
   // 会員本人の来店一覧。帰属記録が正本で、表示に要る属性は受注へ join して導出する（ADR 0003 と同じ扱い。
   // 帰属記録は台帳と同じく platform 帰属なので同 ADR が名指す店舗作用域エンティティそのものではない）。店舗は
   // 内部結合でよい — 完了受注を持つ店舗は削除ガードが明示的に拒むため、来店の店舗が欠けることはない。

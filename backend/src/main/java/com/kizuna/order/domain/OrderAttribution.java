@@ -49,6 +49,16 @@ public class OrderAttribution extends BaseEntity {
   @Column(name = "status", nullable = false, length = 20)
   private OrderAttributionStatus status;
 
+  /** 無効化の理由。訂正の根拠そのものなので無効化では必須で、有効な記録では null。 */
+  @Column(name = "invalidated_reason", length = 500)
+  private String invalidatedReason;
+
+  @Column(name = "invalidated_by")
+  private Long invalidatedBy;
+
+  @Column(name = "invalidated_at")
+  private OffsetDateTime invalidatedAt;
+
   private OrderAttribution(
       String orderId,
       Long memberId,
@@ -91,6 +101,34 @@ public class OrderAttribution extends BaseEntity {
       String orderId, Long memberId, String memberCode, OffsetDateTime attributedAt) {
     return new OrderAttribution(
         orderId, memberId, memberCode, OrderAttributionSource.RECEIPT_TOKEN, attributedAt);
+  }
+
+  /**
+   * 誤帰属を訂正する。帰属記録に対する唯一の訂正操作で、行は削除せず状態だけを倒し、理由・実行者・時刻を残す。
+   *
+   * <p>帰属そのものの記録（会員・根拠・帰属時刻）は書き換えない。訂正の対象は「誰の来店だったことにしていたか」であり、 それを消してしまうと監査に必要な事実が残らない。
+   *
+   * <p>ポイント台帳へは波及しない — 清算は理由の残る手動調整で行う（ADR 0009）。訂正を機械の級聯にすると、誤りの上に 誤りを重ねる危険が誤りを残す危険を上回る。
+   *
+   * <p>二度目の無効化は受け付けない。通せば初回の理由と実行者が上書きされ、最初の訂正の根拠が失われる。
+   */
+  public void invalidate(String reason, Long actorId, OffsetDateTime at) {
+    if (status != OrderAttributionStatus.ACTIVE) {
+      throw new InvalidOrderAttributionException("この帰属記録は既に無効化されています");
+    }
+    if (reason == null || reason.isBlank()) {
+      throw new InvalidOrderAttributionException("無効化の理由は必須です");
+    }
+    if (actorId == null) {
+      throw new InvalidOrderAttributionException("無効化の実行者は必須です");
+    }
+    if (at == null) {
+      throw new InvalidOrderAttributionException("無効化の日時は必須です");
+    }
+    this.status = OrderAttributionStatus.INVALIDATED;
+    this.invalidatedReason = reason;
+    this.invalidatedBy = actorId;
+    this.invalidatedAt = at;
   }
 
   @Override
