@@ -154,6 +154,36 @@ export interface OrderCompletionPreview {
   grant_points: number;
 }
 
+// 受注の帰属の成立機構。COMPLETION=完了時の関連解決 / RECEIPT_TOKEN=伝票トークンの事後申領。
+export type OrderAttributionSource = 'COMPLETION' | 'RECEIPT_TOKEN';
+
+/**
+ * 受注 1 件の帰属の現況（GET /store/orders/{id}/attribution）。
+ *
+ * 返るのは直近の記録 1 件で、会員側の情報は会員コードだけ（表示名・メールは店舗へ渡らない）。
+ * attributed 以外は Java 側が可空のため、記録の無い受注ではキーごと消える。
+ */
+export interface OrderAttribution {
+  /** Java 側が primitive の boolean のため、キーは必ず応答に含まれる。 */
+  attributed: boolean;
+  member_code?: string;
+  source?: OrderAttributionSource;
+  attributed_at?: string;
+  /** 直近の記録が無効化済みならその理由。 */
+  invalidated_reason?: string;
+  invalidated_at?: string;
+}
+
+// 帰属記録の無効化（POST /store/orders/{id}/attribution/invalidation）。理由は必須（500 文字以内）。
+export interface OrderAttributionInvalidationRequest {
+  reason: string;
+}
+
+// 再発行された伝票トークン（POST /store/orders/{id}/receipt-token）。生値はこの応答にしか現れない。
+export interface OrderReceiptTokenIssue {
+  receipt_token: string;
+}
+
 // 会員本人の予約1件（GET /platform/me/orders）。店舗の顧客台帳の項目は含まない。
 export interface MemberOrder {
   id?: string;
