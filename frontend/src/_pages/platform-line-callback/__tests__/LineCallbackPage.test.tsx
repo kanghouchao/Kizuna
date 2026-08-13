@@ -137,7 +137,7 @@ describe('LineCallbackPage', () => {
       // 預かった戻り先を消費しないと、その人は伝票を取り込めないまま、断片は次に同じタブで
       // ログインした別の会員へ渡ってしまう
       Cookies.set('member-return-path', '/member/receipts');
-      sessionStorage.setItem('member-return-fragment', '#tok3n');
+      sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
       arriveAt('?code=auth-code&state=s1', { state: 's1', verifier: 'v1', intent: 'login' });
       mockedLineApi.login.mockResolvedValue({
         registered: false,
@@ -159,7 +159,7 @@ describe('LineCallbackPage', () => {
 
       await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/receipts#tok3n'));
       expect(Cookies.get('member-return-path')).toBeUndefined();
-      expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
+      expect(sessionStorage.getItem('member-return-target')).toBeNull();
     });
 
     it('同意チェックが無ければ登録を送らない', async () => {
