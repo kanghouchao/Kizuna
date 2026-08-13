@@ -15,6 +15,8 @@ public interface OrderMapper {
   // ==================== View(projection) -> Response ====================
 
   /** 読み側 projection をレスポンスDTOに変換します。 */
+  // 伝票トークンの生値は保存されず読み側にも存在しない。完了処理だけが応答へ載せる
+  @Mapping(target = "receiptToken", ignore = true)
   OrderResponse toResponse(OrderView view);
 
   /** 平台横断一覧の projection をレスポンスDTOに変換します（集合作用域）。 */

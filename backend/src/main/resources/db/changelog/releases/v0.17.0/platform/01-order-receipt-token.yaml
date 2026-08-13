@@ -1,0 +1,103 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v01700-001-order-receipt-token
+      author: kanghouchao
+      # 完了時に会員へ帰属しなかった受注へ発行するワンタイムの伝票トークン。所持そのものが事後帰属の証明に
+      # なるため、受注 ID のように列挙できる値では代替できない。
+      # 保存するのは鍵付きハッシュ（token_digest）だけで、生値は完了応答で一度返るきりどこにも残らない —
+      # バックアップや診断経路が未申領クレデンシャルの漏えい経路にならないようにする。
+      # planned_points は完了時点の付与規則で確定した固定値で、申領時点の設定は読まない（同じ会計が申領の
+      # 早い遅いで別のポイントになることを許さない）。0 円完了にも 0 で発行する。
+      # 帰属記録（t_order_attributions）と同じく platform 帰属とし店舗行分離機構には載せない — 申領するのは
+      # 店舗文脈を持たない会員本人であり、店舗で絞ると照合そのものが成立しない。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_order_receipt_tokens
+            remarks: 事後帰属のためのワンタイム伝票トークン（保存はダイジェストのみ）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_receipt_tokens
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: トークンが指す受注
+              - column:
+                  name: token_digest
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_order_receipt_tokens_digest
+                  remarks: 生値の鍵付きハッシュ（照合はこの値で行う。生値は保存しない）
+              - column:
+                  name: planned_points
+                  type: INT
+                  constraints:
+                    nullable: false
+                  remarks: 完了時点の付与規則で確定した付与予定額（申領時に記帳する固定値）
+              - column:
+                  name: issued_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 発行の日時
+              - column:
+                  name: expires_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 申領期限（発行から 90 日）
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 状態（ISSUED=発行済み・未申領 / CLAIMED=申領済み）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 受注へは CASCADE。帰属記録と同じ判断で、削除できる店舗は準備中に限られ完了受注を持たないため、
+        # 実履歴が消える経路は無い。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_receipt_tokens_order
+            baseTableName: t_order_receipt_tokens
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - createIndex:
+            indexName: idx_t_order_receipt_tokens_order
+            tableName: t_order_receipt_tokens
+            columns:
+              - column:
+                  name: order_id
+      rollback:
+        - dropTable:
+            tableName: t_order_receipt_tokens
