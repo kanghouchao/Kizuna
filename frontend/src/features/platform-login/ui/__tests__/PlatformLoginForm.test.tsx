@@ -89,6 +89,19 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     expect(Cookies.get('member-return-path')).toBeUndefined();
   });
 
+  it('伝票の QR から来ていた場合、トークン（フラグメント）ごと申領画面へ戻ること', async () => {
+    // フラグメントはサーバへ送られないため cookie には無い。申領に要るトークンはこれしか無く、
+    // 落とすと戻れても申領できない画面に着地する
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
+    Cookies.set('member-return-path', '/member/receipts');
+    sessionStorage.setItem('member-return-fragment', '#tok3n');
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/receipts#tok3n'));
+    expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
+  });
+
   it('戻り先に外部 URL が仕込まれていても既定のホームへ遷移すること', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
     Cookies.set('member-return-path', 'https://evil.test/');

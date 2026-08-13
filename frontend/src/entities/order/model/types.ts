@@ -179,6 +179,13 @@ export interface MemberVisit {
   granted_points: number;
 }
 
+// 伝票トークンの申領の結果（POST /platform/me/receipts/claim）。
+// 来店の内容は来店履歴（MemberVisit）が返すもので、この応答には乗らない。
+export interface MemberReceiptClaim {
+  /** Java 側が primitive の int のため、キーは必ず応答に含まれる。0 円完了の伝票では 0。 */
+  granted_points: number;
+}
+
 // 会員本人の予約申請（POST /platform/me/orders）。受付担当・顧客・受付経路はサーバ側が決める。
 export interface MemberOrderCreateRequest {
   store_id: number;

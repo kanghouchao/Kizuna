@@ -4,3 +4,4 @@ export { MemberReservationsPage } from './ui/MemberReservationsPage';
 export { MemberPointsPage } from './ui/MemberPointsPage';
 export { MemberVisitsPage } from './ui/MemberVisitsPage';
 export { MemberReservationNewPage } from './ui/MemberReservationNewPage';
+export { MemberReceiptClaimPage } from './ui/MemberReceiptClaimPage';

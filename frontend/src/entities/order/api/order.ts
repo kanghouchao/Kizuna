@@ -10,6 +10,7 @@ import {
 import {
   MemberOrder,
   MemberOrderCreateRequest,
+  MemberReceiptClaim,
   MemberVisit,
   Order,
   OrderCastCandidate,
@@ -115,5 +116,13 @@ export const memberVisitApi = {
   list: async (params?: CursorParams): Promise<CursorPageResult<MemberVisit>> => {
     const response = await apiClient.get('/platform/me/visits', { params });
     return fromCursorPage(response.data);
+  },
+};
+
+/** 会員本人の伝票トークン申領 API。トークンは本体で送る（パスや問い合わせ文字列はアクセスログに残る）。 */
+export const memberReceiptApi = {
+  claim: async (token: string): Promise<MemberReceiptClaim> => {
+    const response = await apiClient.post('/platform/me/receipts/claim', { token });
+    return response.data;
   },
 };

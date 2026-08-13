@@ -86,7 +86,11 @@ apiClient.interceptors.response.use(
         // 失効した MEMBER token でも画面の入口は通るため、差し戻しはここが初めてになりうる。
         // 会員ポータルの現在地（店舗つき）を覚えないと、ログイン後の戻り先を失う。
         // 白名単の外（店舗コンソール等）は rememberMemberReturnPath が黙って捨てる。
-        rememberMemberReturnPath(`${window.location.pathname}${window.location.search}`);
+        // フラグメントも預ける — 申領画面のように、画面が読み取る値がそこにしか無い経路がある。
+        rememberMemberReturnPath(
+          `${window.location.pathname}${window.location.search}`,
+          window.location.hash
+        );
         redirectToLogin('expired');
       }
     }

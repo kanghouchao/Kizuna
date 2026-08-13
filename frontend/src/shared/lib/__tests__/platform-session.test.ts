@@ -76,6 +76,7 @@ describe('platform-session', () => {
 describe('会員ポータルの戻り先パス', () => {
   beforeEach(() => {
     Cookies.remove('member-return-path');
+    sessionStorage.clear();
   });
 
   it('会員ポータル内の相対パスは覚えて取り出せること', () => {
@@ -111,5 +112,49 @@ describe('会員ポータルの戻り先パス', () => {
 
     expect(takeMemberReturnPath()).toBeNull();
     expect(Cookies.get('member-return-path')).toBeUndefined();
+  });
+
+  // 伝票トークンはフラグメントで届く。cookie に入れるとサーバへ送られてしまうため、
+  // 戻り先の断片だけはサーバへ渡らない置き場（sessionStorage）で往復させる
+  it('フラグメントも一緒に覚えて、戻り先の末尾に添えて取り出せること', () => {
+    rememberMemberReturnPath('/member/receipts', '#tok3n');
+
+    expect(takeMemberReturnPath()).toBe('/member/receipts#tok3n');
+  });
+
+  it('フラグメントは cookie に載せないこと（サーバへ送られる場所に置かない）', () => {
+    rememberMemberReturnPath('/member/receipts', '#tok3n');
+
+    expect(Cookies.get('member-return-path')).toBe('/member/receipts');
+  });
+
+  it('フラグメントも 1 度きりで、2 度目には残らないこと', () => {
+    rememberMemberReturnPath('/member/receipts', '#tok3n');
+    takeMemberReturnPath();
+
+    rememberMemberReturnPath('/member/points/');
+    expect(takeMemberReturnPath()).toBe('/member/points/');
+  });
+
+  it('フラグメント無しで覚え直したら前のフラグメントは捨てること', () => {
+    rememberMemberReturnPath('/member/receipts', '#tok3n');
+    rememberMemberReturnPath('/member/points/');
+
+    expect(takeMemberReturnPath()).toBe('/member/points/');
+  });
+
+  it('戻り先が安全でなければフラグメントも捨てること', () => {
+    rememberMemberReturnPath('/platform/dashboard/', '#tok3n');
+
+    expect(takeMemberReturnPath()).toBeNull();
+    rememberMemberReturnPath('/member/points/');
+    expect(takeMemberReturnPath()).toBe('/member/points/');
+  });
+
+  it('# で始まらない値はフラグメントとして扱わないこと', () => {
+    // 連結してもパスの一部にならないことを形で保証する（遷移先は利用者側の値から組み立てるため）
+    rememberMemberReturnPath('/member/receipts', 'evil');
+
+    expect(takeMemberReturnPath()).toBe('/member/receipts');
   });
 });

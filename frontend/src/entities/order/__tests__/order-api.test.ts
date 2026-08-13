@@ -1,4 +1,4 @@
-import { memberOrderApi, memberVisitApi, orderApi } from '@/entities/order';
+import { memberOrderApi, memberReceiptApi, memberVisitApi, orderApi } from '@/entities/order';
 import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
@@ -122,5 +122,16 @@ describe('memberVisitApi', () => {
     mockedGet.mockResolvedValueOnce({ data: { content: [] } });
 
     await expect(memberVisitApi.list()).resolves.toEqual({ rows: [], nextCursor: null });
+  });
+});
+
+describe('memberReceiptApi', () => {
+  it('claim は /platform/me/receipts/claim を POST し、トークンを本体で送る', async () => {
+    // パスや問い合わせ文字列に載せると、90 日有効の生値がアクセスログに残る
+    const mockedPost = apiClient.post as jest.Mock;
+    mockedPost.mockResolvedValueOnce({ data: { granted_points: 120 } });
+
+    await expect(memberReceiptApi.claim('tok3n')).resolves.toEqual({ granted_points: 120 });
+    expect(mockedPost).toHaveBeenCalledWith('/platform/me/receipts/claim', { token: 'tok3n' });
   });
 });

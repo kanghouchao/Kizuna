@@ -64,9 +64,24 @@ describe('MemberPortalShell', () => {
 
     await waitFor(() =>
       expect(mockedRemember).toHaveBeenCalledWith(
-        '/member/reservations/new?store=store1.kizuna.test'
+        '/member/reservations/new?store=store1.kizuna.test',
+        ''
       )
     );
+  });
+
+  it('フラグメント（伝票トークン）も戻り先と一緒に預ける', async () => {
+    // QR から開いた申領画面のトークンはフラグメントにしか無く、ログインへ送った時点で失われる
+    mockedReadClaims.mockReturnValue(null);
+    window.history.pushState({}, '', '/member/receipts#tok3n');
+
+    render(
+      <MemberPortalShell>
+        <p>子要素</p>
+      </MemberPortalShell>
+    );
+
+    await waitFor(() => expect(mockedRemember).toHaveBeenCalledWith('/member/receipts', '#tok3n'));
   });
 
   it('token が無い・壊れている（claims=null）ならログイン画面へ差し戻す', async () => {
