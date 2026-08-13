@@ -11,6 +11,7 @@ import {
   EMAIL_PATTERN_MESSAGE,
   getApiErrorMessage,
   startPlatformSession,
+  takeMemberReturnPath,
 } from '@/shared/lib';
 
 /**
@@ -43,7 +44,10 @@ export function MemberRegisterForm() {
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
       Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
       startPlatformSession('member', expires_at);
-      router.push('/member/');
+      // 会員ポータルで弾かれた人がこの登録画面へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
+      // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
+      // 別の会員がその戻り先へ運ばれる。
+      router.push(takeMemberReturnPath() ?? '/member/');
     } catch {
       // 登録自体は完了している。自動ログインだけが失敗した稀な場合はログイン画面から再開させる。
       notify.success('登録が完了しました。ログインしてください');

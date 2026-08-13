@@ -21,12 +21,16 @@ export async function completePlatformLogin({
   // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
   Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
 
+  const me = await platformAuthApi.me();
+
   // 戻り先はどの利用者種別でログインしても取り出して捨てる。会員以外のログインで残すと、同じタブで
   // 後からログインした会員がその戻り先へ運ばれる — 申領画面は開いた時点で伝票を取り込むため、
   // 残った断片は「他人の伝票を無確認で申領する」経路になる。
+  //
+  // 取り出しは種別の判定より前・{@code me()} の成功より後に置く。1 度きりの取り出しなので、
+  // ログインが確定する前に消すと、通信の一時的な失敗でやり直したときには戻り先が既に無い
+  // （伝票の生値はこの断片にしか無く、再取得の口が無い）。
   const memberReturnPath = takeMemberReturnPath();
-
-  const me = await platformAuthApi.me();
   const activeConsole = me.console ?? 'none';
   const destination = resolvePlatformDestination(activeConsole);
 

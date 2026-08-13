@@ -75,12 +75,35 @@ export function isSafeMemberReturnPath(value: string | undefined | null): value 
  */
 const MEMBER_RETURN_FRAGMENT_KEY = 'member-return-fragment';
 
-/** sessionStorage は環境によって参照そのものが投げる（プライベートモード等）。戻り先の復帰は本質ではないので黙って諦める。 */
-function fragmentStore(): Storage | null {
+/**
+ * 断片の読み書き。sessionStorage は参照そのものも各操作も投げうる（プライベートモード・容量超過）ため、
+ * 呼出側へは決して例外を出さない — 戻り先の復帰は付随的な便宜であり、失敗して困るのは「元の画面へ
+ * 戻れない」ことだけである。ここで投げると、呼び元（シェルの差し戻し）が途中で止まり、未認証の利用者が
+ * ログインへも進めないまま読み込み中の画面に取り残される。
+ */
+function readFragment(): string | null {
   try {
-    return typeof window === 'undefined' ? null : window.sessionStorage;
+    return typeof window === 'undefined'
+      ? null
+      : window.sessionStorage.getItem(MEMBER_RETURN_FRAGMENT_KEY);
   } catch {
     return null;
+  }
+}
+
+function writeFragment(fragment: string | null): void {
+  try {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (fragment === null) {
+      window.sessionStorage.removeItem(MEMBER_RETURN_FRAGMENT_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(MEMBER_RETURN_FRAGMENT_KEY, fragment);
+  } catch {
+    // 書けなくても戻り先の断片が無いだけ（＝QR を読み直せば済む）。消せなかった場合も、
+    // 断片は戻り先 cookie が通ったときにしか使われないので、単体では遷移先にならない。
   }
 }
 
@@ -92,8 +115,7 @@ function fragmentStore(): Storage | null {
  *     — 別の画面から入り直したときに前の断片が付いて回らないようにする
  */
 export function rememberMemberReturnPath(value: string, fragment?: string): void {
-  const store = fragmentStore();
-  store?.removeItem(MEMBER_RETURN_FRAGMENT_KEY);
+  writeFragment(null);
   if (!isSafeMemberReturnPath(value)) {
     return;
   }
@@ -101,7 +123,7 @@ export function rememberMemberReturnPath(value: string, fragment?: string): void
   // `#` で始まるものだけを断片として扱う。連結先はそのまま遷移に渡るため、断片であることが
   // 形から明らかな値以外は載せない（`#` 以降はホストにもパスにもなり得ない）。
   if (fragment?.startsWith('#')) {
-    store?.setItem(MEMBER_RETURN_FRAGMENT_KEY, fragment);
+    writeFragment(fragment);
   }
 }
 
@@ -109,9 +131,8 @@ export function rememberMemberReturnPath(value: string, fragment?: string): void
 export function takeMemberReturnPath(): string | null {
   const value = Cookies.get(MEMBER_RETURN_PATH_COOKIE);
   Cookies.remove(MEMBER_RETURN_PATH_COOKIE);
-  const store = fragmentStore();
-  const fragment = store?.getItem(MEMBER_RETURN_FRAGMENT_KEY);
-  store?.removeItem(MEMBER_RETURN_FRAGMENT_KEY);
+  const fragment = readFragment();
+  writeFragment(null);
   if (!isSafeMemberReturnPath(value)) {
     return null;
   }
