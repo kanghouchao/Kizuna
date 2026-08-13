@@ -19,9 +19,12 @@ import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
+import com.kizuna.order.domain.OrderReceiptToken;
+import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
+import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
@@ -61,6 +64,8 @@ public class OrderService {
 
   private final OrderRepository orderRepository;
   private final OrderAttributionRepository orderAttributionRepository;
+  private final OrderReceiptTokenRepository orderReceiptTokenRepository;
+  private final ReceiptTokenGenerator receiptTokenGenerator;
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final NominatableCastLookup nominatableCast;
@@ -295,6 +300,9 @@ public class OrderService {
    *
    * <p>会員に達した完了は、記帳と同一トランザクションで受注帰属記録（根拠 COMPLETION）を残す。会員の来店履歴はこの記録だけから読むため、
    * ここで記録が生まれない受注はその会員から永久に見えない。
+   *
+   * <p>会員に達しなかった完了（顧客の有無は問わない）は、代わりに伝票トークンを発行して生値を応答で一度だけ返す。 事後帰属の証明はこのトークンの所持だけであり（ADR
+   * 0008）、この応答を逃した客に v1 の救済経路は無い。
    */
   @StoreScoped
   @Transactional
@@ -326,6 +334,7 @@ public class OrderService {
     }
 
     int granted = 0;
+    String receiptToken = null;
     if (memberId != null) {
       Long actorId = resolveActorId(actorEmail);
       // 単位の制約と残高の充足は台帳側が判定する（利用の入口が増えても規則が分かれないため）。
@@ -340,11 +349,35 @@ public class OrderService {
       // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
       orderAttributionRepository.save(
           OrderAttribution.onCompletion(id, memberId, link.getMemberCode(), OffsetDateTime.now()));
+    } else {
+      receiptToken = issueReceiptToken(id, request.getTotalFee());
     }
 
     order.completeWith(request.getTotalFee(), usePoints, granted);
     orderRepository.save(order);
-    return toResponse(id);
+    OrderResponse response = toResponse(id);
+    // 生値がこの応答の外へ出る経路は無い（保存されるのはダイジェストだけ）。会員へ帰属した完了では null。
+    response.setReceiptToken(receiptToken);
+    return response;
+  }
+
+  /**
+   * 会員へ帰属しなかった完了に伝票トークンを発行し、生値を返す。顧客の有無は問わない — 顧客に着いていても関連の無い受注は 会員から見えず、事後帰属の対象になる。
+   *
+   * <p>付与予定額はこの時点の付与規則で確定して持つ。申領時点の設定を読むと、同じ会計が申領の早い遅いで別のポイントになる。 0
+   * 円完了にも予定額0で発行する（申領の効果は来店の可視化に閉じる）。
+   *
+   * <p>保存するのはダイジェストだけで、生値はここから返る応答にしか現れない。
+   */
+  private String issueReceiptToken(String orderId, int totalFee) {
+    ReceiptTokenGenerator.GeneratedToken generated = receiptTokenGenerator.generate();
+    orderReceiptTokenRepository.save(
+        OrderReceiptToken.issueFor(
+            orderId,
+            generated.digest(),
+            pointLedgerService.previewGrant(totalFee),
+            OffsetDateTime.now()));
+    return generated.raw();
   }
 
   /**

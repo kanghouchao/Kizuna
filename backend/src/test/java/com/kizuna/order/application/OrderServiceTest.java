@@ -39,10 +39,14 @@ import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionSource;
 import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderPatch;
+import com.kizuna.order.domain.OrderReceiptToken;
+import com.kizuna.order.domain.OrderReceiptTokenRepository;
+import com.kizuna.order.domain.OrderReceiptTokenStatus;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.domain.ReceptionRoute;
+import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -84,6 +88,8 @@ class OrderServiceTest {
   @Mock CustomerRepository customerRepository;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock OrderAttributionRepository orderAttributionRepository;
+  @Mock OrderReceiptTokenRepository orderReceiptTokenRepository;
+  @Mock ReceiptTokenGenerator receiptTokenGenerator;
   @Mock NominatableCastLookup nominatableCast;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PointLedgerService pointLedgerService;
@@ -1416,13 +1422,16 @@ class OrderServiceTest {
     Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubReceiptTokenIssuance();
     stubReservationRequestUpdateResponse();
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     assertThat(order.getAutoGrantPoints()).isZero();
-    verifyNoInteractions(pointLedgerService);
+    // 台帳へは何も積まない（付与予定額の算定で規則は読むが、書き込みは起きない）
+    verify(pointLedgerService, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
+    verify(pointLedgerService, never()).useForOrder(anyLong(), any(), any(), anyInt(), any());
     // 顧客が未設定なら押さえる行も引く紐づけも無い
     verify(customerRepository, never()).findByIdForUpdate(any());
     verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
@@ -1470,6 +1479,7 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
+    stubReceiptTokenIssuance();
     stubReservationRequestUpdateResponse();
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
@@ -1491,19 +1501,107 @@ class OrderServiceTest {
             .build();
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubReceiptTokenIssuance();
     stubReservationRequestUpdateResponse();
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     verifyNoInteractions(orderAttributionRepository);
-    verifyNoInteractions(pointLedgerService);
+    verify(pointLedgerService, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
   }
 
   private OrderAttribution savedAttribution() {
     ArgumentCaptor<OrderAttribution> captor = ArgumentCaptor.forClass(OrderAttribution.class);
     verify(orderAttributionRepository).save(captor.capture());
     return captor.getValue();
+  }
+
+  // ==================== 伝票トークンの発行 ====================
+
+  private static final String RAW_TOKEN = "raw-receipt-token";
+  private static final String TOKEN_DIGEST = "digest-of-the-raw-receipt-token";
+
+  /** 発行される生値とダイジェスト。乱数と鍵派生そのものは {@code ReceiptTokenGeneratorTest} が固定する。 */
+  private void stubReceiptTokenIssuance() {
+    lenient()
+        .when(receiptTokenGenerator.generate())
+        .thenReturn(new ReceiptTokenGenerator.GeneratedToken(RAW_TOKEN, TOKEN_DIGEST));
+  }
+
+  private OrderReceiptToken savedReceiptToken() {
+    ArgumentCaptor<OrderReceiptToken> captor = ArgumentCaptor.forClass(OrderReceiptToken.class);
+    verify(orderReceiptTokenRepository).save(captor.capture());
+    return captor.getValue();
+  }
+
+  @Test
+  void completeOfAnOrderThatReachedNoMemberIssuesAReceiptToken() {
+    // 事後帰属の証明は所持だけ（受注 ID は列挙できるので証明にならない）。ここで発行しないと、
+    // 会員と分からないまま完了した来店を本人が取り戻す経路が無い
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
+    stubReceiptTokenIssuance();
+    stubReservationRequestUpdateResponse();
+
+    OrderResponse response = service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    OrderReceiptToken token = savedReceiptToken();
+    assertThat(token.getOrderId()).isEqualTo("o1");
+    // 保存するのはダイジェストだけ。生値はこの応答にしか現れない
+    assertThat(token.getTokenDigest()).isEqualTo(TOKEN_DIGEST);
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.ISSUED);
+    assertThat(token.getExpiresAt()).isEqualTo(token.getIssuedAt().plusDays(90));
+    assertThat(response.getReceiptToken()).isEqualTo(RAW_TOKEN);
+  }
+
+  @Test
+  void completeFreezesThePlannedPointsAtTheCompletionTimeRule() {
+    // 申領時点の設定を読むと、同じ会計が申領の早い遅いで別のポイントになる
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
+    order.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
+    stubReceiptTokenIssuance();
+    stubReservationRequestUpdateResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    assertThat(savedReceiptToken().getPlannedPoints()).isEqualTo(120);
+  }
+
+  @Test
+  void completeOfAZeroFeeOrderStillIssuesAReceiptToken() {
+    // 付与が 0 でも来店の事実は取り戻せなければならない（申領の効果は来店の可視化に閉じる）
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
+    order.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    when(pointLedgerService.previewGrant(0)).thenReturn(0);
+    stubReceiptTokenIssuance();
+    stubReservationRequestUpdateResponse();
+
+    OrderResponse response = service.complete("o1", completion(0, null), "staff@kizuna.test");
+
+    assertThat(savedReceiptToken().getPlannedPoints()).isZero();
+    assertThat(response.getReceiptToken()).isEqualTo(RAW_TOKEN);
+  }
+
+  @Test
+  void completeOfAMemberOrderIssuesNoReceiptToken() {
+    // 会員へ帰属した完了に事後帰属の余地は無い。発行すると、その受注を別の会員が申領しに来る口を開ける
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubReservationRequestUpdateResponse();
+
+    OrderResponse response = service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    verifyNoInteractions(orderReceiptTokenRepository, receiptTokenGenerator);
+    assertThat(response.getReceiptToken()).isNull();
   }
 
   @Test

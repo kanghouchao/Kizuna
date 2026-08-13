@@ -65,6 +65,11 @@ export interface Order {
    */
   contact_name?: string;
   contact_phone_number?: string;
+  /**
+   * 伝票トークンの生値。会員へ帰属しなかった完了の応答にだけ現れる（他の読み口では応答から消える）。
+   * サーバはダイジェストしか保存しないので、この応答を逃すと二度と取得できない。
+   */
+  receipt_token?: string;
 }
 
 export interface OrderReceptionist {
