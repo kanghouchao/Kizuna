@@ -113,15 +113,11 @@ public class PointLedgerService {
         .collect(Collectors.toMap(OrderGrantTotalView::getOrderId, OrderGrantTotalView::getTotal));
   }
 
-  /** 受注完了に伴う付与。付与が 0 なら台帳へ何も書かない。戻り値は実際に付与したポイント数。 */
+  /** 受注完了に伴う付与。会計金額から付与額を決めて記帳する。付与が 0 なら台帳へ何も書かない。戻り値は実際に付与したポイント数。 */
   public int grantForOrder(
       long memberId, String orderId, Long storeId, int totalFee, Long actorUserId) {
     int granted = previewGrant(totalFee);
-    if (granted == 0) {
-      return 0;
-    }
-    pointEntryRepository.save(
-        PointEntry.grantForOrder(memberId, orderId, storeId, granted, actorUserId));
+    grantPlannedForOrder(memberId, orderId, storeId, granted, actorUserId);
     return granted;
   }
 
