@@ -225,6 +225,31 @@ describe('routeGuard', () => {
     }
   );
 
+  it.each(['store', 'platform', 'cast'])(
+    'renders the receipt claim route for a %s console session (the fragment must reach the client)',
+    consoleValue => {
+      // 別コンソールのセッションが残ったまま QR を開く場面。ここでコンソール整合で差し戻すと、
+      // 免除の目的（フラグメントをブラウザで受け取ってから預ける）が果たせない
+      const res = handleRouteProtection(
+        createRequest('/member/receipts', true, { 'platform-role': consoleValue }),
+        'platform'
+      );
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
+    }
+  );
+
+  it('still redirects a store console session away from other /member paths', () => {
+    const res = handleRouteProtection(
+      createRequest('/member/visits', true, { 'platform-role': 'store' }),
+      'platform'
+    );
+
+    expect(NextResponse.redirect).toHaveBeenCalled();
+    expect(res).not.toBeNull();
+  });
+
   it('still bounces other /member paths without a token', () => {
     // 免除は申領画面ちょうどだけ。前綴で緩めると会員ポータル全体が未認証で描かれる
     const res = handleRouteProtection(createRequest('/member/receipts/other', false), 'platform');

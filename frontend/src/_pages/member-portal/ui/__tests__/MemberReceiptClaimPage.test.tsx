@@ -78,6 +78,35 @@ describe('MemberReceiptClaimPage', () => {
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
   });
 
+  it('通信失敗の後の再試行が申領不能で返ったら、結果不明として履歴の確認を促す', async () => {
+    // 応答だけを取り落とした場合（サーバは申領済み）、再試行は同形の 404 で返る。これを
+    // 「申領できません」と言い切ると、実際には取り込めている来店を失敗と読ませてしまう。
+    // 伝票は二度と使えないので、利用者が確かめられる先を出すしかない
+    mockedClaim.mockRejectedValueOnce(new Error('network'));
+    mockedClaim.mockRejectedValue(httpError(404, 'この伝票は申領できません。'));
+
+    render(<MemberReceiptClaimPage />);
+
+    const region = await screen.findByRole('alert');
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    const failed = await screen.findByRole('alert');
+    expect(failed).toHaveTextContent('取り込めたかどうかを確認できませんでした');
+    expect(within(failed).getByRole('link', { name: '来店履歴へ' })).toBeInTheDocument();
+    expect(within(failed).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+  });
+
+  it('初回から申領不能で返った伝票は、結果不明ではなく申領不能として出す', async () => {
+    // 一度も届いていない要求に「取り込めたかもしれません」と言うのは、別方向の嘘になる
+    mockedClaim.mockRejectedValue(httpError(404, 'この伝票は申領できません。'));
+
+    render(<MemberReceiptClaimPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(region).toHaveTextContent('この伝票は申領できません。');
+    expect(region).not.toHaveTextContent('確認できませんでした');
+  });
+
   it('トークンが無ければ申領を投げず、読み取り直しを促す', async () => {
     window.history.pushState({}, '', '/member/receipts');
 
