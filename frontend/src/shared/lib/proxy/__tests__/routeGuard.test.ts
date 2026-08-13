@@ -72,6 +72,15 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
+  it('allows access to the legacy /platform/invite/:token without token (public route)', () => {
+    // 配布済みリンクの受け口。守衛に弾かれるとフラグメント形式へ送り直す前に落ちる
+    const req = createRequest('/platform/invite/abc123', false);
+    const res = handleRouteProtection(req, 'platform');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
   it('allows access to /platform/line/callback without token (public route)', () => {
     const req = createRequest('/platform/line/callback', false);
     const res = handleRouteProtection(req, 'platform');
