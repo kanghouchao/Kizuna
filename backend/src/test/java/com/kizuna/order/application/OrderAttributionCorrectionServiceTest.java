@@ -48,6 +48,7 @@ class OrderAttributionCorrectionServiceTest {
   private static final long STORE_ID = 1L;
   private static final long ATTRIBUTED_MEMBER_ID = 7L;
   private static final String MEMBER_CODE = "123456789012";
+  private static final String OTHER_CODE = "999999999999";
   private static final long ATTRIBUTION_ID = 501L;
   private static final long OTHER_ATTRIBUTION_ID = 502L;
   private static final String REASON = "別人の来店を取り違えたため";
@@ -172,8 +173,7 @@ class OrderAttributionCorrectionServiceTest {
   @DisplayName("正しい本人の帰属が別会員として成立していても、古い記録の訂正は妨げないこと（正の対照）")
   void allowsCorrectionWhenAnotherMemberHoldsTheActiveAttribution() {
     givenOrder();
-    OrderAttribution otherMember =
-        OrderAttribution.onReceiptClaim(ORDER_ID, 9L, "999999999999", NOW);
+    OrderAttribution otherMember = OrderAttribution.onReceiptClaim(ORDER_ID, 9L, OTHER_CODE, NOW);
     otherMember.setId(OTHER_ATTRIBUTION_ID);
     givenAttributions(otherMember, invalidatedAttribution());
     givenGranted(100L);
@@ -192,8 +192,7 @@ class OrderAttributionCorrectionServiceTest {
     // 訂正を後回しにした操作者が戻る道。現況の読み口は直近 1 件しか返さないので、これが無いと
     // 誤付与は相手の台帳に残ったまま画面からは二度と辿り着けない。
     givenOrder();
-    OrderAttribution otherMember =
-        OrderAttribution.onReceiptClaim(ORDER_ID, 9L, "999999999999", NOW);
+    OrderAttribution otherMember = OrderAttribution.onReceiptClaim(ORDER_ID, 9L, OTHER_CODE, NOW);
     otherMember.setId(OTHER_ATTRIBUTION_ID);
     givenAttributions(otherMember, invalidatedAttribution());
     givenGranted(100L);
@@ -202,6 +201,48 @@ class OrderAttributionCorrectionServiceTest {
     assertThat(service.findPendingCorrection(ORDER_ID))
         .contains(
             new OrderAttributionCorrectionService.PendingCorrection(ATTRIBUTION_ID, MEMBER_CODE));
+  }
+
+  @Test
+  @DisplayName("直近の無効化記録が引き切り済みでも、その先に残る古い記録を名指せること")
+  void looksPastAnAlreadySettledInvalidationForAnOlderOutstandingOne() {
+    // 2 人が続けて誤帰属し、どちらの差し引きも後回しにしたあと新しい側だけ片付けた状態。
+    // 先に直近 1 件を選んでから条件を当てる形では、古い側が画面から永久に名指せなくなる。
+    givenOrder();
+    OrderAttribution settled = OrderAttribution.onReceiptClaim(ORDER_ID, 9L, OTHER_CODE, NOW);
+    settled.setId(OTHER_ATTRIBUTION_ID);
+    settled.invalidate(REASON, ACTOR_ID, NOW);
+    givenAttributions(settled, invalidatedAttribution());
+    givenGrantedFor(9L, 100L);
+    Mockito.when(pointLedgerService.correctedPointsFor(List.of(OTHER_ATTRIBUTION_ID)))
+        .thenReturn(100L);
+    givenGranted(100L);
+    Mockito.when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID))).thenReturn(0L);
+
+    assertThat(service.findPendingCorrection(ORDER_ID))
+        .contains(
+            new OrderAttributionCorrectionService.PendingCorrection(ATTRIBUTION_ID, MEMBER_CODE));
+  }
+
+  @Test
+  @DisplayName("記帳済みの冪等キーの再送は、現況を材料にする門で撥ねないこと")
+  void letsACommittedRetryReachTheLedgerEvenAfterTheMemberReclaimed() {
+    // 初回が commit したあと会員が再発行された伝票を申領し直すと、現況では門に掛かる。だが再送そのものは
+    // 正当で、台帳が冪等キーで収束させる（ADR 0007）。ここで撥ねるとその機会自体が失われる。
+    givenOrder();
+    OrderAttribution reclaimed =
+        OrderAttribution.onReceiptClaim(ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);
+    reclaimed.setId(OTHER_ATTRIBUTION_ID);
+    givenAttributions(reclaimed, invalidatedAttribution());
+    Mockito.when(pointLedgerService.isIdempotencyKeyCommitted(KEY)).thenReturn(true);
+    givenGranted(200L);
+    givenCorrected(0L, ATTRIBUTION_ID);
+
+    service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
+
+    Mockito.verify(pointLedgerService)
+        .correctForAttribution(
+            ATTRIBUTED_MEMBER_ID, STORE_ID, -100, REASON, ACTOR_ID, KEY, ATTRIBUTION_ID);
   }
 
   @Test
@@ -406,8 +447,12 @@ class OrderAttributionCorrectionServiceTest {
   }
 
   private void givenGranted(long total) {
+    givenGrantedFor(ATTRIBUTED_MEMBER_ID, total);
+  }
+
+  private void givenGrantedFor(long memberId, long total) {
     Mockito.lenient()
-        .when(pointLedgerService.grantedPointsByOrder(ATTRIBUTED_MEMBER_ID, List.of(ORDER_ID)))
+        .when(pointLedgerService.grantedPointsByOrder(memberId, List.of(ORDER_ID)))
         .thenReturn(Map.of(ORDER_ID, total));
   }
 

@@ -221,6 +221,42 @@ describe('OrderAttributionModal', () => {
     expect(screen.queryByLabelText('差し引くポイント')).not.toBeInTheDocument();
   });
 
+  describe('差し引くポイントの検証', () => {
+    /** 差し引きの段まで進める（無効化 → 訂正の段）。 */
+    const openCorrectionStep = async () => {
+      mockedInvalidate.mockResolvedValue(invalidated);
+      renderModal();
+      fireEvent.change(await screen.findByLabelText('無効化の理由'), {
+        target: { value: '取り違え' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
+      return screen.findByLabelText('差し引くポイント');
+    };
+
+    it('空欄のまま送っても要求を飛ばさないこと', async () => {
+      // 空欄の valueAsNumber は NaN で、null でも空文字でもないため required は素通りする。
+      // そのまま送ると JSON の null になり、欄の傍ではなくサーバの失敗として返ってくる
+      const input = await openCorrectionStep();
+      fireEvent.change(input, { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
+      fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
+
+      expect(await screen.findByText('差し引くポイントを入力してください')).toBeInTheDocument();
+      expect(mockedCorrect).not.toHaveBeenCalled();
+    });
+
+    it('小数のまま送っても要求を飛ばさないこと', async () => {
+      // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が int の points へ届く
+      const input = await openCorrectionStep();
+      fireEvent.change(input, { target: { value: '1.5' } });
+      fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
+      fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
+
+      expect(await screen.findByText('差し引くポイントは整数で入力してください')).toBeInTheDocument();
+      expect(mockedCorrect).not.toHaveBeenCalled();
+    });
+  });
+
   it('再発行が前の QR を殺すことを、押す手前で名乗る', async () => {
     // 2 度目の再発行は前に渡した QR を失効させる。押した後では取り戻せない副作用なので、
     // ボタンと同じ画面に出ていなければ操作者は自覚しないまま客の手元の QR を殺す

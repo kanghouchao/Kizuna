@@ -292,6 +292,20 @@ public class PointLedgerService {
     return -pointEntryRepository.sumCorrectionsExcludingKey(attributionIds, excludeIdempotencyKey);
   }
 
+  /**
+   * この冪等キーの記帳が既に成立しているか。
+   *
+   * <p>台帳の内側では再送の判定を入力検証より先に置いている（ADR 0007）。台帳の<b>外側</b>で現況を材料に判じる
+   * 検証を持つ呼出側は、その検証を再送へ当てないためにこの述語を要する — 初回の commit
+   * のあとに現況が動くと、正当な再送が「今は通せない要求」として撥ねられ、台帳が冪等キーで収束させる機会そのものが失われる。
+   *
+   * <p>返すのは有無だけで仕訳は公開しない。内容の一致は記帳の入口が判じる責務であり、外へ出すと二重に判定が生まれる。
+   */
+  @Transactional(readOnly = true)
+  public boolean isIdempotencyKeyCommitted(String idempotencyKey) {
+    return pointEntryRepository.findByIdempotencyKey(idempotencyKey).isPresent();
+  }
+
   /** 指定した帰属記録群に対して既に引かれた量。判定ではなく表示に使うので、どの行も除かずに数える。 */
   @Transactional(readOnly = true)
   public long correctedPointsFor(Collection<Long> attributionIds) {

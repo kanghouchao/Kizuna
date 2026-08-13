@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { OrderAttributionCorrection, orderApi } from '@/entities/order';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import {
   Button,
   Form,
@@ -20,6 +20,8 @@ import {
 
 /** 理由の上限。台帳の理由欄（@Size(max = 500)）と同値。 */
 const REASON_MAX_LENGTH = 500;
+
+const POINTS_REQUIRED = '差し引くポイントを入力してください';
 
 interface AttributionCorrectionStepProps {
   orderId: string;
@@ -168,7 +170,14 @@ function CorrectionForm({
             control={control}
             name="points"
             rules={{
-              required: '差し引くポイントを入力してください',
+              required: POINTS_REQUIRED,
+              validate: {
+                // 空欄は NaN であって null でも空文字でもないため required は素通りする
+                notEmpty: value => !Number.isNaN(value) || POINTS_REQUIRED,
+                // noValidate は type="number" の暗黙の step=1 も止める。これが無いと
+                // 1.5 が int の points へ届く
+                integer: integerRule('差し引くポイント'),
+              },
               min: { value: 1, message: '差し引くポイントは 1 以上で入力してください' },
               max: {
                 value: remaining,
@@ -181,9 +190,13 @@ function CorrectionForm({
                 <FormControl>
                   <Input
                     type="number"
+                    required
                     min={1}
                     max={remaining}
                     {...field}
+                    // register の valueAsNumber と同じ写像。Number() は空欄を 0 にしてしまい、
+                    // 「未入力」を表す NaN が失われる。
+                    value={Number.isNaN(field.value) ? '' : field.value}
                     onChange={event => field.onChange(event.target.valueAsNumber)}
                   />
                 </FormControl>
