@@ -47,3 +47,28 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: DROP INDEX uq_t_order_receipt_tokens_issued_order
+
+  - changeSet:
+      id: platform-v01900-003-revoke-tokens-on-attributed-orders
+      author: kanghouchao
+      # 守る不変量は「申領できる伝票は受注 1 件につき高々 1 本」だけではなく「有効な帰属記録と
+      # 同時に存在しない」でもある。上の索引は前者しか強制できないため、後者を破ったまま残る
+      # 既存行をここで倒す。
+      # この形の行は既存データに在りうる：申領が元の 1 本を CLAIMED にして帰属を成立させるのと
+      # 並行に、もう 1 本が発行された受注では、ACTIVE な帰属と ISSUED が 1 本ずつ並ぶ。受注ごとの
+      # ISSUED は 1 本なので索引は満たしてしまい、検出もされない。残したまま申領されると帰属記録の
+      # 部分一意違反になり、「申領できない伝票はすべて同形のエラー」が壊れる。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              UPDATE t_order_receipt_tokens SET status = 'REVOKED', updated_at = now()
+              WHERE status = 'ISSUED'
+              AND order_id IN (
+                SELECT order_id FROM t_order_attributions WHERE status = 'ACTIVE'
+              )
+      # 倒した行がもともと ISSUED だったことは、この変更の後では区別できない。
+      rollback:
+        - empty
