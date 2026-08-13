@@ -143,12 +143,14 @@ describe('会員ポータルの戻り先パス', () => {
     expect(takeMemberReturnPath()).toBe('/member/points/');
   });
 
-  it('戻り先が安全でなければフラグメントも捨てること', () => {
-    rememberMemberReturnPath('/platform/dashboard/', '#tok3n');
+  it('覚えない戻り先の要求は、既に覚えている組にも触れないこと', () => {
+    // 401 の差し戻しは会員ポータルの外（LINE コールバック等）からも起きる。cookie と断片は
+    // 対で 1 つの戻り先なので、片方だけ消すと「戻り先はあるがトークンが無い」画面に着地する
+    rememberMemberReturnPath('/member/receipts', '#tok3n');
 
-    expect(takeMemberReturnPath()).toBeNull();
-    rememberMemberReturnPath('/member/points/');
-    expect(takeMemberReturnPath()).toBe('/member/points/');
+    rememberMemberReturnPath('/platform/line/callback', '');
+
+    expect(takeMemberReturnPath()).toBe('/member/receipts#tok3n');
   });
 
   // 断片の置き場が使えないことは「元の画面へ戻れない」だけの不便で、呼び元（差し戻し）を

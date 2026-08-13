@@ -110,21 +110,23 @@ function writeFragment(fragment: string | null): void {
 /**
  * ログイン後に戻る会員ポータル内のパスを覚える。安全でない値は黙って捨てる。
  *
+ * <p>安全でない戻り先の要求では<b>何も触らない</b>。cookie と断片は対で 1 つの戻り先であり、片方だけ消すと
+ * 「戻り先はあるがトークンが無い」着地になる — 401 の差し戻しは会員ポータルの外（LINE コールバック等）からも
+ * 起き、そこでは覚える値が白名単を通らない。
+ *
  * @param fragment 戻り先のフラグメント（`window.location.hash` をそのまま）。QR から開いた申領画面のように、
  *     画面が読み取る値がフラグメントにしか無い経路のためにログイン往復で持ち越す。省略・空なら覚えていた分を捨てる
  *     — 別の画面から入り直したときに前の断片が付いて回らないようにする
  */
 export function rememberMemberReturnPath(value: string, fragment?: string): void {
-  writeFragment(null);
   if (!isSafeMemberReturnPath(value)) {
     return;
   }
   Cookies.set(MEMBER_RETURN_PATH_COOKIE, value);
-  // `#` で始まるものだけを断片として扱う。連結先はそのまま遷移に渡るため、断片であることが
-  // 形から明らかな値以外は載せない（`#` 以降はホストにもパスにもなり得ない）。
-  if (fragment?.startsWith('#')) {
-    writeFragment(fragment);
-  }
+  // 断片は cookie と必ず同時に書き替える。`#` で始まるものだけを断片として扱うのは、連結先が
+  // そのまま遷移に渡るため — 断片であることが形から明らかな値以外は載せない
+  // （`#` 以降はホストにもパスにもなり得ない）。
+  writeFragment(fragment?.startsWith('#') ? fragment : null);
 }
 
 /** 覚えた戻り先を 1 度だけ取り出す（取り出しと同時に消す）。無い・安全でない場合は null。 */
