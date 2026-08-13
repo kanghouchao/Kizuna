@@ -66,6 +66,40 @@ class OrderReceiptTokenTest {
   }
 
   @Test
+  @DisplayName("期限内の未申領トークンは申領でき、申領済みになること")
+  void issuedTokenIsClaimableWithinTheValidityWindow() {
+    OrderReceiptToken token = OrderReceiptToken.issueFor("o1", DIGEST, 120, ISSUED_AT);
+
+    assertThat(token.isClaimableAt(ISSUED_AT.plusDays(89))).isTrue();
+    token.claim(ISSUED_AT.plusDays(89));
+
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
+  }
+
+  @Test
+  @DisplayName("申領済みのトークンは二度目の申領ができないこと")
+  void claimedTokenCannotBeClaimedAgain() {
+    // 再送の遮断は冪等キーではなく前提状態の消滅が担う（ADR 0007 の判定基準）
+    OrderReceiptToken token = OrderReceiptToken.issueFor("o1", DIGEST, 120, ISSUED_AT);
+    token.claim(ISSUED_AT);
+
+    assertThat(token.isClaimableAt(ISSUED_AT)).isFalse();
+    assertThatThrownBy(() -> token.claim(ISSUED_AT))
+        .isInstanceOf(InvalidOrderReceiptTokenException.class);
+  }
+
+  @Test
+  @DisplayName("期限を過ぎたトークンは申領できないこと（期限の瞬間を含む）")
+  void expiredTokenIsNotClaimable() {
+    OrderReceiptToken token = OrderReceiptToken.issueFor("o1", DIGEST, 120, ISSUED_AT);
+
+    assertThat(token.isClaimableAt(token.getExpiresAt())).isFalse();
+    assertThatThrownBy(() -> token.claim(token.getExpiresAt()))
+        .isInstanceOf(InvalidOrderReceiptTokenException.class);
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.ISSUED);
+  }
+
+  @Test
   @DisplayName("診断出力にダイジェストが載らないこと")
   void toStringOmitsTheDigest() {
     // 生値は元より持たないが、ダイジェストも照合の鍵そのもの。ログへ流れると保存を絞った意味が消える

@@ -125,6 +125,21 @@ public class PointLedgerService {
     return granted;
   }
 
+  /**
+   * 確定済みの付与額をそのまま記帳する（伝票トークンの申領）。付与が 0 なら台帳へ何も書かない。
+   *
+   * <p>額を呼出側から受け取るのは、その額が<b>完了時点</b>の付与規則で確定しているため。ここで会計金額から
+   * 計算し直すと、申領の早い遅い（＝その間の付与設定の変更）で同じ会計が別のポイントになる。
+   */
+  public void grantPlannedForOrder(
+      long memberId, String orderId, Long storeId, int plannedPoints, Long actorUserId) {
+    if (plannedPoints == 0) {
+      return;
+    }
+    pointEntryRepository.save(
+        PointEntry.grantForOrder(memberId, orderId, storeId, plannedPoints, actorUserId));
+  }
+
   /** 受注会計でのポイント利用。期限の早いロットから引き当てる。 */
   public void useForOrder(
       long memberId, String orderId, Long storeId, int points, Long actorUserId) {

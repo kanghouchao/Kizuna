@@ -82,6 +82,17 @@ public class OrderAttribution extends BaseEntity {
         orderId, memberId, memberCode, OrderAttributionSource.COMPLETION, attributedAt);
   }
 
+  /**
+   * 伝票トークンの事後申領による帰属。完了時と違い、証明はトークンの所持だけで、店舗台帳（顧客行・関連）は一切動かない。
+   *
+   * <p>会員コードは申領した本人の現在のコードを写す（完了時のように関連のスナップショットを引き継ぐ余地は無い — その完了は誰にも帰属しなかった）。
+   */
+  public static OrderAttribution onReceiptClaim(
+      String orderId, Long memberId, String memberCode, OffsetDateTime attributedAt) {
+    return new OrderAttribution(
+        orderId, memberId, memberCode, OrderAttributionSource.RECEIPT_TOKEN, attributedAt);
+  }
+
   @Override
   public String toString() {
     return "OrderAttribution(id="
