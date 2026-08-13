@@ -69,41 +69,46 @@ export function isSafeMemberReturnPath(value: string | undefined | null): value 
 }
 
 /**
- * 戻り先のフラグメントの置き場。cookie ではなく sessionStorage なのは、フラグメントが伝票トークン
+ * 断片つきの戻り先（`パス#断片`）の置き場。cookie ではなく sessionStorage なのは、断片が伝票トークン
  * （所持そのものが証明になるクレデンシャル）を運ぶため — cookie は毎要求サーバへ送られるので、
- * サーバへ渡らないことを担保していたフラグメントの性質がそこで失われる。
+ * サーバへ渡らないことを担保していた断片の性質がそこで失われる。
+ *
+ * <p>断片だけでなく<b>パスごと</b>持つ。cookie はタブ間で共有される一方この置き場はタブ内に閉じるため、
+ * 別タブの差し戻しが cookie を書き替えた後だと、断片だけでは元のタブの伝票トークンが無関係なパスへ付く。
+ * 組で持って一致を確かめれば、その組み合わせは成立しない。パスの白名単は `#` を通さないので、最初の
+ * `#` が組の区切りとして曖昧にならない。
  */
-const MEMBER_RETURN_FRAGMENT_KEY = 'member-return-fragment';
+const MEMBER_RETURN_TARGET_KEY = 'member-return-target';
 
 /**
- * 断片の読み書き。sessionStorage は参照そのものも各操作も投げうる（プライベートモード・容量超過）ため、
+ * 戻り先の組の読み書き。sessionStorage は参照そのものも各操作も投げうる（プライベートモード・容量超過）ため、
  * 呼出側へは決して例外を出さない — 戻り先の復帰は付随的な便宜であり、失敗して困るのは「元の画面へ
  * 戻れない」ことだけである。ここで投げると、呼び元（シェルの差し戻し）が途中で止まり、未認証の利用者が
  * ログインへも進めないまま読み込み中の画面に取り残される。
  */
-function readFragment(): string | null {
+function readTarget(): string | null {
   try {
     return typeof window === 'undefined'
       ? null
-      : window.sessionStorage.getItem(MEMBER_RETURN_FRAGMENT_KEY);
+      : window.sessionStorage.getItem(MEMBER_RETURN_TARGET_KEY);
   } catch {
     return null;
   }
 }
 
-function writeFragment(fragment: string | null): void {
+function writeTarget(target: string | null): void {
   try {
     if (typeof window === 'undefined') {
       return;
     }
-    if (fragment === null) {
-      window.sessionStorage.removeItem(MEMBER_RETURN_FRAGMENT_KEY);
+    if (target === null) {
+      window.sessionStorage.removeItem(MEMBER_RETURN_TARGET_KEY);
       return;
     }
-    window.sessionStorage.setItem(MEMBER_RETURN_FRAGMENT_KEY, fragment);
+    window.sessionStorage.setItem(MEMBER_RETURN_TARGET_KEY, target);
   } catch {
     // 書けなくても戻り先の断片が無いだけ（＝QR を読み直せば済む）。消せなかった場合も、
-    // 断片は戻り先 cookie が通ったときにしか使われないので、単体では遷移先にならない。
+    // 組は cookie のパスと一致したときにしか使われないので、単体では遷移先にならない。
   }
 }
 
@@ -123,20 +128,25 @@ export function rememberMemberReturnPath(value: string, fragment?: string): void
     return;
   }
   Cookies.set(MEMBER_RETURN_PATH_COOKIE, value);
-  // 断片は cookie と必ず同時に書き替える。`#` で始まるものだけを断片として扱うのは、連結先が
+  // 組は cookie と必ず同時に書き替える。`#` で始まるものだけを断片として扱うのは、連結先が
   // そのまま遷移に渡るため — 断片であることが形から明らかな値以外は載せない
   // （`#` 以降はホストにもパスにもなり得ない）。
-  writeFragment(fragment?.startsWith('#') ? fragment : null);
+  writeTarget(fragment?.startsWith('#') ? `${value}${fragment}` : null);
 }
 
-/** 覚えた戻り先を 1 度だけ取り出す（取り出しと同時に消す）。無い・安全でない場合は null。 */
+/**
+ * 覚えた戻り先を 1 度だけ取り出す（取り出しと同時に消す）。無い・安全でない場合は null。
+ *
+ * <p>断片を添えるのは、預けた組が cookie のパスと一致するときだけ。別タブの差し戻しが cookie を
+ * 書き替えていた場合はパスが食い違うため、このタブの伝票トークンが無関係な画面へ付いて回らない。
+ */
 export function takeMemberReturnPath(): string | null {
   const value = Cookies.get(MEMBER_RETURN_PATH_COOKIE);
   Cookies.remove(MEMBER_RETURN_PATH_COOKIE);
-  const fragment = readFragment();
-  writeFragment(null);
+  const target = readTarget();
+  writeTarget(null);
   if (!isSafeMemberReturnPath(value)) {
     return null;
   }
-  return fragment?.startsWith('#') ? `${value}${fragment}` : value;
+  return target?.startsWith(`${value}#`) ? target : value;
 }

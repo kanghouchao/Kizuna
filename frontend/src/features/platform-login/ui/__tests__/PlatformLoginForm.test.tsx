@@ -94,12 +94,12 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     // 落とすと戻れても申領できない画面に着地する
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
     Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-fragment', '#tok3n');
+    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
 
     await submitLoginForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/receipts#tok3n'));
-    expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
+    expect(sessionStorage.getItem('member-return-target')).toBeNull();
   });
 
   it('会員以外がログインしたら、預かっていた戻り先とトークンを捨てること', async () => {
@@ -107,13 +107,13 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     // 取り込むため「他人の伝票を無確認で申領する」経路になる
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST', console: 'none' }));
     Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-fragment', '#tok3n');
+    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
 
     await submitLoginForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/schedule/'));
     expect(Cookies.get('member-return-path')).toBeUndefined();
-    expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
+    expect(sessionStorage.getItem('member-return-target')).toBeNull();
   });
 
   it('/me が失敗したログインでは預かった戻り先を消費しないこと', async () => {
@@ -121,14 +121,14 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     // 戻り先が既に無い（伝票の生値はこの断片にしか無く、再取得の口が無い）
     mockedAuthApi.me.mockRejectedValue(new Error('network'));
     Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-fragment', '#tok3n');
+    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
 
     await submitLoginForm();
 
     await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
     expect(mockPush).not.toHaveBeenCalled();
     expect(Cookies.get('member-return-path')).toBe('/member/receipts');
-    expect(sessionStorage.getItem('member-return-fragment')).toBe('#tok3n');
+    expect(sessionStorage.getItem('member-return-target')).toBe('/member/receipts#tok3n');
   });
 
   it('戻り先に外部 URL が仕込まれていても既定のホームへ遷移すること', async () => {

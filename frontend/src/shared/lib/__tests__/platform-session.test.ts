@@ -143,6 +143,15 @@ describe('会員ポータルの戻り先パス', () => {
     expect(takeMemberReturnPath()).toBe('/member/points/');
   });
 
+  it('別タブが cookie を書き替えていたら、このタブの断片は添えないこと', () => {
+    // cookie はタブ間で共有、置き場はタブ内。組で持たないと、このタブの伝票トークンが
+    // 別タブの用事で書かれた無関係なパスへ付いて回る
+    rememberMemberReturnPath('/member/receipts', '#tok3n');
+    Cookies.set('member-return-path', '/member/points/');
+
+    expect(takeMemberReturnPath()).toBe('/member/points/');
+  });
+
   it('覚えない戻り先の要求は、既に覚えている組にも触れないこと', () => {
     // 401 の差し戻しは会員ポータルの外（LINE コールバック等）からも起きる。cookie と断片は
     // 対で 1 つの戻り先なので、片方だけ消すと「戻り先はあるがトークンが無い」画面に着地する

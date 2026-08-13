@@ -80,7 +80,7 @@ describe('MemberRegisterForm', () => {
     // 消費しないと、その人は伝票を取り込めないまま、断片は次に同じタブでログインした
     // 別の会員へ渡ってしまう
     Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-fragment', '#tok3n');
+    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
     mockedRegister.mockResolvedValue({ member_code: '123456789012' });
     mockedLogin.mockResolvedValue({ token: 'jwt-token', expires_at: Date.now() + 3600_000 });
 
@@ -88,7 +88,7 @@ describe('MemberRegisterForm', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/receipts#tok3n'));
     expect(Cookies.get('member-return-path')).toBeUndefined();
-    expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
+    expect(sessionStorage.getItem('member-return-target')).toBeNull();
   });
 
   it('登録に失敗したらエラートーストを出し、ログインは試みない', async () => {

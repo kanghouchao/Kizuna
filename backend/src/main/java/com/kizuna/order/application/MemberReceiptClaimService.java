@@ -59,13 +59,18 @@ public class MemberReceiptClaimService {
   public MemberReceiptClaimResponse claim(String email, String rawToken) {
     Long platformUserId = resolvePlatformUserId(email);
     MemberLookup member = resolveMember(platformUserId);
-    OffsetDateTime now = OffsetDateTime.now();
 
     OrderReceiptToken token =
         orderReceiptTokenRepository
             .findByTokenDigest(receiptTokenGenerator.digest(rawToken))
-            .filter(found -> found.isClaimableAt(now))
             .orElseThrow(() -> new NotFoundException(UNCLAIMABLE_MESSAGE));
+    // 時刻は行ロックを取った後に読む。並行申領の待ち合わせはロックの解放まで伸びるため、要求開始時の
+    // 時刻で判じると、待っている間に期限を越えた伝票を通しうる。帰属時刻も「成立した瞬間」であるべきで、
+    // 「要求が届いた瞬間」ではない。
+    OffsetDateTime now = OffsetDateTime.now();
+    if (!token.isClaimableAt(now)) {
+      throw new NotFoundException(UNCLAIMABLE_MESSAGE);
+    }
     // 発生店舗は台帳の仕訳が要る（残高の作用域ではなく帰属情報）。トークンは受注へ FK CASCADE で
     // 結ばれているので、引けない受注は実装欠陥だが、その場合も利用者へは同形のエラーで返す。
     Order order =
