@@ -1,0 +1,5 @@
+# v0.18.0 = 帰属記録の無効化（誤帰属の訂正）。platform 層のみ。
+databaseChangeLog:
+  - include:
+      file: platform/01-order-attribution-invalidation.yaml
+      relativeToChangelogFile: true

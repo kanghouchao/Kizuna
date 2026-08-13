@@ -64,6 +64,18 @@ public interface OrderRepository
   @Query(VIEW_SELECT + " where o.id = :id")
   Optional<OrderView> findViewById(@Param("id") String id);
 
+  /**
+   * 現店舗の受注 1 件を集約として引く。
+   *
+   * <p>JPQL で書くのは {@code storeFilter} を効かせるため。Order は StoreScopedEntity だが、Hibernate のフィルタは {@code
+   * EntityManager.find} には掛からず、派生の {@code findById} はそこへ落ちる。複数店舗を授権された操作者は現店舗の文脈のまま 他店舗の受注 ID
+   * を指せるので、店舗を跨がない読み書きはこの形で引く。
+   *
+   * <p>受注に紐づく帰属記録・伝票トークンは platform 帰属で店舗行分離機構に載らない。それらを受注 ID で引く操作は、 先にこの読み口で店舗の所有を確かめてから行う。
+   */
+  @Query("select o from com.kizuna.order.domain.Order o where o.id = :id")
+  Optional<Order> findScopedById(@Param("id") String id);
+
   // 未確定の申請の抽出条件。先頭と続きの問い合わせが同じ条件を共有する（片方だけ直すと、続きの取得が
   // 先頭の取得と違う母集合を辿り、到達できない申請を生む）。
   String PENDING_REQUEST_WHERE =
