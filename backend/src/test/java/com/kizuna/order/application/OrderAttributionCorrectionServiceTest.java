@@ -291,6 +291,41 @@ class OrderAttributionCorrectionServiceTest {
   }
 
   @Test
+  @DisplayName("進み具合は同じ会員の帰属記録すべての訂正を数えること")
+  void statusCountsCorrectionsAcrossEveryAttributionOfTheSameMember() {
+    givenOrder();
+    givenAttributions(reclaimedAttribution(), invalidatedAttribution());
+    givenGranted(200L);
+    Mockito.when(
+            pointLedgerService.correctedPointsFor(
+                Mockito.argThat(
+                    ids ->
+                        ids != null
+                            && ids.containsAll(List.of(ATTRIBUTION_ID, OTHER_ATTRIBUTION_ID)))))
+        .thenReturn(100L);
+
+    OrderAttributionCorrectionResponse response = service.status(ORDER_ID, ATTRIBUTION_ID);
+
+    // 画面はこの差を既定値に取る。書き込み側と作用域がずれると、撥ねられる額を既定値として描く。
+    assertThat(response.grantedPoints()).isEqualTo(200L);
+    assertThat(response.correctedPoints()).isEqualTo(100L);
+  }
+
+  @Test
+  @DisplayName("進み具合も書き込みと同じ門を通ること（撥ねられる材料を画面へ渡さない）")
+  void statusRefusesWhenTheSameMemberHoldsAnActiveAttribution() {
+    givenOrder();
+    OrderAttribution active =
+        OrderAttribution.onReceiptClaim(ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);
+    active.setId(OTHER_ATTRIBUTION_ID);
+    givenAttributions(active, invalidatedAttribution());
+
+    assertThatThrownBy(() -> service.status(ORDER_ID, ATTRIBUTION_ID))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("現に帰属している");
+  }
+
+  @Test
   @DisplayName("会員が削除された帰属は積み先が無く、訂正できないこと")
   void refusesWhenTheMemberReferenceIsMissing() {
     givenOrder();
