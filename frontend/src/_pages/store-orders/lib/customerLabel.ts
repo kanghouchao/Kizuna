@@ -24,3 +24,18 @@ export function customerLabel(order: Order): OrderCustomerLabel | null {
   const reported = order.contact_name || order.contact_phone_number;
   return reported ? { name: reported, unlinked: true } : null;
 }
+
+/**
+ * 取り消せない操作のモーダルが見出しに出す呼び名。相手が誰か分からないまま会計を確定したり
+ * 帰属を無効化したりさせないため、顧客未設定の受注も録入された連絡先で呼ぶ。
+ *
+ * 見出しの行はすでに全体が注記の体裁なので、注記（{@link UNLINKED_NOTE}）だけを分けて装飾せず
+ * 1 本の文字列に畳む。
+ */
+export function customerHeadingText(order: Order | null): string {
+  const label = order === null ? null : customerLabel(order);
+  if (label === null) {
+    return 'お客様名なし';
+  }
+  return label.unlinked ? `${label.name}${UNLINKED_NOTE}` : label.name;
+}

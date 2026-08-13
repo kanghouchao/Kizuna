@@ -145,7 +145,7 @@ public class OrderController {
   @GetMapping("/{id}/attribution")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderAttributionResponse> attribution(@PathVariable String id) {
-    return ResponseEntity.ok(orderAttributionService.get(id));
+    return ResponseEntity.ok(orderAttributionService.currentAttribution(id));
   }
 
   /**

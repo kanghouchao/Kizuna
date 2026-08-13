@@ -2,6 +2,7 @@ package com.kizuna.order.domain;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,14 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
    * <p>この読み口は店舗行分離機構に載らない（帰属記録は platform 帰属）。店舗の所有は受注を先に引いて確かめること。
    */
   List<OrderAttribution> findByOrderIdOrderByIdDesc(String orderId);
+
+  /**
+   * 受注の直近の帰属記録 1 件。有効な行があれば必ずこれになる（無効化は過去の行にしか起こらないため）。
+   *
+   * <p>現況だけが要る経路は履歴を丸ごと読まずにこちらを使う。{@link #findByOrderIdOrderByIdDesc} は「1 件でもあるか」と「有効な行があるか」を
+   * 同時に判じる再発行の門でだけ要る。
+   */
+  Optional<OrderAttribution> findFirstByOrderIdOrderByIdDesc(String orderId);
 
   // 会員本人の来店一覧。帰属記録が正本で、表示に要る属性は受注へ join して導出する（ADR 0003 と同じ扱い。
   // 帰属記録は台帳と同じく platform 帰属なので同 ADR が名指す店舗作用域エンティティそのものではない）。店舗は

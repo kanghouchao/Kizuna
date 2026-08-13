@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { QRCodeSVG } from 'qrcode.react';
 import { notify } from '@/shared/notify';
 import { Order, OrderCompletionPreview, orderApi } from '@/entities/order';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
-import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
-import { receiptClaimUrl } from '../lib/receiptClaimUrl';
+import { customerHeadingText } from '../lib/customerLabel';
+import { ReceiptTokenPanel } from './ReceiptTokenPanel';
 import {
   Button,
   Dialog,
@@ -25,18 +24,6 @@ import {
 
 /** 空欄と 0 は別物なので、未入力の文言は 1 箇所に持って両方の規則から指す。 */
 const TOTAL_FEE_REQUIRED = '会計金額を入力してください';
-
-/**
- * 見出しに出す顧客の呼び名。会計の相手が誰か分からないまま完了させないため、顧客未設定の受注も
- * 録入された連絡先で呼ぶ。見出しの行はすでに全体が注記の体裁なので、注記だけを分けて装飾しない。
- */
-function customerText(order: Order | null): string {
-  const label = order === null ? null : customerLabel(order);
-  if (label === null) {
-    return 'お客様名なし';
-  }
-  return label.unlinked ? `${label.name}${UNLINKED_NOTE}` : label.name;
-}
 
 interface OrderCompletionFormValues {
   /** 空欄は NaN。「未入力」と 0 円の会計を取り違えないため、valueAsNumber の写像をそのまま持つ。 */
@@ -172,35 +159,15 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
         <div className="border-b px-6 py-4">
           <DialogTitle>{receiptToken !== null ? '伝票QRコード' : '完了処理'}</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            {order?.business_date ?? '-'} / {customerText(order)}
+            {order?.business_date ?? '-'} / {customerHeadingText(order)}
           </p>
         </div>
         {receiptToken !== null ? (
-          <div className="px-6 py-5">
-            <div className="flex flex-col items-center gap-4">
-              <div className="rounded-xl border bg-card p-4">
-                <QRCodeSVG
-                  value={receiptClaimUrl(receiptToken)}
-                  size={192}
-                  aria-label="伝票QR"
-                  role="img"
-                />
-              </div>
-              {/* 生値はこの応答にしか現れない。閉じた後に出し直す経路が無いことを先に伝える */}
-              <p className="text-sm text-foreground">
-                この QR は今だけ表示できます。閉じると再表示できません。
-              </p>
-              <p className="text-sm text-muted-foreground">
-                お客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（完了から 90
-                日以内）。
-              </p>
-            </div>
-            <div className="mt-4 flex justify-end gap-3 border-t pt-4">
-              <Button type="button" onClick={onClose}>
-                閉じる
-              </Button>
-            </div>
-          </div>
+          <ReceiptTokenPanel
+            token={receiptToken}
+            claimNote="お客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（完了から 90 日以内）。"
+            onClose={onClose}
+          />
         ) : (
           <Form {...form}>
             {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、

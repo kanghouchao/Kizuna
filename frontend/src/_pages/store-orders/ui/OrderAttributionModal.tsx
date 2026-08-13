@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { QRCodeSVG } from 'qrcode.react';
 import { notify } from '@/shared/notify';
-import { Order, OrderAttribution, orderApi } from '@/entities/order';
+import { Order, OrderAttribution, OrderAttributionSource, orderApi } from '@/entities/order';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
-import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
-import { receiptClaimUrl } from '../lib/receiptClaimUrl';
+import { customerHeadingText } from '../lib/customerLabel';
+import { ReceiptTokenPanel } from './ReceiptTokenPanel';
 import {
   Badge,
   Button,
@@ -28,7 +27,7 @@ import {
 const REASON_MAX_LENGTH = 500;
 
 /** 成立の機構の日本語表示。値そのものは事実の記録で、挙動は分けない。 */
-const SOURCE_LABELS: Record<string, string> = {
+const SOURCE_LABELS: Record<OrderAttributionSource, string> = {
   COMPLETION: '完了時の会員紐づけ',
   RECEIPT_TOKEN: '伝票QRの申領',
 };
@@ -156,35 +155,15 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
         <div className="border-b px-6 py-4">
           <DialogTitle>{receiptToken !== null ? '伝票QRコード' : '会員帰属の訂正'}</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            {order?.business_date ?? '-'} / {customerText(order)}
+            {order?.business_date ?? '-'} / {customerHeadingText(order)}
           </p>
         </div>
         {receiptToken !== null ? (
-          <div className="px-6 py-5">
-            <div className="flex flex-col items-center gap-4">
-              <div className="rounded-xl border bg-card p-4">
-                <QRCodeSVG
-                  value={receiptClaimUrl(receiptToken)}
-                  size={192}
-                  aria-label="伝票QR"
-                  role="img"
-                />
-              </div>
-              {/* 生値はこの応答にしか現れない。閉じた後に出し直す経路が無いことを先に伝える */}
-              <p className="text-sm text-foreground">
-                この QR は今だけ表示できます。閉じると再表示できません。
-              </p>
-              <p className="text-sm text-muted-foreground">
-                正しいお客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（再発行から
-                90 日以内）。
-              </p>
-            </div>
-            <div className="mt-4 flex justify-end gap-3 border-t pt-4">
-              <Button type="button" onClick={onClose}>
-                閉じる
-              </Button>
-            </div>
-          </div>
+          <ReceiptTokenPanel
+            token={receiptToken}
+            claimNote="正しいお客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（再発行から 90 日以内）。"
+            onClose={onClose}
+          />
         ) : isLoading ? (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">読み込み中...</p>
         ) : failure !== null ? (
@@ -210,7 +189,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                       <span>{attribution.member_code}</span>
                     </div>
                     <p className="text-muted-foreground">
-                      {SOURCE_LABELS[attribution.source ?? ''] ?? attribution.source} /{' '}
+                      {attribution.source ? SOURCE_LABELS[attribution.source] : '-'} /{' '}
                       {formatDateTime(attribution.attributed_at)}
                     </p>
                   </>
@@ -297,16 +276,4 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
       </DialogContent>
     </Dialog>
   );
-}
-
-/**
- * 見出しに出す顧客の呼び名。訂正の相手が誰か分からないまま無効化させないため、顧客未設定の受注も
- * 録入された連絡先で呼ぶ。見出しの行はすでに全体が注記の体裁なので、注記だけを分けて装飾しない。
- */
-function customerText(order: Order | null): string {
-  const label = order === null ? null : customerLabel(order);
-  if (label === null) {
-    return 'お客様名なし';
-  }
-  return label.unlinked ? `${label.name}${UNLINKED_NOTE}` : label.name;
 }
