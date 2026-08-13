@@ -19,6 +19,9 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>シードユーザー yamada.jiro@kizuna.test/pass（STORE_STAFF・授権店舗 = 店舗1）で平台ログインして JWT を保持し、 認証 = JWT /
  * 店舗文脈 = X-Store-ID ヘッダという本番構造どおりのリクエストヘッダを組み立てる （Bearer ヘッダ付きリクエストは CSRF 免除）。
+ *
+ * <p>準金銭的な確定操作（ポイントの手動調整、誤帰属の訂正とその一段目の無効化）は店長限定のため、店員の身分では 403 になる。 それらを叩くテストは {@link
+ * #managerHeaders(long)} を使う（ADR 0012）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
@@ -31,27 +34,51 @@ public abstract class CrossStoreTestSupport {
 
   protected String token;
 
+  /** 店長（tanaka.hanako シード）の JWT。要るテストだけが払うよう、初めて使うときに取得する。 */
+  private String managerToken;
+
   @BeforeEach
   void loginAsSeedUser() {
+    token = login("yamada.jiro@kizuna.test");
+  }
+
+  protected HttpHeaders storeHeaders(long storeId) {
+    return headersFor(storeId, token);
+  }
+
+  /**
+   * 店長の身分での店舗文脈ヘッダ。{@code POINT_ADJUST} を要する端点にはこちらを使う。
+   *
+   * <p>v0.5.0 の田中花子シード（STORE_MANAGER・授権店舗 = 店舗1）。店員の {@link #storeHeaders(long)} と使い分けること自体が、
+   * 権限の線がどこに引かれているかの記録になる。
+   */
+  protected HttpHeaders managerHeaders(long storeId) {
+    if (managerToken == null) {
+      managerToken = login("tanaka.hanako@kizuna.test");
+    }
+    return headersFor(storeId, managerToken);
+  }
+
+  private String login(String email) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/platform/login",
-            new HttpEntity<>(
-                "{\"email\": \"yamada.jiro@kizuna.test\", \"password\": \"pass\"}", headers),
+            new HttpEntity<>("{\"email\": \"" + email + "\", \"password\": \"pass\"}", headers),
             JsonNode.class);
-    assertThat(res.getStatusCode()).as("前提: シードユーザーでのログインが成功すること").isEqualTo(HttpStatus.OK);
-    token = res.getBody().path("token").asString();
-    assertThat(token).isNotBlank();
+    assertThat(res.getStatusCode()).as("前提: %s でのログインが成功すること", email).isEqualTo(HttpStatus.OK);
+    String issued = res.getBody().path("token").asString();
+    assertThat(issued).isNotBlank();
+    return issued;
   }
 
-  protected HttpHeaders storeHeaders(long storeId) {
+  private static HttpHeaders headersFor(long storeId, String bearerToken) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.set("X-Role", "store");
     headers.set("X-Store-ID", String.valueOf(storeId));
-    headers.setBearerAuth(token);
+    headers.setBearerAuth(bearerToken);
     return headers;
   }
 }

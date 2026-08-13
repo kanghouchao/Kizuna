@@ -14,6 +14,8 @@ import {
   MemberVisit,
   Order,
   OrderAttribution,
+  OrderAttributionCorrection,
+  OrderAttributionCorrectionRequest,
   OrderAttributionInvalidationRequest,
   OrderCastCandidate,
   OrderCompletionPreview,
@@ -102,9 +104,9 @@ export const orderApi = {
     return response.data;
   },
   /**
-   * 帰属記録を理由付きで無効化する（誤帰属の訂正）。行は削除されず、理由・実行者・時刻が記録に残る。
+   * 帰属記録を理由付きで無効化する（誤帰属の訂正の一段目）。行は削除されず、理由・実行者・時刻が記録に残る。
    *
-   * ポイント台帳へは波及しない。誤って付与されたポイントの清算は手動のポイント調整で行う。
+   * ポイント台帳へは波及しない。誤って付与されたポイントは二段目の訂正で差し引く（ADR 0012）。
    */
   invalidateAttribution: async (
     id: string,
@@ -120,6 +122,29 @@ export const orderApi = {
    */
   reissueReceiptToken: async (id: string): Promise<OrderReceiptTokenIssue> => {
     const response = await apiClient.post(`/store/orders/${id}/receipt-token`);
+    return response.data;
+  },
+  /** 誤帰属の訂正の進み具合。差し引く既定値（付与の全額）と引き残しはここから取る。 */
+  attributionCorrection: async (
+    id: string,
+    attributionId: number
+  ): Promise<OrderAttributionCorrection> => {
+    const response = await apiClient.get(`/store/orders/${id}/attribution/correction`, {
+      params: { attribution_id: attributionId },
+    });
+    return response.data;
+  },
+  /**
+   * 誤帰属で付いたポイントを、名指した帰属記録が持つ会員から差し引く（訂正の二段目。ADR 0012）。
+   *
+   * 宛先は帰属記録が持つ会員であって、顧客に現在紐づく会員ではない — 申領で成立した帰属は紐づけを
+   * 作らず、完了時の帰属でも紐づけはあとから解除・張り替えされうる。
+   */
+  correctAttributionPoints: async (
+    id: string,
+    data: OrderAttributionCorrectionRequest
+  ): Promise<OrderAttributionCorrection> => {
+    const response = await apiClient.post(`/store/orders/${id}/attribution/correction`, data);
     return response.data;
   },
 };

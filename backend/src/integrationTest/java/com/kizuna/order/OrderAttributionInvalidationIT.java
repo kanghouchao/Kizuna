@@ -95,7 +95,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
             orderId);
     assertThat(row.get("status")).isEqualTo(OrderAttributionStatus.INVALIDATED.name());
     assertThat(row.get("invalidated_reason")).isEqualTo(REASON);
-    assertThat(row.get("invalidated_by")).isEqualTo(seedStaffId());
+    assertThat(row.get("invalidated_by")).isEqualTo(seedManagerId());
     assertThat(row.get("invalidated_at")).isNotNull();
 
     // 誰の来店として記録されていたかは訂正後も辿れること（監査の対象そのもの）
@@ -511,12 +511,13 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
   }
 
   private ResponseEntity<JsonNode> invalidate(String orderId, Long attributionId, String reason) {
+    // 無効化は準金銭的な訂正の一段目で店長限定。店員の身分では 403 になる（ADR 0012）。
     return rest.exchange(
         "/store/orders/" + orderId + "/attribution/invalidation",
         HttpMethod.POST,
         new HttpEntity<>(
             "{\"attribution_id\": " + attributionId + ", \"reason\": \"" + reason + "\"}",
-            storeHeaders(STORE_A)),
+            managerHeaders(STORE_A)),
         JsonNode.class);
   }
 
@@ -631,9 +632,10 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     }
   }
 
-  private long seedStaffId() {
+  /** 無効化を実行した身分。訂正は店長限定なので、行に残る実行者は店長になる（ADR 0012）。 */
+  private long seedManagerId() {
     return jdbcTemplate.queryForObject(
-        "select id from t_users where email = ?", Long.class, "yamada.jiro@kizuna.test");
+        "select id from t_users where email = ?", Long.class, "tanaka.hanako@kizuna.test");
   }
 
   // ==================== 受注の用意 ====================

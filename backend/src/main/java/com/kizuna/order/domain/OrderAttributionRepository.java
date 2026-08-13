@@ -42,7 +42,7 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
 
   // 本人は店舗文脈を確立できず storeFilter は働かないため、帰属先会員の一致が唯一の隔離境界である。受注の状態は
   // 条件に入れない — 来店として見えるかは帰属記録の有無と有効性だけで決まる（ADR 0009）。完了後に取り消された
-  // 受注も来店として残り、台帳側が取消仕訳で清算する。訂正は人手の無効化だけが行う。
+  // 受注も来店として残り、台帳側が取消仕訳で収束させる。訂正は人手の無効化だけが行う。
   String MEMBER_VISIT_WHERE =
       " where a.memberId = :memberId and a.status = com.kizuna.order.domain.OrderAttributionStatus.ACTIVE ";
 

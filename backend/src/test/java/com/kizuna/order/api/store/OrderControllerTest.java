@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -59,6 +60,7 @@ class OrderControllerTest {
 
   @MockitoBean private OrderService orderService;
   @MockitoBean private OrderAttributionService orderAttributionService;
+  @MockitoBean private OrderAttributionCorrectionService orderAttributionCorrectionService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
@@ -304,7 +306,7 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("受注管理権限が無ければ帰属の閲覧・無効化・伝票の再発行が拒否されること")
+  @DisplayName("受注管理も店長権限も無ければ帰属の閲覧・無効化・伝票の再発行がいずれも拒否されること")
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void attributionCorrectionIsRejectedWithoutOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
@@ -321,8 +323,36 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("理由の無い無効化は撥ねられ、サービスへ届かないこと")
+  @DisplayName("受注管理だけの店員は帰属を無効化できず、台帳の訂正にも届かないこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void invalidationAndCorrectionRequirePointAdjust() throws Exception {
+    // 不可逆で準金銭的な訂正の一段目だけを店員に許すと、二段目の台帳訂正を実行できない者が訂正を始められ、
+    // やり残しが人を跨いで残る（ADR 0012）。要求そのものは妥当な形なので、撥ねているのは権限だけである。
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            storePost(
+                "/store/orders/o1/attribution/invalidation",
+                "{\"attribution_id\": 1, \"reason\": \"取り違え\"}"))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(
+            storePost(
+                "/store/orders/o1/attribution/correction",
+                "{\"attribution_id\": 1, \"points\": 100, \"reason\": \"取り違え\","
+                    + " \"idempotency_key\": \"k1\"}"))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(storeGet("/store/orders/o1/attribution/correction?attribution_id=1"))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderAttributionService);
+    verifyNoInteractions(orderAttributionCorrectionService);
+  }
+
+  @Test
+  @DisplayName("理由の無い無効化は撥ねられ、サービスへ届かないこと")
+  @WithMockUser(authorities = "PERM_POINT_ADJUST")
   void invalidationWithoutAReasonIsRejected() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -340,7 +370,7 @@ class OrderControllerTest {
 
   @Test
   @DisplayName("対象の帰属記録を名指さない無効化は撥ねられ、サービスへ届かないこと")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  @WithMockUser(authorities = "PERM_POINT_ADJUST")
   void invalidationWithoutATargetIsRejected() throws Exception {
     // 受注から対象を導く形へ戻ると、画面が見ていた記録と別の記録を消しうる
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
@@ -353,7 +383,7 @@ class OrderControllerTest {
 
   @Test
   @DisplayName("列長を超える理由は 400 で撥ねられること（DB のエラーにしない）")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  @WithMockUser(authorities = "PERM_POINT_ADJUST")
   void invalidationWithAnOverlongReasonIsRejected() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     String body = "{\"attribution_id\": 1, \"reason\": \"" + "あ".repeat(501) + "\"}";

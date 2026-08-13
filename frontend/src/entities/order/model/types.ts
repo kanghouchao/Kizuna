@@ -184,6 +184,29 @@ export interface OrderAttributionInvalidationRequest {
   reason: string;
 }
 
+/**
+ * 誤帰属の訂正の進み具合（GET/POST /store/orders/{id}/attribution/correction）。
+ *
+ * 会員の残高は載らない。この口が届く会員は自店舗の顧客と紐づいているとは限らないため、
+ * 店舗へ渡すのは訂正の進み具合だけに閉じてある。
+ */
+export interface OrderAttributionCorrection {
+  /** その受注がその会員へ与えた付与の合計。訂正の累計はこれを超えられない。 */
+  granted_points: number;
+  /** 同じ帰属記録に対して既に差し引いた合計。 */
+  corrected_points: number;
+}
+
+// 誤帰属で付いたポイントの差し引き（POST /store/orders/{id}/attribution/correction）。
+// 宛先は名指した帰属記録が持つ会員で、顧客に現在紐づく会員ではない。points は引く量を正で渡す
+// （この口は与える方向を持たない — 授権が「その付与が誤りだった」ことにだけ由来するため）。
+export interface OrderAttributionCorrectionRequest {
+  attribution_id: number;
+  points: number;
+  reason: string;
+  idempotency_key: string;
+}
+
 // 再発行された伝票トークン（POST /store/orders/{id}/receipt-token）。生値はこの応答にしか現れない。
 export interface OrderReceiptTokenIssue {
   receipt_token: string;
