@@ -212,9 +212,9 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> res =
         rest.exchange(
-            "/platform/cast-invitations/" + token + "/acceptance/existing",
+            "/platform/cast-invitations/acceptance/existing",
             HttpMethod.POST,
-            new HttpEntity<>(bearer(castBearer)),
+            new HttpEntity<>(tokenBody(token), bearer(castBearer)),
             JsonNode.class);
 
     assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
@@ -285,9 +285,9 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     // token（基底クラスの yamada = STAFF（店舗スタッフ束））で既存受諾 → @PreAuthorize ROLE_CAST で 403
     ResponseEntity<String> res =
         rest.exchange(
-            "/platform/cast-invitations/" + token + "/acceptance/existing",
+            "/platform/cast-invitations/acceptance/existing",
             HttpMethod.POST,
-            new HttpEntity<>(bearer(this.token)),
+            new HttpEntity<>(tokenBody(token), bearer(this.token)),
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -301,9 +301,9 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
 
     ResponseEntity<String> res =
         rest.exchange(
-            "/platform/cast-invitations/" + token + "/acceptance/existing",
+            "/platform/cast-invitations/acceptance/existing",
             HttpMethod.POST,
-            new HttpEntity<>(jsonHeaders()),
+            new HttpEntity<>(tokenBody(token), jsonHeaders()),
             String.class);
 
     assertThat(res.getStatusCode().value()).isIn(401, 403);
@@ -319,21 +319,21 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     String email = "cast-broken-bearer-it-" + System.nanoTime() + "@kizuna.test";
 
     ResponseEntity<JsonNode> view =
-        rest.exchange(
-            "/platform/cast-invitations/" + token,
-            HttpMethod.GET,
-            new HttpEntity<>(jsonHeadersWithBrokenBearer()),
+        rest.postForEntity(
+            "/platform/cast-invitations/view",
+            new HttpEntity<>(tokenBody(token), jsonHeadersWithBrokenBearer()),
             JsonNode.class);
     assertThat(view.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(view.getBody().path("status").asString()).isEqualTo("VALID");
 
     String body =
         String.format(
-            "{\"email\": \"%s\", \"password\": \"password1234\", \"display_name\": \"陳腐Bearer花子\"}",
-            email);
+            "{\"token\": \"%s\", \"email\": \"%s\", \"password\": \"password1234\","
+                + " \"display_name\": \"陳腐Bearer花子\"}",
+            token, email);
     ResponseEntity<JsonNode> accept =
         rest.postForEntity(
-            "/platform/cast-invitations/" + token + "/acceptance",
+            "/platform/cast-invitations/acceptance",
             new HttpEntity<>(body, jsonHeadersWithBrokenBearer()),
             JsonNode.class);
 
@@ -450,20 +450,24 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
       String token, String email, String password, String displayName) {
     String body =
         String.format(
-            "{\"email\": \"%s\", \"password\": \"%s\", \"display_name\": \"%s\"}",
-            email, password, displayName);
+            "{\"token\": \"%s\", \"email\": \"%s\", \"password\": \"%s\", \"display_name\": \"%s\"}",
+            token, email, password, displayName);
     return rest.postForEntity(
-        "/platform/cast-invitations/" + token + "/acceptance",
+        "/platform/cast-invitations/acceptance",
         new HttpEntity<>(body, jsonHeaders()),
         JsonNode.class);
   }
 
   private ResponseEntity<JsonNode> viewInvitation(String token) {
-    return rest.exchange(
-        "/platform/cast-invitations/" + token,
-        HttpMethod.GET,
-        new HttpEntity<>(jsonHeaders()),
+    return rest.postForEntity(
+        "/platform/cast-invitations/view",
+        new HttpEntity<>(tokenBody(token), jsonHeaders()),
         JsonNode.class);
+  }
+
+  /** トークンはパスではなく本文で運ぶ（パスはリクエストターゲットとしてアクセスログに残るため）。 */
+  private static String tokenBody(String token) {
+    return String.format("{\"token\": \"%s\"}", token);
   }
 
   private String platformToken(String email, String password) {

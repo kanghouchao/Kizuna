@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
 import {
   CastAcceptanceResponse,
   CastInvitationDetailResponse,
@@ -14,18 +13,32 @@ type Stage = 'loading' | 'invalid' | 'choose' | 'register' | 'login' | 'done';
 
 /** キャスト招待受諾ランディング（公開）。照会 → 新規登録 or 既存ログイン受諾 → 完了画面。 */
 export default function CastInvitePage() {
-  const params = useParams();
-  const token = params.token as string;
-
+  const [token, setToken] = useState('');
   const [stage, setStage] = useState<Stage>('loading');
   const [detail, setDetail] = useState<CastInvitationDetailResponse | null>(null);
   const [invalidMessage, setInvalidMessage] = useState('');
   const [storeName, setStoreName] = useState('');
 
   useEffect(() => {
+    // トークンはフラグメントで届く（castInviteUrl の説明どおり、リクエストターゲットに載せない）。
+    // フラグメントはサーバへ送られないため、描画後にブラウザ側で読み取るしかない。
+    let raw: string;
+    try {
+      raw = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      // 壊れたパーセント符号化（単独の % など）。復元できない以上、招待は特定できない。
+      raw = '';
+    }
+    if (!raw) {
+      setInvalidMessage('招待リンクが見つかりません。URLをご確認ください。');
+      setStage('invalid');
+      return;
+    }
+    setToken(raw);
+
     const load = async () => {
       try {
-        const response = await castInvitationAcceptanceApi.view(token);
+        const response = await castInvitationAcceptanceApi.view(raw);
         if (response.status === 'VALID') {
           setDetail(response);
           setStage('choose');
@@ -43,7 +56,8 @@ export default function CastInvitePage() {
       }
     };
     void load();
-  }, [token]);
+    // フラグメントは入場時の一度だけ読む（token はこの効果自身の setToken 由来のため、依存に入れると再照会が回る）。
+  }, []);
 
   const handleAccepted = (response: CastAcceptanceResponse) => {
     setStoreName(response.store_name ?? '');

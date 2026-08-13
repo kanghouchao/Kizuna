@@ -242,7 +242,8 @@ export async function issueCastInvitation(
 
 /**
  * キャスト招待を新規登録で受諾し、CAST 用の平台身分を作成する
- * （POST /api/platform/cast-invitations/{token}/acceptance, PermitAll）。
+ * （POST /api/platform/cast-invitations/acceptance, PermitAll）。
+ * トークンはパスではなく本文で送る（パスはアクセスログに残るため）。
  * X-Role/X-Store-ID は不要（/platform 配下は StoreIdInterceptor を通らない）。
  */
 export async function acceptCastInvitation(
@@ -252,8 +253,8 @@ export async function acceptCastInvitation(
   password: string,
   displayName: string
 ): Promise<void> {
-  const res = await request.post(`/api/platform/cast-invitations/${invitationToken}/acceptance`, {
-    data: { email, password, display_name: displayName },
+  const res = await request.post('/api/platform/cast-invitations/acceptance', {
+    data: { token: invitationToken, email, password, display_name: displayName },
   });
   if (!res.ok()) {
     throw new Error(`accept cast invitation failed: ${res.status()} ${await res.text()}`);

@@ -64,8 +64,8 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
-  it('allows access to /platform/invite/:token without token (public route)', () => {
-    const req = createRequest('/platform/invite/abc123', false);
+  it('allows access to /platform/invite without token (public route)', () => {
+    const req = createRequest('/platform/invite', false);
     const res = handleRouteProtection(req, 'platform');
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();

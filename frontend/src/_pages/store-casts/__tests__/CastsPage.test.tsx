@@ -84,7 +84,9 @@ describe('招待発行モーダルが一覧の再取得中もアンマウント�
     await screen.findByText('読み込み中...');
     expect(screen.getByText('招待リンクを発行しました')).toBeInTheDocument();
     const linkInput = screen.getByLabelText('招待リンク') as HTMLInputElement;
-    expect(linkInput.value).toContain('/platform/invite/tok-123');
+    // トークンはフラグメント側。パスに載せるとアクセスログへ生値が残る
+    expect(linkInput.value).toContain('/platform/invite#tok-123');
+    expect(linkInput.value.split('#')[0]).not.toContain('tok-123');
 
     resolveRefetch(toPage([{ ...cast, invitation_status: 'INVITED' }]));
     await waitFor(() => expect(mockedCastApi.list).toHaveBeenCalledTimes(2));
