@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { CircleCheckIcon, PlusIcon, SquarePenIcon } from 'lucide-react';
+import { CircleCheckIcon, PlusIcon, SquarePenIcon, UserRoundCogIcon } from 'lucide-react';
 import { ORDER_STATUS_LABELS, Order, OrderStatus, orderApi } from '@/entities/order';
 import { storePath, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
+import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderCompletionModal } from './OrderCompletionModal';
 import { ReservationRequestInbox } from './ReservationRequestInbox';
 import {
@@ -62,6 +63,7 @@ export default function OrderListPage() {
   const params = useParams();
   const storeId = params.storeId as string;
   const [completing, setCompleting] = useState<Order | null>(null);
+  const [correcting, setCorrecting] = useState<Order | null>(null);
   const list = useListPage(
     // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
     // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
@@ -171,6 +173,19 @@ export default function OrderListPage() {
                         完了
                       </Button>
                     )}
+                    {/* 誤帰属の訂正は完了した受注にしか起こらない（帰属が生まれるのは完了と事後申領の
+                        瞬間だけ）。現に帰属しているかは一覧の読み口が持たないので、開いた先で名乗る */}
+                    {order.status === 'COMPLETED' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCorrecting(order)}
+                      >
+                        <UserRoundCogIcon aria-hidden="true" />
+                        会員帰属
+                      </Button>
+                    )}
                     <Button
                       render={<Link href={storePath(storeId, `/orders/${order.id}/edit`)} />}
                       variant="ghost"
@@ -192,6 +207,8 @@ export default function OrderListPage() {
         // 持たないため、現在のページをそのまま取り直す。
         onCompleted={list.reload}
       />
+      {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
+      <OrderAttributionModal order={correcting} onClose={() => setCorrecting(null)} />
     </div>
   );
 }

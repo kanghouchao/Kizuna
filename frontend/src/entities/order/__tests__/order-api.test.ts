@@ -75,6 +75,28 @@ describe('orderApi', () => {
   it('decline は謝絶の子リソースを POST する', async () => {
     expect(await orderApi.decline('o1')).toEqual({ ok: true, url: '/store/orders/o1/decline' });
   });
+  it('attribution は受注の帰属の現況を GET する', async () => {
+    expect(await orderApi.attribution('o1')).toEqual({
+      ok: true,
+      url: '/store/orders/o1/attribution',
+    });
+  });
+  it('invalidateAttribution は理由を添えて無効化の子リソースを POST する', async () => {
+    // 理由はこの訂正の唯一の根拠。省略できる形にすると、後から誰の来店が消えたのか辿れなくなる
+    expect(await orderApi.invalidateAttribution('o1', { reason: '取り違え' })).toEqual({
+      ok: true,
+      url: '/store/orders/o1/attribution/invalidation',
+    });
+    expect(apiClient.post).toHaveBeenCalledWith('/store/orders/o1/attribution/invalidation', {
+      reason: '取り違え',
+    });
+  });
+  it('reissueReceiptToken は伝票トークンの子リソースを POST する', async () => {
+    expect(await orderApi.reissueReceiptToken('o1')).toEqual({
+      ok: true,
+      url: '/store/orders/o1/receipt-token',
+    });
+  });
 });
 
 describe('memberOrderApi', () => {

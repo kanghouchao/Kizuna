@@ -13,10 +13,13 @@ import {
   MemberReceiptClaim,
   MemberVisit,
   Order,
+  OrderAttribution,
+  OrderAttributionInvalidationRequest,
   OrderCastCandidate,
   OrderCompletionPreview,
   OrderCompletionRequest,
   OrderCreateRequest,
+  OrderReceiptTokenIssue,
   OrderReceptionist,
   ReservationRequestUpdateRequest,
 } from '../model/types';
@@ -91,6 +94,32 @@ export const orderApi = {
     const response = await apiClient.get(`/store/orders/${id}/completion-preview`, {
       params: { total_fee: totalFee },
     });
+    return response.data;
+  },
+  /** 受注 1 件の帰属の現況。無効化と再発行のどちらを提示するかはこの読み口で決まる。 */
+  attribution: async (id: string): Promise<OrderAttribution> => {
+    const response = await apiClient.get(`/store/orders/${id}/attribution`);
+    return response.data;
+  },
+  /**
+   * 帰属記録を理由付きで無効化する（誤帰属の訂正）。行は削除されず、理由・実行者・時刻が記録に残る。
+   *
+   * ポイント台帳へは波及しない。誤って付与されたポイントの清算は手動のポイント調整で行う。
+   */
+  invalidateAttribution: async (
+    id: string,
+    data: OrderAttributionInvalidationRequest
+  ): Promise<OrderAttribution> => {
+    const response = await apiClient.post(`/store/orders/${id}/attribution/invalidation`, data);
+    return response.data;
+  },
+  /**
+   * 無効化された受注へ伝票トークンを再発行する。申領期限は再発行から 90 日で数え直される。
+   *
+   * 生値はこの応答にしか現れない（保存されるのはダイジェストだけ）。
+   */
+  reissueReceiptToken: async (id: string): Promise<OrderReceiptTokenIssue> => {
+    const response = await apiClient.post(`/store/orders/${id}/receipt-token`);
     return response.data;
   },
 };
