@@ -93,7 +93,12 @@ public class OrderAttributionService {
   @StoreScoped
   @Transactional
   public OrderReceiptTokenResponse reissueReceiptToken(String orderId) {
-    Order order = requireScopedOrder(orderId);
+    // 「申領できる伝票がまだ無い」を確かめてから発行するまでの間、受注を押さえて並行する再発行と直列化する。
+    // 押さえないと両者が同じ「無い」を観測して 2 本とも発行され、下の門が素通りする。
+    Order order =
+        orderRepository
+            .findScopedByIdForUpdate(orderId)
+            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     if (order.getStatus() != OrderStatus.COMPLETED) {
       throw new ServiceException("完了していない受注に伝票は発行できません");
     }

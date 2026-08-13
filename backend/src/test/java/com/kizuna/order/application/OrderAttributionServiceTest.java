@@ -327,9 +327,26 @@ class OrderAttributionServiceTest {
   }
 
   @Test
+  @DisplayName("再発行は受注を押さえてから門を判じること（並行する再発行が同じ「伝票が無い」を観測しないため）")
+  void reissueLocksTheOrderBeforeCheckingItsGuards() {
+    givenOrder(OrderStatus.COMPLETED);
+    givenAttributions(invalidatedAttribution());
+    givenTokens();
+    Mockito.when(receiptTokenGenerator.generate())
+        .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
+
+    service.reissueReceiptToken(ORDER_ID);
+
+    // 実際の競合は統合テストが踏む。ここが固定するのは「ロックを取る読み口を通っている」配線そのもので、
+    // 素の読み口へ差し替わると門が check-then-act に戻る
+    Mockito.verify(orderRepository).findScopedByIdForUpdate(ORDER_ID);
+    Mockito.verify(orderRepository, Mockito.never()).findScopedById(ORDER_ID);
+  }
+
+  @Test
   @DisplayName("他店舗の受注の再発行は帰属記録に触れる前に 404 になること")
   void reissueRejectsAnOrderOutsideTheStore() {
-    Mockito.when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.empty());
+    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.reissueReceiptToken(ORDER_ID))
         .isInstanceOf(NotFoundException.class);
@@ -353,7 +370,10 @@ class OrderAttributionServiceTest {
             .build();
     order.setId(ORDER_ID);
     order.setStoreId(1L);
-    Mockito.when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.of(order));
+    Mockito.lenient().when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.of(order));
+    Mockito.lenient()
+        .when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
+        .thenReturn(Optional.of(order));
   }
 
   private void givenAttributions(OrderAttribution... rows) {

@@ -32,6 +32,20 @@ const SOURCE_LABELS: Record<OrderAttributionSource, string> = {
   RECEIPT_TOKEN: '伝票QRの申領',
 };
 
+/**
+ * 無効化の前に出す清算の注意書き。台帳へ波及しないことは共通だが、清算の手段は成立の機構で変わる。
+ *
+ * 伝票QRの申領で成立した帰属は店舗台帳に会員の紐づけを作らない（申領は受注 1 件の事実だけを証明し、
+ * 店舗と会員の継続的な関係を作らない）。店舗側のポイント調整は顧客に紐づく会員だけを対象に取るため、
+ * この経路で付いたポイントには届かない。届かない操作を案内しないよう、機構ごとに言い分ける。
+ */
+const SETTLEMENT_NOTES: Record<OrderAttributionSource, string> = {
+  COMPLETION:
+    '無効化しても付与済みのポイントは戻りません。清算が必要な場合は、その顧客の画面でポイント調整を行ってください。',
+  RECEIPT_TOKEN:
+    '無効化しても付与済みのポイントは戻りません。この来店は伝票QRの申領で帰属したため店舗台帳に会員の紐づけが無く、店舗からポイントを戻す操作は現在ありません。',
+};
+
 interface InvalidationFormValues {
   reason: string;
 }
@@ -235,7 +249,9 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                     {/* 台帳へ波及しないことは操作の前に知らせる。事後に気づくと、誤付与が残ったまま
                         訂正が済んだと見なされる */}
                     <p className="text-sm text-muted-foreground">
-                      無効化しても付与済みのポイントは戻りません。清算が必要な場合は顧客画面のポイント調整で行ってください。
+                      {attribution.source
+                        ? SETTLEMENT_NOTES[attribution.source]
+                        : '無効化しても付与済みのポイントは戻りません。'}
                     </p>
                     <div className="flex justify-end gap-3 border-t pt-4">
                       <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
