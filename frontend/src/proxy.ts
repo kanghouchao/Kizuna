@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { resolveStore } from './shared/lib/proxy/storeResolver';
+import { PLATFORM_DOMAIN, resolveStore } from './shared/lib/proxy/storeResolver';
 import { handleRouteProtection } from './shared/lib/proxy/routeGuard';
 
 export const config = {
@@ -29,6 +29,11 @@ export async function proxy(request: NextRequest) {
 
   // Set Role Cookie
   response.cookies.set('x-mw-role', role, cookieOptions);
+
+  // 平台ドメインをクライアントへ渡す。店舗ドメインから会員ポータルへ渡す導線は絶対 URL を
+  // 組む必要があるが、NEXT_PUBLIC_* はビルド時インライン置換のため実行時 env が届かない。
+  // 実行時に決まる値は proxy が cookie で運ぶ（role と同じ流儀）。
+  response.cookies.set('x-mw-platform-domain', PLATFORM_DOMAIN, cookieOptions);
 
   // Set Store Cookies (if applicable)
   if (role === 'store' && storeData?.isValid) {
