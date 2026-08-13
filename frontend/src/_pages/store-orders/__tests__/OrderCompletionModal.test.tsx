@@ -14,6 +14,13 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
+// QR は描画された画像からは中身を読めない。運ぶ値そのものを断言できるよう、値を属性へ出す差し替えにする
+jest.mock('qrcode.react', () => ({
+  QRCodeSVG: ({ value, ...props }: { value: string; 'aria-label': string; role: string }) => (
+    <span data-testid="qr" data-value={value} aria-label={props['aria-label']} role={props.role} />
+  ),
+}));
+
 const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
@@ -294,6 +301,101 @@ describe('OrderCompletionModal', () => {
     expect(await screen.findByText('会員紐づけ済み')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('伝票トークンが返ったら閉じずに QR を出す', async () => {
+    // 生値は完了応答にしか現れない。ここで閉じると、客が後から来店を取り戻す手段ごと消える
+    const onClose = jest.fn();
+    const onCompleted = jest.fn();
+    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
+    mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
+    renderModal(onCompleted, onClose);
+
+    await completeWith('8000');
+
+    expect(await screen.findByLabelText('伝票QR')).toBeInTheDocument();
+    // 客が読み取って行き着くのは申領画面。トークンだけを載せると、読み取っても開く先が無い
+    expect(screen.getByTestId('qr')).toHaveAttribute(
+      'data-value',
+      'http://kizuna.test/member/receipts/raw-receipt-token'
+    );
+    expect(onCompleted).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    // 会計の欄は役目を終えている。QR と入れ替える
+    expect(screen.queryByLabelText('会計金額')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('QR を出している間は Escape で閉じない', async () => {
+    // 生値はこの応答にしか無い。誤って閉じると客が来店を取り戻す手段ごと消えるので、
+    // 閉じるのは明示のボタンだけにする
+    const onClose = jest.fn();
+    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
+    mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
+    renderModal(jest.fn(), onClose);
+
+    await completeWith('8000');
+    await screen.findByLabelText('伝票QR');
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('伝票QR')).toBeInTheDocument();
+  });
+
+  it('会計の入力中は Escape で閉じる', async () => {
+    // 閉じない扱いは QR を出している間だけ。入力中まで塞ぐと、開いただけのモーダルから出られない
+    const onClose = jest.fn();
+    renderModal(jest.fn(), onClose);
+    await screen.findByLabelText('会計金額');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('伝票トークンが返らない完了では QR を出さずに閉じる', async () => {
+    // 会員へ帰属した完了に事後帰属の余地は無い
+    const onClose = jest.fn();
+    renderModal(jest.fn(), onClose);
+
+    await completeWith('8000');
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
+  });
+
+  it('別の受注へ切り替えたら、前の受注の QR を持ち越さない', async () => {
+    // 発行済みのトークンは受注 1 件に結びついている。持ち越すと、別の来店の QR を客に読ませる
+    const otherOrder: Order = { ...confirmedOrder, id: 'o2', customer_name: '鈴木花子' };
+
+    await reopenAfterIssuing(otherOrder);
+
+    expect(await screen.findByLabelText('会計金額')).toBeInTheDocument();
+    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
+  });
+
+  it('同じ受注を開き直しても、前に発行した QR は出さない', async () => {
+    // 生値は発行の応答にしか現れない。閉じた後に出し直せると、「今だけ」と書いた画面が嘘になる
+    await reopenAfterIssuing({ ...confirmedOrder });
+
+    expect(await screen.findByLabelText('会計金額')).toBeInTheDocument();
+    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
+  });
+
+  /** 受注 o1 を完了して QR を出し、いったん閉じてから指定の受注で開き直す。 */
+  const reopenAfterIssuing = async (reopened: Order) => {
+    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
+    mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
+    const { rerender } = render(
+      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+    );
+    await completeWith('8000');
+    await screen.findByLabelText('伝票QR');
+
+    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    rerender(<OrderCompletionModal order={reopened} onClose={jest.fn()} onCompleted={jest.fn()} />);
+  };
 
   it('送信中はキャンセルも完了もどちらも押せない', async () => {
     // 台帳へ記帳されたか分からないまま閉じられると、一覧が古いまま残る

@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { QRCodeSVG } from 'qrcode.react';
 import { notify } from '@/shared/notify';
 import { Order, OrderCompletionPreview, orderApi } from '@/entities/order';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
+import { receiptClaimUrl } from '../lib/receiptClaimUrl';
 import {
   Button,
   Dialog,
@@ -50,6 +52,12 @@ interface OrderCompletionFormValues {
 interface PreviewSnapshot {
   orderId: string;
   body: OrderCompletionPreview;
+}
+
+/** 発行された伝票トークンと、その発行元の受注（見込みと同じ理由で、値だけでは別の受注のものと見分けられない）。 */
+interface IssuedReceiptToken {
+  orderId: string;
+  token: string;
 }
 
 interface OrderCompletionModalProps {
@@ -106,11 +114,18 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   // 前の値を出したままにする。
   const preview = snapshot !== null && snapshot.orderId === orderId ? snapshot.body : null;
 
+  // 発行された伝票トークン。会員へ帰属しなかった完了でだけ返るので、これが在る間は QR を出したまま
+  // 閉じずに待つ（生値はこの応答にしか現れず、閉じると二度と出せない）。
+  const [issued, setIssued] = useState<IssuedReceiptToken | null>(null);
+  const receiptToken = issued !== null && issued.orderId === orderId ? issued.token : null;
+
   useEffect(() => {
     if (!order) return;
     reset({ total_fee: NaN, use_points: NaN });
     // 確定値も欄と一緒に戻す。同じ受注を開き直したとき、空の欄のまま前回の金額で付与予定が出る
     setCommitted(null);
+    // 発行済みの QR も一緒に戻す。「今だけ表示できる」と書いた画面が、開き直しで前の QR を出し直さない
+    setIssued(null);
   }, [order, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
@@ -119,7 +134,7 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
     // 送信可否は入力ではなく今の見込みで決める。
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;
     try {
-      await orderApi.complete(order.id, {
+      const completed = await orderApi.complete(order.id, {
         total_fee: values.total_fee,
         // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
         // （undefined は JSON 化の段でキーごと消える）。
@@ -127,7 +142,12 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
       });
       notify.success('オーダーを完了しました');
       onCompleted();
-      onClose();
+      // 会員へ帰属した完了はトークンを持たないので、これまでどおり閉じる。
+      if (completed.receipt_token) {
+        setIssued({ orderId, token: completed.receipt_token });
+      } else {
+        onClose();
+      }
     } catch (error) {
       // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
@@ -138,8 +158,10 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
     <Dialog
       open={order !== null}
       onOpenChange={next => {
-        // 送信中に閉じると、台帳へ記帳されたかどうか分からないまま古い一覧が残る
-        if (!next && !isSubmitting) onClose();
+        // 送信中に閉じると、台帳へ記帳されたかどうか分からないまま古い一覧が残る。
+        // QR を出している間も同じく閉じない — 生値はこの応答にしか無く、ESC や背景押下で
+        // 誤って閉じると客が来店を取り戻す手段ごと消える。閉じるのは明示のボタンだけにする。
+        if (!next && !isSubmitting && receiptToken === null) onClose();
       }}
     >
       <DialogContent
@@ -148,137 +170,165 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
         className="gap-0 rounded-[10px] p-0 sm:max-w-md"
       >
         <div className="border-b px-6 py-4">
-          <DialogTitle>完了処理</DialogTitle>
+          <DialogTitle>{receiptToken !== null ? '伝票QRコード' : '完了処理'}</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">
             {order?.business_date ?? '-'} / {customerText(order)}
           </p>
         </div>
-        <Form {...form}>
-          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+        {receiptToken !== null ? (
+          <div className="px-6 py-5">
+            <div className="flex flex-col items-center gap-4">
+              <div className="rounded-xl border bg-card p-4">
+                <QRCodeSVG
+                  value={receiptClaimUrl(receiptToken)}
+                  size={192}
+                  aria-label="伝票QR"
+                  role="img"
+                />
+              </div>
+              {/* 生値はこの応答にしか現れない。閉じた後に出し直す経路が無いことを先に伝える */}
+              <p className="text-sm text-foreground">
+                この QR は今だけ表示できます。閉じると再表示できません。
+              </p>
+              <p className="text-sm text-muted-foreground">
+                お客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（完了から 90
+                日以内）。
+              </p>
+            </div>
+            <div className="mt-4 flex justify-end gap-3 border-t pt-4">
+              <Button type="button" onClick={onClose}>
+                閉じる
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Form {...form}>
+            {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。required と min={0} は下の規則が引き継ぐ */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            <FormField
-              control={control}
-              name="total_fee"
-              rules={{
-                required: TOTAL_FEE_REQUIRED,
-                min: { value: 0, message: '会計金額は 0 以上です' },
-                validate: {
-                  // 空欄は NaN であって null でも空文字でもないため required は素通りする
-                  notEmpty: value => !Number.isNaN(value) || TOTAL_FEE_REQUIRED,
-                  // noValidate は type="number" の暗黙の step=1 も止める。これが無いと
-                  // 1.5 が Integer の totalFee へ届く
-                  integer: integerRule('会計金額'),
-                },
-              }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>会計金額</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      required
-                      min={0}
-                      {...field}
-                      // register の valueAsNumber と同じ写像。Number() は空欄を 0 にしてしまい、
-                      // 「未入力」を表す NaN が失われる。
-                      value={Number.isNaN(field.value) ? '' : field.value}
-                      onChange={event => field.onChange(event.target.valueAsNumber)}
-                      onBlur={event => {
-                        field.onBlur();
-                        const fee = event.target.valueAsNumber;
-                        setCommitted({ orderId, fee: Number.isNaN(fee) ? 0 : fee });
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {/* 見込みが読めなくても送信は塞がない。単位も残高も会員資格もサーバ側が再検証する */}
-            {previewLoading ? (
-              <p className="text-sm text-muted-foreground">読み込み中...</p>
-            ) : previewFailure !== null ? (
-              <RegionError
-                message="ポイントの見込みを取得できませんでした"
-                onRetry={() => void reloadPreview()}
-              />
-            ) : (
-              preview !== null && (
-                <div className="space-y-1 text-sm text-foreground">
-                  <p>{preview.member_linked ? '会員紐づけ済み' : '未紐づけ'}</p>
-                  {preview.point_balance !== undefined && (
-                    <p>残高: {preview.point_balance} ポイント</p>
-                  )}
-                  {/* 非会員の受注には付与も利用も無い。予定を出すと、完了しても増えないポイントを約束することになる */}
-                  {preview.member_linked && (
-                    <>
-                      <p>付与予定: {preview.grant_points} ポイント</p>
-                      <p className="text-muted-foreground">
-                        利用は {preview.usage_unit} ポイント単位で指定できます
-                      </p>
-                    </>
-                  )}
-                </div>
-              )
-            )}
-            {/* 非会員の受注にはポイントそのものが存在しないので、欄を出さない。同じ受注で金額を
-                取り直している最中は直前の見込みのまま出したままにする（消えると打ちかけの値が
-                視界から外れる） */}
-            {preview !== null && preview.member_linked && (
+            <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
               <FormField
                 control={control}
-                name="use_points"
+                name="total_fee"
                 rules={{
-                  min: { value: 0, message: '利用ポイントは 0 以上です' },
+                  required: TOTAL_FEE_REQUIRED,
+                  min: { value: 0, message: '会計金額は 0 以上です' },
                   validate: {
-                    integer: integerRule('利用ポイント'),
-                    // 空欄（NaN）は「利用なし」であって違反ではない。どの規則も素通りさせる
-                    unit: value =>
-                      Number.isNaN(value) ||
-                      value % preview.usage_unit === 0 ||
-                      `利用ポイントは ${preview.usage_unit} ポイント単位で指定してください`,
-                    withinBalance: value =>
-                      Number.isNaN(value) ||
-                      preview.point_balance === undefined ||
-                      value <= preview.point_balance ||
-                      `残高を超えています（残高: ${preview.point_balance}）`,
-                    // 請求より大きい割引に相当する利用は台帳へ積ませない。同額までは全額のポイント払い。
-                    // 金額が未入力（NaN）なら会計金額側の規則が名乗るので、ここでは重ねて名乗らない
-                    withinTotalFee: (value, values) =>
-                      Number.isNaN(value) ||
-                      Number.isNaN(values.total_fee) ||
-                      value <= values.total_fee ||
-                      `会計金額を超えています（会計金額: ${values.total_fee}）`,
+                    // 空欄は NaN であって null でも空文字でもないため required は素通りする
+                    notEmpty: value => !Number.isNaN(value) || TOTAL_FEE_REQUIRED,
+                    // noValidate は type="number" の暗黙の step=1 も止める。これが無いと
+                    // 1.5 が Integer の totalFee へ届く
+                    integer: integerRule('会計金額'),
                   },
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>利用ポイント</FormLabel>
+                    <FormLabel>会計金額</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
+                        required
                         min={0}
                         {...field}
+                        // register の valueAsNumber と同じ写像。Number() は空欄を 0 にしてしまい、
+                        // 「未入力」を表す NaN が失われる。
                         value={Number.isNaN(field.value) ? '' : field.value}
                         onChange={event => field.onChange(event.target.valueAsNumber)}
+                        onBlur={event => {
+                          field.onBlur();
+                          const fee = event.target.valueAsNumber;
+                          setCommitted({ orderId, fee: Number.isNaN(fee) ? 0 : fee });
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
-            <div className="flex justify-end gap-3 border-t pt-4">
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                キャンセル
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '処理中...' : '完了する'}
-              </Button>
-            </div>
-          </form>
-        </Form>
+              {/* 見込みが読めなくても送信は塞がない。単位も残高も会員資格もサーバ側が再検証する */}
+              {previewLoading ? (
+                <p className="text-sm text-muted-foreground">読み込み中...</p>
+              ) : previewFailure !== null ? (
+                <RegionError
+                  message="ポイントの見込みを取得できませんでした"
+                  onRetry={() => void reloadPreview()}
+                />
+              ) : (
+                preview !== null && (
+                  <div className="space-y-1 text-sm text-foreground">
+                    <p>{preview.member_linked ? '会員紐づけ済み' : '未紐づけ'}</p>
+                    {preview.point_balance !== undefined && (
+                      <p>残高: {preview.point_balance} ポイント</p>
+                    )}
+                    {/* 非会員の受注には付与も利用も無い。予定を出すと、完了しても増えないポイントを約束することになる */}
+                    {preview.member_linked && (
+                      <>
+                        <p>付与予定: {preview.grant_points} ポイント</p>
+                        <p className="text-muted-foreground">
+                          利用は {preview.usage_unit} ポイント単位で指定できます
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )
+              )}
+              {/* 非会員の受注にはポイントそのものが存在しないので、欄を出さない。同じ受注で金額を
+                取り直している最中は直前の見込みのまま出したままにする（消えると打ちかけの値が
+                視界から外れる） */}
+              {preview !== null && preview.member_linked && (
+                <FormField
+                  control={control}
+                  name="use_points"
+                  rules={{
+                    min: { value: 0, message: '利用ポイントは 0 以上です' },
+                    validate: {
+                      integer: integerRule('利用ポイント'),
+                      // 空欄（NaN）は「利用なし」であって違反ではない。どの規則も素通りさせる
+                      unit: value =>
+                        Number.isNaN(value) ||
+                        value % preview.usage_unit === 0 ||
+                        `利用ポイントは ${preview.usage_unit} ポイント単位で指定してください`,
+                      withinBalance: value =>
+                        Number.isNaN(value) ||
+                        preview.point_balance === undefined ||
+                        value <= preview.point_balance ||
+                        `残高を超えています（残高: ${preview.point_balance}）`,
+                      // 請求より大きい割引に相当する利用は台帳へ積ませない。同額までは全額のポイント払い。
+                      // 金額が未入力（NaN）なら会計金額側の規則が名乗るので、ここでは重ねて名乗らない
+                      withinTotalFee: (value, values) =>
+                        Number.isNaN(value) ||
+                        Number.isNaN(values.total_fee) ||
+                        value <= values.total_fee ||
+                        `会計金額を超えています（会計金額: ${values.total_fee}）`,
+                    },
+                  }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>利用ポイント</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          {...field}
+                          value={Number.isNaN(field.value) ? '' : field.value}
+                          onChange={event => field.onChange(event.target.valueAsNumber)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              <div className="flex justify-end gap-3 border-t pt-4">
+                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? '処理中...' : '完了する'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
       </DialogContent>
     </Dialog>
   );
