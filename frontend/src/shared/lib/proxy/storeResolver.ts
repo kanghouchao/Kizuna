@@ -7,7 +7,13 @@ export interface StoreData {
   storeName: string;
 }
 
-const ADMIN_DOMAINS = new Set([process.env.APP_DOMAIN || 'kizuna.test']);
+/**
+ * 平台ドメイン。サーバ実行時の env が唯一の根拠で、role 判定と、proxy がクライアントへ渡す
+ * cookie の両方がここを読む（既定値が分かれると cookie だけ別のドメインを運ぶため 1 箇所に置く）。
+ */
+export const PLATFORM_DOMAIN = process.env.APP_DOMAIN || 'kizuna.test';
+
+const ADMIN_DOMAINS = new Set([PLATFORM_DOMAIN]);
 
 export async function resolveStore(request: NextRequest): Promise<{
   role: 'platform' | 'store';

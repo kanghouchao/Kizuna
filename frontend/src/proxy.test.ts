@@ -6,6 +6,9 @@ import { NextRequest } from 'next/server';
 // Mock dependencies BEFORE importing proxy
 jest.mock('./shared/lib/proxy/storeResolver', () => ({
   resolveStore: jest.fn(),
+  // 既定値と異なる値にして、cookie が proxy 内の literal ではなく実行時 env 由来の
+  // 定数から来ていることを断言できるようにする
+  PLATFORM_DOMAIN: 'platform.example',
 }));
 
 jest.mock('./shared/lib/proxy/routeGuard', () => ({
@@ -86,5 +89,16 @@ describe('proxy integration', () => {
     expect(res.cookies.get('x-mw-store-id').value).toBe('t1');
     expect(res.cookies.get('x-mw-store-template').value).toBe('dark');
     expect(res.cookies.get('x-mw-store-domain').value).toBe('store.test');
+  });
+
+  it('平台ドメインを cookie でクライアントへ渡す', async () => {
+    // NEXT_PUBLIC_* はビルド時インライン置換のため実行時 env が届かない。
+    // 店舗ドメインから会員ポータルへ渡す絶対 URL の根拠はこの cookie だけ
+    mockResolveStore.mockResolvedValue({ role: 'platform' });
+    mockHandleRouteProtection.mockReturnValue(null);
+
+    const res = (await proxy(createRequest())) as any;
+
+    expect(res.cookies.get('x-mw-platform-domain').value).toBe('platform.example');
   });
 });

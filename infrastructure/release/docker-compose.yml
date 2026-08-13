@@ -166,7 +166,6 @@ services:
       - STORE_CONFIG_API_URL=${STORE_CONFIG_API_URL:-http://backend:8080/store/config/public}
       - NODE_ENV
       - APP_DOMAIN
-      - NEXT_PUBLIC_PLATFORM_DOMAIN
     depends_on:
       backend:
         condition: service_healthy
