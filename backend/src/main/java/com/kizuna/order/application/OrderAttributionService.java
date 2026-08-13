@@ -12,6 +12,7 @@ import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -61,6 +62,10 @@ public class OrderAttributionService {
    * <p>対象は現に有効な帰属記録 1 件。無効化された受注は「会員へ帰属しない状態」へ戻り、伝票トークンの再発行による 事後帰属の対象に復帰する。
    *
    * <p>誤って付与されたポイントはここでは動かない。無効化で台帳を機械的に巻き戻すと、誤りの上に誤りを重ねる危険が 誤りを残す危険を上回る（ADR 0009）。
+   *
+   * <p>対象は受注から導かず、要求が名指した記録と現に有効な記録の一致を確かめる。画面を開いたまま別の操作者が訂正を一巡 （無効化 → 再発行 →
+   * 正しい本人の申領）させると、受注から導く実装では古い理由が<b>新しく成立した正しい帰属</b>へ当たり、 取り戻したばかりの来店を消したうえに誤った監査記録を残す。ずれていれば書かずに
+   * 409 で差し戻す。
    */
   @StoreScoped
   @Transactional
@@ -71,6 +76,9 @@ public class OrderAttributionService {
         latestAttribution(orderId)
             .filter(row -> row.getStatus() == OrderAttributionStatus.ACTIVE)
             .orElseThrow(() -> new ServiceException("この受注は会員へ帰属していません"));
+    if (!attribution.getId().equals(request.getAttributionId())) {
+      throw new ConflictException("この受注の帰属は別の操作で変わりました。最新の状態を確認してからやり直してください");
+    }
 
     attribution.invalidate(request.getReason(), resolveActorId(actorEmail), OffsetDateTime.now());
     return toResponse(orderAttributionRepository.save(attribution));
@@ -157,9 +165,10 @@ public class OrderAttributionService {
   /** 会員側の情報は会員コードだけを写す。表示名・メールはプラットフォーム側プロフィールで、店舗へは渡らない。 */
   private static OrderAttributionResponse toResponse(OrderAttribution attribution) {
     if (attribution == null) {
-      return new OrderAttributionResponse(false, null, null, null, null, null);
+      return new OrderAttributionResponse(null, false, null, null, null, null, null);
     }
     return new OrderAttributionResponse(
+        attribution.getId(),
         attribution.getStatus() == OrderAttributionStatus.ACTIVE,
         attribution.getMemberCode(),
         attribution.getSource().name(),

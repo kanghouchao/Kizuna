@@ -83,11 +83,14 @@ describe('orderApi', () => {
   });
   it('invalidateAttribution は理由を添えて無効化の子リソースを POST する', async () => {
     // 理由はこの訂正の唯一の根拠。省略できる形にすると、後から誰の来店が消えたのか辿れなくなる
-    expect(await orderApi.invalidateAttribution('o1', { reason: '取り違え' })).toEqual({
+    expect(
+      await orderApi.invalidateAttribution('o1', { attribution_id: 501, reason: '取り違え' })
+    ).toEqual({
       ok: true,
       url: '/store/orders/o1/attribution/invalidation',
     });
     expect(apiClient.post).toHaveBeenCalledWith('/store/orders/o1/attribution/invalidation', {
+      attribution_id: 501,
       reason: '取り違え',
     });
   });

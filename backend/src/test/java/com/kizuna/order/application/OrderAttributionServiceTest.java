@@ -15,6 +15,7 @@ import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -49,6 +50,7 @@ class OrderAttributionServiceTest {
   private static final String REASON = "別人の来店を取り違えたため";
   private static final int COMPLETION_GRANT = 98;
   private static final int TOKEN_PLANNED_POINTS = 120;
+  private static final long ATTRIBUTION_ID = 501L;
 
   @Mock private OrderRepository orderRepository;
   @Mock private OrderAttributionRepository orderAttributionRepository;
@@ -177,6 +179,24 @@ class OrderAttributionServiceTest {
     assertThatThrownBy(() -> service.invalidate(ORDER_ID, request(REASON), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class);
     assertThat(invalidated.getInvalidatedReason()).isEqualTo("初回の理由");
+  }
+
+  @Test
+  @DisplayName("画面が見ていた記録と現に有効な記録がずれていれば、書かずに 409 で差し戻すこと")
+  void invalidateRejectsAStaleTarget() {
+    // 画面を開いたまま別の操作者が訂正を一巡させると、有効な記録は「正しい本人の新しい帰属」に入れ替わる。
+    // 受注から対象を導く実装だと、古い理由がその新しい帰属へ当たって取り戻したばかりの来店を消す
+    givenOrder(OrderStatus.COMPLETED);
+    OrderAttribution current = activeAttribution();
+    current.setId(ATTRIBUTION_ID + 1);
+    givenAttributions(current);
+
+    assertThatThrownBy(
+            () -> service.invalidate(ORDER_ID, request(ATTRIBUTION_ID, REASON), ACTOR_EMAIL))
+        .isInstanceOf(ConflictException.class);
+
+    assertThat(current.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
+    Mockito.verify(orderAttributionRepository, Mockito.never()).save(Mockito.any());
   }
 
   @Test
@@ -356,7 +376,12 @@ class OrderAttributionServiceTest {
   // ==================== 用意 ====================
 
   private static OrderAttributionInvalidationRequest request(String reason) {
+    return request(ATTRIBUTION_ID, reason);
+  }
+
+  private static OrderAttributionInvalidationRequest request(Long attributionId, String reason) {
     OrderAttributionInvalidationRequest request = new OrderAttributionInvalidationRequest();
+    request.setAttributionId(attributionId);
     request.setReason(reason);
     return request;
   }
@@ -391,8 +416,11 @@ class OrderAttributionServiceTest {
   }
 
   private static OrderAttribution activeAttribution() {
-    return OrderAttribution.onCompletion(
-        ORDER_ID, MEMBER_ID, MEMBER_CODE, OffsetDateTime.parse("2026-08-10T19:00:00Z"));
+    OrderAttribution attribution =
+        OrderAttribution.onCompletion(
+            ORDER_ID, MEMBER_ID, MEMBER_CODE, OffsetDateTime.parse("2026-08-10T19:00:00Z"));
+    attribution.setId(ATTRIBUTION_ID);
+    return attribution;
   }
 
   private static OrderAttribution invalidatedAttribution() {
