@@ -164,6 +164,8 @@ export type OrderAttributionSource = 'COMPLETION' | 'RECEIPT_TOKEN';
  * attributed 以外は Java 側が可空のため、記録の無い受注ではキーごと消える。
  */
 export interface OrderAttribution {
+  /** 直近の帰属記録の ID。無効化はこの値で対象を名指す。記録が 1 件も無ければ応答から消える。 */
+  id?: number;
   /** Java 側が primitive の boolean のため、キーは必ず応答に含まれる。 */
   attributed: boolean;
   member_code?: string;
@@ -175,7 +177,10 @@ export interface OrderAttribution {
 }
 
 // 帰属記録の無効化（POST /store/orders/{id}/attribution/invalidation）。理由は必須（500 文字以内）。
+// 対象は受注から導かず、画面が読み口で得た帰属記録の ID を名指す（開いたまま別の操作者が訂正を
+// 一巡させると、有効な記録が別人の新しい帰属に入れ替わっているため）。
 export interface OrderAttributionInvalidationRequest {
+  attribution_id: number;
   reason: string;
 }
 

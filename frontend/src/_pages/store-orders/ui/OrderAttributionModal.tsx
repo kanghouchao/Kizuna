@@ -122,9 +122,14 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   }, [order, reset]);
 
   const invalidate = async (values: InvalidationFormValues) => {
-    if (!order?.id) return;
+    // 対象は画面が読み口で得た記録そのものを名指す。受注から導く形へ戻すと、開いたまま別の操作者が
+    // 訂正を一巡させた場合に、この理由が新しく成立した正しい帰属へ当たって来店を消す
+    if (!order?.id || attribution?.id === undefined) return;
     try {
-      const updated = await orderApi.invalidateAttribution(order.id, { reason: values.reason });
+      const updated = await orderApi.invalidateAttribution(order.id, {
+        attribution_id: attribution.id,
+        reason: values.reason,
+      });
       notify.success('帰属を無効化しました');
       // 応答が訂正後の現況を持つので、取り直さず差し替える（読み込み表示で一瞬消えない）
       setSnapshot({ orderId, body: updated });

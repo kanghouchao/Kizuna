@@ -34,6 +34,7 @@ const completedOrder: Order = {
 };
 
 const attributed: OrderAttribution = {
+  id: 501,
   attributed: true,
   member_code: '123456789012',
   source: 'COMPLETION',
@@ -41,6 +42,7 @@ const attributed: OrderAttribution = {
 };
 
 const invalidated: OrderAttribution = {
+  id: 501,
   attributed: false,
   member_code: '123456789012',
   source: 'COMPLETION',
@@ -78,7 +80,11 @@ describe('OrderAttributionModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
 
     await waitFor(() =>
-      expect(mockedInvalidate).toHaveBeenCalledWith('o1', { reason: '別人の来店を取り違えたため' })
+      expect(mockedInvalidate).toHaveBeenCalledWith('o1', {
+        // 受注から導かせず、画面が読み口で得た記録そのものを名指す
+        attribution_id: 501,
+        reason: '別人の来店を取り違えたため',
+      })
     );
     expect(notify.success).toHaveBeenCalledWith('帰属を無効化しました');
   });

@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
  * <p>{@code attributed} を独立した真偽値で持つのは、{@code non_null} 包含設定では記録の無い受注から他の項目がキーごと消えるため。
  * 「帰属していない」と「読めなかった」を画面が取り違えないようにする。
  *
+ * @param id 直近の帰属記録の ID。無効化はこの値で「画面が見ていた記録」を名指す。記録が 1 件も無ければ欠落する
  * @param attributed 現にこの受注が会員へ帰属しているか（有効な帰属記録があるか）
  * @param memberCode 直近の帰属記録の会員コード。記録が 1 件も無ければ欠落する
  * @param source 成立の機構（COMPLETION / RECEIPT_TOKEN）。記録が無ければ欠落する
@@ -20,6 +21,7 @@ import java.time.OffsetDateTime;
  * @param invalidatedAt 無効化した日時。同上
  */
 public record OrderAttributionResponse(
+    Long id,
     boolean attributed,
     String memberCode,
     String source,

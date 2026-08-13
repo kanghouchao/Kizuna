@@ -124,6 +124,43 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("画面が見ていた記録と現に有効な記録がずれた無効化は 409 で差し戻され、正しい帰属が残ること")
+  void invalidationOfAStaleTargetIsRefused() {
+    // 画面を開いたまま別の操作者が訂正を一巡させると、有効な記録は「正しい本人の新しい帰属」に入れ替わる。
+    // 受注から対象を導く実装だと、古い理由がその新しい帰属へ当たって取り戻したばかりの来店を消す
+    RegisteredMember wrongMember = registerAndLogin("stale");
+    RegisteredMember rightMember = registerAndLogin("staleowner");
+    String castName = "取り違え上書き担当-" + nonce;
+    Issued original = completedOrderWithToken(castName);
+    assertThat(claim(wrongMember, original.token()).getStatusCode())
+        .as("前提: 誤った本人が申領できること")
+        .isEqualTo(HttpStatus.OK);
+    Long staleTarget = activeAttributionIdOf(original.orderId());
+
+    // 別の操作者が一巡させる
+    assertThat(invalidate(original.orderId(), staleTarget, REASON).getStatusCode())
+        .as("前提: 一巡目の無効化ができること")
+        .isEqualTo(HttpStatus.OK);
+    String raw = reissue(original.orderId()).getBody().path("receipt_token").asString();
+    assertThat(claim(rightMember, raw).getStatusCode())
+        .as("前提: 正しい本人が取り戻せること")
+        .isEqualTo(HttpStatus.OK);
+
+    // 開いたままだった画面が、古い記録を指したまま送信する
+    ResponseEntity<JsonNode> stale = invalidate(original.orderId(), staleTarget, "古い理由");
+
+    assertThat(stale.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(castNamesInVisitsOf(rightMember)).as("正しい本人の来店が消えないこと").contains(castName);
+    OrderAttribution active =
+        attributionsOf(original.orderId()).stream()
+            .filter(row -> row.getStatus() == OrderAttributionStatus.ACTIVE)
+            .findFirst()
+            .orElseThrow();
+    assertThat(active.getMemberCode()).isEqualTo(rightMember.memberCode());
+    assertThat(active.getInvalidatedReason()).as("誤った監査記録も残さないこと").isNull();
+  }
+
+  @Test
   @DisplayName("再発行の申領期限は原期限を引き継がず、再発行から 90 日で数え直されること")
   void reissuedTokenRestartsTheNinetyDayWindow() {
     // 完了時に会員へ達しなかった受注から始める。誤帰属が申領で成立した形なので、この受注には原期限を持つ
@@ -344,12 +381,31 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
 
   // ==================== 訂正の操作 ====================
 
+  /** 現に有効な帰属記録を対象に無効化する（画面が読み口で得た ID を添える経路と同じ形）。 */
   private ResponseEntity<JsonNode> invalidate(String orderId, String reason) {
+    return invalidate(orderId, activeAttributionIdOf(orderId), reason);
+  }
+
+  private ResponseEntity<JsonNode> invalidate(String orderId, Long attributionId, String reason) {
     return rest.exchange(
         "/store/orders/" + orderId + "/attribution/invalidation",
         HttpMethod.POST,
-        new HttpEntity<>("{\"reason\": \"" + reason + "\"}", storeHeaders(STORE_A)),
+        new HttpEntity<>(
+            "{\"attribution_id\": " + attributionId + ", \"reason\": \"" + reason + "\"}",
+            storeHeaders(STORE_A)),
         JsonNode.class);
+  }
+
+  /** 読み口が返す現況の ID。画面はこれを持って無効化を要求する。 */
+  private Long activeAttributionIdOf(String orderId) {
+    ResponseEntity<JsonNode> current =
+        rest.exchange(
+            "/store/orders/" + orderId + "/attribution",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(current.getStatusCode()).as("前提: 帰属の現況が読めること").isEqualTo(HttpStatus.OK);
+    return current.getBody().path("id").asLong();
   }
 
   private ResponseEntity<JsonNode> reissue(String orderId) {

@@ -311,7 +311,10 @@ class OrderControllerTest {
 
     mockMvc.perform(storeGet("/store/orders/o1/attribution")).andExpect(status().isForbidden());
     mockMvc
-        .perform(storePost("/store/orders/o1/attribution/invalidation", "{\"reason\": \"取り違え\"}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/attribution/invalidation",
+                "{\"attribution_id\": 1, \"reason\": \"取り違え\"}"))
         .andExpect(status().isForbidden());
     mockMvc.perform(storePost("/store/orders/o1/receipt-token")).andExpect(status().isForbidden());
     verifyNoInteractions(orderAttributionService);
@@ -324,10 +327,26 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/store/orders/o1/attribution/invalidation", "{\"reason\": \" \"}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/attribution/invalidation",
+                "{\"attribution_id\": 1, \"reason\": \" \"}"))
         .andExpect(status().isBadRequest());
     mockMvc
         .perform(storePost("/store/orders/o1/attribution/invalidation", "{}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderAttributionService);
+  }
+
+  @Test
+  @DisplayName("対象の帰属記録を名指さない無効化は撥ねられ、サービスへ届かないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void invalidationWithoutATargetIsRejected() throws Exception {
+    // 受注から対象を導く形へ戻ると、画面が見ていた記録と別の記録を消しうる
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/attribution/invalidation", "{\"reason\": \"取り違え\"}"))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderAttributionService);
   }
@@ -337,7 +356,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void invalidationWithAnOverlongReasonIsRejected() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    String body = "{\"reason\": \"" + "あ".repeat(501) + "\"}";
+    String body = "{\"attribution_id\": 1, \"reason\": \"" + "あ".repeat(501) + "\"}";
 
     mockMvc
         .perform(storePost("/store/orders/o1/attribution/invalidation", body))
@@ -345,12 +364,12 @@ class OrderControllerTest {
 
     // 正向対照: 上限ちょうどは通る
     when(orderAttributionService.invalidate(any(), any(), any()))
-        .thenReturn(new OrderAttributionResponse(false, null, null, null, null, null));
+        .thenReturn(new OrderAttributionResponse(null, false, null, null, null, null, null));
     mockMvc
         .perform(
             storePost(
                 "/store/orders/o1/attribution/invalidation",
-                "{\"reason\": \"" + "あ".repeat(500) + "\"}"))
+                "{\"attribution_id\": 1, \"reason\": \"" + "あ".repeat(500) + "\"}"))
         .andExpect(status().isOk());
   }
 
