@@ -1,6 +1,7 @@
 package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
@@ -11,6 +12,9 @@ import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -22,9 +26,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -32,6 +38,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -62,6 +70,8 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
   @Autowired private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Autowired private MemberRepository memberRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private PlatformTransactionManager transactionManager;
+  @PersistenceContext private EntityManager entityManager;
 
   private final long nonce = System.nanoTime();
 
@@ -187,7 +197,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     assertThat(reissued.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(reissued.getBody().path("receipt_token").asString()).isNotBlank();
     OrderReceiptToken token =
-        orderReceiptTokenRepository.findByOrderIdOrderByIdDesc(original.orderId()).get(0);
+        orderReceiptTokenRepository.findById(issuedTokenIdOf(original.orderId())).orElseThrow();
     assertThat(token.getIssuedAt()).isAfter(OffsetDateTime.now().minusMinutes(5));
     assertThat(ChronoUnit.DAYS.between(token.getIssuedAt(), token.getExpiresAt()))
         .isEqualTo(OrderReceiptToken.VALIDITY.toDays());
@@ -272,27 +282,41 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("申領できる伝票が既にある受注へは再発行できないこと（生きた伝票が 2 本並ばない）")
-  void reissueIsRefusedWhileAClaimableTokenExists() {
+  @DisplayName("再発行は前に発行した伝票を失効させ、申領できる伝票を 1 本だけ残すこと")
+  void reissueRevokesThePreviouslyIssuedToken() {
+    // 発行の応答を取り逃した店舗（生値は二度と手に入らない）が訂正をやり直せる唯一の経路。撥ねる形にすると
+    // 以後 90 日どの再試行も通らず、店舗は QR を出せないまま訂正を完了できなくなる
     RegisteredMember wrongMember = registerAndLogin("double");
+    RegisteredMember rightMember = registerAndLogin("doubleowner");
     String orderId = completedOrderAttributedTo(wrongMember, "二重発行担当-" + nonce);
     assertThat(invalidate(orderId, REASON).getStatusCode())
         .as("前提: 無効化できること")
         .isEqualTo(HttpStatus.OK);
-    assertThat(reissue(orderId).getStatusCode()).as("前提: 1 度目の再発行ができること").isEqualTo(HttpStatus.OK);
+    String first = reissue(orderId).getBody().path("receipt_token").asString();
 
-    assertThat(reissue(orderId).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    ResponseEntity<JsonNode> second = reissue(orderId);
 
-    assertThat(tokenCountFor(orderId)).as("生きた伝票は 1 本だけであること").isEqualTo(1);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(tokenCountFor(orderId)).as("行は削除しないこと").isEqualTo(2);
+    assertThat(issuedTokenCountFor(orderId)).as("申領できる伝票は 1 本だけであること").isEqualTo(1);
+    // 生値まで確かめる。状態だけを見るテストは、失効した QR が実際には申領できてしまう実装でも緑になる
+    assertThat(claim(rightMember, first).getStatusCode())
+        .as("前に渡した QR は使えなくなること")
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(
+            claim(rightMember, second.getBody().path("receipt_token").asString()).getStatusCode())
+        .as("最後に発行した QR で取り戻せること")
+        .isEqualTo(HttpStatus.OK);
   }
 
   @Test
-  @DisplayName("並行する再発行は一方だけが成立し、申領できる伝票が 2 本並ばないこと")
+  @DisplayName("並行する再発行が終わっても、申領できる伝票は 1 本だけであること")
   void concurrentReissuesLeaveOnlyOneClaimableToken() throws Exception {
-    // 「申領できる伝票が無い」を確かめてから発行するまでが直列化されないと、両者が同じ「無い」を観測して
-    // 2 本とも発行される。そうなると後から申領した側は帰属記録の部分一意違反（500 系）で落ち、#653 が
-    // 意図して作った「申領できない伝票はすべて同形のエラー」が壊れる
+    // 直列化されないと両者が同じ状態を観測して 2 本とも生きたまま残る。そうなると後から申領した側は
+    // 帰属記録の部分一意違反（500 系）で落ち、「申領できない伝票はすべて同形のエラー」が壊れる。
+    // どちらの応答も成立してよい — 失効させる形なので、遅い側の発行が早い側を殺す
     RegisteredMember wrongMember = registerAndLogin("race");
+    RegisteredMember rightMember = registerAndLogin("raceowner");
     String orderId = completedOrderAttributedTo(wrongMember, "並行再発行担当-" + nonce);
     assertThat(invalidate(orderId, REASON).getStatusCode())
         .as("前提: 無効化できること")
@@ -301,6 +325,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     CountDownLatch ready = new CountDownLatch(2);
     CountDownLatch go = new CountDownLatch(1);
     ExecutorService pool = Executors.newFixedThreadPool(2);
+    List<ResponseEntity<JsonNode>> responses = new ArrayList<>();
     try {
       List<Future<ResponseEntity<JsonNode>>> races = new ArrayList<>();
       for (int i = 0; i < 2; i++) {
@@ -315,19 +340,118 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
       assertThat(ready.await(10, TimeUnit.SECONDS)).as("前提: 2 つの再発行が同時に構えること").isTrue();
       go.countDown();
 
-      List<ResponseEntity<JsonNode>> responses = new ArrayList<>();
       for (Future<ResponseEntity<JsonNode>> race : races) {
         responses.add(race.get(30, TimeUnit.SECONDS));
       }
-      assertThat(responses)
-          .filteredOn(response -> response.getStatusCode() == HttpStatus.OK)
-          .as("成立するのは一方だけ")
-          .hasSize(1);
     } finally {
       pool.shutdownNow();
     }
 
-    assertThat(tokenCountFor(orderId)).as("発行された伝票は 1 本だけであること").isEqualTo(1);
+    assertThat(responses)
+        .as("前提: 並行する再発行がどちらも 500 を出さないこと")
+        .allMatch(response -> response.getStatusCode() == HttpStatus.OK);
+    assertThat(issuedTokenCountFor(orderId)).as("申領できる伝票は 1 本だけであること").isEqualTo(1);
+    // 生値で確かめる。生きているのは 1 本だけなので、申領が成立するのも 1 本だけになる
+    assertThat(responses)
+        .filteredOn(
+            response ->
+                claim(rightMember, response.getBody().path("receipt_token").asString())
+                        .getStatusCode()
+                    == HttpStatus.OK)
+        .as("申領が成立するのは 1 本だけ")
+        .hasSize(1);
+  }
+
+  @Test
+  @DisplayName("同一受注に申領できる伝票を 2 本並べる書き込みは DB が拒むこと")
+  void theDatabaseRefusesASecondIssuedTokenForTheSameOrder() {
+    // 再発行のロックが守る不変量の最終防波堤。索引が黙って消えても、アプリ層のテストは緑のままになる
+    RegisteredMember wrongMember = registerAndLogin("dbguard");
+    String orderId = completedOrderAttributedTo(wrongMember, "DB防波堤担当-" + nonce);
+    assertThat(invalidate(orderId, REASON).getStatusCode())
+        .as("前提: 無効化できること")
+        .isEqualTo(HttpStatus.OK);
+    assertThat(reissue(orderId).getStatusCode()).as("前提: 1 本目を発行できること").isEqualTo(HttpStatus.OK);
+
+    assertThatThrownBy(
+            () ->
+                jdbcTemplate.update(
+                    "insert into t_order_receipt_tokens"
+                        + " (order_id, token_digest, planned_points, issued_at, expires_at,"
+                        + " status, created_at, updated_at, version)"
+                        + " values (?, ?, 0, now(), now() + interval '90 days', 'ISSUED',"
+                        + " now(), now(), 0)",
+                    orderId,
+                    "db-guard-digest-" + nonce))
+        .isInstanceOf(DuplicateKeyException.class);
+
+    assertThat(issuedTokenCountFor(orderId)).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("申領が確定する直前の受注へ走った再発行は、確定を待ってから撥ねられること")
+  void reissueWaitsForAnInFlightClaimBeforeJudging() throws Exception {
+    // 症状の本体は期限境界の競合だが、申領と再発行がそれぞれ now を読む瞬間を HTTP 2 本の外から
+    // 整列させる手段が無く、字面どおりの競合テストは改修前に赤くできない。断言面を配線へ下ろし、
+    // 「申領が確定する直前の状態」を別トランザクションで作って、再発行がそれを待つことを固定する。
+    RegisteredMember wrongMember = registerAndLogin("inflight");
+    RegisteredMember rightMember = registerAndLogin("inflightowner");
+    String orderId = completedOrderAttributedTo(wrongMember, "在途申領担当-" + nonce);
+    assertThat(invalidate(orderId, REASON).getStatusCode())
+        .as("前提: 無効化できること")
+        .isEqualTo(HttpStatus.OK);
+    assertThat(reissue(orderId).getStatusCode()).as("前提: 訂正用の伝票を発行できること").isEqualTo(HttpStatus.OK);
+    long tokenId = issuedTokenIdOf(orderId);
+
+    CountDownLatch claimHeld = new CountDownLatch(1);
+    CountDownLatch releaseClaim = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      // 申領の書き込み集合をそのまま再現したまま commit せずに待つ（トークン行のロックを保持し続ける）
+      Future<?> inFlightClaim =
+          pool.submit(
+              () ->
+                  new TransactionTemplate(transactionManager)
+                      .execute(
+                          status -> {
+                            OrderReceiptToken token =
+                                entityManager.find(
+                                    OrderReceiptToken.class,
+                                    tokenId,
+                                    LockModeType.PESSIMISTIC_WRITE);
+                            token.claim(OffsetDateTime.now());
+                            entityManager.persist(
+                                OrderAttribution.onReceiptClaim(
+                                    orderId,
+                                    rightMember.id(),
+                                    rightMember.memberCode(),
+                                    OffsetDateTime.now()));
+                            entityManager.flush();
+                            claimHeld.countDown();
+                            awaitQuietly(releaseClaim);
+                            return null;
+                          }));
+      assertThat(claimHeld.await(30, TimeUnit.SECONDS)).as("前提: 申領が確定直前の状態で待つこと").isTrue();
+
+      Future<ResponseEntity<JsonNode>> concurrentReissue = pool.submit(() -> reissue(orderId));
+      // 押さえずに読む実装は在途の申領を見ないまま即座に判じて返る。固定したいのは「待つこと」その
+      // ものである — 待たない実装は、期限境界では申領が成立するのと同時に 2 本目を発行してしまう
+      assertThatThrownBy(() -> concurrentReissue.get(3, TimeUnit.SECONDS))
+          .as("再発行は申領の確定を待つこと")
+          .isInstanceOf(TimeoutException.class);
+
+      releaseClaim.countDown();
+      inFlightClaim.get(30, TimeUnit.SECONDS);
+
+      ResponseEntity<JsonNode> refused = concurrentReissue.get(30, TimeUnit.SECONDS);
+      assertThat(refused.getStatusCode()).as("確定した帰属を見てから撥ねること").isEqualTo(HttpStatus.BAD_REQUEST);
+    } finally {
+      releaseClaim.countDown();
+      pool.shutdownNow();
+    }
+
+    assertThat(issuedTokenCountFor(orderId)).as("有効な帰属と申領できる伝票が並ばないこと").isZero();
+    assertThat(activeAttributionCountFor(orderId)).isEqualTo(1);
   }
 
   @Test
@@ -474,6 +598,37 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
   private int tokenCountFor(String orderId) {
     return jdbcTemplate.queryForObject(
         "select count(*) from t_order_receipt_tokens where order_id = ?", Integer.class, orderId);
+  }
+
+  /** 申領できる伝票の本数。失効・申領済みを数えないので、状態遷移が実際に往復したことまで見る。 */
+  private int issuedTokenCountFor(String orderId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from t_order_receipt_tokens where order_id = ? and status = 'ISSUED'",
+        Integer.class,
+        orderId);
+  }
+
+  private long issuedTokenIdOf(String orderId) {
+    return jdbcTemplate.queryForObject(
+        "select id from t_order_receipt_tokens where order_id = ? and status = 'ISSUED'",
+        Long.class,
+        orderId);
+  }
+
+  private int activeAttributionCountFor(String orderId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from t_order_attributions where order_id = ? and status = 'ACTIVE'",
+        Integer.class,
+        orderId);
+  }
+
+  /** 保持側のトランザクション内で待つ。中断はテストの失敗として現れるので、ここでは握り潰さず状態だけ戻す。 */
+  private static void awaitQuietly(CountDownLatch latch) {
+    try {
+      latch.await(30, TimeUnit.SECONDS);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   private long seedStaffId() {

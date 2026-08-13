@@ -100,6 +100,49 @@ class OrderReceiptTokenTest {
   }
 
   @Test
+  @DisplayName("未申領のトークンは失効させられ、以後は申領できないこと")
+  void issuedTokenCanBeRevoked() {
+    OrderReceiptToken token = OrderReceiptToken.issueFor("o1", DIGEST, 120, ISSUED_AT);
+
+    token.revoke();
+
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.REVOKED);
+    assertThat(token.isClaimableAt(ISSUED_AT.plusDays(1))).isFalse();
+  }
+
+  @Test
+  @DisplayName("期限切れの未申領トークンも失効させられること（申領できるかで判じない）")
+  void expiredButUnclaimedTokenCanBeRevoked() {
+    // 期限を倒す機構は無いので、90 日を過ぎた行も ISSUED のまま残る。ここで撥ねると再発行が
+    // その行を倒せず、「受注ごとに ISSUED は高々 1 本」を DB へ委ねられなくなる
+    OrderReceiptToken token = OrderReceiptToken.issueFor("o1", DIGEST, 120, ISSUED_AT);
+    assertThat(token.isClaimableAt(token.getExpiresAt())).as("前提: 期限切れであること").isFalse();
+
+    token.revoke();
+
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.REVOKED);
+  }
+
+  @Test
+  @DisplayName("申領済みのトークンは失効させられないこと（成立した帰属の根拠を書き換えない）")
+  void claimedTokenCannotBeRevoked() {
+    OrderReceiptToken token = OrderReceiptToken.issueFor("o1", DIGEST, 120, ISSUED_AT);
+    token.claim(ISSUED_AT.plusDays(1));
+
+    assertThatThrownBy(token::revoke).isInstanceOf(InvalidOrderReceiptTokenException.class);
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
+  }
+
+  @Test
+  @DisplayName("失効済みのトークンは二度目の失効を受け付けないこと")
+  void revokedTokenCannotBeRevokedAgain() {
+    OrderReceiptToken token = OrderReceiptToken.issueFor("o1", DIGEST, 120, ISSUED_AT);
+    token.revoke();
+
+    assertThatThrownBy(token::revoke).isInstanceOf(InvalidOrderReceiptTokenException.class);
+  }
+
+  @Test
   @DisplayName("診断出力にダイジェストが載らないこと")
   void toStringOmitsTheDigest() {
     // 生値は元より持たないが、ダイジェストも照合の鍵そのもの。ログへ流れると保存を絞った意味が消える

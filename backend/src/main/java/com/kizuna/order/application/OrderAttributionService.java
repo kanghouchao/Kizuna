@@ -94,15 +94,20 @@ public class OrderAttributionService {
    * 付与設定の変更）で別のポイントになる。引き継ぎ元は、この受注に伝票トークンの履歴があればその直近の予定額（完了時に非会員として
    * 発行された額）、無ければ完了時に実際に付与された額（会員へ帰属した完了ではトークンが発行されないため、確定額はこちらにしか無い）。
    *
-   * <p>申領できるトークンが既にある受注へは発行しない。生きたトークンが 2 本並ぶと、後から申領した側は帰属記録の部分一意違反で 落ち、申領の応答が同形でなくなる（{@code
-   * MemberReceiptClaimService} の収束は同一トークンの並行申領しか担わない）。
-   * 有効な帰属記録がある間はトークンが生きていることは無いので、無効化の側にトークンを止める処理は要らない。
+   * <p>先行する未申領のトークンは<b>すべて失効させてから</b>発行する。生きたトークンが 2 本並ぶと、後から申領した側は帰属記録の
+   * 部分一意違反で落ち、申領の応答が同形でなくなる（{@code MemberReceiptClaimService} の収束は同一トークンの並行申領しか担わない）。 発行を撥ねるのではなく前の
+   * 1 本を殺す形にしているのは、発行の応答を取り逃した店舗（生値は二度と手に入らない）が 訂正をやり直せる必要があるためで、渡した QR を回収する手段も店舗にはこれしか無い。
+   *
+   * <p>期限切れの行も {@code ISSUED} のまま残るので、失効の対象は「申領できる行」ではなく<b>未申領の行すべて</b>にする — 索引が強制できるのは「ISSUED は高々
+   * 1 本」であり、期限を条件に含む不変量は静的な索引では表現できない。
+   *
+   * <p>有効な帰属記録がある間はトークンが生きていることは無いので、無効化の側にトークンを止める処理は要らない。
    */
   @StoreScoped
   @Transactional
   public OrderReceiptTokenResponse reissueReceiptToken(String orderId) {
-    // 「申領できる伝票がまだ無い」を確かめてから発行するまでの間、受注を押さえて並行する再発行と直列化する。
-    // 押さえないと両者が同じ「無い」を観測して 2 本とも発行され、下の門が素通りする。
+    // 受注を押さえて並行する再発行と直列化する。トークンが 1 本も無い受注（完了時に会員へ帰属した受注）は
+    // 押さえる行が下に無いため、ここだけが直列化点になる。
     Order order =
         orderRepository
             .findScopedByIdForUpdate(orderId)
@@ -110,6 +115,9 @@ public class OrderAttributionService {
     if (order.getStatus() != OrderStatus.COMPLETED) {
       throw new ServiceException("完了していない受注に伝票は発行できません");
     }
+    // トークン行を先に押さえてから帰属記録を読む。順序を入れ替えると、在途の申領が commit する前に読んだ
+    // 「帰属していない」という観測のまま発行してしまい、有効な帰属と申領できる伝票が並ぶ。
+    List<OrderReceiptToken> tokens = orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
     List<OrderAttribution> attributions =
         orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
     if (attributions.isEmpty()) {
@@ -119,18 +127,22 @@ public class OrderAttributionService {
       throw new ServiceException("この受注は会員へ帰属しています。先に帰属を無効化してください");
     }
 
-    OffsetDateTime now = OffsetDateTime.now();
-    List<OrderReceiptToken> tokens =
-        orderReceiptTokenRepository.findByOrderIdOrderByIdDesc(orderId);
-    if (tokens.stream().anyMatch(token -> token.isClaimableAt(now))) {
-      throw new ServiceException("この受注には申領できる伝票が既にあります");
-    }
+    // 失効を先に flush する。Hibernate は INSERT を UPDATE より先に流すため、まとめて save すると
+    // 新しい行が「まだ倒れていない旧行」と部分一意索引の上で衝突する。
+    tokens.stream()
+        .filter(OrderReceiptToken::isRevocable)
+        .forEach(
+            token -> {
+              token.revoke();
+              orderReceiptTokenRepository.saveAndFlush(token);
+            });
 
     int plannedPoints =
         tokens.isEmpty() ? order.getAutoGrantPoints() : tokens.get(0).getPlannedPoints();
     ReceiptTokenGenerator.GeneratedToken generated = receiptTokenGenerator.generate();
     orderReceiptTokenRepository.save(
-        OrderReceiptToken.issueFor(orderId, generated.digest(), plannedPoints, now));
+        OrderReceiptToken.issueFor(
+            orderId, generated.digest(), plannedPoints, OffsetDateTime.now()));
     return new OrderReceiptTokenResponse(generated.raw());
   }
 

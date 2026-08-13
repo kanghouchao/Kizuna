@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface OrderReceiptTokenRepository extends JpaRepository<OrderReceiptToken, Long> {
 
@@ -18,12 +20,18 @@ public interface OrderReceiptTokenRepository extends JpaRepository<OrderReceiptT
   Optional<OrderReceiptToken> findByTokenDigest(String tokenDigest);
 
   /**
-   * 受注に対して発行された伝票トークンを新しい順に。再発行があるため 1 受注が複数行を持ちうる。
-   *
-   * <p>「申領できる行が既にあるか」の判定は取得した行に {@link OrderReceiptToken#isClaimableAt} を当てて行う —
-   * 状態と期限を問い合わせ側で書き下すと、 申領できるかの定義が二箇所に分かれる。
+   * 再発行のために受注の伝票トークンを新しい順に引き、その行をすべて押さえる。再発行があるため 1 受注が複数行を持ちうる。
    *
    * <p>この読み口は店舗行分離機構に載らない（伝票トークンは platform 帰属）。店舗の所有は受注を先に引いて確かめること。
+   *
+   * <p>この読みが再発行の直列化点そのものである。申領は行を押さえたまま帰属記録を書くため、押さえずに読むと 在途の申領が見えず、「帰属していない」という古い観測のまま 2
+   * 本目を発行してしまう。押さえてから帰属記録を 読むことで、待たされた再発行は申領の確定後に判じられる — <b>この順序は入れ替えられない</b>。
+   *
+   * <p>待ちが環にならないのは、申領が押さえるのがトークン行だけだからである（受注行を要求しない）。再発行は受注行 → トークン行の順に取る。
    */
-  List<OrderReceiptToken> findByOrderIdOrderByIdDesc(String orderId);
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select t from com.kizuna.order.domain.OrderReceiptToken t"
+          + " where t.orderId = :orderId order by t.id desc")
+  List<OrderReceiptToken> findByOrderIdForUpdate(@Param("orderId") String orderId);
 }

@@ -130,6 +130,15 @@ describe('OrderAttributionModal', () => {
     expect(mockedAttribution).toHaveBeenCalledTimes(1);
   });
 
+  it('再発行が前の QR を殺すことを、押す手前で名乗る', async () => {
+    // 2 度目の再発行は前に渡した QR を失効させる。押した後では取り戻せない副作用なので、
+    // ボタンと同じ画面に出ていなければ操作者は自覚しないまま客の手元の QR を殺す
+    mockedAttribution.mockResolvedValue(invalidated);
+    renderModal();
+
+    expect(await screen.findByText(/前に発行した伝票QRは使えなくなります/)).toBeInTheDocument();
+  });
+
   it('再発行した伝票の生値を QR が運ぶ', async () => {
     mockedAttribution.mockResolvedValue(invalidated);
     mockedReissue.mockResolvedValue({ receipt_token: 'raw-token-value' });
