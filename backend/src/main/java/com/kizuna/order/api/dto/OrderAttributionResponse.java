@@ -19,6 +19,8 @@ import java.time.OffsetDateTime;
  * @param attributedAt 帰属が確定した日時。記録が無ければ欠落する
  * @param invalidatedReason 直近の記録が無効化済みならその理由。有効な記録・記録なしでは欠落する
  * @param invalidatedAt 無効化した日時。同上
+ * @param pendingCorrectionAttributionId まだ差し引かれていない誤付与を持つ帰属記録の ID。無ければ欠落する
+ * @param pendingCorrectionMemberCode その記録の会員コード。同上
  */
 public record OrderAttributionResponse(
     Long id,
@@ -27,4 +29,29 @@ public record OrderAttributionResponse(
     String source,
     OffsetDateTime attributedAt,
     String invalidatedReason,
-    OffsetDateTime invalidatedAt) {}
+    OffsetDateTime invalidatedAt,
+    Long pendingCorrectionAttributionId,
+    String pendingCorrectionMemberCode) {
+
+  /**
+   * 残っている訂正を添えた写しを返す。
+   *
+   * <p>現況そのものと別の項目にしてあるのは、両者が食い違いうるため。訂正を後回しにしたあと正しい本人が申領を
+   * 済ませると、直近の記録はその人の<b>有効な</b>帰属で、訂正が要るのは別人の<b>古い</b>記録になる — 現況の項目だけでは 後者を名指せず、画面から差し引きへ戻る道が消える。
+   *
+   * <p>算出は台帳を読む側（{@code OrderAttributionCorrectionService}）が担う。無効化のサービスへ寄せると、あちらが
+   * 台帳へ依存しないことで示している「無効化は台帳へ波及しない」（ADR 0009）の構造的な証跡が失われる。
+   */
+  public OrderAttributionResponse withPendingCorrection(Long attributionId, String memberCode) {
+    return new OrderAttributionResponse(
+        id,
+        attributed,
+        this.memberCode,
+        source,
+        attributedAt,
+        invalidatedReason,
+        invalidatedAt,
+        attributionId,
+        memberCode);
+  }
+}

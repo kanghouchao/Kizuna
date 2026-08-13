@@ -394,7 +394,8 @@ class OrderControllerTest {
 
     // 正向対照: 上限ちょうどは通る
     when(orderAttributionService.invalidate(any(), any(), any()))
-        .thenReturn(new OrderAttributionResponse(null, false, null, null, null, null, null));
+        .thenReturn(
+            new OrderAttributionResponse(null, false, null, null, null, null, null, null, null));
     mockMvc
         .perform(
             storePost(

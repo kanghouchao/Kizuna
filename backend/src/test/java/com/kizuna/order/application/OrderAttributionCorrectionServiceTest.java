@@ -43,13 +43,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OrderAttributionCorrectionServiceTest {
 
   private static final String ORDER_ID = "o1";
-  private static final String OTHER_ORDER_ID = "o2";
   private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long STORE_ID = 1L;
   private static final long ATTRIBUTED_MEMBER_ID = 7L;
   private static final String MEMBER_CODE = "123456789012";
   private static final long ATTRIBUTION_ID = 501L;
+  private static final long OTHER_ATTRIBUTION_ID = 502L;
   private static final String REASON = "別人の来店を取り違えたため";
   private static final String KEY = "idem-1";
   private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-08-14T10:00:00+09:00");
@@ -88,7 +88,7 @@ class OrderAttributionCorrectionServiceTest {
     givenOrder();
     givenAttribution(invalidatedAttribution());
     givenGranted(100L);
-    Mockito.when(pointLedgerService.correctedPointsFor(ATTRIBUTION_ID, KEY)).thenReturn(0L);
+    givenCorrected(0L, ATTRIBUTION_ID);
 
     service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
 
@@ -118,17 +118,113 @@ class OrderAttributionCorrectionServiceTest {
   @DisplayName("別の受注の帰属記録を名指した訂正は届かないこと")
   void refusesAnAttributionBelongingToAnotherOrder() {
     givenOrder();
-    OrderAttribution foreign =
-        OrderAttribution.onCompletion(OTHER_ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);
-    foreign.setId(ATTRIBUTION_ID);
-    foreign.invalidate(REASON, ACTOR_ID, NOW);
-    givenAttribution(foreign);
+    // この受注が持つのは別の記録だけ。帰属記録は platform 帰属で storeFilter が働かないため、
+    // id を直に引く形なら同一店舗の別受注の記録にも当たってしまう。
+    OrderAttribution own =
+        OrderAttribution.onCompletion(ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);
+    own.setId(OTHER_ATTRIBUTION_ID);
+    own.invalidate(REASON, ACTOR_ID, NOW);
+    givenAttributions(own);
 
-    // 帰属記録は platform 帰属で storeFilter が働かず、id 直引きは同一店舗の別受注にも当たる。
     assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
 
     Mockito.verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
+  @DisplayName("同じ会員の別の帰属記録に積んだ訂正も上限に数えること（作用域が付与と揃うこと）")
+  void countsCorrectionsAcrossEveryAttributionOfTheSameMember() {
+    // 無効化 → 再発行 → 本人が申領し直す、を二度たどると同じ会員に同じ受注の付与が 2 本並ぶ。
+    // 記録ごとに訂正済みを数えると、片方の枠がもう片方の付与まで飲み込む（既定値のまま送るだけで
+    // 正当な付与が消える）。
+    givenOrder();
+    givenAttributions(reclaimedAttribution(), invalidatedAttribution());
+    givenGranted(200L);
+    givenCorrected(100L, ATTRIBUTION_ID, OTHER_ATTRIBUTION_ID);
+
+    assertThatThrownBy(() -> service.correct(ORDER_ID, request(200), ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("上限");
+
+    verifyNoLedgerWrite();
+  }
+
+  @Test
+  @DisplayName("その会員が現に帰属している受注では差し引けないこと")
+  void refusesWhenTheSameMemberHoldsAnActiveAttribution() {
+    // 台帳の付与行はどちらの帰属で付いたのかを持たない。正当な付与と誤った付与を切り分けられない以上、
+    // 撥ねるほうが安全側である。
+    givenOrder();
+    OrderAttribution active =
+        OrderAttribution.onReceiptClaim(ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);
+    active.setId(OTHER_ATTRIBUTION_ID);
+    givenAttributions(active, invalidatedAttribution());
+
+    assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("現に帰属している");
+
+    verifyNoLedgerWrite();
+  }
+
+  @Test
+  @DisplayName("正しい本人の帰属が別会員として成立していても、古い記録の訂正は妨げないこと（正の対照）")
+  void allowsCorrectionWhenAnotherMemberHoldsTheActiveAttribution() {
+    givenOrder();
+    OrderAttribution otherMember =
+        OrderAttribution.onReceiptClaim(ORDER_ID, 9L, "999999999999", NOW);
+    otherMember.setId(OTHER_ATTRIBUTION_ID);
+    givenAttributions(otherMember, invalidatedAttribution());
+    givenGranted(100L);
+    givenCorrected(0L, ATTRIBUTION_ID);
+
+    service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
+
+    Mockito.verify(pointLedgerService)
+        .correctForAttribution(
+            ATTRIBUTED_MEMBER_ID, STORE_ID, -100, REASON, ACTOR_ID, KEY, ATTRIBUTION_ID);
+  }
+
+  @Test
+  @DisplayName("現況が別人の有効な帰属に入れ替わっても、残っている訂正を名指せること")
+  void namesTheOutstandingCorrectionEvenWhenTheCurrentAttributionChanged() {
+    // 訂正を後回しにした操作者が戻る道。現況の読み口は直近 1 件しか返さないので、これが無いと
+    // 誤付与は相手の台帳に残ったまま画面からは二度と辿り着けない。
+    givenOrder();
+    OrderAttribution otherMember =
+        OrderAttribution.onReceiptClaim(ORDER_ID, 9L, "999999999999", NOW);
+    otherMember.setId(OTHER_ATTRIBUTION_ID);
+    givenAttributions(otherMember, invalidatedAttribution());
+    givenGranted(100L);
+    Mockito.when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID))).thenReturn(0L);
+
+    assertThat(service.findPendingCorrection(ORDER_ID))
+        .contains(
+            new OrderAttributionCorrectionService.PendingCorrection(ATTRIBUTION_ID, MEMBER_CODE));
+  }
+
+  @Test
+  @DisplayName("引き切った受注では残っている訂正を名乗らないこと")
+  void namesNoOutstandingCorrectionOnceFullyDebited() {
+    givenOrder();
+    givenAttributions(invalidatedAttribution());
+    givenGranted(100L);
+    Mockito.when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID))).thenReturn(100L);
+
+    assertThat(service.findPendingCorrection(ORDER_ID)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("その会員が現に帰属している受注では残っている訂正を名乗らないこと（押せない導線を描かない）")
+  void namesNoOutstandingCorrectionWhileTheSameMemberIsAttributed() {
+    givenOrder();
+    OrderAttribution active =
+        OrderAttribution.onReceiptClaim(ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);
+    active.setId(OTHER_ATTRIBUTION_ID);
+    givenAttributions(active, invalidatedAttribution());
+
+    assertThat(service.findPendingCorrection(ORDER_ID)).isEmpty();
   }
 
   @Test
@@ -149,7 +245,7 @@ class OrderAttributionCorrectionServiceTest {
     givenOrder();
     givenAttribution(invalidatedAttribution());
     givenGranted(100L);
-    Mockito.when(pointLedgerService.correctedPointsFor(ATTRIBUTION_ID, KEY)).thenReturn(70L);
+    givenCorrected(70L, ATTRIBUTION_ID);
 
     assertThatThrownBy(() -> service.correct(ORDER_ID, request(31), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
@@ -164,7 +260,7 @@ class OrderAttributionCorrectionServiceTest {
     givenOrder();
     givenAttribution(invalidatedAttribution());
     givenGranted(100L);
-    Mockito.when(pointLedgerService.correctedPointsFor(ATTRIBUTION_ID, KEY)).thenReturn(70L);
+    givenCorrected(70L, ATTRIBUTION_ID);
 
     OrderAttributionCorrectionResponse response =
         service.correct(ORDER_ID, request(30), ACTOR_EMAIL);
@@ -180,10 +276,12 @@ class OrderAttributionCorrectionServiceTest {
     givenAttribution(invalidatedAttribution());
     givenGranted(100L);
     // 初回の 100 は記帳済み。だが同じキーの行を除けば 0 で、再送は初回と同じ判定に落ちなければならない。
-    Mockito.when(pointLedgerService.correctedPointsFor(ATTRIBUTION_ID, KEY)).thenReturn(0L);
+    givenCorrected(0L, ATTRIBUTION_ID);
     // 除外しない読み方（表示用の重載）を掴むと 100 + 100 > 100 となり、応答を取り逃しただけの正当な再送が
     // 撥ねられる（ADR 0007 と同型の罠）。この stub が無いと Mockito の既定値 0 が返り、誤った実装でも緑になる。
-    Mockito.lenient().when(pointLedgerService.correctedPointsFor(ATTRIBUTION_ID)).thenReturn(100L);
+    Mockito.lenient()
+        .when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID)))
+        .thenReturn(100L);
 
     service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
 
@@ -213,7 +311,7 @@ class OrderAttributionCorrectionServiceTest {
     givenOrder();
     givenAttribution(invalidatedAttribution());
     givenGranted(100L);
-    Mockito.when(pointLedgerService.correctedPointsFor(ATTRIBUTION_ID, KEY)).thenReturn(0L);
+    givenCorrected(0L, ATTRIBUTION_ID);
     Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
@@ -252,16 +350,39 @@ class OrderAttributionCorrectionServiceTest {
         .thenReturn(Optional.of(order));
   }
 
-  private void givenAttribution(OrderAttribution row) {
+  /** この受注が持つ帰属記録（新しい順）。候補は受注から引くので、ここに無い ID は名指せない。 */
+  private void givenAttributions(OrderAttribution... rows) {
     Mockito.lenient()
-        .when(orderAttributionRepository.findById(ATTRIBUTION_ID))
-        .thenReturn(Optional.of(row));
+        .when(orderAttributionRepository.findByOrderIdOrderByIdDesc(ORDER_ID))
+        .thenReturn(List.of(rows));
+  }
+
+  private void givenAttribution(OrderAttribution row) {
+    givenAttributions(row);
+  }
+
+  /** 既に引かれた量。ID の集合が期待どおりの作用域を覆っているときだけ答える。 */
+  private void givenCorrected(long amount, Long... expectedIds) {
+    Mockito.when(
+            pointLedgerService.correctedPointsFor(
+                Mockito.argThat(ids -> ids != null && ids.containsAll(List.of(expectedIds))),
+                Mockito.eq(KEY)))
+        .thenReturn(amount);
   }
 
   private void givenGranted(long total) {
     Mockito.lenient()
         .when(pointLedgerService.grantedPointsByOrder(ATTRIBUTED_MEMBER_ID, List.of(ORDER_ID)))
         .thenReturn(Map.of(ORDER_ID, total));
+  }
+
+  /** 同じ会員が再発行された伝票を申領し直し、その帰属もまた無効化された状態（付与が 2 本並ぶ）。 */
+  private static OrderAttribution reclaimedAttribution() {
+    OrderAttribution row =
+        OrderAttribution.onReceiptClaim(ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);
+    row.setId(OTHER_ATTRIBUTION_ID);
+    row.invalidate(REASON, ACTOR_ID, NOW);
+    return row;
   }
 
   private static OrderAttribution invalidatedAttribution() {

@@ -35,3 +35,23 @@ databaseChangeLog:
         - dropColumn:
             tableName: t_point_entries
             columnName: corrected_attribution_id
+  - changeSet:
+      id: platform-v02000-002-point-entry-corrected-attribution-index
+      author: kanghouchao
+      # 訂正の読み口も書き込みの上限判定もこの列で台帳を集計する。PostgreSQL は参照側の外部キー列に
+      # 索引を作らないので、無いとグループ全体の追記型台帳を毎回走査することになる。
+      # 値を持つのは訂正の仕訳だけなので部分索引にする（= と in の条件は NULL を含まないため使える）。
+      # Liquibase OSS の createIndex は述語を持たないため裸 SQL。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              CREATE INDEX idx_t_point_entries_corrected_attribution
+              ON t_point_entries (corrected_attribution_id)
+              WHERE corrected_attribution_id IS NOT NULL
+      rollback:
+        - dropIndex:
+            indexName: idx_t_point_entries_corrected_attribution
+            tableName: t_point_entries

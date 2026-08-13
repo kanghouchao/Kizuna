@@ -59,7 +59,11 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
 
   /**
-   * 指定した帰属記録に対して既に積まれた訂正の合計。訂正は減算なので負で返る。
+   * 指定した帰属記録群に対して既に積まれた訂正の合計。訂正は減算なので負で返る。
+   *
+   * <p>記録 1 件ではなく<b>群</b>で受けるのは、この合計が {@link #sumGrantsByOrderIds} の付与合計と引き比べられるため。
+   * 付与は受注と会員で数えるので、訂正も同じ受注・同じ会員に属する記録すべてを数えないと、両辺の作用域がずれる。 ずれると、同じ会員が同じ受注で二度帰属した場合（無効化 → 再発行 →
+   * 本人が申領し直す）に、片方の帰属の訂正枠が もう片方の付与まで飲み込む。
    *
    * <p>同じ冪等キーの行を除いて数えるのは、応答を取り逃した正当な再送が累計上限の超過で撥ねられるのを防ぐため。 初回が記帳済みでも、再送が自分自身を数えなければ初回と同じ判定に落ちる（ADR
    * 0007 が「再送の判定を入力検証より 先に置く」ことで一度回避したのと同型の罠）。訂正の仕訳は手動調整であり冪等キーを必ず持つので、キーが null の行を場合分けする必要は無い。
@@ -68,17 +72,17 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
    */
   @Query(
       "select coalesce(sum(e.amount), 0) from com.kizuna.point.domain.PointEntry e"
-          + " where e.correctedAttributionId = :attributionId"
+          + " where e.correctedAttributionId in :attributionIds"
           + " and e.idempotencyKey <> :excludeIdempotencyKey")
   long sumCorrectionsExcludingKey(
-      @Param("attributionId") Long attributionId,
+      @Param("attributionIds") Collection<Long> attributionIds,
       @Param("excludeIdempotencyKey") String excludeIdempotencyKey);
 
-  /** 指定した帰属記録に対して積まれた訂正の合計。訂正は減算なので負で返る。進み具合の表示に使う。 */
+  /** 指定した帰属記録群に対して積まれた訂正の合計。訂正は減算なので負で返る。進み具合の表示に使う。 */
   @Query(
       "select coalesce(sum(e.amount), 0) from com.kizuna.point.domain.PointEntry e"
-          + " where e.correctedAttributionId = :attributionId")
-  long sumCorrections(@Param("attributionId") Long attributionId);
+          + " where e.correctedAttributionId in :attributionIds")
+  long sumCorrections(@Param("attributionIds") Collection<Long> attributionIds);
 
   /** 指定店舗に帰属する仕訳が 1 件でも存在するか。符号は問わない（取消も含めて記録の存在そのものを見る）。 */
   @Query(

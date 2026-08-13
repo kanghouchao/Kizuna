@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { OrderAttributionCorrection, orderApi } from '@/entities/order';
@@ -26,6 +26,8 @@ interface AttributionCorrectionStepProps {
   /** 訂正の宛先を決める帰属記録。差し引く相手はこの記録が持つ会員で、顧客に今紐づく会員ではない。 */
   attributionId: number;
   memberCode?: string;
+  /** 送信中かどうかを親へ上げる。親はこれを見てダイアログの取り消し（ESC・背景押下）を塞ぐ。 */
+  onBusyChange: (isBusy: boolean) => void;
   onDone: () => void;
 }
 
@@ -40,6 +42,7 @@ export function AttributionCorrectionStep({
   orderId,
   attributionId,
   memberCode,
+  onBusyChange,
   onDone,
 }: AttributionCorrectionStepProps) {
   const { data, isLoading, failure, reload } = useResource<OrderAttributionCorrection>(
@@ -69,6 +72,7 @@ export function AttributionCorrectionStep({
       attributionId={attributionId}
       memberCode={memberCode}
       status={data}
+      onBusyChange={onBusyChange}
       onDone={onDone}
     />
   );
@@ -88,6 +92,7 @@ function CorrectionForm({
   attributionId,
   memberCode,
   status,
+  onBusyChange,
   onDone,
 }: CorrectionFormProps) {
   const remaining = status.granted_points - status.corrected_points;
@@ -99,6 +104,13 @@ function CorrectionForm({
     handleSubmit,
     formState: { isSubmitting },
   } = form;
+
+  // 送信中を親へ上げる。片付けで必ず false へ戻すのは、成功時に onDone がこの段を畳むため —
+  // 畳まれた瞬間の isSubmitting はまだ true で、通知だけでは親が送信中のまま固まる。
+  useEffect(() => {
+    onBusyChange(isSubmitting);
+    return () => onBusyChange(false);
+  }, [isSubmitting, onBusyChange]);
 
   // この段を開いた 1 回の人間の操作としてキーを発行する。失敗後の再送信でも変えない —
   // サーバはこのキーで「commit 済みの初回への再送」を見分けて二重記帳を遮断する（ADR 0007）。

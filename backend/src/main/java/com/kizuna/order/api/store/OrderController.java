@@ -149,7 +149,23 @@ public class OrderController {
   @GetMapping("/{id}/attribution")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderAttributionResponse> attribution(@PathVariable String id) {
-    return ResponseEntity.ok(orderAttributionService.currentAttribution(id));
+    return ResponseEntity.ok(
+        withPendingCorrection(id, orderAttributionService.currentAttribution(id)));
+  }
+
+  /**
+   * 現況に「まだ差し引かれていない誤付与」を添える。
+   *
+   * <p>2 つのサービスを跨ぐ組み立てをここで行うのは、無効化のサービスが台帳へ依存しないこと自体が「無効化は台帳へ 波及しない」（ADR
+   * 0009）の構造的な証跡だからである。あちらへ台帳の読みを足すとその証跡が失われる。
+   */
+  private OrderAttributionResponse withPendingCorrection(
+      String orderId, OrderAttributionResponse current) {
+    return orderAttributionCorrectionService
+        .findPendingCorrection(orderId)
+        .map(
+            pending -> current.withPendingCorrection(pending.attributionId(), pending.memberCode()))
+        .orElse(current);
   }
 
   /**
@@ -166,7 +182,11 @@ public class OrderController {
       @PathVariable String id,
       @Valid @RequestBody OrderAttributionInvalidationRequest request,
       Principal principal) {
-    return ResponseEntity.ok(orderAttributionService.invalidate(id, request, principal.getName()));
+    // 無効化の直後は必ず差し引きが残る。現況の読み口と同じ項目を載せておかないと、画面が「後で行う」で
+    // 戻った先で差し引きへの入口を失う。
+    return ResponseEntity.ok(
+        withPendingCorrection(
+            id, orderAttributionService.invalidate(id, request, principal.getName())));
   }
 
   /**

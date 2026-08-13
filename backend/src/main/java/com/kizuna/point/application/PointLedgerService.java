@@ -277,19 +277,28 @@ public class PointLedgerService {
   }
 
   /**
-   * 指定した帰属記録に対して既に引かれた量。訂正は減算なので、正の値に直して返す。
+   * 指定した帰属記録群に対して既に引かれた量。訂正は減算なので、正の値に直して返す。
+   *
+   * <p>記録 1 件ではなく群で受ける理由は {@link PointEntryRepository#sumCorrectionsExcludingKey} に記す — 引き比べる相手である
+   * {@link #grantedPointsByOrder} が受注と会員で数えるため、訂正も同じ作用域で数えなければ上限の判定が壊れる。
    *
    * <p>渡された冪等キーを持つ行は数えない。数えると、応答を取り逃した正当な再送が自分自身の初回記帳によって 累計上限の超過と判じられる。
    */
   @Transactional(readOnly = true)
-  public long correctedPointsFor(long attributionId, String excludeIdempotencyKey) {
-    return -pointEntryRepository.sumCorrectionsExcludingKey(attributionId, excludeIdempotencyKey);
+  public long correctedPointsFor(Collection<Long> attributionIds, String excludeIdempotencyKey) {
+    if (attributionIds.isEmpty()) {
+      return 0;
+    }
+    return -pointEntryRepository.sumCorrectionsExcludingKey(attributionIds, excludeIdempotencyKey);
   }
 
-  /** 指定した帰属記録に対して既に引かれた量。判定ではなく表示に使うので、どの行も除かずに数える。 */
+  /** 指定した帰属記録群に対して既に引かれた量。判定ではなく表示に使うので、どの行も除かずに数える。 */
   @Transactional(readOnly = true)
-  public long correctedPointsFor(long attributionId) {
-    return -pointEntryRepository.sumCorrections(attributionId);
+  public long correctedPointsFor(Collection<Long> attributionIds) {
+    if (attributionIds.isEmpty()) {
+      return 0;
+    }
+    return -pointEntryRepository.sumCorrections(attributionIds);
   }
 
   /**

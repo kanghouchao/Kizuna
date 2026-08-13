@@ -2,6 +2,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { OrderAttributionModal } from '../ui/OrderAttributionModal';
 import { Order, OrderAttribution, orderApi } from '@/entities/order';
+import { TokenClaims, readTokenClaims } from '@/shared/lib';
+
+// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
+}));
 
 jest.mock('@/entities/order', () => ({
   orderApi: {
@@ -29,6 +36,16 @@ const mockedInvalidate = orderApi.invalidateAttribution as jest.Mock;
 const mockedReissue = orderApi.reissueReceiptToken as jest.Mock;
 const mockedCorrectionStatus = orderApi.attributionCorrection as jest.Mock;
 const mockedCorrect = orderApi.correctAttributionPoints as jest.Mock;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
+
+/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
+function claimsWith(permissions: string[]): TokenClaims {
+  return {
+    authorities: permissions.map(permission => `PERM_${permission}`),
+    userType: 'STAFF',
+    storeBridge: true,
+  };
+}
 
 const completedOrder: Order = {
   id: 'o1',
@@ -53,6 +70,23 @@ const invalidated: OrderAttribution = {
   attributed_at: '2026-08-10T19:00:00Z',
   invalidated_reason: '別人の来店を取り違えたため',
   invalidated_at: '2026-08-12T10:00:00Z',
+  pending_correction_attribution_id: 501,
+  pending_correction_member_code: '123456789012',
+};
+
+/**
+ * 訂正を後回しにしたあと、正しい本人が再発行された伝票を申領し終えた状態。
+ *
+ * 現況は<b>その人の有効な帰属</b>に入れ替わり、差し引きが要るのは別人の古い記録（501）になる。
+ */
+const reclaimedByOther: OrderAttribution = {
+  id: 502,
+  attributed: true,
+  member_code: '999999999999',
+  source: 'RECEIPT_TOKEN',
+  attributed_at: '2026-08-13T09:00:00Z',
+  pending_correction_attribution_id: 501,
+  pending_correction_member_code: '123456789012',
 };
 
 const renderModal = (onClose = jest.fn()) =>
@@ -63,6 +97,7 @@ describe('OrderAttributionModal', () => {
     jest.clearAllMocks();
     mockedAttribution.mockResolvedValue(attributed);
     mockedCorrectionStatus.mockResolvedValue({ granted_points: 100, corrected_points: 0 });
+    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'POINT_ADJUST']));
   });
 
   it('閉じている間は帰属の現況を取りに行かない', () => {
@@ -150,6 +185,12 @@ describe('OrderAttributionModal', () => {
     // 取得できてからフォームを起こすので、既定値は最初に描かれたフレームから入っている
     expect(await screen.findByLabelText('差し引くポイント')).toHaveValue(100);
 
+    // 差し引きが済めば残りの誤付与は無くなる。畳んだ後に現況を取り直すので、その応答を用意する
+    mockedAttribution.mockResolvedValue({
+      ...invalidated,
+      pending_correction_attribution_id: undefined,
+      pending_correction_member_code: undefined,
+    });
     fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
     fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
 
@@ -235,6 +276,73 @@ describe('OrderAttributionModal', () => {
     expect(await screen.findByText('帰属の状況を取得できませんでした')).toBeInTheDocument();
     expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '伝票QRを再発行' })).not.toBeInTheDocument();
+  });
+
+  it('正しい本人が申領を済ませた後でも、残っている誤付与の差し引きへ戻れること', async () => {
+    // 後回しにした差し引きは、その間に現況が別人の有効な帰属へ入れ替わると受注からは名指せなくなる。
+    // ここに導線が無いと、誤付与は相手の台帳に残ったまま二度と辿り着けない
+    mockedAttribution.mockResolvedValue(reclaimedByOther);
+    renderModal();
+
+    expect(await screen.findByText(/差し引かれていないポイントが残っています/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'ポイントを差し引く' }));
+
+    // 宛先はサーバが名指す古い記録（501）。現況の 502 を訂正すると、取り戻したばかりの来店を消す
+    await waitFor(() => expect(mockedCorrectionStatus).toHaveBeenCalledWith('o1', 501));
+    expect(await screen.findByText(/123456789012 の台帳から差し引きます/)).toBeInTheDocument();
+  });
+
+  it('残っている誤付与が無ければ差し引きへの導線を出さないこと', async () => {
+    mockedAttribution.mockResolvedValue({
+      ...invalidated,
+      pending_correction_attribution_id: undefined,
+      pending_correction_member_code: undefined,
+    });
+    renderModal();
+
+    await screen.findByText(/前に発行した伝票QRは使えなくなります/);
+    expect(screen.queryByRole('button', { name: 'ポイントを差し引く' })).not.toBeInTheDocument();
+  });
+
+  it('ポイント調整の権限が無ければ無効化の導線も差し引きの導線も出さないこと', async () => {
+    // 無効化はこの PR で POINT_ADJUST 限定になった。押せる導線として描くと、理由を入力し終えてから
+    // 拒否されることになる
+    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE']));
+    mockedAttribution.mockResolvedValue(reclaimedByOther);
+    renderModal();
+
+    expect(await screen.findByText(/ポイント調整の権限が必要です/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ポイントを差し引く' })).not.toBeInTheDocument();
+  });
+
+  it('差し引きの送信中は明示のボタン以外で閉じないこと', async () => {
+    // 送信中に閉じると、訂正が成立したか分からないまま冪等キーが失われる。開き直しでは別のキーになり、
+    // 二重に引かれたのかどうかを操作者が判じられない
+    mockedInvalidate.mockResolvedValue(invalidated);
+    let settle: (value: unknown) => void = () => {};
+    mockedCorrect.mockReturnValue(
+      new Promise(resolve => {
+        settle = resolve;
+      })
+    );
+    const onClose = jest.fn();
+    renderModal(onClose);
+
+    fireEvent.change(await screen.findByLabelText('無効化の理由'), {
+      target: { value: '取り違え' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
+    await screen.findByLabelText('差し引くポイント');
+    fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
+    fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
+
+    await screen.findByRole('button', { name: '処理中...' });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    settle({ granted_points: 100, corrected_points: 100 });
+    await waitFor(() => expect(notify.success).toHaveBeenCalled());
   });
 
   it('無効化の失敗はサーバの文言をそのまま知らせ、入力を残す', async () => {

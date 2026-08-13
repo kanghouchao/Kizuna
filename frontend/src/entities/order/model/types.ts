@@ -174,6 +174,14 @@ export interface OrderAttribution {
   /** 直近の記録が無効化済みならその理由。 */
   invalidated_reason?: string;
   invalidated_at?: string;
+  /**
+   * まだ差し引かれていない誤付与を持つ帰属記録の ID。無ければ応答から消える。
+   *
+   * 現況（上の id）とは別の記録を指しうる — 訂正を後回しにしたあと正しい本人が申領を済ませると、直近の記録は
+   * その人の有効な帰属になり、訂正が要るのは別人の古い記録になる。差し引きの宛先はこちらで名指す。
+   */
+  pending_correction_attribution_id?: number;
+  pending_correction_member_code?: string;
 }
 
 // 帰属記録の無効化（POST /store/orders/{id}/attribution/invalidation）。理由は必須（500 文字以内）。

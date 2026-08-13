@@ -15,6 +15,8 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,21 +47,60 @@ public class OrderAttributionCorrectionService {
   @Transactional(readOnly = true)
   public OrderAttributionCorrectionResponse status(String orderId, Long attributionId) {
     requireScopedOrder(orderId);
-    OrderAttribution attribution = requireInvalidatedAttribution(orderId, attributionId);
+    List<OrderAttribution> attributions =
+        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
+    OrderAttribution attribution =
+        requireInvalidatedAttribution(attributions, orderId, attributionId);
     Long memberId = attribution.getMemberId();
     if (memberId == null) {
       return new OrderAttributionCorrectionResponse(0, 0);
     }
+    // 書き込み経路と同じ門を通す。撥ねられる要求の材料を「引ける額」として画面に描くと、既定値を
+    // そのまま送った操作者が理由の分からない失敗を受け取る。
+    requireNoActiveAttributionFor(attributions, memberId);
     return new OrderAttributionCorrectionResponse(
         grantedPointsFor(memberId, orderId),
-        pointLedgerService.correctedPointsFor(attribution.getId()));
+        pointLedgerService.correctedPointsFor(attributionIdsOf(attributions, memberId)));
   }
+
+  /**
+   * この受注に残っている訂正（誤って付与されたまま差し引かれていない分）。無ければ空。
+   *
+   * <p>帰属の現況の応答に添えるためにある。訂正を後回しにしたあと正しい本人が申領を済ませると、受注の直近の記録は
+   * その人の有効な帰属へ入れ替わり、古い無効化記録は現況の読み口からは見えなくなる。画面が古い記録を名指せる 経路をここでだけ与える —
+   * 無ければ「後で行う」は、誤付与が相手の台帳に残ったまま二度と辿り着けない行き止まりになる。
+   *
+   * <p>見るのは<b>直近の無効化記録 1 件</b>だけで、区間の履歴一覧にはしない（{@link
+   * com.kizuna.order.api.dto.OrderAttributionResponse} と同じ紀律）。その記録の会員が現に有効な帰属を持つ場合は空を返す —
+   * 書き込み経路が撥ねる状態であり、押せない導線を描かない。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public Optional<PendingCorrection> findPendingCorrection(String orderId) {
+    requireScopedOrder(orderId);
+    List<OrderAttribution> attributions =
+        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
+    return attributions.stream()
+        .filter(row -> row.getStatus() == OrderAttributionStatus.INVALIDATED)
+        .filter(row -> row.getMemberId() != null)
+        .findFirst()
+        .filter(row -> !hasActiveAttributionFor(attributions, row.getMemberId()))
+        .filter(row -> outstandingPointsFor(attributions, row) > 0)
+        .map(row -> new PendingCorrection(row.getId(), row.getMemberCode()));
+  }
+
+  /** 訂正の残っている帰属記録の名指し。画面はこの ID をそのまま差し引きの宛先に渡す。 */
+  public record PendingCorrection(Long attributionId, String memberCode) {}
 
   /**
    * 名指された帰属記録が持つ会員から、誤って付与された分を差し引く。
    *
    * <p>累計は付与額を超えられない。残高不足で全額を引けなかった後に会員が他店で貯めた分から引き継ぐ経路が正当である 以上、上限が無ければ際限なく引ける。判定は同じ冪等キーの行を除いて数える
    * — 数えると、応答を取り逃した正当な 再送が自分自身の初回記帳によって超過と判じられる。
+   *
+   * <p>上限の両辺は<b>同じ作用域</b>で数える。付与は受注と会員で数えるので、訂正済みも名指された記録 1 件ではなく、 同じ受注に対するその会員の帰属記録すべてを数える —
+   * 同じ会員が同じ受注に二度帰属しうる（無効化 → 再発行 → 本人が 申領し直す）ため、記録ごとに数えると片方の訂正枠がもう片方の付与まで飲み込む。同じ理由で、その会員が現に有効な
+   * 帰属を持つ受注では訂正を受け付けない — その付与は正当であり、記録ごとの付与額を持たない台帳では正当な分と 誤った分を切り分けられない。
    *
    * <p>残高が足りなければ台帳側が全額を撥ねる（部分的な引き当ては作らない）。例外の文言が現在残高を載せているので、
    * 操作者は引ける額へ入れ直せる。引き切れなかった差額の扱いは未裁定である（ADR 0009 / 0012）。
@@ -73,13 +114,17 @@ public class OrderAttributionCorrectionService {
     orderRepository
         .findScopedByIdForUpdate(orderId)
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
+    List<OrderAttribution> attributions =
+        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
     OrderAttribution attribution =
-        requireInvalidatedAttribution(orderId, request.getAttributionId());
+        requireInvalidatedAttribution(attributions, orderId, request.getAttributionId());
     long memberId = requireMemberId(attribution);
+    requireNoActiveAttributionFor(attributions, memberId);
 
     long granted = grantedPointsFor(memberId, orderId);
     long already =
-        pointLedgerService.correctedPointsFor(attribution.getId(), request.getIdempotencyKey());
+        pointLedgerService.correctedPointsFor(
+            attributionIdsOf(attributions, memberId), request.getIdempotencyKey());
     if (already + request.getPoints() > granted) {
       throw new ServiceException(
           "差し引ける上限を超えています（この受注の付与は " + granted + " ポイント、うち訂正済みは " + already + " ポイントです）");
@@ -101,20 +146,23 @@ public class OrderAttributionCorrectionService {
    * ため、呼出側（controller）はトランザクションの外から本メソッドを呼び、新しい読み取り専用トランザクションで初回の 記帳を読み直す（ADR 0007）。
    *
    * <p>検証は書き込み経路と同じ順序で通すが、受注行はロックしない — 読み取り専用トランザクションでは行ロックが取れず、 勝者は既に commit
-   * 済みで直列化する相手もいない。上限の判定も行わない。初回が通った以上その判定は済んでおり、 ここで撥ねると正当な再送が失敗する。台帳側の再送判定（内容一致なら何も書かずに戻る／不一致は
-   * 409）に落ちることで、 逐次再送と同一の応答になる。
+   * 済みで直列化する相手もいない。上限の判定も、その会員が有効な帰属を持たないことの確認も行わない。初回が通った 以上どちらの判定も済んでおり、また会員が勝者の commit
+   * のあとに申領し直していれば、後から現況で判じると正当な再送が 失敗する。台帳側の再送判定（内容一致なら何も書かずに戻る／不一致は 409）に落ちることで、 逐次再送と同一の応答になる。
    */
   @StoreScoped
   @Transactional(readOnly = true)
   public OrderAttributionCorrectionResponse replayCorrect(
       String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
     requireScopedOrder(orderId);
+    List<OrderAttribution> attributions =
+        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
     OrderAttribution attribution =
-        requireInvalidatedAttribution(orderId, request.getAttributionId());
+        requireInvalidatedAttribution(attributions, orderId, request.getAttributionId());
     long memberId = requireMemberId(attribution);
     long granted = grantedPointsFor(memberId, orderId);
     long already =
-        pointLedgerService.correctedPointsFor(attribution.getId(), request.getIdempotencyKey());
+        pointLedgerService.correctedPointsFor(
+            attributionIdsOf(attributions, memberId), request.getIdempotencyKey());
 
     pointLedgerService.correctForAttribution(
         memberId,
@@ -144,19 +192,59 @@ public class OrderAttributionCorrectionService {
    * <p><b>受注の現況では判じない。</b>無効化のあと正しい本人が申領を済ませていれば受注には有効な帰属記録が並んで存在
    * するが、古い無効化記録は依然として正当な訂正の根拠である（誤って付与された分はまだその会員の台帳にある）。
    *
-   * <p>帰属記録は platform 帰属で storeFilter が働かず、id 直引きは店舗を跨いで当たる。他店舗の受注に属する記録は 上位の受注取得が 404
-   * で止めるが、同一店舗の<b>別の受注</b>に属する記録はこの対応の確認でしか止まらない。
+   * <p>候補は受注 ID から引いた記録に限る。帰属記録は platform 帰属で storeFilter が働かないため、id を直に引く形では
+   * 同一店舗の<b>別の受注</b>に属する記録にも当たり、受注との対応を後から確かめる責務が呼出側に残る。受注から引けば その対応は構造として成り立つ。
    */
-  private OrderAttribution requireInvalidatedAttribution(String orderId, Long attributionId) {
+  private static OrderAttribution requireInvalidatedAttribution(
+      List<OrderAttribution> attributions, String orderId, Long attributionId) {
     OrderAttribution attribution =
-        orderAttributionRepository
-            .findById(attributionId)
-            .filter(row -> row.getOrderId().equals(orderId))
+        attributions.stream()
+            .filter(row -> row.getId().equals(attributionId))
+            .findFirst()
             .orElseThrow(() -> new NotFoundException("帰属記録が見つかりません: " + attributionId));
     if (attribution.getStatus() != OrderAttributionStatus.INVALIDATED) {
       throw new ServiceException("有効な帰属のポイントは差し引けません。先に帰属を無効化してください");
     }
     return attribution;
+  }
+
+  /**
+   * その会員が現に有効な帰属を持っていないこと。持っていれば差し引きを受け付けない。
+   *
+   * <p>同じ会員が同じ受注に二度帰属しうる（誤って無効化された本人が、再発行された伝票を申領し直す）。台帳の付与行は
+   * どちらの帰属で付いたのかを持たないため、この状態では正当な付与と誤った付与を切り分けられない。名指された古い記録の
+   * 訂正枠が新しい正当な付与まで飲み込み、既定値のまま送るだけで正当な分が消える — 撥ねるほうが安全側である。
+   */
+  private static void requireNoActiveAttributionFor(
+      List<OrderAttribution> attributions, long memberId) {
+    if (hasActiveAttributionFor(attributions, memberId)) {
+      throw new ServiceException("この会員はこの来店に現に帰属しているため、ポイントを差し引けません");
+    }
+  }
+
+  private static boolean hasActiveAttributionFor(
+      List<OrderAttribution> attributions, Long memberId) {
+    return attributions.stream()
+        .anyMatch(
+            row ->
+                row.getStatus() == OrderAttributionStatus.ACTIVE
+                    && Objects.equals(row.getMemberId(), memberId));
+  }
+
+  /** その会員がこの受注に対して持つ帰属記録すべて。訂正済みの合計を数える作用域になる。 */
+  private static List<Long> attributionIdsOf(List<OrderAttribution> attributions, long memberId) {
+    return attributions.stream()
+        .filter(row -> Objects.equals(row.getMemberId(), memberId))
+        .map(OrderAttribution::getId)
+        .toList();
+  }
+
+  /** 名指された記録の会員に、この受注でまだ差し引かれずに残っている付与。 */
+  private long outstandingPointsFor(
+      List<OrderAttribution> attributions, OrderAttribution attribution) {
+    long memberId = attribution.getMemberId();
+    return grantedPointsFor(memberId, attribution.getOrderId())
+        - pointLedgerService.correctedPointsFor(attributionIdsOf(attributions, memberId));
   }
 
   /** 帰属先の会員。会員が削除されていれば参照は欠落しており、積み先そのものが無い。 */

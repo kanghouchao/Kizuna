@@ -175,10 +175,15 @@ public class OrderAttributionService {
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 
-  /** 会員側の情報は会員コードだけを写す。表示名・メールはプラットフォーム側プロフィールで、店舗へは渡らない。 */
+  /**
+   * 会員側の情報は会員コードだけを写す。表示名・メールはプラットフォーム側プロフィールで、店舗へは渡らない。
+   *
+   * <p>残っている訂正の項目はここでは埋めない。台帳を読まなければ決まらず、このサービスが台帳へ依存しないことが 「無効化はポイント台帳へ自動波及しない」（ADR
+   * 0009）の構造的な証跡である。呼出側が訂正のサービスから受け取って {@link OrderAttributionResponse#withPendingCorrection} で添える。
+   */
   private static OrderAttributionResponse toResponse(OrderAttribution attribution) {
     if (attribution == null) {
-      return new OrderAttributionResponse(null, false, null, null, null, null, null);
+      return new OrderAttributionResponse(null, false, null, null, null, null, null, null, null);
     }
     return new OrderAttributionResponse(
         attribution.getId(),
@@ -187,6 +192,8 @@ public class OrderAttributionService {
         attribution.getSource().name(),
         attribution.getAttributedAt(),
         attribution.getInvalidatedReason(),
-        attribution.getInvalidatedAt());
+        attribution.getInvalidatedAt(),
+        null,
+        null);
   }
 }

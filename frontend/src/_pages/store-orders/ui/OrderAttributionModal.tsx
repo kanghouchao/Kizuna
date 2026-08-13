@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderAttribution, OrderAttributionSource, orderApi } from '@/entities/order';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { getApiErrorMessage, hasPermission, readTokenClaims, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { AttributionCorrectionStep } from './AttributionCorrectionStep';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
@@ -116,9 +116,9 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   // 別の受注へ切り替わった瞬間は現況を持たない状態から始める（レンダー期の判定なので、前の受注の
   // 帰属で無効化・再発行の可否を決めるフレームが 1 つも無い）。
   const attribution = snapshot !== null && snapshot.orderId === orderId ? snapshot.body : null;
-  // 差し引きの宛先に渡す ID。attribution.id を閉包の中で直に読むと省略可能なままで型が絞れないため、
-  // 束縛を 1 つ挟んで「記録がある」ことを型でも表す。
-  const attributionId = attribution?.id;
+  // 差し引きの宛先に渡す ID。サーバが名指す「まだ差し引かれていない誤付与を持つ記録」で、現況の記録とは
+  // 別でありうる。閉包の中で直に読むと省略可能なままで型が絞れないため、束縛を 1 つ挟む。
+  const pendingCorrectionId = attribution?.pending_correction_attribution_id;
 
   const [reissued, setReissued] = useState<ReissuedReceiptToken | null>(null);
   const receiptToken = reissued !== null && reissued.orderId === orderId ? reissued.token : null;
@@ -127,6 +127,17 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   const [correcting, setCorrecting] = useState<CorrectionTarget | null>(null);
   const correctionTarget =
     correcting !== null && correcting.orderId === orderId ? correcting : null;
+  // 差し引きの送信中は閉じない。子が持つ送信状態をここへ上げる（ESC・背景押下で閉じると、訂正が
+  // 成立したか分からないまま冪等キーが失われ、開き直しでは別のキーになる）。
+  const [isCorrectingBusy, setIsCorrectingBusy] = useState(false);
+
+  // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
+  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
+  // レンダー期ではなく効果で読むのは、claim が描画前に読めない環境で出し分けが揺れないようにするため。
+  const [canAdjust, setCanAdjust] = useState(false);
+  useEffect(() => {
+    setCanAdjust(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
+  }, []);
 
   useEffect(() => {
     if (!order) return;
@@ -134,6 +145,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
     // 発行済みの QR も一緒に戻す。「今だけ表示できる」と書いた画面が、開き直しで前の QR を出し直さない
     setReissued(null);
     setCorrecting(null);
+    setIsCorrectingBusy(false);
   }, [order, reset]);
 
   const invalidate = async (values: InvalidationFormValues) => {
@@ -177,7 +189,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
     }
   };
 
-  const isBusy = isSubmitting || isReissuing;
+  const isBusy = isSubmitting || isReissuing || isCorrectingBusy;
   const dialogTitle =
     receiptToken !== null
       ? '伝票QRコード'
@@ -217,7 +229,13 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
             orderId={correctionTarget.orderId}
             attributionId={correctionTarget.attributionId}
             memberCode={correctionTarget.memberCode}
-            onDone={() => setCorrecting(null)}
+            onBusyChange={setIsCorrectingBusy}
+            onDone={() => {
+              setCorrecting(null);
+              // 差し引きが済むと残りの誤付与も変わる。取り直さないと、下の導線が済んだ訂正を
+              // 指し続ける。
+              void reload();
+            }}
           />
         ) : isLoading ? (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">読み込み中...</p>
@@ -262,7 +280,46 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                 )}
               </div>
 
-              {attribution.attributed ? (
+              {/* 差し引きへ戻る口。無効化の直後に送る導線を閉じてしまうと、ここが唯一の入口になる。
+                  宛先はサーバが名指す古い記録なので、正しい本人が申領を済ませて現況が入れ替わった後でも
+                  同じ相手に届く（受注から導き直すと、その本人の来店を消す操作になってしまう） */}
+              {canAdjust && pendingCorrectionId !== undefined && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <p className="text-sm text-foreground">
+                    {attribution.pending_correction_member_code ?? '無効化した会員'}
+                    に、誤って付与されたまま差し引かれていないポイントが残っています。
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isBusy}
+                    onClick={() =>
+                      setCorrecting({
+                        orderId,
+                        attributionId: pendingCorrectionId,
+                        memberCode: attribution.pending_correction_member_code,
+                      })
+                    }
+                  >
+                    ポイントを差し引く
+                  </Button>
+                </div>
+              )}
+
+              {!canAdjust && attribution.attributed ? (
+                // 無効化は POINT_ADJUST（店長）限定。押せない導線を描くと、理由を入力し終えてから
+                // 拒否されることになる
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    この帰属を訂正するには、ポイント調整の権限が必要です。店長にご依頼ください。
+                  </p>
+                  <div className="flex justify-end border-t pt-4">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                      閉じる
+                    </Button>
+                  </div>
+                </>
+              ) : attribution.attributed ? (
                 <Form {...form}>
                   {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
                       我々の文言は永久に描かれない。required は下の規則が引き継ぐ */}
@@ -318,24 +375,6 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                     <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
                       閉じる
                     </Button>
-                    {/* 差し引きへ戻る口。無効化の直後に送る導線を閉じてしまった場合、ここが唯一の入口に
-                        なる（差し引きは倒した記録を宛先に取るので、あとからでも同じ相手に届く） */}
-                    {attribution.member_code && attributionId !== undefined && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={isBusy}
-                        onClick={() =>
-                          setCorrecting({
-                            orderId,
-                            attributionId,
-                            memberCode: attribution.member_code,
-                          })
-                        }
-                      >
-                        ポイントを差し引く
-                      </Button>
-                    )}
                     {attribution.member_code && (
                       <Button type="button" onClick={() => void reissue()} disabled={isBusy}>
                         {isReissuing ? '発行中...' : '伝票QRを再発行'}
