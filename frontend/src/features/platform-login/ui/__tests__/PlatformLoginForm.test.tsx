@@ -102,6 +102,20 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
   });
 
+  it('会員以外がログインしたら、預かっていた戻り先とトークンを捨てること', async () => {
+    // 同じタブで後からログインした会員がその戻り先へ運ばれると、申領画面は開いた時点で
+    // 取り込むため「他人の伝票を無確認で申領する」経路になる
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST', console: 'none' }));
+    Cookies.set('member-return-path', '/member/receipts');
+    sessionStorage.setItem('member-return-fragment', '#tok3n');
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/schedule/'));
+    expect(Cookies.get('member-return-path')).toBeUndefined();
+    expect(sessionStorage.getItem('member-return-fragment')).toBeNull();
+  });
+
   it('戻り先に外部 URL が仕込まれていても既定のホームへ遷移すること', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
     Cookies.set('member-return-path', 'https://evil.test/');
