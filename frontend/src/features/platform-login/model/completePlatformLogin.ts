@@ -21,6 +21,11 @@ export async function completePlatformLogin({
   // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
   Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
 
+  // 戻り先はどの利用者種別でログインしても取り出して捨てる。会員以外のログインで残すと、同じタブで
+  // 後からログインした会員がその戻り先へ運ばれる — 申領画面は開いた時点で伝票を取り込むため、
+  // 残った断片は「他人の伝票を無確認で申領する」経路になる。
+  const memberReturnPath = takeMemberReturnPath();
+
   const me = await platformAuthApi.me();
   const activeConsole = me.console ?? 'none';
   const destination = resolvePlatformDestination(activeConsole);
@@ -47,7 +52,7 @@ export async function completePlatformLogin({
   if (me.user_type === 'MEMBER') {
     startPlatformSession('member', expires_at);
     // 会員ポータル内で弾かれてログインへ回された場合はその画面へ戻す（白名単を通った相対パスのみ）。
-    return { status: 'ok', path: takeMemberReturnPath() ?? '/member/' };
+    return { status: 'ok', path: memberReturnPath ?? '/member/' };
   }
 
   // 想定外の user_type: 着地先が無いためセッションを破棄する
