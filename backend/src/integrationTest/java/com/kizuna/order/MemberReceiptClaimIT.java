@@ -144,13 +144,19 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("不在・壊れた値・期限切れ・使用済みのトークンが同形のエラーで返ること")
+  @DisplayName("不在・壊れた値・期限切れ・使用済み・失効済みのトークンが同形のエラーで返ること")
   void everyUnusableTokenFailsWithTheSameShape() {
     // 応答を撃ち分けると、受注の存在と完了状態を応答の違いから辿れてしまう
     Issued expired = completedOrderWithToken(null, "期限切れ担当-" + nonce, TOTAL_FEE);
     jdbcTemplate.update(
         "update t_order_receipt_tokens set expires_at = now() - interval '1 day' where order_id = ?",
         expired.orderId());
+    // 再発行が前の 1 本を殺した後の状態。訂正の途中で古い QR を持っている客がここへ来る
+    Issued revoked = completedOrderWithToken(null, "失効済み担当-" + nonce, TOTAL_FEE);
+    jdbcTemplate.update(
+        "update t_order_receipt_tokens set status = ? where order_id = ?",
+        OrderReceiptTokenStatus.REVOKED.name(),
+        revoked.orderId());
     Issued used = completedOrderWithToken(null, "使用済み担当-" + nonce, TOTAL_FEE);
     assertThat(claim(member, used.token()).getStatusCode())
         .as("前提: 1 度目は申領できること")
@@ -159,10 +165,11 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
     ResponseEntity<String> unknown = claimRaw(member, "存在しない伝票-" + nonce);
     ResponseEntity<String> malformed = claimRaw(member, "%%壊れた値%%");
     ResponseEntity<String> expiredResponse = claimRaw(member, expired.token());
+    ResponseEntity<String> revokedResponse = claimRaw(member, revoked.token());
     ResponseEntity<String> usedResponse = claimRaw(member, used.token());
 
     assertThat(unknown.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-    assertThat(List.of(malformed, expiredResponse, usedResponse))
+    assertThat(List.of(malformed, expiredResponse, revokedResponse, usedResponse))
         .as("状態も本文も不在のトークンと区別が付かないこと")
         .allSatisfy(
             response -> {

@@ -270,6 +270,9 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                   {attribution.member_code ? (
                     <p className="text-sm text-muted-foreground">
                       伝票QRを再発行すると、正しいお客様が読み取ってこの来店を取り戻せます。
+                      {/* 2 度目の再発行は前の QR を殺す。押した後に気づいても渡した QR は戻せないので、
+                          取り消せない副作用として操作の手前で名乗る */}
+                      前に発行した伝票QRは使えなくなります。
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">

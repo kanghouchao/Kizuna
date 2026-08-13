@@ -1,0 +1,74 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v01900-001-revoke-surplus-issued-tokens
+      author: kanghouchao
+      # 下の部分一意索引を張れる状態へ既存行を揃える。期限を倒す機構は無く、90 日を過ぎた伝票も
+      # status は ISSUED のまま残るため、1 受注に ISSUED が 2 行ある行が既存データに在りうる。
+      # 受注ごとに id が最大の ISSUED だけを残す。時刻に依らない決定的な規則にしているのは、
+      # 適用のたびに結果が変わらないようにするため。残る 1 本が最も新しく発行された伝票であり、
+      # 倒される側は「より新しい QR が既に出ている古い QR」にあたる。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              UPDATE t_order_receipt_tokens SET status = 'REVOKED', updated_at = now()
+              WHERE status = 'ISSUED'
+              AND id NOT IN (
+                SELECT max(id) FROM t_order_receipt_tokens
+                WHERE status = 'ISSUED' GROUP BY order_id
+              )
+      # 倒した行がもともと ISSUED だったことは、この変更の後では区別できない（失効と期限切れの
+      # 区別は expires_at にしか残らない）。取り消せる変更ではないので空にする。
+      rollback:
+        - empty
+
+  - changeSet:
+      id: platform-v01900-002-order-receipt-token-issued-index
+      author: kanghouchao
+      # 「1 受注につき申領できる伝票は高々 1 本」を DB 側の最終防波堤として固定する。
+      # ただし索引が強制できるのは「ISSUED が高々 1 本」で、業務の不変量より強い — 申領できるか
+      # は現在時刻に依るため、静的な述語では表現できない。差の分だけ再発行は期限切れの ISSUED も
+      # 失効させる。
+      # 申領済み（CLAIMED）と失効済み（REVOKED）の行は記録として残り続けるため、対象を
+      # status='ISSUED' に絞った部分一意索引にする（Liquibase の addUniqueConstraint は述語付き
+      # 索引を表現できないため裸 SQL）。
+      # この索引は DbConstraint に載せない。再発行のロックが守る以上、発火は実装欠陥であり、
+      # 業務例外へ写像せず大きく失敗させる側にあたる。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_order_receipt_tokens_issued_order
+              ON t_order_receipt_tokens (order_id) WHERE status = 'ISSUED'
+      rollback:
+        - sql:
+            sql: DROP INDEX uq_t_order_receipt_tokens_issued_order
+
+  - changeSet:
+      id: platform-v01900-003-revoke-tokens-on-attributed-orders
+      author: kanghouchao
+      # 守る不変量は「申領できる伝票は受注 1 件につき高々 1 本」だけではなく「有効な帰属記録と
+      # 同時に存在しない」でもある。上の索引は前者しか強制できないため、後者を破ったまま残る
+      # 既存行をここで倒す。
+      # この形の行は既存データに在りうる：申領が元の 1 本を CLAIMED にして帰属を成立させるのと
+      # 並行に、もう 1 本が発行された受注では、ACTIVE な帰属と ISSUED が 1 本ずつ並ぶ。受注ごとの
+      # ISSUED は 1 本なので索引は満たしてしまい、検出もされない。残したまま申領されると帰属記録の
+      # 部分一意違反になり、「申領できない伝票はすべて同形のエラー」が壊れる。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              UPDATE t_order_receipt_tokens SET status = 'REVOKED', updated_at = now()
+              WHERE status = 'ISSUED'
+              AND order_id IN (
+                SELECT order_id FROM t_order_attributions WHERE status = 'ACTIVE'
+              )
+      # 倒した行がもともと ISSUED だったことは、この変更の後では区別できない。
+      rollback:
+        - empty

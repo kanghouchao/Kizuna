@@ -106,6 +106,28 @@ public class OrderReceiptToken extends BaseEntity {
     this.status = OrderReceiptTokenStatus.CLAIMED;
   }
 
+  /**
+   * 失効させられる状態か（未申領）。
+   *
+   * <p>判定が<b>期限内かどうかを見ない</b>のが {@link #isClaimableAt} との違いである。期限切れの行も {@code ISSUED} のまま残る
+   * （期限を倒す機構は無い）ので、申領できるかで判じると再発行が期限切れの行を倒せず、「受注ごとに ISSUED は高々 1 本」を DB へ委ねられなくなる。
+   */
+  public boolean isRevocable() {
+    return status == OrderReceiptTokenStatus.ISSUED;
+  }
+
+  /**
+   * 失効させる。再発行が前の 1 本を殺す操作で、店舗が既に渡した QR を回収する唯一の手段にあたる。
+   *
+   * <p>申領済みの行への呼出は呼出側の欠陥。成立した帰属の根拠を後から失効へ書き換えることになる。
+   */
+  public void revoke() {
+    if (!isRevocable()) {
+      throw new InvalidOrderReceiptTokenException("この伝票トークンは失効させられる状態ではありません");
+    }
+    this.status = OrderReceiptTokenStatus.REVOKED;
+  }
+
   /** 生値もダイジェストも載せない。診断出力がクレデンシャルの漏えい経路にならないようにする。 */
   @Override
   public String toString() {

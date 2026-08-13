@@ -12,6 +12,7 @@ import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
+import com.kizuna.order.domain.OrderReceiptTokenStatus;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -315,40 +317,72 @@ class OrderAttributionServiceTest {
   }
 
   @Test
-  @DisplayName("申領できる伝票が既にある受注へは再発行しないこと（生きた伝票が 2 本並ぶと申領の応答が同形でなくなる）")
-  void reissueRejectsWhenAClaimableTokenAlreadyExists() {
+  @DisplayName("再発行は先行する未申領の伝票を失効させ、新しい行より先に flush すること")
+  void reissueRevokesTheLiveTokenBeforeIssuingTheNewOne() {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions(invalidatedAttribution());
-    givenTokens(
+    OrderReceiptToken live =
         OrderReceiptToken.issueFor(
-            ORDER_ID, "live-digest", TOKEN_PLANNED_POINTS, OffsetDateTime.now()));
+            ORDER_ID, "live-digest", TOKEN_PLANNED_POINTS, OffsetDateTime.now());
+    givenTokens(live);
+    Mockito.when(receiptTokenGenerator.generate())
+        .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    assertThatThrownBy(() -> service.reissueReceiptToken(ORDER_ID))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("申領できる伝票が既にあります");
-    Mockito.verify(orderReceiptTokenRepository, Mockito.never()).save(Mockito.any());
+    service.reissueReceiptToken(ORDER_ID);
+
+    assertThat(live.getStatus()).isEqualTo(OrderReceiptTokenStatus.REVOKED);
+    // Hibernate は INSERT を UPDATE より先に流すため、まとめて save すると新しい行が「まだ倒れていない
+    // 旧行」と部分一意索引の上で衝突する。失効が先に flush されることが index を成立させる条件になる
+    InOrder writes = Mockito.inOrder(orderReceiptTokenRepository);
+    writes.verify(orderReceiptTokenRepository).saveAndFlush(live);
+    writes.verify(orderReceiptTokenRepository).save(Mockito.any());
   }
 
   @Test
-  @DisplayName("期限切れの伝票は再発行を妨げないこと（申領できない伝票に窓を塞がせない）")
-  void reissueIgnoresAnExpiredToken() {
+  @DisplayName("期限切れの伝票も失効させること（ISSUED のまま残ると 2 本目を発行できなくなる）")
+  void reissueRevokesAnExpiredTokenToo() {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions(invalidatedAttribution());
-    givenTokens(
+    // 期限を倒す機構は無いため、90 日を過ぎた伝票も status は ISSUED のまま残る。申領できるかで
+    // 失効の対象を決めると、この行が索引の枠を占めたまま再発行が通らなくなる
+    OrderReceiptToken expired =
         OrderReceiptToken.issueFor(
             ORDER_ID,
             "expired-digest",
             TOKEN_PLANNED_POINTS,
-            OffsetDateTime.now().minus(OrderReceiptToken.VALIDITY).minusDays(1)));
+            OffsetDateTime.now().minus(OrderReceiptToken.VALIDITY).minusDays(1));
+    givenTokens(expired);
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
     assertThat(service.reissueReceiptToken(ORDER_ID).receiptToken()).isEqualTo("raw");
+
+    assertThat(expired.getStatus()).isEqualTo(OrderReceiptTokenStatus.REVOKED);
   }
 
   @Test
-  @DisplayName("再発行は受注を押さえてから門を判じること（並行する再発行が同じ「伝票が無い」を観測しないため）")
-  void reissueLocksTheOrderBeforeCheckingItsGuards() {
+  @DisplayName("申領済みの伝票は失効させないこと（成立した帰属の根拠を書き換えない）")
+  void reissueLeavesAClaimedTokenUntouched() {
+    givenOrder(OrderStatus.COMPLETED);
+    givenAttributions(invalidatedAttribution());
+    OrderReceiptToken claimed =
+        OrderReceiptToken.issueFor(
+            ORDER_ID, "claimed-digest", TOKEN_PLANNED_POINTS, OffsetDateTime.now());
+    claimed.claim(OffsetDateTime.now());
+    givenTokens(claimed);
+    Mockito.when(receiptTokenGenerator.generate())
+        .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
+
+    // 申領済みの行を見て何も発行しない実装も「触らない」を満たすため、発行まで断言する
+    assertThat(service.reissueReceiptToken(ORDER_ID).receiptToken()).isEqualTo("raw");
+
+    assertThat(claimed.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
+    Mockito.verify(orderReceiptTokenRepository, Mockito.never()).saveAndFlush(Mockito.any());
+  }
+
+  @Test
+  @DisplayName("再発行はトークン行を押さえてから帰属記録を読むこと（在途の申領を待たずに判じないため）")
+  void reissueLocksTheTokenRowsBeforeReadingTheAttributions() {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions(invalidatedAttribution());
     givenTokens();
@@ -357,10 +391,13 @@ class OrderAttributionServiceTest {
 
     service.reissueReceiptToken(ORDER_ID);
 
-    // 実際の競合は統合テストが踏む。ここが固定するのは「ロックを取る読み口を通っている」配線そのもので、
-    // 素の読み口へ差し替わると門が check-then-act に戻る
+    // 実際の待ち合わせは統合テストが踏む。ここが固定するのは配線と順序そのもので、素の読み口へ
+    // 差し替わるか順序が入れ替わると、門が在途の申領を見ない check-then-act に戻る
     Mockito.verify(orderRepository).findScopedByIdForUpdate(ORDER_ID);
     Mockito.verify(orderRepository, Mockito.never()).findScopedById(ORDER_ID);
+    InOrder reads = Mockito.inOrder(orderReceiptTokenRepository, orderAttributionRepository);
+    reads.verify(orderReceiptTokenRepository).findByOrderIdForUpdate(ORDER_ID);
+    reads.verify(orderAttributionRepository).findByOrderIdOrderByIdDesc(ORDER_ID);
   }
 
   @Test
@@ -411,7 +448,7 @@ class OrderAttributionServiceTest {
   }
 
   private void givenTokens(OrderReceiptToken... rows) {
-    Mockito.when(orderReceiptTokenRepository.findByOrderIdOrderByIdDesc(ORDER_ID))
+    Mockito.when(orderReceiptTokenRepository.findByOrderIdForUpdate(ORDER_ID))
         .thenReturn(List.of(rows));
   }
 
