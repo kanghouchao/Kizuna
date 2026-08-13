@@ -100,26 +100,20 @@ describe('OrderAttributionModal', () => {
     expect(mockedInvalidate).not.toHaveBeenCalled();
   });
 
-  it('台帳へ波及しないことと、清算の手段を無効化の前に画面が名乗る', async () => {
-    // 事後に気づくと、誤って付与されたポイントが残ったまま訂正が済んだと見なされる
-    renderModal();
+  it.each(['COMPLETION', 'RECEIPT_TOKEN'] as const)(
+    '清算の宛先は帰属の会員だと述べ、顧客画面の調整を宛先として案内しない（%s）',
+    async source => {
+      // 調整の口は「その顧客に現在紐づく会員」を対象に取る一方、清算すべき相手はこの帰属記録が
+      // 持つ会員（不変）。ずれた状態で案内どおり操作すると無関係な会員から引かれるため、成立の
+      // 機構によらず特定の画面を宛先として案内しない
+      mockedAttribution.mockResolvedValue({ ...attributed, source });
+      renderModal();
 
-    expect(await screen.findByText(/付与済みのポイントは戻りません/)).toBeInTheDocument();
-    // 完了時の紐づけで成立した帰属は顧客に会員が紐づいているので、その画面の調整が届く
-    expect(screen.getByText(/顧客の画面でポイント調整/)).toBeInTheDocument();
-  });
-
-  it('伝票QR申領で成立した帰属では、届かない清算手段を案内しない', async () => {
-    // 申領は店舗台帳に会員の紐づけを作らない。店舗側のポイント調整は顧客に紐づく会員しか対象に
-    // 取れないため、顧客画面を案内すると実行できない操作を指示することになる
-    mockedAttribution.mockResolvedValue({ ...attributed, source: 'RECEIPT_TOKEN' });
-    renderModal();
-
-    expect(
-      await screen.findByText(/店舗からポイントを戻す操作は現在ありません/)
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/顧客の画面でポイント調整/)).not.toBeInTheDocument();
-  });
+      expect(await screen.findByText(/付与済みのポイントは戻りません/)).toBeInTheDocument();
+      expect(screen.getByText(/上の会員コードの台帳に対して行う/)).toBeInTheDocument();
+      expect(screen.getByText(/この会員に届きません/)).toBeInTheDocument();
+    }
+  );
 
   it('無効化に成功すると、取り直さずに再発行の導線へ切り替わる', async () => {
     mockedInvalidate.mockResolvedValue(invalidated);
