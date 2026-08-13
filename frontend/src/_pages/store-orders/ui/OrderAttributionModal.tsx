@@ -33,18 +33,19 @@ const SOURCE_LABELS: Record<OrderAttributionSource, string> = {
 };
 
 /**
- * 無効化の前に出す清算の注意書き。台帳へ波及しないことは共通だが、清算の手段は成立の機構で変わる。
+ * 無効化の前に出す清算の注意書き。
  *
- * 伝票QRの申領で成立した帰属は店舗台帳に会員の紐づけを作らない（申領は受注 1 件の事実だけを証明し、
- * 店舗と会員の継続的な関係を作らない）。店舗側のポイント調整は顧客に紐づく会員だけを対象に取るため、
- * この経路で付いたポイントには届かない。届かない操作を案内しないよう、機構ごとに言い分ける。
+ * 清算の宛先は<b>この帰属記録が持つ会員</b>（不変）である一方、店舗コンソールのポイント調整は
+ * 「その顧客に<b>現在</b>紐づく会員」を対象に取る。両者は一致するとは限らない — 申領で成立した帰属は
+ * そもそも紐づけを作らず、完了時の帰属でも紐づけはあとから解除・変更されうる。ずれている状態で
+ * 案内どおりに操作すると、撥ねられるか、<b>無関係な会員から引かれる</b>。
+ *
+ * よって特定の画面を宛先として案内しない。宛先は上に表示している会員コードであることと、
+ * 顧客画面の調整が届くとは限らないことだけを述べる。機構ごとに文言を出し分ける形は採らない —
+ * 「どの場合に届くか」は紐づけの現況しだいで、成立の機構からは判らないため。
  */
-const SETTLEMENT_NOTES: Record<OrderAttributionSource, string> = {
-  COMPLETION:
-    '無効化しても付与済みのポイントは戻りません。清算が必要な場合は、その顧客の画面でポイント調整を行ってください。',
-  RECEIPT_TOKEN:
-    '無効化しても付与済みのポイントは戻りません。この来店は伝票QRの申領で帰属したため店舗台帳に会員の紐づけが無く、店舗からポイントを戻す操作は現在ありません。',
-};
+const SETTLEMENT_NOTE =
+  '無効化しても付与済みのポイントは戻りません。清算は上の会員コードの台帳に対して行う必要があります。顧客画面のポイント調整はその顧客に現在紐づく会員を対象に取るため、紐づけが無い・変わっている場合はこの会員に届きません。';
 
 interface InvalidationFormValues {
   reason: string;
@@ -253,11 +254,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                     />
                     {/* 台帳へ波及しないことは操作の前に知らせる。事後に気づくと、誤付与が残ったまま
                         訂正が済んだと見なされる */}
-                    <p className="text-sm text-muted-foreground">
-                      {attribution.source
-                        ? SETTLEMENT_NOTES[attribution.source]
-                        : '無効化しても付与済みのポイントは戻りません。'}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{SETTLEMENT_NOTE}</p>
                     <div className="flex justify-end gap-3 border-t pt-4">
                       <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
                         キャンセル
