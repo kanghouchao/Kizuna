@@ -8,7 +8,7 @@ import {
   declineOrder,
   deleteCast,
   deleteCustomer,
-  deleteOrder,
+  cancelOrder,
   deleteShift,
   linkMemberToCustomer,
   loginAsStoreAdmin,
@@ -42,7 +42,7 @@ let createdOrderId = '';
 
 /**
  * 未処理の予約申請のうち、このシナリオの会員が出したものの id を引く
- * （GET /api/store/orders/reservation-requests）。UI から出した申請は応答を取り損ねると id が
+ * （GET /api/store/orders/work-queue の未確定群）。UI から出した申請は応答を取り損ねると id が
  * 手元に無いため、後片付けはこの引き直しを拠り所にする。
  */
 async function findPendingRequestIds(
@@ -50,12 +50,12 @@ async function findPendingRequestIds(
   token: string,
   code: string
 ): Promise<string[]> {
-  const res = await request.get('/api/store/orders/reservation-requests', {
+  const res = await request.get('/api/store/orders/work-queue', {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    params: { size: 100 },
+    params: { statuses: 'CREATED', size: 100 },
   });
   if (!res.ok()) {
-    throw new Error(`list reservation requests failed: ${res.status()} ${await res.text()}`);
+    throw new Error(`list work queue failed: ${res.status()} ${await res.text()}`);
   }
   const body = await res.json();
   const rows = body.content as Array<{ id: string; requester_member_code: string | null }>;
@@ -159,11 +159,11 @@ Then('予約一覧に {string} の予約が表示される', async ({ page }, st
   await expect(item.getByText(statusLabel, { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
-When('店舗管理者が予約受付 inbox で予約を確定する', async ({ page }) => {
+When('店舗管理者が受注一覧の「未確定」群で予約を確定する', async ({ page }) => {
   const storeId = await loginViaUiAndEnterStore(page);
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
-  // inbox は店舗共有かつ古い順に並ぶため、先頭を掴むと先に残っている他人の申請を確定してしまう。
-  // 行に出る会員コードでこのシナリオの申請だけを名指す。
+  // 群は店舗共有なので、先頭を掴むと先に残っている他人の申請を確定してしまう。
+  // カードに出る会員コードでこのシナリオの申請だけを名指す。
   const request = page
     .getByRole('listitem')
     .filter({ hasText: 'WEB申請' })
@@ -203,8 +203,9 @@ When('予約を取り下げる', async ({ page }) => {
 // 受注は顧客・キャストを参照する（FK RESTRICT）ため、必ず受注 → シフト → キャスト → 顧客の順で消す。
 After(async ({ request }) => {
   const adminToken = await loginAsStoreAdmin(request);
-  // 未確定のまま終わった申請は削除が拒否される（謝絶で扱う設計）ので、まず謝絶して CANCELLED にする。
-  // 対象は id ではなく会員コードで引き直す — 申請の POST 応答を取り損ねた中断でも消し残さないため。
+  // 受注を消す口は無い（ADR 0013）。未確定のまま終わった申請は謝絶で、確定まで進んだものは
+  // 理由付きの取消で終端へ送り、対応が要る群から外す。
+  // 対象は id ではなく会員コードで引き直す — 申請の POST 応答を取り損ねた中断でも残さないため。
   const pendingIds = memberCode
     ? await findPendingRequestIds(request, adminToken, memberCode).catch(error => {
         warnCleanupFailure(error);
@@ -214,8 +215,9 @@ After(async ({ request }) => {
   for (const id of pendingIds) {
     await declineOrder(request, adminToken, id).catch(warnCleanupFailure);
   }
-  for (const id of new Set([...pendingIds, createdOrderId].filter(Boolean))) {
-    await deleteOrder(request, adminToken, id).catch(warnCleanupFailure);
+  if (createdOrderId) {
+    // 確定まで進んだ受注は取消で終端へ。既に終端なら撥ねられるので、失敗は後片付けの警告に留める。
+    await cancelOrder(request, adminToken, createdOrderId, 'e2e の後片付け').catch(() => {});
   }
   if (createdShiftId) {
     await deleteShift(request, adminToken, createdShiftId).catch(() => {});

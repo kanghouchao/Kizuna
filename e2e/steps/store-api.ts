@@ -357,16 +357,24 @@ export async function declineOrder(
   }
 }
 
-/** 受注を削除する（DELETE /api/store/orders/{id}, hasAuthority('ORDER_MANAGE')）。 */
-export async function deleteOrder(
+/**
+ * 確定済みの受注を理由付きで取消す（POST /api/store/orders/{id}/cancellation,
+ * hasAuthority('ORDER_MANAGE')）。
+ *
+ * 受注を消す口は無い（ADR 0013 — 誤登録も行を消さず取消として残す）ので、後片付けはこれが終端になる。
+ * 行そのものは共有の店舗に残り続けるが、対応が要る群からは外れるので後続のシナリオを妨げない。
+ */
+export async function cancelOrder(
   request: APIRequestContext,
   token: string,
-  id: string
+  id: string,
+  reason: string
 ): Promise<void> {
-  const res = await request.delete(`/api/store/orders/${id}`, {
+  const res = await request.post(`/api/store/orders/${id}/cancellation`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { reason },
   });
   if (!res.ok()) {
-    throw new Error(`delete order failed: ${res.status()} ${await res.text()}`);
+    throw new Error(`cancel order failed: ${res.status()} ${await res.text()}`);
   }
 }
