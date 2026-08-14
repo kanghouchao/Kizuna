@@ -2,6 +2,7 @@ package com.kizuna.order.api.dto;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -45,6 +46,15 @@ public class OrderResponse {
   private String requesterMemberCode; // 申請した会員（店舗が起こした受注では null）
   private String locationAddress;
   private String locationBuilding;
+
+  // 取消の記録（理由・実行者・時刻）。取消していない受注では応答から消える。会員本人へ返す
+  // MemberOrderResponse は項目の白名単なので、この理由が会員へ渡ることはない
+  private String cancelledReason;
+
+  /** 取消の実行者の表示名。操作者が削除された取消では欠落する（FK が SET NULL のため）。 */
+  private String cancelledByName;
+
+  private OffsetDateTime cancelledAt;
 
   /**
    * 発行された伝票トークンの生値。会員へ帰属しなかった完了の<b>応答にだけ</b>現れ、他の読み口では常に null。

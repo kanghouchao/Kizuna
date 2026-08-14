@@ -36,6 +36,9 @@ class PlatformOrderServiceTest {
 
   @InjectMocks PlatformOrderService service;
 
+  /** HQ 経由の作成の実行者。受付担当の補完先として店舗側の作成へそのまま渡る。 */
+  private static final String ACTOR_EMAIL = "hq@kizuna.test";
+
   private PlatformOrderCreateRequest requestForStore(long storeId) {
     PlatformOrderCreateRequest req = new PlatformOrderCreateRequest();
     req.setStoreId(storeId);
@@ -65,7 +68,7 @@ class PlatformOrderServiceTest {
     OrderResponse res = OrderResponse.builder().id("o1").build();
     when(storeScopeExecutor.runInStore(eq(7L), any())).thenReturn(res);
 
-    assertThat(service.create(req)).isSameAs(res);
+    assertThat(service.create(req, ACTOR_EMAIL)).isSameAs(res);
   }
 
   @Test
@@ -73,12 +76,12 @@ class PlatformOrderServiceTest {
   void createRunsOrderServiceCreateAsScopedAction() {
     PlatformOrderCreateRequest req = requestForStore(7L);
     OrderResponse res = OrderResponse.builder().id("o1").build();
-    when(orderService.create(req)).thenReturn(res);
+    when(orderService.create(req, ACTOR_EMAIL)).thenReturn(res);
     // executor へ渡された action（Supplier）を実行させ、orderService.create が呼ばれることを固定する
     when(storeScopeExecutor.runInStore(eq(7L), any()))
         .thenAnswer(inv -> ((Supplier<OrderResponse>) inv.getArgument(1)).get());
 
-    assertThat(service.create(req)).isSameAs(res);
-    verify(orderService).create(req);
+    assertThat(service.create(req, ACTOR_EMAIL)).isSameAs(res);
+    verify(orderService).create(req, ACTOR_EMAIL);
   }
 }

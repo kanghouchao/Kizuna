@@ -1,0 +1,5 @@
+# v0.22.0 = 受注の取消記録（理由・実行者・時刻。ADR 0013）。store 層のみ。
+databaseChangeLog:
+  - include:
+      file: store/01-order-cancellation.yaml
+      relativeToChangelogFile: true

@@ -162,20 +162,6 @@ class OrderCompletionIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("汎用更新では完了へ遷移できないこと")
-  void genericUpdateCannotCompleteAnOrder() {
-    String castId = createCast(STORE_A, token, "完了遷移拒否");
-    String orderId = createOrder(STORE_A, token, SEED_RECEPTIONIST_ID, castId, null, "完了遷移拒否");
-    assertThat(updateStatus(STORE_A, token, orderId, castId, SEED_RECEPTIONIST_ID, "CONFIRMED"))
-        .as("前提: 確定への遷移は汎用更新が引き続き受け持つこと")
-        .isEqualTo(HttpStatus.OK);
-
-    assertThat(updateStatus(STORE_A, token, orderId, castId, SEED_RECEPTIONIST_ID, "COMPLETED"))
-        .isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(statusOf(STORE_A, token, orderId)).isEqualTo("CONFIRMED");
-  }
-
-  @Test
   @DisplayName("事前計算は紐づけの有無で残高の有無が変わること")
   void previewCarriesTheBalanceOnlyForLinkedOrders() {
     String memberCode = registerMember("preview");
@@ -209,14 +195,11 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     return confirmedOrder(storeId, bearerToken, receptionistId, customerId, label);
   }
 
+  /** 店舗が起こす受注は確定で出生するため、作成だけで完了の前提が揃う。 */
   private String confirmedOrder(
       long storeId, String bearerToken, long receptionistId, String customerId, String label) {
     String castId = createCast(storeId, bearerToken, label + "-" + nonce);
-    String orderId = createOrder(storeId, bearerToken, receptionistId, castId, customerId, label);
-    assertThat(updateStatus(storeId, bearerToken, orderId, castId, receptionistId, "CONFIRMED"))
-        .as("前提: 受注を確定できること")
-        .isEqualTo(HttpStatus.OK);
-    return orderId;
+    return createOrder(storeId, bearerToken, receptionistId, castId, customerId, label);
   }
 
   private String createOrder(
@@ -247,31 +230,6 @@ class OrderCompletionIT extends CrossStoreTestSupport {
         .as("前提: store %d での受注作成が成功すること", storeId)
         .isTrue();
     return created.getBody().path("id").asString();
-  }
-
-  private HttpStatus updateStatus(
-      long storeId,
-      String bearerToken,
-      String orderId,
-      String castId,
-      long receptionistId,
-      String status) {
-    String body =
-        "{\"receptionist_id\": "
-            + receptionistId
-            + ", \"cast_id\": \""
-            + castId
-            + "\", \"status\": \""
-            + status
-            + "\"}";
-    return HttpStatus.valueOf(
-        rest.exchange(
-                "/store/orders/" + orderId,
-                HttpMethod.PUT,
-                new HttpEntity<>(body, headersFor(storeId, bearerToken)),
-                JsonNode.class)
-            .getStatusCode()
-            .value());
   }
 
   private String createCast(long storeId, String bearerToken, String name) {

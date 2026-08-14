@@ -358,7 +358,6 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
   private Issued completedOrderWithToken(String customerId, String castName, int totalFee) {
     String castId = createCast(castName);
     String orderId = createOrder(castId, customerId, castName);
-    assertThat(updateStatus(orderId, castId, "CONFIRMED")).as("前提: 受注を確定できること").isTrue();
     ResponseEntity<JsonNode> completed =
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
@@ -389,24 +388,6 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
             "/store/orders", new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
     return created.getBody().path("id").asString();
-  }
-
-  private boolean updateStatus(String orderId, String castId, String status) {
-    String body =
-        "{\"receptionist_id\": "
-            + SEED_RECEPTIONIST_ID
-            + ", \"cast_id\": \""
-            + castId
-            + "\", \"status\": \""
-            + status
-            + "\"}";
-    return rest.exchange(
-            "/store/orders/" + orderId,
-            HttpMethod.PUT,
-            new HttpEntity<>(body, storeHeaders(STORE_A)),
-            JsonNode.class)
-        .getStatusCode()
-        .is2xxSuccessful();
   }
 
   private String createCast(String name) {

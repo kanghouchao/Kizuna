@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -123,6 +124,20 @@ public class Order extends StoreScopedEntity {
   @Column(name = "reception_route", length = 20)
   private ReceptionRoute receptionRoute;
 
+  /** 取消の理由。取消の根拠そのものなので取消では必須で、取消していない受注では null。分類軸ではない（enum 化しない）。 */
+  @Column(name = "cancelled_reason", length = 500)
+  private String cancelledReason;
+
+  /**
+   * 取消を実行した操作者。書き込み時は必須だが、読み出しでは欠落しうる — 操作者の削除で FK が SET NULL になるためで、帰属記録の {@code invalidatedBy}
+   * と同じ紀律である。
+   */
+  @Column(name = "cancelled_by")
+  private Long cancelledBy;
+
+  @Column(name = "cancelled_at")
+  private OffsetDateTime cancelledAt;
+
   /** 申請した会員。店舗が直接起こした受注では null。 */
   @Column(name = "requester_member_id")
   private Long requesterMemberId;
@@ -207,8 +222,31 @@ public class Order extends StoreScopedEntity {
     this.remarks = remarks;
   }
 
+  /**
+   * 受付で録入された連絡先を訂正する。null のフィールドは変更しない。
+   *
+   * <p>顧客が着いた受注では<b>撥ねる</b>。着いていれば名乗りの正本は台帳の行であり、受注側の写しを書き足すと どちらが正本かが読み手から消える。黙って捨てる（{@link
+   * #recordContactIfUnlinked} の作成時の作法）を 訂正の経路でも採ると、送り手は直ったと誤解したまま台帳の誤記が残る。
+   *
+   * <p>訂正は写しを直すだけで、台帳照合（0 件建档 / 1 件紐づけ / 複数断念）は再走しない。事後に受注を顧客へ着ける操作は この集約の外の別の口が担う。
+   */
+  public void correctContact(String name, String phoneNumber) {
+    if (customerId != null) {
+      throw new InvalidOrderContactCorrectionException("顧客が紐づいた受注の連絡先は編集できません。顧客詳細で台帳の情報を訂正してください");
+    }
+    if (name != null) {
+      this.contactName = name;
+    }
+    if (phoneNumber != null) {
+      this.contactPhoneNumber = phoneNumber;
+    }
+  }
+
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(OrderPatch patch) {
+    if (patch.businessDate() != null) {
+      this.businessDate = patch.businessDate();
+    }
     if (patch.arrivalScheduledStartTime() != null) {
       this.arrivalScheduledStartTime = patch.arrivalScheduledStartTime();
     }
@@ -232,6 +270,18 @@ public class Order extends StoreScopedEntity {
     }
     if (patch.manualDiscount() != null) {
       this.manualDiscount = patch.manualDiscount();
+    }
+    if (patch.locationAddress() != null) {
+      this.locationAddress = patch.locationAddress();
+    }
+    if (patch.locationBuilding() != null) {
+      this.locationBuilding = patch.locationBuilding();
+    }
+    if (patch.carrier() != null) {
+      this.carrier = patch.carrier();
+    }
+    if (patch.mediaName() != null) {
+      this.mediaName = patch.mediaName();
     }
     if (patch.remarks() != null) {
       this.remarks = patch.remarks();
@@ -262,8 +312,28 @@ public class Order extends StoreScopedEntity {
     transitionTo(OrderStatus.COMPLETED);
   }
 
-  /** 注文をキャンセルする。完了前のみ可能。 */
-  public void cancel() {
+  /**
+   * 確定済みの注文を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみ — 未確定の申請は謝絶（{@link
+   * #cancelRequest}）が受け持ち、誤って完了した受注の救済経路はまだ存在しない（ADR 0013）。
+   *
+   * <p>二度目の取消は同一状態への静默冪等（{@link #transitionTo}）に委ねず明示的に撥ねる。通せば初回の理由と実行者が黙って上書きされ、理由を必須にした意味が消える。
+   */
+  public void cancelWith(String reason, Long actorId, OffsetDateTime at) {
+    if (status != OrderStatus.CONFIRMED) {
+      throw new IllegalOrderStateTransitionException(status, OrderStatus.CANCELLED);
+    }
+    if (reason == null || reason.isBlank()) {
+      throw new InvalidOrderCancellationException("取消の理由は必須です");
+    }
+    if (actorId == null) {
+      throw new InvalidOrderCancellationException("取消の実行者は必須です");
+    }
+    if (at == null) {
+      throw new InvalidOrderCancellationException("取消の日時は必須です");
+    }
+    this.cancelledReason = reason;
+    this.cancelledBy = actorId;
+    this.cancelledAt = at;
     transitionTo(OrderStatus.CANCELLED);
   }
 

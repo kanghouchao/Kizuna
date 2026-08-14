@@ -20,12 +20,16 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.order.domain.OrderQueryCriteria;
+import com.kizuna.order.domain.OrderSortKey;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.application.StoreActivationService;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.List;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
@@ -88,43 +92,81 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("予約受付 inbox が要求された続きの位置と件数を読み口へ渡すこと")
+  @DisplayName("作業キューが要求された群・検索・並び・続きの位置を読み口へ渡すこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
-  void reservationRequestsForwardTheRequestedCursor() throws Exception {
+  void workQueueForwardsTheRequestedCriteriaAndCursor() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
+        ArgumentCaptor.forClass(OrderQueryCriteria.class);
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
-    when(orderService.listPendingReservationRequests(cursorCaptor.capture(), sizeCaptor.capture()))
+    when(orderService.listWorkQueue(
+            criteriaCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(
-            get("/store/orders/reservation-requests?cursor=abc&size=5")
+            get("/store/orders/work-queue?statuses=CREATED,CONFIRMED&customer_name=山田"
+                    + "&business_date=2026-08-15&sort=PAX&desc=true&cursor=abc&size=5")
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
+    assertThat(criteriaCaptor.getValue().statuses())
+        .containsExactlyInAnyOrder(OrderStatus.CREATED, OrderStatus.CONFIRMED);
+    assertThat(criteriaCaptor.getValue().customerName()).isEqualTo("山田");
+    assertThat(criteriaCaptor.getValue().businessDate()).isEqualTo(LocalDate.of(2026, 8, 15));
+    assertThat(criteriaCaptor.getValue().sortKey()).isEqualTo(OrderSortKey.PAX);
+    assertThat(criteriaCaptor.getValue().descending()).isTrue();
     assertThat(cursorCaptor.getValue()).isEqualTo("abc");
     assertThat(sizeCaptor.getValue()).isEqualTo(5);
   }
 
   @Test
-  @DisplayName("続きの位置を指定しない予約受付 inbox は先頭から読むこと")
+  @DisplayName("続きの位置と検索を指定しない作業キューは先頭から絞り込みなしで読むこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
-  void reservationRequestsStartFromTheBeginningWithoutACursor() throws Exception {
+  void workQueueStartsFromTheBeginningWithoutACursor() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
+        ArgumentCaptor.forClass(OrderQueryCriteria.class);
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
-    when(orderService.listPendingReservationRequests(cursorCaptor.capture(), anyInt()))
+    when(orderService.listWorkQueue(criteriaCaptor.capture(), cursorCaptor.capture(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(
-            get("/store/orders/reservation-requests")
+            get("/store/orders/work-queue?statuses=CONFIRMED&customer_name=")
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(cursorCaptor.getValue()).isNull();
+    // 空欄の検索語は「送っていない」と同じ。述語を組むと全件が条件から漏れる
+    assertThat(criteriaCaptor.getValue().customerName()).isNull();
+    assertThat(criteriaCaptor.getValue().businessDate()).isNull();
+  }
+
+  @Test
+  @DisplayName("アーカイブが群と並びを読み口へ渡し、ページャで辿れること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void archiveForwardsTheRequestedCriteriaAndPage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
+        ArgumentCaptor.forClass(OrderQueryCriteria.class);
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    when(orderService.listArchive(criteriaCaptor.capture(), pageableCaptor.capture()))
+        .thenReturn(Page.empty());
+
+    mockMvc
+        .perform(
+            get("/store/orders/archive?statuses=CANCELLED&sort=BUSINESS_DATE&page=2&size=5")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
+
+    assertThat(criteriaCaptor.getValue().statuses()).containsExactly(OrderStatus.CANCELLED);
+    assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
+    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
   }
 
   @Test

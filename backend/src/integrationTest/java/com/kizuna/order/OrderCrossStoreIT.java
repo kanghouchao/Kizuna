@@ -204,7 +204,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(untouched.getBody().path("status").asString())
         .as("謝絶が拒否された受注はキャンセルへ落ちないこと")
-        .isEqualTo("CREATED");
+        .isEqualTo("CONFIRMED");
 
     // 負向: store B は store A の受注に申請専用経路でも到達できない
     String orderId = createOrderAs(STORE_A, castId);
@@ -224,7 +224,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(foreignDecline.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-    // 拒否された受注は未確定のまま残っている
+    // 拒否された受注は出生時のまま（確定）残っている
     ResponseEntity<JsonNode> after =
         rest.exchange(
             "/store/orders/" + orderId,
@@ -232,7 +232,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(after.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(after.getBody().path("status").asString()).isEqualTo("CREATED");
+    assertThat(after.getBody().path("status").asString()).isEqualTo("CONFIRMED");
   }
 
   @Test

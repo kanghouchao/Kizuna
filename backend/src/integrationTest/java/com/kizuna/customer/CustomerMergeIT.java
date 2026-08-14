@@ -68,7 +68,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   void movesOrdersOfEveryStatusAndLeavesATombstone() {
     String surviving = createCustomer("存続-" + nonce);
     String merged = createCustomer("被統合-" + nonce);
-    String created = orderFor(merged, "予約中");
+    // 未確定（CREATED）は会員申請だけが持つ状態になったため、店舗の作成経路では作れない。
+    // 統合が状態を条件にしないことは、店舗が到達できる 3 状態で固定する。
     String confirmed = confirmedOrderFor(merged, "確定");
     String completed = completedOrderFor(merged, "完了");
     String cancelled = cancelledOrderFor(merged, "取消");
@@ -77,13 +78,12 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody().path("surviving_customer_id").asString()).isEqualTo(surviving);
-    assertThat(response.getBody().path("moved_order_count").asInt()).isEqualTo(4);
+    assertThat(response.getBody().path("moved_order_count").asInt()).isEqualTo(3);
     // 状態は付替えの条件に入らない。売上も履歴も欠けないこと。
-    assertThat(statusOf(created)).isEqualTo(OrderStatus.CREATED);
     assertThat(statusOf(confirmed)).isEqualTo(OrderStatus.CONFIRMED);
     assertThat(statusOf(completed)).isEqualTo(OrderStatus.COMPLETED);
     assertThat(statusOf(cancelled)).isEqualTo(OrderStatus.CANCELLED);
-    assertThat(List.of(created, confirmed, completed, cancelled))
+    assertThat(List.of(confirmed, completed, cancelled))
         .allSatisfy(orderId -> assertThat(customerOf(orderId)).isEqualTo(surviving));
     // 行は削除されず、統合先を指す墓標として残る
     assertThat(mergedIntoOf(merged)).isEqualTo(surviving);
@@ -399,10 +399,9 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     return created.getBody().path("id").asString();
   }
 
+  /** 店舗が起こす受注は確定で出生するため、作成だけで確定済みになる。 */
   private String confirmedOrderFor(String customerId, String label) {
-    String orderId = orderFor(customerId, label);
-    assertThat(updateStatus(orderId, "CONFIRMED")).as("前提: 受注を確定できること").isTrue();
-    return orderId;
+    return orderFor(customerId, label);
   }
 
   private String completedOrderFor(String customerId, String label) {
@@ -421,27 +420,16 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
   private String cancelledOrderFor(String customerId, String label) {
     String orderId = orderFor(customerId, label);
-    assertThat(updateStatus(orderId, "CANCELLED")).as("前提: 受注を取消できること").isTrue();
+    assertThat(
+            rest.exchange(
+                    "/store/orders/" + orderId + "/cancellation",
+                    HttpMethod.POST,
+                    new HttpEntity<>("{\"reason\": \"統合テストの前提づくり\"}", managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .as("前提: 受注を取消できること")
+        .isEqualTo(HttpStatus.OK);
     return orderId;
-  }
-
-  private boolean updateStatus(String orderId, String status) {
-    String castId = orderRepository.findById(orderId).map(Order::getCastId).orElseThrow();
-    String body =
-        "{\"receptionist_id\": "
-            + SEED_RECEPTIONIST_ID
-            + ", \"cast_id\": \""
-            + castId
-            + "\", \"status\": \""
-            + status
-            + "\"}";
-    return rest.exchange(
-            "/store/orders/" + orderId,
-            HttpMethod.PUT,
-            new HttpEntity<>(body, managerHeaders(STORE_A)),
-            JsonNode.class)
-        .getStatusCode()
-        .is2xxSuccessful();
   }
 
   private String createCast(String name) {

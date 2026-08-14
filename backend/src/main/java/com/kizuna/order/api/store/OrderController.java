@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.OrderAttributionCorrectionRequest;
 import com.kizuna.order.api.dto.OrderAttributionCorrectionResponse;
 import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
+import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
@@ -16,20 +17,26 @@ import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.order.domain.OrderQueryCriteria;
+import com.kizuna.order.domain.OrderSortKey;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,12 +55,68 @@ public class OrderController {
   private final OrderAttributionService orderAttributionService;
   private final OrderAttributionCorrectionService orderAttributionCorrectionService;
 
+  /** 顧客詳細の注文履歴。ある顧客に着いた受注を新しい順に辿る（状態は問わない）。 */
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Page<OrderResponse>> list(
       @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
     return ResponseEntity.ok(orderService.list(customerId, pageable));
+  }
+
+  /**
+   * 作業キュー（対応が要る受注）の読み口。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。
+   *
+   * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。確定・取消で行が消えていく一覧なので、
+   * 位置を「何件目か」で指すと処理の直後に境界の受注を飛ばす。
+   *
+   * <p>状態を要求で受けるのは、画面の群がその軸そのものだからである（検索条件には状態を持たせない）。
+   */
+  @GetMapping("/work-queue")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<CursorPage<OrderResponse>> listWorkQueue(
+      @RequestParam(name = "statuses") Set<OrderStatus> statuses,
+      @RequestParam(name = "customer_name", required = false) String customerName,
+      @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
+          LocalDate businessDate,
+      @RequestParam(name = "sort", defaultValue = "BUSINESS_DATE") OrderSortKey sort,
+      @RequestParam(name = "desc", defaultValue = "false") boolean descending,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return ResponseEntity.ok(
+        orderService.listWorkQueue(
+            criteria(statuses, customerName, businessDate, sort, descending), cursor, size));
+  }
+
+  /**
+   * アーカイブ（完了・取消）の読み口。作業キューと同じ検索・並び替えを、オフセットのページャで辿る。
+   *
+   * <p>位置をページ番号で指せるのは、終端状態の受注が処理で消えず増えるだけだからである。
+   */
+  @GetMapping("/archive")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<Page<OrderResponse>> listArchive(
+      @RequestParam(name = "statuses") Set<OrderStatus> statuses,
+      @RequestParam(name = "customer_name", required = false) String customerName,
+      @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
+          LocalDate businessDate,
+      @RequestParam(name = "sort", defaultValue = "BUSINESS_DATE") OrderSortKey sort,
+      @RequestParam(name = "desc", defaultValue = "true") boolean descending,
+      @PageableDefault(size = 20) Pageable pageable) {
+    return ResponseEntity.ok(
+        orderService.listArchive(
+            criteria(statuses, customerName, businessDate, sort, descending), pageable));
+  }
+
+  /** 空文字の検索語は「送っていない」と同じに扱う。画面の検索欄をクリアした状態がそのまま乗ってくるため。 */
+  private OrderQueryCriteria criteria(
+      Set<OrderStatus> statuses,
+      String customerName,
+      LocalDate businessDate,
+      OrderSortKey sort,
+      boolean descending) {
+    String search = (customerName == null || customerName.isBlank()) ? null : customerName.trim();
+    return new OrderQueryCriteria(statuses, search, businessDate, sort, descending);
   }
 
   @GetMapping("/{id}")
@@ -80,24 +143,17 @@ public class OrderController {
     return ResponseEntity.ok(orderService.listCastCandidates(search));
   }
 
+  /**
+   * 受注を作成する。この経路の受注は確定で出生し、受付経路に WEB は指定できない。
+   *
+   * <p>受付担当を省略した要求では実行者本人が受付担当になる。そのため認証主体をサービスへ渡す。
+   */
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> create(@Valid @RequestBody OrderCreateRequest request) {
+  public ResponseEntity<OrderResponse> create(
+      @Valid @RequestBody OrderCreateRequest request, Principal principal) {
     return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
-        .body(orderService.create(request));
-  }
-
-  /**
-   * 予約受付 inbox の未確定申請一覧。並び（古い順）は読み口が固定するため、並び順の指定は受けない。
-   *
-   * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。処理で行が消えていく一覧なので、
-   * 位置を「何件目か」で指すと処理の直後に境界の申請を飛ばす。
-   */
-  @GetMapping("/reservation-requests")
-  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<CursorPage<OrderResponse>> listReservationRequests(
-      @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(orderService.listPendingReservationRequests(cursor, size));
+        .body(orderService.create(request, principal.getName()));
   }
 
   /**
@@ -240,24 +296,37 @@ public class OrderController {
     return ResponseEntity.ok(orderService.completionPreview(id, totalFee));
   }
 
-  /** 予約申請を謝絶する。 */
+  /** 予約申請を謝絶する。確定後の取消は理由必須の専用操作（{@link #cancel}）が受け持つ。 */
   @PostMapping("/{id}/decline")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> decline(@PathVariable String id) {
     return ResponseEntity.ok(orderService.decline(id));
   }
 
+  /**
+   * 確定済みの受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は終端状態として凍結される（ADR 0013）。
+   *
+   * <p>対象は確定済みの受注のみ。未確定の申請は謝絶が、誤って完了した受注の救済は（まだ存在しない）別の経路が受け持つ。 二度目の取消は撥ねられる（逐次なら集約の守衛で
+   * 400、同時なら楽観ロックで 409）。
+   */
+  @PostMapping("/{id}/cancellation")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<OrderResponse> cancel(
+      @PathVariable String id,
+      @Valid @RequestBody OrderCancellationRequest request,
+      Principal principal) {
+    return ResponseEntity.ok(orderService.cancel(id, request, principal.getName()));
+  }
+
+  /**
+   * 受注の内容を部分更新する。状態は動かさない — 完了・取消・確定・謝絶はいずれも専用の操作が独占する。
+   *
+   * <p>終端状態（完了・取消）の受注は撥ねられる。受注 1 件を名指して消す口は無い（誤登録も取消として記録に残す。ADR 0013）。
+   */
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> update(
       @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
     return ResponseEntity.ok(orderService.update(id, request));
-  }
-
-  @DeleteMapping("/{id}")
-  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable String id) {
-    orderService.delete(id);
-    return ResponseEntity.ok().build();
   }
 }
