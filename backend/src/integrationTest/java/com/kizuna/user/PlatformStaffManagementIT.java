@@ -883,7 +883,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("権限目録は STAFF_MANAGE 保持者に 17 件の code+console を返すこと")
+  @DisplayName("権限目録は STAFF_MANAGE 保持者に 18 件の code+console を返すこと")
   void permissionCatalogIsExposedToStaffManage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
@@ -892,7 +892,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/permissions", HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody()).hasSize(17);
+    assertThat(res.getBody()).hasSize(18);
     assertThat(res.getBody().toString()).contains("ORDER_MANAGE").contains("PLATFORM");
   }
 

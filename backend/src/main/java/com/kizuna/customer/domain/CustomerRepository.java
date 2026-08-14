@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -54,4 +55,37 @@ public interface CustomerRepository
    * 0009）。
    */
   List<Customer> findByPhoneNumberAndStoreId(String phoneNumber, Long storeId);
+
+  /**
+   * その顧客が既に墓標（統合済み）かどうか。
+   *
+   * <p>押さえた行の実体からではなく別問い合わせで判定する。悲観排他ロックは既に永続化文脈に載っている実体の状態を更新しないため、
+   * ロック後に実体のフィールドを読むと第一次キャッシュの古い値を見る（{@link #findByIdForUpdate} の契約）。集計の投影は 実体を経由しないので、押さえた直後の DB
+   * の値をそのまま返す。
+   */
+  @Query(
+      """
+      select count(c) > 0 from com.kizuna.customer.domain.Customer c
+      where c.id = :id and c.mergedIntoId is not null
+      """)
+  boolean isMerged(@Param("id") String id);
+
+  /**
+   * 連鎖統合の圧平。被統合行を指していた既存の墓標を、新しい統合先へ付け替える。A→B の後で B→C を統合すると A は直接 C を指し、旧 ID の解決は常に一跳で届く（ADR
+   * 0010）。
+   *
+   * <p>WHERE 句に店舗を明示するのは、Hibernate の {@code @Filter} が HQL の一括 UPDATE には掛からないため。
+   *
+   * @return 付け替えた墓標の件数
+   */
+  @Modifying
+  @Query(
+      """
+      update com.kizuna.customer.domain.Customer c set c.mergedIntoId = :survivingId
+      where c.mergedIntoId = :mergedId and c.storeId = :storeId
+      """)
+  int flattenMergedInto(
+      @Param("survivingId") String survivingId,
+      @Param("mergedId") String mergedId,
+      @Param("storeId") Long storeId);
 }

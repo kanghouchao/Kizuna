@@ -47,6 +47,14 @@ public enum PermissionCode {
   CUSTOMER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /**
+   * 重複した顧客行の統合の実行と、統合履歴・重複候補の閲覧（CustomerMergeController）。取り返しのつかない台帳級の操作のため店長限定。
+   *
+   * <p>統合には取消（undo）が無く、誤統合の修復は統合履歴を根拠とする人手作業になる（ADR 0010）。履歴そのものが機微情報であり、
+   * 候補提示は統合画面の一部で単独の価値を持たないため、実行・履歴閲覧・候補提示のいずれもこの一つの権限で守る。
+   */
+  CUSTOMER_MERGE(Console.STORE, SystemRole.STORE_MANAGER),
+
+  /**
    * 会員ポイントの手動調整と、誤帰属の訂正（帰属記録の無効化と、その台帳訂正）。準金銭的な確定系操作のため店長限定。
    *
    * <p>無効化までこの権限に含めるのは、不可逆なその操作だけを店員に許すと、二段目の台帳訂正を実行できない者が訂正を 始められ、やり残しが人を跨いで残るためである（ADR 0012）。

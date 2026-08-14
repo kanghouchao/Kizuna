@@ -59,6 +59,25 @@ public class Customer extends StoreScopedEntity {
   @Column(name = "ng_content")
   private String ngContent;
 
+  /**
+   * 統合先の顧客。NULL がこの行は生きていることを意味し、値があればこの行は墓標でその値が統合先である（ADR 0010）。
+   *
+   * <p>{@code updatable = false} を付けてはならない。連鎖統合の圧平は「被統合行を指している既存の墓標」の指す先を
+   * 書き換えるので、不変列として写像すると圧平が静かに効かなくなる。
+   */
+  @Column(name = "merged_into_id")
+  private String mergedIntoId;
+
+  /**
+   * 統合の被統合行としてこの行を墓標にする。行は削除せず、以後は統合先への道標としてだけ残る。
+   *
+   * <p>既に墓標の行を再び統合できないのは呼出側（{@code CustomerMergeService}）が実行の瞬間に判定する。
+   * その判定は押さえた行の状態からではなく別問い合わせで行うため、ここでは 自分自身の状態を見ない。
+   */
+  public void mergeInto(String survivingCustomerId) {
+    this.mergedIntoId = survivingCustomerId;
+  }
+
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(CustomerPatch patch) {
     if (patch.name() != null) {
