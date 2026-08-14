@@ -210,17 +210,19 @@ export default function OrderListPage() {
             条件に合う受注がありません
           </p>
         ) : (
-          queue.rows.map(order => (
-            <OrderQueueCard
-              key={order.id}
-              order={order}
-              onProcessed={removeFromQueue}
-              onEdit={target =>
-                target.status === 'CREATED' ? setEditingRequest(target) : setEditing(target)
-              }
-              onComplete={setCompleting}
-            />
-          ))
+          <ul className="space-y-3">
+            {queue.rows.map(order => (
+              <OrderQueueCard
+                key={order.id}
+                order={order}
+                onProcessed={removeFromQueue}
+                onEdit={target =>
+                  target.status === 'CREATED' ? setEditingRequest(target) : setEditing(target)
+                }
+                onComplete={setCompleting}
+              />
+            ))}
+          </ul>
         )}
         {queue.hasMore && (
           <Button
