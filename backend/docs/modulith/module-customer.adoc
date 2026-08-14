@@ -10,13 +10,15 @@
 _Repositories_
 
 * `c.k.c.domain.CustomerMemberLinkRepository`
+* `c.k.c.domain.CustomerMergeRepository`
 * `c.k.c.domain.CustomerRepository`
 |Bean references
 |* `c.k.m.application.MemberLookupService` (in Member)
 * `c.k.u.domain.PlatformUserRepository` (in User)
-* `c.k.p.application.PointLedgerService` (in Point)
 * `c.k.s.storescope.StoreContext` (in Shared)
+* `c.k.p.application.PointLedgerService` (in Point)
 |Aggregate roots
 |* `c.k.c.domain.Customer`
 * `c.k.c.domain.CustomerMemberLink`
+* `c.k.c.domain.CustomerMerge`
 |===

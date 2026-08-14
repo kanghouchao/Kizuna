@@ -7,16 +7,22 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
+import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScoped;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -31,8 +37,12 @@ public class CustomerService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
+  private static final String MERGED_CUSTOMER_UNDELETABLE =
+      "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
+
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
+  private final CustomerMergeRepository customerMergeRepository;
   private final CustomerMapper customerMapper;
 
   @StoreScoped
@@ -115,13 +125,38 @@ public class CustomerService {
         customerMapper.toResponse(customerRepository.save(customer)), activeMemberCodeOf(id));
   }
 
+  /**
+   * 顧客を削除する。統合に関与した行は存続行・被統合行のいずれも削除できない — 統合履歴が誤統合の唯一の修復根拠であり、旧 ID の解決も
+   * 墓標が残っていて初めて届くため、誤削除で消えるほうが重い（ADR 0010）。
+   */
   @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!customerRepository.existsById(id)) {
       throw new NotFoundException("顧客が見つかりません");
     }
-    customerRepository.deleteById(id);
+    if (customerMergeRepository.existsInvolving(id)) {
+      throw new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
+    }
+    try {
+      customerRepository.deleteById(id);
+      // DELETE を今この場へ流す。トランザクション境界の commit まで遅れると、外部キー違反が
+      // この catch を素通りして全域ハンドラの兜底（500）へ落ちる。
+      customerRepository.flush();
+    } catch (DataIntegrityViolationException ex) {
+      // 事前判定と削除の間に統合が確定した競合の最終防波堤。統合に関与した行は履歴の 2 本と、存続行なら
+      // 墓標からの自己参照にも指されており、どれが先に違反として現れるかは DB の検査順に依るので 3 本とも
+      // 同じ案内へ写す。写像を持たない他の整合性違反（受注が残っている等）は translate が元の例外を返し、
+      // 従来どおり大きく失敗する。
+      Supplier<RuntimeException> undeletable =
+          () -> new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.FK_T_CUSTOMER_MERGES_SURVIVING, undeletable,
+              DbConstraint.FK_T_CUSTOMER_MERGES_MERGED, undeletable,
+              DbConstraint.FK_T_CUSTOMERS_MERGED_INTO, undeletable));
+    }
   }
 
   private String activeMemberCodeOf(String customerId) {

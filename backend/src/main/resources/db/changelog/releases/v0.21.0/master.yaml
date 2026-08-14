@@ -1,0 +1,5 @@
+# v0.21.0 = 顧客統合（統合先参照の列と統合履歴。ADR 0010）。store 層のみ。
+databaseChangeLog:
+  - include:
+      file: store/01-customer-merge.yaml
+      relativeToChangelogFile: true

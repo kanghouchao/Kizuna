@@ -32,7 +32,19 @@ public enum DbConstraint {
   UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key"),
 
   /** t_customer_member_links の「店舗ごと会員 1 人につき有効な関連は高々 1 本」の部分一意索引。 */
-  UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER("uq_t_customer_member_links_active_member");
+  UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER("uq_t_customer_member_links_active_member"),
+
+  /** t_customer_member_links の「顧客 1 行につき有効な関連は高々 1 本」の部分一意索引。 */
+  UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_CUSTOMER("uq_t_customer_member_links_active_customer"),
+
+  /** t_customer_merges → t_customers（存続行）の FK（RESTRICT）。 */
+  FK_T_CUSTOMER_MERGES_SURVIVING("fk_t_customer_merges_surviving"),
+
+  /** t_customer_merges → t_customers（被統合行）の FK（RESTRICT）。 */
+  FK_T_CUSTOMER_MERGES_MERGED("fk_t_customer_merges_merged"),
+
+  /** t_customers.merged_into_id の自己参照 FK（RESTRICT）。墓標の指す先が消えると旧 ID の解決が切れる。 */
+  FK_T_CUSTOMERS_MERGED_INTO("fk_t_customers_merged_into");
 
   private final String sqlName;
 

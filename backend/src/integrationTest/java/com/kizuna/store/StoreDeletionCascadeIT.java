@@ -185,6 +185,64 @@ class StoreDeletionCascadeIT {
     assertThat(countStore(storeId)).as("拒否された店舗は残存すること").isEqualTo(1L);
   }
 
+  @Test
+  @DisplayName("顧客統合を行った準備中の店舗も削除でき、墓標と統合履歴が CASCADE 消去されること")
+  void storeWithCustomerMergeCanStillBeDeleted() {
+    Store store = freshStore("統合済み検証店舗", "merge-store-delete-it");
+    long storeId = store.getId();
+    // 統合が残す形（存続行・統合先を指す墓標・両行を指す統合履歴）を直挿する。ここで見たいのは
+    // サービス層ではなく外部キーの働き — 顧客への参照は RESTRICT なので、店舗削除の CASCADE が
+    // 統合履歴より先に顧客へ届くと、削除が違反で止まりうるのではないかという疑いを潰す。
+    String surviving = "merge-cascade-surviving-" + UUID.randomUUID();
+    String merged = "merge-cascade-merged-" + UUID.randomUUID();
+    insertCustomer(storeId, surviving, null);
+    insertCustomer(storeId, merged, surviving);
+    insertCustomerMerge(storeId, surviving, merged);
+
+    // 前提: 削除前は墓標と統合履歴が実在する（空振りで緑にならないことを固定）。
+    assertThat(countCustomers(storeId)).as("削除前は顧客が 2 件あること").isEqualTo(2L);
+    assertThat(countCustomerMerges(storeId)).as("削除前は統合履歴が 1 件あること").isEqualTo(1L);
+
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(countCustomers(storeId)).as("顧客は店舗と共に消えること").isZero();
+    assertThat(countCustomerMerges(storeId)).as("統合履歴も店舗と共に消えること").isZero();
+    assertThat(countStore(storeId)).isZero();
+  }
+
+  private void insertCustomer(long storeId, String customerId, String mergedIntoId) {
+    jdbcTemplate.update(
+        "INSERT INTO t_customers (id, store_id, name, merged_into_id, created_at, updated_at,"
+            + " version) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+        customerId,
+        storeId,
+        "統合カスケード検証顧客",
+        mergedIntoId);
+  }
+
+  private void insertCustomerMerge(long storeId, String survivingId, String mergedId) {
+    jdbcTemplate.update(
+        "INSERT INTO t_customer_merges (id, store_id, surviving_customer_id, merged_customer_id,"
+            + " merged_at, moved_order_count, moved_link_count, created_at, updated_at, version)"
+            + " VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,"
+            + " 0)",
+        "merge-cascade-it-" + UUID.randomUUID(),
+        storeId,
+        survivingId,
+        mergedId);
+  }
+
+  private long countCustomers(long storeId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM t_customers WHERE store_id = ?", Long.class, storeId);
+  }
+
+  private long countCustomerMerges(long storeId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM t_customer_merges WHERE store_id = ?", Long.class, storeId);
+  }
+
   /** 台帳の持ち主となる会員を公開端点から用意し、その id を返す。 */
   private long registerMember() {
     HttpHeaders headers = new HttpHeaders();

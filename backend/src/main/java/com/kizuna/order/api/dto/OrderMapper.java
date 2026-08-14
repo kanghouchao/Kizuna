@@ -65,5 +65,7 @@ public interface OrderMapper {
   @Mapping(target = "rank", constant = "SILVER")
   @Mapping(target = "lineId", ignore = true)
   @Mapping(target = "usageAreas", ignore = true)
+  // 起こしたばかりの行は定義上まだ生きている。統合先参照は統合だけが立てる。
+  @Mapping(target = "mergedIntoId", ignore = true)
   Customer toCustomer(OrderCreateRequest request);
 }

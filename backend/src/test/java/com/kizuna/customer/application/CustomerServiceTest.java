@@ -3,6 +3,7 @@ package com.kizuna.customer.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,10 +14,12 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
+import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -38,6 +41,7 @@ class CustomerServiceTest {
 
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
+  @Mock private CustomerMergeRepository customerMergeRepository;
   @Mock private CustomerMapper customerMapper;
 
   @InjectMocks private CustomerService customerService;
@@ -237,6 +241,18 @@ class CustomerServiceTest {
     when(customerRepository.existsById("c1")).thenReturn(true);
     customerService.delete("c1");
     verify(customerRepository).deleteById("c1");
+  }
+
+  @Test
+  @DisplayName("統合に関与した顧客の削除は 409 で撥ねられ、行が消えないこと")
+  void delete_rejectsCustomersInvolvedInAMerge() {
+    when(customerRepository.existsById("c1")).thenReturn(true);
+    when(customerMergeRepository.existsInvolving("c1")).thenReturn(true);
+
+    assertThatThrownBy(() -> customerService.delete("c1"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合");
+    verify(customerRepository, never()).deleteById("c1");
   }
 
   @Test

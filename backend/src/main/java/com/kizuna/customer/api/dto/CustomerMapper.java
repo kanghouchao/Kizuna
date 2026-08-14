@@ -16,6 +16,8 @@ public interface CustomerMapper {
   @Mapping(target = "landmark", ignore = true)
   // rank は DB デフォルト（'SILVER'）と同義。エンティティに列をマッピングしたため明示的に補完する
   @Mapping(target = "rank", source = "rank", defaultValue = "SILVER")
+  // 起こしたばかりの行は定義上まだ生きている。統合先参照は統合だけが立てる。
+  @Mapping(target = "mergedIntoId", ignore = true)
   Customer toEntity(CustomerCreateRequest request);
 
   /** 更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */
