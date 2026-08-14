@@ -424,6 +424,51 @@ class OrderControllerTest {
   }
 
   @Test
+  @DisplayName("列長を超える取消の理由は 400 で撥ねられること（DB のエラーにしない）")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void cancellationWithAnOverlongReasonIsRejected() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    String body = "{\"reason\": \"" + "あ".repeat(501) + "\"}";
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/cancellation", body))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+
+    // 正向対照: 上限ちょうどは通る
+    when(orderService.cancel(any(), any(), any())).thenReturn(OrderResponse.builder().build());
+    mockMvc
+        .perform(
+            storePost("/store/orders/o1/cancellation", "{\"reason\": \"" + "あ".repeat(500) + "\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("理由の無い取消は 400 で撥ねられること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void cancellationWithoutAReasonIsRejected() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    // 理由は取消の根拠そのもの。空白だけの理由も「書いていない」と同じに扱う
+    mockMvc
+        .perform(storePost("/store/orders/o1/cancellation", "{\"reason\": \"   \"}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
+  @DisplayName("受注管理権限が無ければ取消が拒否されること")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void cancellationIsRejectedWithoutOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/cancellation", "{\"reason\": \"客都合\"}"))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
   @DisplayName("列長を超える理由は 400 で撥ねられること（DB のエラーにしない）")
   @WithMockUser(authorities = "PERM_POINT_ADJUST")
   void invalidationWithAnOverlongReasonIsRejected() throws Exception {
