@@ -1,0 +1,57 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v02000-001-point-entry-corrected-attribution
+      author: kanghouchao
+      # 誤帰属の訂正として積んだ手動調整が、どの帰属記録を訂正したのかを指し返す（ADR 0012）。
+      # 減算は期限の早いロットから引く引き当てで、誤って付与されたロットを狙い撃ちにはしないため、
+      # この列が無いと台帳の側から訂正の由来を機械的に辿れない。同じ帰属記録に対する訂正の累計が
+      # 付与額を超えないことも、この列を軸に数える。
+      # 値を持つのは帰属訂正の手動調整だけで、顧客経路の通常の調整は NULL。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - addColumn:
+            tableName: t_point_entries
+            columns:
+              - column:
+                  name: corrected_attribution_id
+                  type: BIGINT
+                  remarks: 訂正した帰属記録（誤帰属の訂正のみ。通常の手動調整は NULL）
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_corrected_attribution
+            baseTableName: t_point_entries
+            baseColumnNames: corrected_attribution_id
+            referencedTableName: t_order_attributions
+            referencedColumnNames: id
+            # 店舗削除は受注を消し、帰属記録も CASCADE で消えるが、会員の残高と仕訳履歴はグループ
+            # 資産として残らなければならない（ADR 0006）。CASCADE では台帳行が道連れになり、
+            # RESTRICT では帰属記録が店舗削除を塞ぐ。指し先を失った訂正行は指し返しだけを失う。
+            onDelete: SET NULL
+      rollback:
+        - dropForeignKeyConstraint:
+            baseTableName: t_point_entries
+            constraintName: fk_t_point_entries_corrected_attribution
+        - dropColumn:
+            tableName: t_point_entries
+            columnName: corrected_attribution_id
+  - changeSet:
+      id: platform-v02000-002-point-entry-corrected-attribution-index
+      author: kanghouchao
+      # 訂正の読み口も書き込みの上限判定もこの列で台帳を集計する。PostgreSQL は参照側の外部キー列に
+      # 索引を作らないので、無いとグループ全体の追記型台帳を毎回走査することになる。
+      # 値を持つのは訂正の仕訳だけなので部分索引にする（= と in の条件は NULL を含まないため使える）。
+      # Liquibase OSS の createIndex は述語を持たないため裸 SQL。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - sql:
+            sql: >-
+              CREATE INDEX idx_t_point_entries_corrected_attribution
+              ON t_point_entries (corrected_attribution_id)
+              WHERE corrected_attribution_id IS NOT NULL
+      rollback:
+        - dropIndex:
+            indexName: idx_t_point_entries_corrected_attribution
+            tableName: t_point_entries

@@ -8,15 +8,12 @@ import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -36,34 +33,7 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
   @Autowired private CastFieldDefinitionRepository fieldDefinitionRepository;
   @Autowired private CastRepository castRepository;
 
-  private String managerToken;
   private final long nonce = System.nanoTime();
-
-  @BeforeEach
-  void loginAsManager() {
-    managerToken = loginAs("tanaka.hanako@kizuna.test");
-  }
-
-  private String loginAs(String email) {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    ResponseEntity<JsonNode> res =
-        rest.postForEntity(
-            "/platform/login",
-            new HttpEntity<>("{\"email\": \"" + email + "\", \"password\": \"pass\"}", headers),
-            JsonNode.class);
-    assertThat(res.getStatusCode()).as("前提: %s でのログインが成功する", email).isEqualTo(HttpStatus.OK);
-    return res.getBody().path("token").asString();
-  }
-
-  private HttpHeaders managerHeaders(long storeId) {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("X-Role", "store");
-    headers.set("X-Store-ID", String.valueOf(storeId));
-    headers.setBearerAuth(managerToken);
-    return headers;
-  }
 
   private String createDefinitionAs(long storeId, String key, String label, boolean isPublic) {
     ResponseEntity<JsonNode> res =

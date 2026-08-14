@@ -41,8 +41,9 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
    * 会員 1 人の、受注ごとの付与合計。加算で受注 ID を持つ仕訳だけを足す — 付与の経路（完了時・事後申領）を種別で区別せず、{@link #findCreditsByOrderId}
    * と同じ読み方で拾う。取消は元の付与を打ち消す減算として別の行に積まれ、この合計には現れない。
    *
-   * <p>会員 ID の一致を条件に載せるのは、1 件の受注に別々の会員の付与が並びうるため。誤帰属を無効化しても付与行は台帳に残る（清算は手動調整）ので、その受注が正しい本人へ申領されると
-   * 受注 ID だけでは前の会員の付与まで足してしまう。
+   * <p>会員 ID の一致を条件に載せるのは、1
+   * 件の受注に別々の会員の付与が並びうるため。誤帰属を無効化しても付与行は台帳に残る（訂正は別段の手動調整）ので、その受注が正しい本人へ申領されると 受注 ID
+   * だけでは前の会員の付与まで足してしまう。
    *
    * <p>合計は long で返す。1 件の仕訳は int でも、1 受注に複数の付与が積まれた合計は int を超えうる。
    */
@@ -56,6 +57,32 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
 
   /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
+
+  /**
+   * 指定した帰属記録群に対して既に積まれた訂正の合計。訂正は減算なので負で返る。
+   *
+   * <p>記録 1 件ではなく<b>群</b>で受けるのは、この合計が {@link #sumGrantsByOrderIds} の付与合計と引き比べられるため。
+   * 付与は受注と会員で数えるので、訂正も同じ受注・同じ会員に属する記録すべてを数えないと、両辺の作用域がずれる。 ずれると、同じ会員が同じ受注で二度帰属した場合（無効化 → 再発行 →
+   * 本人が申領し直す）に、片方の帰属の訂正枠が もう片方の付与まで飲み込む。
+   *
+   * <p>同じ冪等キーの行を除いて数えるのは、応答を取り逃した正当な再送が累計上限の超過で撥ねられるのを防ぐため。 初回が記帳済みでも、再送が自分自身を数えなければ初回と同じ判定に落ちる（ADR
+   * 0007 が「再送の判定を入力検証より 先に置く」ことで一度回避したのと同型の罠）。訂正の仕訳は手動調整であり冪等キーを必ず持つので、キーが null の行を場合分けする必要は無い。
+   *
+   * <p>合計を long で返すのは残高と同じ理由 — 1 件の仕訳は int でも積み上げた合計は int を超えうる。
+   */
+  @Query(
+      "select coalesce(sum(e.amount), 0) from com.kizuna.point.domain.PointEntry e"
+          + " where e.correctedAttributionId in :attributionIds"
+          + " and e.idempotencyKey <> :excludeIdempotencyKey")
+  long sumCorrectionsExcludingKey(
+      @Param("attributionIds") Collection<Long> attributionIds,
+      @Param("excludeIdempotencyKey") String excludeIdempotencyKey);
+
+  /** 指定した帰属記録群に対して積まれた訂正の合計。訂正は減算なので負で返る。進み具合の表示に使う。 */
+  @Query(
+      "select coalesce(sum(e.amount), 0) from com.kizuna.point.domain.PointEntry e"
+          + " where e.correctedAttributionId in :attributionIds")
+  long sumCorrections(@Param("attributionIds") Collection<Long> attributionIds);
 
   /** 指定店舗に帰属する仕訳が 1 件でも存在するか。符号は問わない（取消も含めて記録の存在そのものを見る）。 */
   @Query(

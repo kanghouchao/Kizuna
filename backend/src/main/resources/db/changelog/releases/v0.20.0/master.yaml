@@ -1,0 +1,5 @@
+# v0.20.0 = 誤帰属の台帳訂正が帰属記録を指し返すための列（ADR 0012）。platform 層のみ。
+databaseChangeLog:
+  - include:
+      file: platform/01-point-entry-corrected-attribution.yaml
+      relativeToChangelogFile: true

@@ -46,7 +46,11 @@ public enum PermissionCode {
   /** 顧客の閲覧・登録・更新・削除（CustomerController）。 */
   CUSTOMER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
-  /** 会員ポイントの手動調整（確定系操作 — CustomerPointController の調整端点）。準金銭的な確定操作のため店長限定。 */
+  /**
+   * 会員ポイントの手動調整と、誤帰属の訂正（帰属記録の無効化と、その台帳訂正）。準金銭的な確定系操作のため店長限定。
+   *
+   * <p>無効化までこの権限に含めるのは、不可逆なその操作だけを店員に許すと、二段目の台帳訂正を実行できない者が訂正を 始められ、やり残しが人を跨いで残るためである（ADR 0012）。
+   */
   POINT_ADJUST(Console.STORE, SystemRole.STORE_MANAGER),
 
   /** 出勤（シフト）の閲覧・登録・更新（ShiftController）。 */

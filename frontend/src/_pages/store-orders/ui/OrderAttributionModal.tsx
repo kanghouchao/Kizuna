@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderAttribution, OrderAttributionSource, orderApi } from '@/entities/order';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { getApiErrorMessage, hasPermission, readTokenClaims, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
+import { AttributionCorrectionStep } from './AttributionCorrectionStep';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
 import {
   Badge,
@@ -33,19 +34,13 @@ const SOURCE_LABELS: Record<OrderAttributionSource, string> = {
 };
 
 /**
- * 無効化の前に出す清算の注意書き。
+ * 無効化の前に出す注意書き。
  *
- * 清算の宛先は<b>この帰属記録が持つ会員</b>（不変）である一方、店舗コンソールのポイント調整は
- * 「その顧客に<b>現在</b>紐づく会員」を対象に取る。両者は一致するとは限らない — 申領で成立した帰属は
- * そもそも紐づけを作らず、完了時の帰属でも紐づけはあとから解除・変更されうる。ずれている状態で
- * 案内どおりに操作すると、撥ねられるか、<b>無関係な会員から引かれる</b>。
- *
- * よって特定の画面を宛先として案内しない。宛先は上に表示している会員コードであることと、
- * 顧客画面の調整が届くとは限らないことだけを述べる。機構ごとに文言を出し分ける形は採らない —
- * 「どの場合に届くか」は紐づけの現況しだいで、成立の機構からは判らないため。
+ * 無効化そのものは台帳へ波及しない（ADR 0009）。誤って付与された分は続く段で差し引くので、
+ * ここでは「無効化だけでは戻らない」ことと「この直後に差し引きへ進む」ことを述べる。
  */
-const SETTLEMENT_NOTE =
-  '無効化しても付与済みのポイントは戻りません。清算は上の会員コードの台帳に対して行う必要があります。顧客画面のポイント調整はその顧客に現在紐づく会員を対象に取るため、紐づけが無い・変わっている場合はこの会員に届きません。';
+const CORRECTION_NOTE =
+  '無効化しても付与済みのポイントは自動では戻りません。無効化のあと、この帰属の会員から差し引く手続きへ進みます。';
 
 interface InvalidationFormValues {
   reason: string;
@@ -66,6 +61,16 @@ interface ReissuedReceiptToken {
   token: string;
 }
 
+/**
+ * 差し引きの対象。宛先は<b>この帰属記録</b>が持つ会員で、受注から導き直さない — 開いたまま別の操作者が
+ * 訂正を一巡させると、受注の直近の記録は正しい本人の新しい帰属に入れ替わっている。
+ */
+interface CorrectionTarget {
+  orderId: string;
+  attributionId: number;
+  memberCode?: string;
+}
+
 interface OrderAttributionModalProps {
   /** 訂正の対象。null なら閉じている。 */
   order: Order | null;
@@ -77,11 +82,12 @@ function formatDateTime(value?: string): string {
 }
 
 /**
- * 誤帰属の訂正モーダル（帰属記録の無効化と、伝票QRの再発行）。
+ * 誤帰属の訂正モーダル（帰属記録の無効化、誤付与の差し引き、伝票QRの再発行）。
  *
  * 無効化は帰属記録に対する唯一の訂正操作で、行は削除されず理由・実行者・時刻が残る。
- * ポイント台帳へは波及しないため、誤って付与されたポイントの清算は顧客側のポイント調整で
- * 別途行う必要がある — その旨は取り消せない操作の手前で画面が名乗る。
+ * ポイント台帳へは波及しないため、誤って付与された分は続く段で<b>帰属記録が持つ会員</b>から
+ * 差し引く（ADR 0012）。領域としては二段だが、画面は一段目の直後に二段目へ送る — 同じ操作者の
+ * 同じ会話の中で閉じないと、やり残しに気づく機会がどこにも無いためである。
  *
  * 無効化された受注は「会員へ帰属しない状態」へ戻り、正しい本人は再発行された QR の所持証明で
  * 来店を取り戻せる。申領期限は再発行から 90 日で数え直される。
@@ -110,16 +116,36 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   // 別の受注へ切り替わった瞬間は現況を持たない状態から始める（レンダー期の判定なので、前の受注の
   // 帰属で無効化・再発行の可否を決めるフレームが 1 つも無い）。
   const attribution = snapshot !== null && snapshot.orderId === orderId ? snapshot.body : null;
+  // 差し引きの宛先に渡す ID。サーバが名指す「まだ差し引かれていない誤付与を持つ記録」で、現況の記録とは
+  // 別でありうる。閉包の中で直に読むと省略可能なままで型が絞れないため、束縛を 1 つ挟む。
+  const pendingCorrectionId = attribution?.pending_correction_attribution_id;
 
   const [reissued, setReissued] = useState<ReissuedReceiptToken | null>(null);
   const receiptToken = reissued !== null && reissued.orderId === orderId ? reissued.token : null;
   const [isReissuing, setIsReissuing] = useState(false);
+
+  const [correcting, setCorrecting] = useState<CorrectionTarget | null>(null);
+  const correctionTarget =
+    correcting !== null && correcting.orderId === orderId ? correcting : null;
+  // 差し引きの送信中は閉じない。子が持つ送信状態をここへ上げる（ESC・背景押下で閉じると、訂正が
+  // 成立したか分からないまま冪等キーが失われ、開き直しでは別のキーになる）。
+  const [isCorrectingBusy, setIsCorrectingBusy] = useState(false);
+
+  // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
+  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
+  // レンダー期ではなく効果で読むのは、claim が描画前に読めない環境で出し分けが揺れないようにするため。
+  const [canAdjust, setCanAdjust] = useState(false);
+  useEffect(() => {
+    setCanAdjust(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
+  }, []);
 
   useEffect(() => {
     if (!order) return;
     reset({ reason: '' });
     // 発行済みの QR も一緒に戻す。「今だけ表示できる」と書いた画面が、開き直しで前の QR を出し直さない
     setReissued(null);
+    setCorrecting(null);
+    setIsCorrectingBusy(false);
   }, [order, reset]);
 
   const invalidate = async (values: InvalidationFormValues) => {
@@ -135,6 +161,14 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
       // 応答が訂正後の現況を持つので、取り直さず差し替える（読み込み表示で一瞬消えない）
       setSnapshot({ orderId, body: updated });
       reset({ reason: '' });
+      // そのまま二段目へ送る。ここで通常の画面に戻すと、誤って付与された分が相手の台帳に残ったまま
+      // 「訂正が済んだ」ことになり、やり残しに気づく機会がどこにも無くなる。宛先には今まさに倒した
+      // 記録を渡す（受注から導き直さない）。
+      setCorrecting({
+        orderId,
+        attributionId: attribution.id,
+        memberCode: attribution.member_code,
+      });
     } catch (error) {
       // 帰属していない・既に無効化済みは、サーバが対処できる文言を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, '帰属の無効化に失敗しました'));
@@ -155,7 +189,13 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
     }
   };
 
-  const isBusy = isSubmitting || isReissuing;
+  const isBusy = isSubmitting || isReissuing || isCorrectingBusy;
+  const dialogTitle =
+    receiptToken !== null
+      ? '伝票QRコード'
+      : correctionTarget !== null
+        ? '誤付与の差し引き'
+        : '会員帰属の訂正';
 
   return (
     <Dialog
@@ -173,7 +213,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
         className="gap-0 rounded-[10px] p-0 sm:max-w-md"
       >
         <div className="border-b px-6 py-4">
-          <DialogTitle>{receiptToken !== null ? '伝票QRコード' : '会員帰属の訂正'}</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">
             {order?.business_date ?? '-'} / {customerHeadingText(order)}
           </p>
@@ -183,6 +223,19 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
             token={receiptToken}
             claimNote="正しいお客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（再発行から 90 日以内）。"
             onClose={onClose}
+          />
+        ) : correctionTarget !== null ? (
+          <AttributionCorrectionStep
+            orderId={correctionTarget.orderId}
+            attributionId={correctionTarget.attributionId}
+            memberCode={correctionTarget.memberCode}
+            onBusyChange={setIsCorrectingBusy}
+            onDone={() => {
+              setCorrecting(null);
+              // 差し引きが済むと残りの誤付与も変わる。取り直さないと、下の導線が済んだ訂正を
+              // 指し続ける。
+              void reload();
+            }}
           />
         ) : isLoading ? (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">読み込み中...</p>
@@ -227,7 +280,46 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                 )}
               </div>
 
-              {attribution.attributed ? (
+              {/* 差し引きへ戻る口。無効化の直後に送る導線を閉じてしまうと、ここが唯一の入口になる。
+                  宛先はサーバが名指す古い記録なので、正しい本人が申領を済ませて現況が入れ替わった後でも
+                  同じ相手に届く（受注から導き直すと、その本人の来店を消す操作になってしまう） */}
+              {canAdjust && pendingCorrectionId !== undefined && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <p className="text-sm text-foreground">
+                    {attribution.pending_correction_member_code ?? '無効化した会員'}
+                    に、誤って付与されたまま差し引かれていないポイントが残っています。
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isBusy}
+                    onClick={() =>
+                      setCorrecting({
+                        orderId,
+                        attributionId: pendingCorrectionId,
+                        memberCode: attribution.pending_correction_member_code,
+                      })
+                    }
+                  >
+                    ポイントを差し引く
+                  </Button>
+                </div>
+              )}
+
+              {!canAdjust && attribution.attributed ? (
+                // 無効化は POINT_ADJUST（店長）限定。押せない導線を描くと、理由を入力し終えてから
+                // 拒否されることになる
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    この帰属を訂正するには、ポイント調整の権限が必要です。店長にご依頼ください。
+                  </p>
+                  <div className="flex justify-end border-t pt-4">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                      閉じる
+                    </Button>
+                  </div>
+                </>
+              ) : attribution.attributed ? (
                 <Form {...form}>
                   {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
                       我々の文言は永久に描かれない。required は下の規則が引き継ぐ */}
@@ -254,7 +346,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                     />
                     {/* 台帳へ波及しないことは操作の前に知らせる。事後に気づくと、誤付与が残ったまま
                         訂正が済んだと見なされる */}
-                    <p className="text-sm text-muted-foreground">{SETTLEMENT_NOTE}</p>
+                    <p className="text-sm text-muted-foreground">{CORRECTION_NOTE}</p>
                     <div className="flex justify-end gap-3 border-t pt-4">
                       <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
                         キャンセル
@@ -279,7 +371,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
                       この受注は会員へ帰属したことがないため、訂正の対象ではありません。
                     </p>
                   )}
-                  <div className="flex justify-end gap-3 border-t pt-4">
+                  <div className="flex flex-wrap justify-end gap-3 border-t pt-4">
                     <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
                       閉じる
                     </Button>

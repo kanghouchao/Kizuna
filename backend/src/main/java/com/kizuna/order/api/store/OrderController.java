@@ -1,5 +1,7 @@
 package com.kizuna.order.api.store;
 
+import com.kizuna.order.api.dto.OrderAttributionCorrectionRequest;
+import com.kizuna.order.api.dto.OrderAttributionCorrectionResponse;
 import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
@@ -11,6 +13,7 @@ import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
+import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.shared.exception.DbConstraint;
@@ -43,6 +46,7 @@ public class OrderController {
 
   private final OrderService orderService;
   private final OrderAttributionService orderAttributionService;
+  private final OrderAttributionCorrectionService orderAttributionCorrectionService;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
@@ -145,21 +149,44 @@ public class OrderController {
   @GetMapping("/{id}/attribution")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderAttributionResponse> attribution(@PathVariable String id) {
-    return ResponseEntity.ok(orderAttributionService.currentAttribution(id));
+    return ResponseEntity.ok(
+        withPendingCorrection(id, orderAttributionService.currentAttribution(id)));
   }
 
   /**
-   * 帰属記録を理由付きで無効化する（誤帰属の訂正）。帰属記録に対する唯一の訂正操作で、行は削除しない。
+   * 現況に「まだ差し引かれていない誤付与」を添える。
    *
-   * <p>ポイント台帳へは波及しない。誤って付与されたポイントの清算は理由の残る手動調整で行う。
+   * <p>2 つのサービスを跨ぐ組み立てをここで行うのは、無効化のサービスが台帳へ依存しないこと自体が「無効化は台帳へ 波及しない」（ADR
+   * 0009）の構造的な証跡だからである。あちらへ台帳の読みを足すとその証跡が失われる。
+   */
+  private OrderAttributionResponse withPendingCorrection(
+      String orderId, OrderAttributionResponse current) {
+    return orderAttributionCorrectionService
+        .findPendingCorrection(orderId)
+        .map(
+            pending -> current.withPendingCorrection(pending.attributionId(), pending.memberCode()))
+        .orElse(current);
+  }
+
+  /**
+   * 帰属記録を理由付きで無効化する（誤帰属の訂正の一段目）。帰属記録に対する唯一の訂正操作で、行は削除しない。
+   *
+   * <p>ポイント台帳へは波及しない。誤って付与されたポイントは二段目の訂正で差し引く（ADR 0012）。
+   *
+   * <p>権限が {@code POINT_ADJUST} なのは、これが不可逆で準金銭的な操作の一段目だからである。一段目だけを店員に許すと、
+   * 二段目を実行できない者が訂正を始められ、やり残しが人を跨いで残る。
    */
   @PostMapping("/{id}/attribution/invalidation")
-  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderAttributionResponse> invalidateAttribution(
       @PathVariable String id,
       @Valid @RequestBody OrderAttributionInvalidationRequest request,
       Principal principal) {
-    return ResponseEntity.ok(orderAttributionService.invalidate(id, request, principal.getName()));
+    // 無効化の直後は必ず差し引きが残る。現況の読み口と同じ項目を載せておかないと、画面が「後で行う」で
+    // 戻った先で差し引きへの入口を失う。
+    return ResponseEntity.ok(
+        withPendingCorrection(
+            id, orderAttributionService.invalidate(id, request, principal.getName())));
   }
 
   /**
@@ -171,6 +198,38 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderReceiptTokenResponse> reissueReceiptToken(@PathVariable String id) {
     return ResponseEntity.ok(orderAttributionService.reissueReceiptToken(id));
+  }
+
+  /** 誤帰属の訂正の進み具合（この受注がその会員へ与えた付与の合計と、既に差し引いた合計）。画面の既定値はここから取る。 */
+  @GetMapping("/{id}/attribution/correction")
+  @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
+  public ResponseEntity<OrderAttributionCorrectionResponse> correctionStatus(
+      @PathVariable String id, @RequestParam(name = "attribution_id") Long attributionId) {
+    return ResponseEntity.ok(orderAttributionCorrectionService.status(id, attributionId));
+  }
+
+  /**
+   * 誤帰属で付いたポイントを、名指された帰属記録が持つ会員から差し引く（訂正の二段目。ADR 0012）。
+   *
+   * <p>同時再送で冪等キーの一意制約に敗れた場合だけ、初回の結果を読み直す再送処理へ回す（ADR 0007）。この分岐はサービスの トランザクション境界の外に置かなければならない —
+   * 制約違反の時点で敗者のトランザクションは作廃されており、内側で catch しても読み直せない。他の整合性違反は実装欠陥なのでそのまま上げ、全域ハンドラの分類に委ねる。
+   */
+  @PostMapping("/{id}/attribution/correction")
+  @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
+  public ResponseEntity<OrderAttributionCorrectionResponse> correctAttribution(
+      @PathVariable String id,
+      @Valid @RequestBody OrderAttributionCorrectionRequest request,
+      Principal principal) {
+    try {
+      return ResponseEntity.ok(
+          orderAttributionCorrectionService.correct(id, request, principal.getName()));
+    } catch (DataIntegrityViolationException ex) {
+      if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY)) {
+        throw ex;
+      }
+      return ResponseEntity.ok(
+          orderAttributionCorrectionService.replayCorrect(id, request, principal.getName()));
+    }
   }
 
   /** 完了処理の事前計算（会計金額に対する付与見込みと、会員なら残高）。 */

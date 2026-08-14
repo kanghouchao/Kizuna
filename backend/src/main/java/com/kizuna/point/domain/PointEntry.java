@@ -73,6 +73,16 @@ public class PointEntry extends BaseEntity {
   private String idempotencyKey;
 
   /**
+   * 誤帰属の訂正で、どの帰属記録を訂正したか（ADR 0012）。訂正の手動調整だけが持ち、顧客経路の通常の調整は null。
+   *
+   * <p>減算は期限の早いロットから引く引き当てで、誤って付与されたロットを狙い撃ちにはしないため、この指し返しが無いと台帳の側から訂正の由来を辿れない。
+   *
+   * <p>帰属記録は受注と共に消えうるので欠落しうる（FK は SET NULL）。台帳行はグループ資産として残る側であり、指し先の生存に巻き込まれない。
+   */
+  @Column(name = "corrected_attribution_id", updatable = false)
+  private Long correctedAttributionId;
+
+  /**
    * この減算がどの加算ロットを消費したか。減算仕訳集約の一部として一緒に永続化される。
    *
    * <p>{@code nullable = false} は子側 INSERT に entry_id を含めさせるための指定で、これが無いと NULL で挿入してから UPDATE
@@ -93,6 +103,7 @@ public class PointEntry extends BaseEntity {
       Long actorUserId,
       String reason,
       String idempotencyKey,
+      Long correctedAttributionId,
       List<PointAllocation> allocations) {
     if (memberId == null) {
       throw new InvalidPointEntryException("会員 ID は必須です");
@@ -114,6 +125,7 @@ public class PointEntry extends BaseEntity {
     this.actorUserId = actorUserId;
     this.reason = reason;
     this.idempotencyKey = idempotencyKey;
+    this.correctedAttributionId = correctedAttributionId;
     this.allocations = new ArrayList<>(allocations);
   }
 
@@ -188,6 +200,7 @@ public class PointEntry extends BaseEntity {
         actorUserId,
         null,
         null,
+        null,
         List.of());
   }
 
@@ -211,6 +224,7 @@ public class PointEntry extends BaseEntity {
         orderId,
         null,
         actorUserId,
+        null,
         null,
         null,
         allocations);
@@ -241,6 +255,42 @@ public class PointEntry extends BaseEntity {
         actorUserId,
         reason,
         idempotencyKey,
+        null,
+        allocations);
+  }
+
+  /**
+   * 誤帰属の訂正（ADR 0012）。種別は手動調整そのもので、宛先が帰属記録の持つ会員であることと、どの帰属記録を訂正したかを 指し返すことだけが通常の調整と違う。
+   *
+   * <p>減算は期限の早いロットから引く引き当てであり、誤って付与されたロットを狙い撃ちにはしない。狙い撃ちにしないからこそ、
+   * そのロットへ既に引き当て済みの消費行へ手を触れずに済み、「引き当ての合計は減算量に一致する」が破れない。
+   *
+   * <p>有効期限は持たない。訂正は残高を引く操作であって加算ロットを作らないため、期限を載せる先が無い。
+   */
+  public static PointEntry correctAttribution(
+      Long memberId,
+      Long storeId,
+      int delta,
+      String reason,
+      List<PointAllocation> allocations,
+      Long actorUserId,
+      String idempotencyKey,
+      Long correctedAttributionId) {
+    if (correctedAttributionId == null) {
+      throw new InvalidPointEntryException("訂正した帰属記録は必須です");
+    }
+    return new PointEntry(
+        PointEntryType.MANUAL_ADJUST,
+        memberId,
+        delta,
+        null,
+        storeId,
+        null,
+        null,
+        actorUserId,
+        reason,
+        idempotencyKey,
+        correctedAttributionId,
         allocations);
   }
 
@@ -270,6 +320,7 @@ public class PointEntry extends BaseEntity {
         actorUserId,
         null,
         null,
+        null,
         List.of(PointAllocation.of(original.getId(), available)));
   }
 
@@ -284,6 +335,7 @@ public class PointEntry extends BaseEntity {
         PointEntryType.EXPIRE,
         memberId,
         -points,
+        null,
         null,
         null,
         null,
@@ -306,6 +358,7 @@ public class PointEntry extends BaseEntity {
         null,
         null,
         actorUserId,
+        null,
         null,
         null,
         allocations);

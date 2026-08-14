@@ -97,7 +97,7 @@ public class PointLedgerService {
    * <p>返すのは合計だけで、仕訳そのものは公開しない — 来店 1 件に添える「その来店で得たポイント」は台帳の付与行からしか
    * 導けないが、行を渡すと追加型台帳の不変条件が外から触れるようになる。
    *
-   * <p>会員 ID を要求するのは、1 件の受注に別々の会員の付与が並びうるため。誤帰属を無効化しても付与行は台帳に残る（清算は手動調整）ので、 受注 ID
+   * <p>会員 ID を要求するのは、1 件の受注に別々の会員の付与が並びうるため。誤帰属を無効化しても付与行は台帳に残る（訂正は別段の手動調整）ので、 受注 ID
    * だけで足すと、その受注を申領した正しい本人の来店に前の会員の付与が現れる。
    *
    * <p>合計が long なのは残高と同じ理由 — 1 件の仕訳は int でも、積み上げた合計は int を超えうる。読み取りで丸めて例外にするより、 台帳が表せる値をそのまま返す。
@@ -217,6 +217,102 @@ public class PointLedgerService {
     if (!same) {
       throw new ConflictException("初回の調整は既に成立しています。残高を確認のうえ、必要なら新しい調整として実行してください");
     }
+  }
+
+  /**
+   * 誤帰属の訂正（ADR 0012）。宛先の会員は呼出側が帰属記録から解いて渡し、この層は台帳の規律だけを見る。
+   *
+   * <p>再送の判定も引き当ての規則も手動調整と同じである。違うのは、どの帰属記録を訂正したかを指し返すことと、加算を 受け付けないこと —
+   * この口の授権は「その付与が誤りだった」ことにだけ由来し、与える方向は含まない。
+   *
+   * <p>減算は期限の早いロットから引く。誤って付与されたロットを狙い撃ちにはしないので、そのロットへ既に引き当て済みの
+   * 消費行には触れず、「引き当ての合計は減算量に一致する」が最初から最後まで破れない。
+   */
+  public void correctForAttribution(
+      long memberId,
+      Long storeId,
+      int delta,
+      String reason,
+      Long actorUserId,
+      String idempotencyKey,
+      long correctedAttributionId) {
+    PointEntry committed = pointEntryRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
+    if (committed != null) {
+      requireSameCorrection(committed, memberId, storeId, delta, reason, correctedAttributionId);
+      return;
+    }
+    if (delta >= 0) {
+      throw new ServiceException("訂正は減算で指定してください");
+    }
+    List<PlannedAllocation> plan = lockedLedgerOf(memberId).planConsumption(-delta);
+    pointEntryRepository.save(
+        PointEntry.correctAttribution(
+            memberId,
+            storeId,
+            delta,
+            reason,
+            allocationsOf(plan),
+            actorUserId,
+            idempotencyKey,
+            correctedAttributionId));
+  }
+
+  /** 訂正の再送判定。宛先の帰属記録まで一致して初めて再送と認める — 同じキーで別の帰属を訂正する要求は取り違えであって再送ではない。 */
+  private static void requireSameCorrection(
+      PointEntry committed,
+      long memberId,
+      Long storeId,
+      int delta,
+      String reason,
+      long correctedAttributionId) {
+    boolean same =
+        committed.getMemberId() == memberId
+            && Objects.equals(committed.getOriginatingStoreId(), storeId)
+            && committed.getAmount() == delta
+            && Objects.equals(committed.getReason(), reason)
+            && Objects.equals(committed.getCorrectedAttributionId(), correctedAttributionId);
+    if (!same) {
+      throw new ConflictException("初回の訂正は既に成立しています。台帳を確認のうえ、必要なら新しい訂正として実行してください");
+    }
+  }
+
+  /**
+   * 指定した帰属記録群に対して既に引かれた量。訂正は減算なので、正の値に直して返す。
+   *
+   * <p>記録 1 件ではなく群で受ける理由は {@link PointEntryRepository#sumCorrectionsExcludingKey} に記す — 引き比べる相手である
+   * {@link #grantedPointsByOrder} が受注と会員で数えるため、訂正も同じ作用域で数えなければ上限の判定が壊れる。
+   *
+   * <p>渡された冪等キーを持つ行は数えない。数えると、応答を取り逃した正当な再送が自分自身の初回記帳によって 累計上限の超過と判じられる。
+   */
+  @Transactional(readOnly = true)
+  public long correctedPointsFor(Collection<Long> attributionIds, String excludeIdempotencyKey) {
+    if (attributionIds.isEmpty()) {
+      return 0;
+    }
+    return -pointEntryRepository.sumCorrectionsExcludingKey(attributionIds, excludeIdempotencyKey);
+  }
+
+  /**
+   * この冪等キーの記帳が既に成立しているか。
+   *
+   * <p>台帳の内側では再送の判定を入力検証より先に置いている（ADR 0007）。台帳の<b>外側</b>で現況を材料に判じる
+   * 検証を持つ呼出側は、その検証を再送へ当てないためにこの述語を要する — 初回の commit
+   * のあとに現況が動くと、正当な再送が「今は通せない要求」として撥ねられ、台帳が冪等キーで収束させる機会そのものが失われる。
+   *
+   * <p>返すのは有無だけで仕訳は公開しない。内容の一致は記帳の入口が判じる責務であり、外へ出すと二重に判定が生まれる。
+   */
+  @Transactional(readOnly = true)
+  public boolean isIdempotencyKeyCommitted(String idempotencyKey) {
+    return pointEntryRepository.findByIdempotencyKey(idempotencyKey).isPresent();
+  }
+
+  /** 指定した帰属記録群に対して既に引かれた量。判定ではなく表示に使うので、どの行も除かずに数える。 */
+  @Transactional(readOnly = true)
+  public long correctedPointsFor(Collection<Long> attributionIds) {
+    if (attributionIds.isEmpty()) {
+      return 0;
+    }
+    return -pointEntryRepository.sumCorrections(attributionIds);
   }
 
   /**
