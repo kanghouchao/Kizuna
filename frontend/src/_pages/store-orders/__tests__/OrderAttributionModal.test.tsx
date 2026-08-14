@@ -252,7 +252,9 @@ describe('OrderAttributionModal', () => {
       fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
       fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
 
-      expect(await screen.findByText('差し引くポイントは整数で入力してください')).toBeInTheDocument();
+      expect(
+        await screen.findByText('差し引くポイントは整数で入力してください')
+      ).toBeInTheDocument();
       expect(mockedCorrect).not.toHaveBeenCalled();
     });
   });
