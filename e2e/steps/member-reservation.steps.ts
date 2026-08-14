@@ -216,7 +216,8 @@ After(async ({ request }) => {
     await declineOrder(request, adminToken, id).catch(warnCleanupFailure);
   }
   if (createdOrderId) {
-    // 確定まで進んだ受注は取消で終端へ。既に終端なら撥ねられるので、失敗は後片付けの警告に留める。
+    // 確定まで進んだ受注は取消で終端へ送る。既に終端なら撥ねられるが、それは想定内なので
+    // 握り潰す（他の後片付けと違い「既に片付いている」と区別がつかない）。
     await cancelOrder(request, adminToken, createdOrderId, 'e2e の後片付け').catch(() => {});
   }
   if (createdShiftId) {

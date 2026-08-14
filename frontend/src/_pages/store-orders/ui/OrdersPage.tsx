@@ -7,13 +7,14 @@ import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
   Order,
+  OrderListCriteria,
   OrderSortKey,
   OrderStatus,
   orderApi,
 } from '@/entities/order';
 import { storePath, useCursorList } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
-import { OrderArchiveSection, type ArchiveCriteria } from './OrderArchiveSection';
+import { OrderArchiveSection } from './OrderArchiveSection';
 import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderCompletionModal } from './OrderCompletionModal';
 import { OrderEditModal } from './OrderEditModal';
@@ -48,6 +49,19 @@ interface SearchDraft {
 
 const EMPTY_DRAFT: SearchDraft = { customerName: '', businessDate: '' };
 
+/**
+ * 画面の入力を読み口の条件へ畳む。組み立てを 1 箇所に持つのは、検索・並び替え・初期表示の 3 経路が
+ * 同じ条件を作るためで、散らすと片方だけが更新されて群ごとに違う母集合を見に行く。
+ */
+function toCriteria(draft: SearchDraft, sortKey: OrderSortKey, desc: boolean): OrderListCriteria {
+  return {
+    customer_name: draft.customerName || undefined,
+    business_date: draft.businessDate || undefined,
+    sort_key: sortKey,
+    desc,
+  };
+}
+
 export default function OrderListPage() {
   const params = useParams();
   const storeId = params.storeId as string;
@@ -64,17 +78,12 @@ export default function OrderListPage() {
   const [correcting, setCorrecting] = useState<Order | null>(null);
 
   // 群を跨いで同じ条件を当てる。参照が毎レンダー変わるとアーカイブが取り直し続けるため畳んで持つ
-  const criteria: ArchiveCriteria = useMemo(
-    () => ({
-      customer_name: applied.customerName || undefined,
-      business_date: applied.businessDate || undefined,
-      sort_key: sortKey,
-      desc: descending,
-    }),
+  const criteria: OrderListCriteria = useMemo(
+    () => toCriteria(applied, sortKey, descending),
     [applied, sortKey, descending]
   );
 
-  const queue = useCursorList<Order, ArchiveCriteria>(
+  const queue = useCursorList<Order, OrderListCriteria>(
     (cursor, activeCriteria) =>
       orderApi.listWorkQueue({
         ...activeCriteria,
@@ -87,23 +96,13 @@ export default function OrderListPage() {
 
   const apply = (next: SearchDraft) => {
     setApplied(next);
-    queue.search({
-      customer_name: next.customerName || undefined,
-      business_date: next.businessDate || undefined,
-      sort_key: sortKey,
-      desc: descending,
-    });
+    queue.search(toCriteria(next, sortKey, descending));
   };
 
   const applySort = (key: OrderSortKey, desc: boolean) => {
     setSortKey(key);
     setDescending(desc);
-    queue.search({
-      customer_name: applied.customerName || undefined,
-      business_date: applied.businessDate || undefined,
-      sort_key: key,
-      desc,
-    });
+    queue.search(toCriteria(applied, key, desc));
   };
 
   /** 処理し終えた受注は群の対象から外れるので、手元から取り除くだけで一覧は正しくなる。 */

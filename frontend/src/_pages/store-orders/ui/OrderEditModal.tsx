@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ExternalLinkIcon } from 'lucide-react';
 import { Order, OrderUpdateRequest, orderApi } from '@/entities/order';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerHeadingText, customerLabel } from '../lib/customerLabel';
+import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
   Dialog,
@@ -22,10 +23,22 @@ import {
   FormLabel,
   Input,
   RegionError,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from '@/shared/ui';
 
+// 受付担当の未選択を表す番兵値。フォームが持つ値は空文字に戻す（作成フォームと同型）。
+const SELECT_NONE = '__none__';
+
 interface OrderEditFormValues {
+  /** 受付担当。'' は「変更しない」ではなく候補の未解決を意味するので、送信時に元の値へ戻す。 */
+  receptionist_id: string;
+  /** 指名するキャストの id。 */
+  cast_id: string;
   business_date: string;
   arrival_scheduled_start_time: string;
   arrival_scheduled_end_time: string;
@@ -53,6 +66,8 @@ interface OrderEditModalProps {
 }
 
 const EMPTY_VALUES: OrderEditFormValues = {
+  receptionist_id: '',
+  cast_id: '',
   business_date: '',
   arrival_scheduled_start_time: '',
   arrival_scheduled_end_time: '',
@@ -110,8 +125,23 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
     reload,
   } = useResource<Order>(orderId === null ? null : () => orderApi.get(orderId), [orderId]);
 
+  const {
+    data: receptionistOptions,
+    failure: receptionistsFailure,
+    reload: loadReceptionists,
+  } = useResource(() => orderApi.listReceptionists());
+  const receptionistItems = [
+    { value: SELECT_NONE, label: '－－－' },
+    ...(receptionistOptions ?? [])
+      .filter(o => o.id !== undefined)
+      .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
+  ];
+
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, formState } = form;
+  // 播き終えた受注。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
+  // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
+  const [seededId, setSeededId] = useState<string | null>(null);
 
   // 取得できたら播く。取得の到着はレンダーより後なので、values ではなく効果で入れる
   // （初期値として渡すと、開いた最初のフレームが空欄のまま描かれる）。
@@ -120,6 +150,8 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
       return;
     }
     reset({
+      receptionist_id: current.receptionist_id != null ? String(current.receptionist_id) : '',
+      cast_id: current.cast_id ?? '',
       business_date: current.business_date ?? '',
       arrival_scheduled_start_time: toTimeInput(current.arrival_scheduled_start_time),
       arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
@@ -137,8 +169,11 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
       contact_name: current.contact_name ?? '',
       contact_phone_number: current.contact_phone_number ?? '',
     });
+    setSeededId(current.id ?? null);
   }, [current, reset]);
 
+  // 別の受注を開いた直後は、まだ前の受注の値が入っている。播き直すまでフォームを出さない
+  const seeded = current !== null && seededId === orderId;
   const linked = current?.customer_id != null;
 
   const submit = async (values: OrderEditFormValues) => {
@@ -147,9 +182,12 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
     }
     const request: OrderUpdateRequest = {
       // 指名と受付担当は毎回運ぶ。省略は「変更しない」ではなく「外す」と区別できないため、
-      // 設定済みの受注では要求そのものが撥ねられる（サーバ側の契約）。
-      receptionist_id: current.receptionist_id,
-      cast_id: current.cast_id,
+      // 設定済みの受注では要求そのものが撥ねられる（サーバ側の契約）。欄が空のまま
+      // （未設定で確定した受注）なら元の値をそのまま返し、この画面が外す口にならないようにする。
+      receptionist_id: values.receptionist_id
+        ? Number(values.receptionist_id)
+        : current.receptionist_id,
+      cast_id: values.cast_id || current.cast_id,
       business_date: optionalText(values.business_date),
       arrival_scheduled_start_time: optionalTime(values.arrival_scheduled_start_time),
       arrival_scheduled_end_time: optionalTime(values.arrival_scheduled_end_time),
@@ -189,7 +227,7 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
     <Dialog
       open={order !== null}
       onOpenChange={next => {
-        if (!next) onClose();
+        if (!next && !formState.isSubmitting) onClose();
       }}
     >
       <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-2xl">
@@ -215,9 +253,66 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
           </div>
         )}
 
-        {current !== null && (
+        {seeded && (
           <Form {...form}>
             <form onSubmit={handleSubmit(submit)} className="space-y-6">
+              <section className="space-y-3">
+                <h3 className="text-muted-foreground text-sm font-medium">担当</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={control}
+                    name="receptionist_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>受付</FormLabel>
+                        <Select
+                          items={receptionistItems}
+                          value={field.value ? field.value : SELECT_NONE}
+                          onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {receptionistItems.map(o => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {/* 候補が取れなくても編集は塞がない（元の受付担当がそのまま運ばれる） */}
+                        {receptionistsFailure !== null && (
+                          <RegionError
+                            message="受付担当者の取得に失敗しました"
+                            onRetry={() => void loadReceptionists()}
+                          />
+                        )}
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name="cast_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CastSearchCombobox
+                            id="edit-cast"
+                            label="指名"
+                            castName={current.cast_name ?? ''}
+                            onChange={field.onChange}
+                            triggerRef={field.ref}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
+
               <section className="space-y-3">
                 <h3 className="text-muted-foreground text-sm font-medium">日時</h3>
                 <div className="grid grid-cols-2 gap-4">

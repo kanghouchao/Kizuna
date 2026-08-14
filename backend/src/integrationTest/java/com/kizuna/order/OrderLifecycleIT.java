@@ -2,16 +2,22 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -27,6 +33,8 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
 
   /** v0.5.0 の山田次郎シード（STORE_STAFF・授権店舗 = 店舗1）。 */
   private static final long SEED_RECEPTIONIST_ID = 3L;
+
+  @Autowired private OrderRepository orderRepository;
 
   private final long nonce = System.nanoTime();
 
@@ -88,6 +96,68 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     // 適格条件は「当店を授権する ORDER_MANAGE 保持の STAFF」。店長はこれを満たす
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(created.getBody().path("receptionist_id").asLong()).isPositive();
+  }
+
+  @Test
+  @DisplayName("受付候補でない実行者が受付担当を省略したら明示的に撥ねられること")
+  void createRejectsAnOmittedReceptionistForAnIneligibleActor() {
+    // HQ 管理者は ORDER_SET_MANAGE で店舗を跨いで受注を起こせるが、受付候補の適格条件
+    // （当店を授権する ORDER_MANAGE 保持の STAFF）は満たさない。黙って未設定にせず撥ねる
+    String hqToken = login("admin@kizuna.test");
+    String castId = createCast(storeHeaders(STORE_A), "HQ 起点");
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(hqToken);
+
+    ResponseEntity<JsonNode> rejected =
+        rest.postForEntity(
+            "/platform/orders",
+            new HttpEntity<>(
+                "{\"store_id\": "
+                    + STORE_A
+                    + ", \"business_date\": \""
+                    + LocalDate.now()
+                    + "\", \"cast_id\": \""
+                    + castId
+                    + "\"}",
+                headers),
+            JsonNode.class);
+
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(rejected.getBody().path("error").asString()).contains("受付担当を指定してください");
+  }
+
+  @Test
+  @DisplayName("HQ 経由の作成にも同じ規則（出生確定・WEB 拒否）が効くこと")
+  void hqOriginatedOrdersFollowTheSameRules() {
+    // 入口によって受注の生まれ方が変わらないこと。HQ は店舗側の作成へ委譲するので規則を共有する
+    String hqToken = login("admin@kizuna.test");
+    String castId = createCast(storeHeaders(STORE_A), "HQ 出生");
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(hqToken);
+    String body =
+        "{\"store_id\": "
+            + STORE_A
+            + ", \"business_date\": \""
+            + LocalDate.now()
+            + "\", \"cast_id\": \""
+            + castId
+            + "\", \"receptionist_id\": "
+            + SEED_RECEPTIONIST_ID;
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/platform/orders", new HttpEntity<>(body + "}", headers), JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(created.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+
+    ResponseEntity<JsonNode> web =
+        rest.postForEntity(
+            "/platform/orders",
+            new HttpEntity<>(body + ", \"reception_route\": \"WEB\"}", headers),
+            JsonNode.class);
+    assertThat(web.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   // ==================== 編集の契約（#681） ====================
@@ -220,6 +290,26 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     // 誤って完了した受注の救済にこの操作を広げてはならない（ADR 0013）
     assertThat(cancel(orderId, "誤完了の救済に使おうとした").getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(statusOf(orderId)).isEqualTo("COMPLETED");
+  }
+
+  @Test
+  @DisplayName("未確定の申請は取消の専用操作では取り消せないこと（謝絶が受け持つ）")
+  void pendingRequestsCannotBeCancelled() {
+    // 定義域は CONFIRMED → CANCELLED のみ。未確定の申請は店舗がまだ受諾していないので謝絶で扱う。
+    // 会員申請は API から起こせないため、行を直挿しして未確定の状態を作る。
+    Order pending =
+        Order.builder()
+            .businessDate(LocalDate.now())
+            .pax(2)
+            .status(OrderStatus.CREATED)
+            .receptionRoute(ReceptionRoute.WEB)
+            .requesterMemberCode("999999999999")
+            .build();
+    pending.setStoreId(STORE_A);
+    String orderId = orderRepository.save(pending).getId();
+
+    assertThat(cancel(orderId, "未確定を取消そうとした").getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(statusOf(orderId)).isEqualTo("CREATED");
   }
 
   @Test

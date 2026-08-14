@@ -59,7 +59,8 @@ public abstract class CrossStoreTestSupport {
     return headersFor(storeId, managerToken);
   }
 
-  private String login(String email) {
+  /** 種子ユーザーとして平台ログインする。実行者の身分そのものが主題のテストが使う（HQ 管理者など）。 */
+  protected String login(String email) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     ResponseEntity<JsonNode> res =

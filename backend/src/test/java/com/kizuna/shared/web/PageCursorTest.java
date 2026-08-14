@@ -46,6 +46,15 @@ class PageCursorTest {
   }
 
   @Test
+  @DisplayName("数値の鍵を数として読めること（人数・コース時間・分に均した到着予定時刻）")
+  void readsTheNumberKey() {
+    assertThat(new PageCursor("1170", "order-1").numberKey()).isEqualTo(1170);
+    // 未設定を均した番兵もそのまま往復する（均さないとその行へ二度と到達できない）
+    assertThat(new PageCursor(String.valueOf(Integer.MAX_VALUE), "order-1").numberKey())
+        .isEqualTo(Integer.MAX_VALUE);
+  }
+
+  @Test
   @DisplayName("数値の副キーを数として読めること")
   void readsTheNumericId() {
     assertThat(new PageCursor("2026-08-04T10:00:00+09:00", "42").longId()).isEqualTo(42L);
@@ -74,6 +83,7 @@ class PageCursorTest {
 
     assertThatThrownBy(cursor::timestampKey).isInstanceOf(ServiceException.class);
     assertThatThrownBy(cursor::dateKey).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(cursor::numberKey).isInstanceOf(ServiceException.class);
   }
 
   @Test
