@@ -19,6 +19,7 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -147,15 +148,14 @@ public class CustomerService {
       // 墓標からの自己参照にも指されており、どれが先に違反として現れるかは DB の検査順に依るので 3 本とも
       // 同じ案内へ写す。写像を持たない他の整合性違反（受注が残っている等）は translate が元の例外を返し、
       // 従来どおり大きく失敗する。
+      Supplier<RuntimeException> undeletable =
+          () -> new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
       throw IntegrityViolations.translate(
           ex,
           Map.of(
-              DbConstraint.FK_T_CUSTOMER_MERGES_SURVIVING,
-              () -> new ConflictException(MERGED_CUSTOMER_UNDELETABLE),
-              DbConstraint.FK_T_CUSTOMER_MERGES_MERGED,
-              () -> new ConflictException(MERGED_CUSTOMER_UNDELETABLE),
-              DbConstraint.FK_T_CUSTOMERS_MERGED_INTO,
-              () -> new ConflictException(MERGED_CUSTOMER_UNDELETABLE)));
+              DbConstraint.FK_T_CUSTOMER_MERGES_SURVIVING, undeletable,
+              DbConstraint.FK_T_CUSTOMER_MERGES_MERGED, undeletable,
+              DbConstraint.FK_T_CUSTOMERS_MERGED_INTO, undeletable));
     }
   }
 

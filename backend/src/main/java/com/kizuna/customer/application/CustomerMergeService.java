@@ -38,6 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerMergeService {
 
+  /** 両行が認領されているときの案内。事前判定と、それをすり抜けた競合が部分一意索引に当たる場合とで同じ文言を返す。 */
+  private static final String RELEASE_THE_LINK_FIRST = "両方の顧客に会員が紐づいています。先に関連を解除してから統合してください";
+
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
@@ -75,7 +78,7 @@ public class CustomerMergeService {
     if (hasActiveLink(survivingCustomerId) && hasActiveLink(mergedCustomerId)) {
       // 部分一意索引により両者は必ず別会員を指す。二人の本人がそれぞれ認領している行なので、
       // 台帳級の「同一人物か」の判断と一緒に片付けさせない（ADR 0010）。
-      throw new ConflictException("両方の顧客に会員が紐づいています。先に関連を解除してから統合してください");
+      throw new ConflictException(RELEASE_THE_LINK_FIRST);
     }
 
     Long storeId = storeContext.getStoreId();
@@ -136,7 +139,7 @@ public class CustomerMergeService {
           ex,
           Map.of(
               DbConstraint.UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_CUSTOMER,
-              () -> new ConflictException("両方の顧客に会員が紐づいています。先に関連を解除してから統合してください")));
+              () -> new ConflictException(RELEASE_THE_LINK_FIRST)));
     }
   }
 
