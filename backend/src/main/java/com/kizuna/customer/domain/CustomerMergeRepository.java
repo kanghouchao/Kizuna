@@ -19,12 +19,16 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
    * <p>WHERE 句に店舗を明示するのは、Hibernate の {@code @Filter} が HQL の一括 UPDATE には掛からないため。フィルタ任せにすると
    * 店舗境界がこの文から消える。
    *
+   * <p>{@code versioned} を付けるのは、受注の顧客参照が可変列であり、この文が版を上げないと並行する受注更新の
+   * 書き戻しが付替えを静かに取り消すため。付替えの前に読まれた受注は、自分が読んだ時点の顧客（墓標）を他の項目と 一緒に flush する — 版が据え置きなら楽観ロックの述語が成立し、その 1
+   * 件だけ墓標に着いたまま残る。 版を上げれば敗者は 409 になり、やり直せば正しい存続行に着く。
+   *
    * @return 移した受注の件数（統合履歴にそのまま残す）
    */
   @Modifying
   @Query(
       """
-      update com.kizuna.order.domain.Order o set o.customerId = :survivingId
+      update versioned com.kizuna.order.domain.Order o set o.customerId = :survivingId
       where o.customerId = :mergedId and o.storeId = :storeId
       """)
   int repointOrders(

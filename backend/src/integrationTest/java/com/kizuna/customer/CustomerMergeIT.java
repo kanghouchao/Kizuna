@@ -125,6 +125,30 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(mergedIntoOf(b)).isEqualTo(c);
   }
 
+  @Test
+  @DisplayName("付替えと圧平が行の版を上げること（並行して読まれていた行の書き戻しが静かに勝たない）")
+  void advancesTheVersionOfEveryRowItRewrites() {
+    String a = createCustomer("版A-" + nonce);
+    String b = createCustomer("版B-" + nonce);
+    String c = createCustomer("版C-" + nonce);
+    String orderId = orderFor(b, "版受注");
+    assertThat(merge(STORE_A, b, a).getStatusCode())
+        .as("前提: A を B へ統合できること")
+        .isEqualTo(HttpStatus.OK);
+    long tombstoneVersionBefore = versionOfCustomer(a);
+    long orderVersionBefore = versionOfOrder(orderId);
+
+    assertThat(merge(STORE_A, c, b).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 版を上げないと、統合の前に読まれていた行を後から保存する経路が、自分が読んだ時点の値
+    // （墓標 A なら統合先 B、受注なら顧客 B）を他の項目と一緒に書き戻せてしまう。楽観ロックの
+    // 述語が成立するため競合として現れず、圧平と付替えだけが静かに取り消される。
+    // 外形（並行する 2 つの要求のどちらが勝つか）の固定は後続の並行テストの範囲で、
+    // ここではその競合が検出可能になる前提だけを決定的に押さえる。
+    assertThat(versionOfCustomer(a)).as("圧平した墓標の版").isGreaterThan(tombstoneVersionBefore);
+    assertThat(versionOfOrder(orderId)).as("付け替えた受注の版").isGreaterThan(orderVersionBefore);
+  }
+
   // ==================== 統合履歴 ====================
 
   @Test
@@ -309,6 +333,14 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
   private String customerOf(String orderId) {
     return orderRepository.findById(orderId).map(Order::getCustomerId).orElseThrow();
+  }
+
+  private long versionOfCustomer(String customerId) {
+    return customer(customerId).getVersion();
+  }
+
+  private long versionOfOrder(String orderId) {
+    return orderRepository.findById(orderId).map(Order::getVersion).orElseThrow();
   }
 
   private OrderStatus statusOf(String orderId) {

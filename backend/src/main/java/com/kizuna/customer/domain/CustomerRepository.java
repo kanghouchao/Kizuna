@@ -76,12 +76,16 @@ public interface CustomerRepository
    *
    * <p>WHERE 句に店舗を明示するのは、Hibernate の {@code @Filter} が HQL の一括 UPDATE には掛からないため。
    *
+   * <p>{@code versioned} を付けるのは、統合先参照が可変列であり、この文が版を上げないと並行する顧客更新の 書き戻しが圧平を静かに取り消すため。墓標 A を読んだ更新の途中で
+   * B→C の統合が A を C へ付け替えると、 更新側は自分が読んだ時点の値（B）を他の項目と一緒に flush する — 版が据え置きなら楽観ロックの述語が 成立してしまい、A→B→C
+   * の連鎖が復活して「解決は常に一跳」が破れる。版を上げれば敗者は 409 になる。
+   *
    * @return 付け替えた墓標の件数
    */
   @Modifying
   @Query(
       """
-      update com.kizuna.customer.domain.Customer c set c.mergedIntoId = :survivingId
+      update versioned com.kizuna.customer.domain.Customer c set c.mergedIntoId = :survivingId
       where c.mergedIntoId = :mergedId and c.storeId = :storeId
       """)
   int flattenMergedInto(
