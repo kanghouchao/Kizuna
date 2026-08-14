@@ -1,5 +1,6 @@
 package com.kizuna.order.application;
 
+import com.kizuna.customer.application.CustomerReferenceResolver;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -68,6 +69,7 @@ public class OrderService {
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
+  private final CustomerReferenceResolver customerReferenceResolver;
   private final NominatableCastLookup nominatableCast;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PointLedgerService pointLedgerService;
@@ -269,7 +271,8 @@ public class OrderService {
         customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
             order.getStoreId(), order.getRequesterMemberId(), LinkStatus.ACTIVE);
     if (established.isPresent()) {
-      return established.get().getCustomerId();
+      // 関連の照会は行を押さえないため、着ける前に顧客参照の解決を通す。
+      return customerReferenceResolver.resolveForWrite(established.get().getCustomerId());
     }
     Long actorId = resolveActorId(actorEmail);
     // store_id は StoreScopeStampListener が @PrePersist で採番する。ランクは他の台帳行の作成経路
@@ -630,13 +633,13 @@ public class OrderService {
    * 行に決める形も同じ理由で採らない。
    *
    * <p>顧客に着かなかった受注には、録入された連絡先を受注側へ写す。写さないと、台帳にも受注にも残らないまま入力が消える。
+   *
+   * <p>既存の行へ着ける ID は {@link CustomerReferenceResolver} から得る。顧客参照を書く経路が共有する解決口で、
+   * 書く直前に対象の行を押さえる。取得できない顧客（不在・他店舗）はそこで 404 になる。
    */
   private void handleCustomerLinking(OrderCreateRequest req, Order order) {
     if (req.getCustomerId() != null && !req.getCustomerId().isEmpty()) {
-      if (!customerRepository.existsById(req.getCustomerId())) {
-        throw new NotFoundException("顧客が見つかりません: " + req.getCustomerId());
-      }
-      order.linkCustomer(req.getCustomerId());
+      order.linkCustomer(customerReferenceResolver.resolveForWrite(req.getCustomerId()));
       return;
     }
     if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
@@ -644,10 +647,12 @@ public class OrderService {
           customerRepository.findByPhoneNumberAndStoreId(
               req.getPhoneNumber(), storeContext.getStoreId());
       if (matched.isEmpty()) {
+        // 起こしたばかりの行は他の経路の書き換えに晒されていないため、解決を経ずにそのまま着ける。
         // store_id は StoreScopeStampListener が @PrePersist で採番する
         order.linkCustomer(customerRepository.save(orderMapper.toCustomer(req)).getId());
       } else if (matched.size() == 1) {
-        order.linkCustomer(matched.get(0).getId());
+        // 照合は行を押さえない問い合わせなので、着ける前に解決を通す（照合そのものの 3 分岐は変わらない）。
+        order.linkCustomer(customerReferenceResolver.resolveForWrite(matched.get(0).getId()));
       }
     }
     order.recordContactIfUnlinked(req.getCustomerName(), req.getPhoneNumber());

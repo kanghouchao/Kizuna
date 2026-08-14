@@ -33,6 +33,7 @@ public class CustomerMemberLinkService {
 
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
+  private final CustomerReferenceResolver customerReferenceResolver;
   private final MemberLookupService memberLookupService;
   private final PlatformUserRepository platformUserRepository;
 
@@ -40,9 +41,9 @@ public class CustomerMemberLinkService {
   @Transactional
   public CustomerMemberLinkResponse link(String customerId, String memberCode, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    // 紐づけを読む前に顧客行を押さえ、記帳（受注完了・手動調整）と同じ直列化点に載せる。
-    // 契約は CustomerRepository#findByIdForUpdate に記す。
-    lockCustomer(customerId);
+    // 成立先の顧客は、顧客参照を書く他の経路と同じ口で解決する。行を押さえてから紐づけを読むことで、
+    // 記帳（受注完了・手動調整）と同じ直列化点に載る。以降の読み書きはすべて解決された ID を使う。
+    String targetId = customerReferenceResolver.resolveForWrite(customerId);
     MemberLookup member =
         memberLookupService
             .findByMemberCode(memberCode)
@@ -50,7 +51,7 @@ public class CustomerMemberLinkService {
 
     CustomerMemberLink current =
         customerMemberLinkRepository
-            .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
+            .findByCustomerIdAndStatus(targetId, LinkStatus.ACTIVE)
             .orElse(null);
     if (current != null && member.memberId().equals(current.getMemberId())) {
       throw new ConflictException("この顧客は既にこの会員と紐づいています");
@@ -70,7 +71,7 @@ public class CustomerMemberLinkService {
 
     CustomerMemberLink link =
         CustomerMemberLink.builder()
-            .customerId(customerId)
+            .customerId(targetId)
             .memberId(member.memberId())
             .memberCode(member.memberCode())
             // この経路の成立根拠は会員コードの提示ただ一つ。他の根拠はそれぞれの機構の書き手が記録する。
@@ -116,7 +117,12 @@ public class CustomerMemberLinkService {
     }
   }
 
-  /** 紐づけを書き換える経路の直列化点。取得できない顧客は他店舗の顧客も含めて 404。 */
+  /**
+   * 解除の直列化点。取得できない顧客は他店舗の顧客も含めて 404。
+   *
+   * <p>書き込み先を解決する経路（{@link CustomerReferenceResolver}）とは分けている — 解除が対象にするのは名指された行そのもので、
+   * 別の行へ向け直してよい操作ではない。
+   */
   private void lockCustomer(String customerId) {
     customerRepository
         .findByIdForUpdate(customerId)
