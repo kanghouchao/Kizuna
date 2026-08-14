@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.customer.application.CustomerReferenceResolver;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -87,6 +88,7 @@ class OrderServiceTest {
   @Mock OrderRepository orderRepository;
   @Mock CustomerRepository customerRepository;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
+  @Mock CustomerReferenceResolver customerReferenceResolver;
   @Mock OrderAttributionRepository orderAttributionRepository;
   @Mock OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock ReceiptTokenGenerator receiptTokenGenerator;
@@ -210,7 +212,8 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(1L);
     when(orderMapper.toEntity(req)).thenReturn(entity);
-    when(customerRepository.existsById("c1")).thenReturn(true);
+    // 指定された顧客は共有の解決口を通って書き込み先になる（そこで行が押さえられる）
+    when(customerReferenceResolver.resolveForWrite("c1")).thenReturn("c1");
     when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -224,6 +227,24 @@ class OrderServiceTest {
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c1");
     assertThat(orderCaptor.getValue().getCastId()).isEqualTo("g1");
     assertThat(orderCaptor.getValue().getReceptionistId()).isEqualTo(1L);
+  }
+
+  @Test
+  void createRejectsACustomerThatCannotBeResolved() {
+    // 不在の顧客も他店舗の顧客も、解決口が同じ 404 に落とす（存在の有無は漏れない）
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerId("missing");
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(customerReferenceResolver.resolveForWrite("missing"))
+        .thenThrow(new NotFoundException("顧客が見つかりません"));
+
+    assertThatThrownBy(() -> service.create(req))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("顧客が見つかりません");
+    verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test
@@ -256,6 +277,8 @@ class OrderServiceTest {
 
     verify(customerRepository).save(customerCaptor.capture());
     assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09012345678");
+    // 起こしたばかりの行は他の経路の書き換えに晒されていないので、解決を経ずに着ける
+    verifyNoInteractions(customerReferenceResolver);
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c-new");
     // 台帳に行を起こした以上、受注側の写しは要らない
@@ -271,6 +294,8 @@ class OrderServiceTest {
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(customerRepository.findByPhoneNumberAndStoreId("09012345678", STORE_ID))
         .thenReturn(List.of(customerWithId("c1")));
+    // 照合は行を押さえない問い合わせなので、着ける前に共有の解決口を通る
+    when(customerReferenceResolver.resolveForWrite("c1")).thenReturn("c1");
     stubCreateHappyPath();
 
     service.create(req);
@@ -300,6 +325,8 @@ class OrderServiceTest {
     assertThat(orderCaptor.getValue().getCustomerId()).isNull();
     // 顧客を起こして重複を増やすこともしない
     verify(customerRepository, never()).save(any());
+    // どの行にも着けない以上、一致行のどれも押さえない
+    verifyNoInteractions(customerReferenceResolver);
     // 顧客未設定で成立させる以上、録入された連絡先は受注側に残さないと消える
     assertThat(orderCaptor.getValue().getContactName()).isEqualTo("重複照合の来客");
     assertThat(orderCaptor.getValue().getContactPhoneNumber()).isEqualTo("09012345678");
@@ -1005,6 +1032,8 @@ class OrderServiceTest {
     when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
             STORE_ID, 100L, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
+    // 関連の照会は行を押さえないため、着ける前に共有の解決口を通る
+    when(customerReferenceResolver.resolveForWrite("cust-1")).thenReturn("cust-1");
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
@@ -1058,6 +1087,8 @@ class OrderServiceTest {
     assertThat(link.getLinkedBy()).as("確定した実行者が関連の実行者になること").isEqualTo(7L);
 
     assertThat(request.getCustomerId()).as("受注が整備された顧客に着くこと").isEqualTo("cust-new");
+    // 起こしたばかりの行は他の経路の書き換えに晒されていないので、解決を経ずに着ける
+    verifyNoInteractions(customerReferenceResolver);
   }
 
   @Test
@@ -1085,6 +1116,7 @@ class OrderServiceTest {
     when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
             STORE_ID, 100L, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(current));
+    when(customerReferenceResolver.resolveForWrite("cust-current")).thenReturn("cust-current");
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());

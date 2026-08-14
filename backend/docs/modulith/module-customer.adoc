@@ -3,7 +3,11 @@
 |Base package
 |`com.kizuna.customer`
 |Spring components
-|_Repositories_
+|_Services_
+
+* `c.k.c.application.CustomerReferenceResolver`
+
+_Repositories_
 
 * `c.k.c.domain.CustomerMemberLinkRepository`
 * `c.k.c.domain.CustomerRepository`
