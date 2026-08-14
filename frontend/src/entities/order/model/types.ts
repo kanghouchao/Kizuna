@@ -70,6 +70,87 @@ export interface Order {
    * サーバはダイジェストしか保存しないので、この応答を逃すと二度と取得できない。
    */
   receipt_token?: string;
+  /**
+   * 取消の記録（理由・実行者の表示名・時刻）。取消していない受注では応答から消える。
+   *
+   * 実行者は操作者の削除で欠落しうる（FK が SET NULL）。会員向けの応答は項目の白名単なので、
+   * この理由が会員へ渡ることはない。
+   */
+  cancelled_reason?: string;
+  cancelled_by_name?: string;
+  cancelled_at?: string;
+}
+
+/**
+ * 受注一覧の並び替えの鍵（GET /store/orders/work-queue・/archive の sort_key）。
+ *
+ * 鍵は受注自身の列に限る — join 先の顧客名・キャスト名を鍵にすると、並びが他の集約の書き換えで動く。
+ * どの鍵も未設定を最大として並べる（昇順で末尾、降順で先頭）。
+ */
+export type OrderSortKey = 'BUSINESS_DATE' | 'ARRIVAL_TIME' | 'PAX' | 'COURSE_MINUTES';
+
+export const ORDER_SORT_KEY_LABELS: Record<OrderSortKey, string> = {
+  BUSINESS_DATE: '営業日',
+  ARRIVAL_TIME: '時刻',
+  PAX: '人数',
+  COURSE_MINUTES: 'コース',
+};
+
+/**
+ * 群読み口の抽出条件。作業キュー（カーソル）とアーカイブ（オフセット）が同じ条件を共有する。
+ *
+ * 状態の軸は検索条件ではなく statuses が担う — 画面でも群そのものが状態の軸なので、検索欄に
+ * 状態を置くと群と条件が食い違う。
+ */
+export interface OrderQueryParams {
+  /** 対象の状態。サーバ側が必須（欠けると 400）。 */
+  statuses: OrderStatus[];
+  /** お客様名の部分一致。空欄は送らない。 */
+  customer_name?: string;
+  business_date?: string;
+  sort_key?: OrderSortKey;
+  desc?: boolean;
+}
+
+/**
+ * 受注の部分更新（PUT /store/orders/{id}）。null ではなく「送らない」が変更しないの意。
+ *
+ * 状態は収めない — 完了・取消・確定・謝絶はいずれも専用の操作が独占する（ADR 0013）。対象は
+ * 確定済みの受注に限られ、終端状態（完了・取消）はサーバが撥ねる。
+ *
+ * 指名・受付担当は契約上は任意だが、**既に設定済みの受注では省略すると 400 になる**（省略が
+ * 「変更しない」なのか「外す」なのかを契約側で区別できないため、外れた結果を黙って作らない）。
+ * 店舗が起こした受注は出生時に両方が埋まっているので、編集画面は毎回この 2 つを運ぶ必要がある。
+ */
+export interface OrderUpdateRequest {
+  receptionist_id?: number;
+  cast_id?: string;
+  business_date?: string;
+  arrival_scheduled_start_time?: string;
+  arrival_scheduled_end_time?: string;
+  pax?: number;
+  course_minutes?: number;
+  extension_minutes?: number;
+  option_codes?: string[];
+  discount_name?: string;
+  manual_discount?: number;
+  location_address?: string;
+  location_building?: string;
+  carrier?: string;
+  media_name?: string;
+  remarks?: string;
+  cast_driver_message?: string;
+  /**
+   * 受付で録入された連絡先の訂正。顧客が着いていない受注でだけ送れる（着いた受注へ送ると 400）。
+   * 送っても台帳照合は再走しない。
+   */
+  contact_name?: string;
+  contact_phone_number?: string;
+}
+
+/** 確定済みの受注の取消（POST /store/orders/{id}/cancellation）。理由は必須（500 文字以内）。 */
+export interface OrderCancellationRequest {
+  reason: string;
 }
 
 export interface OrderReceptionist {
@@ -89,8 +170,12 @@ export interface OrderCastCandidate {
 }
 
 export interface OrderCreateRequest {
-  // 受付とキャストは Java 側が @NotNull / @NotBlank のため必須
-  receptionist_id: number;
+  /**
+   * 受付担当。**省略すると実行者本人が受付担当として記録される**（サーバが確定操作と同じ適格述語で
+   * 解決し、適格でなければ 400）。画面の既定が「自分」なのはこのため — JWT にも /platform/me にも
+   * 利用者 id が無いので、画面の側で「自分」を選択値として組み立てることはできない。
+   */
+  receptionist_id?: number;
   business_date: string;
   arrival_scheduled_start_time?: string;
   arrival_scheduled_end_time?: string;
@@ -103,7 +188,8 @@ export interface OrderCreateRequest {
   option_codes?: string[];
   discount_name?: string;
   manual_discount?: number;
-  reception_route?: ReceptionRoute;
+  /** 受付経路。WEB は会員ポータルの申請だけが名乗るため、この契約では拒否される（400）。 */
+  reception_route?: Exclude<ReceptionRoute, 'WEB'>;
   carrier?: string;
   media_name?: string;
   remarks?: string;

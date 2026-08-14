@@ -1,21 +1,25 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
-import { orderApi } from '@/entities/order';
+import { Order, orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
   // 表示ラベル等の定数は本物を使う（API だけを差し替える）
   ...jest.requireActual('@/entities/order/model/types'),
   orderApi: {
-    list: jest.fn(),
+    get: jest.fn(),
     create: jest.fn(),
+    update: jest.fn(),
+    cancel: jest.fn(),
     listReceptionists: jest.fn(),
     listCastCandidates: jest.fn(),
-    listReservationRequests: jest.fn(),
+    listWorkQueue: jest.fn(),
+    listArchive: jest.fn(),
     confirm: jest.fn(),
     decline: jest.fn(),
     complete: jest.fn(),
     completionPreview: jest.fn(),
+    updateReservationRequest: jest.fn(),
   },
 }));
 
@@ -26,358 +30,391 @@ jest.mock('next/navigation', () => ({
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 
-describe('店側オーダー画面の描画', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
-    mockedOrderApi.listReservationRequests.mockResolvedValue({
-      rows: [],
-      nextCursor: null,
-    });
-  });
+/** 確定済みの受注 1 件。fixture は手書きで、Order 型との照合は tsc の側で効く（jest は型検査しない）。 */
+function confirmedOrder(overrides: Partial<Order> = {}): Order {
+  return {
+    id: 'o1',
+    business_date: '2026-07-03',
+    arrival_scheduled_start_time: '19:30:00',
+    customer_id: 'c1',
+    customer_name: '山田太郎',
+    cast_name: '花子',
+    receptionist_name: '佐藤',
+    pax: 2,
+    course_minutes: 60,
+    receptionist_id: 3,
+    cast_id: 'cast-1',
+    status: 'CONFIRMED',
+    reception_route: 'PHONE',
+    ...overrides,
+  };
+}
 
-  // fixture は手書きであり、バックエンドの実応答を見ているわけではない。
-  // 機械的な担保は fixture と Order 型の照合だけで、それは tsc の側で効く（jest は型検査しない）。
-  it('一覧は各行の項目を表示すること', async () => {
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [
-        {
-          id: '1',
-          business_date: '2026-07-03',
-          customer_name: '山田太郎',
-          cast_name: '花子',
-          course_minutes: 60,
-          extension_minutes: 0,
-          option_codes: [],
-          manual_discount: 0,
-          status: 'CREATED',
-        },
-      ],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
+/** 会員ポータルからの未確定申請 1 件。 */
+function pendingRequest(overrides: Partial<Order> = {}): Order {
+  return {
+    id: 'r1',
+    business_date: '2026-07-05',
+    customer_name: '高橋美咲',
+    pax: 2,
+    status: 'CREATED',
+    reception_route: 'WEB',
+    requester_member_code: '000123456789',
+    ...overrides,
+  };
+}
 
+const EMPTY_ARCHIVE = { rows: [], page: 0, pageCount: 0, total: 0 };
+
+function stubQueue(...rows: Order[]) {
+  mockedOrderApi.listWorkQueue.mockResolvedValue({ rows, nextCursor: null });
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockedOrderApi.listWorkQueue.mockResolvedValue({ rows: [], nextCursor: null });
+  mockedOrderApi.listArchive.mockResolvedValue(EMPTY_ARCHIVE);
+});
+
+describe('作業キューの描画', () => {
+  it('対応が要る受注をカードで出し、状態と内容を名乗ること', async () => {
+    stubQueue(confirmedOrder());
     render(<OrderListPage />);
 
-    expect(await screen.findByText('2026-07-03')).toBeInTheDocument();
-    expect(screen.getByText('山田太郎')).toBeInTheDocument();
-    expect(screen.getByText('花子')).toBeInTheDocument();
-    expect(screen.getByText('60 分')).toBeInTheDocument();
+    expect(await screen.findByText('山田太郎')).toBeInTheDocument();
+    expect(screen.getByText('確定')).toBeInTheDocument();
+    expect(screen.getByText(/指名 花子/)).toBeInTheDocument();
+    expect(screen.getByText(/2 名/)).toBeInTheDocument();
   });
 
-  it('予約受付カードの見出しが見出しナビゲーションに乗ること', async () => {
-    // CardTitle は div を描くため、role と aria-level の両方が無いと支援技術の見出し
-    // 一覧から消える。描画差分には現れない欠落なので、ここで固定する。
-    mockedOrderApi.list.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
-
+  it('群の指定は未確定と確定だけで、終端状態は読み口へ要求しないこと', async () => {
     render(<OrderListPage />);
 
-    expect(await screen.findByRole('heading', { level: 2, name: '予約受付' })).toBeInTheDocument();
-  });
-
-  it('一覧の遷移リンクは店舗スコープのパスを指すこと', async () => {
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [
-        {
-          id: '7',
-          business_date: '2026-07-03',
-          customer_name: '山田太郎',
-          cast_name: '花子',
-          course_minutes: 60,
-          extension_minutes: 0,
-          option_codes: [],
-          manual_discount: 0,
-          status: 'CREATED',
-        },
-      ],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
-
-    render(<OrderListPage />);
-    await screen.findByText('2026-07-03');
-
-    expect(screen.getByRole('link', { name: /新規オーダー登録/ })).toHaveAttribute(
-      'href',
-      '/store/1/orders/create'
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
+    // 終端を混ぜると、完了が積み上がった店舗で対応が要る受注が取得窓から落ちる
+    expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ statuses: ['CREATED', 'CONFIRMED'] })
     );
-    const links = screen.getAllByRole('link');
-    expect(links.map(link => link.getAttribute('href'))).toContain('/store/1/orders/7/edit');
   });
 
-  it('店舗が手入力した未確定の受注を「申請中」と表示しないこと', async () => {
-    // CREATED は申請でも店舗起点の受注でも起きる。申請中と呼ぶと、店舗が起こした受注まで
-    // 会員の申請に見えて予約受付 inbox の対象と誤認される。
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [{ id: '9', business_date: '2026-07-05', status: 'CREATED' }],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
-
+  it('未確定の会員申請には確定・謝絶が出て、確定済みには出ないこと', async () => {
+    stubQueue(pendingRequest(), confirmedOrder());
     render(<OrderListPage />);
 
-    expect(await screen.findByText('未確定')).toBeInTheDocument();
-    expect(screen.queryByText('申請中')).not.toBeInTheDocument();
-    expect(screen.queryByText('WEB申請')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '確定' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
+    expect(screen.getByText('WEB申請')).toBeInTheDocument();
+    // 確定済みの側は完了と取消を持つ
+    expect(screen.getByRole('button', { name: '完了' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
   });
 
-  it('キャスト未指名はフリー表記になること', async () => {
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [
-        {
-          id: '8',
-          business_date: '2026-07-04',
-          customer_name: '鈴木花子',
-          // 未指名はキーごと応答から消える（null は来ない）
-          course_minutes: 90,
-          extension_minutes: 0,
-          option_codes: [],
-          manual_discount: 0,
-          status: 'CREATED',
-        },
-      ],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
-
+  it('確定を押すと確定の口を叩き、その受注が群から外れること', async () => {
+    stubQueue(pendingRequest());
+    mockedOrderApi.confirm.mockResolvedValue(pendingRequest({ status: 'CONFIRMED' }));
     render(<OrderListPage />);
 
-    expect(await screen.findByText('フリー')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: '確定' }));
+
+    await waitFor(() => expect(mockedOrderApi.confirm).toHaveBeenCalledWith('r1'));
+    // 処理し終えた受注は群の対象から外れる。取り直しに行かず手元から取り除く
+    await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
+  });
+
+  it('取得の失敗を空表示と区別すること', async () => {
+    mockedOrderApi.listWorkQueue.mockRejectedValue(new Error('boom'));
+    render(<OrderListPage />);
+
+    // 「受注なし」に見せると未対応を見落とす
+    expect(await screen.findByRole('alert')).toHaveTextContent('受注を取得できませんでした');
+    expect(screen.queryByText('条件に合う受注がありません')).not.toBeInTheDocument();
   });
 
   it('顧客未設定の受注は録入された連絡先で呼ぶこと', async () => {
-    // 電話番号が同店で複数の顧客に一致すると自動照合は断念され、受注は顧客未設定で成立する。
-    // 台帳の顧客名が無いからと '-' で出すと、受付が録入した連絡先がどこにも見えなくなる。
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [
-        {
-          id: '10',
-          business_date: '2026-08-12',
-          // customer_name は顧客未設定なのでキーごと応答から消える
-          contact_name: '重複照合の来客',
-          contact_phone_number: '09012345678',
-          status: 'CREATED',
-        },
-      ],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
-
+    stubQueue(
+      confirmedOrder({
+        customer_id: undefined,
+        customer_name: undefined,
+        contact_name: '匿名希望',
+      })
+    );
     render(<OrderListPage />);
 
-    expect(await screen.findByText('重複照合の来客')).toBeInTheDocument();
-    // 台帳に行を持たない申告のままの値なので、注記は他を説明する文字の体裁で添える
-    expect(screen.getByText('（顧客未設定）')).toHaveClass('text-muted-foreground');
-  });
-
-  it('連絡先が氏名を持たなければ電話番号で呼ぶこと', async () => {
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [
-        {
-          id: '11',
-          business_date: '2026-08-12',
-          contact_phone_number: '09012345678',
-          status: 'CREATED',
-        },
-      ],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
-
-    render(<OrderListPage />);
-
-    expect(await screen.findByText('09012345678')).toBeInTheDocument();
+    expect(await screen.findByText('匿名希望')).toBeInTheDocument();
     expect(screen.getByText('（顧客未設定）')).toBeInTheDocument();
-  });
-
-  it('オーダーが0件なら不在メッセージを表示すること', async () => {
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [],
-      page: 0,
-      pageCount: 0,
-      total: 0,
-    });
-
-    render(<OrderListPage />);
-
-    expect(await screen.findByText('オーダーがありません')).toBeInTheDocument();
-  });
-
-  it('新規登録はバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
-    mockedOrderApi.create.mockResolvedValue({});
-    mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
-    mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
-
-    render(<CreateOrderPage />);
-    // 受付・キャストはサーバ側が @NotNull / @NotBlank。選ばないと送信自体が止まる。
-    // キャストを先に選ぶ（指名の選択が開いている間は受付の選択を開けない）。
-    fireEvent.click(await screen.findByRole('combobox', { name: /キャスト/ }));
-    const option = await screen.findByRole('option', { name: /花子/ });
-    // Base UI の Item は pointerdown を経ていない mouse click を無視する
-    fireEvent.pointerDown(option);
-    fireEvent.click(option);
-    fireEvent.click(await screen.findByRole('combobox', { name: /受付(?!経路)/ }));
-    const option2 = await screen.findByRole('option', { name: '受付花子' });
-    // Base UI の Item は pointerdown を経ていない mouse click を無視する
-    fireEvent.pointerDown(option2);
-    fireEvent.click(option2);
-    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
-
-    await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
-    const body = mockedOrderApi.create.mock.calls[0][0] as unknown as Record<string, unknown>;
-    expect(body).toHaveProperty('business_date');
-    expect(body).toHaveProperty('course_minutes', 60);
-    // セレクト未操作時の既定ペイロード（挙動維持の錨）
-    expect(body).toHaveProperty('classification', 'ーー');
-    expect(body).toHaveProperty('has_pet', false);
-    expect(body).toHaveProperty('discount_name', '');
-    // 受付は Java 側が Long。文字列ではなく数値で送る。
-    expect(body).toHaveProperty('receptionist_id', 7);
-    expect(body).toHaveProperty('cast_id', 'cast-1');
-    expect(body).not.toHaveProperty('store_name');
-    expect(body).not.toHaveProperty('storeName');
-    expect(body).not.toHaveProperty('businessDate');
   });
 });
 
-describe('オーダー一覧の完了処理', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockedOrderApi.listReservationRequests.mockResolvedValue({ rows: [], nextCursor: null });
-    mockedOrderApi.completionPreview.mockResolvedValue({
-      member_linked: false,
-      usage_unit: 100,
-      grant_points: 0,
-    });
+describe('検索と並び替え', () => {
+  it('検索は適用してから取得へ渡り、群を跨いで同じ条件が当たること', async () => {
+    render(<OrderListPage />);
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '山田' } });
+    // 入力しただけでは取得へ行かない（適用済みの条件だけを読む）
+    expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: '山田' })
+      )
+    );
+    // アーカイブにも同じ条件が当たる — 群ごとに違う条件だと同じ画面が 2 つの母集合を主張する
+    await waitFor(() =>
+      expect(mockedOrderApi.listArchive).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: '山田' })
+      )
+    );
   });
 
-  it('完了は確定済みの行にだけ出ること', async () => {
-    // 確定済み以外への完了はサーバ側が撥ねる。押せる形で出すと必ず失敗する操作を勧めることになる
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [
-        { id: 'a', business_date: '2026-08-01', status: 'CONFIRMED' },
-        { id: 'b', business_date: '2026-08-02', status: 'CREATED' },
-        { id: 'c', business_date: '2026-08-03', status: 'COMPLETED' },
-        { id: 'd', business_date: '2026-08-04', status: 'CANCELLED' },
-      ],
-      page: 0,
-      pageCount: 1,
-      total: 4,
-    });
-
+  it('並び替えの向きを変えると、その条件で取り直すこと', async () => {
     render(<OrderListPage />);
-    await screen.findByText('2026-08-01');
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
 
-    expect(screen.getAllByRole('button', { name: '完了' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /昇順/ }));
+
+    // 取り直さない形だと「並び替えても一覧が動かない」退行が静かに通る
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sort_key: 'BUSINESS_DATE', desc: true })
+      )
+    );
+    await waitFor(() =>
+      expect(mockedOrderApi.listArchive).toHaveBeenLastCalledWith(
+        expect.objectContaining({ desc: true })
+      )
+    );
+  });
+});
+
+describe('カード内の取消（二段）', () => {
+  it('取消を押すと理由の入力に変わり、理由が空のうちは実行できないこと', async () => {
+    stubQueue(confirmedOrder());
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '取消' }));
+
+    const execute = screen.getByRole('button', { name: '取消する' });
+    // 理由を書かずに取消せると、書かずに済むと誤解させる（サーバも撥ねる）
+    expect(execute).toBeDisabled();
+    expect(mockedOrderApi.cancel).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('取消の理由'), {
+      target: { value: '客都合。当日連絡あり' },
+    });
+    expect(screen.getByRole('button', { name: '取消する' })).toBeEnabled();
   });
 
-  it('完了を押すと、その受注の完了処理モーダルが開くこと', async () => {
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [{ id: 'a', business_date: '2026-08-01', status: 'CONFIRMED', total_fee: 0 }],
-      page: 0,
-      pageCount: 1,
-      total: 1,
-    });
-
+  it('理由を添えて取消すと専用の口を叩き、その受注が群から外れること', async () => {
+    stubQueue(confirmedOrder());
+    mockedOrderApi.cancel.mockResolvedValue(confirmedOrder({ status: 'CANCELLED' }));
     render(<OrderListPage />);
-    fireEvent.click(await screen.findByRole('button', { name: '完了' }));
 
-    expect(await screen.findByText('完了処理')).toBeInTheDocument();
-    await waitFor(() => expect(mockedOrderApi.completionPreview).toHaveBeenCalledWith('a', 0));
+    fireEvent.click(await screen.findByRole('button', { name: '取消' }));
+    fireEvent.change(screen.getByLabelText('取消の理由'), { target: { value: '客都合' } });
+    fireEvent.click(screen.getByRole('button', { name: '取消する' }));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.cancel).toHaveBeenCalledWith('o1', { reason: '客都合' })
+    );
+    await waitFor(() => expect(screen.queryByText('山田太郎')).not.toBeInTheDocument());
   });
 
-  it('状態バッジは状態ごとに塗り分けること', async () => {
-    // 一律で成功の緑に塗ると、キャンセルまで正常終了に見える
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [
-        { id: 'a', business_date: '2026-08-01', status: 'CONFIRMED' },
-        { id: 'd', business_date: '2026-08-04', status: 'CANCELLED' },
-      ],
-      page: 0,
-      pageCount: 1,
-      total: 2,
-    });
-
+  it('やめるを押すと理由を捨てて元の操作に戻ること', async () => {
+    stubQueue(confirmedOrder());
     render(<OrderListPage />);
 
-    expect(await screen.findByText('確定')).toHaveClass('bg-success/10');
-    const cancelled = screen.getByText('キャンセル');
-    expect(cancelled).toHaveClass('bg-destructive/10');
-    expect(cancelled).not.toHaveClass('bg-success/10');
+    fireEvent.click(await screen.findByRole('button', { name: '取消' }));
+    fireEvent.change(screen.getByLabelText('取消の理由'), { target: { value: '書きかけ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'やめる' }));
+
+    expect(screen.queryByLabelText('取消の理由')).not.toBeInTheDocument();
+    expect(mockedOrderApi.cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('一覧内の編集モーダル', () => {
+  it('確定済みの編集は 1 件を読み直し、指名と受付担当を毎回運んで保存すること', async () => {
+    stubQueue(confirmedOrder());
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder({ pax: 5 }));
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+
+    // 一覧の行を種にすると、他の操作者が直した後の画面で陳腐化した値を送り返す
+    await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledWith('o1'));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(dialog).getByLabelText('人数')).toHaveValue(2));
+
+    fireEvent.change(within(dialog).getByLabelText('人数'), { target: { value: '5' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.update).toHaveBeenCalledWith(
+        'o1',
+        // 省略は「外す」と区別できないため、設定済みの 2 項目は毎回運ばないと 400 になる
+        expect.objectContaining({ pax: 5, receptionist_id: 3, cast_id: 'cast-1' })
+      )
+    );
+  });
+
+  it('顧客の着いた受注では連絡先を編集させず、顧客詳細への導線を出すこと', async () => {
+    stubQueue(confirmedOrder());
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+    const dialog = await screen.findByRole('dialog');
+
+    // 受注 1 件を直したつもりの変更が同じ顧客の他の受注へ波及しないため、台帳の項目は読み取り
+    await waitFor(() =>
+      expect(within(dialog).getByRole('link', { name: /顧客詳細を開く/ })).toHaveAttribute(
+        'href',
+        '/store/1/customers/c1'
+      )
+    );
+    expect(within(dialog).queryByLabelText('電話番号')).not.toBeInTheDocument();
+  });
+
+  it('顧客の着いていない受注では連絡先を訂正でき、その 2 項目を送ること', async () => {
+    const unlinked = confirmedOrder({
+      customer_id: undefined,
+      customer_name: undefined,
+      contact_name: '誤記の名前',
+    });
+    stubQueue(unlinked);
+    mockedOrderApi.get.mockResolvedValue(unlinked);
+    mockedOrderApi.update.mockResolvedValue(unlinked);
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(within(dialog).getByLabelText('お客様名')).toHaveValue('誤記の名前')
+    );
+
+    fireEvent.change(within(dialog).getByLabelText('お客様名'), {
+      target: { value: '正しい名前' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.update).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({ contact_name: '正しい名前' })
+      )
+    );
+  });
+
+  it('未確定の申請は申請専用のモーダルで編集すること', async () => {
+    stubQueue(pendingRequest());
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+
+    // 申請は指名・受付担当を可空として扱う専用の契約で編集する（端点も契約も従来どおり）
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mockedOrderApi.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('アーカイブ', () => {
+  it('たたまれた状態では行を出さず、開くと結末を名乗ること', async () => {
+    mockedOrderApi.listArchive.mockImplementation(async params =>
+      params.statuses[0] === 'CANCELLED'
+        ? {
+            rows: [
+              confirmedOrder({
+                id: 'x1',
+                status: 'CANCELLED',
+                cancelled_reason: '客都合。当日夕方に連絡あり',
+                cancelled_by_name: '田中店長',
+                cancelled_at: '2026-07-03T17:42:00+09:00',
+              }),
+            ],
+            page: 0,
+            pageCount: 1,
+            total: 1,
+          }
+        : EMPTY_ARCHIVE
+    );
+    render(<OrderListPage />);
+
+    const toggle = await screen.findByRole('button', { name: /取消 \d+ 件/ });
+    expect(screen.queryByText(/客都合。当日夕方に連絡あり/)).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    // 結末を確かめるために詳細を開かなくて済むよう、行が理由・実行者・時刻を名乗る
+    expect(await screen.findByText(/客都合。当日夕方に連絡あり/)).toBeInTheDocument();
+    expect(screen.getByText(/田中店長/)).toBeInTheDocument();
+  });
+
+  it('完了の行は会計金額と付与ポイントを名乗ること', async () => {
+    mockedOrderApi.listArchive.mockImplementation(async params =>
+      params.statuses[0] === 'COMPLETED'
+        ? {
+            rows: [
+              confirmedOrder({
+                id: 'x2',
+                status: 'COMPLETED',
+                total_fee: 28000,
+                auto_grant_points: 280,
+              }),
+            ],
+            page: 0,
+            pageCount: 1,
+            total: 1,
+          }
+        : EMPTY_ARCHIVE
+    );
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
+
+    expect(await screen.findByText(/会計 ¥28,000/)).toBeInTheDocument();
+    expect(screen.getByText(/付与 280pt/)).toBeInTheDocument();
   });
 });
 
 describe('オーダー一覧ページ固有の要素', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
-    mockedOrderApi.listReservationRequests.mockResolvedValue({
-      rows: [],
-      nextCursor: null,
-    });
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [],
-      page: 0,
-      pageCount: 0,
-      total: 0,
-    });
-  });
-
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
     render(<OrderListPage />);
-    await screen.findByText('オーダーがありません');
 
-    // e2e（hybrid-console-access）は見出し名 'オーダー一覧' の完全一致で到達確認する
-    expect(screen.getByRole('heading', { level: 1, name: 'オーダー一覧' })).toBeInTheDocument();
-    expect(screen.getByText('当日の注文状況を確認・管理できます。')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '新規オーダー登録' })).toHaveAttribute(
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('オーダー一覧');
+    expect(screen.getByRole('link', { name: /新規オーダー登録/ })).toHaveAttribute(
       'href',
       '/store/1/orders/create'
     );
   });
 });
 
-describe('オーダー一覧のページ送り', () => {
+describe('新規オーダー登録', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // 一覧ページは予約受付 inbox を同居させるため、その読み口も満たしておく
-    mockedOrderApi.listReservationRequests.mockResolvedValue({
-      rows: [],
-      nextCursor: null,
-    });
+    mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 3, display_name: '山田次郎' }]);
+    mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
   });
 
-  // 1 ページ 20 件で、101 件目以降にもページ送りで到達できることを固定する
-  it('2 ページ目のボタンで 0 起点の page=1 を取得すること', async () => {
-    mockedOrderApi.list.mockResolvedValue({
-      rows: [{ id: '1', business_date: '2026-07-03', course_minutes: 60, status: 'CREATED' }],
-      page: 0,
-      pageCount: 6,
-      total: 120,
-    });
+  it('受付担当を選ばなければ項目ごと送らないこと（サーバが実行者本人に解決する）', async () => {
+    mockedOrderApi.create.mockResolvedValue(confirmedOrder());
+    render(<CreateOrderPage />);
 
-    render(<OrderListPage />);
-    await screen.findByText('2026-07-03');
-    expect(mockedOrderApi.list).toHaveBeenCalledWith({
-      page: 0,
-      size: 20,
-      sort: 'createdAt,id,desc',
-    });
+    fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '新規客' } });
+    // キャストは必須。候補から選ばずに送ると欄の傍で止まる
+    const form = screen.getByRole('button', { name: '登録する' });
+    fireEvent.click(form);
 
-    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    await waitFor(() => expect(screen.getByText(/キャストを候補から選択/)).toBeInTheDocument());
+    expect(mockedOrderApi.create).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() =>
-      expect(mockedOrderApi.list).toHaveBeenLastCalledWith({
-        page: 1,
-        size: 20,
-        sort: 'createdAt,id,desc',
-      })
-    );
+  it('受付経路の選択肢に Web 申請を出さないこと', async () => {
+    render(<CreateOrderPage />);
+
+    // WEB は会員ポータルの申請だけが名乗る値（後端も拒否する）
+    expect(screen.queryByText('Web 申請')).not.toBeInTheDocument();
   });
 });

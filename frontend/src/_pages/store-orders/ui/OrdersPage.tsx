@@ -2,210 +2,274 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
-import { CircleCheckIcon, PlusIcon, SquarePenIcon, UserRoundCogIcon } from 'lucide-react';
-import { ORDER_STATUS_LABELS, Order, OrderStatus, orderApi } from '@/entities/order';
-import { storePath, useListPage } from '@/shared/lib';
-import { ListPage } from '@/widgets/list-page';
-import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
+import { useMemo, useState } from 'react';
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
+import {
+  ORDER_SORT_KEY_LABELS,
+  Order,
+  OrderSortKey,
+  OrderStatus,
+  orderApi,
+} from '@/entities/order';
+import { storePath, useCursorList } from '@/shared/lib';
+import { PageHeader } from '@/widgets/page-header';
+import { OrderArchiveSection, type ArchiveCriteria } from './OrderArchiveSection';
 import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderCompletionModal } from './OrderCompletionModal';
-import { ReservationRequestInbox } from './ReservationRequestInbox';
+import { OrderEditModal } from './OrderEditModal';
+import { OrderQueueCard } from './OrderQueueCard';
+import { ReservationRequestEditModal } from './ReservationRequestEditModal';
 import {
-  Badge,
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Input,
+  Label,
+  RegionError,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/shared/ui';
 
-/** 一覧 1 ページあたりの件数 */
-const PAGE_SIZE = 20;
+/** 作業キューの 1 回の読み込み件数。処理で行が消える一覧なので継ぎ足しで辿る。 */
+const QUEUE_PAGE_SIZE = 20;
 
-/**
- * 状態バッジの色。全状態を同じ色で塗ると、キャンセルまで成功の緑で出る。
- *
- * 未確定は中立（bg-muted に muted の文字を重ねると光量比が足りないため、文字は foreground）。
- * 申請中の黄は使わない — 未確定は店舗が手入力した受注でも起きるので、店舗側では中立に呼ぶ。
- */
-const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
-  CREATED: 'border-transparent bg-muted text-foreground',
-  CONFIRMED: 'border-transparent bg-success/10 text-success-strong',
-  COMPLETED: 'border-transparent bg-primary/10 text-primary-strong',
-  CANCELLED: 'border-transparent bg-destructive/10 text-destructive-strong',
-};
+/** 対応が要る受注の群。未確定（会員申請）と確定済みを 1 つの面に出す。 */
+const ACTIVE_STATUSES: OrderStatus[] = ['CREATED', 'CONFIRMED'];
 
-/**
- * 一覧の「お客様名」欄。台帳の顧客名が無ければ受付で録入された連絡先で呼び、台帳に行を持たない
- * 申告のままの値であることを注記で添える（注記は他を説明する文字なので muted）。
- */
-function CustomerCell({ order }: { order: Order }) {
-  const label = customerLabel(order);
-  if (label === null) {
-    return <>-</>;
-  }
-  return (
-    <>
-      <span>{label.name}</span>
-      {label.unlinked && <span className="text-muted-foreground">{UNLINKED_NOTE}</span>}
-    </>
-  );
+const SORT_KEYS = Object.keys(ORDER_SORT_KEY_LABELS) as OrderSortKey[];
+
+interface SearchDraft {
+  customerName: string;
+  businessDate: string;
 }
+
+const EMPTY_DRAFT: SearchDraft = { customerName: '', businessDate: '' };
 
 export default function OrderListPage() {
   const params = useParams();
   const storeId = params.storeId as string;
+
+  // 入力中の値と「適用済み」の条件を分ける。取得は適用済みだけを読む（DESIGN.md）
+  const [draft, setDraft] = useState<SearchDraft>(EMPTY_DRAFT);
+  const [applied, setApplied] = useState<SearchDraft>(EMPTY_DRAFT);
+  const [sortKey, setSortKey] = useState<OrderSortKey>('BUSINESS_DATE');
+  const [descending, setDescending] = useState(false);
+
+  const [editing, setEditing] = useState<Order | null>(null);
+  const [editingRequest, setEditingRequest] = useState<Order | null>(null);
   const [completing, setCompleting] = useState<Order | null>(null);
   const [correcting, setCorrecting] = useState<Order | null>(null);
-  const list = useListPage(
-    // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
-    // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
-    page => orderApi.list({ page, size: PAGE_SIZE, sort: 'createdAt,id,desc' })
+
+  // 群を跨いで同じ条件を当てる。参照が毎レンダー変わるとアーカイブが取り直し続けるため畳んで持つ
+  const criteria: ArchiveCriteria = useMemo(
+    () => ({
+      customer_name: applied.customerName || undefined,
+      business_date: applied.businessDate || undefined,
+      sort_key: sortKey,
+      desc: descending,
+    }),
+    [applied, sortKey, descending]
   );
-  const orders = list.rows;
+
+  const queue = useCursorList<Order, ArchiveCriteria>(
+    (cursor, activeCriteria) =>
+      orderApi.listWorkQueue({
+        ...activeCriteria,
+        statuses: ACTIVE_STATUSES,
+        cursor,
+        size: QUEUE_PAGE_SIZE,
+      }),
+    criteria
+  );
+
+  const apply = (next: SearchDraft) => {
+    setApplied(next);
+    queue.search({
+      customer_name: next.customerName || undefined,
+      business_date: next.businessDate || undefined,
+      sort_key: sortKey,
+      desc: descending,
+    });
+  };
+
+  const applySort = (key: OrderSortKey, desc: boolean) => {
+    setSortKey(key);
+    setDescending(desc);
+    queue.search({
+      customer_name: applied.customerName || undefined,
+      business_date: applied.businessDate || undefined,
+      sort_key: key,
+      desc,
+    });
+  };
+
+  /** 処理し終えた受注は群の対象から外れるので、手元から取り除くだけで一覧は正しくなる。 */
+  const removeFromQueue = (id: string) => queue.setRows(prev => prev.filter(row => row.id !== id));
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>
-            予約受付
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ReservationRequestInbox onProcessed={list.reload} />
-        </CardContent>
-      </Card>
-      <ListPage
+      <PageHeader
         title="オーダー一覧"
-        description="当日の注文状況を確認・管理できます。"
+        description="対応が要る受注を前面に、完了・取消はアーカイブにまとめています。"
         actions={
           <Button render={<Link href={storePath(storeId, '/orders/create')} />}>
             <PlusIcon aria-hidden="true" />
             新規オーダー登録
           </Button>
         }
-        state={list}
-        emptyMessage="オーダーがありません"
-        errorMessage="オーダーの取得に失敗しました"
-        onRetry={list.reload}
-      >
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>営業日</TableHead>
-              <TableHead>お客様名</TableHead>
-              <TableHead>女の子名</TableHead>
-              <TableHead>人数</TableHead>
-              <TableHead>コース</TableHead>
-              <TableHead>ステータス</TableHead>
-              <TableHead className="text-right">アクション</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.map(order => (
-              <TableRow key={order.id}>
-                <TableCell className="text-muted-foreground">{order.business_date}</TableCell>
-                <TableCell className="text-foreground">
-                  <CustomerCell order={order} />
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={
-                      !order.cast_name || order.cast_name === 'フリー'
-                        ? 'border-transparent bg-muted text-foreground'
-                        : 'border-transparent bg-chart-5/10 text-foreground'
-                    }
-                  >
-                    {order.cast_name || 'フリー'}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {order.pax != null ? `${order.pax} 名` : '-'}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {order.course_minutes != null ? `${order.course_minutes} 分` : '-'}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Badge
-                      variant="outline"
-                      className={
-                        order.status
-                          ? STATUS_BADGE_CLASS[order.status]
-                          : 'border-transparent bg-muted text-foreground'
-                      }
-                    >
-                      {order.status ? ORDER_STATUS_LABELS[order.status] : '-'}
-                    </Badge>
-                    {/* 申請の判定は受付経路だけでは足りない（店舗が手入力の受注にも付けられる）。
-                      サーバ側の予約受付 inbox と同じく申請者の有無まで見る。 */}
-                    {order.reception_route === 'WEB' && order.requester_member_code && (
-                      <Badge
-                        variant="outline"
-                        className="border-transparent bg-primary/10 text-primary-strong"
-                      >
-                        WEB申請
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {/* 完了できるのは確定済みの受注だけ（それ以外はサーバ側が遷移を撥ねる）。
-                        会計金額とポイントを決める操作なので、遷移ではなくこの場で開く */}
-                    {order.status === 'CONFIRMED' && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCompleting(order)}
-                      >
-                        <CircleCheckIcon aria-hidden="true" />
-                        完了
-                      </Button>
-                    )}
-                    {/* 誤帰属の訂正は完了した受注にしか起こらない（帰属が生まれるのは完了と事後申領の
-                        瞬間だけ）。現に帰属しているかは一覧の読み口が持たないので、開いた先で名乗る */}
-                    {order.status === 'COMPLETED' && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCorrecting(order)}
-                      >
-                        <UserRoundCogIcon aria-hidden="true" />
-                        会員帰属
-                      </Button>
-                    )}
-                    <Button
-                      render={<Link href={storePath(storeId, `/orders/${order.id}/edit`)} />}
-                      variant="ghost"
-                      size="icon-sm"
-                    >
-                      <SquarePenIcon />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </ListPage>
+      />
+
+      {/* ステータスの絞り込みは置かない — 群そのものがその軸で、二本あると群と条件が食い違う */}
+      <Card>
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            apply(draft);
+          }}
+        >
+          <CardContent className="flex flex-col gap-4 md:flex-row md:items-end">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="order-search-customer">お客様名</Label>
+              <Input
+                id="order-search-customer"
+                value={draft.customerName}
+                onChange={e => setDraft({ ...draft, customerName: e.target.value })}
+                placeholder="部分一致"
+              />
+            </div>
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="order-search-date">営業日</Label>
+              <Input
+                id="order-search-date"
+                type="date"
+                value={draft.businessDate}
+                onChange={e => setDraft({ ...draft, businessDate: e.target.value })}
+              />
+            </div>
+            {/* 表の見出しが無いので、並び替えは専用のコントロールを持つ */}
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="order-sort">並び</Label>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={sortKey}
+                  onValueChange={v => applySort(v as OrderSortKey, descending)}
+                  items={SORT_KEYS.map(k => ({ value: k, label: ORDER_SORT_KEY_LABELS[k] }))}
+                >
+                  <SelectTrigger id="order-sort" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_KEYS.map(k => (
+                      <SelectItem key={k} value={k}>
+                        {ORDER_SORT_KEY_LABELS[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={descending ? '降順（押すと昇順）' : '昇順（押すと降順）'}
+                  onClick={() => applySort(sortKey, !descending)}
+                >
+                  {descending ? <ArrowDownIcon /> : <ArrowUpIcon />}
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-end gap-2">
+              <Button type="submit">検索</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDraft(EMPTY_DRAFT);
+                  apply(EMPTY_DRAFT);
+                }}
+              >
+                クリア
+              </Button>
+            </div>
+          </CardContent>
+        </form>
+      </Card>
+
+      <section className="space-y-3">
+        <h2 className="text-foreground text-sm font-medium">対応が要る</h2>
+        {/* 取得の失敗を空表示と区別する — 「受注なし」に見せると未対応を見落とす */}
+        {queue.failed ? (
+          <RegionError message="受注を取得できませんでした。" onRetry={queue.reload} />
+        ) : queue.isLoading && queue.rows.length === 0 ? (
+          <p className="text-muted-foreground text-sm">読み込み中...</p>
+        ) : queue.rows.length === 0 && !queue.hasMore ? (
+          // 続きが残っているうちは「受注なし」と言い切らない（表示中を処理し終えただけの状態と区別できなくなる）
+          <p className="text-muted-foreground bg-card rounded-lg border p-4 text-sm">
+            条件に合う受注がありません
+          </p>
+        ) : (
+          queue.rows.map(order => (
+            <OrderQueueCard
+              key={order.id}
+              order={order}
+              onProcessed={removeFromQueue}
+              onEdit={target =>
+                target.status === 'CREATED' ? setEditingRequest(target) : setEditing(target)
+              }
+              onComplete={setCompleting}
+            />
+          ))
+        )}
+        {queue.hasMore && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={queue.isLoading}
+            onClick={queue.loadMore}
+          >
+            もっと見る
+          </Button>
+        )}
+      </section>
+
+      <div className="space-y-3">
+        <OrderArchiveSection
+          title="完了"
+          status="COMPLETED"
+          criteria={criteria}
+          onCorrectAttribution={setCorrecting}
+        />
+        <OrderArchiveSection
+          title="取消"
+          status="CANCELLED"
+          criteria={criteria}
+          onCorrectAttribution={setCorrecting}
+        />
+      </div>
+
+      <OrderEditModal
+        order={editing}
+        onClose={() => setEditing(null)}
+        onSaved={updated =>
+          queue.setRows(prev => prev.map(row => (row.id === updated.id ? updated : row)))
+        }
+      />
+      {/* 未確定の申請は指名・受付担当を可空として扱う専用の契約で編集する（端点も契約も従来どおり） */}
+      <ReservationRequestEditModal
+        request={editingRequest}
+        onClose={() => setEditingRequest(null)}
+        onSaved={updated =>
+          queue.setRows(prev => prev.map(row => (row.id === updated.id ? updated : row)))
+        }
+      />
       <OrderCompletionModal
         order={completing}
         onClose={() => setCompleting(null)}
-        // 完了した受注は状態も会計欄も変わって一覧に残る。useListPage は行の差し替え口を
-        // 持たないため、現在のページをそのまま取り直す。
-        onCompleted={list.reload}
+        // 完了した受注は作業キューから外れてアーカイブへ移る
+        onCompleted={() => removeFromQueue(completing?.id ?? '')}
       />
       {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
       <OrderAttributionModal order={correcting} onClose={() => setCorrecting(null)} />
