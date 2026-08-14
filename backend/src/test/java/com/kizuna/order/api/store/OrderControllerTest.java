@@ -170,17 +170,24 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("受注管理権限が無ければ予約受付 inbox を読めないこと")
+  @DisplayName("受注管理権限が無ければ群読み口を読めないこと")
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
-  void reservationRequestsAreRejectedWithoutOrderManage() throws Exception {
+  void groupReadsAreRejectedWithoutOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
         .perform(
-            get("/store/orders/reservation-requests")
+            get("/store/orders/work-queue?statuses=CREATED")
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isForbidden());
+    mockMvc
+        .perform(
+            get("/store/orders/archive?statuses=COMPLETED")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderService);
   }
 
   @Test

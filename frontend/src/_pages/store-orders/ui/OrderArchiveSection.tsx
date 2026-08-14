@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UserRoundCogIcon } from 'lucide-react';
-import { Order, OrderQueryParams, OrderStatus, orderApi } from '@/entities/order';
+import { Order, OrderListCriteria, OrderStatus, orderApi } from '@/entities/order';
 import { useListPage } from '@/shared/lib';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import { Button, RegionError } from '@/shared/ui';
@@ -10,13 +10,10 @@ import { Button, RegionError } from '@/shared/ui';
 /** アーカイブの 1 ページ。増えるだけの記録なので、位置をページ番号で指せる。 */
 const PAGE_SIZE = 10;
 
-/** 群を跨いで共有する検索・並び替えの条件（状態の軸はこの群自身が持つ）。 */
-export type ArchiveCriteria = Omit<OrderQueryParams, 'statuses'>;
-
 interface OrderArchiveSectionProps {
   title: string;
   status: OrderStatus;
-  criteria: ArchiveCriteria;
+  criteria: OrderListCriteria;
   /** 帰属の訂正モーダルを開く（完了した受注にだけ起こる）。 */
   onCorrectAttribution: (order: Order) => void;
 }
@@ -26,7 +23,8 @@ function OutcomeLine({ order }: { order: Order }) {
     return (
       <p className="text-muted-foreground text-sm">
         会計 ¥{(order.total_fee ?? 0).toLocaleString()}
-        {order.auto_grant_points ? ` ・ 付与 ${order.auto_grant_points}pt` : ''}
+        {/* 0 を畳むと「付与なし」と「名乗っていない」が区別できなくなる（完了した受注は必ず持つ） */}
+        {order.auto_grant_points != null ? ` ・ 付与 ${order.auto_grant_points}pt` : ''}
         {order.used_points ? ` ・ 利用 ${order.used_points}pt` : ''}
       </p>
     );
@@ -100,15 +98,21 @@ export function OrderArchiveSection({
   onCorrectAttribution,
 }: OrderArchiveSectionProps) {
   const [open, setOpen] = useState(false);
-  const list = useListPage<Order, ArchiveCriteria>(
+  const list = useListPage<Order, OrderListCriteria>(
     (page, applied) =>
       orderApi.listArchive({ ...applied, statuses: [status], page, size: PAGE_SIZE }),
     criteria
   );
   const { search } = list;
 
-  // 条件が変わったら取り直す。フックは適用済み条件を自分で持つので、渡し直すだけでは動かない
+  // 条件が変わったら取り直す。フックは適用済み条件を自分で持つので、渡し直すだけでは動かない。
+  // 初回はフック自身の取得と重なるため飛ばす（同じページを 2 回取りに行かないため）。
+  const appliedRef = useRef(criteria);
   useEffect(() => {
+    if (appliedRef.current === criteria) {
+      return;
+    }
+    appliedRef.current = criteria;
     void search(criteria);
   }, [criteria, search]);
 

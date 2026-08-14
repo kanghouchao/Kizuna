@@ -94,8 +94,9 @@ When(
   async ({ page }, reason: string) => {
     const card = ownCard(page);
     await card.getByRole('button', { name: '取消', exact: true }).click();
-    // 一段目では実行できない — 理由が空のうちは押せない
-    await expect(card.getByRole('button', { name: '取消する', exact: true })).toBeDisabled();
+    // 検証では押せなくしない。理由なしで押すと欄の傍が理由を求める（DESIGN.md）
+    await card.getByRole('button', { name: '取消する', exact: true }).click();
+    await expect(card.getByText('取消の理由を入力してください')).toBeVisible();
     await card.getByLabel('取消の理由', { exact: true }).fill(reason);
     await Promise.all([
       page.waitForResponse(
@@ -145,7 +146,7 @@ After(async ({ request }) => {
   const token = await loginAsStoreAdmin(request);
   if (createdOrderId) {
     // 受注は消せない（ADR 0013）ので、終端へ送って対応が要る群から外すだけ。
-    // 既に終端なら撥ねられるため、失敗は後片付けの警告に留める。
+    // シナリオ側で既に取消・完了まで進んでいれば撥ねられるが、それは想定内なので握り潰す。
     await cancelOrder(request, token, createdOrderId, 'e2e の後片付け').catch(() => {});
   }
   if (createdCastId) {

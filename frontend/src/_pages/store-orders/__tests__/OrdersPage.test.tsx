@@ -190,21 +190,29 @@ describe('検索と並び替え', () => {
 });
 
 describe('カード内の取消（二段）', () => {
-  it('取消を押すと理由の入力に変わり、理由が空のうちは実行できないこと', async () => {
+  it('取消を押すと理由の入力に変わり、理由が空のまま実行すると欄の傍が理由を求めること', async () => {
     stubQueue(confirmedOrder());
     render(<OrderListPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: '取消' }));
 
-    const execute = screen.getByRole('button', { name: '取消する' });
-    // 理由を書かずに取消せると、書かずに済むと誤解させる（サーバも撥ねる）
-    expect(execute).toBeDisabled();
-    expect(mockedOrderApi.cancel).not.toHaveBeenCalled();
+    // 検証で押せなくしない — 灰色のボタンは何が足りないかを言わない（DESIGN.md）
+    fireEvent.click(screen.getByRole('button', { name: '取消する' }));
 
-    fireEvent.change(screen.getByLabelText('取消の理由'), {
-      target: { value: '客都合。当日連絡あり' },
-    });
-    expect(screen.getByRole('button', { name: '取消する' })).toBeEnabled();
+    expect(await screen.findByText('取消の理由を入力してください')).toBeInTheDocument();
+    expect(mockedOrderApi.cancel).not.toHaveBeenCalled();
+  });
+
+  it('空白だけの理由も「書いていない」と同じに扱うこと', async () => {
+    stubQueue(confirmedOrder());
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '取消' }));
+    fireEvent.change(screen.getByLabelText('取消の理由'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: '取消する' }));
+
+    expect(await screen.findByText('取消の理由を入力してください')).toBeInTheDocument();
+    expect(mockedOrderApi.cancel).not.toHaveBeenCalled();
   });
 
   it('理由を添えて取消すと専用の口を叩き、その受注が群から外れること', async () => {

@@ -1,12 +1,23 @@
 'use client';
 
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { CircleCheckIcon, SquarePenIcon, XIcon } from 'lucide-react';
 import { ORDER_STATUS_LABELS, Order, orderApi } from '@/entities/order';
 import { getApiErrorMessage } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
-import { Badge, Button, Label, Textarea } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Textarea,
+} from '@/shared/ui';
 
 /** 取消の理由の上限。サーバ側の列長（500）と揃える。 */
 const CANCEL_REASON_MAX_LENGTH = 500;
@@ -57,7 +68,7 @@ function CardMeta({ order }: { order: Order }) {
 export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: OrderQueueCardProps) {
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [reason, setReason] = useState('');
+  const cancelForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
 
   const id = order.id ?? '';
   const pending = order.status === 'CREATED';
@@ -189,52 +200,64 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
       </div>
 
       {cancelling && (
-        <div className="border-destructive/40 space-y-3 rounded-lg border p-3">
-          <p className="text-destructive-strong text-sm">
-            取消した受注は元に戻せません。理由は記録に残ります。
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor={`cancel-reason-${id}`}>取消の理由</Label>
-            <Textarea
-              id={`cancel-reason-${id}`}
-              rows={2}
-              required
-              maxLength={CANCEL_REASON_MAX_LENGTH}
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={processing}
-              onClick={() => {
-                setReason('');
-                setCancelling(false);
+        <Form {...cancelForm}>
+          {/* native の検証が割り込むと、こちらの文言が描かれないまま送信が止まる */}
+          <form
+            noValidate
+            onSubmit={cancelForm.handleSubmit(values =>
+              run(
+                () => orderApi.cancel(id, { reason: values.reason.trim() }),
+                '受注を取消しました',
+                '取消に失敗しました'
+              )
+            )}
+            className="border-destructive/40 space-y-3 rounded-lg border p-3"
+          >
+            <p className="text-destructive-strong text-sm">
+              取消した受注は元に戻せません。理由は記録に残ります。
+            </p>
+            <FormField
+              control={cancelForm.control}
+              name="reason"
+              // 理由は取消の根拠そのもの。空白だけは書いていないのと同じ（サーバも同じに撥ねる）
+              rules={{
+                validate: value => value.trim().length > 0 || '取消の理由を入力してください',
+                maxLength: {
+                  value: CANCEL_REASON_MAX_LENGTH,
+                  message: `取消の理由は ${CANCEL_REASON_MAX_LENGTH} 文字以内です`,
+                },
               }}
-            >
-              やめる
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              // 理由が無い取消はサーバも撥ねる。押せてしまうと、書かずに済むと誤解させる
-              disabled={processing || reason.trim().length === 0}
-              onClick={() =>
-                run(
-                  () => orderApi.cancel(id, { reason: reason.trim() }),
-                  '受注を取消しました',
-                  '取消に失敗しました'
-                )
-              }
-            >
-              取消する
-            </Button>
-          </div>
-        </div>
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>取消の理由</FormLabel>
+                  <FormControl>
+                    {/* required は検証ではなく支援技術への告知として残す（規則の側が enforcement） */}
+                    <Textarea rows={2} required maxLength={CANCEL_REASON_MAX_LENGTH} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={processing}
+                onClick={() => {
+                  cancelForm.reset({ reason: '' });
+                  setCancelling(false);
+                }}
+              >
+                やめる
+              </Button>
+              {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
+              <Button type="submit" variant="destructive" size="sm" disabled={processing}>
+                取消する
+              </Button>
+            </div>
+          </form>
+        </Form>
       )}
     </li>
   );

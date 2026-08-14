@@ -113,6 +113,12 @@ export interface OrderQueryParams {
 }
 
 /**
+ * 検索と並び替えの条件（状態の軸を除いた部分）。作業キューとアーカイブが同じものを共有する —
+ * 群ごとに違う条件だと、同じ画面が 2 つの母集合を主張することになる。
+ */
+export type OrderListCriteria = Omit<OrderQueryParams, 'statuses'>;
+
+/**
  * 受注の部分更新（PUT /store/orders/{id}）。null ではなく「送らない」が変更しないの意。
  *
  * 状態は収めない — 完了・取消・確定・謝絶はいずれも専用の操作が独占する（ADR 0013）。対象は
