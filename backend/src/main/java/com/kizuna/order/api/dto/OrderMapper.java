@@ -32,7 +32,9 @@ public interface OrderMapper {
    */
   @Mapping(target = "locationAddress", source = "address")
   @Mapping(target = "locationBuilding", source = "buildingName")
-  @Mapping(target = "status", constant = "CREATED")
+  // 店舗・HQ が起こす受注は確定で出生する。電話口で受けると決めた時点で可否は判断済みであり、
+  // 画面上でもう一度確定し直す段は無い。CREATED は会員申請だけが持つ状態
+  @Mapping(target = "status", constant = "CONFIRMED")
   @Mapping(target = "surveyStatus", ignore = true)
   @Mapping(target = "actualArrivalTime", ignore = true)
   @Mapping(target = "actualEndTime", ignore = true)
@@ -51,6 +53,10 @@ public interface OrderMapper {
   @Mapping(target = "requesterMemberId", ignore = true)
   @Mapping(target = "requesterMemberCode", ignore = true)
   @Mapping(target = "requesterDeclaredName", ignore = true)
+  // 取消の記録は専用の取消操作だけが書く
+  @Mapping(target = "cancelledReason", ignore = true)
+  @Mapping(target = "cancelledBy", ignore = true)
+  @Mapping(target = "cancelledAt", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   // ==================== UpdateRequest -> Patch ====================

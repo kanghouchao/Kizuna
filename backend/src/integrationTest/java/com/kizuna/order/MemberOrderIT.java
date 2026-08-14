@@ -135,19 +135,17 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("予約受付 inbox には会員の未確定申請だけが現れること")
-  void reservationRequestInboxHoldsOnlyPendingMemberRequests() {
-    String requestId = requestReservation(memberAToken, STORE_A, "inbox 対象");
-
-    // 店舗が手入力した受注に受付経路 WEB を付けても、申請ではないため inbox には現れてはならない。
-    String castId = createCastAs(STORE_A, "inbox 判定用キャスト");
-    String staffOrderId = createStoreOrderTaggedWeb(castId);
+  @DisplayName("「未確定」群には会員の未処理の申請が現れ、処理し終えると外れること")
+  void pendingGroupHoldsMemberRequestsUntilTheyAreProcessed() {
+    String requestId = requestReservation(memberAToken, STORE_A, "未確定群の対象");
+    // 店舗が起こした受注は確定で出生するため、この群には現れない
+    String storeOrderId = createStoreOrder(createCastAs(STORE_A, "未確定群の判定用キャスト"));
 
     List<String> ids = allPendingIds();
-    assertThat(ids).as("会員の未確定申請は現れること").contains(requestId);
-    assertThat(ids).as("店舗が起こした受注は受付経路が WEB でも現れないこと").doesNotContain(staffOrderId);
+    assertThat(ids).as("会員の未処理の申請は現れること").contains(requestId);
+    assertThat(ids).as("店舗が起こした受注は確定で出生するので現れないこと").doesNotContain(storeOrderId);
 
-    // 確定したものは処理済みなので inbox から外れる
+    // 確定したものは処理済みなので群から外れる
     rest.exchange(
         "/store/orders/" + requestId + "/confirmation",
         HttpMethod.POST,
@@ -239,7 +237,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
   private JsonNode fetchInbox(String cursor, int size) {
     ResponseEntity<JsonNode> inbox =
         rest.exchange(
-            "/store/orders/reservation-requests?size="
+            "/store/orders/work-queue?statuses=CREATED&size="
                 + size
                 + (cursor == null ? "" : "&cursor=" + cursor),
             HttpMethod.GET,
@@ -301,8 +299,8 @@ class MemberOrderIT extends CrossStoreTestSupport {
     return created.getBody().path("id").asString();
   }
 
-  /** 店舗スタッフが手入力し、受付経路だけ WEB を付けた受注（申請ではない）。 */
-  private String createStoreOrderTaggedWeb(String castId) {
+  /** 店舗スタッフが手入力した受注（申請ではない）。確定で出生する。 */
+  private String createStoreOrder(String castId) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders",
@@ -311,7 +309,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
                     + LocalDate.now(ZoneId.of("Asia/Tokyo"))
                     + "\", \"cast_id\": \""
                     + castId
-                    + "\", \"reception_route\": \"WEB\"}",
+                    + "\"}",
                 storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 店舗側の受注作成が成功すること").isTrue();
@@ -487,7 +485,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
     String orderId = requestReservation(memberAToken, STORE_A, "汎用更新の対象外");
     String castId = createCastAs(STORE_A, "汎用更新ガード用キャスト");
 
-    // 汎用更新で CONFIRMED を送っても、確定時の指名再検証・顧客補完を迂回して遷移はできない
+    // 汎用更新の契約には状態が無い。未知の項目として撥ねられ、確定時の指名再検証・顧客補完は迂回できない
     ResponseEntity<JsonNode> tampered =
         rest.exchange(
             "/store/orders/" + orderId,
@@ -622,7 +620,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.FORBIDDEN);
 
     String castId = createCastAs(STORE_A, "編集収口ガード用キャスト");
-    String storeOrderId = createStoreOrderTaggedWeb(castId);
+    String storeOrderId = createStoreOrder(castId);
     assertThat(updateReservationRequest(STORE_A, storeOrderId, "{\"pax\": 2}").getStatusCode())
         .as("店舗が起こした受注は申請専用の可空な契約では変更できないこと")
         .isEqualTo(HttpStatus.NOT_FOUND);
@@ -692,7 +690,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
   @DisplayName("汎用更新では既にある指名・受付担当を省略で外せないこと")
   void genericUpdateCannotRemoveAnExistingNominationOrReceptionist() {
     String castId = createCastAs(STORE_A, "汎用更新の必須性ガード用キャスト");
-    String storeOrderId = createStoreOrderTaggedWeb(castId);
+    String storeOrderId = createStoreOrder(castId);
 
     ResponseEntity<JsonNode> withoutReceptionist = updateOrder(storeOrderId, "{\"pax\": 3}");
     assertThat(withoutReceptionist.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);

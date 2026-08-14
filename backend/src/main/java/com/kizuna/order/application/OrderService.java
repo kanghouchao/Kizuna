@@ -7,6 +7,7 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
@@ -20,11 +21,15 @@ import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
+import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
+import com.kizuna.order.domain.ReceptionRoute;
+import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.DbConstraint;
@@ -44,11 +49,14 @@ import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +72,7 @@ public class OrderService {
   private static final String DEFAULT_RANK = "SILVER";
 
   private final OrderRepository orderRepository;
+  private final OrderSearchQuery orderSearchQuery;
   private final OrderAttributionRepository orderAttributionRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
@@ -86,6 +95,63 @@ public class OrderService {
     return orderRepository.findAllViews(filter, pageable).map(orderMapper::toResponse);
   }
 
+  /**
+   * 作業キュー（対応が要る受注）の読み口。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。
+   *
+   * <p>絞り込みは DB 側で行う — 受注一覧の先頭ページを取って手元で選り分けると、完了が積み上がった店舗で 未対応の受注が取得窓から落ちて見えなくなる。
+   *
+   * <p>続きの指定は「何件目か」ではなくカーソル（並びの鍵）で受ける。この一覧は行が処理で消えていく作業キューなので、
+   * 件数で位置を指すと確定・取消のたびに後続が繰り上がり、続きを取った時点で境界の受注を飛ばす。
+   *
+   * <p>取得は 2 段。条件と並びは要求ごとに変わるので ID の並びだけを動的な問い合わせで確定させ、行の中身は 表示名の join を持つ既存の読み口で引き直す（{@link
+   * com.kizuna.order.infrastructure.OrderSearchQuery} にその理由を記す）。
+   *
+   * @param cursor 続きの位置。null なら先頭から
+   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public CursorPage<OrderResponse> listWorkQueue(
+      OrderQueryCriteria criteria, String cursor, int requestedSize) {
+    int size = CursorPage.clampSize(requestedSize);
+    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
+    List<String> ids =
+        orderSearchQuery.findIds(
+            criteria, cursor == null ? null : PageCursor.decode(cursor), size + 1);
+    List<OrderView> views = viewsInOrder(ids);
+    return CursorPage.of(views, size, view -> cursorOf(view, criteria.sortKey()))
+        .map(orderMapper::toResponse);
+  }
+
+  /**
+   * アーカイブ（完了・取消）の読み口。作業キューと同じ検索・並び替えを、オフセットのページャで辿る。
+   *
+   * <p>位置をページ番号で指せるのは、終端状態の受注が処理で消えず増えるだけだからである。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public Page<OrderResponse> listArchive(OrderQueryCriteria criteria, Pageable pageable) {
+    List<String> ids = orderSearchQuery.findIds(criteria, pageable);
+    List<OrderResponse> rows = viewsInOrder(ids).stream().map(orderMapper::toResponse).toList();
+    return new PageImpl<>(rows, pageable, orderSearchQuery.count(criteria));
+  }
+
+  /** 名指された ID の読み側 projection を、渡された ID の並びのまま返す。 */
+  private List<OrderView> viewsInOrder(List<String> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    Map<String, OrderView> byId =
+        orderRepository.findViewsByIds(ids).stream()
+            .collect(Collectors.toMap(OrderView::getId, view -> view));
+    return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+  }
+
+  /** 続きの位置は一覧の並び（並び替えの鍵 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
+  private static String cursorOf(OrderView view, OrderSortKey sortKey) {
+    return new PageCursor(sortKey.cursorValueOf(view), view.getId()).encode();
+  }
+
   @StoreScoped
   @Transactional(readOnly = true)
   public OrderResponse get(String id) {
@@ -93,45 +159,20 @@ public class OrderService {
   }
 
   /**
-   * 予約受付 inbox の未確定申請一覧。
+   * 店舗・HQ が起こす受注を作成する。この経路の受注は<b>確定で出生する</b>（出生状態は {@link OrderMapper#toEntity} が持つ）—
+   * 電話口で受けると決めた時点で 可否は判断済みであり、画面上でもう一度確定し直す段は無い。
    *
-   * <p>絞り込みは DB 側で行う — 受注一覧の先頭ページを取って手元で選り分けると、確定済みの受注が積み上がった店舗で 未処理の申請が窓から落ちて見えなくなる。
-   *
-   * <p>絞り込んだうえで取得件数も抑える。未処理の申請は店舗が処理し終えるまで残り続けるため、無界で返すと 積み上がるほど 1 回の取得・応答・描画が重くなる。
-   *
-   * <p>続きの指定は「何件目か」ではなくカーソル（並びの鍵）で受ける。この一覧は行が処理で消えていく作業キューなので、
-   * 件数で位置を指すと確定・謝絶のたびに後続が繰り上がり、続きを取った時点で境界の申請を飛ばす。
-   *
-   * @param cursor 続きの位置。null なら先頭から
-   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
+   * @param actorEmail 実行者。受付担当が省略されたときの補完先になる
    */
   @StoreScoped
-  @Transactional(readOnly = true)
-  public CursorPage<OrderResponse> listPendingReservationRequests(
-      String cursor, int requestedSize) {
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    List<OrderView> fetched =
-        cursor == null
-            ? orderRepository.findPendingReservationRequestViews(limit)
-            : fetchAfter(PageCursor.decode(cursor), limit);
-    return CursorPage.of(fetched, size, OrderService::cursorOf).map(orderMapper::toResponse);
-  }
-
-  private List<OrderView> fetchAfter(PageCursor cursor, Limit limit) {
-    return orderRepository.findPendingReservationRequestViewsAfter(
-        cursor.timestampKey(), cursor.id(), limit);
-  }
-
-  /** 続きの位置は inbox の並び（受付時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(OrderView view) {
-    return new PageCursor(view.getCreatedAt().toString(), view.getId()).encode();
-  }
-
-  @StoreScoped
   @Transactional
-  public OrderResponse create(OrderCreateRequest request) {
+  public OrderResponse create(OrderCreateRequest request, String actorEmail) {
+    // 受付経路の WEB は会員ポータルの申請だけが書く値。台帳を触るより先に撥ねる — 広告費と効果集計の
+    // 根拠になる記録が代理入力で偽装されると、後から申請と手入力を切り分ける手立てが無い。
+    if (request.getReceptionRoute() == ReceptionRoute.WEB) {
+      throw new ServiceException("受付経路に WEB は指定できません。会員ポータルからの申請だけが WEB を名乗ります");
+    }
+
     // MapStructを使用して基本的なフィールドをマッピング（store_id は StoreScopeStampListener が @PrePersist で採番）
     Order order = orderMapper.toEntity(request);
 
@@ -144,33 +185,42 @@ public class OrderService {
         .find(storeContext.getStoreId(), request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
     order.assignCast(request.getCastId());
-    validateReceptionist(request.getReceptionistId());
-    order.assignReceptionist(request.getReceptionistId());
+    order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
 
     Order saved = orderRepository.save(order);
     return toResponse(saved.getId());
   }
 
+  /**
+   * 作成時の受付担当を決める。明示された ID はそのまま検証し、省略されたときは実行者本人を確定操作と同じ適格述語（{@link #eligibleReceptionistId}）で解決する。
+   *
+   * <p>適格でない実行者（店舗を授権する HQ 管理者など）では黙って未設定にせず撥ねる。確定操作が未設定のまま残すのは
+   * 会員の申請が既に成立しているからで、こちらは受注そのものをこれから起こす — 誤りは早いほうが直せる。
+   */
+  private Long resolveReceptionist(Long requested, String actorEmail) {
+    if (requested != null) {
+      validateReceptionist(requested);
+      return requested;
+    }
+    return eligibleReceptionistId(actorEmail)
+        .orElseThrow(() -> new ServiceException("受付担当を指定してください"));
+  }
+
+  /**
+   * 受注の内容を部分更新する。状態は動かさない — 完了は完了処理が、取消は取消操作が、未確定申請の確定・謝絶は専用操作が独占する（ADR 0013）。
+   *
+   * <p>終端状態（完了・取消）の受注はこの口では書き換えられない。受注には変更履歴が無いため、ここを開けておくことは 「誰が・いつ・何を」のどれも残さずに確定した記録を動かす裏口になる。
+   */
   @StoreScoped
   @Transactional
   public OrderResponse update(String id, OrderUpdateRequest request) {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
-    // 完了は会計金額の確定とポイント台帳への記帳と不可分のため、専用の完了処理だけが入口になる。
-    // 汎用更新から遷移できると、会計もポイントも入らないまま完了した受注が成立してしまう。
-    if (OrderStatus.COMPLETED.name().equals(request.getStatus())) {
-      throw new ServiceException("完了への変更は完了処理でのみ行えます");
-    }
-
-    // 未確定（CREATED）の申請に限り、状態遷移の入口は確定・謝絶の専用操作ただ一つ。汎用更新でも
-    // 遷移できると、確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう。
-    // 確定後のキャンセルは通常の受注のライフサイクルとして汎用更新が引き続き受け持つ —
-    // 受付経路と申請者スナップショットは追跡のため残り続けるので、申請かどうかだけで判定してはならない。
-    if (request.getStatus() != null
-        && order.isReservationRequest()
-        && order.getStatus() == OrderStatus.CREATED) {
-      throw new ServiceException("予約申請の状態は確定・謝絶の操作でのみ変更できます");
+    // 判定は「終端か」の単一述語で行い、状態ごとに書き分けない。書き分けは同じ規則を二箇所に持たせ、
+    // 片方だけが更新される入口になる（ADR 0013）。完了後の内容訂正は権限付き・記録付きの別経路が担う。
+    if (order.getStatus() != null && order.getStatus().isTerminal()) {
+      throw new ServiceException("完了・取消済みの受注は編集できません");
     }
 
     // 空文字は「送っていない」と同じに扱う。編集画面の未選択がそのまま乗ってくる形なので、存在しない
@@ -204,6 +254,12 @@ public class OrderService {
       throw new ServiceException("指名を外すことはできません。キャストを指定してください");
     }
 
+    // 連絡先の訂正も書き換えより先に判定させる。顧客が着いた受注では集約が撥ねる（黙って捨てない）。
+    // 送られなかった要求で呼ばないのは、顧客が着いた受注の他項目の編集まで巻き添えで撥ねないため。
+    if (request.getContactName() != null || request.getContactPhoneNumber() != null) {
+      order.correctContact(request.getContactName(), request.getContactPhoneNumber());
+    }
+
     // 非nullフィールドのみをドメインの部分更新コマンドとして適用
     order.apply(orderMapper.toPatch(request));
 
@@ -213,11 +269,6 @@ public class OrderService {
     }
     if (receptionistId != null) {
       order.assignReceptionist(receptionistId);
-    }
-
-    // ステータスはドメインの遷移メソッド経由で変更（不正な遷移はドメイン例外 → 400）
-    if (request.getStatus() != null) {
-      order.transitionTo(parseStatus(request.getStatus()));
     }
 
     Order saved = orderRepository.save(order);
@@ -475,7 +526,26 @@ public class OrderService {
     return toResponse(saved.getId());
   }
 
-  /** 予約申請を謝絶する。確定前の申請のみが対象で、確定後の取り消しは通常のキャンセル経路に委ねる。 */
+  /**
+   * 確定済みの受注を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみで、理由・実行者・時刻を記録に残す（ADR 0013）。
+   *
+   * <p>汎用更新から状態を動かす裏口を閉じた代わりに立てた専用の口。未確定申請の謝絶（{@link #decline}）とは別物で、
+   * あちらが理由を持たないのは店舗がまだ受諾していない段階だから。
+   *
+   * <p>二度目の取消は集約が撥ねる（逐次なら 400）。同時に届いた 2 つは双方が CONFIRMED を読んで守衛を通り、 {@code @Version} の楽観ロックで敗者が 409
+   * に落ちる — 記録される理由と実行者は先に commit した側のもので、 敗者を黙って成功させる方が「自分の理由が残った」と誤って伝える。
+   */
+  @StoreScoped
+  @Transactional
+  public OrderResponse cancel(String id, OrderCancellationRequest request, String actorEmail) {
+    Order order =
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    order.cancelWith(request.getReason(), resolveActorId(actorEmail), OffsetDateTime.now());
+    orderRepository.save(order);
+    return toResponse(id);
+  }
+
+  /** 予約申請を謝絶する。確定前の申請のみが対象で、確定後の取り消しは理由必須の取消操作（{@link #cancel}）に委ねる。 */
   @StoreScoped
   @Transactional
   public OrderResponse decline(String id) {
@@ -549,14 +619,6 @@ public class OrderService {
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
   }
 
-  private OrderStatus parseStatus(String raw) {
-    try {
-      return OrderStatus.valueOf(raw);
-    } catch (IllegalArgumentException e) {
-      throw new ServiceException("不正な注文ステータスです: " + raw);
-    }
-  }
-
   private void validateReceptionist(Long receptionistId) {
     Long storeId = storeContext.getStoreId();
     Set<Long> orderManageRoleIds =
@@ -603,25 +665,6 @@ public class OrderService {
         && user.getEnabled()
         && user.authorizes(storeId)
         && !Collections.disjoint(user.getRoleIds(), orderManageRoleIds);
-  }
-
-  @StoreScoped
-  @Transactional
-  public void delete(String id) {
-    Order order =
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
-    // 未確定の申請は削除ではなく謝絶で扱う — 削除すると CANCELLED の記録が残らず、会員側の
-    // 予約履歴からも消えてしまう。汎用更新の状態ガードと同じく、確定・謝絶を経た後の行は
-    // 通常の受注として削除の管理操作を受け付ける。
-    if (order.isReservationRequest() && order.getStatus() == OrderStatus.CREATED) {
-      throw new ServiceException("未確定の予約申請は削除できません。謝絶で扱ってください");
-    }
-    // 完了済みの受注はポイント台帳の仕訳が order_id で参照している。削除すると FK の SET NULL で
-    // 付与・利用の根拠だけが静かに失われ、残高は残ったまま出所を辿れなくなる。
-    if (order.getStatus() == OrderStatus.COMPLETED) {
-      throw new ServiceException("完了済みの受注は削除できません");
-    }
-    orderRepository.deleteById(id);
   }
 
   /**

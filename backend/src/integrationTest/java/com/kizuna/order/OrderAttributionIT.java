@@ -206,7 +206,6 @@ class OrderAttributionIT extends CrossStoreTestSupport {
   private String confirmedOrder(String customerId, String label) {
     String castId = createCast(label);
     String orderId = createOrder(castId, customerId, label);
-    assertThat(updateStatus(orderId, castId, "CONFIRMED")).as("前提: 受注を確定できること").isTrue();
     return orderId;
   }
 
@@ -228,24 +227,6 @@ class OrderAttributionIT extends CrossStoreTestSupport {
             "/store/orders", new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
     return created.getBody().path("id").asString();
-  }
-
-  private boolean updateStatus(String orderId, String castId, String status) {
-    String body =
-        "{\"receptionist_id\": "
-            + SEED_RECEPTIONIST_ID
-            + ", \"cast_id\": \""
-            + castId
-            + "\", \"status\": \""
-            + status
-            + "\"}";
-    return rest.exchange(
-            "/store/orders/" + orderId,
-            HttpMethod.PUT,
-            new HttpEntity<>(body, storeHeaders(STORE_A)),
-            JsonNode.class)
-        .getStatusCode()
-        .is2xxSuccessful();
   }
 
   private String createCast(String name) {

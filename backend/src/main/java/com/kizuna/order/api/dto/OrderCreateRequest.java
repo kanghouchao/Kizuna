@@ -12,7 +12,13 @@ import lombok.Data;
 
 @Data
 public class OrderCreateRequest {
-  @NotNull(message = "受付は必須です")
+
+  /**
+   * 受付担当。省略すると実行者本人が受付担当として書き込まれる（確定操作と同じ適格述語で判定し、適格でなければ 400）。
+   *
+   * <p>契約で必須にしないのは、店舗スタッフの大多数にとって受付担当が自分自身であり、毎回自分を選び直す手間を強いるため。 前端は既定でこの項目を省略して送る — JWT にも {@code
+   * /platform/me} にも利用者 id が無く、画面の側で「自分」を選択値として組み立てられない。
+   */
   private Long receptionistId;
 
   @NotNull private LocalDate businessDate;
@@ -52,7 +58,12 @@ public class OrderCreateRequest {
   private String discountName;
   private Integer manualDiscount;
 
-  /** 受付経路。実際の受付手段を記録する値で、未指定は「不明」を意味する（既定値で補完しない）。 */
+  /**
+   * 受付経路。実際の受付手段を記録する値で、未指定は「不明」を意味する（既定値で補完しない）。
+   *
+   * <p>{@code WEB} は会員ポータルの申請だけが書く値のため、この契約では拒否される（{@link
+   * com.kizuna.order.application.OrderService#create}）。広告費・効果集計の根拠になる経路記録が代理入力で偽装されないようにするため。
+   */
   private ReceptionRoute receptionRoute;
 
   private String carrier;

@@ -69,6 +69,14 @@ public interface OrderView {
 
   String getLocationBuilding();
 
+  /** 取消の理由。取消していない受注では null。 */
+  String getCancelledReason();
+
+  /** 取消を実行した操作者の表示名。操作者が削除された取消では欠落する（FK が SET NULL のため）。 */
+  String getCancelledByName();
+
+  OffsetDateTime getCancelledAt();
+
   /** 受付時刻。予約受付 inbox の並びの鍵であり、続きを指すカーソルもこの値から組む。 */
   OffsetDateTime getCreatedAt();
 }

@@ -24,6 +24,7 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
@@ -40,13 +41,16 @@ import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionSource;
 import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderPatch;
+import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderReceiptTokenStatus;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.domain.ReceptionRoute;
+import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
@@ -67,6 +71,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,7 +81,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -86,6 +90,7 @@ import org.springframework.data.domain.Pageable;
 class OrderServiceTest {
 
   @Mock OrderRepository orderRepository;
+  @Mock OrderSearchQuery orderSearchQuery;
   @Mock CustomerRepository customerRepository;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock CustomerReferenceResolver customerReferenceResolver;
@@ -108,12 +113,54 @@ class OrderServiceTest {
 
   private static final long STORE_ID = 1L;
 
+  /** 作成・確定の実行者。受付担当を明示する要求では補完へ到達しない。 */
+  private static final String ACTOR_EMAIL = "staff@kizuna.test";
+
   /** 予約受付 inbox の並びの鍵になる受付時刻。 */
   private static final OffsetDateTime RECEIVED_AT =
       OffsetDateTime.parse("2026-08-04T10:00:00+09:00");
 
   private OrderPatch emptyPatch() {
-    return new OrderPatch(null, null, null, null, null, null, null, null, null, null);
+    return patchWith(builder -> builder);
+  }
+
+  /** 部分更新コマンドを 1〜2 項目だけ埋めて作る。項目数が多く、位置引数で並べると どの null が何なのか読めなくなるためのテスト用ヘルパー。 */
+  private OrderPatch patchWith(UnaryOperator<PatchDraft> draft) {
+    return draft.apply(new PatchDraft(null, null, null)).toPatch();
+  }
+
+  /** {@link #patchWith} が埋める項目。テストが実際に使うものだけを持つ。 */
+  private record PatchDraft(LocalDate businessDate, Integer pax, String discountName) {
+    PatchDraft businessDate(LocalDate value) {
+      return new PatchDraft(value, pax, discountName);
+    }
+
+    PatchDraft pax(Integer value) {
+      return new PatchDraft(businessDate, value, discountName);
+    }
+
+    PatchDraft discountName(String value) {
+      return new PatchDraft(businessDate, pax, value);
+    }
+
+    OrderPatch toPatch() {
+      return new OrderPatch(
+          businessDate,
+          null,
+          null,
+          pax,
+          null,
+          null,
+          null,
+          discountName,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null);
+    }
   }
 
   /** 受付担当ヘルパーが持つ既定ロール id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
@@ -221,7 +268,7 @@ class OrderServiceTest {
         .thenReturn(Optional.of(mock(OrderView.class)));
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(res);
 
-    service.create(req);
+    service.create(req, ACTOR_EMAIL);
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c1");
@@ -241,7 +288,7 @@ class OrderServiceTest {
     when(customerReferenceResolver.resolveForWrite("missing"))
         .thenThrow(new NotFoundException("顧客が見つかりません"));
 
-    assertThatThrownBy(() -> service.create(req))
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
     verify(orderRepository, never()).save(any(Order.class));
@@ -273,7 +320,7 @@ class OrderServiceTest {
         .thenReturn(Optional.of(mock(OrderView.class)));
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
-    service.create(req);
+    service.create(req, ACTOR_EMAIL);
 
     verify(customerRepository).save(customerCaptor.capture());
     assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09012345678");
@@ -298,7 +345,7 @@ class OrderServiceTest {
     when(customerReferenceResolver.resolveForWrite("c1")).thenReturn("c1");
     stubCreateHappyPath();
 
-    service.create(req);
+    service.create(req, ACTOR_EMAIL);
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c1");
@@ -319,7 +366,7 @@ class OrderServiceTest {
         .thenReturn(List.of(customerWithId("c1"), customerWithId("c2")));
     stubCreateHappyPath();
 
-    service.create(req);
+    service.create(req, ACTOR_EMAIL);
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isNull();
@@ -342,7 +389,7 @@ class OrderServiceTest {
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     stubCreateHappyPath();
 
-    service.create(req);
+    service.create(req, ACTOR_EMAIL);
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isNull();
@@ -388,7 +435,7 @@ class OrderServiceTest {
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(nominatableCast.find(STORE_ID, "retired")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.create(req))
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         // 対象は店舗スタッフなので、列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す
         .isInstanceOf(ServiceException.class)
         .isNotInstanceOf(NotFoundException.class)
@@ -410,7 +457,7 @@ class OrderServiceTest {
         .thenReturn(
             Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
-    assertThatThrownBy(() -> service.create(req))
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
@@ -429,7 +476,7 @@ class OrderServiceTest {
     when(platformUserRepository.findById(1L))
         .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
 
-    assertThatThrownBy(() -> service.create(req))
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
@@ -458,7 +505,7 @@ class OrderServiceTest {
             .build();
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
 
-    assertThatThrownBy(() -> service.create(req))
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
@@ -478,9 +525,85 @@ class OrderServiceTest {
     stopped.stop();
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(stopped));
 
-    assertThatThrownBy(() -> service.create(req))
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void createRejectsWebAsTheReceptionRoute() {
+    // WEB は会員ポータルの申請だけが書く値。代理入力で経路記録を偽装させない
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+    req.setReceptionRoute(ReceptionRoute.WEB);
+
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("WEB");
+    // 台帳を触るより先に撥ねる（拒否の健全さを巻き戻しに委ねない）
+    verifyNoInteractions(orderMapper, customerRepository, customerReferenceResolver);
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void createAcceptsPhoneAsTheReceptionRoute() {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+    req.setReceptionRoute(ReceptionRoute.PHONE);
+
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    stubCreateHappyPath();
+
+    service.create(req, ACTOR_EMAIL);
+
+    verify(orderRepository).save(any(Order.class));
+  }
+
+  @Test
+  void createAssignsTheActorAsReceptionistWhenTheSlotIsOmitted() {
+    // 受付担当は既定で実行者本人。毎回自分を探して選ぶ手間を省く
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+
+    PlatformUser actor = authorizedReceptionist();
+    actor.setId(7L);
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.create(req, ACTOR_EMAIL);
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getReceptionistId()).isEqualTo(7L);
+  }
+
+  @Test
+  void createRejectsAnOmittedReceptionistWhenTheActorIsNotEligible() {
+    // 受付候補でない実行者（店舗を授権する HQ 管理者など）は黙って未設定にせず撥ねる。
+    // 確定操作が未設定を許すのは会員の申請が既に成立しているからで、こちらは受注をこれから起こす
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCastId("g1");
+
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(platformUserRepository.findByEmail(ACTOR_EMAIL))
+        .thenReturn(
+            Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+
+    assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .isNotInstanceOf(NotFoundException.class)
+        .hasMessageContaining("受付担当を指定してください");
     verify(orderRepository, never()).save(any());
   }
 
@@ -509,67 +632,23 @@ class OrderServiceTest {
   }
 
   @Test
-  void updateRejectsStatusChangeForReservationRequests() {
-    // 申請の状態遷移の入口は確定・謝絶の専用操作ただ一つ — 汎用更新から遷移できると
-    // 確定時の指名再検証・顧客の補完・謝絶の対象判定をすべて迂回できてしまう
-    Order request = reservationRequest().build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
+  void updateRejectsTerminalOrders() {
+    // 汎用更新は終端状態を全拒する。受注には変更履歴が無いので、ここを開けておくことは
+    // 「誰が・いつ・何を」のどれも残さずに確定した記録を動かす裏口になる（ADR 0013）
+    for (OrderStatus terminal : List.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
+      Order order = Order.builder().status(terminal).pax(2).build();
+      when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
 
-    OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setCastId("g2");
-    req.setReceptionistId(2L);
-    req.setStatus("CONFIRMED");
+      OrderUpdateRequest req = new OrderUpdateRequest();
+      req.setPax(9);
 
-    assertThatThrownBy(() -> service.update("o1", req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("確定・謝絶の操作でのみ");
-    assertThat(request.getStatus()).isEqualTo(OrderStatus.CREATED);
+      assertThatThrownBy(() -> service.update("o1", req))
+          .as("状態 %s の受注が編集を撥ねること", terminal)
+          .isInstanceOf(ServiceException.class)
+          .hasMessageContaining("完了・取消済み");
+      assertThat(order.getPax()).as("撥ねた要求が内容を書き換えないこと").isEqualTo(2);
+    }
     verify(orderRepository, never()).save(any(Order.class));
-  }
-
-  @Test
-  void updateAllowsCancellationAfterConfirmation() {
-    // 受付経路と申請者スナップショットは確定後も残るため、「申請かどうか」だけで遷移を塞ぐと
-    // 会員起点の受注がキャンセルへ一切進めなくなる。ガードは未確定（CREATED）に限る
-    Order confirmedOrder =
-        reservationRequest().status(OrderStatus.CONFIRMED).receptionistId(3L).build();
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmedOrder));
-    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
-    when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
-    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
-    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findViewById(nullable(String.class)))
-        .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
-
-    OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setCastId("g2");
-    req.setReceptionistId(2L);
-    req.setStatus("CANCELLED");
-
-    service.update("o1", req);
-
-    assertThat(confirmedOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-  }
-
-  @Test
-  void updateRejectsTransitionToCompleted() {
-    // 完了は会計金額の確定とポイント台帳への記帳と不可分。汎用更新から遷移できると、会計もポイントも
-    // 入らないまま完了した受注が成立する
-    Order confirmedOrder = Order.builder().status(OrderStatus.CONFIRMED).castId("g1").build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmedOrder));
-
-    OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setCastId("g1");
-    req.setStatus("COMPLETED");
-
-    assertThatThrownBy(() -> service.update("o1", req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("完了処理でのみ");
-    assertThat(confirmedOrder.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-    verify(orderRepository, never()).save(any(Order.class));
-    verify(pointLedgerService, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
   }
 
   @Test
@@ -603,7 +682,7 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
-        .thenReturn(new OrderPatch(null, null, null, null, null, null, "新しい割引名", null, null, null));
+        .thenReturn(patchWith(builder -> builder.discountName("新しい割引名")));
     when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -620,65 +699,121 @@ class OrderServiceTest {
     assertThat(existing.getDiscountName()).isEqualTo("新しい割引名");
   }
 
+  private OrderCancellationRequest cancellationRequest(String reason) {
+    OrderCancellationRequest req = new OrderCancellationRequest();
+    req.setReason(reason);
+    return req;
+  }
+
   @Test
-  void updateAppliesLegalStatusTransition() {
-    Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+  void cancelRecordsTheReasonActorAndTime() {
+    // 汎用更新から状態を動かす裏口を閉じた代わりの専用の口。「取消できること」はここへ移設した
+    Order confirmed = Order.builder().status(OrderStatus.CONFIRMED).build();
+    PlatformUser actor = authorizedReceptionist();
+    actor.setId(7L);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
+    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    service.cancel("o1", cancellationRequest("客都合。当日夕方に体調不良の連絡あり"), ACTOR_EMAIL);
+
+    assertThat(confirmed.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    assertThat(confirmed.getCancelledReason()).isEqualTo("客都合。当日夕方に体調不良の連絡あり");
+    assertThat(confirmed.getCancelledBy()).isEqualTo(7L);
+    assertThat(confirmed.getCancelledAt()).isNotNull();
+  }
+
+  @Test
+  void cancelRejectsAnOrderThatIsNotConfirmed() {
+    // 「不正な遷移が撥ねられること」の移設先。未確定の申請は謝絶が、誤完了の救済は別の経路が受け持つ
+    for (OrderStatus status :
+        List.of(OrderStatus.CREATED, OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
+      Order order = Order.builder().status(status).build();
+      when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+      PlatformUser actor = authorizedReceptionist();
+      actor.setId(7L);
+      lenient()
+          .when(platformUserRepository.findByEmail(ACTOR_EMAIL))
+          .thenReturn(Optional.of(actor));
+
+      assertThatThrownBy(() -> service.cancel("o1", cancellationRequest("理由"), ACTOR_EMAIL))
+          .as("状態 %s からの取消が拒否されること", status)
+          .isInstanceOf(IllegalOrderStateTransitionException.class);
+      assertThat(order.getStatus()).isEqualTo(status);
+    }
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void cancelFailsWhenTheActorIsNoLongerAPlatformUser() {
+    // 実行者不明のまま取消を通すと、失効した認証セッションによる操作が記録から区別できなくなる
+    Order confirmed = Order.builder().status(OrderStatus.CONFIRMED).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
+    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.cancel("o1", cancellationRequest("理由"), ACTOR_EMAIL))
+        .isInstanceOf(StaleSessionException.class);
+    assertThat(confirmed.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void updateCorrectsTheContactOfAnUnlinkedOrder() {
+    // 顧客の着いていない受注は録入された連絡先が唯一の名乗りなので、誤記はここでしか直せない
+    Order existing = Order.builder().status(OrderStatus.CONFIRMED).contactName("誤記の名前").build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
-    when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
-    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setCastId("g2");
-    req.setReceptionistId(2L);
-    req.setStatus("CONFIRMED");
+    req.setContactName("正しい名前");
+    req.setContactPhoneNumber("09099998888");
 
     service.update("o1", req);
 
-    assertThat(existing.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(existing.getContactName()).isEqualTo("正しい名前");
+    assertThat(existing.getContactPhoneNumber()).isEqualTo("09099998888");
   }
 
   @Test
-  void updateRejectsIllegalStatusTransition() {
-    // 遷移表そのものの判定が汎用更新に残っていること（完了の専用ガードとは別経路）。
-    // 完了で試すと専用ガードが先に撥ねてしまい、遷移表を通らなくなる
-    Order existing = Order.builder().status(OrderStatus.CANCELLED).build();
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
-    when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
-    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+  void updateRejectsContactCorrectionOnALinkedOrder() {
+    // 顧客が着いていれば名乗りの正本は台帳の行。黙って捨てると送り手は直ったと誤解したまま誤記が残る
+    Order linked = Order.builder().status(OrderStatus.CONFIRMED).customerId("c1").pax(2).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(linked));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setCastId("g2");
-    req.setReceptionistId(2L);
-    req.setStatus("CONFIRMED");
+    req.setContactName("受注側から書こうとした名前");
 
     assertThatThrownBy(() -> service.update("o1", req))
-        .isInstanceOf(IllegalOrderStateTransitionException.class);
-    assertThat(existing.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("顧客詳細");
+    assertThat(linked.getContactName()).isNull();
+    verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test
-  void updateRejectsUnknownStatusValue() {
-    Order existing = Order.builder().status(OrderStatus.CREATED).build();
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
-    when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
-    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+  void updateLeavesALinkedOrderEditableWhenNoContactIsSent() {
+    // 連絡先を送らない編集まで巻き添えで撥ねない（顧客が着いた受注の人数・備考は直せる必要がある）
+    Order linked = Order.builder().status(OrderStatus.CONFIRMED).customerId("c1").pax(2).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(linked));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
+        .thenReturn(patchWith(builder -> builder.pax(9)));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setCastId("g2");
-    req.setReceptionistId(2L);
-    req.setStatus("GARBAGE");
+    req.setPax(9);
 
-    assertThatThrownBy(() -> service.update("o1", req)).isInstanceOf(ServiceException.class);
+    service.update("o1", req);
+
+    assertThat(linked.getPax()).isEqualTo(9);
   }
 
   @Test
@@ -775,7 +910,8 @@ class OrderServiceTest {
 
   /** 人数と備考だけを差し替える部分更新コマンド（汎用更新の典型的な編集）。 */
   private static OrderPatch paxAndRemarksPatch(Integer pax, String remarks) {
-    return new OrderPatch(null, null, pax, null, null, null, null, null, remarks, null);
+    return new OrderPatch(
+        null, null, null, pax, null, null, null, null, null, null, null, null, null, remarks, null);
   }
 
   @Test
@@ -874,83 +1010,144 @@ class OrderServiceTest {
     verify(nominatableCast, never()).find(any(), anyString());
   }
 
-  /** 予約受付 inbox の読み口が返す 1 行分の projection。 */
-  private static OrderView pendingView(String id, OffsetDateTime createdAt) {
+  /** 作業キューの読み口が返す 1 行分の projection。並びの鍵になる項目だけを埋める。 */
+  private static OrderView queueView(String id, Integer pax) {
     OrderView view = mock(OrderView.class);
     lenient().when(view.getId()).thenReturn(id);
-    lenient().when(view.getCreatedAt()).thenReturn(createdAt);
+    lenient().when(view.getPax()).thenReturn(pax);
     return view;
   }
 
+  private static OrderQueryCriteria queueCriteria() {
+    return new OrderQueryCriteria(
+        Set.of(OrderStatus.CREATED, OrderStatus.CONFIRMED), null, null, OrderSortKey.PAX, false);
+  }
+
   @Test
-  void listPendingReservationRequestsDelegatesFilteringToTheQuery() {
-    OrderView view = pendingView("o1", RECEIVED_AT);
+  void listWorkQueueDelegatesFilteringToTheQuery() {
+    OrderView view = queueView("o1", 2);
     OrderResponse res = OrderResponse.builder().id("o1").build();
-    when(orderRepository.findPendingReservationRequestViews(any(Limit.class)))
-        .thenReturn(List.of(view));
+    when(orderSearchQuery.findIds(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
+        .thenReturn(List.of("o1"));
+    when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(List.of(view));
     when(orderMapper.toResponse(view)).thenReturn(res);
 
-    assertThat(service.listPendingReservationRequests(null, 20).content()).containsExactly(res);
-    // 受注一覧の先頭ページを取って手元で選り分ける実装だと、確定済みが積み上がった店舗で申請が窓から落ちる
+    assertThat(service.listWorkQueue(queueCriteria(), null, 20).content()).containsExactly(res);
+    // 受注一覧の先頭ページを取って手元で選り分ける実装だと、完了が積み上がった店舗で未対応が窓から落ちる
     verify(orderRepository, never()).findAllViews(any(), any(Pageable.class));
   }
 
   @Test
-  void listPendingReservationRequestsHandsBackTheCursorOfTheLastReturnedRequest() {
+  void listWorkQueueKeepsTheOrderTheQueryDecided() {
+    // 行の中身は id の集合で引き直すため、返る順は問い合わせの並びと一致しない。並べ直さないと
+    // 画面の並び替えが効かないまま「並び替えたつもり」になる
+    List<OrderView> views = List.of(queueView("o1", 1), queueView("o2", 2));
+    when(orderSearchQuery.findIds(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
+        .thenReturn(List.of("o2", "o1"));
+    when(orderRepository.findViewsByIds(List.of("o2", "o1"))).thenReturn(views);
+    when(orderMapper.toResponse(any(OrderView.class)))
+        .thenAnswer(
+            i -> OrderResponse.builder().id(i.getArgument(0, OrderView.class).getId()).build());
+
+    assertThat(service.listWorkQueue(queueCriteria(), null, 20).content())
+        .extracting(OrderResponse::getId)
+        .containsExactly("o2", "o1");
+  }
+
+  @Test
+  void listWorkQueueHandsBackTheCursorOfTheLastReturnedRow() {
     // 上限より 1 件多く返るのが「続きがある」ことの現れ。3 件目は応答に載せない。
-    List<OrderView> fetched =
-        List.of(
-            pendingView("o1", RECEIVED_AT),
-            pendingView("o2", RECEIVED_AT.plusMinutes(1)),
-            pendingView("o3", RECEIVED_AT.plusMinutes(2)));
-    when(orderRepository.findPendingReservationRequestViews(Limit.of(3))).thenReturn(fetched);
+    List<OrderView> views = List.of(queueView("o1", 1), queueView("o2", 2), queueView("o3", 3));
+    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))
+        .thenReturn(List.of("o1", "o2", "o3"));
+    when(orderRepository.findViewsByIds(List.of("o1", "o2", "o3"))).thenReturn(views);
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
-    CursorPage<OrderResponse> page = service.listPendingReservationRequests(null, 2);
+    CursorPage<OrderResponse> page = service.listWorkQueue(queueCriteria(), null, 2);
 
     assertThat(page.content()).hasSize(2);
     // 続きの位置は返した最後の行を指す。余分に取った 3 件目を指すと、その行が飛ばされる。
-    assertThat(PageCursor.decode(page.nextCursor()))
-        .isEqualTo(new PageCursor(RECEIVED_AT.plusMinutes(1).toString(), "o2"));
+    assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("2", "o2"));
   }
 
   @Test
-  void listPendingReservationRequestsReportsNoCursorWhenNothingFollows() {
-    List<OrderView> fetched = List.of(pendingView("o1", RECEIVED_AT));
-    when(orderRepository.findPendingReservationRequestViews(Limit.of(3))).thenReturn(fetched);
+  void listWorkQueueCursorCarriesTheSentinelForAnUnsetSortKey() {
+    // 並び替えの鍵が未設定の行でも続きの位置を作れなければ、その行の次から先へ進めなくなる
+    List<OrderView> views = List.of(queueView("o1", null), queueView("o2", 3));
+    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(2)))
+        .thenReturn(List.of("o1", "o2"));
+    when(orderRepository.findViewsByIds(List.of("o1", "o2"))).thenReturn(views);
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
-    assertThat(service.listPendingReservationRequests(null, 2).nextCursor()).isNull();
+    CursorPage<OrderResponse> page = service.listWorkQueue(queueCriteria(), null, 1);
+
+    assertThat(PageCursor.decode(page.nextCursor()))
+        .isEqualTo(new PageCursor(String.valueOf(Integer.MAX_VALUE), "o1"));
   }
 
   @Test
-  void listPendingReservationRequestsResumesFromTheGivenCursorInsteadOfAnOffset() {
-    String cursor = new PageCursor(RECEIVED_AT.toString(), "o1").encode();
-    when(orderRepository.findPendingReservationRequestViewsAfter(
-            eq(RECEIVED_AT), eq("o1"), any(Limit.class)))
+  void listWorkQueueReportsNoCursorWhenNothingFollows() {
+    List<OrderView> views = List.of(queueView("o1", 1));
+    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))
+        .thenReturn(List.of("o1"));
+    when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(views);
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    assertThat(service.listWorkQueue(queueCriteria(), null, 2).nextCursor()).isNull();
+  }
+
+  @Test
+  void listWorkQueueResumesFromTheGivenCursorInsteadOfAnOffset() {
+    String cursor = new PageCursor("2", "o1").encode();
+    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), any(PageCursor.class), anyInt()))
         .thenReturn(List.of());
 
-    assertThat(service.listPendingReservationRequests(cursor, 20).content()).isEmpty();
-    // 位置を件数で指す読み口へ落ちると、手前の申請が処理で消えた分だけ境界の申請を飛ばす
-    verify(orderRepository, never()).findPendingReservationRequestViews(any(Limit.class));
+    assertThat(service.listWorkQueue(queueCriteria(), cursor, 20).content()).isEmpty();
+    // 位置を件数で指すと、手前の行が処理で消えた分だけ境界の受注を飛ばす
+    verify(orderSearchQuery)
+        .findIds(any(OrderQueryCriteria.class), eq(new PageCursor("2", "o1")), anyInt());
   }
 
   @Test
-  void listPendingReservationRequestsRejectsAMalformedCursor() {
-    assertThatThrownBy(() -> service.listPendingReservationRequests("not-a-cursor", 20))
+  void listWorkQueueRejectsAMalformedCursor() {
+    assertThatThrownBy(() -> service.listWorkQueue(queueCriteria(), "not-a-cursor", 20))
         .isInstanceOf(ServiceException.class);
-    verify(orderRepository, never()).findPendingReservationRequestViewsAfter(any(), any(), any());
+    verifyNoInteractions(orderSearchQuery);
   }
 
   @Test
-  void listPendingReservationRequestsCapsTheRequestedSize() {
-    when(orderRepository.findPendingReservationRequestViews(any(Limit.class)))
+  void listWorkQueueCapsTheRequestedSize() {
+    when(orderSearchQuery.findIds(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
         .thenReturn(List.of());
 
-    service.listPendingReservationRequests(null, 10_000);
+    service.listWorkQueue(queueCriteria(), null, 10_000);
 
     // 1 回の応答は抑える。続きはカーソルで辿れるので、抑えても到達性は落ちない。
-    verify(orderRepository).findPendingReservationRequestViews(Limit.of(CursorPage.MAX_SIZE + 1));
+    verify(orderSearchQuery)
+        .findIds(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(CursorPage.MAX_SIZE + 1));
+  }
+
+  @Test
+  void listArchiveCarriesTheTotalCountForThePager() {
+    OrderQueryCriteria criteria =
+        new OrderQueryCriteria(
+            Set.of(OrderStatus.COMPLETED), null, null, OrderSortKey.BUSINESS_DATE, true);
+    Pageable pageable = PageRequest.of(0, 20);
+    List<OrderView> views = List.of(queueView("o1", 1));
+    when(orderSearchQuery.findIds(criteria, pageable)).thenReturn(List.of("o1"));
+    when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(views);
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    when(orderSearchQuery.count(criteria)).thenReturn(137L);
+
+    Page<OrderResponse> page = service.listArchive(criteria, pageable);
+
+    assertThat(page.getContent()).hasSize(1);
+    // 総件数が無いとページャは最終ページを出せない（作業キューと違い位置をページ番号で指すため）
+    assertThat(page.getTotalElements()).isEqualTo(137L);
   }
 
   /** 確定・謝絶の対象となる会員申請の形（Web 受付 + 申請時点の会員コード）。 */
@@ -1910,54 +2107,6 @@ class OrderServiceTest {
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any(Order.class));
-  }
-
-  @Test
-  void deleteRemovesIfExists() {
-    Order storeOrder = Order.builder().status(OrderStatus.CREATED).build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
-    service.delete("o1");
-    verify(orderRepository).deleteById("o1");
-  }
-
-  @Test
-  void deleteThrowsWhenMissing() {
-    when(orderRepository.findById("nope")).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> service.delete("nope")).isInstanceOf(NotFoundException.class);
-  }
-
-  @Test
-  void deleteRejectsPendingReservationRequests() {
-    // 未確定の申請を削除すると CANCELLED の記録が残らず会員の履歴からも消える — 謝絶へ誘導する
-    Order pending = reservationRequest().build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(pending));
-
-    assertThatThrownBy(() -> service.delete("o1"))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("謝絶で扱ってください");
-    verify(orderRepository, never()).deleteById(anyString());
-  }
-
-  @Test
-  void deleteRejectsCompletedOrders() {
-    // 完了済みの受注はポイント台帳の仕訳が order_id で参照している。削除すると FK の SET NULL で
-    // 付与・利用の根拠だけが静かに失われる
-    Order completed = Order.builder().status(OrderStatus.COMPLETED).build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(completed));
-
-    assertThatThrownBy(() -> service.delete("o1"))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("完了済みの受注は削除できません");
-    verify(orderRepository, never()).deleteById(anyString());
-  }
-
-  @Test
-  void deleteAllowsProcessedMemberOrders() {
-    // 確定・謝絶を経た後の行は通常の受注として削除の管理操作を受け付ける
-    Order cancelled = reservationRequest().status(OrderStatus.CANCELLED).build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(cancelled));
-    service.delete("o1");
-    verify(orderRepository).deleteById("o1");
   }
 
   /** {@link #authorizedReceptionist()} を id・表示名だけ差し替えて複製する（一覧テストで複数件を区別するため）。 */

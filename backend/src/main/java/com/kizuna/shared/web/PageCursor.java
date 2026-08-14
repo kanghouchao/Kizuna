@@ -61,6 +61,15 @@ public record PageCursor(String key, String id) {
     }
   }
 
+  /** 数値で並ぶ一覧の鍵（人数・コース時間・分に均した到着予定時刻）。 */
+  public Integer numberKey() {
+    try {
+      return Integer.valueOf(key);
+    } catch (NumberFormatException e) {
+      throw new ServiceException(MALFORMED_MESSAGE);
+    }
+  }
+
   /** 業務日（{@code business_date}）で並ぶ一覧の鍵。 */
   public LocalDate dateKey() {
     try {

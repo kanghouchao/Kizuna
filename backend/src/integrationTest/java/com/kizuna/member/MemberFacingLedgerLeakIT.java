@@ -67,6 +67,9 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   /** 手動調整の理由。店員が書く運用内部の文言であり、本人向けのポイント明細にも現れてはならない。 */
   private static final String CANARY_REASON = "CANARY-REASON-ecb1f0d4-8a2c";
 
+  /** 受注取消の理由。店舗の内部事情を書く文言であり、本人の予約履歴（申請の追跡）にも現れてはならない。 */
+  private static final String CANARY_CANCELLATION_REASON = "CANARY-CANCELREASON-ecb1f0d4-8a2c";
+
   /** 会員のポイント台帳へ仕込む加算。本人向けのポイント端点だけが返してよく、他の会員側端点には現れてはならない。 */
   private static final int CANARY_ADJUSTED = 987654321;
 
@@ -101,7 +104,8 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           CANARY_LINE_ID,
           CANARY_ADDRESS,
           CANARY_USAGE_AREAS,
-          CANARY_REASON);
+          CANARY_REASON,
+          CANARY_CANCELLATION_REASON);
 
   /** 残高そのものを指す項目名。ポイント端点にだけ許し、他の端点では下の一覧の一部として禁止し続ける。 */
   private static final List<String> BALANCE_FIELD_NAMES =
@@ -128,7 +132,10 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           "\"usage_areas\"",
           "\"has_pet\"",
           "\"member_linked\"",
-          "\"linked_member_code\"");
+          "\"linked_member_code\"",
+          "\"cancelled_reason\"",
+          "\"cancelled_by_name\"",
+          "\"cancelled_at\"");
 
   /** ポイント端点で禁止する項目名。残高系だけを上の一覧から差し引いて作る — 2 本の一覧を並べて書くと、 台帳側に項目が増えたときに片方だけが更新されて掃き出しが静かに緩む。 */
   private static final List<String> POINT_ENDPOINT_DENIED_FIELD_NAMES =
@@ -257,6 +264,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             "ledger-leak-" + memberId));
 
     seedAttributedVisit(memberId);
+    seedCancelledRequest(memberId);
 
     // ログインは紐づけの後に行う。紐づけ前の応答への断言は紐づけ由来の混入を検出しようがないため、
     // 断言対象は必ず紐づけ済み状態で取得する（登録応答だけは会員作成そのものなので紐づけ前が本質）。
@@ -452,6 +460,29 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
         PointEntry.grantForOrder(memberId, orderId, STORE_A, CANARY_GRANTED_POINTS, null));
   }
 
+  /**
+   * 店舗が取消した会員申請を 1 件仕込む。理由・実行者・時刻は店舗の内部記録なので、本人の予約履歴（申請の追跡）に 回り込む余地を作ったうえで非混入を確かめる。
+   *
+   * <p>取消 API ではなく直挿しにするのは、理由の実データを狙った値で置くため。確定済みの受注が取消を経て理由を持つ経路 そのものは {@code OrderCancellationIT}
+   * が固定している。
+   */
+  private void seedCancelledRequest(long memberId) {
+    Order cancelled =
+        Order.builder()
+            .businessDate(LocalDate.now(ZoneId.of("Asia/Tokyo")))
+            .customerId(customerId)
+            .pax(2)
+            .status(OrderStatus.CANCELLED)
+            .receptionRoute(ReceptionRoute.WEB)
+            .requesterMemberId(memberId)
+            .requesterMemberCode(memberCode)
+            .cancelledReason(CANARY_CANCELLATION_REASON)
+            .cancelledAt(OffsetDateTime.now())
+            .build();
+    cancelled.setStoreId(STORE_A);
+    orderRepository.save(cancelled);
+  }
+
   /** 紐づけ済み店舗へ会員本人として予約を申請する（指名なし）。 */
   private void requestReservation() {
     HttpHeaders headers = bearer(memberToken);
@@ -521,18 +552,6 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
     String orderId = created.getBody().path("id").asString();
-
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + orderId,
-            HttpMethod.PUT,
-            new HttpEntity<>(
-                "{\"receptionist_id\": 3, \"cast_id\": \""
-                    + castId
-                    + "\", \"status\": \"CONFIRMED\"}",
-                storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode().is2xxSuccessful()).as("前提: 受注を確定できること").isTrue();
 
     ResponseEntity<JsonNode> completed =
         rest.exchange(
