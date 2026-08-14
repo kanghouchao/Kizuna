@@ -1,6 +1,7 @@
 package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.customer.application.CustomerReferenceResolver;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.LinkStatus;
@@ -51,6 +52,7 @@ public class MemberOrderService {
   private final OrderRepository orderRepository;
   private final NominatableCastLookup nominatableCast;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
+  private final CustomerReferenceResolver customerReferenceResolver;
   private final PlatformUserRepository platformUserRepository;
   private final MemberLookupService memberLookupService;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
@@ -184,10 +186,19 @@ public class MemberOrderService {
   }
 
   /** 申請先店舗に本人の紐づけ済み顧客があれば結び付ける。無ければ空のままで、店舗側の紐づけ操作で後から成立する。 */
+  /**
+   * 申請先店舗に申請者の有効な関連があれば、その顧客を受注の着き先として解決する。関連が無ければ空（顧客未設定の申請は正規の状態で、確定時に整備される）。
+   *
+   * <p>解決は顧客参照を書く他の経路と同じ口を通し、書く直前に顧客行を押さえる。関連の照会はロックを取らないため、 ここを通さないと台帳側の書き換えと何も競合せずに参照だけが決まる。
+   *
+   * <p>この経路は店舗文脈を確立できず storeFilter が働かないので、店舗境界は解決口ではなく関連の照会（storeId を明示）が引く。 解決口が引けない顧客は 404
+   * になるが、関連の顧客参照には外部キーがあるためこの経路では起こらない。
+   */
   private Optional<String> resolveLinkedCustomerId(Long storeId, Long memberId) {
     return customerMemberLinkRepository
         .findByStoreIdAndMemberIdAndStatus(storeId, memberId, LinkStatus.ACTIVE)
-        .map(CustomerMemberLink::getCustomerId);
+        .map(CustomerMemberLink::getCustomerId)
+        .map(customerReferenceResolver::resolveForWrite);
   }
 
   private MemberOrderResponse toResponse(Long memberId, String orderId) {

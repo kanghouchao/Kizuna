@@ -10,9 +10,11 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.customer.application.CustomerReferenceResolver;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.LinkReason;
@@ -71,6 +73,7 @@ class MemberOrderServiceTest {
   @Mock OrderRepository orderRepository;
   @Mock NominatableCastLookup nominatableCast;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
+  @Mock CustomerReferenceResolver customerReferenceResolver;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock MemberLookupService memberLookupService;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
@@ -176,12 +179,30 @@ class MemberOrderServiceTest {
     when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
             STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
+    // 関連の照会は行を押さえないため、着ける前に顧客参照を書く経路が共有する解決口を通る
+    when(customerReferenceResolver.resolveForWrite("cust-1")).thenReturn("cust-1");
     stubSavedView();
 
     service.request(EMAIL, requestFor(today(), null));
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("cust-1");
+  }
+
+  @Test
+  @DisplayName("紐づけが無ければ解決口を通らないこと（顧客未設定の申請は正規の状態）")
+  void requestResolvesNothingWhenThereIsNoMemberLink() {
+    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
+    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
+            STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    stubSavedView();
+
+    service.request(EMAIL, requestFor(today(), null));
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomerId()).isNull();
+    verifyNoInteractions(customerReferenceResolver);
   }
 
   @Test
