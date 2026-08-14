@@ -107,7 +107,7 @@ class OrderControllerTest {
     mockMvc
         .perform(
             get("/store/orders/work-queue?statuses=CREATED,CONFIRMED&customer_name=山田"
-                    + "&business_date=2026-08-15&sort=PAX&desc=true&cursor=abc&size=5")
+                    + "&business_date=2026-08-15&sort_key=PAX&desc=true&cursor=abc&size=5")
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
@@ -159,7 +159,7 @@ class OrderControllerTest {
 
     mockMvc
         .perform(
-            get("/store/orders/archive?statuses=CANCELLED&sort=BUSINESS_DATE&page=2&size=5")
+            get("/store/orders/archive?statuses=CANCELLED&sort_key=BUSINESS_DATE&page=2&size=5")
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
