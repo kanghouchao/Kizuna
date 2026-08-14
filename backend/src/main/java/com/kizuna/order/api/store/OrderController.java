@@ -79,13 +79,13 @@ public class OrderController {
       @RequestParam(name = "customer_name", required = false) String customerName,
       @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
           LocalDate businessDate,
-      @RequestParam(name = "sort", defaultValue = "BUSINESS_DATE") OrderSortKey sort,
+      @RequestParam(name = "sort_key", defaultValue = "BUSINESS_DATE") OrderSortKey sortKey,
       @RequestParam(name = "desc", defaultValue = "false") boolean descending,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok(
         orderService.listWorkQueue(
-            criteria(statuses, customerName, businessDate, sort, descending), cursor, size));
+            criteria(statuses, customerName, businessDate, sortKey, descending), cursor, size));
   }
 
   /**
@@ -100,12 +100,15 @@ public class OrderController {
       @RequestParam(name = "customer_name", required = false) String customerName,
       @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
           LocalDate businessDate,
-      @RequestParam(name = "sort", defaultValue = "BUSINESS_DATE") OrderSortKey sort,
+      @RequestParam(name = "sort_key", defaultValue = "BUSINESS_DATE") OrderSortKey sortKey,
       @RequestParam(name = "desc", defaultValue = "true") boolean descending,
-      @PageableDefault(size = 20) Pageable pageable) {
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
     return ResponseEntity.ok(
         orderService.listArchive(
-            criteria(statuses, customerName, businessDate, sort, descending), pageable));
+            criteria(statuses, customerName, businessDate, sortKey, descending), pageable));
   }
 
   /** 空文字の検索語は「送っていない」と同じに扱う。画面の検索欄をクリアした状態がそのまま乗ってくるため。 */
@@ -113,10 +116,10 @@ public class OrderController {
       Set<OrderStatus> statuses,
       String customerName,
       LocalDate businessDate,
-      OrderSortKey sort,
+      OrderSortKey sortKey,
       boolean descending) {
     String search = (customerName == null || customerName.isBlank()) ? null : customerName.trim();
-    return new OrderQueryCriteria(statuses, search, businessDate, sort, descending);
+    return new OrderQueryCriteria(statuses, search, businessDate, sortKey, descending);
   }
 
   @GetMapping("/{id}")

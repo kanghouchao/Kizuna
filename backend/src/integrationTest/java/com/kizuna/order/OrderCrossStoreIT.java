@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
@@ -147,6 +149,58 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             orderRepository.findAllViews(foreignCustomerId, Pageable.ofSize(1)).getTotalElements())
         .as("他店舗の顧客に着いた受注が 1 件も無いこと")
         .isZero();
+  }
+
+  @Test
+  @DisplayName("群読み口が他店舗の受注を返さないこと（作業キュー・アーカイブとも）")
+  void groupReadsDoNotLeakForeignOrders() {
+    // 群読み口の並びは注入した EntityManager への動的な問い合わせで決まる。@Query と違い店舗行分離が
+    // 効いているかは形から読めないため、実データそのものが応答へ現れないことで確かめる。
+    // 件数の一致で見ると「帰属不一致」と「実データの非漏出」が区別できない。
+    String foreignName = "他店舗カナリア-" + nonce;
+    insertOrderForStoreB(foreignName, OrderStatus.CONFIRMED);
+    insertOrderForStoreB(foreignName + "-終端", OrderStatus.CANCELLED);
+
+    // 正向対照: 同じ条件で自店舗の受注は現れる（負向が条件の書き損じ由来でない証明）
+    String castId = createCastAs(STORE_A, "群読み口の対照キャスト");
+    String ownId = createOrderAs(STORE_A, castId);
+
+    ResponseEntity<String> queue =
+        rest.exchange(
+            "/store/orders/work-queue?statuses=CREATED,CONFIRMED&size=2000",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            String.class);
+    assertThat(queue.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(queue.getBody()).as("正向対照: 自店舗の受注は現れること").contains(ownId);
+    assertThat(queue.getBody()).as("他店舗の受注が作業キューへ漏れないこと").doesNotContain(foreignName);
+
+    ResponseEntity<String> archive =
+        rest.exchange(
+            "/store/orders/archive?statuses=COMPLETED,CANCELLED&size=2000",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            String.class);
+    assertThat(archive.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(archive.getBody()).as("他店舗の受注がアーカイブへ漏れないこと").doesNotContain(foreignName);
+  }
+
+  /**
+   * 第二店舗の受注を storeFilter を経由しない直挿しで用意する。
+   *
+   * <p>基底のシードユーザーは店舗1 のみ授権なので、店舗2 の受注は API では起こせない。お客様名は受注側の 連絡先の写しへ入れる —
+   * 群読み口の検索が読む項目であり、応答にもそのまま載るため、漏れれば文字列として現れる。
+   */
+  private String insertOrderForStoreB(String contactName, OrderStatus status) {
+    Order order =
+        Order.builder()
+            .businessDate(LocalDate.now())
+            .contactName(contactName)
+            .pax(2)
+            .status(status)
+            .build();
+    order.setStoreId(STORE_B);
+    return orderRepository.save(order).getId();
   }
 
   @Test

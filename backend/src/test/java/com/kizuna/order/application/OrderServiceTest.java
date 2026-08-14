@@ -1088,6 +1088,20 @@ class OrderServiceTest {
   }
 
   @Test
+  void listWorkQueueFailsLoudWhenTheBodyReadDropsARow() {
+    // 黙って取り落とすと「上限より 1 件多く取れたか」で判る続きの有無がその 1 件ぶん狂い、
+    // 続きがあるのに「もう無い」と返る。呼出側はそこで読むのをやめ、受注が画面から永久に消える
+    List<OrderView> incomplete = List.of(queueView("o1", 1));
+    when(orderSearchQuery.findIds(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
+        .thenReturn(List.of("o1", "o2"));
+    when(orderRepository.findViewsByIds(List.of("o1", "o2"))).thenReturn(incomplete);
+
+    assertThatThrownBy(() -> service.listWorkQueue(queueCriteria(), null, 1))
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
   void listWorkQueueReportsNoCursorWhenNothingFollows() {
     List<OrderView> views = List.of(queueView("o1", 1));
     when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))

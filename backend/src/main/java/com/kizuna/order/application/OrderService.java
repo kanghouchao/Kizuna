@@ -136,7 +136,15 @@ public class OrderService {
     return new PageImpl<>(rows, pageable, orderSearchQuery.count(criteria));
   }
 
-  /** 名指された ID の読み側 projection を、渡された ID の並びのまま返す。 */
+  /**
+   * 名指された ID の読み側 projection を、渡された ID の並びのまま返す。
+   *
+   * <p>1 件でも引けなければ<b>失敗させる</b>。黙って取り落とすと、作業キューでは「上限より 1 件多く取れたか」で判定している 続きの有無がその 1
+   * 件ぶん狂い、続きがあるのに「もう無い」と返る — 呼出側はそこで読むのをやめるので、 対応が要る受注が画面から永久に消える。件数の減った 1
+   * ページとして現れるため、断らなければ表示上は正常に見えてしまう。
+   *
+   * <p>2 つの問い合わせは同じ店舗の文脈・同じトランザクションで走るので、母集合が食い違うこと自体が実装の欠陥である （典型は動的な問い合わせの側に店舗行分離が効いていない場合）。
+   */
   private List<OrderView> viewsInOrder(List<String> ids) {
     if (ids.isEmpty()) {
       return List.of();
@@ -144,7 +152,12 @@ public class OrderService {
     Map<String, OrderView> byId =
         orderRepository.findViewsByIds(ids).stream()
             .collect(Collectors.toMap(OrderView::getId, view -> view));
-    return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+    List<OrderView> views = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+    if (views.size() != ids.size()) {
+      throw new IllegalStateException(
+          "受注一覧の並びと本体で母集合が食い違いました: 並び %d 件に対し本体 %d 件".formatted(ids.size(), views.size()));
+    }
+    return views;
   }
 
   /** 続きの位置は一覧の並び（並び替えの鍵 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */

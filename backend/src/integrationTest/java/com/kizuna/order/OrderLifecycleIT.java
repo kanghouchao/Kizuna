@@ -315,7 +315,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
         orderId(
             createOrder(body -> body.field("customer_name", "\"" + unique + "\"").without("pax")));
 
-    String query = "statuses=CREATED,CONFIRMED&sort=PAX&customer_name=" + unique + "&size=1";
+    String query = "statuses=CREATED,CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=1";
     JsonNode first = workQueue(query);
     List<String> collected = new ArrayList<>(idsOf(first));
     String cursor = first.path("next_cursor").asString();
@@ -342,7 +342,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
                           .field("pax", String.valueOf(value)))));
     }
 
-    String query = "statuses=CREATED,CONFIRMED&sort=PAX&customer_name=" + unique + "&size=1";
+    String query = "statuses=CREATED,CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=1";
     JsonNode first = workQueue(query);
     assertThat(idsOf(first)).containsExactly(created.get(0));
     String cursor = first.path("next_cursor").asString();
@@ -367,7 +367,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
             createOrder(
                 body -> body.field("customer_name", "\"" + unique + "\"").field("pax", "9")));
 
-    String base = "statuses=CREATED,CONFIRMED&sort=PAX&customer_name=" + unique + "&size=2000";
+    String base = "statuses=CREATED,CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=2000";
     assertThat(idsOf(workQueue(base + "&desc=false"))).containsExactly(small, large);
     assertThat(idsOf(workQueue(base + "&desc=true"))).containsExactly(large, small);
   }
