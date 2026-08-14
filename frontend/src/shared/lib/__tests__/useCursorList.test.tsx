@@ -23,7 +23,7 @@ describe('useCursorList', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.rows).toEqual(['row0', 'row1']);
     expect(result.current.hasMore).toBe(true);
-    expect(fetcher).toHaveBeenCalledWith(undefined);
+    expect(fetcher).toHaveBeenCalledWith(undefined, undefined);
   });
 
   it('追加読み込みは続きの位置から 1 回だけ取り、表示中の行に継ぎ足す', async () => {
@@ -36,7 +36,7 @@ describe('useCursorList', () => {
     await waitFor(() => expect(result.current.rows).toEqual(['row0', 'row1', 'row2', 'row3']));
     // 読み込み済みの範囲は読み直さない（読み直す実装では、ここまでで 3 要求が飛ぶ）
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher).toHaveBeenNthCalledWith(2, '2');
+    expect(fetcher).toHaveBeenNthCalledWith(2, '2', undefined);
   });
 
   it('処理で表示中の行を取り除いても、続きは同じ位置から続く', async () => {
@@ -49,7 +49,7 @@ describe('useCursorList', () => {
     act(() => result.current.loadMore());
 
     await waitFor(() => expect(result.current.rows).toEqual(['row1', 'row2', 'row3']));
-    expect(fetcher).toHaveBeenNthCalledWith(2, '2');
+    expect(fetcher).toHaveBeenNthCalledWith(2, '2', undefined);
   });
 
   it('古いリクエストの遅延応答は新しい結果を上書きしない', async () => {
@@ -145,7 +145,7 @@ describe('useCursorList', () => {
     act(() => result.current.reload());
 
     await waitFor(() => expect(result.current.rows).toEqual(['row0', 'row1']));
-    expect(fetcher).toHaveBeenLastCalledWith(undefined);
+    expect(fetcher).toHaveBeenLastCalledWith(undefined, undefined);
     expect(result.current.failed).toBe(false);
   });
 
@@ -163,5 +163,29 @@ describe('useCursorList', () => {
 
     await waitFor(() => expect(result.current.rows).toEqual(['row0', 'row1']));
     expect(result.current.failed).toBe(false);
+  });
+
+  it('検索条件を適用すると先頭から取り直し、続きの取得もその条件で行う', async () => {
+    // 条件が変わっても取り直さない形だと、並び替えや検索を押しても一覧が動かない退行が静かに通る
+    const fetcher = jest.fn(async (cursor: string | undefined, criteria: { q: string }) => ({
+      rows: [{ id: `${criteria.q}-${cursor ?? 'head'}` }],
+      nextCursor: 'c1',
+    }));
+    const { result } = renderHook(() => useCursorList(fetcher, { q: 'a' }));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(fetcher).toHaveBeenLastCalledWith(undefined, { q: 'a' });
+
+    act(() => result.current.search({ q: 'b' }));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    // 位置も起点へ戻す — 前の条件で得たカーソルは新しい並びの中では別の場所を指す
+    expect(fetcher).toHaveBeenLastCalledWith(undefined, { q: 'b' });
+    expect(result.current.rows).toEqual([{ id: 'b-head' }]);
+
+    act(() => result.current.loadMore());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(fetcher).toHaveBeenLastCalledWith('c1', { q: 'b' });
   });
 });

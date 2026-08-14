@@ -52,18 +52,68 @@ describe('orderApi', () => {
       params: { search: '花' },
     });
   });
-  it('listReservationRequests は予約受付の専用読み口を GET し、カーソルページを正規化する', async () => {
+  it('get は受注 1 件を GET する', async () => {
+    expect(await orderApi.get('o1')).toEqual({ ok: true, url: '/store/orders/o1' });
+  });
+  it('update は受注を PUT する', async () => {
+    expect(await orderApi.update('o1', { pax: 3 })).toEqual({ ok: true, url: '/store/orders/o1' });
+  });
+  it('cancel は取消の子リソースを POST する', async () => {
+    expect(await orderApi.cancel('o1', { reason: '客都合' })).toEqual({
+      ok: true,
+      url: '/store/orders/o1/cancellation',
+    });
+  });
+  it('listWorkQueue は群読み口を GET し、カーソルページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
       data: { content: [{ id: 'o1' }], next_cursor: 'abc' },
     });
 
     // 絞り込みは専用読み口の責務。受注一覧を取って手元で選り分ける形へは戻さない。
-    await expect(orderApi.listReservationRequests({ cursor: 'abc', size: 20 })).resolves.toEqual({
-      rows: [{ id: 'o1' }],
-      nextCursor: 'abc',
+    await expect(
+      orderApi.listWorkQueue({
+        statuses: ['CREATED', 'CONFIRMED'],
+        sort_key: 'PAX',
+        desc: true,
+        cursor: 'abc',
+        size: 20,
+      })
+    ).resolves.toEqual({ rows: [{ id: 'o1' }], nextCursor: 'abc' });
+    expect(mockedGet).toHaveBeenCalledWith('/store/orders/work-queue', {
+      params: {
+        statuses: 'CREATED,CONFIRMED',
+        sort_key: 'PAX',
+        desc: true,
+        cursor: 'abc',
+        size: 20,
+      },
     });
-    expect(mockedGet).toHaveBeenCalledWith('/store/orders/reservation-requests', {
-      params: { cursor: 'abc', size: 20 },
+  });
+  it('listWorkQueue は空欄の検索条件を要求から落とす', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { content: [], next_cursor: null } });
+
+    await orderApi.listWorkQueue({
+      statuses: ['CONFIRMED'],
+      customer_name: '',
+      business_date: '',
+      size: 20,
+    });
+
+    // 空欄を送ると「絞り込んでいない」ことが要求から読めなくなる
+    expect(mockedGet).toHaveBeenCalledWith('/store/orders/work-queue', {
+      params: { statuses: 'CONFIRMED', size: 20 },
+    });
+  });
+  it('listArchive はアーカイブを GET し、Spring Page を PageResult へ正規化する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ id: 'o1' }], total_pages: 2, total_elements: 7, size: 5, number: 1 },
+    });
+
+    await expect(
+      orderApi.listArchive({ statuses: ['COMPLETED'], page: 1, size: 5 })
+    ).resolves.toEqual({ rows: [{ id: 'o1' }], page: 1, pageCount: 2, total: 7 });
+    expect(mockedGet).toHaveBeenCalledWith('/store/orders/archive', {
+      params: { statuses: 'COMPLETED', page: 1, size: 5 },
     });
   });
   it('confirm は確定の子リソースを POST する', async () => {

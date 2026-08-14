@@ -17,7 +17,9 @@ export default function CreateOrderPage() {
     setIsSubmitting(true);
     try {
       const request: OrderCreateRequest = {
-        receptionist_id: Number(data.receptionistId),
+        // 未選択は「自分」の意。項目ごと送らないことでサーバが実行者本人を受付担当に据える
+        // （JWT にも /platform/me にも利用者 id が無いため、画面の側で自分を選択値にはできない）
+        receptionist_id: data.receptionistId === '' ? undefined : Number(data.receptionistId),
         business_date: data.businessDate,
         arrival_scheduled_start_time: data.arrivalStartTime
           ? `${data.arrivalStartTime}:00`

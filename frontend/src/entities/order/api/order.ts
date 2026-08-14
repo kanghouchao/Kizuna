@@ -17,14 +17,34 @@ import {
   OrderAttributionCorrection,
   OrderAttributionCorrectionRequest,
   OrderAttributionInvalidationRequest,
+  OrderCancellationRequest,
   OrderCastCandidate,
   OrderCompletionPreview,
   OrderCompletionRequest,
   OrderCreateRequest,
+  OrderQueryParams,
   OrderReceiptTokenIssue,
   OrderReceptionist,
+  OrderUpdateRequest,
   ReservationRequestUpdateRequest,
 } from '../model/types';
+
+/**
+ * 群読み口の問い合わせ文字列を組む。
+ *
+ * 状態は繰り返しではなくカンマ区切りの 1 個で送り、空欄の検索語は項目ごと落とす — サーバ側は空欄も
+ * 「送っていない」と同じに扱うが、送らない方が「絞り込んでいない」ことが要求そのものから読める。
+ */
+function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown> {
+  const { statuses, customer_name: customerName, ...rest } = params;
+  return {
+    ...Object.fromEntries(
+      Object.entries(rest).filter(([, value]) => value !== undefined && value !== '')
+    ),
+    statuses: statuses.join(','),
+    ...(customerName ? { customer_name: customerName } : {}),
+  };
+}
 
 export const orderApi = {
   list: async (
@@ -33,9 +53,56 @@ export const orderApi = {
     const response = await apiClient.get('/store/orders', { params });
     return fromSpringPage(response.data);
   },
+  /** 受注 1 件。編集モーダルは開くたびにここから読み直す（一覧の行を種にすると陳腐化した値で上書きする）。 */
+  get: async (id: string): Promise<Order> => {
+    const response = await apiClient.get(`/store/orders/${id}`);
+    return response.data;
+  },
   create: async (data: OrderCreateRequest): Promise<Order> => {
     const response = await apiClient.post('/store/orders', data);
     return response.data;
+  },
+  /**
+   * 受注の内容を部分更新する。状態は動かせない（完了・取消・確定・謝絶は専用の操作が独占する）。
+   *
+   * 既に設定済みの指名・受付担当は毎回運ぶこと — 省略すると「外す」と区別できないため 400 になる。
+   */
+  update: async (id: string, data: OrderUpdateRequest): Promise<Order> => {
+    const response = await apiClient.put(`/store/orders/${id}`, data);
+    return response.data;
+  },
+  /**
+   * 確定済みの受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は凍結される。
+   *
+   * 二度目は撥ねられる（逐次なら 400、同時なら楽観ロックで 409）。
+   */
+  cancel: async (id: string, data: OrderCancellationRequest): Promise<Order> => {
+    const response = await apiClient.post(`/store/orders/${id}/cancellation`, data);
+    return response.data;
+  },
+  /**
+   * 作業キュー（対応が要る受注）。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。
+   *
+   * 続きは応答の nextCursor をそのまま cursor に渡して取る。確定・取消で行が消えても位置がずれない。
+   */
+  listWorkQueue: async (
+    params: OrderQueryParams & CursorParams
+  ): Promise<CursorPageResult<Order>> => {
+    const response = await apiClient.get('/store/orders/work-queue', {
+      params: toQuery(params),
+    });
+    return fromCursorPage(response.data);
+  },
+  /**
+   * アーカイブ（完了・取消）。作業キューと同じ検索・並び替えを、オフセットのページャで辿る。
+   *
+   * 位置をページ番号で指せるのは、終端状態の受注が処理で消えず増えるだけだから。
+   */
+  listArchive: async (params: OrderQueryParams & PaginationParams): Promise<PageResult<Order>> => {
+    const response = await apiClient.get('/store/orders/archive', {
+      params: toQuery(params),
+    });
+    return fromSpringPage(response.data);
   },
   listReceptionists: async (): Promise<OrderReceptionist[]> => {
     const response = await apiClient.get('/store/orders/receptionists');
@@ -52,16 +119,11 @@ export const orderApi = {
     return response.data;
   },
   /**
-   * 予約受付 inbox の未確定申請一覧（絞り込みと並びはサーバ側、取得件数は 1 回分に抑える）。
+   * 未確定の予約申請を編集する。送った内容がそのまま新しい申請内容になる（省略＝未設定）。
    *
-   * 続きは応答の nextCursor をそのまま cursor に渡して取る。確定・謝絶で行が消えても位置がずれないため、
-   * 読み込み済みの範囲を読み直さずに済む。
+   * 汎用更新（{@link orderApi.update}）と別の口なのは、指名と受付担当を可空として扱うため — 会員は
+   * 指名なしで申請できるので、必須の契約しか無いと人数や備考を直すだけで指名付きの受注に変えざるを得ない。
    */
-  listReservationRequests: async (params?: CursorParams): Promise<CursorPageResult<Order>> => {
-    const response = await apiClient.get('/store/orders/reservation-requests', { params });
-    return fromCursorPage(response.data);
-  },
-  /** 未確定の予約申請を編集する。送った内容がそのまま新しい申請内容になる（省略＝未設定）。 */
   updateReservationRequest: async (
     id: string,
     data: ReservationRequestUpdateRequest

@@ -43,10 +43,9 @@ const HAS_PET_OPTIONS = [
   { value: 'true', label: 'あり' },
 ];
 const COURSE_MINUTES_OPTIONS = ['60', '90', '120'].map(v => ({ value: v, label: v }));
-const RECEPTION_ROUTE_OPTIONS = [
-  { value: 'PHONE', label: '電話受付' },
-  { value: 'WEB', label: 'Web 申請' },
-];
+// WEB は会員ポータルの申請だけが名乗る値なので選択肢に出さない（後端も拒否する）。
+// 選択肢が 1 つでもセレクトを残すのは、受付経路が記録項目であって、値の追加は行の追加だから。
+const RECEPTION_ROUTE_OPTIONS = [{ value: 'PHONE', label: '電話受付' }];
 const DISCOUNT_OPTIONS = [
   { value: SELECT_NONE, label: 'なし' },
   { value: '一番最初割', label: '一番最初割' },
@@ -67,7 +66,8 @@ export interface OrderFormData {
   hasPet: boolean;
   castId: string;
   pax: number;
-  receptionRoute: ReceptionRoute;
+  /** 受付経路。店舗側の合法値は電話受付だけ（WEB は会員ポータルの申請だけが名乗る）。 */
+  receptionRoute: Exclude<ReceptionRoute, 'WEB'>;
   courseMinutes: number;
   extensionMinutes: number;
   options: string[];
@@ -121,8 +121,9 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
     failure: receptionistsFailure,
     reload: loadReceptionists,
   } = useResource(() => orderApi.listReceptionists());
+  // 未選択は「自分が受付担当」の意。サーバが実行者本人を解決するので、画面は選ばせない道を既定にする
   const receptionistItems = [
-    { value: SELECT_NONE, label: '－－－' },
+    { value: SELECT_NONE, label: '自分（既定）' },
     ...(receptionistOptions ?? [])
       .filter(o => o.id !== undefined)
       .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
@@ -143,11 +144,9 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
               <FormField
                 control={control}
                 name="receptionistId"
-                // 受付はサーバ側が @NotNull。未選択のまま送ると 400 になるため送信前に止める
-                rules={{ required: '受付を選択してください' }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>受付 *</FormLabel>
+                    <FormLabel>受付</FormLabel>
                     <Select
                       items={receptionistItems}
                       value={field.value ? field.value : SELECT_NONE}
