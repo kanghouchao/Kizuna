@@ -116,10 +116,6 @@ class OrderServiceTest {
   /** 作成・確定の実行者。受付担当を明示する要求では補完へ到達しない。 */
   private static final String ACTOR_EMAIL = "staff@kizuna.test";
 
-  /** 予約受付 inbox の並びの鍵になる受付時刻。 */
-  private static final OffsetDateTime RECEIVED_AT =
-      OffsetDateTime.parse("2026-08-04T10:00:00+09:00");
-
   private OrderPatch emptyPatch() {
     return patchWith(builder -> builder);
   }
@@ -131,9 +127,6 @@ class OrderServiceTest {
 
   /** {@link #patchWith} が埋める項目。テストが実際に使うものだけを持つ。 */
   private record PatchDraft(LocalDate businessDate, Integer pax, String discountName) {
-    PatchDraft businessDate(LocalDate value) {
-      return new PatchDraft(value, pax, discountName);
-    }
 
     PatchDraft pax(Integer value) {
       return new PatchDraft(businessDate, value, discountName);
