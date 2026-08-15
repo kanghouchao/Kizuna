@@ -51,6 +51,7 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
+import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
@@ -843,11 +844,9 @@ class OrderServiceTest {
             .receptionistId(3L)
             .pax(2)
             .build();
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(paxAndRemarksPatch(5, null));
-    when(platformUserRepository.findById(3L)).thenReturn(Optional.of(authorizedReceptionist()));
     stubReservationRequestUpdateResponse();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -860,6 +859,31 @@ class OrderServiceTest {
     assertThat(confirmed.getPax()).isEqualTo(5);
     assertThat(confirmed.getCastId()).isEqualTo("g1");
     verify(nominatableCast, never()).find(any(), anyString());
+  }
+
+  @Test
+  void updateLeavesAnUnchangedReceptionistAlone() {
+    // 指名と同じ理由。この経路は受付担当の付いた受注に receptionist_id の再送を必須にしているため、
+    // 据え置きにまで適格を要求すると、担当者が退職・権限剥奪・他店異動になった受注が人数・備考の
+    // 修正もできなくなる。据え置かれた受付担当は割り当てた時点で検証済みで、FK も掛かっている
+    Order confirmed =
+        Order.builder().status(OrderStatus.CONFIRMED).receptionistId(3L).pax(2).build();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
+        .thenReturn(paxAndRemarksPatch(5, null));
+    stubReservationRequestUpdateResponse();
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setReceptionistId(3L);
+    req.setPax(5);
+
+    service.update("o1", req);
+
+    assertThat(confirmed.getPax()).isEqualTo(5);
+    assertThat(confirmed.getReceptionistId()).isEqualTo(3L);
+    // 適格の問い合わせそのものへ行かないこと。「適格な利用者を返す」で緑にすると、
+    // 適格でなくなった担当者で撥ねる退行を見逃す
+    verify(platformUserRepository, never()).findById(anyLong());
   }
 
   @Test
@@ -912,11 +936,9 @@ class OrderServiceTest {
     // 指名を外したまま確定した受注は、キャストを作り出さずに人数・備考を直せなければならない
     Order confirmed =
         reservationRequest().status(OrderStatus.CONFIRMED).receptionistId(3L).pax(2).build();
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(paxAndRemarksPatch(5, "人数を直した"));
-    when(platformUserRepository.findById(3L)).thenReturn(Optional.of(authorizedReceptionist()));
     stubReservationRequestUpdateResponse();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -1020,9 +1042,9 @@ class OrderServiceTest {
   void listWorkQueueDelegatesFilteringToTheQuery() {
     OrderView view = queueView("o1", 2);
     OrderResponse res = OrderResponse.builder().id("o1").build();
-    when(orderSearchQuery.findIds(
+    when(orderSearchQuery.findRows(
             any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
-        .thenReturn(List.of("o1"));
+        .thenReturn(List.of(new OrderedRow("o1", 2)));
     when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(List.of(view));
     when(orderMapper.toResponse(view)).thenReturn(res);
 
@@ -1036,9 +1058,9 @@ class OrderServiceTest {
     // 行の中身は id の集合で引き直すため、返る順は問い合わせの並びと一致しない。並べ直さないと
     // 画面の並び替えが効かないまま「並び替えたつもり」になる
     List<OrderView> views = List.of(queueView("o1", 1), queueView("o2", 2));
-    when(orderSearchQuery.findIds(
+    when(orderSearchQuery.findRows(
             any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
-        .thenReturn(List.of("o2", "o1"));
+        .thenReturn(List.of(new OrderedRow("o2", 2), new OrderedRow("o1", 1)));
     when(orderRepository.findViewsByIds(List.of("o2", "o1"))).thenReturn(views);
     when(orderMapper.toResponse(any(OrderView.class)))
         .thenAnswer(
@@ -1053,8 +1075,10 @@ class OrderServiceTest {
   void listWorkQueueHandsBackTheCursorOfTheLastReturnedRow() {
     // 上限より 1 件多く返るのが「続きがある」ことの現れ。3 件目は応答に載せない。
     List<OrderView> views = List.of(queueView("o1", 1), queueView("o2", 2), queueView("o3", 3));
-    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))
-        .thenReturn(List.of("o1", "o2", "o3"));
+    when(orderSearchQuery.findRows(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))
+        .thenReturn(
+            List.of(new OrderedRow("o1", 1), new OrderedRow("o2", 2), new OrderedRow("o3", 3)));
     when(orderRepository.findViewsByIds(List.of("o1", "o2", "o3"))).thenReturn(views);
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
@@ -1069,8 +1093,9 @@ class OrderServiceTest {
   void listWorkQueueCursorCarriesTheSentinelForAnUnsetSortKey() {
     // 並び替えの鍵が未設定の行でも続きの位置を作れなければ、その行の次から先へ進めなくなる
     List<OrderView> views = List.of(queueView("o1", null), queueView("o2", 3));
-    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(2)))
-        .thenReturn(List.of("o1", "o2"));
+    when(orderSearchQuery.findRows(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(2)))
+        .thenReturn(List.of(new OrderedRow("o1", Integer.MAX_VALUE), new OrderedRow("o2", 3)));
     when(orderRepository.findViewsByIds(List.of("o1", "o2"))).thenReturn(views);
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
@@ -1081,13 +1106,30 @@ class OrderServiceTest {
   }
 
   @Test
+  void listWorkQueueBuildsTheCursorFromTheOrderingQueryNotTheBody() {
+    // 2 本の問い合わせは READ COMMITTED では別の断面を見る。間に他の操作者が境界の行の鍵を書き換えると、
+    // 本体の側から組んだ続きは新しい値の後ろから始まり、間に挟まる受注を丸ごと飛ばす（人数 1 の行が
+    // 100 に直されれば 1〜100 が続きに現れない）。並びを決めた側の鍵だけがその穴を塞ぐ
+    List<OrderView> rewritten = List.of(queueView("o1", 100), queueView("o2", 200));
+    when(orderSearchQuery.findRows(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
+        .thenReturn(List.of(new OrderedRow("o1", 1), new OrderedRow("o2", 2)));
+    when(orderRepository.findViewsByIds(List.of("o1", "o2"))).thenReturn(rewritten);
+    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+
+    CursorPage<OrderResponse> page = service.listWorkQueue(queueCriteria(), null, 1);
+
+    assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("1", "o1"));
+  }
+
+  @Test
   void listWorkQueueFailsLoudWhenTheBodyReadDropsARow() {
     // 黙って取り落とすと「上限より 1 件多く取れたか」で判る続きの有無がその 1 件ぶん狂い、
     // 続きがあるのに「もう無い」と返る。呼出側はそこで読むのをやめ、受注が画面から永久に消える
     List<OrderView> incomplete = List.of(queueView("o1", 1));
-    when(orderSearchQuery.findIds(
+    when(orderSearchQuery.findRows(
             any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
-        .thenReturn(List.of("o1", "o2"));
+        .thenReturn(List.of(new OrderedRow("o1", 1), new OrderedRow("o2", 2)));
     when(orderRepository.findViewsByIds(List.of("o1", "o2"))).thenReturn(incomplete);
 
     assertThatThrownBy(() -> service.listWorkQueue(queueCriteria(), null, 1))
@@ -1097,8 +1139,9 @@ class OrderServiceTest {
   @Test
   void listWorkQueueReportsNoCursorWhenNothingFollows() {
     List<OrderView> views = List.of(queueView("o1", 1));
-    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))
-        .thenReturn(List.of("o1"));
+    when(orderSearchQuery.findRows(
+            any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))
+        .thenReturn(List.of(new OrderedRow("o1", 1)));
     when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(views);
     when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
@@ -1108,13 +1151,13 @@ class OrderServiceTest {
   @Test
   void listWorkQueueResumesFromTheGivenCursorInsteadOfAnOffset() {
     String cursor = new PageCursor("2", "o1").encode();
-    when(orderSearchQuery.findIds(any(OrderQueryCriteria.class), any(PageCursor.class), anyInt()))
+    when(orderSearchQuery.findRows(any(OrderQueryCriteria.class), any(PageCursor.class), anyInt()))
         .thenReturn(List.of());
 
     assertThat(service.listWorkQueue(queueCriteria(), cursor, 20).content()).isEmpty();
     // 位置を件数で指すと、手前の行が処理で消えた分だけ境界の受注を飛ばす
     verify(orderSearchQuery)
-        .findIds(any(OrderQueryCriteria.class), eq(new PageCursor("2", "o1")), anyInt());
+        .findRows(any(OrderQueryCriteria.class), eq(new PageCursor("2", "o1")), anyInt());
   }
 
   @Test
@@ -1126,7 +1169,7 @@ class OrderServiceTest {
 
   @Test
   void listWorkQueueCapsTheRequestedSize() {
-    when(orderSearchQuery.findIds(
+    when(orderSearchQuery.findRows(
             any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
         .thenReturn(List.of());
 
@@ -1134,7 +1177,7 @@ class OrderServiceTest {
 
     // 1 回の応答は抑える。続きはカーソルで辿れるので、抑えても到達性は落ちない。
     verify(orderSearchQuery)
-        .findIds(
+        .findRows(
             any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(CursorPage.MAX_SIZE + 1));
   }
 

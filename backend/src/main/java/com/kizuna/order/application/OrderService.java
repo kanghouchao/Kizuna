@@ -25,11 +25,11 @@ import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
+import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.DbConstraint;
@@ -115,11 +115,16 @@ public class OrderService {
       OrderQueryCriteria criteria, String cursor, int requestedSize) {
     int size = CursorPage.clampSize(requestedSize);
     // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    List<String> ids =
-        orderSearchQuery.findIds(
+    List<OrderedRow> rows =
+        orderSearchQuery.findRows(
             criteria, cursor == null ? null : PageCursor.decode(cursor), size + 1);
-    List<OrderView> views = viewsInOrder(ids);
-    return CursorPage.of(views, size, view -> cursorOf(view, criteria.sortKey()))
+    // 続きの位置は並びを決めたこの問い合わせが返した鍵から組む。行の中身を引く 2 本目から組むと、
+    // 2 本が別の断面を見た場合に並べたときの値と食い違い、間の受注を丸ごと飛ばす（OrderedRow に理由を記す）。
+    Map<String, String> cursorsById =
+        rows.stream()
+            .collect(Collectors.toMap(OrderedRow::id, row -> String.valueOf(row.sortKey())));
+    List<OrderView> views = viewsInOrder(rows.stream().map(OrderedRow::id).toList());
+    return CursorPage.of(views, size, view -> cursorOf(view, cursorsById))
         .map(orderMapper::toResponse);
   }
 
@@ -131,6 +136,7 @@ public class OrderService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<OrderResponse> listArchive(OrderQueryCriteria criteria, Pageable pageable) {
+    // アーカイブは位置をページ番号で指すため、鍵の値そのものは要らない
     List<String> ids = orderSearchQuery.findIds(criteria, pageable);
     List<OrderResponse> rows = viewsInOrder(ids).stream().map(orderMapper::toResponse).toList();
     return new PageImpl<>(rows, pageable, orderSearchQuery.count(criteria));
@@ -144,6 +150,10 @@ public class OrderService {
    * ページとして現れるため、断らなければ表示上は正常に見えてしまう。
    *
    * <p>2 つの問い合わせは同じ店舗の文脈・同じトランザクションで走るので、母集合が食い違うこと自体が実装の欠陥である （典型は動的な問い合わせの側に店舗行分離が効いていない場合）。
+   *
+   * <p>捕まえるのは<b>行が消えたこと</b>だけで、行の値が変わったことは見ない。READ COMMITTED では 2 本が別の断面を
+   * 見るため値の食い違い自体は起こりうるが、続きの位置は並びを決めた 1 本目の鍵から組むので（{@code OrderSearchQuery.OrderedRow}）、表示が 1
+   * 拍古いことしか意味しない。
    */
   private List<OrderView> viewsInOrder(List<String> ids) {
     if (ids.isEmpty()) {
@@ -161,8 +171,8 @@ public class OrderService {
   }
 
   /** 続きの位置は一覧の並び（並び替えの鍵 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(OrderView view, OrderSortKey sortKey) {
-    return new PageCursor(sortKey.cursorValueOf(view), view.getId()).encode();
+  private static String cursorOf(OrderView view, Map<String, String> cursorsById) {
+    return new PageCursor(cursorsById.get(view.getId()), view.getId()).encode();
   }
 
   @StoreScoped
@@ -249,7 +259,12 @@ public class OrderService {
     // 会員申請、受付候補でない実行者が確定したもの）は未設定のまま他項目を直せなければならない一方、
     // 既に付いているものを省略で外せると、この汎用更新が指名解除・受付担当解除の裏口になる。
     if (receptionistId != null) {
-      validateReceptionist(receptionistId);
+      // 指名と同じく、縛るのは差し替えだけで据え置き（同じ受付担当の再送）は素通しする。この経路は
+      // 受付担当の付いた受注に receptionist_id の再送を必須にしているため、無条件に適格を要求すると、
+      // 受付担当が退職・権限剥奪・他店異動で適格でなくなった受注が備考・人数の修正もできなくなる。
+      if (!receptionistId.equals(order.getReceptionistId())) {
+        validateReceptionist(receptionistId);
+      }
     } else if (order.getReceptionistId() != null) {
       throw new ServiceException("受付担当を外すことはできません。受付担当を指定してください");
     }
