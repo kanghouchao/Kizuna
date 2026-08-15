@@ -90,10 +90,11 @@ public class OrderSearchQuery {
     List<String> conditions = new ArrayList<>();
     conditions.add("o.status in :statuses");
     if (criteria.customerName() != null) {
-      // 表示と同じ規則で照合する — 台帳の顧客名が無ければ受付で録入された連絡先の氏名で呼ぶ。
-      // 顧客が着いた受注では写しが空なので、2 つが同時に埋まることはない。
+      // 表示と同じ規則で照合する — 台帳の顧客名が無ければ受付で録入された連絡先の氏名、それも無ければ
+      // 申請時の名乗りで呼ぶ。当店に台帳行の無い会員の未確定申請は前 2 つをどちらも持たないため、
+      // 名乗りまで見ないと画面に「お客様名なし」として出ている行が検索で消える。3 つが同時に埋まることはない。
       conditions.add(
-          "lower(coalesce(c.name, o.contactName)) like :customerName escape '"
+          "lower(coalesce(c.name, o.contactName, o.requesterDeclaredName)) like :customerName escape '"
               + LIKE_ESCAPE.getEscapeCharacter()
               + "'");
     }

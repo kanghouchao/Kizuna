@@ -91,11 +91,10 @@ function toTimeInput(value: string | undefined): string {
   return value ? value.slice(0, 5) : '';
 }
 
-/** 空欄は「送らない」。空文字を送ると、数値欄はサーバ側の下限に、文字列欄は空への書き換えになる。 */
-function optionalText(value: string): string | undefined {
-  return value.trim() === '' ? undefined : value.trim();
-}
-
+/**
+ * 日付・時刻・数値の空欄は「送らない」。契約は null を「変更しない」と読むため空への書き換えを表現する形が
+ * 無く、空文字を送ると型の変換に失敗して 400 になる。空にしたつもりの欄は元の値が残る。
+ */
 function optionalNumber(value: string): number | undefined {
   return value.trim() === '' ? undefined : Number(value);
 }
@@ -104,10 +103,34 @@ function optionalTime(value: string): string | undefined {
   return value === '' ? undefined : `${value}:00`;
 }
 
+function optionalDate(value: string): string | undefined {
+  return value === '' ? undefined : value;
+}
+
+/**
+ * 触った欄の項目だけを残す。欄の名前は契約の項目名と同じなので、対応表を別に持たずに名前で引ける。
+ *
+ * <p>全項目を毎回運ぶと、同じ受注を別の操作者が直している間この画面が開いていた場合、触ってもいない
+ * 項目まで開いた時点の値で上書きしてしまう。部分更新の契約（送らない＝変更しない）をそのまま使う。
+ */
+function pickEdited(
+  edited: OrderUpdateRequest,
+  dirtyFields: Partial<Record<keyof OrderEditFormValues, boolean>>
+): OrderUpdateRequest {
+  // 絞り込んでも項目の型は変わらないが、Object.fromEntries は索引署名しか名乗れないため写し直す
+  return Object.fromEntries(
+    Object.entries(edited).filter(([key]) => dirtyFields[key as keyof OrderEditFormValues])
+  ) as OrderUpdateRequest;
+}
+
 /**
  * 一覧の中で受注を編集するモーダル。
  *
  * <p>開くたびにサーバから 1 件を読み直す。一覧の行を種にすると、他の操作者が直した後の画面で 陳腐化した値をそのまま送り返してしまう。
+ *
+ * <p>送るのは<b>触った欄だけ</b>。全項目を毎回運ぶと、この画面を開いている間に別の操作者が同じ受注を直した場合、
+ * 触ってもいない項目まで開いた時点の値で押し戻してしまう。文字列の項目は空欄を空文字で送るので「空にする」も
+ * 表せるが、日付・時刻・数値にその形は無い（契約が「変更しない」を null で表すため）。
  *
  * <p>顧客区は<b>読み取りと遷移だけ</b>。顧客台帳の項目をここから直せると、受注 1 件を直したつもりの 変更が同じ顧客の他の受注へ波及する。訂正は顧客詳細で行う。
  *
@@ -139,9 +162,19 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
 
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, formState } = form;
+  // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
+  // レンダー中に読むのは、react-hook-form が formState の購読をこの読み取りで決めるため
+  const { dirtyFields } = formState;
   // 播き終えた受注。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
   // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
   const [seededId, setSeededId] = useState<string | null>(null);
+
+  // 開き直したら播種をやり直す。useResource は取りに行かない間も持っている値を残すので、同じ受注を
+  // 二度目に開いた瞬間は前回の内容が current に居座ったまま — 播種済みの印を消さないと、取り直しの
+  // 完了を待たずに陳腐化した値のフォームが出て、そのまま保存できてしまう。
+  useEffect(() => {
+    setSeededId(null);
+  }, [orderId]);
 
   // 取得できたら播く。取得の到着はレンダーより後なので、values ではなく効果で入れる
   // （初期値として渡すと、開いた最初のフレームが空欄のまま描かれる）。
@@ -180,35 +213,40 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
     if (orderId === null || current === null) {
       return;
     }
+    // 文字列の項目は空欄をそのまま空文字で送る。契約は null だけを「変更しない」と読むので、これが
+    // 「空にする」の表し方になる（trim するのは、空白だけの入力を空と同じに扱うため）。
+    const edited: OrderUpdateRequest = {
+      business_date: optionalDate(values.business_date),
+      arrival_scheduled_start_time: optionalTime(values.arrival_scheduled_start_time),
+      arrival_scheduled_end_time: optionalTime(values.arrival_scheduled_end_time),
+      pax: optionalNumber(values.pax),
+      course_minutes: optionalNumber(values.course_minutes),
+      extension_minutes: optionalNumber(values.extension_minutes),
+      location_address: values.location_address.trim(),
+      location_building: values.location_building.trim(),
+      carrier: values.carrier.trim(),
+      media_name: values.media_name.trim(),
+      discount_name: values.discount_name.trim(),
+      manual_discount: optionalNumber(values.manual_discount),
+      remarks: values.remarks.trim(),
+      cast_driver_message: values.cast_driver_message.trim(),
+      // 顧客が着いた受注へ送るとサーバが撥ねる。着いていない受注でだけ運ぶ
+      ...(linked
+        ? {}
+        : {
+            contact_name: values.contact_name.trim(),
+            contact_phone_number: values.contact_phone_number.trim(),
+          }),
+    };
     const request: OrderUpdateRequest = {
-      // 指名と受付担当は毎回運ぶ。省略は「変更しない」ではなく「外す」と区別できないため、
+      // 指名と受付担当は触っていなくても毎回運ぶ。省略は「変更しない」ではなく「外す」と区別できないため、
       // 設定済みの受注では要求そのものが撥ねられる（サーバ側の契約）。欄が空のまま
       // （未設定で確定した受注）なら元の値をそのまま返し、この画面が外す口にならないようにする。
       receptionist_id: values.receptionist_id
         ? Number(values.receptionist_id)
         : current.receptionist_id,
       cast_id: values.cast_id || current.cast_id,
-      business_date: optionalText(values.business_date),
-      arrival_scheduled_start_time: optionalTime(values.arrival_scheduled_start_time),
-      arrival_scheduled_end_time: optionalTime(values.arrival_scheduled_end_time),
-      pax: optionalNumber(values.pax),
-      course_minutes: optionalNumber(values.course_minutes),
-      extension_minutes: optionalNumber(values.extension_minutes),
-      location_address: optionalText(values.location_address),
-      location_building: optionalText(values.location_building),
-      carrier: optionalText(values.carrier),
-      media_name: optionalText(values.media_name),
-      discount_name: optionalText(values.discount_name),
-      manual_discount: optionalNumber(values.manual_discount),
-      remarks: optionalText(values.remarks),
-      cast_driver_message: optionalText(values.cast_driver_message),
-      // 顧客が着いた受注へ送るとサーバが撥ねる。着いていない受注でだけ運ぶ
-      ...(linked
-        ? {}
-        : {
-            contact_name: optionalText(values.contact_name),
-            contact_phone_number: optionalText(values.contact_phone_number),
-          }),
+      ...pickEdited(edited, dirtyFields),
     };
     try {
       const updated = await orderApi.update(orderId, request);

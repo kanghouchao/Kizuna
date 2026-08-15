@@ -40,6 +40,9 @@ const QUEUE_PAGE_SIZE = 20;
 /** 対応が要る受注の群。未確定（会員申請）と確定済みを 1 つの面に出す。 */
 const ACTIVE_STATUSES: OrderStatus[] = ['CREATED', 'CONFIRMED'];
 
+/** 作業キューを離れた受注の行き先。終端状態はこの 2 つしかない（ADR 0013）。 */
+type ArchiveStatus = Extract<OrderStatus, 'COMPLETED' | 'CANCELLED'>;
+
 const SORT_KEYS = Object.keys(ORDER_SORT_KEY_LABELS) as OrderSortKey[];
 
 interface SearchDraft {
@@ -105,8 +108,22 @@ export default function OrderListPage() {
     queue.search(toCriteria(applied, key, desc));
   };
 
-  /** 処理し終えた受注は群の対象から外れるので、手元から取り除くだけで一覧は正しくなる。 */
-  const removeFromQueue = (id: string) => queue.setRows(prev => prev.filter(row => row.id !== id));
+  // アーカイブへ移った受注を群ごとに数える。件数の控えはたたんだままでも出ているので、移った先を
+  // 取り直さないと「アーカイブに入ったのか」が画面のどこからも読めない
+  const [archived, setArchived] = useState<Record<ArchiveStatus, number>>({
+    COMPLETED: 0,
+    CANCELLED: 0,
+  });
+
+  /** 処理し終えた受注を手元から取り除き、行った先のアーカイブを取り直させる。 */
+  const removeFromQueue = (id: string, movedTo: ArchiveStatus) => {
+    queue.setRows(prev => prev.filter(row => row.id !== id));
+    setArchived(prev => ({ ...prev, [movedTo]: prev[movedTo] + 1 }));
+  };
+
+  /** 一覧の行を新しい内容へ差し替える（確定・編集のように群の中に留まる処理）。 */
+  const replaceRow = (updated: Order) =>
+    queue.setRows(prev => prev.map(row => (row.id === updated.id ? updated : row)));
 
   return (
     <div className="space-y-6">
@@ -214,7 +231,9 @@ export default function OrderListPage() {
               <OrderQueueCard
                 key={order.id}
                 order={order}
-                onProcessed={removeFromQueue}
+                // 謝絶も取消も行き先は取消の群（謝絶は取消の記録を持たない CANCELLED）
+                onProcessed={id => removeFromQueue(id, 'CANCELLED')}
+                onConfirmed={replaceRow}
                 onEdit={target =>
                   target.status === 'CREATED' ? setEditingRequest(target) : setEditing(target)
                 }
@@ -241,36 +260,30 @@ export default function OrderListPage() {
           title="完了"
           status="COMPLETED"
           criteria={criteria}
+          reloadToken={archived.COMPLETED}
           onCorrectAttribution={setCorrecting}
         />
         <OrderArchiveSection
           title="取消"
           status="CANCELLED"
           criteria={criteria}
+          reloadToken={archived.CANCELLED}
           onCorrectAttribution={setCorrecting}
         />
       </div>
 
-      <OrderEditModal
-        order={editing}
-        onClose={() => setEditing(null)}
-        onSaved={updated =>
-          queue.setRows(prev => prev.map(row => (row.id === updated.id ? updated : row)))
-        }
-      />
+      <OrderEditModal order={editing} onClose={() => setEditing(null)} onSaved={replaceRow} />
       {/* 未確定の申請は指名・受付担当を可空として扱う専用の契約で編集する（端点も契約も従来どおり） */}
       <ReservationRequestEditModal
         request={editingRequest}
         onClose={() => setEditingRequest(null)}
-        onSaved={updated =>
-          queue.setRows(prev => prev.map(row => (row.id === updated.id ? updated : row)))
-        }
+        onSaved={replaceRow}
       />
       <OrderCompletionModal
         order={completing}
         onClose={() => setCompleting(null)}
-        // 完了した受注は作業キューから外れてアーカイブへ移る
-        onCompleted={() => removeFromQueue(completing?.id ?? '')}
+        // 完了した受注は作業キューから外れて完了のアーカイブへ移る
+        onCompleted={() => removeFromQueue(completing?.id ?? '', 'COMPLETED')}
       />
       {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
       <OrderAttributionModal order={correcting} onClose={() => setCorrecting(null)} />

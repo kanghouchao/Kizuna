@@ -11,7 +11,7 @@ import lombok.Data;
  * 受注の部分更新の内容（null は「変更しない」）。確定後の受注のライフサイクルはこの契約が受け持つ。
  *
  * <p>状態は収めない。完了は完了処理が、取消は取消操作が、未確定申請の確定・謝絶は専用操作が独占するため、この口に残る合法な状態遷移は無い（ADR
- * 0013）。同じ理由で対象は確定済みの受注に限られ、 終端状態（完了・取消）の受注はこの口では書き換えられない。
+ * 0013）。終端状態（完了・取消）の受注はこの口では書き換えられない。
  *
  * <p>会計金額・利用ポイント・自動付与ポイントも収めない — 完了処理だけが確定させる。受付経路も収めない（店舗側の合法値が PHONE のみで空回りするため）。
  *
@@ -43,16 +43,25 @@ public class OrderUpdateRequest {
   private String discountName;
   private Integer manualDiscount;
 
-  /** 場所（住所）。誤記の訂正のために編集できる。 */
+  /**
+   * 場所（住所）。誤記の訂正のために編集できる。
+   *
+   * <p>上限は行き先の列と同じ（{@code t_orders.location_address} = VARCHAR(500)）。以下の 3 項目も同様で、契約で撥ねないと
+   * 溢れた値が更新時の SQLSTATE 22001 になり、理由の分かる 400 ではなく 500 で返る。
+   */
+  @Size(max = 500, message = "住所は 500 文字以内です")
   private String locationAddress;
 
-  /** 場所（建物名）。 */
+  /** 場所（建物名）。上限は {@code t_orders.location_building} = VARCHAR(255)。 */
+  @Size(max = 255, message = "建物名は 255 文字以内です")
   private String locationBuilding;
 
-  /** 媒体（キャリア）。 */
+  /** 媒体（キャリア）。上限は {@code t_orders.carrier} = VARCHAR(100)。 */
+  @Size(max = 100, message = "キャリアは 100 文字以内です")
   private String carrier;
 
-  /** 媒体（知った媒体）。 */
+  /** 媒体（知った媒体）。上限は {@code t_orders.media_name} = VARCHAR(100)。 */
+  @Size(max = 100, message = "媒体名は 100 文字以内です")
   private String mediaName;
 
   private String remarks;

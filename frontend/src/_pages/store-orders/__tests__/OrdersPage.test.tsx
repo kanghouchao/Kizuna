@@ -109,7 +109,7 @@ describe('作業キューの描画', () => {
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
   });
 
-  it('確定を押すと確定の口を叩き、その受注が群から外れること', async () => {
+  it('確定した受注は群に残り、確定後の操作へ入れ替わること', async () => {
     stubQueue(pendingRequest());
     mockedOrderApi.confirm.mockResolvedValue(pendingRequest({ status: 'CONFIRMED' }));
     render(<OrderListPage />);
@@ -117,8 +117,12 @@ describe('作業キューの描画', () => {
     fireEvent.click(await screen.findByRole('button', { name: '確定' }));
 
     await waitFor(() => expect(mockedOrderApi.confirm).toHaveBeenCalledWith('r1'));
-    // 処理し終えた受注は群の対象から外れる。取り直しに行かず手元から取り除く
-    await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
+    // 確定は「対応が要る」群の中の移動（未確定 → 確定）で、群からは外れない。取り除くと
+    // 続けて完了させたい受注が画面から消え、取り直すまで戻ってこない
+    expect(screen.getByText('高橋美咲')).toBeInTheDocument();
+    // 応答の内容へ差し替わるので、次の操作は確定済みのものになる
+    await waitFor(() => expect(screen.getByRole('button', { name: '完了' })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: '確定' })).not.toBeInTheDocument();
   });
 
   it('取得の失敗を空表示と区別すること', async () => {
@@ -260,13 +264,54 @@ describe('一覧内の編集モーダル', () => {
     fireEvent.change(within(dialog).getByLabelText('人数'), { target: { value: '5' } });
     fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
 
+    await waitFor(() => expect(mockedOrderApi.update).toHaveBeenCalled());
+    // 触った欄と、省略が「外す」と区別できない 2 項目だけ。全項目を毎回運ぶと、この画面を開いている
+    // 間に別の操作者が直した受注へ、触ってもいない項目を開いた時点の値で押し戻してしまう
+    const [, body] = mockedOrderApi.update.mock.calls[0];
+    expect(Object.keys(body).sort()).toEqual(['cast_id', 'pax', 'receptionist_id']);
+    expect(body).toEqual({ pax: 5, receptionist_id: 3, cast_id: 'cast-1' });
+  });
+
+  it('文字列の欄は空にした結果も送ること（空文字が「空にする」の表し方）', async () => {
+    stubQueue(confirmedOrder({ remarks: '消したい備考' }));
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder({ remarks: '消したい備考' }));
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder());
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(dialog).getByLabelText('備考')).toHaveValue('消したい備考'));
+
+    fireEvent.change(within(dialog).getByLabelText('備考'), { target: { value: '' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    // 項目ごと落とすと、消したはずの備考が残る（サーバは送られない項目を「変更しない」と読む）
     await waitFor(() =>
       expect(mockedOrderApi.update).toHaveBeenCalledWith(
         'o1',
-        // 省略は「外す」と区別できないため、設定済みの 2 項目は毎回運ばないと 400 になる
-        expect.objectContaining({ pax: 5, receptionist_id: 3, cast_id: 'cast-1' })
+        expect.objectContaining({ remarks: '' })
       )
     );
+  });
+
+  it('同じ受注を開き直したとき、取り直しの前に前回の内容を出さないこと', async () => {
+    stubQueue(confirmedOrder());
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+    const first = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(first).getByLabelText('人数')).toHaveValue(2));
+    fireEvent.click(within(first).getByRole('button', { name: 'キャンセル' }));
+
+    // 2 度目は取得を宙吊りにする。取得の口は取りに行かない間も持っている値を残すので、播種済みの
+    // 印を消さないと、取り直しの完了を待たずに陳腐化した内容のフォームが出て保存できてしまう
+    mockedOrderApi.get.mockReturnValue(new Promise<Order>(() => {}));
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+
+    const reopened = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(reopened).getByText('読み込み中...')).toBeInTheDocument());
+    expect(within(reopened).queryByLabelText('人数')).not.toBeInTheDocument();
   });
 
   it('顧客の着いた受注では連絡先を編集させず、顧客詳細への導線を出すこと', async () => {
@@ -359,6 +404,48 @@ describe('アーカイブ', () => {
     // 結末を確かめるために詳細を開かなくて済むよう、行が理由・実行者・時刻を名乗る
     expect(await screen.findByText(/客都合。当日夕方に連絡あり/)).toBeInTheDocument();
     expect(screen.getByText(/田中店長/)).toBeInTheDocument();
+    // 時刻は閲覧者の時間帯へ直して出す。応答の文字列を切って出すと、末尾の +09:00 が落ちた壁時計が
+    // そのまま日本時間の顔をして並ぶ（実行環境の時間帯に依らないよう、切った形が無いことで見る）
+    expect(screen.queryByText(/2026-07-03 17:42/)).not.toBeInTheDocument();
+  });
+
+  it('取消の記録を持たない CANCELLED を「実行者不明」と呼ばないこと', async () => {
+    // 謝絶と会員の取り下げは確定へ至らないまま消えた申請で、理由も実行者も構造的に存在しない
+    mockedOrderApi.listArchive.mockImplementation(async params =>
+      params.statuses[0] === 'CANCELLED'
+        ? {
+            rows: [pendingRequest({ id: 'x3', status: 'CANCELLED' })],
+            page: 0,
+            pageCount: 1,
+            total: 1,
+          }
+        : EMPTY_ARCHIVE
+    );
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /取消 \d+ 件/ }));
+
+    expect(await screen.findByText('確定前に取り消された申請')).toBeInTheDocument();
+    expect(screen.queryByText(/実行者不明/)).not.toBeInTheDocument();
+  });
+
+  it('受注が移ってきた群を取り直すこと', async () => {
+    stubQueue(confirmedOrder());
+    mockedOrderApi.cancel.mockResolvedValue(confirmedOrder({ status: 'CANCELLED' }));
+    render(<OrderListPage />);
+
+    // 起動時に 2 群ぶん取りに行く。ここから増えた分がアーカイブの取り直し
+    await waitFor(() => expect(mockedOrderApi.listArchive).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(await screen.findByRole('button', { name: '取消' }));
+    fireEvent.change(screen.getByLabelText('取消の理由'), { target: { value: '客都合' } });
+    fireEvent.click(screen.getByRole('button', { name: '取消する' }));
+
+    // 件数の控えはたたんだままでも出ているので、取り直さないと「アーカイブに入ったのか」が
+    // 画面のどこからも読めない。取り直すのは行き先の群だけ
+    await waitFor(() => expect(mockedOrderApi.listArchive).toHaveBeenCalledTimes(3));
+    const [lastCall] = mockedOrderApi.listArchive.mock.calls.slice(-1);
+    expect(lastCall[0].statuses).toEqual(['CANCELLED']);
   });
 
   it('完了の行は会計金額と付与ポイントを名乗ること', async () => {

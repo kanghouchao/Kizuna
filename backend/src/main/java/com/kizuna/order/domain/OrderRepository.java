@@ -46,6 +46,7 @@ public interface OrderRepository
              o.castDriverMessage as castDriverMessage, o.status as status,
              o.receptionRoute as receptionRoute,
              o.requesterMemberCode as requesterMemberCode,
+             o.requesterDeclaredName as requesterDeclaredName,
              o.locationAddress as locationAddress, o.locationBuilding as locationBuilding,
              o.cancelledReason as cancelledReason, cu.displayName as cancelledByName,
              o.cancelledAt as cancelledAt,
