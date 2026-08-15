@@ -40,7 +40,11 @@ public class OrderUpdateRequest {
   private Integer courseMinutes;
   private Integer extensionMinutes;
   private List<String> optionCodes;
+
+  /** 割引名。上限は {@code t_orders.discount_name} = VARCHAR(255)。 */
+  @Size(max = 255, message = "割引名は 255 文字以内です")
   private String discountName;
+
   private Integer manualDiscount;
 
   /**
