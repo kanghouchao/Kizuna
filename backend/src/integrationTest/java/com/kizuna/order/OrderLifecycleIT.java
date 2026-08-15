@@ -206,6 +206,29 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("作成も同じ入力を同じ 400 で撥ねること（更新だけ直すと同じ値が口によって 400 と 500 に割れる）")
+  void createRejectsTheSameOverlongTextsAsUpdate() {
+    // 作成の住所は派遣先と顧客台帳の 2 つへ入るが、上限はどちらも 500 で一致する
+    ResponseEntity<JsonNode> longAddress =
+        createOrder(body -> body.field("address", "\"" + "あ".repeat(501) + "\""));
+    assertThat(longAddress.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(longAddress.getBody().path("error").asString()).contains("500 文字以内");
+
+    ResponseEntity<JsonNode> longCarrier =
+        createOrder(body -> body.field("carrier", "\"" + "あ".repeat(101) + "\""));
+    assertThat(longCarrier.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    // 台帳だけへ入る項目も同じ扱い。溢れは顧客行の挿入で起きるため、契約で撥ねないと受注の口からは
+    // 「受注の作成が 500 で落ちた」としか見えない
+    ResponseEntity<JsonNode> longLandmark =
+        createOrder(
+            body ->
+                body.field("phone_number", "\"0901111" + (nonce % 10000) + "\"")
+                    .field("landmark", "\"" + "あ".repeat(256) + "\""));
+    assertThat(longLandmark.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
   @DisplayName("顧客の着いていない受注の連絡先を訂正できること")
   void updateCorrectsTheContactOfAnUnlinkedOrder() {
     // 電話番号を送らなければ台帳照合は起きず、録入した連絡先が受注側の写しとして残る

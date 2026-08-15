@@ -17,6 +17,7 @@ import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -373,7 +374,12 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
         JsonNode.class);
   }
 
-  /** 本人として店舗A へ予約を申請する（確定しないので帰属記録は生まれない）。 */
+  /**
+   * 本人として店舗A へ予約を申請する（確定しないので帰属記録は生まれない）。
+   *
+   * <p>営業日は申請側の検証と同じ時間帯で数える。素の {@code LocalDate.now()}（＝コンテナの UTC）だと、日本時間の 00:00〜09:00
+   * に走らせたときだけ「昨日」を送ることになり、過去日の申請として撥ねられる。
+   */
   private String requestReservation() {
     ResponseEntity<JsonNode> requested =
         rest.postForEntity(
@@ -382,7 +388,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
                 "{\"store_id\": "
                     + STORE_A
                     + ", \"business_date\": \""
-                    + LocalDate.now()
+                    + LocalDate.now(ZoneId.of("Asia/Tokyo"))
                     + "\", \"pax\": 2, \"declared_name\": \"名乗り太郎\"}",
                 bearer(member.token())),
             JsonNode.class);
