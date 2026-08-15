@@ -65,6 +65,15 @@ public interface OrderView {
 
   String getRequesterMemberCode();
 
+  /**
+   * 申請時に会員が店舗へ名乗った名前。店舗が起こした受注では null。
+   *
+   * <p>未確定の申請では、これが受注の唯一の名乗りになりうる — 当店に台帳行の無い会員の初回申請は顧客が着かず、
+   * 受付で録入する連絡先も持たないため、これを出さないと作業キューで「お客様名なし」としか呼べない。確定すると 台帳行が起きてそちらが正本になる（{@code
+   * OrderService#ensureCustomerForRequester} がこの名前を写す）。
+   */
+  String getRequesterDeclaredName();
+
   String getLocationAddress();
 
   String getLocationBuilding();

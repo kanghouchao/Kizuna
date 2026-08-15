@@ -14,8 +14,20 @@ interface OrderArchiveSectionProps {
   title: string;
   status: OrderStatus;
   criteria: OrderListCriteria;
+  /**
+   * この群へ受注が移ってくるたびに増える値。変わったら取り直す。
+   *
+   * 中身は読まない — 「何件移ったか」ではなく「移った」ことだけが取り直しの合図で、値を解釈すると
+   * 手元の件数を推算する誘惑が生まれる（他の操作者の処理が入るとその推算は必ず狂う）。
+   */
+  reloadToken: number;
   /** 帰属の訂正モーダルを開く（完了した受注にだけ起こる）。 */
   onCorrectAttribution: (order: Order) => void;
+}
+
+/** 時刻は応答のオフセット付き文字列をそのまま切らず、閲覧者の時間帯へ直して出す（切ると +09:00 が落ちる）。 */
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('ja-JP');
 }
 
 function OutcomeLine({ order }: { order: Order }) {
@@ -29,12 +41,17 @@ function OutcomeLine({ order }: { order: Order }) {
       </p>
     );
   }
-  // 取消は誰が・いつ・なぜを行そのものが名乗る（詳細を開かずに経緯を辿れるように）
-  const at = order.cancelled_at ? order.cancelled_at.slice(0, 16).replace('T', ' ') : '';
-  const by = order.cancelled_by_name ?? '実行者不明';
+  // 取消の記録を持たない CANCELLED は、確定へ至らないまま消えた申請（店舗の謝絶か会員の取り下げ）。
+  // 理由も実行者も構造的に存在しないので、欠落として「実行者不明」と呼ばずそう名乗る — どちらだったかは
+  // 記録が無く、読み口に無い区別を画面が作ってはならない。
+  if (!order.cancelled_at) {
+    return <p className="text-muted-foreground text-sm">確定前に取り消された申請</p>;
+  }
+  // 取消は誰が・いつ・なぜを行そのものが名乗る（詳細を開かずに経緯を辿れるように）。
+  // 実行者の欠落はここだけで起こる — 操作者が削除された取消（FK が SET NULL）。
   return (
     <p className="text-muted-foreground text-sm">
-      {[at, by].filter(Boolean).join(' ')}
+      {formatDateTime(order.cancelled_at)} {order.cancelled_by_name ?? '実行者不明'}
       {order.cancelled_reason ? ` — ${order.cancelled_reason}` : ''}
     </p>
   );
@@ -95,6 +112,7 @@ export function OrderArchiveSection({
   title,
   status,
   criteria,
+  reloadToken,
   onCorrectAttribution,
 }: OrderArchiveSectionProps) {
   const [open, setOpen] = useState(false);
@@ -103,7 +121,7 @@ export function OrderArchiveSection({
       orderApi.listArchive({ ...applied, statuses: [status], page, size: PAGE_SIZE }),
     criteria
   );
-  const { search } = list;
+  const { search, reload } = list;
 
   // 条件が変わったら取り直す。フックは適用済み条件を自分で持つので、渡し直すだけでは動かない。
   // 初回はフック自身の取得と重なるため飛ばす（同じページを 2 回取りに行かないため）。
@@ -115,6 +133,18 @@ export function OrderArchiveSection({
     appliedRef.current = criteria;
     void search(criteria);
   }, [criteria, search]);
+
+  // 作業キューから受注が移ってきたら取り直す。たたんでいても件数の控えは出ているので、開閉は問わない。
+  // 条件の取り直し（上）と違い今のページに留まるのは、増えた 1 件を見に行くために閲覧位置を
+  // 動かすと、続けて処理している最中に手元のページが勝手に飛ぶため。
+  const reloadTokenRef = useRef(reloadToken);
+  useEffect(() => {
+    if (reloadTokenRef.current === reloadToken) {
+      return;
+    }
+    reloadTokenRef.current = reloadToken;
+    void reload();
+  }, [reloadToken, reload]);
 
   return (
     <div className="bg-card rounded-xl border shadow-sm">

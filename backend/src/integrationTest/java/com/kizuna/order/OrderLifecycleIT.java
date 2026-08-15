@@ -188,6 +188,24 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("列の上限を超える場所・媒体を、理由の分かる 400 で撥ねること")
+  void updateRejectsTextsLongerThanTheirColumns() {
+    String orderId = orderId(createOrder(body -> body));
+
+    // 契約で撥ねないと、溢れた値が更新時の SQLSTATE 22001 になり 500 で返る — 送り手には
+    // 「何が長すぎたのか」も「直せば通るのか」も分からない
+    ResponseEntity<JsonNode> rejected =
+        update(orderId, "{\"location_address\": \"" + "あ".repeat(501) + "\"}");
+
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(rejected.getBody().path("error").asString()).contains("500 文字以内");
+    // 上限ちょうどは通す（境界を 1 文字ずらすと正当な入力が拒まれる）
+    assertThat(
+            update(orderId, "{\"location_address\": \"" + "あ".repeat(500) + "\"}").getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
   @DisplayName("顧客の着いていない受注の連絡先を訂正できること")
   void updateCorrectsTheContactOfAnUnlinkedOrder() {
     // 電話番号を送らなければ台帳照合は起きず、録入した連絡先が受注側の写しとして残る
@@ -389,6 +407,35 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     List<String> byDate =
         idsOf(workQueue("statuses=CREATED,CONFIRMED&size=2000&business_date=" + day));
     assertThat(byDate).contains(target).doesNotContain(other);
+  }
+
+  @Test
+  @DisplayName("台帳にも連絡先にも名の無い会員申請を、申請時の名乗りで検索できること")
+  void workQueueFindsMemberRequestsByTheirDeclaredName() {
+    // 当店に台帳行の無い会員の初回申請は顧客が着かず、受付で録入する連絡先も持たない。名乗りまで
+    // 見ないと、画面に出ている行が検索した途端に消える（呼び名の出所と検索の出所が食い違うため）。
+    String declared = "名乗り" + nonce;
+    Order request =
+        Order.builder()
+            .businessDate(LocalDate.now())
+            .pax(2)
+            .status(OrderStatus.CREATED)
+            .receptionRoute(ReceptionRoute.WEB)
+            .requesterMemberCode("999999999999")
+            .requesterDeclaredName(declared)
+            .build();
+    request.setStoreId(STORE_A);
+    String orderId = orderRepository.save(request).getId();
+
+    JsonNode found = workQueue("statuses=CREATED&size=2000&customer_name=" + declared);
+    assertThat(idsOf(found)).contains(orderId);
+
+    // null の項目はキーごと応答から消えるため、欠落は has() で見る（isNull() は欠落に対して偽）
+    JsonNode row = orderJson(orderId);
+    assertThat(row.has("customer_name")).as("前提: 台帳の顧客名を持たないこと").isFalse();
+    assertThat(row.has("contact_name")).as("前提: 録入された連絡先も持たないこと").isFalse();
+    // 呼び名を出せなければ、作業キューでは「お客様名なし」としか名乗れない
+    assertThat(row.path("requester_declared_name").asString()).isEqualTo(declared);
   }
 
   @Test

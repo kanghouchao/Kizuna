@@ -44,6 +44,10 @@ public class OrderResponse {
   private String status;
   private String receptionRoute;
   private String requesterMemberCode; // 申請した会員（店舗が起こした受注では null）
+
+  /** 申請時に会員が店舗へ名乗った名前。当店に台帳行の無い会員の未確定申請では、これが唯一の名乗りになる。 */
+  private String requesterDeclaredName;
+
   private String locationAddress;
   private String locationBuilding;
 

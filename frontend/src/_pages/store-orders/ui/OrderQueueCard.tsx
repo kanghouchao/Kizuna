@@ -24,8 +24,13 @@ const CANCEL_REASON_MAX_LENGTH = 500;
 
 interface OrderQueueCardProps {
   order: Order;
-  /** 確定・謝絶・取消のように、この受注が群から外れる処理が終わったとき。 */
+  /** 謝絶・取消のように、この受注が群から外れる処理が終わったとき。 */
   onProcessed: (id: string) => void;
+  /**
+   * 確定が終わったとき。確定は「対応が要る」群の中の移動（未確定 → 確定）で群からは外れないため、
+   * 取り除かずに応答の内容へ差し替える。
+   */
+  onConfirmed: (confirmed: Order) => void;
   /** 編集モーダルを開く。 */
   onEdit: (order: Order) => void;
   /** 完了モーダルを開く。 */
@@ -65,7 +70,13 @@ function CardMeta({ order }: { order: Order }) {
  *
  * <p>取消はモーダルを開かず、カードがその場で理由入力に変わる（二段）。一覧の中で完結させるのが この画面の主張なので、確認だけを外へ出さない。
  */
-export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: OrderQueueCardProps) {
+export function OrderQueueCard({
+  order,
+  onProcessed,
+  onConfirmed,
+  onEdit,
+  onComplete,
+}: OrderQueueCardProps) {
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancelForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
@@ -73,13 +84,21 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
   const id = order.id ?? '';
   const pending = order.status === 'CREATED';
 
-  const run = async (action: () => Promise<unknown>, success: string, failure: string) => {
+  /**
+   * 処理を走らせて結果を通知する。処理後にこの受注が群から外れるのか、群の中で状態が変わるだけなのかは
+   * 操作ごとに違うので、行の始末は {@code settle} が決める。
+   */
+  const run = async (
+    action: () => Promise<Order>,
+    success: string,
+    failure: string,
+    settle: (updated: Order) => void
+  ) => {
     setProcessing(true);
     try {
-      await action();
+      const updated = await action();
       notify.success(success);
-      // 処理し終えた受注はこの群の対象から外れるので、手元から取り除くだけで一覧は正しくなる
-      onProcessed(id);
+      settle(updated);
     } catch (error) {
       // 指名の再検証や終端の凍結など、サーバは対処方法を含む文言を返す。汎用文言に潰さない
       notify.error(getApiErrorMessage(error, failure));
@@ -87,6 +106,9 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
       setProcessing(false);
     }
   };
+
+  /** 謝絶・取消の後始末。この受注はもう「対応が要る」群の対象ではないので手元から取り除く。 */
+  const leaveQueue = () => onProcessed(id);
 
   return (
     <li className="bg-card space-y-3 rounded-lg border p-4 shadow-sm">
@@ -144,7 +166,12 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
                   size="sm"
                   disabled={processing}
                   onClick={() =>
-                    run(() => orderApi.decline(id), '予約を謝絶しました', '謝絶に失敗しました')
+                    run(
+                      () => orderApi.decline(id),
+                      '予約を謝絶しました',
+                      '謝絶に失敗しました',
+                      leaveQueue
+                    )
                   }
                 >
                   謝絶
@@ -154,7 +181,14 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
                   size="sm"
                   disabled={processing}
                   onClick={() =>
-                    run(() => orderApi.confirm(id), '予約を確定しました', '確定に失敗しました')
+                    // 確定した受注は「対応が要る」群に残る（次は完了・編集・取消の対象）。
+                    // 応答へ差し替えるのは、確定が受付担当の補完と顧客の着け直しまで行うため。
+                    run(
+                      () => orderApi.confirm(id),
+                      '予約を確定しました',
+                      '確定に失敗しました',
+                      onConfirmed
+                    )
                   }
                 >
                   確定
@@ -208,7 +242,8 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
               run(
                 () => orderApi.cancel(id, { reason: values.reason.trim() }),
                 '受注を取消しました',
-                '取消に失敗しました'
+                '取消に失敗しました',
+                leaveQueue
               )
             )}
             className="border-destructive/40 space-y-3 rounded-lg border p-3"

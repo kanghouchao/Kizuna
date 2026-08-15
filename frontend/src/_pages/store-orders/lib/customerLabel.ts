@@ -11,17 +11,21 @@ export interface OrderCustomerLabel {
 }
 
 /**
- * 受注の顧客の呼び名。どちらも無ければ null で、空欄の出し方は呼び出し側が決める。
+ * 受注の顧客の呼び名。どれも無ければ null で、空欄の出し方は呼び出し側が決める。
  *
- * 録入された連絡先と台帳の顧客名を呼び出し側が見分けられる形で返すのは、前者が台帳に行を持たない
- * 申告のままの文字列だから。それでも出すのは、電話番号が同店で複数の顧客に一致した受注
- * （自動照合を断念して顧客未設定で成立する）は、録入した連絡先を出さないと画面のどこにも現れないため。
+ * 録入された連絡先・申請時の名乗りと台帳の顧客名を呼び出し側が見分けられる形で返すのは、前者が台帳に
+ * 行を持たない申告のままの文字列だから。それでも出すのは、電話番号が同店で複数の顧客に一致した受注
+ * （自動照合を断念して顧客未設定で成立する）と、当店に台帳行の無い会員の未確定申請（確定するまで顧客が
+ * 着かない）が、申告のままの名乗りを出さないと画面のどこにも現れないため。
+ *
+ * 並びは呼び名の正本の近い順。サーバ側の検索（{@code OrderSearchQuery}）も同じ 3 つを同じ順で見る。
  */
 export function customerLabel(order: Order): OrderCustomerLabel | null {
   if (order.customer_name) {
     return { name: order.customer_name, unlinked: false };
   }
-  const reported = order.contact_name || order.contact_phone_number;
+  const reported =
+    order.contact_name || order.contact_phone_number || order.requester_declared_name;
   return reported ? { name: reported, unlinked: true } : null;
 }
 
