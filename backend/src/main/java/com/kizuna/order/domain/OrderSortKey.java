@@ -10,6 +10,9 @@ package com.kizuna.order.domain;
  * 全順序を保つので害はない。
  *
  * <p>時刻を「その日の何分目か」に均すのは、番兵に整数リテラルだけを使うため。秒だけ違う 2 件は同値に畳まれるが、そこは id が解く。
+ *
+ * <p>鍵の値を Java 側で組み直す口は持たない。続きの位置は<b>並びを決めた問い合わせが返した値</b>だけから作る（{@code
+ * OrderSearchQuery.OrderedRow}）。同じ計算を式と Java の両方に置くと、片方だけが更新されて並びと位置が静かにずれる。
  */
 public enum OrderSortKey {
   BUSINESS_DATE("o.businessDate", KeyType.DATE),
@@ -25,9 +28,6 @@ public enum OrderSortKey {
     DATE,
     NUMBER
   }
-
-  /** 未設定を最大として扱うための番兵。{@link #ARRIVAL_TIME} は分に均した値なので同じ整数で足りる。 */
-  private static final int UNSET_SENTINEL = Integer.MAX_VALUE;
 
   private final String expression;
   private final KeyType keyType;
@@ -48,22 +48,5 @@ public enum OrderSortKey {
 
   public KeyType keyType() {
     return keyType;
-  }
-
-  /** 1 行から「続きの位置」の鍵を取り出す。{@link #expression()} が SQL 側で計算する値と同じものを Java 側で作る。 */
-  public String cursorValueOf(OrderView view) {
-    return switch (this) {
-      case BUSINESS_DATE -> view.getBusinessDate().toString();
-      case ARRIVAL_TIME ->
-          String.valueOf(
-              view.getArrivalScheduledStartTime() == null
-                  ? UNSET_SENTINEL
-                  : view.getArrivalScheduledStartTime().getHour() * 60
-                      + view.getArrivalScheduledStartTime().getMinute());
-      case PAX -> String.valueOf(view.getPax() == null ? UNSET_SENTINEL : view.getPax());
-      case COURSE_MINUTES ->
-          String.valueOf(
-              view.getCourseMinutes() == null ? UNSET_SENTINEL : view.getCourseMinutes());
-    };
   }
 }

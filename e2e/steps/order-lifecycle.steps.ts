@@ -1,13 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import {
-  cancelOrder,
-  createCast,
-  deleteCast,
-  loginAsStoreAdmin,
-  loginViaUiAndEnterStore,
-} from './store-api';
+import { cancelOrder, createCast, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -44,8 +38,11 @@ When('電話受付の受注を登録する', async ({ page }) => {
   await page.getByLabel('営業日', { exact: true }).fill(todayInTokyo());
   await page.getByLabel('人数', { exact: true }).fill('2');
 
-  // 指名は候補から選ぶ（サーバ側が在籍中のキャストしか受け付けない）
+  // 指名は候補から選ぶ（サーバ側が在籍中のキャストしか受け付けない）。名前で絞ってから選ぶのは、
+  // 候補の読み口が件数上限を持つため — 共有の店舗ではキャストが積み上がり、絞らないと播種した
+  // このキャストが上限の外へ押し出されて選べなくなる。
   await page.getByLabel('キャスト *', { exact: true }).click();
+  await page.getByPlaceholder('名前で検索').fill(createdCastName);
   await page.getByRole('option', { name: createdCastName }).click();
 
   // 受付担当は選ばない。既定の「自分」＝項目ごと省略送信で、サーバが実行者本人に解決する
@@ -149,9 +146,9 @@ After(async ({ request }) => {
     // シナリオ側で既に取消・完了まで進んでいれば撥ねられるが、それは想定内なので握り潰す。
     await cancelOrder(request, token, createdOrderId, 'e2e の後片付け').catch(() => {});
   }
-  if (createdCastId) {
-    await deleteCast(request, token, createdCastId).catch(() => {});
-  }
+  // 播種したキャストは片付けない。受注が指名として参照したまま残り（受注を消す口は無い。ADR 0013）、
+  // fk_t_orders_cast は RESTRICT なので削除は必ず失敗する。失敗すると分かっている呼び出しを
+  // 握り潰すと、本当に片付くはずのものが片付かなくなったときにも気づけない。
   createdCastId = '';
   createdCastName = '';
   createdOrderId = '';

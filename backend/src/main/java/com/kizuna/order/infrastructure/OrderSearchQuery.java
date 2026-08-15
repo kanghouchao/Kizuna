@@ -42,6 +42,15 @@ public class OrderSearchQuery {
   private final EntityManager entityManager;
 
   /**
+   * 並びの中の 1 行。ID と、その行を並べるのに使った鍵の値の組。
+   *
+   * <p>鍵を<b>この問い合わせから</b>返すのが要点で、続きを指すカーソルはこの値だけから組む。行の中身を引く 2 本目の問い合わせから鍵を読むと、READ COMMITTED では 2
+   * 本が別の断面を見るため、間に他の操作者が境界の行の 鍵を書き換えると、並べたときの値と続きに書く値が食い違う — 続きはその新しい値の後ろから始まり、間に挟まる 受注を丸ごと飛ばす（人数 1
+   * の行が 100 に直されれば、1〜100 の受注が続きに現れない）。
+   */
+  public record OrderedRow(String id, Object sortKey) {}
+
+  /**
    * 作業キューの並び（カーソル型）。渡された位置より後ろだけを、上限まで返す。
    *
    * <p>位置は「何件目か」ではなく並びの鍵そのものなので、確定・取消で手前の行が消えても後続は繰り上がらない。
@@ -49,19 +58,25 @@ public class OrderSearchQuery {
    * @param cursor 続きの位置。null なら先頭から
    * @param limit 取得件数の上限（呼出側が「続きの有無」の判定ぶんを足して渡す）
    */
-  public List<String> findIds(OrderQueryCriteria criteria, PageCursor cursor, int limit) {
+  public List<OrderedRow> findRows(OrderQueryCriteria criteria, PageCursor cursor, int limit) {
     List<String> conditions = new ArrayList<>(baseConditions(criteria));
     if (cursor != null) {
       conditions.add(keysetCondition(criteria));
     }
-    TypedQuery<String> query =
+    TypedQuery<Object[]> query =
         entityManager.createQuery(
-            "select o.id " + FROM_CLAUSE + where(conditions) + orderBy(criteria), String.class);
+            "select o.id, %s ".formatted(criteria.sortKey().expression())
+                + FROM_CLAUSE
+                + where(conditions)
+                + orderBy(criteria),
+            Object[].class);
     bindBase(query, criteria);
     if (cursor != null) {
       bindCursor(query, criteria, cursor);
     }
-    return query.setMaxResults(limit).getResultList();
+    return query.setMaxResults(limit).getResultList().stream()
+        .map(row -> new OrderedRow((String) row[0], row[1]))
+        .toList();
   }
 
   /** アーカイブの並び（オフセット型）。増えるだけの記録なので、位置をページ番号で指せる。 */
