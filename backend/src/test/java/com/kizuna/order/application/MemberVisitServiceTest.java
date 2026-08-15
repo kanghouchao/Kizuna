@@ -52,9 +52,7 @@ class MemberVisitServiceTest {
 
   @Captor private ArgumentCaptor<Limit> limitCaptor;
 
-  @SuppressWarnings("unchecked")
-  @Captor
-  private ArgumentCaptor<List<String>> orderIdsCaptor;
+  @Captor private ArgumentCaptor<List<String>> orderIdsCaptor;
 
   /** 来店 1 件の読み側 projection の代役。 */
   private record View(
