@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -33,7 +34,7 @@ public class SecurityConfig {
 
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/platform/login"),
-    PathPatternRequestMatcher.withDefaults().matcher("/files/upload"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/files"),
     // 匿名 POST の招待照会と新規登録受諾（Bearer なしのため Bearer 免除に該当しない）。既存受諾(/existing)は Bearer 付きで既存免除に該当する。
     // 照会はトークンをパスに載せないため POST であり、読み取りでも CSRF 免除が要る。
     PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/view"),

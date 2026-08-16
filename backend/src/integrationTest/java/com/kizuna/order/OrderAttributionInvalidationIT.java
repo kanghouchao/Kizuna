@@ -144,7 +144,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     Issued original = completedOrderWithToken(castName);
     assertThat(claim(wrongMember, original.token()).getStatusCode())
         .as("前提: 誤った本人が申領できること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
     Long staleTarget = activeAttributionIdOf(original.orderId());
 
     // 別の操作者が一巡させる
@@ -154,7 +154,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     String raw = reissue(original.orderId()).getBody().path("receipt_token").asString();
     assertThat(claim(rightMember, raw).getStatusCode())
         .as("前提: 正しい本人が取り戻せること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
 
     // 開いたままだった画面が、古い記録を指したまま送信する
     ResponseEntity<JsonNode> stale = invalidate(original.orderId(), staleTarget, "古い理由");
@@ -180,7 +180,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     Issued original = completedOrderWithToken("期限再計算担当-" + nonce);
     assertThat(claim(wrongMember, original.token()).getStatusCode())
         .as("前提: 誤った本人が申領できること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
     assertThat(invalidate(original.orderId(), REASON).getStatusCode())
         .as("前提: 無効化できること")
         .isEqualTo(HttpStatus.OK);
@@ -194,7 +194,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> reissued = reissue(original.orderId());
 
-    assertThat(reissued.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(reissued.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(reissued.getBody().path("receipt_token").asString()).isNotBlank();
     OrderReceiptToken token =
         orderReceiptTokenRepository.findById(issuedTokenIdOf(original.orderId())).orElseThrow();
@@ -218,7 +218,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
         original.orderId());
     assertThat(claim(wrongMember, original.token()).getStatusCode())
         .as("前提: 誤った本人が申領できること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
     assertThat(invalidate(original.orderId(), REASON).getStatusCode())
         .as("前提: 無効化できること")
         .isEqualTo(HttpStatus.OK);
@@ -244,7 +244,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     String raw = reissue(orderId).getBody().path("receipt_token").asString();
     ResponseEntity<JsonNode> claimed = claim(rightMember, raw);
 
-    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     // 付与予定額は完了時点で確定した額を引き継ぐ（訂正の早い遅いで同じ会計が別のポイントにならない）
     assertThat(claimed.getBody().path("granted_points").asInt()).isEqualTo(EXPECTED_POINTS);
 
@@ -296,7 +296,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> second = reissue(orderId);
 
-    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(tokenCountFor(orderId)).as("行は削除しないこと").isEqualTo(2);
     assertThat(issuedTokenCountFor(orderId)).as("申領できる伝票は 1 本だけであること").isEqualTo(1);
     // 生値まで確かめる。状態だけを見るテストは、失効した QR が実際には申領できてしまう実装でも緑になる
@@ -306,7 +306,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     assertThat(
             claim(rightMember, second.getBody().path("receipt_token").asString()).getStatusCode())
         .as("最後に発行した QR で取り戻せること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
   }
 
   @Test
@@ -349,7 +349,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
 
     assertThat(responses)
         .as("前提: 並行する再発行がどちらも 500 を出さないこと")
-        .allMatch(response -> response.getStatusCode() == HttpStatus.OK);
+        .allMatch(response -> response.getStatusCode() == HttpStatus.CREATED);
     assertThat(issuedTokenCountFor(orderId)).as("申領できる伝票は 1 本だけであること").isEqualTo(1);
     // 生値で確かめる。生きているのは 1 本だけなので、申領が成立するのも 1 本だけになる
     assertThat(responses)
@@ -357,7 +357,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
             response ->
                 claim(rightMember, response.getBody().path("receipt_token").asString())
                         .getStatusCode()
-                    == HttpStatus.OK)
+                    == HttpStatus.CREATED)
         .as("申領が成立するのは 1 本だけ")
         .hasSize(1);
   }
@@ -371,7 +371,9 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     assertThat(invalidate(orderId, REASON).getStatusCode())
         .as("前提: 無効化できること")
         .isEqualTo(HttpStatus.OK);
-    assertThat(reissue(orderId).getStatusCode()).as("前提: 1 本目を発行できること").isEqualTo(HttpStatus.OK);
+    assertThat(reissue(orderId).getStatusCode())
+        .as("前提: 1 本目を発行できること")
+        .isEqualTo(HttpStatus.CREATED);
 
     assertThatThrownBy(
             () ->
@@ -400,7 +402,9 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
     assertThat(invalidate(orderId, REASON).getStatusCode())
         .as("前提: 無効化できること")
         .isEqualTo(HttpStatus.OK);
-    assertThat(reissue(orderId).getStatusCode()).as("前提: 訂正用の伝票を発行できること").isEqualTo(HttpStatus.OK);
+    assertThat(reissue(orderId).getStatusCode())
+        .as("前提: 訂正用の伝票を発行できること")
+        .isEqualTo(HttpStatus.CREATED);
     long tokenId = issuedTokenIdOf(orderId);
 
     CountDownLatch claimHeld = new CountDownLatch(1);
@@ -543,7 +547,7 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> claim(RegisteredMember member, String rawToken) {
     return rest.exchange(
-        "/platform/me/receipts/claim",
+        "/platform/me/receipts",
         HttpMethod.POST,
         new HttpEntity<>("{\"token\": \"" + rawToken + "\"}", bearer(member.token())),
         JsonNode.class);

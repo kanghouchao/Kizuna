@@ -99,10 +99,10 @@ describe('shiftApi', () => {
       url: '/store/shift-requests/sr1/approval',
     });
   });
-  it('declineShiftRequest は /store/shift-requests/:id/decline を POST する', async () => {
+  it('declineShiftRequest は /store/shift-requests/:id/rejection を POST する', async () => {
     expect(await shiftApi.declineShiftRequest('sr1')).toEqual({
       ok: true,
-      url: '/store/shift-requests/sr1/decline',
+      url: '/store/shift-requests/sr1/rejection',
     });
   });
 });

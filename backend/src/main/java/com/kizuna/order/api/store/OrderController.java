@@ -168,7 +168,7 @@ public class OrderController {
    * 未確定の予約申請を編集する。指名・受付担当を可空で扱う専用の契約で、汎用更新（{@link #update}）の必須項目に縛られずに
    * 人数・備考を直したり指名を外したりできる。受け取った内容がそのまま新しい申請内容になる。
    */
-  @PutMapping("/reservation-requests/{id}")
+  @PutMapping("/{id}/reservation-request")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderWorkQueueResponse> updateReservationRequest(
       @PathVariable String id, @Valid @RequestBody ReservationRequestUpdateRequest request) {
@@ -262,7 +262,8 @@ public class OrderController {
   @PostMapping("/{id}/receipt-token")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderReceiptTokenResponse> reissueReceiptToken(@PathVariable String id) {
-    return ResponseEntity.ok(orderAttributionService.reissueReceiptToken(id));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(orderAttributionService.reissueReceiptToken(id));
   }
 
   /** 誤帰属の訂正の進み具合（この受注がその会員へ与えた付与の合計と、既に差し引いた合計）。画面の既定値はここから取る。 */
@@ -306,7 +307,7 @@ public class OrderController {
   }
 
   /** 予約申請を謝絶する。確定後の取消は理由必須の専用操作（{@link #cancel}）が受け持つ。 */
-  @PostMapping("/{id}/decline")
+  @PostMapping("/{id}/refusal")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Void> decline(@PathVariable String id) {
     orderService.decline(id);

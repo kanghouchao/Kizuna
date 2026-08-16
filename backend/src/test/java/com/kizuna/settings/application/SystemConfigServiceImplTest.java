@@ -81,7 +81,7 @@ class SystemConfigServiceImplTest {
     String key = "maintenance_mode";
     String newValue = "true";
     SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configKey(key).configValue(newValue).build();
+        SystemConfigUpdateRequest.builder().configValue(newValue).build();
 
     SystemConfig existingConfig =
         SystemConfig.builder().configKey(key).configValue("false").build();
@@ -97,7 +97,7 @@ class SystemConfigServiceImplTest {
     when(systemConfigMapper.toResponse(updatedConfig)).thenReturn(response);
 
     // 実行
-    SystemConfigResponse result = systemConfigService.updateConfig(request);
+    SystemConfigResponse result = systemConfigService.updateConfig(key, request);
 
     // 検証
     assertNotNull(result);
@@ -110,43 +110,42 @@ class SystemConfigServiceImplTest {
   @DisplayName("真偽値型の設定に不正な値を指定すると例外が発生すること")
   void updateConfig_invalidBoolean() {
     SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder()
-            .configKey("maintenance_mode")
-            .configValue("yes")
-            .build();
+        SystemConfigUpdateRequest.builder().configValue("yes").build();
     SystemConfig config =
         SystemConfig.builder().configKey("maintenance_mode").valueType("BOOLEAN").build();
     when(systemConfigRepository.findByConfigKey("maintenance_mode"))
         .thenReturn(Optional.of(config));
 
-    assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("maintenance_mode", request));
   }
 
   @Test
   @DisplayName("数値型の設定に不正な値を指定すると例外が発生すること")
   void updateConfig_invalidNumber() {
     SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configKey("smtp_port").configValue("abc").build();
+        SystemConfigUpdateRequest.builder().configValue("abc").build();
     SystemConfig config = SystemConfig.builder().configKey("smtp_port").valueType("NUMBER").build();
     when(systemConfigRepository.findByConfigKey("smtp_port")).thenReturn(Optional.of(config));
 
-    assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+    assertThrows(
+        ServiceException.class, () -> systemConfigService.updateConfig("smtp_port", request));
   }
 
   @Test
   @DisplayName("数値型の設定に int の範囲を超える値を指定すると例外が発生すること")
   void updateConfig_numberBeyondIntRange() {
     SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder()
-            .configKey("point_usage_unit")
-            .configValue("9999999999")
-            .build();
+        SystemConfigUpdateRequest.builder().configValue("9999999999").build();
     SystemConfig config =
         SystemConfig.builder().configKey("point_usage_unit").valueType("NUMBER").build();
     when(systemConfigRepository.findByConfigKey("point_usage_unit"))
         .thenReturn(Optional.of(config));
 
-    assertThrows(ServiceException.class, () -> systemConfigService.updateConfig(request));
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("point_usage_unit", request));
   }
 
   @Test
@@ -154,10 +153,7 @@ class SystemConfigServiceImplTest {
   void updateConfig_numberAtIntMax() {
     String value = String.valueOf(Integer.MAX_VALUE);
     SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder()
-            .configKey("point_usage_unit")
-            .configValue(value)
-            .build();
+        SystemConfigUpdateRequest.builder().configValue(value).build();
     SystemConfig config =
         SystemConfig.builder().configKey("point_usage_unit").valueType("NUMBER").build();
     when(systemConfigRepository.findByConfigKey("point_usage_unit"))
@@ -166,7 +162,8 @@ class SystemConfigServiceImplTest {
     when(systemConfigMapper.toResponse(config))
         .thenReturn(SystemConfigResponse.builder().configValue(value).build());
 
-    assertEquals(value, systemConfigService.updateConfig(request).getConfigValue());
+    assertEquals(
+        value, systemConfigService.updateConfig("point_usage_unit", request).getConfigValue());
   }
 
   @Test
@@ -216,12 +213,12 @@ class SystemConfigServiceImplTest {
   void updateConfig_NotFound() {
     // 準備
     String key = "unknown_key";
-    SystemConfigUpdateRequest request = SystemConfigUpdateRequest.builder().configKey(key).build();
+    SystemConfigUpdateRequest request = SystemConfigUpdateRequest.builder().build();
 
     when(systemConfigRepository.findByConfigKey(key)).thenReturn(Optional.empty());
 
     // 実行・検証
-    assertThrows(NotFoundException.class, () -> systemConfigService.updateConfig(request));
+    assertThrows(NotFoundException.class, () -> systemConfigService.updateConfig(key, request));
   }
 
   @Test

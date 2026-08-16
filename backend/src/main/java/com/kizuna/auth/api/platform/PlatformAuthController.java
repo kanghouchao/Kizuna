@@ -64,7 +64,7 @@ public class PlatformAuthController {
   }
 
   /** パスワード変更。成功時は現在のトークンを失効させるため、クライアントは再ログインが必要。 */
-  @PutMapping("/password")
+  @PutMapping("/me/password")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<Void> changePassword(
       Principal principal,

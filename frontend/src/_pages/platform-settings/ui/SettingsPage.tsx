@@ -28,10 +28,9 @@ export default function SystemSettingsPage() {
 
   const saveConfig = async (configKey: string, configValue: string) => {
     const request: SystemConfigUpdateRequest = {
-      config_key: configKey,
       config_value: configValue,
     };
-    await systemConfigService.updateConfig(request);
+    await systemConfigService.updateConfig(configKey, request);
     // 更新できた 1 件だけを差し替える。一覧ごと取り直すと編集中の欄が読み込み表示で消える
     setConfigs(
       prev =>

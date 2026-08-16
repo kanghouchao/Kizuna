@@ -300,7 +300,7 @@ class StoreIdInterceptorTest {
   @DisplayName("storeBridge=false の平台トークンは授権スコープでも店舗ヘッダを名乗ると 403 で拒否し文脈を設定しないこと（本人種別線）")
   void preHandle_withoutStoreBridge_rejectsEvenWithAuthorizedScope() {
     // CAST/MEMBER/HQ 系（STORE コンソール能力なし）は ALL_STORES でも過橋不可。scope.authorizes が
-    // 真になる前に storeBridge で弾き、isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立を塞ぐ。
+    // 真になる前に storeBridge で弾き、isAuthenticated() のみの端点（POST /files 等）への店舗文脈確立を塞ぐ。
     authenticateWithPlatformScope(false, "ALL_STORES", List.of());
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader("X-Role", "store");

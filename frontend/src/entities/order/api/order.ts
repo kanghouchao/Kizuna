@@ -138,7 +138,7 @@ export const orderApi = {
     id: string,
     data: ReservationRequestUpdateRequest
   ): Promise<OrderWorkQueueRow> => {
-    const response = await apiClient.put(`/store/orders/reservation-requests/${id}`, data);
+    const response = await apiClient.put(`/store/orders/${id}/reservation-request`, data);
     return response.data;
   },
   /** 予約申請を確定する（受注として受け付ける）。 */
@@ -148,7 +148,7 @@ export const orderApi = {
   },
   /** 予約申請を謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
   decline: async (id: string): Promise<void> => {
-    await apiClient.post(`/store/orders/${id}/decline`);
+    await apiClient.post(`/store/orders/${id}/refusal`);
   },
   /**
    * 受注を完了する（会計の確定）。ポイントの利用と自動付与が台帳へ入るのはこの経路だけ。
@@ -247,7 +247,7 @@ export const memberVisitApi = {
 /** 会員本人の伝票トークン申領 API。トークンは本体で送る（パスや問い合わせ文字列はアクセスログに残る）。 */
 export const memberReceiptApi = {
   claim: async (token: string): Promise<MemberReceiptClaim> => {
-    const response = await apiClient.post('/platform/me/receipts/claim', { token });
+    const response = await apiClient.post('/platform/me/receipts', { token });
     return response.data;
   },
 };

@@ -17,10 +17,10 @@ describe('systemConfigService', () => {
       url: '/platform/configs',
     });
   });
-  it('updateConfig は /platform/configs を PUT する', async () => {
-    expect(await systemConfigService.updateConfig({ config_key: 'k', config_value: 'v' })).toEqual({
+  it('updateConfig は /platform/configs/{key} を PUT する', async () => {
+    expect(await systemConfigService.updateConfig('smtp_port', { config_value: 'v' })).toEqual({
       ok: true,
-      url: '/platform/configs',
+      url: '/platform/configs/smtp_port',
     });
   });
 });

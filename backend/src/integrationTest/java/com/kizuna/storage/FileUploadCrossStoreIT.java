@@ -20,7 +20,7 @@ import org.springframework.util.MultiValueMap;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 平台トークンによる {@code /files/upload} のプラットフォーム保存判定を本物の PostgreSQL/Redis/MinIO で固定する統合テスト。
+ * 平台トークンによる {@code POST /files} のプラットフォーム保存判定を本物の PostgreSQL/Redis/MinIO で固定する統合テスト。
  *
  * <p>{@code /files/**} も含め全リクエストが単一 issuer（PlatformAuth）の decoder 検証を通るため、平台トークンで
  * 認証が通る。プラットフォーム領域（platform prefix）への保存は HQ 管理者（role claim = HQ_ADMIN）のみに限定し、それ以外のロール・ 店舗詐称ヘッダは
@@ -77,7 +77,7 @@ class FileUploadCrossStoreIT {
   }
 
   @Test
-  @DisplayName("HQ トークン + X-Role:store + X-Store-ID の /files/upload は 403 で拒否されること（過橋の店舗ロール制限）")
+  @DisplayName("HQ トークン + X-Role:store + X-Store-ID の POST /files は 403 で拒否されること（過橋の店舗ロール制限）")
   void hqTokenWithSpoofedStoreHeaderIsForbidden() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin(HQ_EMAIL));
@@ -85,31 +85,31 @@ class FileUploadCrossStoreIT {
     headers.set("X-Store-ID", "1");
 
     ResponseEntity<String> res =
-        rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), String.class);
+        rest.exchange("/files", HttpMethod.POST, uploadRequest(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
-  @DisplayName("HQ 以外の平台トークン（店舗スタッフ）の /files/upload は 403 で拒否されプラットフォーム領域に保存されないこと")
+  @DisplayName("HQ 以外の平台トークン（店舗スタッフ）の POST /files は 403 で拒否されプラットフォーム領域に保存されないこと")
   void nonHqPlatformTokenUploadIsForbidden() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin(STAFF_EMAIL));
 
     ResponseEntity<String> res =
-        rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), String.class);
+        rest.exchange("/files", HttpMethod.POST, uploadRequest(headers), String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
-  @DisplayName("HQ トークン（詐称ヘッダ無し）の /files/upload は platform 領域へ 201 で保存されること")
+  @DisplayName("HQ トークン（詐称ヘッダ無し）の POST /files は platform 領域へ 201 で保存されること")
   void hqTokenWithoutSpoofUploadsToPlatform() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin(HQ_EMAIL));
 
     ResponseEntity<JsonNode> res =
-        rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), JsonNode.class);
+        rest.exchange("/files", HttpMethod.POST, uploadRequest(headers), JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(res.getBody().path("url").asString()).contains("/platform/");

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,10 +33,10 @@ public class PlatformConfigController {
     return ResponseEntity.ok(systemConfigService.getAllConfigs());
   }
 
-  @PutMapping
+  @PutMapping("/{key}")
   @PreAuthorize("hasAuthority('PERM_SYSTEM_CONFIG_MANAGE')")
   public ResponseEntity<SystemConfigResponse> update(
-      @Valid @RequestBody SystemConfigUpdateRequest request) {
-    return ResponseEntity.ok(systemConfigService.updateConfig(request));
+      @PathVariable String key, @Valid @RequestBody SystemConfigUpdateRequest request) {
+    return ResponseEntity.ok(systemConfigService.updateConfig(key, request));
   }
 }

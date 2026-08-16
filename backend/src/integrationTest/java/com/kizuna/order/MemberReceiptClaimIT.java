@@ -73,7 +73,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> claimed = claim(member, issued.token());
 
-    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(claimed.getBody().path("granted_points").asInt()).isEqualTo(EXPECTED_PLANNED_POINTS);
 
     OrderAttribution attribution = attributionOf(issued.orderId());
@@ -104,7 +104,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> claimed = claim(member, issued.token());
 
-    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(claimed.getBody().path("granted_points").asInt()).isEqualTo(fixedPoints);
     assertThat(balance()).as("台帳へ入るのも発行時の固定額であること").isEqualTo(fixedPoints);
   }
@@ -117,7 +117,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> claimed = claim(member, issued.token());
 
-    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(claimed.getBody().path("granted_points").asInt()).isZero();
     assertThat(ledgerRowsFor(issued.orderId())).as("台帳に仕訳を書かないこと").isZero();
     // 帰属は付与の有無と独立している。来店としては見えなければならない
@@ -133,7 +133,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
     Issued issued = completedOrderWithToken(customerId, "無波及担当-" + nonce, TOTAL_FEE);
     int customersBefore = customerCountAtStoreA();
 
-    assertThat(claim(member, issued.token()).getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(claim(member, issued.token()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     // 正向対照: 申領そのものは確かに成立している（下の不在の断言が空振りでないことの証明）
     assertThat(attributionOf(issued.orderId()).getSource())
@@ -160,7 +160,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
     Issued used = completedOrderWithToken(null, "使用済み担当-" + nonce, TOTAL_FEE);
     assertThat(claim(member, used.token()).getStatusCode())
         .as("前提: 1 度目は申領できること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
 
     ResponseEntity<String> unknown = claimRaw(member, "存在しない伝票-" + nonce);
     ResponseEntity<String> malformed = claimRaw(member, "%%壊れた値%%");
@@ -185,7 +185,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
   void claimingTwiceBooksOnlyOnce() {
     // 再送の遮断は冪等キーではなく前提状態（未申領）の消滅が担う（ADR 0007 の判定基準）
     Issued issued = completedOrderWithToken(null, "二重申領担当-" + nonce, TOTAL_FEE);
-    assertThat(claim(member, issued.token()).getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(claim(member, issued.token()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     assertThat(claimRaw(member, issued.token()).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
@@ -224,11 +224,11 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
         responses.add(race.get(30, TimeUnit.SECONDS));
       }
       assertThat(responses)
-          .filteredOn(response -> response.getStatusCode() == HttpStatus.OK)
+          .filteredOn(response -> response.getStatusCode() == HttpStatus.CREATED)
           .as("成立するのは一方だけ")
           .hasSize(1);
       assertThat(responses)
-          .filteredOn(response -> response.getStatusCode() != HttpStatus.OK)
+          .filteredOn(response -> response.getStatusCode() != HttpStatus.CREATED)
           .as("敗者は不在のトークンと同形で返ること")
           .singleElement()
           .satisfies(
@@ -253,7 +253,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
     HttpHeaders headers = bearer(token);
     ResponseEntity<String> forbidden =
         rest.postForEntity(
-            "/platform/me/receipts/claim",
+            "/platform/me/receipts",
             new HttpEntity<>(claimBody(issued.token()), headers),
             String.class);
 
@@ -265,7 +265,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> claim(RegisteredMember as, String rawToken) {
     return rest.postForEntity(
-        "/platform/me/receipts/claim",
+        "/platform/me/receipts",
         new HttpEntity<>(claimBody(rawToken), bearer(as.token())),
         JsonNode.class);
   }
@@ -273,7 +273,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
   /** 応答の形そのものを比べるため、本文を解釈せず生文字列で受ける。 */
   private ResponseEntity<String> claimRaw(RegisteredMember as, String rawToken) {
     return rest.postForEntity(
-        "/platform/me/receipts/claim",
+        "/platform/me/receipts",
         new HttpEntity<>(claimBody(rawToken), bearer(as.token())),
         String.class);
   }

@@ -34,7 +34,7 @@ public class ShiftRequestController {
     return ResponseEntity.ok(shiftRequestService.approve(id));
   }
 
-  @PostMapping("/{id}/decline")
+  @PostMapping("/{id}/rejection")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<StoreShiftRequestResponse> decline(@PathVariable String id) {
     return ResponseEntity.ok(shiftRequestService.decline(id));

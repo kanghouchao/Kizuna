@@ -55,7 +55,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
           && StringUtils.isNumeric(request.getHeader(HEADER_STORE_ID))) {
         // 店舗文脈を名乗れるのは STORE コンソール能力の保持者（storeBridge claim）のみ。CAST/MEMBER/HQ が
         // 店舗ヘッダを名乗るのは詐称として 403 で拒否する。授権スコープ検証より前に弾き、
-        // isAuthenticated() のみの端点（/files/upload 等）への店舗文脈確立の漏れを塞ぐ。
+        // isAuthenticated() のみの端点（POST /files 等）への店舗文脈確立の漏れを塞ぐ。
         if (!Boolean.TRUE.equals(claims.getClaimAsBoolean(CLAIM_STORE_BRIDGE))) {
           throw new AccessDeniedException("店舗コンソールの権限がありません");
         }
@@ -74,7 +74,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
     } else if (claims != null) {
       // 認証済みだが storeId claim を持たない（プラットフォーム PlatformAuth 発行、または storeId 無しの legacy）。
       // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する。詐称ヘッダが無ければ下の
-      // @StoreOptional 判定に委ね、プラットフォームの正当な素通り（例: /files/upload の platform 保存）を保つ。
+      // @StoreOptional 判定に委ね、プラットフォームの正当な素通り（例: POST /files の platform 保存）を保つ。
       if (claimsStoreHeaderPresent) {
         throw new AccessDeniedException("店舗文脈を名乗る権限がありません");
       }

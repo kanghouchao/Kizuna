@@ -20,6 +20,7 @@
   POST /store/orders/{id}/completion
   POST /store/orders/{id}/cancellation
   POST /store/shift-requests/{id}/approval
+  POST /store/shift-requests/{id}/rejection
   POST /store/customers/{customerId}/merges
   POST /store/orders/{id}/attribution/correction
   ```
@@ -31,10 +32,10 @@
   [ADR 0010](adr/0010-customer-merge-is-repoint-and-tombstone.md) の顧客統合、
   [ADR 0011](adr/0011-receipt-token-reissue-revokes-the-previous-one.md) の伝票トークン再発行も、
   この形で公開している。遷移ごとに端点が分かれることで、権限・冪等性・不正遷移の 400 を遷移単位で表現できる。
-- **裸の動詞は禁止**。動作は名詞化するか、対象資源の生成として表す。
-  この形は既に本仓に存在する（`POST /store/orders/{id}/decline`、`POST /store/shift-requests/{id}/decline`、
-  `POST /files/upload`、`POST /platform/me/receipts/claim`）が、**これらは是正バッチの対象であって 9 章の保護対象ではない**。
-  現状として模倣してよい先例と読まないこと。
+- **裸の動詞は禁止**。動作は名詞化するか、対象資源の生成として表す
+  （`POST /store/orders/{id}/refusal`、`POST /store/shift-requests/{id}/rejection`）。
+  集合への追加として表せる動作は、その集合への生成に寄せる
+  （`POST /files`、`POST /platform/me/receipts`）。
   唯一の例外は 3 章の「秘匿トークンを受ける読み取り」（`/view` 型）で、これは命名ではなく安全上の理由による偏離である。
 - 字面セグメント（`/public`、`/lookup`、`/work-queue`、`/archive` 等）と `{id}` テンプレートの共存は許容する。
   ただしこれらは **`{id}` の値空間を恒久的に侵食する**（同名の id が来ても字面側が勝つ）。
