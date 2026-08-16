@@ -67,6 +67,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -86,6 +87,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -1103,6 +1106,27 @@ class OrderServiceTest {
 
     assertThat(PageCursor.decode(page.nextCursor()))
         .isEqualTo(new PageCursor(String.valueOf(Integer.MAX_VALUE), "o1"));
+  }
+
+  @Test
+  void groupReadsRunInASingleSnapshot() throws NoSuchMethodException {
+    // 群読み口は 1 回の応答を作るのに複数の文を投げる。既定の READ COMMITTED では文ごとに断面を
+    // 取り直すため、文の間に他者の commit が挟まると同じ応答の中で違う世界を見る（続きが行を飛ばす /
+    // 完了済みが作業キューに混じる / 総数が中身と食い違う）。宣言が外れると 3 つとも黙って戻る。
+    // 断面が実際に保たれることは OrderGroupReadSnapshotIT が本物の PostgreSQL で見る
+    Method workQueue =
+        OrderService.class.getMethod(
+            "listWorkQueue", OrderQueryCriteria.class, String.class, int.class);
+    Method archive =
+        OrderService.class.getMethod("listArchive", OrderQueryCriteria.class, Pageable.class);
+
+    for (Method method : List.of(workQueue, archive)) {
+      Transactional tx = method.getAnnotation(Transactional.class);
+      assertThat(tx).as("%s に @Transactional があること", method.getName()).isNotNull();
+      assertThat(tx.isolation())
+          .as("%s が 1 つの断面を要求すること", method.getName())
+          .isEqualTo(Isolation.REPEATABLE_READ);
+    }
   }
 
   @Test
