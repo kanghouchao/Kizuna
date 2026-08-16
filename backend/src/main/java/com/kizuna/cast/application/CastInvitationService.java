@@ -10,6 +10,7 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
@@ -99,6 +100,7 @@ public class CastInvitationService {
   }
 
   /** ページ内の档案について招待状態（四態）を一括導出する。呼び出し元の storeFilter 有効なトランザクション内で使う。 */
+  @StoreScopeExempt(reason = "storeFilter を有効化した呼出元のトランザクション内でのみ使う内部一括導出で、境界は呼出元が引く")
   public Map<String, CastInvitationStatus> deriveStatuses(List<Cast> casts) {
     if (casts.isEmpty()) {
       return Map.of();

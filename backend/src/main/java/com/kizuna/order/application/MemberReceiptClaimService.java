@@ -13,6 +13,7 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +56,7 @@ public class MemberReceiptClaimService {
    * @param rawToken QR が運ぶトークンの生値。保存された鍵付きダイジェストとの一致だけで照合する
    * @return 記帳したポイント（付与予定額 0 の伝票では 0 で、台帳に行は書かない）
    */
+  @StoreScopeExempt(reason = "トークンの鍵付きダイジェスト一致だけが申領を成立させる材料で、受注は店舗を跨いで引く（店舗で絞ると照合が成立しない）")
   @Transactional
   public MemberReceiptClaimResponse claim(String email, String rawToken) {
     Long platformUserId = resolvePlatformUserId(email);

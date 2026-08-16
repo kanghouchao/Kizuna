@@ -3,6 +3,7 @@ package com.kizuna.shift.application;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shift.api.dto.CastScheduleResponse;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -31,6 +32,7 @@ public class CastScheduleService {
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
 
+  @StoreScopeExempt(reason = "認証済み email から逆引きした本人の cast_id 集合が唯一の境界で、本人の档案は所属店にしか存在しない")
   @Transactional(readOnly = true)
   public List<CastScheduleResponse> myWeek(String email, LocalDate from, LocalDate to) {
     if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > MAX_SPAN_DAYS) {
