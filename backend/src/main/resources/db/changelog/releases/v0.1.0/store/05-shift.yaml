@@ -94,3 +94,13 @@ databaseChangeLog:
                   name: store_id
               - column:
                   name: work_date
+        # 本人ポータルの週間スケジュール読みは cast_id 集合＋work_date 範囲で絞り store_id を
+        # 条件に含めないため、上の複合索引では絞り込めない。専用の複合索引を持つ。
+        - createIndex:
+            indexName: idx_t_shifts_cast_work_date
+            tableName: t_shifts
+            columns:
+              - column:
+                  name: cast_id
+              - column:
+                  name: work_date

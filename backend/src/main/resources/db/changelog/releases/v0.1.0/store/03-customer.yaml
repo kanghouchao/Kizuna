@@ -56,11 +56,6 @@ databaseChangeLog:
                   defaultValueBoolean: false
                   remarks: ペットの有無
               - column:
-                  name: points
-                  type: INTEGER
-                  defaultValueNumeric: 0
-                  remarks: 保有ポイント
-              - column:
                   name: rank
                   type: VARCHAR(50)
                   defaultValue: SILVER
@@ -81,6 +76,11 @@ databaseChangeLog:
                   name: ng_content
                   type: TEXT
                   remarks: NG内容
+              - column:
+                  # 統合先参照（ADR 0010）。NULL が「生きている行」で、値があればその行は墓標。
+                  name: merged_into_id
+                  type: VARCHAR(64)
+                  remarks: 統合先の顧客。NULL は生きている行で、値があれば墓標
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -107,6 +107,15 @@ databaseChangeLog:
             referencedTableName: t_stores
             referencedColumnNames: id
             onDelete: CASCADE
+        # 自己参照の外部キーは RESTRICT — 墓標の指す先が消えると旧 ID の解決が切れるため、
+        # 統合先の削除は DB が止める（ADR 0010）。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customers_merged_into
+            baseTableName: t_customers
+            baseColumnNames: merged_into_id
+            referencedTableName: t_customers
+            referencedColumnNames: id
+            onDelete: RESTRICT
         - createIndex:
             indexName: idx_t_customers_phone
             tableName: t_customers
@@ -115,3 +124,134 @@ databaseChangeLog:
                   name: phone_number
               - column:
                   name: store_id
+        - sql:
+            # 連鎖統合の圧平は「被統合行を指している墓標」を一括で書き換える。PostgreSQL は参照側の
+            # 外部キー列に索引を作らず、値を持つのは墓標だけなので部分索引にする。
+            sql: >-
+              CREATE INDEX idx_t_customers_merged_into
+              ON t_customers (merged_into_id)
+              WHERE merged_into_id IS NOT NULL
+
+  - changeSet:
+      id: store-v0100-003-customer-merge-history
+      author: kanghouchao
+      # 統合履歴。統合に取消（undo）は無く、誤統合の修復は「誰が・いつ・どの行をどの行へ・何を移したか」を
+      # 根拠とする人手作業になる（ADR 0010）。移した件数は統合時の一括 UPDATE の結果をそのまま残す
+      # （後から数え直すと、統合後に積まれた受注・関連まで数えてしまい根拠にならない）。
+      #
+      # 顧客への外部キーは両方とも RESTRICT。結果として統合に関与した行は存続行・被統合行とも削除できなく
+      # なるが、修復の根拠と旧 ID の解決が誤削除で消えるほうが重い。実行者は削除されても履歴が残るよう
+      # SET NULL（表示名の欠落で行ごと消さない）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_customer_merges
+            remarks: 顧客統合の履歴
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_customer_merges
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: surviving_customer_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 統合後に台帳へ残る行
+              - column:
+                  name: merged_customer_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 墓標になった行
+              - column:
+                  name: merged_by
+                  type: BIGINT
+                  remarks: 統合の実行者。利用者削除後も履歴を残すため SET NULL
+              - column:
+                  name: merged_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 統合の実行時刻
+              - column:
+                  name: moved_order_count
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  remarks: 存続行へ付け替えた受注の件数
+              - column:
+                  name: moved_link_count
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  remarks: 存続行へ付け替えた関連の件数（ACTIVE・RELEASED の全区間）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_merges_store
+            baseTableName: t_customer_merges
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_merges_surviving
+            baseTableName: t_customer_merges
+            baseColumnNames: surviving_customer_id
+            referencedTableName: t_customers
+            referencedColumnNames: id
+            onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_merges_merged
+            baseTableName: t_customer_merges
+            baseColumnNames: merged_customer_id
+            referencedTableName: t_customers
+            referencedColumnNames: id
+            onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_merges_merged_by
+            baseTableName: t_customer_merges
+            baseColumnNames: merged_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - createIndex:
+            indexName: idx_t_customer_merges_surviving
+            tableName: t_customer_merges
+            columns:
+              - column:
+                  name: surviving_customer_id
+        - createIndex:
+            indexName: idx_t_customer_merges_merged
+            tableName: t_customer_merges
+            columns:
+              - column:
+                  name: merged_customer_id

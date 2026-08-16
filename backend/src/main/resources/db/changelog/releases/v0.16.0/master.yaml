@@ -1,5 +1,0 @@
-# v0.16.0 = 会員申請が店舗へ名乗る名前。store 層のみ。
-databaseChangeLog:
-  - include:
-      file: store/01-order-requester-declared-name.yaml
-      relativeToChangelogFile: true

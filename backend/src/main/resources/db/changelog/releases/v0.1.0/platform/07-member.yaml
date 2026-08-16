@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: platform-v0500-001-member-schema
+      id: platform-v0100-007-member-schema
       author: kanghouchao
       # 会員（Member）。プラットフォーム層の会員身分で、店舗 CRM 台帳（Customer）とは別概念。
       # PlatformUser（user_type=MEMBER）と 1 対 1 で対応し、来店時に提示する一意の会員コードを持つ。
@@ -62,6 +62,3 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: CASCADE
-      rollback:
-        - dropTable:
-            tableName: t_members

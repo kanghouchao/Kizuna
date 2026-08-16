@@ -60,6 +60,14 @@ databaseChangeLog:
                     nullable: false
                   remarks: 授権店舗範囲種別（ALL_STORES / SPECIFIC_STORES）
               - column:
+                  # 1 つの LINE アカウントが複数の身分に結び付くと、なりすまし経路になるため一意。
+                  name: line_user_id
+                  type: VARCHAR(64)
+                  constraints:
+                    unique: true
+                    uniqueConstraintName: uq_t_users_line_user_id
+                  remarks: 連携済み LINE ユーザー ID（未連携は NULL。値を持つ行は一意）
+              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   defaultValueComputed: CURRENT_TIMESTAMP

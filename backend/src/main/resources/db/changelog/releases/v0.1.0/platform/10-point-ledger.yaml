@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: platform-v01000-001-point-ledger
+      id: platform-v0100-010-point-ledger-schema
       author: kanghouchao
       # 会員ポイント台帳。追加型で、訂正も取消も新しい行として積み既存行は書き換えない。残高は行の合計として
       # 都度求めるため、残高列は持たない。会員はプラットフォーム級の身分なので台帳も店舗で分割せず、
@@ -65,6 +65,23 @@ databaseChangeLog:
                   name: reason
                   type: VARCHAR(500)
                   remarks: 手動調整の理由（MANUAL_ADJUST では必須）
+              - column:
+                  # 応答喪失後の再送が台帳へ二重記帳されるのを、クライアント生成キーの一意制約で
+                  # 機構的に遮断する（ADR 0007）。PostgreSQL の UNIQUE は NULL 同士を別値と見るため
+                  # 部分インデックスは不要。
+                  name: idempotency_key
+                  type: VARCHAR(64)
+                  constraints:
+                    unique: true
+                    uniqueConstraintName: uq_t_point_entries_idempotency_key
+                  remarks: 手動調整の冪等キー（クライアント生成。手動調整以外は NULL。値を持つ行は一意）
+              - column:
+                  # 誤帰属の訂正として積んだ手動調整が、どの帰属記録を訂正したのかを指し返す（ADR 0012）。
+                  # 減算は期限の早いロットから引く引き当てで誤付与ロットを狙い撃ちにしないため、この列が
+                  # 無いと訂正の由来を機械的に辿れず、同じ帰属記録への訂正累計の上限判定も成立しない。
+                  name: corrected_attribution_id
+                  type: BIGINT
+                  remarks: 訂正した帰属記録（誤帰属の訂正のみ。通常の手動調整は NULL）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -170,6 +187,16 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: SET NULL
+        # 店舗削除は受注を消し、帰属記録も CASCADE で消えるが、会員の残高と仕訳履歴はグループ
+        # 資産として残らなければならない（ADR 0006）。CASCADE では台帳行が道連れになり、
+        # RESTRICT では帰属記録が店舗削除を塞ぐ。指し先を失った訂正行は指し返しだけを失う。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_corrected_attribution
+            baseTableName: t_point_entries
+            baseColumnNames: corrected_attribution_id
+            referencedTableName: t_order_attributions
+            referencedColumnNames: id
+            onDelete: SET NULL
         - addForeignKeyConstraint:
             constraintName: fk_t_point_usage_allocations_entry
             baseTableName: t_point_usage_allocations
@@ -185,7 +212,6 @@ databaseChangeLog:
             referencedColumnNames: id
             onDelete: CASCADE
         # 増減 0 の仕訳と 0 以下の引き当ては台帳の意味を壊すため DB 側でも塞ぐ。
-        # Liquibase OSS は CHECK 制約の宣言的な変更を持たないため裸 SQL。
         - sql:
             sql: >-
               ALTER TABLE t_point_entries
@@ -222,9 +248,11 @@ databaseChangeLog:
             columns:
               - column:
                   name: source_entry_id
-      # 明細が仕訳を参照しているため、明細から先に落とす。
-      rollback:
-        - dropTable:
-            tableName: t_point_usage_allocations
-        - dropTable:
-            tableName: t_point_entries
+        # 訂正の読み口も書き込みの上限判定もこの列で台帳を集計する。PostgreSQL は参照側の外部キー列に
+        # 索引を作らないので、無いとグループ全体の追記型台帳を毎回走査することになる。
+        # 値を持つのは訂正の仕訳だけなので部分索引にする。
+        - sql:
+            sql: >-
+              CREATE INDEX idx_t_point_entries_corrected_attribution
+              ON t_point_entries (corrected_attribution_id)
+              WHERE corrected_attribution_id IS NOT NULL

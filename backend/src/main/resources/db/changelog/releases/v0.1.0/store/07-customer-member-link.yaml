@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: store-v0800-001-customer-member-link-schema
+      id: store-v0100-007-customer-member-link-schema
       author: kanghouchao
       # 会員と店舗顧客台帳の紐づけ。1 行が 1 区間（ACTIVE → RELEASED）を表す追加型の台帳で、
       # 解除・変更でも行は削除せず履歴として残す。member_code は会員行が消えた後も履歴を
@@ -47,6 +47,15 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                   remarks: 関連状態（ACTIVE=紐づけ済み/RELEASED=解除済み）
+              - column:
+                  # 成立根拠は「どの機構で成立したか」の事実で、行ごとに不変で挙動を分けない。
+                  # DB 既定値は持たない — 根拠は書き手が機構ごとに明示するもので、既定値を置くと
+                  # 明示し忘れた行が MEMBER_CODE を名乗って静かに混ざる。
+                  name: reason
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 成立根拠（MEMBER_CODE=会員コード提示/MEMBER_REQUEST=会員申請の確定時自動整備/MIGRATION=旧システム移行由来）
               - column:
                   name: linked_by
                   type: BIGINT
@@ -125,21 +134,9 @@ databaseChangeLog:
             columns:
               - column:
                   name: customer_id
-      rollback:
-        - dropTable:
-            tableName: t_customer_member_links
-
-  - changeSet:
-      id: store-v0800-002-customer-member-link-active-indexes
-      author: kanghouchao
-      # 「紐づけ済み」は 1 顧客につき 1 件、同一店舗の同一会員につき 1 件までという業務不変量を
-      # DB 側の最終防波堤として固定する。解除済み（RELEASED）の行は履歴として何件でも積むため、
-      # 対象を status='ACTIVE' に絞った部分一意索引にする（Liquibase の addUniqueConstraint は
-      # 述語付き索引を表現できないため裸 SQL）。
-      preConditions:
-        - dbms:
-            type: postgresql
-      changes:
+        # 「紐づけ済みは 1 顧客につき 1 件、同一店舗の同一会員につき 1 件まで」という業務不変量を
+        # DB 側の最終防波堤として固定する。解除済み（RELEASED）の行は履歴として何件でも積むため、
+        # 対象を status='ACTIVE' に絞った部分一意索引にする。
         - sql:
             sql: >-
               CREATE UNIQUE INDEX uq_t_customer_member_links_active_customer
@@ -148,8 +145,3 @@ databaseChangeLog:
             sql: >-
               CREATE UNIQUE INDEX uq_t_customer_member_links_active_member
               ON t_customer_member_links (store_id, member_id) WHERE status = 'ACTIVE'
-      rollback:
-        - sql:
-            sql: DROP INDEX uq_t_customer_member_links_active_customer
-        - sql:
-            sql: DROP INDEX uq_t_customer_member_links_active_member

@@ -37,6 +37,15 @@ databaseChangeLog:
                   type: VARCHAR(128)
                   remarks: 代表連絡先メールアドレス
               - column:
+                  # PREPARING（準備中）は開店前の下ごしらえ期間で、この間だけ店舗を削除できる。
+                  # 店舗側の利用者が初めて店舗コンソールへ入った時点で ACTIVE へ一方向に遷移し、以後は戻らない。
+                  name: status
+                  type: VARCHAR(20)
+                  defaultValue: PREPARING
+                  constraints:
+                    nullable: false
+                  remarks: 稼働状態（PREPARING=準備中/ACTIVE=稼働中）
+              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   defaultValueComputed: CURRENT_TIMESTAMP
