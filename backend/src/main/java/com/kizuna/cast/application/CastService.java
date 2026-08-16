@@ -12,6 +12,9 @@ import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
@@ -20,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -109,13 +113,30 @@ public class CastService {
     }
   }
 
+  /**
+   * キャストを削除する。受注から参照されている行は削除できない — 過去の受注が誰の担当だったかは売上の根拠であり、 参照ごと消えてよいものではない。在籍しなくなったキャストは削除ではなく
+   * INACTIVE で表す。
+   */
   @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!castRepository.existsById(id)) {
       throw new NotFoundException("キャストが見つかりません");
     }
-    castRepository.deleteById(id);
+    try {
+      castRepository.deleteById(id);
+      // DELETE を今この場へ流す。トランザクション境界の commit まで遅れると、外部キー違反が
+      // この catch を素通りして全域ハンドラの兜底（500）へ落ちる。
+      castRepository.flush();
+    } catch (DataIntegrityViolationException ex) {
+      // 受注 FK 違反は日常操作で当たる（受注のあるキャストの削除）ので、次の一手の読める 409 へ写す。
+      // 他の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.FK_T_ORDERS_CAST,
+              () -> new ConflictException("受注が紐づいているキャストは削除できません。在籍停止に変更してください")));
+    }
   }
 
   @StoreScoped

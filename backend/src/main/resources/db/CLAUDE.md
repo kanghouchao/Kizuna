@@ -64,8 +64,12 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   Keep the `pk_` / `uq_` / `fk_` / `idx_` / `ck_` naming and never rename a constraint without
   checking `DbConstraint`.
 - **Every FK declares an explicit `onDelete`.** The choice is a design decision (CASCADE for
-  store-owned data, SET NULL for audit trails that outlive the referenced row, RESTRICT to make
-  deletion fail loudly) — copy the reasoning style of the existing comments.
+  store-owned data, SET NULL for audit trails that outlive the referenced row, RESTRICT/NO ACTION
+  to refuse the deletion) — copy the reasoning style of the existing comments.
+- **An FK whose refusal is mapped to a business exception must be `NO ACTION`, not `RESTRICT`.**
+  Both refuse equally, but PostgreSQL reports a RESTRICT violation as SQLSTATE 23001 and Hibernate
+  extracts no constraint name from it, so the `DbConstraint` mapping never fires and the refusal
+  surfaces as a 500. `DbConstraintLiteralTests` enforces this for every enum member.
 - **Partial (predicate) indexes and CHECK constraints use raw `sql` changes** — Liquibase OSS
   cannot express them declaratively.
 - **Seeds take no explicit ids** (IDENTITY sequences must not collide with seeded rows), with

@@ -41,6 +41,8 @@ public class CustomerService {
   private static final String MERGED_CUSTOMER_UNDELETABLE =
       "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
 
+  private static final String ORDERED_CUSTOMER_UNDELETABLE = "受注が紐づいている顧客は削除できません。来店の記録が参照しています";
+
   /**
    * 墓標そのものを名指した書き換えの案内。更新・削除・ポイント調整・解除の 4 経路が同じ文面を返すのは、どれも次の一手が同じ
    * （統合先の行を編集する）だからである。統合先へ黙って向け直してよいのは参照の書き込み先だけで、名指した行への書き換えは撥ねる（ADR 0010）。
@@ -172,10 +174,10 @@ public class CustomerService {
       // この catch を素通りして全域ハンドラの兜底（500）へ落ちる。
       customerRepository.flush();
     } catch (DataIntegrityViolationException ex) {
-      // 事前判定と削除の間に統合が確定した競合の最終防波堤。統合に関与した行は履歴の 2 本と、存続行なら
-      // 墓標からの自己参照にも指されており、どれが先に違反として現れるかは DB の検査順に依るので 3 本とも
-      // 同じ案内へ写す。写像を持たない他の整合性違反（受注が残っている等）は translate が元の例外を返し、
-      // 従来どおり大きく失敗する。
+      // 統合の側は事前判定と削除の間に統合が確定した競合の最終防波堤。統合に関与した行は履歴の 2 本と、
+      // 存続行なら墓標からの自己参照にも指されており、どれが先に違反として現れるかは DB の検査順に依るので
+      // 3 本とも同じ案内へ写す。受注の側は事前判定を持たない（顧客モジュールから受注を数えると依存が環に
+      // なる）ので、この写像が唯一の分類になる。写像を持たない整合性違反は実装欠陥として大きく失敗させる。
       Supplier<RuntimeException> undeletable =
           () -> new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
       throw IntegrityViolations.translate(
@@ -183,7 +185,9 @@ public class CustomerService {
           Map.of(
               DbConstraint.FK_T_CUSTOMER_MERGES_SURVIVING, undeletable,
               DbConstraint.FK_T_CUSTOMER_MERGES_MERGED, undeletable,
-              DbConstraint.FK_T_CUSTOMERS_MERGED_INTO, undeletable));
+              DbConstraint.FK_T_CUSTOMERS_MERGED_INTO, undeletable,
+              DbConstraint.FK_T_ORDERS_CUSTOMER,
+                  () -> new ConflictException(ORDERED_CUSTOMER_UNDELETABLE)));
     }
   }
 

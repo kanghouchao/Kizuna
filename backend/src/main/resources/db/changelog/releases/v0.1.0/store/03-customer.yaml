@@ -115,7 +115,7 @@ databaseChangeLog:
             baseColumnNames: merged_into_id
             referencedTableName: t_customers
             referencedColumnNames: id
-            onDelete: RESTRICT
+            onDelete: NO ACTION
         - createIndex:
             indexName: idx_t_customers_phone
             tableName: t_customers
@@ -228,14 +228,14 @@ databaseChangeLog:
             baseColumnNames: surviving_customer_id
             referencedTableName: t_customers
             referencedColumnNames: id
-            onDelete: RESTRICT
+            onDelete: NO ACTION
         - addForeignKeyConstraint:
             constraintName: fk_t_customer_merges_merged
             baseTableName: t_customer_merges
             baseColumnNames: merged_customer_id
             referencedTableName: t_customers
             referencedColumnNames: id
-            onDelete: RESTRICT
+            onDelete: NO ACTION
         - addForeignKeyConstraint:
             constraintName: fk_t_customer_merges_merged_by
             baseTableName: t_customer_merges
