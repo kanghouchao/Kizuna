@@ -67,9 +67,13 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   store-owned data, SET NULL for audit trails that outlive the referenced row, RESTRICT/NO ACTION
   to refuse the deletion) — copy the reasoning style of the existing comments.
 - **An FK whose refusal is mapped to a business exception must be `NO ACTION`, not `RESTRICT`.**
-  Both refuse equally, but PostgreSQL reports a RESTRICT violation as SQLSTATE 23001 and Hibernate
-  extracts no constraint name from it, so the `DbConstraint` mapping never fires and the refusal
-  surfaces as a 500. `DbConstraintLiteralTests` enforces this for every enum member.
+  PostgreSQL reports a RESTRICT violation as SQLSTATE 23001 and Hibernate extracts no constraint
+  name from it, so the `DbConstraint` mapping never fires and the refusal surfaces as a 500.
+  `DbConstraintLiteralTests` enforces this for every enum member. The two are not synonyms —
+  RESTRICT can never be deferred, NO ACTION can if declared DEFERRABLE — but every FK here is
+  non-deferrable, and a parent CASCADE that removes the children in the same statement (store
+  deletion) behaves the same under both, measured on PG 18 (`StoreDeletionCascadeIT`). What
+  actually differs is how the violation is reported.
 - **Partial (predicate) indexes and CHECK constraints use raw `sql` changes** — Liquibase OSS
   cannot express them declaratively.
 - **Seeds take no explicit ids** (IDENTITY sequences must not collide with seeded rows), with

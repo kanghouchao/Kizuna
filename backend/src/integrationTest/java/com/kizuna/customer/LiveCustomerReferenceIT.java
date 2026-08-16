@@ -41,6 +41,9 @@ import tools.jackson.databind.JsonNode;
  */
 class LiveCustomerReferenceIT extends CrossStoreTestSupport {
 
+  /** demo シード（seed/05-demo.yaml）の山田次郎（STORE_STAFF・授権店舗 = 店舗1）。関連の実行者として使用。 */
+  private static final long SEED_RECEPTIONIST_ID = 3L;
+
   @Autowired private CustomerRepository customerRepository;
   @Autowired private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Autowired private OrderRepository orderRepository;
@@ -119,8 +122,6 @@ class LiveCustomerReferenceIT extends CrossStoreTestSupport {
                     .isTrue());
   }
 
-  // ==================== 解決を通さない書き込み（将来の 5 つ目の経路の代役） ====================
-
   private void tombstone(String customerId, String survivingId) {
     Customer customer = customerRepository.findById(customerId).orElseThrow();
     customer.mergeInto(survivingId);
@@ -175,11 +176,6 @@ class LiveCustomerReferenceIT extends CrossStoreTestSupport {
     return jdbcTemplate.queryForObject(
         "select merged_into_id from t_customers where id = ?", String.class, customerId);
   }
-
-  // ==================== 端点からの準備 ====================
-
-  /** demo シード（seed/05-demo.yaml）の山田次郎（STORE_STAFF・授権店舗 = 店舗1）。 */
-  private static final long SEED_RECEPTIONIST_ID = 3L;
 
   private String createCustomer(String label) {
     ResponseEntity<JsonNode> created =

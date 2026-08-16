@@ -125,8 +125,7 @@ public class CastService {
     }
     try {
       castRepository.deleteById(id);
-      // DELETE を今この場へ流す。トランザクション境界の commit まで遅れると、外部キー違反が
-      // この catch を素通りして全域ハンドラの兜底（500）へ落ちる。
+      // flush が要る理由は CustomerService#delete と同じ（commit まで遅れると catch を素通りする）。
       castRepository.flush();
     } catch (DataIntegrityViolationException ex) {
       // 受注 FK 違反は日常操作で当たる（受注のあるキャストの削除）ので、次の一手の読める 409 へ写す。
