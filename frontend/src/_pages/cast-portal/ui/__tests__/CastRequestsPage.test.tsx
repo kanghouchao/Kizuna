@@ -31,7 +31,7 @@ describe('CastRequestsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedMyStores.mockResolvedValue(STORES);
-    mockedMyShiftRequests.mockResolvedValue([]);
+    mockedMyShiftRequests.mockResolvedValue({ rows: [], nextCursor: null });
   });
 
   it('店舗セレクタに所属店舗一覧を表示する', async () => {
@@ -102,41 +102,44 @@ describe('CastRequestsPage', () => {
   });
 
   it('履歴の状態バッジ(受付済み/確定済み/却下)を表示すること', async () => {
-    mockedMyShiftRequests.mockResolvedValue([
-      {
-        id: 'sr1',
-        work_date: '2026-08-01',
-        start_time: '18:00:00',
-        end_time: '23:00:00',
-        note: null,
-        status: 'PENDING',
-        store_id: 1,
-        store_name: '店舗A',
-        created_at: '2026-07-20T00:00:00Z',
-      },
-      {
-        id: 'sr2',
-        work_date: '2026-08-02',
-        start_time: '10:00:00',
-        end_time: '12:00:00',
-        note: null,
-        status: 'APPROVED',
-        store_id: 2,
-        store_name: '店舗B',
-        created_at: '2026-07-21T00:00:00Z',
-      },
-      {
-        id: 'sr3',
-        work_date: '2026-08-03',
-        start_time: '14:00:00',
-        end_time: '16:00:00',
-        note: null,
-        status: 'DECLINED',
-        store_id: 1,
-        store_name: '店舗A',
-        created_at: '2026-07-22T00:00:00Z',
-      },
-    ]);
+    mockedMyShiftRequests.mockResolvedValue({
+      rows: [
+        {
+          id: 'sr1',
+          work_date: '2026-08-01',
+          start_time: '18:00:00',
+          end_time: '23:00:00',
+          note: null,
+          status: 'PENDING',
+          store_id: 1,
+          store_name: '店舗A',
+          created_at: '2026-07-20T00:00:00Z',
+        },
+        {
+          id: 'sr2',
+          work_date: '2026-08-02',
+          start_time: '10:00:00',
+          end_time: '12:00:00',
+          note: null,
+          status: 'APPROVED',
+          store_id: 2,
+          store_name: '店舗B',
+          created_at: '2026-07-21T00:00:00Z',
+        },
+        {
+          id: 'sr3',
+          work_date: '2026-08-03',
+          start_time: '14:00:00',
+          end_time: '16:00:00',
+          note: null,
+          status: 'DECLINED',
+          store_id: 1,
+          store_name: '店舗A',
+          created_at: '2026-07-22T00:00:00Z',
+        },
+      ],
+      nextCursor: null,
+    });
 
     render(<CastRequestsPage />);
 
@@ -146,30 +149,33 @@ describe('CastRequestsPage', () => {
   });
 
   it('変更申請の履歴は種別バッジと専用の状態文言(変更承認済み/謝絶)で表示すること', async () => {
-    mockedMyShiftRequests.mockResolvedValue([
-      {
-        id: 'sr4',
-        work_date: '2026-08-04',
-        start_time: '19:00:00',
-        end_time: '22:00:00',
-        type: 'CHANGE',
-        status: 'APPROVED',
-        store_id: 1,
-        store_name: '店舗A',
-        created_at: '2026-07-23T00:00:00Z',
-      },
-      {
-        id: 'sr5',
-        work_date: '2026-08-05',
-        start_time: '19:00:00',
-        end_time: '22:00:00',
-        type: 'CHANGE',
-        status: 'DECLINED',
-        store_id: 1,
-        store_name: '店舗A',
-        created_at: '2026-07-24T00:00:00Z',
-      },
-    ]);
+    mockedMyShiftRequests.mockResolvedValue({
+      rows: [
+        {
+          id: 'sr4',
+          work_date: '2026-08-04',
+          start_time: '19:00:00',
+          end_time: '22:00:00',
+          type: 'CHANGE',
+          status: 'APPROVED',
+          store_id: 1,
+          store_name: '店舗A',
+          created_at: '2026-07-23T00:00:00Z',
+        },
+        {
+          id: 'sr5',
+          work_date: '2026-08-05',
+          start_time: '19:00:00',
+          end_time: '22:00:00',
+          type: 'CHANGE',
+          status: 'DECLINED',
+          store_id: 1,
+          store_name: '店舗A',
+          created_at: '2026-07-24T00:00:00Z',
+        },
+      ],
+      nextCursor: null,
+    });
 
     render(<CastRequestsPage />);
 
@@ -182,7 +188,7 @@ describe('CastRequestsPage', () => {
 
   it('取得に失敗した場合はエラー文言を表示し、再試行で復帰できること', async () => {
     mockedMyShiftRequests.mockRejectedValueOnce(new Error('network error'));
-    mockedMyShiftRequests.mockResolvedValueOnce([]);
+    mockedMyShiftRequests.mockResolvedValueOnce({ rows: [], nextCursor: null });
 
     render(<CastRequestsPage />);
 

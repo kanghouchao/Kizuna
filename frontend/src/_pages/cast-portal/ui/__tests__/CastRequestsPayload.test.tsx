@@ -75,7 +75,7 @@ describe('出勤希望フォームの店舗セレクト配線と送信ペイロ�
   beforeEach(() => {
     jest.clearAllMocks();
     mockedMyStores.mockResolvedValue(STORES);
-    mockedMyShiftRequests.mockResolvedValue([]);
+    mockedMyShiftRequests.mockResolvedValue({ rows: [], nextCursor: null });
     mockedSubmit.mockResolvedValue({ id: 'sr1', status: 'PENDING' });
   });
 

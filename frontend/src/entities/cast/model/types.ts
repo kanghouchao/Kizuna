@@ -21,6 +21,23 @@ export interface CastResponse {
   updated_at?: string;
 }
 
+/**
+ * キャスト一覧の 1 行（GET /store/casts）。名簿として見分け、招待の進み具合を判断するのに
+ * 要る項目だけを持つ。紹介文・カスタム項目・作成更新時刻は詳細の読み口が返す。
+ */
+export interface CastSummaryResponse {
+  id?: string;
+  name?: string;
+  status?: string;
+  photo_url?: string;
+  age?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
+  invitation_status?: CastInvitationStatus;
+}
+
 // 公開カスタムフィールド1件（表示順どおりに整形済み）
 export interface CastCustomFieldView {
   key?: string;

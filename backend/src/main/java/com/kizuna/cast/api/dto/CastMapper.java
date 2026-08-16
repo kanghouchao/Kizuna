@@ -18,9 +18,13 @@ public interface CastMapper {
   @Mapping(target = "invitationStatus", ignore = true)
   CastResponse toResponse(Cast cast);
 
-  /** 招待状態を詰めた応答に変換する（一覧・詳細用）。 */
+  /** 招待状態を詰めた応答に変換する（詳細用）。 */
   @Mapping(target = "invitationStatus", source = "invitationStatus")
   CastResponse toResponse(Cast cast, CastInvitationStatus invitationStatus);
+
+  /** 一覧の行に変換する。招待状態は一覧でも必ず要るので、状態を伴わない多重定義は持たない。 */
+  @Mapping(target = "invitationStatus", source = "invitationStatus")
+  CastSummaryResponse toSummaryResponse(Cast cast, CastInvitationStatus invitationStatus);
 
   @Mapping(target = "status", defaultValue = "ACTIVE")
   @Mapping(target = "platformUserId", ignore = true)

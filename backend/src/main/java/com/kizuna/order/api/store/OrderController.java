@@ -1,5 +1,6 @@
 package com.kizuna.order.api.store;
 
+import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderAttributionCorrectionRequest;
 import com.kizuna.order.api.dto.OrderAttributionCorrectionResponse;
 import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
@@ -8,11 +9,14 @@ import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
+import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
@@ -58,7 +62,7 @@ public class OrderController {
   /** 顧客詳細の注文履歴。ある顧客に着いた受注を新しい順に辿る（状態は問わない）。 */
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<Page<OrderResponse>> list(
+  public ResponseEntity<Page<OrderSummaryResponse>> list(
       @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
     return ResponseEntity.ok(orderService.list(customerId, pageable));
@@ -74,7 +78,7 @@ public class OrderController {
    */
   @GetMapping("/work-queue")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<CursorPage<OrderResponse>> listWorkQueue(
+  public ResponseEntity<CursorPage<OrderWorkQueueResponse>> listWorkQueue(
       @RequestParam(name = "statuses") Set<OrderStatus> statuses,
       @RequestParam(name = "customer_name", required = false) String customerName,
       @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
@@ -95,7 +99,7 @@ public class OrderController {
    */
   @GetMapping("/archive")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<Page<OrderResponse>> listArchive(
+  public ResponseEntity<Page<OrderArchiveResponse>> listArchive(
       @RequestParam(name = "statuses") Set<OrderStatus> statuses,
       @RequestParam(name = "customer_name", required = false) String customerName,
       @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
@@ -165,7 +169,7 @@ public class OrderController {
    */
   @PutMapping("/reservation-requests/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> updateReservationRequest(
+  public ResponseEntity<OrderWorkQueueResponse> updateReservationRequest(
       @PathVariable String id, @Valid @RequestBody ReservationRequestUpdateRequest request) {
     return ResponseEntity.ok(orderService.updateReservationRequest(id, request));
   }
@@ -182,7 +186,8 @@ public class OrderController {
    */
   @PostMapping("/{id}/confirmation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> confirm(@PathVariable String id, Principal principal) {
+  public ResponseEntity<OrderWorkQueueResponse> confirm(
+      @PathVariable String id, Principal principal) {
     try {
       return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
     } catch (DataIntegrityViolationException ex) {
@@ -197,7 +202,7 @@ public class OrderController {
   /** 受注を完了する（会計の確定）。ポイントの付与・利用はこの経路でのみ台帳へ入る。 */
   @PostMapping("/{id}/completion")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> complete(
+  public ResponseEntity<OrderCompletionResponse> complete(
       @PathVariable String id,
       @Valid @RequestBody OrderCompletionRequest request,
       Principal principal) {
@@ -302,8 +307,9 @@ public class OrderController {
   /** 予約申請を謝絶する。確定後の取消は理由必須の専用操作（{@link #cancel}）が受け持つ。 */
   @PostMapping("/{id}/decline")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> decline(@PathVariable String id) {
-    return ResponseEntity.ok(orderService.decline(id));
+  public ResponseEntity<Void> decline(@PathVariable String id) {
+    orderService.decline(id);
+    return ResponseEntity.noContent().build();
   }
 
   /**
@@ -314,11 +320,12 @@ public class OrderController {
    */
   @PostMapping("/{id}/cancellation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> cancel(
+  public ResponseEntity<Void> cancel(
       @PathVariable String id,
       @Valid @RequestBody OrderCancellationRequest request,
       Principal principal) {
-    return ResponseEntity.ok(orderService.cancel(id, request, principal.getName()));
+    orderService.cancel(id, request, principal.getName());
+    return ResponseEntity.noContent().build();
   }
 
   /**
@@ -328,7 +335,7 @@ public class OrderController {
    */
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> update(
+  public ResponseEntity<OrderWorkQueueResponse> update(
       @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
     return ResponseEntity.ok(orderService.update(id, request));
   }

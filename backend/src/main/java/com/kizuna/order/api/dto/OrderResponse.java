@@ -8,7 +8,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 
 @Data
 @Builder
@@ -59,11 +58,4 @@ public class OrderResponse {
   private String cancelledByName;
 
   private OffsetDateTime cancelledAt;
-
-  /**
-   * 発行された伝票トークンの生値。会員へ帰属しなかった完了の<b>応答にだけ</b>現れ、他の読み口では常に null。
-   *
-   * <p>保存されるのはダイジェストだけなので、この応答を取り逃すと生値は二度と手に入らない。診断出力へ滲ませないため {@code toString()} からも外す。
-   */
-  @ToString.Exclude private String receiptToken;
 }

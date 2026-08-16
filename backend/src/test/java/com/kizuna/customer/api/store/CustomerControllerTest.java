@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.customer.api.dto.CustomerResponse;
+import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.application.CustomerService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
@@ -55,7 +55,7 @@ class CustomerControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<CustomerResponse> empty = new PageImpl<>(List.of());
+    Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
     when(customerService.list(any(), any(), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
@@ -72,7 +72,7 @@ class CustomerControllerTest {
   void listTrimsSurroundingWhitespaceOfSearch() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
-    Page<CustomerResponse> empty = new PageImpl<>(List.of());
+    Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
     when(customerService.list(searchCaptor.capture(), any(), any(), any())).thenReturn(empty);
 
     mockMvc
@@ -92,7 +92,7 @@ class CustomerControllerTest {
   void listPassesIdeographicSpaceOnlySearchAsNull() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
-    Page<CustomerResponse> empty = new PageImpl<>(List.of());
+    Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
     when(customerService.list(searchCaptor.capture(), any(), any(), any())).thenReturn(empty);
 
     mockMvc

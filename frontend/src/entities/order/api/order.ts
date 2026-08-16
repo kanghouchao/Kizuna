@@ -17,15 +17,19 @@ import {
   OrderAttributionCorrection,
   OrderAttributionCorrectionRequest,
   OrderAttributionInvalidationRequest,
+  OrderArchiveRow,
   OrderCancellationRequest,
   OrderCastCandidate,
   OrderCompletionPreview,
   OrderCompletionRequest,
+  OrderCompletionResult,
   OrderCreateRequest,
   OrderQueryParams,
   OrderReceiptTokenIssue,
   OrderReceptionist,
+  OrderSummaryRow,
   OrderUpdateRequest,
+  OrderWorkQueueRow,
   ReservationRequestUpdateRequest,
 } from '../model/types';
 
@@ -49,7 +53,7 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 export const orderApi = {
   list: async (
     params?: PaginationParams & { customer_id?: string }
-  ): Promise<PageResult<Order>> => {
+  ): Promise<PageResult<OrderSummaryRow>> => {
     const response = await apiClient.get('/store/orders', { params });
     return fromSpringPage(response.data);
   },
@@ -71,18 +75,18 @@ export const orderApi = {
    * 既に設定済みの指名・受付担当だけは例外で、直していなくても毎回運ぶこと — 省略すると「外す」と
    * 区別できないため 400 になる。
    */
-  update: async (id: string, data: OrderUpdateRequest): Promise<Order> => {
+  update: async (id: string, data: OrderUpdateRequest): Promise<OrderWorkQueueRow> => {
     const response = await apiClient.put(`/store/orders/${id}`, data);
     return response.data;
   },
   /**
    * 確定済みの受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は凍結される。
    *
-   * 二度目は撥ねられる（逐次なら 400、同時なら楽観ロックで 409）。
+   * 二度目は撥ねられる（逐次なら 400、同時なら楽観ロックで 409）。応答は 204（本体なし）で、
+   * 呼出側は行を消すか一覧を取り直す。
    */
-  cancel: async (id: string, data: OrderCancellationRequest): Promise<Order> => {
-    const response = await apiClient.post(`/store/orders/${id}/cancellation`, data);
-    return response.data;
+  cancel: async (id: string, data: OrderCancellationRequest): Promise<void> => {
+    await apiClient.post(`/store/orders/${id}/cancellation`, data);
   },
   /**
    * 作業キュー（対応が要る受注）。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。
@@ -91,7 +95,7 @@ export const orderApi = {
    */
   listWorkQueue: async (
     params: OrderQueryParams & CursorParams
-  ): Promise<CursorPageResult<Order>> => {
+  ): Promise<CursorPageResult<OrderWorkQueueRow>> => {
     const response = await apiClient.get('/store/orders/work-queue', {
       params: toQuery(params),
     });
@@ -102,7 +106,9 @@ export const orderApi = {
    *
    * 位置をページ番号で指せるのは、終端状態の受注が処理で消えず増えるだけだから。
    */
-  listArchive: async (params: OrderQueryParams & PaginationParams): Promise<PageResult<Order>> => {
+  listArchive: async (
+    params: OrderQueryParams & PaginationParams
+  ): Promise<PageResult<OrderArchiveRow>> => {
     const response = await apiClient.get('/store/orders/archive', {
       params: toQuery(params),
     });
@@ -131,26 +137,25 @@ export const orderApi = {
   updateReservationRequest: async (
     id: string,
     data: ReservationRequestUpdateRequest
-  ): Promise<Order> => {
+  ): Promise<OrderWorkQueueRow> => {
     const response = await apiClient.put(`/store/orders/reservation-requests/${id}`, data);
     return response.data;
   },
   /** 予約申請を確定する（受注として受け付ける）。 */
-  confirm: async (id: string): Promise<Order> => {
+  confirm: async (id: string): Promise<OrderWorkQueueRow> => {
     const response = await apiClient.post(`/store/orders/${id}/confirmation`);
     return response.data;
   },
-  /** 予約申請を謝絶する。 */
-  decline: async (id: string): Promise<Order> => {
-    const response = await apiClient.post(`/store/orders/${id}/decline`);
-    return response.data;
+  /** 予約申請を謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
+  decline: async (id: string): Promise<void> => {
+    await apiClient.post(`/store/orders/${id}/decline`);
   },
   /**
    * 受注を完了する（会計の確定）。ポイントの利用と自動付与が台帳へ入るのはこの経路だけ。
    *
    * 対象は確定済みの受注に限られ、それ以外の状態はサーバ側が撥ねる。
    */
-  complete: async (id: string, data: OrderCompletionRequest): Promise<Order> => {
+  complete: async (id: string, data: OrderCompletionRequest): Promise<OrderCompletionResult> => {
     const response = await apiClient.post(`/store/orders/${id}/completion`, data);
     return response.data;
   },

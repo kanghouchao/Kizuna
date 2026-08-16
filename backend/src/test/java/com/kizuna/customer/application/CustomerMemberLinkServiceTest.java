@@ -329,9 +329,10 @@ class CustomerMemberLinkServiceTest {
   void historyDoesNotTakeTheCustomerRowLock() {
     // 読むだけの照会が行を押さえると、履歴を開いただけで並行する紐づけの書き換えを待たせる
     givenCustomerExists();
-    Mockito.when(customerMemberLinkRepository.findHistory(CUSTOMER_ID)).thenReturn(List.of());
+    Mockito.when(customerMemberLinkRepository.findHistory(Mockito.eq(CUSTOMER_ID), any()))
+        .thenReturn(List.of());
 
-    service.history(CUSTOMER_ID);
+    service.history(CUSTOMER_ID, null, 20);
 
     Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(any());
     Mockito.verifyNoInteractions(customerReferenceResolver);
@@ -350,9 +351,11 @@ class CustomerMemberLinkServiceTest {
     Mockito.when(view.getReleasedAt())
         .thenReturn(OffsetDateTime.parse("2026-07-02T10:00:00+09:00"));
     Mockito.when(view.getReleasedByName()).thenReturn("田中花子");
-    Mockito.when(customerMemberLinkRepository.findHistory(CUSTOMER_ID)).thenReturn(List.of(view));
+    Mockito.when(customerMemberLinkRepository.findHistory(Mockito.eq(CUSTOMER_ID), any()))
+        .thenReturn(List.of(view));
 
-    List<CustomerMemberLinkHistoryResponse> history = service.history(CUSTOMER_ID);
+    List<CustomerMemberLinkHistoryResponse> history =
+        service.history(CUSTOMER_ID, null, 20).content();
 
     assertThat(history).hasSize(1);
     CustomerMemberLinkHistoryResponse row = history.get(0);
@@ -368,7 +371,7 @@ class CustomerMemberLinkServiceTest {
   void historyFailsWhenCustomerMissing() {
     Mockito.when(customerRepository.existsById(CUSTOMER_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.history(CUSTOMER_ID))
+    assertThatThrownBy(() -> service.history(CUSTOMER_ID, null, 20))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }

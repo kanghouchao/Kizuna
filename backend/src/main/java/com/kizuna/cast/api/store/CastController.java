@@ -4,6 +4,7 @@ import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
+import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
@@ -37,7 +38,7 @@ public class CastController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public ResponseEntity<Page<CastResponse>> list(
+  public ResponseEntity<Page<CastSummaryResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
     return ResponseEntity.ok(castService.list(search, pageable));

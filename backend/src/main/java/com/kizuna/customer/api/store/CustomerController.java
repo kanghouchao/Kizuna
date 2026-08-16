@@ -2,6 +2,7 @@ package com.kizuna.customer.api.store;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerResponse;
+import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
 import jakarta.validation.Valid;
@@ -30,7 +31,7 @@ public class CustomerController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<Page<CustomerResponse>> list(
+  public ResponseEntity<Page<CustomerSummaryResponse>> list(
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String rank,
       @RequestParam(required = false) String classification,

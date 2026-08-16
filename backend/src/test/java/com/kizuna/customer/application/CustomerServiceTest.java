@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
+import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
@@ -51,15 +52,15 @@ class CustomerServiceTest {
     Customer c = Customer.builder().name("Test").build();
     Page<Customer> page = new PageImpl<>(List.of(c));
 
-    CustomerResponse resp = new CustomerResponse();
+    CustomerSummaryResponse resp = new CustomerSummaryResponse();
     resp.setName("Test");
 
     when(customerRepository.findAll(
             ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
-    when(customerMapper.toResponse(c)).thenReturn(resp);
+    when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
-    Page<CustomerResponse> result =
+    Page<CustomerSummaryResponse> result =
         customerService.list("test", "GOLD", "VIP", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("Test");
@@ -70,15 +71,16 @@ class CustomerServiceTest {
     Customer c = Customer.builder().name("All").build();
     Page<Customer> page = new PageImpl<>(List.of(c));
 
-    CustomerResponse resp = new CustomerResponse();
+    CustomerSummaryResponse resp = new CustomerSummaryResponse();
     resp.setName("All");
 
     when(customerRepository.findAll(
             ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
-    when(customerMapper.toResponse(c)).thenReturn(resp);
+    when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
-    Page<CustomerResponse> result = customerService.list(null, null, null, PageRequest.of(0, 10));
+    Page<CustomerSummaryResponse> result =
+        customerService.list(null, null, null, PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("All");
   }
@@ -168,7 +170,7 @@ class CustomerServiceTest {
   }
 
   @Test
-  @DisplayName("一覧は本ページ分の紐づけを 1 回で引き、紐づけ済みだけに会員コードを載せること")
+  @DisplayName("一覧は本ページ分の紐づけを 1 回で引き、行ごとに有無を載せること")
   void list_decoratesMemberLink() {
     Customer linked = new Customer();
     linked.setId("c1");
@@ -176,27 +178,25 @@ class CustomerServiceTest {
     unlinked.setId("c2");
     Page<Customer> page = new PageImpl<>(List.of(linked, unlinked));
 
-    CustomerResponse linkedResponse = new CustomerResponse();
+    CustomerSummaryResponse linkedResponse = new CustomerSummaryResponse();
     linkedResponse.setId("c1");
-    CustomerResponse unlinkedResponse = new CustomerResponse();
+    CustomerSummaryResponse unlinkedResponse = new CustomerSummaryResponse();
     unlinkedResponse.setId("c2");
 
     when(customerRepository.findAll(
             ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
-    when(customerMapper.toResponse(linked)).thenReturn(linkedResponse);
-    when(customerMapper.toResponse(unlinked)).thenReturn(unlinkedResponse);
+    when(customerMapper.toSummaryResponse(linked)).thenReturn(linkedResponse);
+    when(customerMapper.toSummaryResponse(unlinked)).thenReturn(unlinkedResponse);
     when(customerMemberLinkRepository.findByCustomerIdInAndStatus(
             List.of("c1", "c2"), LinkStatus.ACTIVE))
         .thenReturn(List.of(activeLink("c1", "123456789012")));
 
-    List<CustomerResponse> result =
+    List<CustomerSummaryResponse> result =
         customerService.list(null, null, null, PageRequest.of(0, 10)).getContent();
 
     assertThat(result.get(0).getMemberLinked()).isTrue();
-    assertThat(result.get(0).getLinkedMemberCode()).isEqualTo("123456789012");
     assertThat(result.get(1).getMemberLinked()).isFalse();
-    assertThat(result.get(1).getLinkedMemberCode()).isNull();
     verify(customerMemberLinkRepository).findByCustomerIdInAndStatus(any(), any());
   }
 

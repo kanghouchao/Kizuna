@@ -7,12 +7,13 @@ import {
   CastInvitationIssueResponse,
   CastPublicResponse,
   CastResponse,
+  CastSummaryResponse,
   CastUpdateRequest,
 } from '../model/types';
 
 export const castApi = {
   /** キャスト一覧を取得する */
-  list: async (params?: PaginationParams): Promise<PageResult<CastResponse>> => {
+  list: async (params?: PaginationParams): Promise<PageResult<CastSummaryResponse>> => {
     const response = await apiClient.get('/store/casts', { params });
     return fromSpringPage(response.data);
   },

@@ -12,6 +12,7 @@ jest.mock('@/entities/customer', () => ({
     update: jest.fn(),
     linkMember: jest.fn(),
     unlinkMember: jest.fn(),
+    memberLink: jest.fn(),
     memberLinkHistory: jest.fn(),
     memberPointBalance: jest.fn(),
   },
@@ -47,7 +48,9 @@ const emptyOrderPage = { rows: [], page: 0, pageCount: 1, total: 0 };
 describe('顧客編集ページの取得失敗', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue([]);
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
@@ -124,7 +127,9 @@ describe('顧客編集ページの注文履歴', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedCustomerApi.get.mockResolvedValue(customer);
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue([]);
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
   });
 
   it('受注ステータスを enum 生値ではなく受注一覧と同じ日本語ラベルで表示すること', async () => {

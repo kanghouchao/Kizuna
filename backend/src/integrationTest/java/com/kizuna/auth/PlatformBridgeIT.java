@@ -184,9 +184,15 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     return headers;
   }
 
+  /**
+   * 漏出の観測面は作業キューの読み口にする。顧客詳細の注文履歴（{@code GET /store/orders}）は 要約の行になり備考を載せないため、カナリアが応答に現れる余地が無くなった。
+   */
   private ResponseEntity<String> getStoreOrdersRaw(HttpHeaders headers) {
     return rest.exchange(
-        "/store/orders?size=500", HttpMethod.GET, new HttpEntity<>(headers), String.class);
+        "/store/orders/work-queue?statuses=CREATED,CONFIRMED&size=2000",
+        HttpMethod.GET,
+        new HttpEntity<>(headers),
+        String.class);
   }
 
   private long castCountForStore(long storeId) {

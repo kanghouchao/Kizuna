@@ -71,11 +71,6 @@ export interface Order {
   contact_name?: string;
   contact_phone_number?: string;
   /**
-   * 伝票トークンの生値。会員へ帰属しなかった完了の応答にだけ現れる（他の読み口では応答から消える）。
-   * サーバはダイジェストしか保存しないので、この応答を逃すと二度と取得できない。
-   */
-  receipt_token?: string;
-  /**
    * 取消の記録（理由・実行者の表示名・時刻）。取消していない受注では応答から消える。
    *
    * 実行者は操作者の削除で欠落しうる（FK が SET NULL）。会員向けの応答は項目の白名単なので、
@@ -84,6 +79,78 @@ export interface Order {
   cancelled_reason?: string;
   cancelled_by_name?: string;
   cancelled_at?: string;
+}
+
+/**
+ * 作業キューの 1 行（GET /store/orders/work-queue）。対応の要否を判断し、その場で確定・謝絶するのに
+ * 要る項目だけを持つ。行を書き戻す操作（確定・更新・申請編集）の応答も同じ形で返るため、受け取った
+ * ものをそのまま 1 行の差し替えに使える。
+ */
+export interface OrderWorkQueueRow {
+  id?: string;
+  receptionist_id?: number;
+  receptionist_name?: string;
+  business_date?: string;
+  arrival_scheduled_start_time?: string;
+  cast_id?: string;
+  cast_name?: string;
+  pax?: number;
+  course_minutes?: number;
+  remarks?: string;
+  status?: OrderStatus;
+  reception_route?: ReceptionRoute;
+  /** 申請した会員の会員コード。店舗が起こした受注では応答から消える。 */
+  requester_member_code?: string;
+  customer_name?: string;
+  /** 受付で録入された連絡先。台帳の顧客に着かなかった受注にだけ残る。 */
+  contact_name?: string;
+  contact_phone_number?: string;
+  /** 申請時に会員が店舗へ名乗った名前。台帳行の無い会員の未確定申請では唯一の名乗りになる。 */
+  requester_declared_name?: string;
+}
+
+/**
+ * アーカイブの 1 行（GET /store/orders/archive）。終端状態の受注を振り返るための会計・ポイントと
+ * 取消の記録を持つ。指名・受付担当・備考は対応中にしか使わないので載らない。
+ */
+export interface OrderArchiveRow {
+  id?: string;
+  status?: OrderStatus;
+  business_date?: string;
+  total_fee?: number;
+  auto_grant_points?: number;
+  used_points?: number;
+  cancelled_at?: string;
+  /** 取消の実行者。操作者の削除で欠落しうる（FK が SET NULL）。 */
+  cancelled_by_name?: string;
+  cancelled_reason?: string;
+  customer_name?: string;
+  contact_name?: string;
+  contact_phone_number?: string;
+  requester_declared_name?: string;
+}
+
+/**
+ * 顧客詳細の注文履歴 1 行（GET /store/orders?customer_id=）。顧客は画面の文脈が持っているので載らない。
+ */
+export interface OrderSummaryRow {
+  id?: string;
+  business_date?: string;
+  cast_name?: string;
+  course_minutes?: number;
+  extension_minutes?: number;
+  used_points?: number;
+  status?: OrderStatus;
+}
+
+/**
+ * 完了処理の応答（POST /store/orders/{id}/completion）。伝票トークンの生値だけを持つ。
+ *
+ * 会員へ帰属した完了ではキーごと消える。サーバはダイジェストしか保存しないので、この応答を
+ * 逃すと生値は二度と取得できない。
+ */
+export interface OrderCompletionResult {
+  receipt_token?: string;
 }
 
 /**

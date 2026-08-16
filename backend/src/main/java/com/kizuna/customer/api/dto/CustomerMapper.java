@@ -13,6 +13,10 @@ public interface CustomerMapper {
   @Mapping(target = "linkedMemberCode", ignore = true)
   CustomerResponse toResponse(Customer customer);
 
+  // 同上。一覧は紐づけの有無だけを持ち、会員コードは載せない。
+  @Mapping(target = "memberLinked", ignore = true)
+  CustomerSummaryResponse toSummaryResponse(Customer customer);
+
   @Mapping(target = "landmark", ignore = true)
   // rank は DB デフォルト（'SILVER'）と同義。エンティティに列をマッピングしたため明示的に補完する
   @Mapping(target = "rank", source = "rank", defaultValue = "SILVER")

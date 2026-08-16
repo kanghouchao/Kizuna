@@ -12,11 +12,15 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
-import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.api.dto.OrderCompletionResponse;
+import com.kizuna.order.api.dto.OrderSummaryResponse;
+import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderService;
@@ -78,7 +82,7 @@ class OrderControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<OrderResponse> empty = new PageImpl<>(List.of());
+    Page<OrderSummaryResponse> empty = new PageImpl<>(List.of());
     when(orderService.list(any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
@@ -120,6 +124,74 @@ class OrderControllerTest {
     assertThat(criteriaCaptor.getValue().descending()).isTrue();
     assertThat(cursorCaptor.getValue()).isEqualTo("abc");
     assertThat(sizeCaptor.getValue()).isEqualTo(5);
+  }
+
+  @Test
+  @DisplayName("作業キューの行に伝票トークンとドライバー連絡事項のキーが存在しないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void workQueueRowCarriesNeitherTheReceiptTokenNorTheDriverMessage() throws Exception {
+    // 抑制ではなく型から消えていることを見る。NON_NULL 下では値が null でもキーは消えるので、
+    // isNull() では「型に残ったまま詰め忘れただけ」の状態と区別できない。
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.listWorkQueue(any(), any(), anyInt()))
+        .thenReturn(
+            new CursorPage<>(
+                List.of(OrderWorkQueueResponse.builder().id("o1").status("CONFIRMED").build()),
+                null));
+
+    mockMvc
+        .perform(storeGet("/store/orders/work-queue?statuses=CONFIRMED"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].id").value("o1"))
+        .andExpect(jsonPath("$.content[0].receipt_token").doesNotExist())
+        .andExpect(jsonPath("$.content[0].cast_driver_message").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("アーカイブの行に伝票トークンとドライバー連絡事項のキーが存在しないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void archiveRowCarriesNeitherTheReceiptTokenNorTheDriverMessage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.listArchive(any(), any()))
+        .thenReturn(
+            new PageImpl<>(
+                List.of(OrderArchiveResponse.builder().id("o1").status("COMPLETED").build())));
+
+    mockMvc
+        .perform(storeGet("/store/orders/archive?statuses=COMPLETED"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].id").value("o1"))
+        .andExpect(jsonPath("$.content[0].receipt_token").doesNotExist())
+        .andExpect(jsonPath("$.content[0].cast_driver_message").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("完了の応答は伝票トークンだけを持ち、受注の項目を載せないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionResponseCarriesOnlyTheReceiptToken() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.complete(any(), any(), any()))
+        .thenReturn(new OrderCompletionResponse("raw-token"));
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.receipt_token").value("raw-token"))
+        .andExpect(jsonPath("$.id").doesNotExist())
+        .andExpect(jsonPath("$.status").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("会員へ帰属した完了では伝票トークンのキーごと消えること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionOfAMemberOrderOmitsTheReceiptTokenKey() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.complete(any(), any(), any())).thenReturn(new OrderCompletionResponse(null));
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.receipt_token").doesNotExist());
   }
 
   @Test
@@ -195,11 +267,11 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmAndDeclineAreAllowedForOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirm(any(), any())).thenReturn(OrderResponse.builder().build());
-    when(orderService.decline(any())).thenReturn(OrderResponse.builder().build());
+    when(orderService.confirm(any(), any())).thenReturn(OrderWorkQueueResponse.builder().build());
 
     mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isOk());
-    mockMvc.perform(storePost("/store/orders/o1/decline")).andExpect(status().isOk());
+    // 謝絶は結果を読まれない操作なので 204（本体なし）で返る。
+    mockMvc.perform(storePost("/store/orders/o1/decline")).andExpect(status().isNoContent());
   }
 
   @Test
@@ -218,7 +290,7 @@ class OrderControllerTest {
   void reservationRequestUpdateAcceptsAnOmittedCastAndReceptionist() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.updateReservationRequest(any(), any()))
-        .thenReturn(OrderResponse.builder().build());
+        .thenReturn(OrderWorkQueueResponse.builder().build());
 
     mockMvc
         .perform(storePut("/store/orders/reservation-requests/o1", "{\"pax\": 3}"))
@@ -241,7 +313,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void completionAndPreviewAreAllowedForOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.complete(any(), any(), any())).thenReturn(OrderResponse.builder().build());
+    when(orderService.complete(any(), any(), any())).thenReturn(new OrderCompletionResponse(null));
     when(orderService.completionPreview(any(), anyInt()))
         .thenReturn(OrderCompletionPreviewResponse.builder().build());
 
@@ -284,7 +356,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderUpdateContractAcceptsAnOmittedCastAndReceptionist() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.update(any(), any())).thenReturn(OrderResponse.builder().build());
+    when(orderService.update(any(), any())).thenReturn(OrderWorkQueueResponse.builder().build());
 
     // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
     // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。
@@ -334,7 +406,7 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.confirm(any(), any()))
         .thenThrow(integrityViolation("uq_t_customer_member_links_active_member"))
-        .thenReturn(OrderResponse.builder().id("o1").build());
+        .thenReturn(OrderWorkQueueResponse.builder().id("o1").build());
 
     mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isOk());
 
@@ -442,12 +514,11 @@ class OrderControllerTest {
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderService);
 
-    // 正向対照: 上限ちょうどは通る
-    when(orderService.cancel(any(), any(), any())).thenReturn(OrderResponse.builder().build());
+    // 正向対照: 上限ちょうどは通る（取消は結果を読まれない操作なので 204）
     mockMvc
         .perform(
             storePost("/store/orders/o1/cancellation", "{\"reason\": \"" + "あ".repeat(500) + "\"}"))
-        .andExpect(status().isOk());
+        .andExpect(status().isNoContent());
   }
 
   @Test

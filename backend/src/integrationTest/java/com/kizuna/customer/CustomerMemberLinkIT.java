@@ -6,7 +6,12 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.member.domain.Member;
+import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,11 +38,12 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
   private static final String PASSWORD = "password1234";
 
   @Autowired private CustomerMemberLinkRepository customerMemberLinkRepository;
+  @Autowired private MemberRepository memberRepository;
 
   private final long nonce = System.nanoTime();
 
   @Test
-  @DisplayName("会員コードで紐づけると一覧・詳細に紐づけ状態と会員コードが投影されること")
+  @DisplayName("会員コードで紐づけると詳細と現況に会員コードが、一覧に紐づけ状態が投影されること")
   void linkIsProjectedOntoListAndDetail() {
     // 一覧はクエリ文字列で絞り込むため、顧客名は ASCII の一意な字面にする
     String name = "cml-projected-" + nonce;
@@ -69,7 +75,14 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
     JsonNode row = list.getBody().path("content").get(0);
     assertThat(row.path("id").asString()).isEqualTo(customerId);
     assertThat(row.path("member_linked").asBoolean()).isTrue();
-    assertThat(row.path("linked_member_code").asString()).isEqualTo(memberCode);
+    // 一覧の行は会員コードを持たない（要るのは有無だけ）。コードは現況の読み口が答える
+    assertThat(row.hasNonNull("linked_member_code")).isFalse();
+
+    ResponseEntity<JsonNode> current = memberLink(STORE_A, customerId, token);
+    assertThat(current.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(current.getBody().path("member_code").asString()).isEqualTo(memberCode);
+    assertThat(current.getBody().path("linked").asBoolean()).isTrue();
+    assertThat(current.getBody().path("linked_at").asString()).isNotBlank();
   }
 
   @Test
@@ -104,6 +117,9 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
     assertThat(detail.getBody().path("member_linked").asBoolean()).isFalse();
     // 応答は non_null 包含のため未紐づけでは項目ごと落ちる。値が無いことだけを見る
     assertThat(detail.getBody().hasNonNull("linked_member_code")).isFalse();
+    // 現況の読み口は「紐づいていない」を本体で表さず 404 で返す
+    assertThat(memberLink(STORE_A, customerId, token).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test
@@ -129,7 +145,7 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(detail.getBody().path("member_linked").asBoolean()).isFalse();
 
-    JsonNode history = history(STORE_A, customerId, token).getBody();
+    JsonNode history = history(STORE_A, customerId, token).getBody().path("content");
     assertThat(history).hasSize(1);
     JsonNode row = history.get(0);
     assertThat(row.path("member_code").asString()).isEqualTo(memberCode);
@@ -152,7 +168,7 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
     assertThat(switched.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(switched.getBody().path("member_code").asString()).isEqualTo(secondCode);
 
-    JsonNode history = history(STORE_A, customerId, token).getBody();
+    JsonNode history = history(STORE_A, customerId, token).getBody().path("content");
     assertThat(history).hasSize(2);
     // 新しい区間が先頭。旧区間は削除されず RELEASED として残る。
     assertThat(history.get(0).path("member_code").asString()).isEqualTo(secondCode);
@@ -236,6 +252,8 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
     assertThat(link(STORE_B, customerId, memberCode, token).getStatusCode())
         .isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(history(STORE_B, customerId, token).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(memberLink(STORE_B, customerId, token).getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
@@ -252,8 +270,8 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.OK);
 
     // 店舗Aの履歴には店舗Bの区間が混ざらない
-    assertThat(history(STORE_A, customerInA, managerToken).getBody()).hasSize(1);
-    assertThat(history(STORE_B, customerInB, managerToken).getBody()).hasSize(1);
+    assertThat(history(STORE_A, customerInA, managerToken).getBody().path("content")).hasSize(1);
+    assertThat(history(STORE_B, customerInB, managerToken).getBody().path("content")).hasSize(1);
   }
 
   @Test
@@ -268,6 +286,10 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(history(STORE_A, customerInB, managerToken).getStatusCode())
         .isEqualTo(HttpStatus.NOT_FOUND);
+    // 越境の 404 は「紐づいていない」の 404 と同形になる。現況の読み口でも顧客の存在自体が漏れない
+    ResponseEntity<JsonNode> foreign = memberLink(STORE_A, customerInB, managerToken);
+    assertThat(foreign.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(foreign.getBody().hasNonNull("member_code")).as("拒否応答に他店舗の会員コードが現れないこと").isFalse();
   }
 
   @Test
@@ -286,6 +308,55 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
     return "/store/customers/" + customerId + "/member-link";
   }
 
+  @Test
+  @DisplayName("紐づけ時刻が同一の履歴でも、カーソルで重複・欠落なく辿れること")
+  void walksEveryHistoryRowThroughTheCursorEvenWhenLinkedAtTheSameInstant() {
+    // 並びの鍵（linked_at）だけでは同値の 3 行の前後が決まらない。size=2 の境界がその群の
+    // 内側に落ちるので、副キー id が無いと 2 頁目が手前へ戻って重複するか、行を飛ばす。
+    String customerId = createCustomer(STORE_A, "cml-same-instant-" + nonce);
+    long memberId = memberIdOf(registerMember("link-same-instant"));
+    OffsetDateTime sameInstant = OffsetDateTime.parse("2026-08-10T12:00:00+09:00");
+
+    List<String> seeded = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      CustomerMemberLink row =
+          CustomerMemberLink.builder()
+              .customerId(customerId)
+              .memberId(memberId)
+              .memberCode("00000000000" + i)
+              .reason(LinkReason.MEMBER_CODE)
+              .linkedBy(1L)
+              .linkedAt(sameInstant)
+              .build();
+      // 3 行とも解除済みにする。ACTIVE は顧客・会員ごとに 1 件までの部分一意索引に当たる
+      row.release(1L);
+      row.setStoreId(STORE_A);
+      seeded.add(customerMemberLinkRepository.saveAndFlush(row).getId());
+    }
+
+    List<String> walked = new ArrayList<>();
+    String cursor = null;
+    int pages = 0;
+    do {
+      String url =
+          memberLinkPath(customerId)
+              + "/history?size=2"
+              + (cursor == null ? "" : "&cursor=" + cursor);
+      ResponseEntity<JsonNode> page =
+          rest.exchange(
+              url, HttpMethod.GET, new HttpEntity<>(headersFor(STORE_A, token)), JsonNode.class);
+      assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
+      page.getBody().path("content").forEach(row -> walked.add(row.path("id").asString()));
+      JsonNode next = page.getBody().path("next_cursor");
+      cursor = next.isString() ? next.asString() : null;
+      pages++;
+    } while (cursor != null && pages < 10);
+
+    assertThat(cursor).as("続きを辿り切ること").isNull();
+    assertThat(walked).as("同じ行を二度返さないこと").doesNotHaveDuplicates();
+    assertThat(walked).as("同刻の 3 行がすべて現れること").containsAll(seeded);
+  }
+
   private ResponseEntity<JsonNode> link(
       long storeId, String customerId, String memberCode, String bearerToken) {
     return rest.exchange(
@@ -296,12 +367,25 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
         JsonNode.class);
   }
 
+  /** 現に有効な紐づけ（未紐づけなら 404）。 */
+  private ResponseEntity<JsonNode> memberLink(long storeId, String customerId, String bearerToken) {
+    return rest.exchange(
+        memberLinkPath(customerId),
+        HttpMethod.GET,
+        new HttpEntity<>(headersFor(storeId, bearerToken)),
+        JsonNode.class);
+  }
+
   private ResponseEntity<JsonNode> history(long storeId, String customerId, String bearerToken) {
     return rest.exchange(
         memberLinkPath(customerId) + "/history",
         HttpMethod.GET,
         new HttpEntity<>(headersFor(storeId, bearerToken)),
         JsonNode.class);
+  }
+
+  private long memberIdOf(String memberCode) {
+    return memberRepository.findByMemberCode(memberCode).map(Member::getId).orElseThrow();
   }
 
   private String createCustomer(long storeId, String name) {

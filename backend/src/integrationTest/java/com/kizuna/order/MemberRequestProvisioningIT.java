@@ -65,7 +65,8 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));
 
     assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    String customerId = confirmed.getBody().path("customer_id").asString();
+    // 確定の応答は作業キューの行の形で顧客 ID を載せない。着いた先は詳細の読み口で確かめる
+    String customerId = customerIdOf(orderId, storeHeaders(STORE_A));
     assertThat(customerId).as("確定した受注が顧客に着くこと").isNotBlank();
 
     JsonNode customer = customer(customerId).getBody();
@@ -91,11 +92,11 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     linkByMemberCode(established, applicant.memberCode());
     String declaredName = "使われない名乗り-" + nonce;
 
-    ResponseEntity<JsonNode> confirmed =
-        confirm(request(applicant, STORE_A, declaredName), storeHeaders(STORE_A));
+    String orderId = request(applicant, STORE_A, declaredName);
+    ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));
 
     assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(confirmed.getBody().path("customer_id").asString()).isEqualTo(established);
+    assertThat(customerIdOf(orderId, storeHeaders(STORE_A))).isEqualTo(established);
     List<CustomerMemberLink> links = activeLinks(applicant);
     assertThat(links).hasSize(1);
     assertThat(links.get(0).getReason())
@@ -118,7 +119,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
                     JsonNode.class)
                 .getStatusCode())
         .as("前提: 謝絶が成功すること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.NO_CONTENT);
 
     String withdrawnName = "取下げる名乗り-" + nonce;
     String withdrawn = request(applicant, STORE_A, withdrawnName);
@@ -172,7 +173,9 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     assertThat(responses)
         .allSatisfy(
             response ->
-                assertThat(response.getBody().path("customer_id").asString())
+                assertThat(
+                        customerIdOf(
+                            response.getBody().path("id").asString(), storeHeaders(STORE_A)))
                     .as("双方の受注が同じ顧客に着くこと")
                     .isEqualTo(links.get(0).getCustomerId()));
   }
@@ -203,14 +206,12 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));
 
     assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(confirmed.getBody().path("customer_id").asString())
-        .as("別会員を指す行に着け続けないこと（完了すればその会員へ記帳されてしまう）")
-        .isNotEqualTo(shared);
+    String landedCustomerId = customerIdOf(orderId, storeHeaders(STORE_A));
+    assertThat(landedCustomerId).as("別会員を指す行に着け続けないこと（完了すればその会員へ記帳されてしまう）").isNotEqualTo(shared);
     List<CustomerMemberLink> links = activeLinks(applicant);
     assertThat(links).as("申請者には当店の関連が整うこと").hasSize(1);
     assertThat(links.get(0).getReason()).isEqualTo(LinkReason.MEMBER_REQUEST);
-    assertThat(confirmed.getBody().path("customer_id").asString())
-        .isEqualTo(links.get(0).getCustomerId());
+    assertThat(landedCustomerId).isEqualTo(links.get(0).getCustomerId());
     assertThat(activeLinks(other)).as("付け替え先の会員の関連は動かないこと").hasSize(1);
     assertThat(activeLinks(other).get(0).getCustomerId()).isEqualTo(shared);
   }
@@ -232,7 +233,16 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(completed.getBody().path("auto_grant_points").asInt())
+    // 完了の応答は伝票トークン専用の型。付与の結果は詳細の読み口で確かめる
+    assertThat(
+            rest.exchange(
+                    "/store/orders/" + orderId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(storeHeaders(STORE_A)),
+                    JsonNode.class)
+                .getBody()
+                .path("auto_grant_points")
+                .asInt())
         .as("会員コードの再提示なしに付与されること")
         .isEqualTo(120);
     assertThat(pointEntryRepository.findCredits(memberIdOf(applicant)))
@@ -250,8 +260,10 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     Applicant applicant = register(canaryDisplayName, canaryEmail);
     String declaredName = "CANARY-DECLARED-" + nonce;
     String orderId = request(applicant, STORE_A, declaredName);
-    String customerId =
-        confirm(orderId, storeHeaders(STORE_A)).getBody().path("customer_id").asString();
+    assertThat(confirm(orderId, storeHeaders(STORE_A)).getStatusCode())
+        .as("前提: 確定が成功すること")
+        .isEqualTo(HttpStatus.OK);
+    String customerId = customerIdOf(orderId, storeHeaders(STORE_A));
 
     String customerBody = rawStoreBody("/store/customers/" + customerId);
     String listBody = rawStoreBody("/store/customers?search=" + declaredName);
@@ -287,7 +299,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
         confirm(orderId, headersFor(STORE_B, loginAs(MULTI_STORE_MANAGER_EMAIL)));
 
     assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(confirmed.getBody().path("customer_id").asString())
+    assertThat(customerIdOf(orderId, headersFor(STORE_B, loginAs(MULTI_STORE_MANAGER_EMAIL))))
         .as("他店舗の台帳行を跨いで使わないこと")
         .isNotBlank()
         .isNotEqualTo(storeACustomer);
@@ -318,6 +330,15 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(requested.getStatusCode()).as("前提: 予約申請が成功すること").isEqualTo(HttpStatus.CREATED);
     return requested.getBody().path("id").asString();
+  }
+
+  /** 受注が着いた顧客の ID。確定の応答は作業キューの行の形になり顧客 ID を載せないため、詳細の読み口から取る。 */
+  private String customerIdOf(String orderId, HttpHeaders headers) {
+    return rest.exchange(
+            "/store/orders/" + orderId, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class)
+        .getBody()
+        .path("customer_id")
+        .asString();
   }
 
   private ResponseEntity<JsonNode> confirm(String orderId, HttpHeaders headers) {

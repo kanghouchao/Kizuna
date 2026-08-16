@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon, SquarePenIcon, XIcon } from 'lucide-react';
-import { ORDER_STATUS_LABELS, Order, orderApi } from '@/entities/order';
+import { ORDER_STATUS_LABELS, OrderWorkQueueRow, orderApi } from '@/entities/order';
 import { getApiErrorMessage } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
@@ -23,21 +23,21 @@ import {
 const CANCEL_REASON_MAX_LENGTH = 500;
 
 interface OrderQueueCardProps {
-  order: Order;
+  order: OrderWorkQueueRow;
   /** 謝絶・取消のように、この受注が群から外れる処理が終わったとき。 */
   onProcessed: (id: string) => void;
   /**
    * 確定が終わったとき。確定は「対応が要る」群の中の移動（未確定 → 確定）で群からは外れないため、
    * 取り除かずに応答の内容へ差し替える。
    */
-  onConfirmed: (confirmed: Order) => void;
+  onConfirmed: (confirmed: OrderWorkQueueRow) => void;
   /** 編集モーダルを開く。 */
-  onEdit: (order: Order) => void;
+  onEdit: (order: OrderWorkQueueRow) => void;
   /** 完了モーダルを開く。 */
-  onComplete: (order: Order) => void;
+  onComplete: (order: OrderWorkQueueRow) => void;
 }
 
-function CustomerName({ order }: { order: Order }) {
+function CustomerName({ order }: { order: OrderWorkQueueRow }) {
   const label = customerLabel(order);
   if (label === null) {
     return <span className="text-muted-foreground">お客様名なし</span>;
@@ -51,7 +51,7 @@ function CustomerName({ order }: { order: Order }) {
 }
 
 /** カードの 2 行目。時刻・指名・人数・コース・受付を 1 本の注記行に畳む。 */
-function CardMeta({ order }: { order: Order }) {
+function CardMeta({ order }: { order: OrderWorkQueueRow }) {
   const parts = [
     order.arrival_scheduled_start_time?.slice(0, 5) ?? '時刻未定',
     order.cast_name ? `指名 ${order.cast_name}` : 'フリー',
@@ -88,11 +88,11 @@ export function OrderQueueCard({
    * 処理を走らせて結果を通知する。処理後にこの受注が群から外れるのか、群の中で状態が変わるだけなのかは
    * 操作ごとに違うので、行の始末は {@code settle} が決める。
    */
-  const run = async (
-    action: () => Promise<Order>,
+  const run = async <T,>(
+    action: () => Promise<T>,
     success: string,
     failure: string,
-    settle: (updated: Order) => void
+    settle: (updated: T) => void
   ) => {
     setProcessing(true);
     try {

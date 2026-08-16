@@ -4,6 +4,7 @@ import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
+import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastFieldDefinition;
@@ -38,14 +39,14 @@ public class CastService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<CastResponse> list(String search, Pageable pageable) {
+  public Page<CastSummaryResponse> list(String search, Pageable pageable) {
     Page<Cast> page =
         search != null
             ? castRepository.findByNameContainingIgnoreCase(search, pageable)
             : castRepository.findAll(pageable);
     Map<String, CastInvitationStatus> statuses =
         castInvitationService.deriveStatuses(page.getContent());
-    return page.map(cast -> castMapper.toResponse(cast, statuses.get(cast.getId())));
+    return page.map(cast -> castMapper.toSummaryResponse(cast, statuses.get(cast.getId())));
   }
 
   @StoreScoped

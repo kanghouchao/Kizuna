@@ -1,4 +1,4 @@
-import { apiClient } from '@/shared/api';
+import { CursorPageResult, CursorParams, apiClient, fromCursorPage } from '@/shared/api';
 import {
   CastScheduleItem,
   CastShiftRequestItem,
@@ -58,10 +58,17 @@ export const shiftApi = {
     const response = await apiClient.post('/platform/me/shift-requests/changes', data);
     return response.data;
   },
-  /** 本人（キャスト）の出勤希望履歴を取得する（全所属店横断・全量・新しい順）。 */
-  myShiftRequests: async (): Promise<CastShiftRequestItem[]> => {
-    const response = await apiClient.get('/platform/me/shift-requests');
-    return response.data;
+  /**
+   * 本人（キャスト）の出勤希望履歴を取得する（全所属店横断・新しい順）。
+   *
+   * 続きは応答の nextCursor をそのまま cursor に渡して取る。履歴は提出のたびに増え続けるため、
+   * 全量では返らない。
+   */
+  myShiftRequests: async (
+    params?: CursorParams
+  ): Promise<CursorPageResult<CastShiftRequestItem>> => {
+    const response = await apiClient.get('/platform/me/shift-requests', { params });
+    return fromCursorPage(response.data);
   },
   /** 本人（キャスト）の所属店舗一覧を取得する（提出フォームの店舗セレクタ用）。 */
   myStores: async (): Promise<CastStoreItem[]> => {

@@ -7,15 +7,19 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
+import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
@@ -90,10 +94,10 @@ public class OrderService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<OrderResponse> list(String customerId, Pageable pageable) {
+  public Page<OrderSummaryResponse> list(String customerId, Pageable pageable) {
     // 一覧は集約を経由せず JPQL join projection で取得。customerId は顧客詳細の注文履歴用
     String filter = (customerId == null || customerId.isBlank()) ? null : customerId;
-    return orderRepository.findAllViews(filter, pageable).map(orderMapper::toResponse);
+    return orderRepository.findAllViews(filter, pageable).map(orderMapper::toSummaryResponse);
   }
 
   /**
@@ -119,7 +123,7 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<OrderResponse> listWorkQueue(
+  public CursorPage<OrderWorkQueueResponse> listWorkQueue(
       OrderQueryCriteria criteria, String cursor, int requestedSize) {
     int size = CursorPage.clampSize(requestedSize);
     // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
@@ -133,7 +137,7 @@ public class OrderService {
             .collect(Collectors.toMap(OrderedRow::id, row -> String.valueOf(row.sortKey())));
     List<OrderView> views = viewsInOrder(rows.stream().map(OrderedRow::id).toList());
     return CursorPage.of(views, size, view -> cursorOf(view, cursorsById))
-        .map(orderMapper::toResponse);
+        .map(orderMapper::toWorkQueueResponse);
   }
 
   /**
@@ -146,10 +150,11 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<OrderResponse> listArchive(OrderQueryCriteria criteria, Pageable pageable) {
+  public Page<OrderArchiveResponse> listArchive(OrderQueryCriteria criteria, Pageable pageable) {
     // アーカイブは位置をページ番号で指すため、鍵の値そのものは要らない
     List<String> ids = orderSearchQuery.findIds(criteria, pageable);
-    List<OrderResponse> rows = viewsInOrder(ids).stream().map(orderMapper::toResponse).toList();
+    List<OrderArchiveResponse> rows =
+        viewsInOrder(ids).stream().map(orderMapper::toArchiveResponse).toList();
     return new PageImpl<>(rows, pageable, orderSearchQuery.count(criteria));
   }
 
@@ -247,7 +252,7 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderResponse update(String id, OrderUpdateRequest request) {
+  public OrderWorkQueueResponse update(String id, OrderUpdateRequest request) {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
@@ -311,7 +316,7 @@ public class OrderService {
     }
 
     Order saved = orderRepository.save(order);
-    return toResponse(saved.getId());
+    return toWorkQueueResponse(saved.getId());
   }
 
   /**
@@ -326,7 +331,7 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderResponse confirm(String id, String actorEmail) {
+  public OrderWorkQueueResponse confirm(String id, String actorEmail) {
     Order order = findReservationRequest(id);
     revalidateNomination(order);
     order.confirm();
@@ -338,7 +343,7 @@ public class OrderService {
       order.linkCustomer(ensureCustomerForRequester(order, actorEmail));
     }
     orderRepository.save(order);
-    return toResponse(id);
+    return toWorkQueueResponse(id);
   }
 
   /**
@@ -399,7 +404,8 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderResponse complete(String id, OrderCompletionRequest request, String actorEmail) {
+  public OrderCompletionResponse complete(
+      String id, OrderCompletionRequest request, String actorEmail) {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
@@ -448,10 +454,8 @@ public class OrderService {
 
     order.completeWith(request.getTotalFee(), usePoints, granted);
     orderRepository.save(order);
-    OrderResponse response = toResponse(id);
     // 生値がこの応答の外へ出る経路は無い（保存されるのはダイジェストだけ）。会員へ帰属した完了では null。
-    response.setReceiptToken(receiptToken);
-    return response;
+    return new OrderCompletionResponse(receiptToken);
   }
 
   /**
@@ -537,7 +541,7 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderResponse updateReservationRequest(
+  public OrderWorkQueueResponse updateReservationRequest(
       String id, ReservationRequestUpdateRequest request) {
     Order order = findReservationRequest(id);
     if (order.getStatus() != OrderStatus.CREATED) {
@@ -562,7 +566,7 @@ public class OrderService {
         request.getReceptionistId(), request.getCastId(), request.getPax(), request.getRemarks());
 
     Order saved = orderRepository.save(order);
-    return toResponse(saved.getId());
+    return toWorkQueueResponse(saved.getId());
   }
 
   /**
@@ -576,22 +580,20 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderResponse cancel(String id, OrderCancellationRequest request, String actorEmail) {
+  public void cancel(String id, OrderCancellationRequest request, String actorEmail) {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
     order.cancelWith(request.getReason(), resolveActorId(actorEmail), OffsetDateTime.now());
     orderRepository.save(order);
-    return toResponse(id);
   }
 
   /** 予約申請を謝絶する。確定前の申請のみが対象で、確定後の取り消しは理由必須の取消操作（{@link #cancel}）に委ねる。 */
   @StoreScoped
   @Transactional
-  public OrderResponse decline(String id) {
+  public void decline(String id) {
     Order order = findReservationRequest(id);
     order.cancelRequest();
     orderRepository.save(order);
-    return toResponse(id);
   }
 
   /**
@@ -655,6 +657,14 @@ public class OrderService {
     return orderRepository
         .findViewById(id)
         .map(orderMapper::toResponse)
+        .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+  }
+
+  /** 行を書き戻す操作の応答。作業キューが持つ行と同じ形で返し、呼出側がその場で 1 行だけ差し替えられるようにする。 */
+  private OrderWorkQueueResponse toWorkQueueResponse(String id) {
+    return orderRepository
+        .findViewById(id)
+        .map(orderMapper::toWorkQueueResponse)
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
   }
 
