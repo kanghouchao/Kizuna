@@ -55,9 +55,11 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> completed = complete(STORE_A, token, orderId, TOTAL_FEE, null);
 
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(completed.getBody().path("status").asString()).isEqualTo("COMPLETED");
-    assertThat(completed.getBody().path("total_fee").asInt()).isEqualTo(TOTAL_FEE);
-    assertThat(completed.getBody().path("auto_grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
+    // 完了の応答は伝票トークン専用の型。会計とポイントの結果は詳細の読み口で確かめる
+    JsonNode detail = orderJson(STORE_A, token, orderId);
+    assertThat(detail.path("status").asString()).isEqualTo("COMPLETED");
+    assertThat(detail.path("total_fee").asInt()).isEqualTo(TOTAL_FEE);
+    assertThat(detail.path("auto_grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
 
     long memberId = memberIdOf(memberCode);
     List<PointEntry> credits = pointEntryRepository.findCredits(memberId);
@@ -89,8 +91,9 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> completed = complete(STORE_B, managerToken, spent, TOTAL_FEE, 100);
 
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(completed.getBody().path("used_points").asInt()).isEqualTo(100);
-    assertThat(completed.getBody().path("auto_grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
+    JsonNode spentDetail = orderJson(STORE_B, managerToken, spent);
+    assertThat(spentDetail.path("used_points").asInt()).isEqualTo(100);
+    assertThat(spentDetail.path("auto_grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
 
     long memberId = memberIdOf(memberCode);
     PointEntry usage = usageEntryOf(memberId);
@@ -143,7 +146,7 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     // 正向対照: 同額なら全額のポイント払いとして通る（負向 400 が経路の不在でない証明）
     ResponseEntity<JsonNode> completed = complete(STORE_A, token, spending, 100, 100);
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(completed.getBody().path("used_points").asInt()).isEqualTo(100);
+    assertThat(orderJson(STORE_A, token, spending).path("used_points").asInt()).isEqualTo(100);
   }
 
   @Test
@@ -286,14 +289,17 @@ class OrderCompletionIT extends CrossStoreTestSupport {
   }
 
   private String statusOf(long storeId, String bearerToken, String orderId) {
+    return orderJson(storeId, bearerToken, orderId).path("status").asString();
+  }
+
+  /** 受注 1 件の詳細。完了の応答が伝票トークンだけになったので、会計の結果はここから読む。 */
+  private JsonNode orderJson(long storeId, String bearerToken, String orderId) {
     return rest.exchange(
             "/store/orders/" + orderId,
             HttpMethod.GET,
             new HttpEntity<>(headersFor(storeId, bearerToken)),
             JsonNode.class)
-        .getBody()
-        .path("status")
-        .asString();
+        .getBody();
   }
 
   // ==================== 会員・台帳 ====================

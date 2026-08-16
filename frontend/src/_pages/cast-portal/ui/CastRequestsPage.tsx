@@ -9,7 +9,7 @@ import {
   ShiftRequestCreateRequest,
   shiftApi,
 } from '@/entities/shift';
-import { useResource } from '@/shared/lib';
+import { useCursorList, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -98,11 +98,13 @@ export function CastRequestsPage() {
   } = useResource(() => shiftApi.myStores());
   const stores = storesData ?? [];
   const {
-    data: history,
+    rows: history,
     isLoading: historyLoading,
-    failure: historyFailure,
+    failed: historyFailed,
+    hasMore: hasMoreHistory,
     reload: reloadHistory,
-  } = useResource(() => shiftApi.myShiftRequests());
+    loadMore: loadMoreHistory,
+  } = useCursorList(cursor => shiftApi.myShiftRequests({ cursor }));
 
   // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
   const storeOptions = stores.map(s => ({
@@ -139,7 +141,7 @@ export function CastRequestsPage() {
       await shiftApi.submitShiftRequest(payload);
       notify.success('出勤希望を提出しました');
       reset(defaultValues(values.store_id));
-      void reloadHistory();
+      reloadHistory();
     } catch {
       notify.error('出勤希望の提出に失敗しました');
     }
@@ -282,10 +284,10 @@ export function CastRequestsPage() {
         <h2 className="mb-2 text-sm font-semibold text-foreground">提出履歴</h2>
         {historyLoading ? (
           <p className="text-sm text-muted-foreground">読み込み中...</p>
-        ) : historyFailure !== null ? (
+        ) : historyFailed ? (
           // 読めなかった履歴を空に見せると、提出済みの希望が消えたと読める
-          <RegionError message="履歴の取得に失敗しました" onRetry={() => void reloadHistory()} />
-        ) : history === null || history.length === 0 ? (
+          <RegionError message="履歴の取得に失敗しました" onRetry={() => reloadHistory()} />
+        ) : history.length === 0 ? (
           <p className="text-sm text-muted-foreground">提出履歴はありません</p>
         ) : (
           <ul className="space-y-2">
@@ -323,6 +325,20 @@ export function CastRequestsPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {hasMoreHistory && (
+          <div className="mt-3 flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => loadMoreHistory()}
+              disabled={historyLoading}
+            >
+              さらに読み込む
+            </Button>
+          </div>
         )}
       </div>
     </div>

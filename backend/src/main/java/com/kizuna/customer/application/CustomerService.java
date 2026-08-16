@@ -3,6 +3,7 @@ package com.kizuna.customer.application;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
+import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
@@ -47,7 +48,7 @@ public class CustomerService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<CustomerResponse> list(
+  public Page<CustomerSummaryResponse> list(
       String search, String rank, String classification, Pageable pageable) {
     Specification<Customer> spec = searchSpec(search, rank, classification);
     Page<Customer> page = customerRepository.findAll(spec, pageable);
@@ -63,8 +64,11 @@ public class CustomerService {
                     Collectors.toMap(
                         CustomerMemberLink::getCustomerId, CustomerMemberLink::getMemberCode));
     return page.map(
-        customer ->
-            withMemberLink(customerMapper.toResponse(customer), activeCodes.get(customer.getId())));
+        customer -> {
+          CustomerSummaryResponse row = customerMapper.toSummaryResponse(customer);
+          row.setMemberLinked(activeCodes.containsKey(customer.getId()));
+          return row;
+        });
   }
 
   /**

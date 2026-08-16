@@ -63,13 +63,27 @@ describe('customerApi', () => {
   it('unlinkMember は member-link を DELETE する', async () => {
     await expect(customerApi.unlinkMember('c1')).resolves.toBeUndefined();
   });
-  it('memberLinkHistory は member-link/history を GET し配列をそのまま返す', async () => {
-    mockedGet.mockResolvedValueOnce({ data: [{ id: 'l1', status: 'ACTIVE' }] });
+  it('memberLink は現に有効な紐づけを GET する', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { linked: true, member_code: '123456789012' } });
 
-    await expect(customerApi.memberLinkHistory('c1')).resolves.toEqual([
-      { id: 'l1', status: 'ACTIVE' },
-    ]);
-    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-link/history');
+    await expect(customerApi.memberLink('c1')).resolves.toEqual({
+      linked: true,
+      member_code: '123456789012',
+    });
+    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-link');
+  });
+  it('memberLinkHistory は member-link/history を GET し、カーソルページを正規化する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ id: 'l1', status: 'ACTIVE' }], next_cursor: 'abc' },
+    });
+
+    await expect(customerApi.memberLinkHistory('c1', { cursor: 'x' })).resolves.toEqual({
+      rows: [{ id: 'l1', status: 'ACTIVE' }],
+      nextCursor: 'abc',
+    });
+    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-link/history', {
+      params: { cursor: 'x' },
+    });
   });
   it('memberPointBalance は member-point-balance を GET する', async () => {
     mockedGet.mockResolvedValueOnce({ data: { linked: true, balance: 120 } });

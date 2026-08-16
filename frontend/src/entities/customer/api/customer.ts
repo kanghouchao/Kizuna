@@ -1,4 +1,12 @@
-import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
+import {
+  CursorPageResult,
+  CursorParams,
+  PageResult,
+  PaginationParams,
+  apiClient,
+  fromCursorPage,
+  fromSpringPage,
+} from '@/shared/api';
 import {
   CustomerCreateRequest,
   CustomerMemberLinkHistoryResponse,
@@ -6,6 +14,7 @@ import {
   CustomerPointAdjustmentRequest,
   CustomerPointBalanceResponse,
   CustomerResponse,
+  CustomerSummaryResponse,
   CustomerUpdateRequest,
 } from '../model/types';
 
@@ -17,7 +26,7 @@ export type CustomerListParams = PaginationParams & {
 
 export const customerApi = {
   /** 顧客一覧を取得する */
-  list: async (params?: CustomerListParams): Promise<PageResult<CustomerResponse>> => {
+  list: async (params?: CustomerListParams): Promise<PageResult<CustomerSummaryResponse>> => {
     const response = await apiClient.get('/store/customers', { params });
     return fromSpringPage(response.data);
   },
@@ -51,10 +60,21 @@ export const customerApi = {
   unlinkMember: async (id: string): Promise<void> => {
     await apiClient.delete(`/store/customers/${id}/member-link`);
   },
-  /** 会員紐づけの履歴を新しい順に取得する */
-  memberLinkHistory: async (id: string): Promise<CustomerMemberLinkHistoryResponse[]> => {
-    const response = await apiClient.get(`/store/customers/${id}/member-link/history`);
+  /**
+   * 現に有効な会員紐づけを取得する。紐づいていない顧客では 404 で返る — 「紐づいていない」を
+   * 本体で表すと、呼出側が読んでからもう一度分岐することになる。
+   */
+  memberLink: async (id: string): Promise<CustomerMemberLinkResponse> => {
+    const response = await apiClient.get(`/store/customers/${id}/member-link`);
     return response.data;
+  },
+  /** 会員紐づけの履歴を新しい順に取得する。続きは応答の nextCursor をそのまま cursor に渡して取る。 */
+  memberLinkHistory: async (
+    id: string,
+    params?: CursorParams
+  ): Promise<CursorPageResult<CustomerMemberLinkHistoryResponse>> => {
+    const response = await apiClient.get(`/store/customers/${id}/member-link/history`, { params });
+    return fromCursorPage(response.data);
   },
   /** 紐づく会員のポイント残高を取得する（残高は顧客ではなく会員の台帳が持つ） */
   memberPointBalance: async (id: string): Promise<CustomerPointBalanceResponse> => {

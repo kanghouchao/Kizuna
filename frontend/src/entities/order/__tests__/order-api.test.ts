@@ -12,6 +12,7 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 const mockedGet = apiClient.get as jest.Mock;
+const mockedPost = apiClient.post as jest.Mock;
 
 describe('orderApi', () => {
   it('list は /store/orders を GET し、Spring Page を PageResult へ正規化する', async () => {
@@ -58,10 +59,11 @@ describe('orderApi', () => {
   it('update は受注を PUT する', async () => {
     expect(await orderApi.update('o1', { pax: 3 })).toEqual({ ok: true, url: '/store/orders/o1' });
   });
-  it('cancel は取消の子リソースを POST する', async () => {
-    expect(await orderApi.cancel('o1', { reason: '客都合' })).toEqual({
-      ok: true,
-      url: '/store/orders/o1/cancellation',
+  it('cancel は取消の子リソースを POST し、本体を返さない', async () => {
+    // 応答は 204。呼出側は行を消すだけで結果を読まない
+    await expect(orderApi.cancel('o1', { reason: '客都合' })).resolves.toBeUndefined();
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/orders/o1/cancellation', {
+      reason: '客都合',
     });
   });
   it('listWorkQueue は群読み口を GET し、カーソルページを正規化する', async () => {
@@ -122,8 +124,9 @@ describe('orderApi', () => {
       url: '/store/orders/o1/confirmation',
     });
   });
-  it('decline は謝絶の子リソースを POST する', async () => {
-    expect(await orderApi.decline('o1')).toEqual({ ok: true, url: '/store/orders/o1/decline' });
+  it('decline は謝絶の子リソースを POST し、本体を返さない', async () => {
+    await expect(orderApi.decline('o1')).resolves.toBeUndefined();
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/orders/o1/decline');
   });
   it('attribution は受注の帰属の現況を GET する', async () => {
     expect(await orderApi.attribution('o1')).toEqual({

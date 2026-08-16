@@ -1,4 +1,13 @@
-import { Order } from '@/entities/order';
+/**
+ * 呼び名を導ける最小限。作業キューの行とアーカイブの行が共通で持つ 4 項目だけを要求し、
+ * どちらの行型でも（詳細でも）そのまま渡せるようにする。
+ */
+export interface OrderCustomerNameSource {
+  customer_name?: string;
+  contact_name?: string;
+  contact_phone_number?: string;
+  requester_declared_name?: string;
+}
 
 /** 台帳の顧客に着いていない受注の呼び名に添える注記。 */
 export const UNLINKED_NOTE = '（顧客未設定）';
@@ -20,7 +29,7 @@ export interface OrderCustomerLabel {
  *
  * 並びは呼び名の正本の近い順。サーバ側の検索（{@code OrderSearchQuery}）も同じ 3 つを同じ順で見る。
  */
-export function customerLabel(order: Order): OrderCustomerLabel | null {
+export function customerLabel(order: OrderCustomerNameSource): OrderCustomerLabel | null {
   if (order.customer_name) {
     return { name: order.customer_name, unlinked: false };
   }
@@ -36,7 +45,7 @@ export function customerLabel(order: Order): OrderCustomerLabel | null {
  * 見出しの行はすでに全体が注記の体裁なので、注記（{@link UNLINKED_NOTE}）だけを分けて装飾せず
  * 1 本の文字列に畳む。
  */
-export function customerHeadingText(order: Order | null): string {
+export function customerHeadingText(order: OrderCustomerNameSource | null): string {
   const label = order === null ? null : customerLabel(order);
   if (label === null) {
     return 'お客様名なし';

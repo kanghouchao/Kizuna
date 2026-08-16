@@ -13,6 +13,7 @@ import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
+import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastFieldDefinition;
@@ -63,16 +64,16 @@ class CastServiceTest {
     g.setId("g1");
     Page<Cast> page = new PageImpl<>(List.of(g));
 
-    CastResponse resp = new CastResponse();
+    CastSummaryResponse resp = new CastSummaryResponse();
     resp.setName("Test");
 
     when(castRepository.findByNameContainingIgnoreCase(eq("test"), any(PageRequest.class)))
         .thenReturn(page);
     when(castInvitationService.deriveStatuses(anyList()))
         .thenReturn(Map.of("g1", CastInvitationStatus.NOT_INVITED));
-    when(castMapper.toResponse(g, CastInvitationStatus.NOT_INVITED)).thenReturn(resp);
+    when(castMapper.toSummaryResponse(g, CastInvitationStatus.NOT_INVITED)).thenReturn(resp);
 
-    Page<CastResponse> result = castService.list("test", PageRequest.of(0, 10));
+    Page<CastSummaryResponse> result = castService.list("test", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("Test");
   }
@@ -83,15 +84,15 @@ class CastServiceTest {
     g.setId("g1");
     Page<Cast> page = new PageImpl<>(List.of(g));
 
-    CastResponse resp = new CastResponse();
+    CastSummaryResponse resp = new CastSummaryResponse();
     resp.setName("All");
 
     when(castRepository.findAll(any(PageRequest.class))).thenReturn(page);
     when(castInvitationService.deriveStatuses(anyList()))
         .thenReturn(Map.of("g1", CastInvitationStatus.INVITED));
-    when(castMapper.toResponse(g, CastInvitationStatus.INVITED)).thenReturn(resp);
+    when(castMapper.toSummaryResponse(g, CastInvitationStatus.INVITED)).thenReturn(resp);
 
-    Page<CastResponse> result = castService.list(null, PageRequest.of(0, 10));
+    Page<CastSummaryResponse> result = castService.list(null, PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("All");
   }

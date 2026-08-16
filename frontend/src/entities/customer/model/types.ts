@@ -19,6 +19,24 @@ export interface CustomerResponse {
   linked_member_code?: string;
 }
 
+/**
+ * 顧客一覧の 1 行（GET /store/customers）。目当ての顧客を絞り込んで選ぶのに要る項目だけを持つ。
+ *
+ * 住所・NG の内容・利用エリアは詳細の読み口が返す。会員コードも持たない — 一覧で要るのは
+ * 紐づけの有無だけである。
+ */
+export interface CustomerSummaryResponse {
+  id?: string;
+  name?: string;
+  phone_number?: string;
+  line_id?: string;
+  rank?: string;
+  classification?: string;
+  /** 会員紐づけの有無。一覧の応答では常に真偽値が入る。 */
+  member_linked?: boolean;
+  ng_type?: string;
+}
+
 /** 会員紐づけの関連状態。customer/domain/LinkStatus.java と対応。 */
 export type CustomerMemberLinkStatus = 'ACTIVE' | 'RELEASED';
 

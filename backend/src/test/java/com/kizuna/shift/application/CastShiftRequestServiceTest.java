@@ -3,6 +3,7 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
@@ -301,9 +303,9 @@ class CastShiftRequestServiceTest {
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of());
 
-    List<CastShiftRequestResponse> result = service.history(EMAIL);
+    CursorPage<CastShiftRequestResponse> result = service.history(EMAIL, null, 20);
 
-    assertThat(result).isEmpty();
+    assertThat(result.content()).isEmpty();
     verifyNoInteractions(shiftRequestRepository, shiftRequestMapper);
   }
 
@@ -315,14 +317,14 @@ class CastShiftRequestServiceTest {
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(castIds);
 
     CastShiftRequestView view = mock(CastShiftRequestView.class);
-    when(shiftRequestRepository.findHistoryByCastIds(castIds)).thenReturn(List.of(view));
+    when(shiftRequestRepository.findHistoryByCastIds(eq(castIds), any())).thenReturn(List.of(view));
     CastShiftRequestResponse response =
         CastShiftRequestResponse.builder().storeId(1L).storeName("店舗A").build();
     when(shiftRequestMapper.toHistoryResponse(view)).thenReturn(response);
 
-    List<CastShiftRequestResponse> result = service.history(EMAIL);
+    CursorPage<CastShiftRequestResponse> result = service.history(EMAIL, null, 20);
 
-    assertThat(result).containsExactly(response);
+    assertThat(result.content()).containsExactly(response);
     verify(shiftRequestRepository, never()).findAllByOrderByCreatedAtAsc();
   }
 }

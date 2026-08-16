@@ -19,6 +19,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Limit;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -104,8 +105,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody().path("moved_link_count").asInt()).isEqualTo(2);
     // 解除済みの区間も移らなければ「過去に誰と紐づいていたか」の履歴が統合で切れる
-    assertThat(customerMemberLinkRepository.findHistory(merged)).isEmpty();
-    assertThat(customerMemberLinkRepository.findHistory(surviving)).hasSize(2);
+    assertThat(customerMemberLinkRepository.findHistory(merged, Limit.unlimited())).isEmpty();
+    assertThat(customerMemberLinkRepository.findHistory(surviving, Limit.unlimited())).hasSize(2);
     assertThat(customerMemberLinkRepository.findByCustomerIdAndStatus(surviving, LinkStatus.ACTIVE))
         .as("有効な区間は存続行の側で有効なまま")
         .isPresent();
@@ -428,7 +429,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
                     JsonNode.class)
                 .getStatusCode())
         .as("前提: 受注を取消できること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.NO_CONTENT);
     return orderId;
   }
 

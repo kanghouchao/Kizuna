@@ -115,7 +115,10 @@ export default function CustomerEditPage() {
         isSubmitting={isSubmitting}
       />
 
-      <MemberLinkSection customerId={id} />
+      {/* 顧客が変わったら区画ごと作り直す。中の履歴はカーソルで辿る読み口で、マウント時にしか
+          取りに行かない — 同じ画面位置で [id] だけが変わる遷移では前の顧客の行が残る。
+          入力途中の会員コードも同時に捨てる。 */}
+      <MemberLinkSection key={id} customerId={id} />
 
       {/* 注文履歴 */}
       <TableCard>

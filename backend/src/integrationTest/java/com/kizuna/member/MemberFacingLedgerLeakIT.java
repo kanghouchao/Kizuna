@@ -283,7 +283,18 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("紐づけ後も会員側の全端点の生ボディに台帳の実データと項目名が一切現れないこと")
   void memberFacingEndpointsNeverExposeLedgerFields() {
-    // 正向対照: 台帳の実データは店舗側からは確かに読める（断言対象が「漏れうるデータ」であることの証明）
+    // 正向対照: 台帳の実データは店舗側からは確かに読める（断言対象が「漏れうるデータ」であることの証明）。
+    // 読む先は詳細 — 一覧の行は要約になり、NG の内容など応対中にだけ要る項目を載せない。
+    ResponseEntity<String> storeDetail =
+        rest.exchange(
+            "/store/customers/" + customerId,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            String.class);
+    assertThat(storeDetail.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(storeDetail.getBody()).contains(CANARY_RANK).contains(CANARY_NG_CONTENT);
+
+    // 一覧の行も同じ台帳を投影する面なので、載る項目については同じく正向対照に置く
     ResponseEntity<String> storeList =
         rest.exchange(
             "/store/customers?search=" + CANARY_PHONE,
@@ -291,7 +302,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_A)),
             String.class);
     assertThat(storeList.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(storeList.getBody()).contains(CANARY_RANK).contains(CANARY_NG_CONTENT);
+    assertThat(storeList.getBody()).contains(CANARY_RANK);
 
     // 残高も同じく、店舗側の照会からは読める（数値のカナリアが台帳へ届いていることの証明でもある）
     ResponseEntity<String> storeBalance =

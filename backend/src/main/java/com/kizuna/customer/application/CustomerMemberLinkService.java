@@ -14,10 +14,13 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -102,13 +105,52 @@ public class CustomerMemberLinkService {
     customerMemberLinkRepository.save(current);
   }
 
+  /**
+   * 顧客に現に有効な紐づけ。無ければ 404 — 「紐づいていない」を 200 で表すと、呼出側が本体を読んでから もう一度分岐することになり、操作の可否を状態の有無だけで決められなくなる。
+   */
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<CustomerMemberLinkHistoryResponse> history(String customerId) {
+  public CustomerMemberLinkResponse current(String customerId) {
     requireCustomer(customerId);
-    return customerMemberLinkRepository.findHistory(customerId).stream()
-        .map(CustomerMemberLinkService::toHistoryResponse)
-        .toList();
+    return customerMemberLinkRepository
+        .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
+        .map(link -> new CustomerMemberLinkResponse(true, link.getMemberCode(), link.getLinkedAt()))
+        .orElseThrow(() -> new NotFoundException("紐づけられている会員がいません"));
+  }
+
+  /**
+   * 顧客 1 件の紐づけ履歴。続きはカーソルで辿る。
+   *
+   * <p>履歴は解除・再紐づけのたびに増え続けるので、上限の無い一覧では返さない。
+   *
+   * @param cursor 続きの位置。null なら先頭から
+   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public CursorPage<CustomerMemberLinkHistoryResponse> history(
+      String customerId, String cursor, int requestedSize) {
+    requireCustomer(customerId);
+    int size = CursorPage.clampSize(requestedSize);
+    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
+    Limit limit = Limit.of(size + 1);
+    List<CustomerMemberLinkView> fetched =
+        cursor == null
+            ? customerMemberLinkRepository.findHistory(customerId, limit)
+            : fetchHistoryAfter(customerId, PageCursor.decode(cursor), limit);
+    return CursorPage.of(fetched, size, CustomerMemberLinkService::cursorOf)
+        .map(CustomerMemberLinkService::toHistoryResponse);
+  }
+
+  private List<CustomerMemberLinkView> fetchHistoryAfter(
+      String customerId, PageCursor cursor, Limit limit) {
+    return customerMemberLinkRepository.findHistoryAfter(
+        customerId, cursor.timestampKey(), cursor.id(), limit);
+  }
+
+  /** 続きの位置は一覧の並び（紐づけ時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
+  private static String cursorOf(CustomerMemberLinkView view) {
+    return new PageCursor(view.getLinkedAt().toString(), view.getId()).encode();
   }
 
   private void requireCustomer(String customerId) {

@@ -20,7 +20,10 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -252,12 +255,56 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   private boolean historyContainsId(JsonNode body, String id) {
-    for (JsonNode node : body) {
+    for (JsonNode node : body.path("content")) {
       if (id.equals(node.path("id").asString())) {
         return true;
       }
     }
     return false;
+  }
+
+  @Test
+  @DisplayName("提出時刻が同一の申請でも、カーソルで重複・欠落なく辿れること")
+  void walksEveryRequestThroughTheCursorEvenWhenSubmittedAtTheSameInstant() {
+    // 並びの鍵（created_at）だけでは同値の 3 行の前後が決まらない。size=2 の境界がその群の
+    // 内側に落ちるので、副キー id が無いと 2 頁目が手前へ戻って重複するか、行を飛ばす。
+    OffsetDateTime sameInstant = OffsetDateTime.parse("2026-08-10T12:00:00+09:00");
+    List<String> seeded = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      String id =
+          saveShiftRequest(
+              myCastId,
+              STORE_A,
+              LocalDate.now(ZoneId.of("Asia/Tokyo")).plusDays(10 + i),
+              LocalTime.of(18, 0),
+              LocalTime.of(23, 0),
+              "同刻提出" + i,
+              ShiftRequestStatus.PENDING);
+      // created_at は @PrePersist が採番するため、保存後に同値へ揃え直す（@PreUpdate は触らない）
+      ShiftRequest saved = shiftRequestRepository.findById(id).orElseThrow();
+      saved.setCreatedAt(sameInstant);
+      shiftRequestRepository.saveAndFlush(saved);
+      seeded.add(id);
+    }
+
+    List<String> walked = new ArrayList<>();
+    String cursor = null;
+    int pages = 0;
+    do {
+      String url =
+          "/platform/me/shift-requests?size=2" + (cursor == null ? "" : "&cursor=" + cursor);
+      ResponseEntity<JsonNode> page =
+          rest.exchange(url, HttpMethod.GET, new HttpEntity<>(bearer(castToken)), JsonNode.class);
+      assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
+      page.getBody().path("content").forEach(row -> walked.add(row.path("id").asString()));
+      JsonNode next = page.getBody().path("next_cursor");
+      cursor = next.isString() ? next.asString() : null;
+      pages++;
+    } while (cursor != null && pages < 10);
+
+    assertThat(cursor).as("続きを辿り切ること").isNull();
+    assertThat(walked).as("同じ行を二度返さないこと").doesNotHaveDuplicates();
+    assertThat(walked).as("同刻の 3 行がすべて現れること").containsAll(seeded);
   }
 
   private String tomorrow() {
@@ -505,7 +552,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> history = getHistory(castToken);
     assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
     boolean found = false;
-    for (JsonNode node : history.getBody()) {
+    for (JsonNode node : history.getBody().path("content")) {
       if (id.equals(node.path("id").asString())) {
         found = true;
         assertThat(node.path("type").asString()).as("履歴に種別が現れること").isEqualTo("CHANGE");

@@ -764,7 +764,8 @@ class MemberOrderIT extends CrossStoreTestSupport {
             HttpMethod.POST,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(declined.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // 謝絶は結果を読まれない操作なので 204（本体なし）
+    assertThat(declined.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     JsonNode own = firstReservation(memberAToken);
     assertThat(own.path("id").asString()).isEqualTo(orderId);

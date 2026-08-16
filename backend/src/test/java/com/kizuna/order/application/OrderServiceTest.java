@@ -24,15 +24,19 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
+import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
@@ -206,13 +210,13 @@ class OrderServiceTest {
   @Test
   void listReturnsPageOfOrderResponses() {
     OrderView view = mock(OrderView.class);
-    OrderResponse res = OrderResponse.builder().id("o1").build();
+    OrderSummaryResponse res = OrderSummaryResponse.builder().id("o1").build();
     Page<OrderView> page = new PageImpl<>(List.of(view), PageRequest.of(0, 10), 1);
 
     when(orderRepository.findAllViews(eq(null), any(Pageable.class))).thenReturn(page);
-    when(orderMapper.toResponse(view)).thenReturn(res);
+    when(orderMapper.toSummaryResponse(view)).thenReturn(res);
 
-    Page<OrderResponse> result = service.list(null, PageRequest.of(0, 10));
+    Page<OrderSummaryResponse> result = service.list(null, PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getId()).isEqualTo("o1");
   }
@@ -220,13 +224,13 @@ class OrderServiceTest {
   @Test
   void listFiltersByCustomerId() {
     OrderView view = mock(OrderView.class);
-    OrderResponse res = OrderResponse.builder().id("o1").build();
+    OrderSummaryResponse res = OrderSummaryResponse.builder().id("o1").build();
     Page<OrderView> page = new PageImpl<>(List.of(view), PageRequest.of(0, 10), 1);
 
     when(orderRepository.findAllViews(eq("c1"), any(Pageable.class))).thenReturn(page);
-    when(orderMapper.toResponse(view)).thenReturn(res);
+    when(orderMapper.toSummaryResponse(view)).thenReturn(res);
 
-    Page<OrderResponse> result = service.list("c1", PageRequest.of(0, 10));
+    Page<OrderSummaryResponse> result = service.list("c1", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getId()).isEqualTo("o1");
   }
@@ -315,7 +319,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.create(req, ACTOR_EMAIL);
 
@@ -417,7 +421,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
   }
 
   @Test
@@ -575,7 +579,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.create(req, ACTOR_EMAIL);
 
@@ -616,7 +620,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -660,7 +664,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -685,7 +689,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -711,8 +715,6 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
     when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     service.cancel("o1", cancellationRequest("客都合。当日夕方に体調不良の連絡あり"), ACTOR_EMAIL);
 
@@ -765,7 +767,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setContactName("正しい名前");
@@ -803,7 +805,7 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setPax(9);
@@ -1044,12 +1046,12 @@ class OrderServiceTest {
   @Test
   void listWorkQueueDelegatesFilteringToTheQuery() {
     OrderView view = queueView("o1", 2);
-    OrderResponse res = OrderResponse.builder().id("o1").build();
+    OrderWorkQueueResponse res = OrderWorkQueueResponse.builder().id("o1").build();
     when(orderSearchQuery.findRows(
             any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
         .thenReturn(List.of(new OrderedRow("o1", 2)));
     when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(List.of(view));
-    when(orderMapper.toResponse(view)).thenReturn(res);
+    when(orderMapper.toWorkQueueResponse(view)).thenReturn(res);
 
     assertThat(service.listWorkQueue(queueCriteria(), null, 20).content()).containsExactly(res);
     // 受注一覧の先頭ページを取って手元で選り分ける実装だと、完了が積み上がった店舗で未対応が窓から落ちる
@@ -1065,12 +1067,15 @@ class OrderServiceTest {
             any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
         .thenReturn(List.of(new OrderedRow("o2", 2), new OrderedRow("o1", 1)));
     when(orderRepository.findViewsByIds(List.of("o2", "o1"))).thenReturn(views);
-    when(orderMapper.toResponse(any(OrderView.class)))
+    when(orderMapper.toWorkQueueResponse(any(OrderView.class)))
         .thenAnswer(
-            i -> OrderResponse.builder().id(i.getArgument(0, OrderView.class).getId()).build());
+            i ->
+                OrderWorkQueueResponse.builder()
+                    .id(i.getArgument(0, OrderView.class).getId())
+                    .build());
 
     assertThat(service.listWorkQueue(queueCriteria(), null, 20).content())
-        .extracting(OrderResponse::getId)
+        .extracting(OrderWorkQueueResponse::getId)
         .containsExactly("o2", "o1");
   }
 
@@ -1083,9 +1088,9 @@ class OrderServiceTest {
         .thenReturn(
             List.of(new OrderedRow("o1", 1), new OrderedRow("o2", 2), new OrderedRow("o3", 3)));
     when(orderRepository.findViewsByIds(List.of("o1", "o2", "o3"))).thenReturn(views);
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
-    CursorPage<OrderResponse> page = service.listWorkQueue(queueCriteria(), null, 2);
+    CursorPage<OrderWorkQueueResponse> page = service.listWorkQueue(queueCriteria(), null, 2);
 
     assertThat(page.content()).hasSize(2);
     // 続きの位置は返した最後の行を指す。余分に取った 3 件目を指すと、その行が飛ばされる。
@@ -1100,9 +1105,9 @@ class OrderServiceTest {
             any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(2)))
         .thenReturn(List.of(new OrderedRow("o1", Integer.MAX_VALUE), new OrderedRow("o2", 3)));
     when(orderRepository.findViewsByIds(List.of("o1", "o2"))).thenReturn(views);
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
-    CursorPage<OrderResponse> page = service.listWorkQueue(queueCriteria(), null, 1);
+    CursorPage<OrderWorkQueueResponse> page = service.listWorkQueue(queueCriteria(), null, 1);
 
     assertThat(PageCursor.decode(page.nextCursor()))
         .isEqualTo(new PageCursor(String.valueOf(Integer.MAX_VALUE), "o1"));
@@ -1139,9 +1144,9 @@ class OrderServiceTest {
             any(OrderQueryCriteria.class), nullable(PageCursor.class), anyInt()))
         .thenReturn(List.of(new OrderedRow("o1", 1), new OrderedRow("o2", 2)));
     when(orderRepository.findViewsByIds(List.of("o1", "o2"))).thenReturn(rewritten);
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
-    CursorPage<OrderResponse> page = service.listWorkQueue(queueCriteria(), null, 1);
+    CursorPage<OrderWorkQueueResponse> page = service.listWorkQueue(queueCriteria(), null, 1);
 
     assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("1", "o1"));
   }
@@ -1167,7 +1172,7 @@ class OrderServiceTest {
             any(OrderQueryCriteria.class), nullable(PageCursor.class), eq(3)))
         .thenReturn(List.of(new OrderedRow("o1", 1)));
     when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(views);
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     assertThat(service.listWorkQueue(queueCriteria(), null, 2).nextCursor()).isNull();
   }
@@ -1214,10 +1219,10 @@ class OrderServiceTest {
     List<OrderView> views = List.of(queueView("o1", 1));
     when(orderSearchQuery.findIds(criteria, pageable)).thenReturn(List.of("o1"));
     when(orderRepository.findViewsByIds(List.of("o1"))).thenReturn(views);
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
     when(orderSearchQuery.count(criteria)).thenReturn(137L);
 
-    Page<OrderResponse> page = service.listArchive(criteria, pageable);
+    Page<OrderArchiveResponse> page = service.listArchive(criteria, pageable);
 
     assertThat(page.getContent()).hasSize(1);
     // 総件数が無いとページャは最終ページを出せない（作業キューと違い位置をページ番号で指すため）
@@ -1242,7 +1247,7 @@ class OrderServiceTest {
     when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1262,7 +1267,7 @@ class OrderServiceTest {
         .thenReturn(Optional.of(otherStoreActor));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1276,7 +1281,7 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1307,7 +1312,7 @@ class OrderServiceTest {
     when(customerReferenceResolver.resolveForWrite("cust-1")).thenReturn("cust-1");
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1339,7 +1344,7 @@ class OrderServiceTest {
     when(customerRepository.save(any(Customer.class))).thenReturn(provisioned);
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1390,7 +1395,7 @@ class OrderServiceTest {
     when(customerReferenceResolver.resolveForWrite("cust-current")).thenReturn("cust-current");
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1416,7 +1421,7 @@ class OrderServiceTest {
     when(customerRepository.save(any(Customer.class))).thenReturn(provisioned);
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1436,7 +1441,7 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1459,8 +1464,6 @@ class OrderServiceTest {
     request.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     service.decline("o1");
 
@@ -1538,7 +1541,7 @@ class OrderServiceTest {
         .thenReturn(true);
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
 
     service.confirm("o1", "staff@kizuna.test");
 
@@ -1557,8 +1560,6 @@ class OrderServiceTest {
     Order request = reservationRequest().build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(request));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
 
     service.decline("o1");
 
@@ -1850,7 +1851,8 @@ class OrderServiceTest {
     stubReceiptTokenIssuance();
     stubReservationRequestUpdateResponse();
 
-    OrderResponse response = service.complete("o1", completion(12000, null), "staff@kizuna.test");
+    OrderCompletionResponse response =
+        service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
     OrderReceiptToken token = savedReceiptToken();
     assertThat(token.getOrderId()).isEqualTo("o1");
@@ -1858,7 +1860,7 @@ class OrderServiceTest {
     assertThat(token.getTokenDigest()).isEqualTo(TOKEN_DIGEST);
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.ISSUED);
     assertThat(token.getExpiresAt()).isEqualTo(token.getIssuedAt().plusDays(90));
-    assertThat(response.getReceiptToken()).isEqualTo(RAW_TOKEN);
+    assertThat(response.receiptToken()).isEqualTo(RAW_TOKEN);
   }
 
   @Test
@@ -1886,10 +1888,11 @@ class OrderServiceTest {
     stubReceiptTokenIssuance();
     stubReservationRequestUpdateResponse();
 
-    OrderResponse response = service.complete("o1", completion(0, null), "staff@kizuna.test");
+    OrderCompletionResponse response =
+        service.complete("o1", completion(0, null), "staff@kizuna.test");
 
     assertThat(savedReceiptToken().getPlannedPoints()).isZero();
-    assertThat(response.getReceiptToken()).isEqualTo(RAW_TOKEN);
+    assertThat(response.receiptToken()).isEqualTo(RAW_TOKEN);
   }
 
   @Test
@@ -1901,10 +1904,11 @@ class OrderServiceTest {
     stubActor();
     stubReservationRequestUpdateResponse();
 
-    OrderResponse response = service.complete("o1", completion(12000, null), "staff@kizuna.test");
+    OrderCompletionResponse response =
+        service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
     verifyNoInteractions(orderReceiptTokenRepository, receiptTokenGenerator);
-    assertThat(response.getReceiptToken()).isNull();
+    assertThat(response.receiptToken()).isNull();
   }
 
   @Test
@@ -2044,9 +2048,23 @@ class OrderServiceTest {
   /** 編集後の応答組み立て（読み口 → DTO）だけを満たす stub。編集そのものの検証は集約の状態で行う。 */
   private void stubReservationRequestUpdateResponse() {
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findViewById(nullable(String.class)))
+    lenient()
+        .when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
-    when(orderMapper.toResponse(any(OrderView.class))).thenReturn(OrderResponse.builder().build());
+    stubRowResponses();
+  }
+
+  /**
+   * 応答の組み立て（読み口 → DTO）だけを満たす stub。どの型で返るかは操作ごとに違い、結果を読まない操作（取消・謝絶）は 写像自体を呼ばないため lenient
+   * で置く。操作そのものの検証は集約の状態で行う。
+   */
+  private void stubRowResponses() {
+    lenient()
+        .when(orderMapper.toResponse(any(OrderView.class)))
+        .thenReturn(OrderResponse.builder().build());
+    lenient()
+        .when(orderMapper.toWorkQueueResponse(any(OrderView.class)))
+        .thenReturn(OrderWorkQueueResponse.builder().build());
   }
 
   private ReservationRequestUpdateRequest reservationRequestUpdate(

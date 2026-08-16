@@ -221,7 +221,7 @@ describe('カード内の取消（二段）', () => {
 
   it('理由を添えて取消すと専用の口を叩き、その受注が群から外れること', async () => {
     stubQueue(confirmedOrder());
-    mockedOrderApi.cancel.mockResolvedValue(confirmedOrder({ status: 'CANCELLED' }));
+    mockedOrderApi.cancel.mockResolvedValue(undefined);
     render(<OrderListPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: '取消' }));
@@ -431,7 +431,7 @@ describe('アーカイブ', () => {
 
   it('受注が移ってきた群を取り直すこと', async () => {
     stubQueue(confirmedOrder());
-    mockedOrderApi.cancel.mockResolvedValue(confirmedOrder({ status: 'CANCELLED' }));
+    mockedOrderApi.cancel.mockResolvedValue(undefined);
     render(<OrderListPage />);
 
     // 起動時に 2 群ぶん取りに行く。ここから増えた分がアーカイブの取り直し

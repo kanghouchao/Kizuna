@@ -12,6 +12,7 @@ jest.mock('@/entities/customer', () => ({
     update: jest.fn(),
     linkMember: jest.fn(),
     unlinkMember: jest.fn(),
+    memberLink: jest.fn(),
     memberLinkHistory: jest.fn(),
     memberPointBalance: jest.fn(),
   },
@@ -23,9 +24,11 @@ jest.mock('@/entities/order', () => ({
   orderApi: { list: jest.fn() },
 }));
 
+const currentParams = { storeId: '1', id: 'cus-1' };
+
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
-  useParams: () => ({ storeId: '1', id: 'cus-1' }),
+  useParams: () => currentParams,
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -47,7 +50,9 @@ const emptyOrderPage = { rows: [], page: 0, pageCount: 1, total: 0 };
 describe('顧客編集ページの取得失敗', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue([]);
+    currentParams.id = 'cus-1';
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
@@ -123,8 +128,10 @@ describe('顧客編集ページの取得失敗', () => {
 describe('顧客編集ページの注文履歴', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    currentParams.id = 'cus-1';
     mockedCustomerApi.get.mockResolvedValue(customer);
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue([]);
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
   });
 
   it('受注ステータスを enum 生値ではなく受注一覧と同じ日本語ラベルで表示すること', async () => {
@@ -139,5 +146,62 @@ describe('顧客編集ページの注文履歴', () => {
 
     expect(await screen.findByText('確定')).toBeInTheDocument();
     expect(screen.queryByText('CONFIRMED')).not.toBeInTheDocument();
+  });
+});
+
+describe('顧客編集ページの顧客切り替え', () => {
+  const rowFor = (customerId: string) => ({
+    rows: [
+      {
+        id: `link-${customerId}`,
+        member_code: `CODE-${customerId}`,
+        status: 'ACTIVE' as const,
+        linked_at: '2026-08-01T10:00:00+09:00',
+        linked_by_name: '山田次郎',
+      },
+    ],
+    nextCursor: 'cursor-of-' + customerId,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    currentParams.id = 'cus-1';
+    mockedCustomerApi.get.mockResolvedValue(customer);
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
+    mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
+    mockedCustomerApi.memberLinkHistory.mockImplementation((id: string) =>
+      Promise.resolve(rowFor(id) as never)
+    );
+  });
+
+  it('同じ画面位置で顧客が変わったら、前の顧客の紐づけ履歴を残さず取り直すこと', async () => {
+    // App Router は [id] だけが変わる遷移で頁を再マウントしない。履歴の読み口は
+    // マウント時にしか取りに行かないので、残った行は前の顧客のものとして描かれ続ける。
+    const { rerender } = render(<CustomerEditPage />);
+    expect(await screen.findByText('CODE-cus-1')).toBeInTheDocument();
+
+    currentParams.id = 'cus-2';
+    rerender(<CustomerEditPage />);
+
+    expect(await screen.findByText('CODE-cus-2')).toBeInTheDocument();
+    expect(screen.queryByText('CODE-cus-1')).not.toBeInTheDocument();
+    expect(mockedCustomerApi.memberLinkHistory).toHaveBeenLastCalledWith('cus-2', {
+      cursor: undefined,
+    });
+  });
+
+  it('顧客が変わったら、入力途中の会員コードを持ち越さないこと', async () => {
+    const { rerender } = render(<CustomerEditPage />);
+    await screen.findByText('CODE-cus-1');
+
+    fireEvent.change(screen.getByLabelText('会員コード'), { target: { value: '123456789012' } });
+    expect(screen.getByLabelText('会員コード')).toHaveValue('123456789012');
+
+    currentParams.id = 'cus-2';
+    rerender(<CustomerEditPage />);
+
+    await screen.findByText('CODE-cus-2');
+    expect(screen.getByLabelText('会員コード')).toHaveValue('');
   });
 });

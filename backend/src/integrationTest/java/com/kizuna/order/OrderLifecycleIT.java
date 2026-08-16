@@ -181,10 +181,12 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     // 改期を取消＋再登録でやると、取消の記録が雑音で汚れる
     assertThat(updated.getBody().path("business_date").asString())
         .isEqualTo(rescheduled.toString());
-    assertThat(updated.getBody().path("location_address").asString()).isEqualTo("中央区銀座 1-2-3");
-    assertThat(updated.getBody().path("location_building").asString()).isEqualTo("グランドホテル 1204");
-    assertThat(updated.getBody().path("carrier").asString()).isEqualTo("ドコモ");
-    assertThat(updated.getBody().path("media_name").asString()).isEqualTo("自社サイト");
+    // 更新の応答は作業キューの行の形なので、行に載らない項目は詳細の読み口で確かめる
+    JsonNode detail = orderJson(orderId);
+    assertThat(detail.path("location_address").asString()).isEqualTo("中央区銀座 1-2-3");
+    assertThat(detail.path("location_building").asString()).isEqualTo("グランドホテル 1204");
+    assertThat(detail.path("carrier").asString()).isEqualTo("ドコモ");
+    assertThat(detail.path("media_name").asString()).isEqualTo("自社サイト");
   }
 
   @Test
@@ -282,12 +284,13 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> cancelled = cancel(orderId, "客都合。当日夕方に体調不良の連絡あり");
 
-    assertThat(cancelled.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(cancelled.getBody().path("status").asString()).isEqualTo("CANCELLED");
-    assertThat(cancelled.getBody().path("cancelled_reason").asString())
-        .isEqualTo("客都合。当日夕方に体調不良の連絡あり");
-    assertThat(cancelled.getBody().path("cancelled_by_name").asString()).isNotBlank();
-    assertThat(cancelled.getBody().path("cancelled_at").asString()).isNotBlank();
+    // 取消は結果を読まれない操作なので 204。記録は詳細の読み口で確かめる
+    assertThat(cancelled.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    JsonNode after = orderJson(orderId);
+    assertThat(after.path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(after.path("cancelled_reason").asString()).isEqualTo("客都合。当日夕方に体調不良の連絡あり");
+    assertThat(after.path("cancelled_by_name").asString()).isNotBlank();
+    assertThat(after.path("cancelled_at").asString()).isNotBlank();
 
     // 二度目を通すと初回の理由と実行者が黙って上書きされ、理由を必須にした意味が消える
     ResponseEntity<JsonNode> again = cancel(orderId, "二度目の理由");
@@ -308,7 +311,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   @DisplayName("取消済み・完了済みの受注は編集できないこと")
   void terminalOrdersAreFrozen() {
     String cancelledId = orderId(createOrder(body -> body));
-    assertThat(cancel(cancelledId, "凍結の確認").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(cancel(cancelledId, "凍結の確認").getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     String completedId = orderId(createOrder(body -> body));
     assertThat(complete(completedId).getStatusCode()).as("前提: 受注を完了できること").isEqualTo(HttpStatus.OK);
@@ -378,7 +381,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     String label = "群読み口-" + nonce;
     String confirmedId = orderId(createOrder(body -> body.field("remarks", "\"" + label + "\"")));
     String cancelledId = orderId(createOrder(body -> body.field("remarks", "\"" + label + "\"")));
-    assertThat(cancel(cancelledId, "群の確認").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(cancel(cancelledId, "群の確認").getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     List<String> queue = idsOf(workQueue("statuses=CREATED,CONFIRMED&size=2000"));
 
@@ -390,7 +393,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   @DisplayName("アーカイブが終端状態だけを群ごとに返し、総件数を運ぶこと")
   void archiveReturnsTerminalOrdersWithATotalCount() {
     String cancelledId = orderId(createOrder(body -> body));
-    assertThat(cancel(cancelledId, "アーカイブの確認").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(cancel(cancelledId, "アーカイブの確認").getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     ResponseEntity<JsonNode> archive =
         rest.exchange(
@@ -509,7 +512,8 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
 
     // 続きを取る前に先頭を処理する。位置を「何件目か」で指していると、ここで後続が繰り上がって
     // 2 件目が飛ばされる
-    assertThat(cancel(created.get(0), "カーソル継続の確認").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(cancel(created.get(0), "カーソル継続の確認").getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
 
     assertThat(idsOf(workQueue(query + "&cursor=" + cursor))).containsExactly(created.get(1));
   }

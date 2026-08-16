@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.platform;
 
+import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
@@ -7,7 +8,6 @@ import com.kizuna.shift.api.dto.ShiftRequestResponse;
 import com.kizuna.shift.application.CastShiftRequestService;
 import jakarta.validation.Valid;
 import java.security.Principal;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 本人（キャスト）ポータルの出勤希望 API（提出・履歴）。 */
@@ -43,9 +44,13 @@ public class PlatformShiftRequestController {
         .body(castShiftRequestService.submitChange(principal.getName(), request));
   }
 
+  /** 本人の出勤希望履歴。続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。 */
   @GetMapping
   @PreAuthorize("hasRole('CAST')")
-  public ResponseEntity<List<CastShiftRequestResponse>> history(Principal principal) {
-    return ResponseEntity.ok(castShiftRequestService.history(principal.getName()));
+  public ResponseEntity<CursorPage<CastShiftRequestResponse>> history(
+      Principal principal,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return ResponseEntity.ok(castShiftRequestService.history(principal.getName(), cursor, size));
   }
 }

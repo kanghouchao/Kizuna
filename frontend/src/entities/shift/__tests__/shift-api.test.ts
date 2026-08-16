@@ -1,4 +1,5 @@
 import { shiftApi } from '@/entities/shift';
+import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -9,6 +10,8 @@ jest.mock('@/shared/api/client', () => ({
     delete: jest.fn(async (url: string) => ({ data: undefined })),
   },
 }));
+
+const mockedGet = apiClient.get as jest.Mock;
 
 describe('shiftApi', () => {
   it('list は /store/shifts を GET する', async () => {
@@ -68,10 +71,17 @@ describe('shiftApi', () => {
       })
     ).toEqual({ ok: true, url: '/platform/me/shift-requests/changes' });
   });
-  it('myShiftRequests は /platform/me/shift-requests を GET する', async () => {
-    expect(await shiftApi.myShiftRequests()).toEqual({
-      ok: true,
-      url: '/platform/me/shift-requests',
+  it('myShiftRequests は /platform/me/shift-requests を GET し、カーソルページを正規化する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ id: 'r1' }], next_cursor: 'abc' },
+    });
+
+    await expect(shiftApi.myShiftRequests({ cursor: 'x' })).resolves.toEqual({
+      rows: [{ id: 'r1' }],
+      nextCursor: 'abc',
+    });
+    expect(mockedGet).toHaveBeenLastCalledWith('/platform/me/shift-requests', {
+      params: { cursor: 'x' },
     });
   });
   it('myStores は /platform/me/stores を GET する', async () => {

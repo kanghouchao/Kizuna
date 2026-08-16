@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { customerApi } from '@/entities/customer';
 import { PointAdjustmentDialog } from './PointAdjustmentDialog';
-import { getApiErrorMessage, hasPermission, readTokenClaims, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  hasPermission,
+  readTokenClaims,
+  useCursorList,
+  useResource,
+} from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -35,11 +41,22 @@ function actorCell(name?: string, at?: string) {
 
 /** 顧客編集ページの会員紐づけ区画。紐づけ・変更・解除と、その履歴を扱う。 */
 export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
-  const { data, isLoading, failure, reload } = useResource(
-    () => customerApi.memberLinkHistory(customerId),
-    [customerId]
-  );
-  const history = data ?? [];
+  // 現況は履歴から推し量らず専用の読み口から取る。未紐づけは 404 で返るので、
+  // 「取れなかった」と「紐づいていない」が failure の種別で分かれる。
+  const {
+    data: activeLink,
+    isLoading: isLinkLoading,
+    failure: linkFailure,
+    reload: reloadLink,
+  } = useResource(() => customerApi.memberLink(customerId), [customerId]);
+  const {
+    rows: history,
+    isLoading,
+    failed,
+    hasMore,
+    reload,
+    loadMore,
+  } = useCursorList(cursor => customerApi.memberLinkHistory(customerId, { cursor }));
   // 残高は顧客ではなく紐づく会員の台帳が持つため、紐づけ履歴とは別の読み口から取る
   const {
     data: balance,
@@ -59,11 +76,9 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
     setCanAdjust(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
   }, []);
 
-  // 現に有効な区間は高々 1 件で、履歴は新しい順に返る
-  const activeLink = history.find(row => row.status === 'ACTIVE');
-  // 履歴が読めていない間は現況が不明。紐づけ POST は既存の有効区間を置き換えるため、
-  // 未読込のまま操作させると読み取り失敗が誤解除に化ける — 読めるまで操作を止める
-  const isHistoryReady = !isLoading && failure === null;
+  // 紐づけ POST は既存の有効区間を置き換えるため、現況が不明なまま操作させると
+  // 読み取り失敗が誤解除に化ける。404（未紐づけ）は現況が判った状態なので操作を許す。
+  const isLinkReady = !isLinkLoading && (linkFailure === null || linkFailure === 'notFound');
 
   const handleLink = async () => {
     try {
@@ -72,7 +87,8 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
       notify.success('会員を紐づけました');
       setMemberCode('');
       // 紐づく先が変われば残高の指す台帳も変わる。履歴と一緒に取り直す
-      await Promise.all([reload(), reloadBalance()]);
+      reload();
+      await Promise.all([reloadLink(), reloadBalance()]);
     } catch (error) {
       notify.error(getApiErrorMessage(error, '会員の紐づけに失敗しました'));
     } finally {
@@ -86,7 +102,8 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
       setIsSubmitting(true);
       await customerApi.unlinkMember(customerId);
       notify.success('会員の紐づけを解除しました');
-      await Promise.all([reload(), reloadBalance()]);
+      reload();
+      await Promise.all([reloadLink(), reloadBalance()]);
     } catch (error) {
       notify.error(getApiErrorMessage(error, '会員の紐づけ解除に失敗しました'));
     } finally {
@@ -105,9 +122,9 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
           <div className="flex items-center gap-2">
             {/* 履歴の失敗は下の RegionError が 1 度だけ名乗る。ここに書き足すと、
                 回復手段を持たない二つ目の告知になる（残高は別の読み口で、自分の再試行を持つ） */}
-            {!isHistoryReady ? (
+            {!isLinkReady ? (
               <span className="text-muted-foreground">
-                {isLoading ? '読み込み中...' : '紐づけ状態は不明です'}
+                {isLinkLoading ? '読み込み中...' : '紐づけ状態は不明です'}
               </span>
             ) : activeLink ? (
               <>
@@ -163,7 +180,7 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
             />
             <Button
               onClick={() => void handleLink()}
-              disabled={isSubmitting || !memberCode || !isHistoryReady}
+              disabled={isSubmitting || !memberCode || !isLinkReady}
             >
               紐づける
             </Button>
@@ -171,7 +188,7 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
               <Button
                 variant="outline"
                 onClick={() => setIsConfirmingUnlink(true)}
-                disabled={isSubmitting || !isHistoryReady}
+                disabled={isSubmitting || !isLinkReady}
               >
                 解除
               </Button>
@@ -181,11 +198,11 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
 
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
-        ) : failure !== null ? (
+        ) : failed ? (
           // 読めなかった履歴を残すと「紐づけ履歴がありません」に化ける。区画自身が失敗を名乗る
           <RegionError
             message="会員紐づけの履歴取得に失敗しました"
-            onRetry={() => void reload()}
+            onRetry={() => reload()}
             className="justify-center p-8"
           />
         ) : history.length === 0 ? (
@@ -226,6 +243,14 @@ export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
               ))}
             </TableBody>
           </Table>
+        )}
+
+        {hasMore && (
+          <div className="flex justify-center border-t p-4">
+            <Button variant="outline" onClick={() => loadMore()} disabled={isLoading}>
+              さらに読み込む
+            </Button>
+          </div>
         )}
       </TableCard>
 

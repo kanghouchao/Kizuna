@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.cast.api.dto.CastResponse;
+import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -57,7 +57,7 @@ class CastControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<CastResponse> empty = new PageImpl<>(List.of());
+    Page<CastSummaryResponse> empty = new PageImpl<>(List.of());
     when(castService.list(any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
@@ -73,7 +73,7 @@ class CastControllerTest {
   void listPassesBlankSearchAsNull() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
-    Page<CastResponse> empty = new PageImpl<>(List.of());
+    Page<CastSummaryResponse> empty = new PageImpl<>(List.of());
     when(castService.list(searchCaptor.capture(), any())).thenReturn(empty);
 
     mockMvc
