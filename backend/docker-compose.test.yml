@@ -1,7 +1,8 @@
 # 統合テスト専用 compose（issue #225）
 # 開発用スタック（プロジェクト名 kizuna）とは独立したプロジェクト名で、
-# データは tmpfs のみ（ボリューム永続化なし）。実行ごとに down で使い捨てる
-# （gradle キャッシュボリュームだけは依存再取得の flaky 回避のため保持する）。
+# データは tmpfs とコンテナの書き込み層のみ（ボリュームを一切宣言しない）。使い捨てスタックが
+# worktree ごとの名前付きボリュームを残していく事故を、宣言の側で断つ。中断で残ったコンテナの
+# 匿名ボリューム（イメージ側 VOLUME 宣言由来）は Taskfile の事前回収が拾う。
 #
 # name: は手動実行時のフォールバック。`task test-integration` は worktree 名から導出した
 # COMPOSE_PROJECT_NAME を与えて上書きする（環境変数の方が name: より優先される）。固定名のままだと
@@ -55,8 +56,10 @@ services:
     user: root # bind mount への build/ 書き込みのため（rules/backend.md の Spotless Docker 実行と同じ流儀）
     working_dir: /app
     volumes:
+      # gradle キャッシュ（/root/.gradle）はあえてマウントしない: コンテナの書き込み層に落ち、
+      # どの経路でもコンテナ削除と一緒に消える。依存の取得は実行ごとのフル取得になり、
+      # レジストリ断で赤くなりうるが、キャッシュをホストに溜め込まないほうを取る。
       - .:/app
-      - gradle-it-cache:/root/.gradle
     environment:
       POSTGRES_HOST: database
       POSTGRES_PORT: "5432"
@@ -83,7 +86,6 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
-    command: ./gradlew integrationTest --no-daemon
-
-volumes:
-  gradle-it-cache:
+    # イメージ同梱の gradle を使う（wrapper だと空キャッシュへ毎回ディストリビューションを
+    # 落とし直す）。イメージタグの版は gradle/wrapper/gradle-wrapper.properties と揃えること。
+    command: gradle integrationTest --no-daemon

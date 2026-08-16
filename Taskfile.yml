@@ -102,11 +102,15 @@ tasks:
       - echo "🏗️  E2E 用にイメージをビルド（tag=e2e-{{.STACK_ID}}）..."
       - task -d backend build DOCKER_TAG=e2e-{{.STACK_ID}}
       - task -d frontend build DOCKER_TAG=e2e-{{.STACK_ID}}
-      # 事前 down: 前回 run が中断されると defer が走らず依存コンテナが残留し、`docker compose run`
-      # がそれを静かに再利用して前回のデータが残った DB に対して走る。
+      # 事前回収: 前回 run が中断されると defer が走らず依存コンテナが残留し、`docker compose run`
+      # がそれを静かに再利用して前回のデータが残った DB に対して走る。down はコンテナしか消さず
+      # 匿名ボリューム（e2e の node_modules 等）を取り残すため、`docker rm -fv` でコンテナと
+      # 匿名ボリュームを一緒に回収してから down でネットワークを畳む
+      # （rm -fv は名前付きボリュームには届かないので、開発 DB を巻き込む経路が構造的に無い）。
+      - docker compose -f e2e/docker-compose.e2e.yml ps -aq | xargs -r docker rm -fv
       - docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
       # 成否・途中クラッシュを問わずスタックを必ず破棄する（起動失敗時の残骸も回収）。
-      - defer: docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
+      - defer: docker compose -f e2e/docker-compose.e2e.yml ps -aq | xargs -r docker rm -fv && docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
       - |
         set -e
         echo "🎭 E2E（playwright-bdd）を実行..."

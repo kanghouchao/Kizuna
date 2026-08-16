@@ -52,18 +52,17 @@ tasks:
         sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
     env:
       # -p ではなく環境変数で与える（compose ファイルの name: より優先される）。
-      # 副作用として gradle キャッシュボリュームも worktree ごとに分かれるため、
-      # 新しい worktree の初回だけ依存をフル取得する。共有すると並行実行が
-      # 同じ /root/.gradle のロックを奪い合うので、分けるほうを取っている。
       COMPOSE_PROJECT_NAME: kizuna-backend-test-{{.STACK_ID}}
     cmds:
       - echo "🧪  バックエンドの統合テストを実行中（compose ネットワーク接続）..."
-      # -v を付けない: 唯一のボリュームは gradle キャッシュで、消すと毎回フル再取得になり
-      # 依存解決の flaky 要因になる。DB は tmpfs のためコンテナ削除だけで使い捨てが成立する
-      # 事前 down: 前回 run が中断されると defer が走らず依存コンテナが残留し、
-      # `docker compose run` がそれを静かに再利用して tmpfs DB の汚れが偽陽性を生む（#412）
-      - docker compose -f docker-compose.test.yml down
-      - defer: docker compose -f docker-compose.test.yml down
+      # 事前回収: 前回 run が中断されると defer が走らずコンテナが残留し、`docker compose run` が
+      # それを静かに再利用して tmpfs DB の汚れが偽陽性を生む（#412）。down はコンテナしか消さず
+      # 匿名ボリューム（イメージ側 VOLUME 宣言由来）を取り残すため、`docker rm -fv` で
+      # コンテナと匿名ボリュームを一緒に回収してから down でネットワークを畳む
+      # （rm -fv は名前付きボリュームには届かないので、開発 DB を巻き込む経路が構造的に無い）。
+      - docker compose -f docker-compose.test.yml ps -aq | xargs -r docker rm -fv
+      - docker compose -f docker-compose.test.yml down --remove-orphans
+      - defer: docker compose -f docker-compose.test.yml ps -aq | xargs -r docker rm -fv && docker compose -f docker-compose.test.yml down --remove-orphans
       - docker compose -f docker-compose.test.yml run --rm integration-test
 
   test:
