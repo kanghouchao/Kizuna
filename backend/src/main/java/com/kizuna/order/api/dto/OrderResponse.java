@@ -16,17 +16,17 @@ import lombok.NoArgsConstructor;
 public class OrderResponse {
   private String id;
   private Long receptionistId;
-  private String receptionistName; // Helper for display
+  private String receptionistName;
   private LocalDate businessDate;
   private LocalTime arrivalScheduledStartTime;
   private LocalTime arrivalScheduledEndTime;
   private String customerId;
-  private String customerName; // Helper
+  private String customerName;
   // 受付で録入された連絡先。顧客が着かなかった受注にだけ入る（着いた受注では台帳の行が名乗りを持つ）
   private String contactName;
   private String contactPhoneNumber;
   private String castId;
-  private String castName; // Helper
+  private String castName;
   private Integer pax;
   private Integer courseMinutes;
   private Integer extensionMinutes;

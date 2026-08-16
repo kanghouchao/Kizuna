@@ -1,4 +1,4 @@
-// navigation helper with injectable navigator for easier testing
+// 遷移の実行部を差し替え可能にしたナビゲーション（テストでは navigator を注入する）
 
 type NavigatorFn = (url: string) => void;
 
@@ -7,7 +7,7 @@ function defaultNavigator(url: string) {
     try {
       window.location.assign(url);
     } catch {
-      // jsdom may not implement navigation; swallow in environments where it's unsupported
+      // jsdom などページ遷移を実装しない環境では握りつぶす
     }
   }
 }
@@ -33,12 +33,11 @@ export function redirectToLogin(reason?: string) {
         navigatorFn(loginPath(reason));
       }
     } catch {
-      // reading pathname may throw in some environments; ignore
+      // pathname の読み取りが例外になる環境では何もしない
     }
   }
 }
 
-// Test helpers
 export function __setNavigatorForTests(fn: NavigatorFn) {
   navigatorFn = fn;
 }

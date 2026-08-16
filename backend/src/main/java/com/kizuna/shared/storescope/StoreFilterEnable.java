@@ -9,13 +9,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * Aspect that enables Hibernate store filtering for methods annotated with {@code @StoreScoped}.
- *
- * <p>When a method is annotated with {@code @StoreScoped}, this aspect intercepts the call and
- * enables the Hibernate {@code storeFilter}, setting the store ID from the {@link StoreContext}.
- * This ensures that all database operations within the method are scoped to the current store.
- *
- * @author kanghouchao
+ * {@code @StoreScoped} メソッドの呼び出しを囲み、現在の Session に Hibernate の {@code storeFilter} を有効化する。
+ * 店舗文脈が無い場合は何もしない — 絞り込み無しのまま実行される。
  */
 @Aspect
 @Component

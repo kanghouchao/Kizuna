@@ -9,8 +9,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class MenuVO {
-  private String name; // Label
-  private String path; // Href
+  private String name;
+  private String path;
   private String icon;
-  private List<MenuVO> items; // Children
+  private List<MenuVO> items;
 }

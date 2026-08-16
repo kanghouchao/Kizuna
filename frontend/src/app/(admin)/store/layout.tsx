@@ -13,15 +13,11 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
           値はヘッダー全体の最悪所要幅 674px（見出し 90 + 操作行 520 + 左右余白 64。
           操作行は店舗セレクタが上限まで伸びた場合）の上に取る。 */}
         <div className="flex h-screen bg-background overflow-x-auto">
-          {/* Sidebar Component */}
           <Sidebar />
 
-          {/* Main Container */}
           <div className="flex-1 flex flex-col min-w-[44rem] overflow-hidden">
-            {/* Header Component */}
             <Header />
 
-            {/* Main Content Area */}
             {/* relative: 絶対配置の子（Select が描画するフォーム互換用の隠し input 等）の
               包含ブロックをこのスクロール領域に閉じ込め、ページ全体が伸びるのを防ぐ */}
             <main className="relative flex-1 overflow-y-auto p-8">

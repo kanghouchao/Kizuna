@@ -28,29 +28,24 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
   public String store(String prefix, String bucket, MultipartFile file) {
     AppProperties.Upload upload = appProperties.getUpload();
 
-    // プレフィックスのバリデーション (パストラバーサル防止)
+    // prefix・bucket は object key に組み込まれるため、英数字類に絞ってパストラバーサルを防ぐ
     if (prefix == null || !prefix.matches("^[a-zA-Z0-9_-]+$")) {
       throw new ServiceException("不正なプレフィックスです");
     }
 
-    // バケット名のバリデーション (パストラバーサル防止)
-    // 英数字、ハイフン、アンダースコアのみを許可
     if (bucket == null || !bucket.matches("^[a-zA-Z0-9_-]+$")) {
       throw new ServiceException("不正なバケット名です");
     }
 
-    // ファイルサイズのバリデーション
     if (file.getSize() > upload.getMaxFileSize()) {
       throw new ServiceException("ファイルサイズが上限を超えています");
     }
 
-    // MIMEタイプのバリデーション
     String contentType = file.getContentType();
     if (contentType == null || !upload.getAllowedTypes().contains(contentType)) {
       throw new ServiceException("許可されていないファイル形式です");
     }
 
-    // 拡張子を元のファイル名から取得
     String originalFilename = file.getOriginalFilename();
     String extension = "";
     if (originalFilename != null && originalFilename.contains(".")) {

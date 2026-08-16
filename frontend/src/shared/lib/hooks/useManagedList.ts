@@ -44,7 +44,7 @@ export function useManagedList<T>(fetcher: () => Promise<T[]>) {
   useEffect(() => {
     void refetch();
     return () => {
-      // requestIdRef is a request counter, not a DOM ref.
+      // requestIdRef は DOM ref ではなくリクエスト連番のカウンタ。
       // eslint-disable-next-line react-hooks/exhaustive-deps
       requestIdRef.current++;
     };

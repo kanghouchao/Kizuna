@@ -10,17 +10,8 @@ import MVSection from '../_sections/MVSection';
 import './theme.css';
 
 /**
- * classic 模版のテナントページ (Server Component)
- *
- * 構成（排布差: キャッチコピー帯を Banner の直上に置き明るい第一印象を作る）:
- * 1. AgeGate    - 年齢確認オーバーレイ（Client Component / localStorage）
- * 2. Header     - スティッキーヘッダー
- * 3. キャッチコピー帯（設定時のみ）
- * 4. Banner     - フルスクリーンヒーローセクション
- * 5. MVSection  - メインビジュアル
- * 6. CastSection - キャスト紹介カルーセル
- * 7. Advertisement - キャンペーン情報
- * 8. Footer     - フッター
+ * classic 模版の店舗トップページ（Server Component）。
+ * 既定模版との排布差: キャッチコピー帯を Banner の直上に置き、明るい第一印象を作る。
  */
 export default async function ClassicTemplate() {
   const cookieStore = await cookies();
