@@ -8,16 +8,13 @@ export const config = {
 };
 
 export async function proxy(request: NextRequest) {
-  // 1. Identify Role & Store
   const { role, storeData } = await resolveStore(request);
 
-  // 2. Route Protection (Security Guard)
   const redirectResponse = handleRouteProtection(request, role);
   if (redirectResponse) {
     return redirectResponse;
   }
 
-  // 3. Prepare Response & Cookies
   const response = NextResponse.next();
   const isHttps = request.nextUrl.protocol === 'https:';
   const cookieOptions = {
@@ -27,7 +24,6 @@ export async function proxy(request: NextRequest) {
     path: '/',
   };
 
-  // Set Role Cookie
   response.cookies.set('x-mw-role', role, cookieOptions);
 
   // 平台ドメインをクライアントへ渡す。店舗ドメインから会員ポータルへ渡す導線は絶対 URL を
@@ -35,7 +31,6 @@ export async function proxy(request: NextRequest) {
   // 実行時に決まる値は proxy が cookie で運ぶ（role と同じ流儀）。
   response.cookies.set('x-mw-platform-domain', PLATFORM_DOMAIN, cookieOptions);
 
-  // Set Store Cookies (if applicable)
   if (role === 'store' && storeData?.isValid) {
     // ドメインを保存して、後続リクエストで検証に使用
     const hostname = (

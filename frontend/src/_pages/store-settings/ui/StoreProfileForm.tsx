@@ -275,7 +275,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                     value={value}
                     onChange={onChange}
                     bucket="public"
-                    className="w-32 h-32" // Square
+                    className="w-32 h-32"
                   />
                 )}
               />
@@ -296,7 +296,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                   value={value}
                   onChange={onChange}
                   bucket="public"
-                  className="w-full h-40 max-w-2xl" // Wide rectangle
+                  className="w-full h-40 max-w-2xl"
                 />
               )}
             />
@@ -345,7 +345,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                   value={value}
                   onChange={onChange}
                   bucket="public"
-                  className="w-full h-64" // Taller wide rectangle
+                  className="w-full h-64"
                 />
               )}
             />
@@ -519,7 +519,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
           </div>
         </section>
 
-        {/* Buttons */}
         <div className="flex justify-end gap-4 pt-6 border-t">
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? '保存中...' : '設定を保存する'}

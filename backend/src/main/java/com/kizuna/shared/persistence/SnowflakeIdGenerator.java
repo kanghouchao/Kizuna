@@ -7,12 +7,12 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.id.IdentifierGenerator;
 
 /**
- * Simple snowflake ID generator that produces 64-bit numeric IDs encoded as decimal strings. This
- * implementation is deterministic and not cluster-coordinated; set workerId appropriately.
+ * 64bit の snowflake ID を 10 進文字列として払い出す {@link IdentifierGenerator}。 クラスタ間の調整は持たないため、多重起動する場合は
+ * workerId を重複させないこと。
  */
 public class SnowflakeIdGenerator implements IdentifierGenerator {
 
-  // epoch: 2020-01-01
+  // 起点は 2020-01-01
   private static final long EPOCH = 1577836800000L;
   private static final long WORKER_ID_BITS = 10L;
   private static final long SEQUENCE_BITS = 12L;
@@ -25,7 +25,6 @@ public class SnowflakeIdGenerator implements IdentifierGenerator {
   private long sequence = 0L;
 
   public SnowflakeIdGenerator() {
-    // default worker id 1; consider injecting via property or environment
     this(1L);
   }
 
@@ -40,13 +39,13 @@ public class SnowflakeIdGenerator implements IdentifierGenerator {
   private synchronized long nextId() {
     long timestamp = Instant.now().toEpochMilli();
     if (timestamp < lastTimestamp) {
-      // clock moved backwards, wait until lastTimestamp
+      // 時計の巻き戻り。前回時刻まで待って ID の重複を防ぐ
       timestamp = waitUntil(lastTimestamp);
     }
     if (timestamp == lastTimestamp) {
       sequence = (sequence + 1) & SEQUENCE_MASK;
       if (sequence == 0) {
-        // sequence overflow on the same millisecond
+        // 同一ミリ秒内で連番が尽きたため、次のミリ秒まで待つ
         timestamp = waitUntil(lastTimestamp + 1);
       }
     } else {

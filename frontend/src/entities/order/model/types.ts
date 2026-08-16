@@ -273,7 +273,6 @@ export interface OrderCreateRequest {
   media_name?: string;
   remarks?: string;
   cast_driver_message?: string;
-  // Customer Creation Fields
   phone_number?: string;
   phone_number2?: string;
   address?: string;

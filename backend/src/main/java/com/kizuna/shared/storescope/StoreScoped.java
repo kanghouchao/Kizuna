@@ -5,23 +5,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/**
- * Indicates that the annotated method should have automatic store filtering applied.
- *
- * <p>When this annotation is present, the system will automatically inject the current store's ID
- * and apply store-specific filtering logic to the method.
- *
- * <p><b>Usage Example:</b>
- *
- * <pre>{@code
- * @StoreScoped
- * public List<User> getUsersForStore() {
- *     // Implementation that will be automatically filtered by store
- * }
- * }</pre>
- *
- * @author kanghouchao
- */
+/** メソッドの実行中、現在の店舗文脈で Hibernate の storeFilter を有効化することを宣言する。 */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface StoreScoped {}

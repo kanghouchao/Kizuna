@@ -12,7 +12,7 @@ function sanitizeBannerUrl(url: string | undefined): string | undefined {
     const parsed = new URL(trimmed);
     if (['http:', 'https:'].includes(parsed.protocol)) return parsed.toString();
   } catch {
-    // Invalid URL
+    // URL として解釈できない値は未設定として扱う
   }
   return undefined;
 }

@@ -12,8 +12,6 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface OrderMapper {
 
-  // ==================== View(projection) -> Response ====================
-
   /** 読み側 projection をレスポンスDTOに変換します。 */
   OrderResponse toResponse(OrderView view);
 
@@ -29,14 +27,7 @@ public interface OrderMapper {
   /** 平台横断一覧の projection をレスポンスDTOに変換します（集合作用域）。 */
   PlatformOrderResponse toPlatformResponse(PlatformOrderView view);
 
-  // ==================== CreateRequest -> Entity ====================
-
-  /**
-   * 注文作成リクエストDTOを注文エンティティに変換します。 注: 関連 ID（顧客、キャスト、受付担当）はサービス層で存在確認後に割り当てます。
-   *
-   * @param request 注文作成リクエスト
-   * @return 注文エンティティ
-   */
+  /** 注文作成リクエストDTOを注文エンティティに変換します。 */
   @Mapping(target = "locationAddress", source = "address")
   @Mapping(target = "locationBuilding", source = "buildingName")
   // 店舗・HQ が起こす受注は確定で出生する。電話口で受けると決めた時点で可否は判断済みであり、
@@ -66,13 +57,10 @@ public interface OrderMapper {
   @Mapping(target = "cancelledAt", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
-  // ==================== UpdateRequest -> Patch ====================
-
   /** 注文更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */
   OrderPatch toPatch(OrderUpdateRequest request);
 
-  // ==================== CreateRequest -> Customer（電話番号からの顧客スマートリンク用） ====================
-
+  /** 電話番号からの顧客スマートリンク用に、作成リクエストから顧客行を起こします。 */
   @Mapping(target = "name", source = "customerName")
   // rank は DB デフォルト（'SILVER'）と同義。注文経由の顧客作成でも通常作成と揃える
   @Mapping(target = "rank", constant = "SILVER")

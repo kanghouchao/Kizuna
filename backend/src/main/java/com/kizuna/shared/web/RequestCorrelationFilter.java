@@ -16,9 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/**
- * Assigns a correlation identifier to every request and ensures store context data exits cleanly.
- */
+/** 全リクエストに相関 ID を割り当て、応答後に ThreadContext と店舗文脈を確実に掃除する。 */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor

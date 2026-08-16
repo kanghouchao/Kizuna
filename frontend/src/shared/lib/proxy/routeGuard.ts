@@ -34,23 +34,16 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
   // 無限リダイレクト（ERR_TOO_MANY_REDIRECTS）に陥る。
   const isPublicPlatformRoute = isPublicPlatformPath(path);
 
-  // 1. Platform Route Protection
-  // If accessing a protected /platform/* route without a token, redirect to /platform/login
   if (path.startsWith('/platform') && !isPublicPlatformRoute && !hasToken) {
     console.error('🔒 Unauthorized access to /platform, redirecting to login');
     return NextResponse.redirect(new URL('/platform/login', request.url));
   }
 
-  // 2. Store Route Protection
-  // If accessing /store/* without a token, redirect to root (/)
-  // This logic applies even if role is 'platform' but accessing store routes (though rare)
-  // But strictly, we mostly care about store role here.
   if (path.startsWith('/store') && !hasToken) {
     console.error('🔒 Unauthorized access to /store, redirecting to root');
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // 2.5. Cast Portal Route Protection
   // /cast/** はキャストポータル専用の認証済み領域。専用ログイン画面は無く /platform/login が
   // 入口のため、未トークンはそちらへ差し戻す（/store の既定遷移先である「/」とは別系統）。
   // 公開ストアフロントの /casts・/casts/:id を巻き込まないため厳密一致＋/cast/ 配下に限定する。
@@ -59,7 +52,6 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
     return NextResponse.redirect(new URL('/platform/login', request.url));
   }
 
-  // 2.6. Member Portal Route Protection
   // /member/** は会員ポータル専用の認証済み領域。入口は /platform/login（キャストと同様、
   // 専用ログイン画面は無い）。厳密一致＋/member/ 配下に限定するのも同じ理由。
   //
@@ -82,7 +74,6 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
     return response;
   }
 
-  // 3. Console/area alignment
   // 店舗文脈のまま /platform/* を直打ちすると、サイドバー（能力由来）と本文（URL 由来）が
   // 食い違ったまま描画され、平台 API も 403 になる。トークン保持者のコンソールと URL エリアが
   // 一致しない場合は自コンソールのホームへ差し戻す。cookie 不在（レガシーセッション）や
@@ -108,7 +99,6 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
     }
   }
 
-  // 4. Legacy id-less / retired store URL handling
   // id 無しの店舗 URL（例 /store/orders、ブックマーク・共有リンクに残りうる）は
   // /store/[storeId]/... にも /store/entry にもマッチせず 404 になる。
   // 廃止済みルート（/store/dashboard・/store/5/dashboard 等）も同じく遷移先が無い。
@@ -121,5 +111,5 @@ export function handleRouteProtection(request: NextRequest, role: 'platform' | '
     return NextResponse.redirect(new URL(storeEntryPath(path), request.url));
   }
 
-  return null; // No redirection needed
+  return null;
 }

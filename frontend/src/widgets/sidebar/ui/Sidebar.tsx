@@ -98,7 +98,7 @@ export function Sidebar() {
         setNavigation(mappedNavigation);
       } catch (error) {
         console.error('Failed to fetch menus', error);
-        // Fallback to basic Dashboard if API fails
+        // メニュー取得に失敗したら最低限の導線に落とす。
         // role state ではなく role effect と同じ解決順（platform console → x-mw-role cookie）で直接判定する。
         const platformConsole = getPlatformConsole();
         const isStore = platformConsole

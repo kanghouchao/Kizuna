@@ -9,18 +9,7 @@ import Header from '../_sections/Header';
 import MVSection from '../_sections/MVSection';
 import './theme.css';
 
-/**
- * デフォルトのテナントページ模版 (Server Component)
- *
- * 構成:
- * 1. AgeGate    - 年齢確認オーバーレイ（Client Component / localStorage）
- * 2. Header     - スティッキーヘッダー
- * 3. Banner     - フルスクリーンヒーローセクション
- * 4. MVSection  - メインビジュアル
- * 5. CastSection - キャスト紹介カルーセル
- * 6. Advertisement - キャンペーン情報
- * 7. Footer     - フッター
- */
+/** 既定模版の店舗トップページ（Server Component）。 */
 export default async function DefaultTemplate() {
   const cookieStore = await cookies();
   const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';

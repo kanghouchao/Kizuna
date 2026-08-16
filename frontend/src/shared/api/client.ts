@@ -41,7 +41,7 @@ apiClient.interceptors.request.use(
           (config.headers as any)['X-Store-ID'] = storeId;
         }
       } else {
-        // Attach role and store context from middleware cookies
+        // proxy が焼いた x-mw cookie から役割と店舗文脈をヘッダへ移す
         const role = Cookies.get('x-mw-role');
         if (role) {
           (config.headers as any)['X-Role'] = role;
@@ -54,7 +54,7 @@ apiClient.interceptors.request.use(
         }
       }
     } catch {
-      // noop
+      // cookie が読めない環境ではヘッダ無しで送る（受否はバックエンドが fail-closed に判定する）
     }
     return config;
   },
