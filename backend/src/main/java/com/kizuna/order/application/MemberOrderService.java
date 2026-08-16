@@ -19,6 +19,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
@@ -60,6 +61,7 @@ public class MemberOrderService {
   private final AppProperties appProperties;
 
   /** 予約を申請する。申請は受注（Order）の CREATED として起き、店舗の確定で同じ行が CONFIRMED になる。 */
+  @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、店舗の実在を確かめたうえで store_id を明示設定して書く")
   @Transactional
   public MemberOrderResponse request(String email, MemberOrderCreateRequest request) {
     MemberLookup member = resolveMember(email);
@@ -100,6 +102,7 @@ public class MemberOrderService {
    * @param cursor 続きの位置。null なら先頭から
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
+  @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、申請者（requesterMemberId）の一致を問い合わせ自体に載せることが唯一の境界")
   @Transactional(readOnly = true)
   public CursorPage<MemberOrderResponse> list(String email, String cursor, int requestedSize) {
     MemberLookup member = resolveMember(email);
@@ -124,6 +127,7 @@ public class MemberOrderService {
   }
 
   /** 本人が申請した未確定の予約を取り下げる。確定後は店舗との調整が要るため取り下げられない。 */
+  @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、申請者（requesterMemberId）の一致を取り出しの条件に載せることが唯一の境界")
   @Transactional
   public MemberOrderResponse cancel(String email, String orderId) {
     MemberLookup member = resolveMember(email);

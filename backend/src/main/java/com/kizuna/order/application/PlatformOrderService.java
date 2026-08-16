@@ -6,6 +6,7 @@ import com.kizuna.order.api.dto.PlatformOrderCreateRequest;
 import com.kizuna.order.api.dto.PlatformOrderResponse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -36,6 +37,8 @@ public class PlatformOrderService {
    * <p>店舗側の作成へそのまま委譲するため、出生確定・WEB 拒否・受付担当の省略補完はこちらでも同じに効く — 入口によって受注の生まれ方は変わらない。実行者は受付担当の補完に要るので
    * 渡す（HQ 管理者は受付候補の適格条件を満たさないため、省略した要求は 400 になる）。
    */
+  @StoreScopeExempt(
+      reason = "repository を自ら読まず、StoreScopeExecutor で店舗文脈を確立して @StoreScoped な店舗側の作成へ委譲する")
   public OrderResponse create(PlatformOrderCreateRequest request, String actorEmail) {
     return storeScopeExecutor.runInStore(
         request.getStoreId(), () -> orderService.create(request, actorEmail));

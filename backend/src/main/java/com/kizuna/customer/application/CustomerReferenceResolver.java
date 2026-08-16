@@ -2,6 +2,7 @@ package com.kizuna.customer.application;
 
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,8 @@ public class CustomerReferenceResolver {
    * <p>呼出側のトランザクションに必ず参加する（{@code MANDATORY}）。自分でトランザクションを開くと新しい Session になり、 呼出側の
    * {@code @StoreScoped} が有効にした storeFilter が掛からないまま他店舗の行を押さえたうえ、 呼出側が書き込む前に行ロックを手放してしまう。
    */
+  @StoreScopeExempt(
+      reason = "呼出元のトランザクションに必ず参加し（MANDATORY）、店舗境界は呼出元の storeFilter か呼出元が明示する storeId が引く")
   @Transactional(propagation = Propagation.MANDATORY)
   public String resolveForWrite(String customerId) {
     customerRepository

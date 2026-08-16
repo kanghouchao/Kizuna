@@ -2,6 +2,7 @@ package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 class NominatableCastLookup {
 
+  private static final String EXPLICIT_STORE_PREDICATE =
+      "キャスト読み取りの暗黙の絞り込みに頼らず、店舗の一致を引き当ての述語に明示することが境界";
+
   /** 指名を成立させる在籍状態。 */
   private static final String ACTIVE_STATUS = "ACTIVE";
 
@@ -36,6 +40,7 @@ class NominatableCastLookup {
   private final CastRepository castRepository;
 
   /** 指名先として成立するキャストを引く。成立しないときは空を返し、何を投げるかは呼び出し側が決める。 */
+  @StoreScopeExempt(reason = EXPLICIT_STORE_PREDICATE)
   Optional<Cast> find(Long storeId, String castId) {
     return castRepository
         .findById(castId)
@@ -48,6 +53,7 @@ class NominatableCastLookup {
    *
    * <p>検索語なし（null・空白のみ）は絞り込みなしと同じに扱う。コンボボックスは開いた時点で語なしに一度取りに行くため、 ここで空を返すと候補が何も出ないまま打ち始めることになる。
    */
+  @StoreScopeExempt(reason = EXPLICIT_STORE_PREDICATE)
   List<Cast> searchCandidates(Long storeId, String keyword) {
     String name = keyword == null ? "" : keyword.trim();
     return castRepository

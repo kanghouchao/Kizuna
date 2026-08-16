@@ -3,6 +3,7 @@ package com.kizuna.shift.application;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.domain.ConfirmedShiftCastView;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -33,11 +34,15 @@ public class ConfirmedShiftLookupService {
 
   private static final String CONFIRMED = "CONFIRMED";
 
+  private static final String EXPLICIT_STORE_ID_IS_THE_BOUNDARY =
+      "呼び手（会員）は店舗文脈を確立できないため、問い合わせへの storeId 明示指定が唯一の境界";
+
   private final ShiftRepository shiftRepository;
   private final StoreExistenceCheck storeExistenceCheck;
   private final AppProperties appProperties;
 
   /** 指定店舗・指定日の確定シフトに入っている ACTIVE キャストを返す。 */
+  @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public List<PublicShiftResponse> listConfirmedCasts(Long storeId, LocalDate workDate) {
     if (!storeExistenceCheck.exists(storeId)) {
@@ -63,6 +68,7 @@ public class ConfirmedShiftLookupService {
   }
 
   /** 指定店舗・指定キャスト・指定日に確定シフトがあるか。 */
+  @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public boolean hasConfirmedShift(Long storeId, String castId, LocalDate workDate) {
     return shiftRepository.existsByStoreIdAndCastIdAndWorkDateAndStatus(
