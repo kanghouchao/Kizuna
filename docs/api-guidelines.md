@@ -76,13 +76,18 @@
 失敗応答の本体は `CommonExceptionHandler` が組み立てる次の形で統一する。個別のハンドラで別形を作らない。
 
 ```json
-{ "error": "利用者向けの固定文言", "details": { "start_at": "必須です" } }
+{ "error": "利用者向けの文言", "details": { "start_at": "必須です" } }
 ```
 
-- `error` は**型ごとに固定した利用者向け文言**。フレームワークや DB の生 message は Java の型名や内部構造を含むため転送しない。
+- `error` は**サーバ側が定めた利用者向け文言**。出所は二通りで、handler が例外型ごとに固定した文言（認可拒否・楽観ロック競合など）と、
+  throw 箇所が書いた文言（`ServiceException` / `ConflictException` / `NotFoundException` の message、Bean Validation の
+  `message` 属性）である。どちらも**人が書いた**文言であることが条件。
+  禁止するのは**フレームワークや DB の内部 message をそのまま転送すること**（Java の型名・SQL・制約名・スタックトレースを含み、
+  ワイヤ契約への漏出になる）。未捕捉例外は固定文言の 500 に潰す。
 - `details` は任意で、キーは**要求で送るときと同じ綴り（snake_case）**に揃える。
   束縛結果が持つのは camelCase のプロパティパスなので、ここで写像してから載せる。
-- 例外の internal message をそのまま `error` に流すのはワイヤ契約への漏出であり、禁止。
+- 新しいドメイン例外を足すときは、既存の `ServiceException` / `ConflictException` / `NotFoundException` の
+  どれかに寄せる。ハンドラを増やすほど、同じ状態が端点によって別のステータスで返る余地が生まれる。
 
 ## 5. ページネーションの選択基準
 
