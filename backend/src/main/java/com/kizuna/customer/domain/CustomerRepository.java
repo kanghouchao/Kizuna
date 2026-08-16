@@ -36,9 +36,9 @@ public interface CustomerRepository
    * PointEntryRepository#findCreditsForUpdate}）。記帳の 2 経路で順序が揃い、解除は台帳を触らないため待ちが環にならない。
    * 読むだけの経路（残高照会・完了の事前計算・紐づけ履歴・顧客の投影）はこのロックを取らない。
    *
-   * <p>Customer は StoreScopedEntity で、JPQL の問い合わせには {@code storeFilter} が掛かる（{@code
-   * EntityManager.find} には掛からないため、派生の {@code findById} に @Lock を足す形では店舗境界が外れる）。{@code @StoreScoped}
-   * の文脈では 他店舗の顧客が空になり、存在の有無が漏れない既存の性質はこの形で保たれる。
+   * <p>Customer は StoreScopedEntity で、この問い合わせにも {@code storeFilter} が掛かる（applyToLoadByKey により派生の
+   * {@code findById} でも同様 — StoreScopedLoadByKeyIT が実測で固定）。{@code @StoreScoped} の文脈では
+   * 他店舗の顧客が空になり、存在の有無が漏れない。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select c from com.kizuna.customer.domain.Customer c where c.id = :id")

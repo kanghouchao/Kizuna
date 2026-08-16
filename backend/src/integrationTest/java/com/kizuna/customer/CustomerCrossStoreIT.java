@@ -52,7 +52,7 @@ class CustomerCrossStoreIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("他店舗の顧客 ID を GET しても取得できないこと（applyToLoadByKey 回帰）")
+  @DisplayName("非授権の店舗文脈からの顧客 ID 直指しはインターセプタが 403 で拒むこと")
   void otherStoreCannotReadForeignCustomerById() {
     String id = createCustomerAs(STORE_A, "統合テスト顧客（負向）");
 
@@ -63,8 +63,8 @@ class CustomerCrossStoreIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_B)),
             JsonNode.class);
 
-    // 越権はインターセプタが JWT と X-Store-ID の不一致を拒否 → 403。
-    // 重要なのは 200 でデータが漏れないこと
+    // 単店授権のスタッフは JWT と X-Store-ID の不一致でインターセプタに拒まれ、SQL まで届かない。
+    // フィルタ層の境界（多店授権者の越境が 404 になること）は StoreScopedLoadByKeyIT が固定する。
     assertThat(leaked.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
