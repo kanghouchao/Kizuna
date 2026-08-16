@@ -76,7 +76,7 @@ class PlatformStoreApiIT {
   }
 
   @Test
-  @DisplayName("POST /platform/stores は HQ 管理者で 204 になること")
+  @DisplayName("POST /platform/stores は HQ 管理者で 201 になり、新規 id を返すこと")
   void hqAdminCanCreateStore() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
@@ -90,10 +90,11 @@ class PlatformStoreApiIT {
                 + " \"email\": \"store-create-it@kizuna.test\"}",
             UUID.randomUUID());
 
-    ResponseEntity<Void> res =
-        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), JsonNode.class);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(res.getBody().path("id").asLong()).isPositive();
   }
 
   // ドメインは管理画面で店舗サイトへのリンクとして描画される。`/` `:` `@` を通すと
@@ -177,10 +178,10 @@ class PlatformStoreApiIT {
                 + " \"email\": \"store-create-it@kizuna.test\"}",
             maxLabel);
 
-    ResponseEntity<Void> res =
-        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), JsonNode.class);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
   }
 
   // 編集画面は name と email を送る。更新 DTO が受け取らない項目は
@@ -243,26 +244,18 @@ class PlatformStoreApiIT {
         .isEqualTo("keep@kizuna.test");
   }
 
-  /** 店舗を作成し、その id を返す。POST は 204 で本文を返さないため、一意な name で検索して引く。 */
+  /** 店舗を作成し、その id を返す。 */
   private String createStore(String token, String name, String domain, String email) {
     HttpHeaders headers = bearer(token);
     headers.setContentType(MediaType.APPLICATION_JSON);
     String body =
         String.format(
             "{\"name\": \"%s\", \"domain\": \"%s\", \"email\": \"%s\"}", name, domain, email);
-    ResponseEntity<Void> created =
-        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
-    assertThat(created.getStatusCode()).as("前提: 店舗が作成されること").isEqualTo(HttpStatus.NO_CONTENT);
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), JsonNode.class);
+    assertThat(created.getStatusCode()).as("前提: 店舗が作成されること").isEqualTo(HttpStatus.CREATED);
 
-    ResponseEntity<JsonNode> found =
-        rest.exchange(
-            "/platform/stores?search=" + name,
-            HttpMethod.GET,
-            new HttpEntity<>(bearer(token)),
-            JsonNode.class);
-    assertThat(found.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(found.getBody().path("content").size()).as("前提: 作成した店舗が一意に引けること").isEqualTo(1);
-    return found.getBody().path("content").get(0).path("id").asString();
+    return created.getBody().path("id").asString();
   }
 
   @Test
@@ -357,9 +350,9 @@ class PlatformStoreApiIT {
                 + " \"email\": \"store-it-likeesc@kizuna.test\"}",
             name, uniqueSuffix);
 
-    ResponseEntity<Void> created =
-        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), Void.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity("/platform/stores", new HttpEntity<>(body, headers), JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     String wildcardSearch = name.replace("acb", "a_b");
     ResponseEntity<JsonNode> underscore =

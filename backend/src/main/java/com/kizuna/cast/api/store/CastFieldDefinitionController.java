@@ -53,6 +53,6 @@ public class CastFieldDefinitionController {
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     service.delete(id);
-    return ResponseEntity.ok().build();
+    return ResponseEntity.noContent().build();
   }
 }

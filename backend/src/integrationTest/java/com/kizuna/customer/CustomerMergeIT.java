@@ -462,7 +462,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
                     JsonNode.class)
                 .getStatusCode())
         .as("前提: 会員の紐づけを解除できること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.NO_CONTENT);
   }
 
   // ==================== 会員 ====================

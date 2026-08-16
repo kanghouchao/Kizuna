@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -115,6 +117,24 @@ class CustomerMemberLinkControllerTest {
         .andExpect(status().isOk());
 
     verify(customerMemberLinkService).history("c1", "abc", 5);
+  }
+
+  @Test
+  @DisplayName("解除は本体無しの 204 で返ること")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void unlinkRespondsWithNoContent() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            delete("/store/customers/c1/member-link")
+                .with(csrf())
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .principal(() -> "tanaka.hanako@kizuna.test"))
+        .andExpect(status().isNoContent());
+
+    verify(customerMemberLinkService).unlink("c1", "tanaka.hanako@kizuna.test");
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {

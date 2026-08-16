@@ -50,7 +50,7 @@ class StoreRegistryServiceTest {
   }
 
   @Test
-  void create_savesStoreAndDefaultStoreProfile() {
+  void create_savesStoreAndDefaultStoreProfileAndReturnsTheNewId() {
     StoreCreateDTO req = new StoreCreateDTO();
     req.setName("T1");
     req.setDomain("d1.com");
@@ -59,7 +59,7 @@ class StoreRegistryServiceTest {
     t.setId(1L);
     when(storeRepository.save(any())).thenReturn(t);
 
-    storeRegistryService.create(req);
+    assertThat(storeRegistryService.create(req)).isEqualTo(1L);
 
     verify(storeRepository).save(any());
     verify(storeProfileRepository).save(any());

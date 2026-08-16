@@ -39,6 +39,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -159,7 +160,7 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> create(
       @Valid @RequestBody OrderCreateRequest request, Principal principal) {
-    return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+    return ResponseEntity.status(HttpStatus.CREATED)
         .body(orderService.create(request, principal.getName()));
   }
 

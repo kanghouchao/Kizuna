@@ -16,6 +16,11 @@ export interface CreateStoreRequest {
   email: string;
 }
 
+// 店舗作成レスポンス（作成された店舗の id だけを返す）
+export interface CreateStoreResponse {
+  id: number;
+}
+
 // 店舗更新リクエスト
 export interface UpdateStoreRequest {
   name: string;

@@ -56,7 +56,7 @@ public class ShiftController {
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     shiftService.delete(id);
-    return ResponseEntity.ok().build();
+    return ResponseEntity.noContent().build();
   }
 
   @GetMapping("/public")

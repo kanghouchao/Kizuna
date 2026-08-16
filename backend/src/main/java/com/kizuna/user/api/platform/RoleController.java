@@ -8,6 +8,7 @@ import com.kizuna.user.application.RoleService;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -43,7 +44,7 @@ public class RoleController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<RoleResponse> create(@Valid @RequestBody RoleCreateRequest req) {
-    return ResponseEntity.ok(roleService.create(req));
+    return ResponseEntity.status(HttpStatus.CREATED).body(roleService.create(req));
   }
 
   @PutMapping("/{id}")

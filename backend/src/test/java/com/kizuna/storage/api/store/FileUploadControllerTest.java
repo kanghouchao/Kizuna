@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -70,7 +71,7 @@ class FileUploadControllerTest {
 
     ResponseEntity<FileUploadResponse> res = controller.upload(file, "public");
 
-    assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     verify(fileStorageService).store("platform", "public", file);
     assertThat(res.getBody().getUrl()).isEqualTo("/static/uploads/public/platform/x.jpg");
   }
@@ -97,7 +98,7 @@ class FileUploadControllerTest {
 
     ResponseEntity<FileUploadResponse> res = controller.upload(file, "public");
 
-    assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     verify(fileStorageService).store("5", "public", file);
   }
 }

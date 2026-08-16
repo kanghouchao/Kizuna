@@ -135,7 +135,7 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
             HttpMethod.DELETE,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(released.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(released.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     ResponseEntity<JsonNode> detail =
         rest.exchange(

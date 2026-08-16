@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,7 +49,7 @@ public class PlatformStaffController {
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> create(
       @Valid @RequestBody PlatformStaffCreateRequest req) {
-    return ResponseEntity.ok(platformStaffService.create(req));
+    return ResponseEntity.status(HttpStatus.CREATED).body(platformStaffService.create(req));
   }
 
   @PutMapping("/{id}")

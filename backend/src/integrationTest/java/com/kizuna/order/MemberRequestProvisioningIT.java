@@ -200,7 +200,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
                     Void.class)
                 .getStatusCode())
         .as("前提: 紐づけを解除できること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.NO_CONTENT);
     linkByMemberCode(shared, other.memberCode());
 
     ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));

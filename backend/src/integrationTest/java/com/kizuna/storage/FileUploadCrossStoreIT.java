@@ -103,7 +103,7 @@ class FileUploadCrossStoreIT {
   }
 
   @Test
-  @DisplayName("HQ トークン（詐称ヘッダ無し）の /files/upload は platform 領域へ 200 で保存されること")
+  @DisplayName("HQ トークン（詐称ヘッダ無し）の /files/upload は platform 領域へ 201 で保存されること")
   void hqTokenWithoutSpoofUploadsToPlatform() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin(HQ_EMAIL));
@@ -111,7 +111,7 @@ class FileUploadCrossStoreIT {
     ResponseEntity<JsonNode> res =
         rest.exchange("/files/upload", HttpMethod.POST, uploadRequest(headers), JsonNode.class);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(res.getBody().path("url").asString()).contains("/platform/");
   }
 }
