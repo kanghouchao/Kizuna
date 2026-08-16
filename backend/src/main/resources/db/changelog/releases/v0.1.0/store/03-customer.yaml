@@ -116,6 +116,17 @@ databaseChangeLog:
             referencedTableName: t_customers
             referencedColumnNames: id
             onDelete: NO ACTION
+        # 「受注・関連が参照する顧客は生きている行である」を DB に宣言的に守らせるための参照先。
+        # PostgreSQL は条件付き外部キーも CHECK 内の副問い合わせも持たないので、生きているかを
+        # 生成列にして (id, alive) を複合外部キーの参照先にするのが唯一の宣言的な手段になる。
+        - sql:
+            sql: >-
+              ALTER TABLE t_customers
+              ADD COLUMN alive BOOLEAN GENERATED ALWAYS AS (merged_into_id IS NULL) STORED
+        - addUniqueConstraint:
+            tableName: t_customers
+            columnNames: id,alive
+            constraintName: uq_t_customers_id_alive
         - createIndex:
             indexName: idx_t_customers_phone
             tableName: t_customers

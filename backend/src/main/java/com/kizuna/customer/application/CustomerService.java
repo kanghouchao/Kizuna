@@ -186,7 +186,7 @@ public class CustomerService {
               DbConstraint.FK_T_CUSTOMER_MERGES_SURVIVING, undeletable,
               DbConstraint.FK_T_CUSTOMER_MERGES_MERGED, undeletable,
               DbConstraint.FK_T_CUSTOMERS_MERGED_INTO, undeletable,
-              DbConstraint.FK_T_ORDERS_CUSTOMER,
+              DbConstraint.FK_T_ORDERS_CUSTOMER_ALIVE,
                   () -> new ConflictException(ORDERED_CUSTOMER_UNDELETABLE)));
     }
   }

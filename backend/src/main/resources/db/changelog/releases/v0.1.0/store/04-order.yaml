@@ -217,12 +217,22 @@ databaseChangeLog:
             onDelete: SET NULL
         # 顧客・キャストへの参照は削除を止める。止める力が同じ RESTRICT ではなく NO ACTION を採る理由は
         # DbConstraint の Javadoc（違反の見え方の差）にある。
+        #
+        # 顧客への参照は (id, alive) を指す複合外部キーで、「参照先は生きた行」まで DB が守る。
+        # 生成列は顧客未設定なら NULL になり、MATCH SIMPLE の既定で無帰属受注は検査対象外に残る。
+        # 単列の外部キーは置かない — この制約が存在を含んで強く言うので、二重に張ると同じ違反が
+        # どちらの名前で報告されるか定まらず、名前で写す業務例外が揺れる。
+        - sql:
+            sql: >-
+              ALTER TABLE t_orders
+              ADD COLUMN customer_alive BOOLEAN
+              GENERATED ALWAYS AS (CASE WHEN customer_id IS NULL THEN NULL ELSE true END) STORED
         - addForeignKeyConstraint:
-            constraintName: fk_t_orders_customer
+            constraintName: fk_t_orders_customer_alive
             baseTableName: t_orders
-            baseColumnNames: customer_id
+            baseColumnNames: customer_id,customer_alive
             referencedTableName: t_customers
-            referencedColumnNames: id
+            referencedColumnNames: id,alive
             onDelete: NO ACTION
         - addForeignKeyConstraint:
             constraintName: fk_t_orders_cast

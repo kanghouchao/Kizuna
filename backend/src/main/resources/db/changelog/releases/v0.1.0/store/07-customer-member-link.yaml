@@ -100,12 +100,19 @@ databaseChangeLog:
             referencedTableName: t_stores
             referencedColumnNames: id
             onDelete: CASCADE
+        # 受注と同じく (id, alive) を指す複合外部キー。顧客そのものが消えるときは関連も一緒に消え、
+        # 関連が残ったままの墓標化は拒まれる（削除の連鎖と、生きているかの書き換えは別の向き）。
+        - sql:
+            sql: >-
+              ALTER TABLE t_customer_member_links
+              ADD COLUMN customer_alive BOOLEAN
+              GENERATED ALWAYS AS (CASE WHEN customer_id IS NULL THEN NULL ELSE true END) STORED
         - addForeignKeyConstraint:
-            constraintName: fk_t_customer_member_links_customer
+            constraintName: fk_t_customer_member_links_customer_alive
             baseTableName: t_customer_member_links
-            baseColumnNames: customer_id
+            baseColumnNames: customer_id,customer_alive
             referencedTableName: t_customers
-            referencedColumnNames: id
+            referencedColumnNames: id,alive
             onDelete: CASCADE
         - addForeignKeyConstraint:
             constraintName: fk_t_customer_member_links_member
