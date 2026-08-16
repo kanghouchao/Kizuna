@@ -37,7 +37,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
-  /** ALL_STORES/HQ_ADMIN のシードユーザー（v0.4.0 central/02-platform-users-seed.yaml）。 */
+  /** ALL_STORES の HQ 管理者シード（seed/04-platform-admin.yaml）。 */
   private static final String SEED_EMAIL = "admin@kizuna.test";
 
   /** 授権判定に使う 2 店舗。名称そのものを漏洩検知のカナリアに用いる。 */

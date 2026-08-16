@@ -31,16 +31,16 @@ import tools.jackson.databind.JsonNode;
  * 200 で保存される（正向対照）。HQ 以外の平台トークン（店舗スタッフ）は詐称ヘッダ無しでも プラットフォーム保存を拒否される（follow-up:
  * 低権限身分のプラットフォーム共有領域書き込み封鎖）。
  *
- * <p>プラットフォームログイン前提を廃し、v0.4.0/v0.5.0 の平台シードでログインする。
+ * <p>プラットフォームログイン前提を廃し、ベースラインの平台シード（seed/04-platform-admin.yaml と seed/05-demo.yaml）でログインする。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 class FileUploadCrossStoreIT {
 
-  /** v0.4.0 シードの HQ 管理者（ALL_STORES）。プラットフォーム保存を許可される唯一のロール。 */
+  /** seed/04-platform-admin.yaml の HQ 管理者（ALL_STORES）。プラットフォーム保存を許可される唯一のロール。 */
   private static final String HQ_EMAIL = "admin@kizuna.test";
 
-  /** v0.5.0 シードの店舗スタッフ（SPECIFIC_STORES {1}）。プラットフォーム保存は拒否される。 */
+  /** demo シードの店舗スタッフ（SPECIFIC_STORES {1}）。プラットフォーム保存は拒否される。 */
   private static final String STAFF_EMAIL = "yamada.jiro@kizuna.test";
 
   @Autowired private TestRestTemplate rest;

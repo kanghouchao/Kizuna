@@ -49,8 +49,8 @@ public abstract class CrossStoreTestSupport {
   /**
    * 店長の身分での店舗文脈ヘッダ。{@code POINT_ADJUST} を要する端点にはこちらを使う。
    *
-   * <p>v0.5.0 の田中花子シード（STORE_MANAGER・授権店舗 = 店舗1）。店員の {@link #storeHeaders(long)} と使い分けること自体が、
-   * 権限の線がどこに引かれているかの記録になる。
+   * <p>demo シード（seed/05-demo.yaml）の田中花子（STORE_MANAGER・授権店舗 = 店舗1）。店員の {@link #storeHeaders(long)}
+   * と使い分けること自体が、 権限の線がどこに引かれているかの記録になる。
    */
   protected HttpHeaders managerHeaders(long storeId) {
     if (managerToken == null) {

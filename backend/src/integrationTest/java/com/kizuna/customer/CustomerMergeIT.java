@@ -47,7 +47,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "password1234";
 
-  /** v0.5.0 の山田次郎シード（STORE_STAFF・授権店舗 = 店舗1）。受注の受付担当として使用。 */
+  /** demo シード（seed/05-demo.yaml）の山田次郎（STORE_STAFF・授権店舗 = 店舗1）。受注の受付担当として使用。 */
   private static final long SEED_RECEPTIONIST_ID = 3L;
 
   private static final String MANAGER_EMAIL = "tanaka.hanako@kizuna.test";

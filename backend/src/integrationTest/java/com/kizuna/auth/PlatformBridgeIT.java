@@ -39,7 +39,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>平台トークンを /platform・/store で直接受理し、店舗文脈は StoreIdInterceptor が X-Store-ID を 授権店舗集合（StoreScope）で
  * fail-closed 検証する。断言は {@link com.kizuna.order.PlatformOrderScopeIT}
- * の強断言様式（応答生ボディに授権外店舗の実データが一切現れないこと）に倣う。シードユーザーは v0.5.0（田中花子=STORE_MANAGER{1,2} /
+ * の強断言様式（応答生ボディに授権外店舗の実データが一切現れないこと）に倣う。シードユーザーは demo シード（田中花子=STORE_MANAGER{1,2} /
  * 山田次郎=STORE_STAFF{1} / HQ=ALL_STORES）。
  */
 class PlatformBridgeIT extends CrossStoreTestSupport {
@@ -49,13 +49,13 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   /** {@link com.kizuna.shared.exception.CommonExceptionHandler} の汎用 401 文言と一致する固定値。 */
   private static final String UNAUTHENTICATED_MESSAGE = "認証に失敗しました";
 
-  /** v0.4.0 シードの HQ 管理者（ALL_STORES）。 */
+  /** seed/04-platform-admin.yaml の HQ 管理者（ALL_STORES）。 */
   private static final String HQ_EMAIL = "admin@kizuna.test";
 
-  /** v0.5.0 シードの店長（SPECIFIC_STORES {1,2}）。 */
+  /** demo シードの店長（SPECIFIC_STORES {1,2}）。 */
   private static final String MANAGER_EMAIL = "tanaka.hanako@kizuna.test";
 
-  /** v0.5.0 シードのスタッフ（SPECIFIC_STORES {1}）。 */
+  /** demo シードのスタッフ（SPECIFIC_STORES {1}）。 */
   private static final String STAFF_EMAIL = "yamada.jiro@kizuna.test";
 
   /** 役割線検証用に直挿する CAST ユーザー（PlatformOrderScopeIT の planted-user 様式）。 */
@@ -78,7 +78,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
 
   @BeforeEach
   void prepareBridgeFixture() {
-    // store1 に正向マーカー、store2（v0.5.0 シードの実在店舗 = STORE_B）にカナリアを直挿する。
+    // store1 に正向マーカー、store2（demo シードの実在店舗 = STORE_B）にカナリアを直挿する。
     ensureMarkerOrder(STORE_A, MARKER_S1_REMARKS);
     ensureMarkerOrder(STORE_B, CANARY_S2_REMARKS);
 

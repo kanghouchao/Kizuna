@@ -43,7 +43,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
-  /** ALL_STORES/HQ_ADMIN のシードユーザー（v0.4.0 central/02-platform-users-seed.yaml）。 */
+  /** ALL_STORES の HQ 管理者シード（seed/04-platform-admin.yaml）。 */
   private static final String SEED_EMAIL = "admin@kizuna.test";
 
   private static final String SPECIFIC_EMAIL = "scope-manager@kizuna.test";
@@ -59,7 +59,10 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
   private static final LocalDate CANARY_B_DATE = LocalDate.of(2999, 1, 2);
 
-  /** v0.5.0 central/01 の山田次郎シード(platform_users id=3, STORE_STAFF, SPECIFIC_STORES{1})。受付担当として使用。 */
+  /**
+   * demo シード（seed/05-demo.yaml）の山田次郎(platform_users id=3, STORE_STAFF,
+   * SPECIFIC_STORES{1})。受付担当として使用。
+   */
   private static final long SEED_RECEPTIONIST_ID = 3L;
 
   @Autowired private OrderRepository orderRepository;
