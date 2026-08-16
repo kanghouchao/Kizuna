@@ -171,7 +171,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   /**
    * 掃き出す会員側の GET 端点。残高系の項目を許すかは端点ごとに決める。
    *
-   * <p>申領（{@code POST /platform/me/receipts/claim}）はこの表に入らない — 一覧の掃き出しは同じ要求を何度でも
+   * <p>申領（{@code POST /platform/me/receipts}）はこの表に入らない — 一覧の掃き出しは同じ要求を何度でも
    * 撃てることが前提で、トークンの状態を進める操作は載せられない。代わりに専用の 1 件（{@link
    * #memberReceiptClaimReturnsOnlyWhitelistedFields}）で同じ掃き出しを当てる。
    *
@@ -522,12 +522,12 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     // トークンは 1 度しか使えないため、生ボディの掃き出しと項目名の白名単を同じ 1 応答から見る
     ResponseEntity<JsonNode> claimed =
         rest.postForEntity(
-            "/platform/me/receipts/claim",
+            "/platform/me/receipts",
             new HttpEntity<>("{\"token\": \"" + rawToken + "\"}", bearer(memberToken)),
             JsonNode.class);
 
-    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertNoLedgerLeak("POST /platform/me/receipts/claim", claimed.getBody().toString(), false);
+    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertNoLedgerLeak("POST /platform/me/receipts", claimed.getBody().toString(), false);
     List<String> fields = new ArrayList<>();
     claimed.getBody().propertyNames().forEach(fields::add);
     assertThat(fields)

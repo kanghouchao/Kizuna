@@ -1,6 +1,8 @@
 package com.kizuna.settings.api.platform;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,6 +20,7 @@ import com.kizuna.store.application.StoreActivationService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -77,10 +80,10 @@ class PlatformConfigControllerTest {
     // 実行・検証
     mockMvc
         .perform(
-            put("/platform/configs")
+            put("/platform/configs/site_name")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"config_key\":\"site_name\",\"config_value\":\"新しい名前\"}"))
+                .content("{\"config_value\":\"新しい名前\"}"))
         .andExpect(status().isForbidden());
   }
 
@@ -89,17 +92,46 @@ class PlatformConfigControllerTest {
   @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void updateUnknownKey() throws Exception {
     // 準備
-    when(systemConfigService.updateConfig(any(SystemConfigUpdateRequest.class)))
+    when(systemConfigService.updateConfig(any(String.class), any(SystemConfigUpdateRequest.class)))
         .thenThrow(new ServiceException("設定キーが見つかりません: unknown_key"));
 
     // 実行・検証
     mockMvc
         .perform(
-            put("/platform/configs")
+            put("/platform/configs/unknown_key")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"config_key\":\"unknown_key\",\"config_value\":\"v\"}"))
+                .content("{\"config_value\":\"v\"}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("設定キーが見つかりません: unknown_key"));
+  }
+
+  /** 実在する設定キー（{@code seed} が入れる形）が path 変数として欠けずにサービスへ届くことを固定する。 */
+  @Test
+  @DisplayName("更新の宛先は path の設定キーで、値だけを本体で受けること")
+  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
+  void updateAddressesTheKeyInThePath() throws Exception {
+    when(systemConfigService.updateConfig(any(String.class), any(SystemConfigUpdateRequest.class)))
+        .thenReturn(
+            SystemConfigResponse.builder()
+                .configKey("line_channel_id")
+                .configValue("1234567890")
+                .build());
+
+    mockMvc
+        .perform(
+            put("/platform/configs/line_channel_id")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"config_value\":\"1234567890\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.config_key").value("line_channel_id"));
+
+    ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<SystemConfigUpdateRequest> request =
+        ArgumentCaptor.forClass(SystemConfigUpdateRequest.class);
+    verify(systemConfigService).updateConfig(key.capture(), request.capture());
+    assertThat(key.getValue()).isEqualTo("line_channel_id");
+    assertThat(request.getValue().getConfigValue()).isEqualTo("1234567890");
   }
 }

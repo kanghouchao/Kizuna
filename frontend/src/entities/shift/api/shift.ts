@@ -85,9 +85,9 @@ export const shiftApi = {
     const response = await apiClient.post(`/store/shift-requests/${id}/approval`);
     return response.data;
   },
-  /** 出勤希望を辞退する。 */
+  /** 出勤希望を却下する。 */
   declineShiftRequest: async (id: string): Promise<StoreShiftRequestItem> => {
-    const response = await apiClient.post(`/store/shift-requests/${id}/decline`);
+    const response = await apiClient.post(`/store/shift-requests/${id}/rejection`);
     return response.data;
   },
 };

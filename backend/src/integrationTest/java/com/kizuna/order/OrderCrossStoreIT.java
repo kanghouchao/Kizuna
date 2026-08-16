@@ -245,7 +245,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
     String declineControlId = createOrderAs(STORE_A, castId);
     ResponseEntity<JsonNode> ownDecline =
         rest.exchange(
-            "/store/orders/" + declineControlId + "/decline",
+            "/store/orders/" + declineControlId + "/refusal",
             HttpMethod.POST,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
@@ -272,7 +272,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> foreignDecline =
         rest.exchange(
-            "/store/orders/" + orderId + "/decline",
+            "/store/orders/" + orderId + "/refusal",
             HttpMethod.POST,
             new HttpEntity<>(storeHeaders(STORE_B)),
             JsonNode.class);

@@ -285,7 +285,7 @@ export interface OrderCreateRequest {
   ng_content?: string;
 }
 
-// 未確定の予約申請に対する店舗側の編集（PUT /store/orders/reservation-requests/{id}）。
+// 未確定の予約申請に対する店舗側の編集（PUT /store/orders/{id}/reservation-request）。
 // 送った内容がそのまま新しい申請内容になる部分更新ではない契約で、省略した項目は未設定になる。
 // 指名・受付担当を外せることがこの契約の目的なので、両者は可空。
 export interface ReservationRequestUpdateRequest {
@@ -410,7 +410,7 @@ export interface MemberVisit {
   granted_points: number;
 }
 
-// 伝票トークンの申領の結果（POST /platform/me/receipts/claim）。
+// 伝票トークンの申領の結果（POST /platform/me/receipts）。
 // 来店の内容は来店履歴（MemberVisit）が返すもので、この応答には乗らない。
 export interface MemberReceiptClaim {
   /** Java 側が primitive の int のため、キーは必ず応答に含まれる。0 円完了の伝票では 0。 */

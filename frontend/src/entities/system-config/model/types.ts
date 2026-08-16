@@ -12,9 +12,8 @@ export interface SystemConfigResponse {
   updated_at?: string;
 }
 
-// システム設定更新リクエスト
+// システム設定更新リクエスト。宛先の設定キーはパスが持つため本体には載せない
 export interface SystemConfigUpdateRequest {
-  config_key: string;
   // Java 側に必須注解が無い
   config_value?: string;
 }

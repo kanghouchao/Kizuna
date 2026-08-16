@@ -6,6 +6,7 @@ import com.kizuna.order.application.MemberReceiptClaimService;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,11 +27,12 @@ public class PlatformMemberReceiptController {
 
   private final MemberReceiptClaimService memberReceiptClaimService;
 
-  @PostMapping("/claim")
+  /** 申領は本人の帰属記録を起こす生成なので 201。トークンは本体で受ける（パスに載せるとアクセスログへ残る）。 */
+  @PostMapping
   @PreAuthorize("hasRole('MEMBER')")
   public ResponseEntity<MemberReceiptClaimResponse> claim(
       Principal principal, @Valid @RequestBody MemberReceiptClaimRequest request) {
-    return ResponseEntity.ok(
-        memberReceiptClaimService.claim(principal.getName(), request.getToken()));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(memberReceiptClaimService.claim(principal.getName(), request.getToken()));
   }
 }

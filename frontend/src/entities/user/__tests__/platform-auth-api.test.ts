@@ -35,10 +35,13 @@ describe('platform api', () => {
     const res = await platformAuthApi.stores();
     expect(res).toEqual({ ok: true, url: '/platform/stores/me' });
   });
-  it('changePassword PUTs /platform/password', async () => {
-    await expect(
-      platformAuthApi.changePassword({ current_password: 'a', new_password: 'b' })
-    ).resolves.toBeUndefined();
+  it('changePassword PUTs /platform/me/password', async () => {
+    const client = jest.requireMock('@/shared/api/client').default;
+    const body = { current_password: 'a', new_password: 'b' };
+
+    await expect(platformAuthApi.changePassword(body)).resolves.toBeUndefined();
+
+    expect(client.put).toHaveBeenLastCalledWith('/platform/me/password', body);
   });
   it('logout POSTs /platform/logout', async () => {
     await expect(platformAuthApi.logout()).resolves.toBeUndefined();

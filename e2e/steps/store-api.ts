@@ -341,7 +341,7 @@ export async function linkMemberToCustomer(
 }
 
 /**
- * 予約申請を謝絶する（POST /api/store/orders/{id}/decline, hasAuthority('ORDER_MANAGE')）。
+ * 予約申請を謝絶する（POST /api/store/orders/{id}/refusal, hasAuthority('ORDER_MANAGE')）。
  * 未確定（CREATED）の申請は削除が拒否されるため、後片付けはこちらで CANCELLED にしてから削除する。
  */
 export async function declineOrder(
@@ -349,11 +349,11 @@ export async function declineOrder(
   token: string,
   id: string
 ): Promise<void> {
-  const res = await request.post(`/api/store/orders/${id}/decline`, {
+  const res = await request.post(`/api/store/orders/${id}/refusal`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
-    throw new Error(`decline order failed: ${res.status()} ${await res.text()}`);
+    throw new Error(`refuse order failed: ${res.status()} ${await res.text()}`);
   }
 }
 

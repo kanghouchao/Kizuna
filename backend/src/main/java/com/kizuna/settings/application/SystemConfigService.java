@@ -10,7 +10,7 @@ public interface SystemConfigService {
 
   List<SystemConfigResponse> getConfigsByCategory(String category);
 
-  SystemConfigResponse updateConfig(SystemConfigUpdateRequest request);
+  SystemConfigResponse updateConfig(String configKey, SystemConfigUpdateRequest request);
 
   /** 設定値を取得する（キャッシュされる。バックエンド内部からの設定参照はこのメソッドを使うこと） */
   Optional<String> getConfigValue(String configKey);

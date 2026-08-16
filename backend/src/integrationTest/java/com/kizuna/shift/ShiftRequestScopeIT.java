@@ -248,7 +248,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> decline(long storeId, String id) {
     return rest.exchange(
-        "/store/shift-requests/" + id + "/decline",
+        "/store/shift-requests/" + id + "/rejection",
         HttpMethod.POST,
         new HttpEntity<>(storeHeaders(storeId)),
         JsonNode.class);
@@ -514,7 +514,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
             JsonNode.class);
     ResponseEntity<JsonNode> crossDecline =
         rest.exchange(
-            "/store/shift-requests/" + id + "/decline",
+            "/store/shift-requests/" + id + "/rejection",
             HttpMethod.POST,
             new HttpEntity<>(managerHeaders(managerToken, STORE_B)),
             JsonNode.class);
@@ -647,7 +647,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("変更申請の謝絶で対象シフトが元のまま維持されること")
+  @DisplayName("変更申請の却下で対象シフトが元のまま維持されること")
   void declineChange_keepsTargetShiftUntouched() {
     Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
     ResponseEntity<JsonNode> created =
@@ -660,7 +660,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     assertThat(declined.getBody().path("status").asString()).isEqualTo("DECLINED");
 
     Shift reloaded = shiftRepository.findById(shift.getId()).orElseThrow();
-    assertThat(reloaded.getWorkDate()).as("謝絶では元の確定シフトが維持されること").isEqualTo(shift.getWorkDate());
+    assertThat(reloaded.getWorkDate()).as("却下では元の確定シフトが維持されること").isEqualTo(shift.getWorkDate());
     assertThat(reloaded.getStartTime()).isEqualTo(shift.getStartTime());
     assertThat(reloaded.getEndTime()).isEqualTo(shift.getEndTime());
     assertThat(reloaded.getStatus()).isEqualTo("CONFIRMED");
@@ -704,7 +704,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("対象シフトが削除されても変更申請は履歴に残り(SET NULL)、承認は 400・謝絶は可能なこと")
+  @DisplayName("対象シフトが削除されても変更申請は履歴に残り(SET NULL)、承認は 400・却下は可能なこと")
   void deletedTargetShift_keepsChangeRequestHistoryAndBlocksApproval() {
     Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
     ResponseEntity<JsonNode> created =
@@ -721,7 +721,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     assertThat(approved.getStatusCode()).as("適用先が無い承認は拒否されること").isEqualTo(HttpStatus.BAD_REQUEST);
 
     ResponseEntity<JsonNode> declined = decline(STORE_A, id);
-    assertThat(declined.getStatusCode()).as("謝絶は可能なこと").isEqualTo(HttpStatus.OK);
+    assertThat(declined.getStatusCode()).as("却下は可能なこと").isEqualTo(HttpStatus.OK);
     assertThat(declined.getBody().path("status").asString()).isEqualTo("DECLINED");
   }
 

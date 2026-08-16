@@ -33,7 +33,7 @@ export const platformAuthApi = {
     return response.data;
   },
   changePassword: async (data: PasswordChangeRequest): Promise<void> => {
-    await apiClient.put('/platform/password', data);
+    await apiClient.put('/platform/me/password', data);
   },
   logout: async (): Promise<void> => {
     // 失効済みトークンでの退出は 401 になる（パスワード変更が直前にセッションを畳んだ場合など。

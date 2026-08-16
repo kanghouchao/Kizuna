@@ -113,7 +113,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     String declined = request(applicant, STORE_A, declinedName);
     assertThat(
             rest.exchange(
-                    "/store/orders/" + declined + "/decline",
+                    "/store/orders/" + declined + "/refusal",
                     HttpMethod.POST,
                     new HttpEntity<>(storeHeaders(STORE_A)),
                     JsonNode.class)

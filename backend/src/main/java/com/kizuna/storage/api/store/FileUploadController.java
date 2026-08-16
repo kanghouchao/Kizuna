@@ -28,7 +28,7 @@ public class FileUploadController {
   private final StoreContext storeContext;
   private final AppProperties appProperties;
 
-  @PostMapping("/upload")
+  @PostMapping
   @PreAuthorize("isAuthenticated()")
   @StoreOptional
   public ResponseEntity<FileUploadResponse> upload(

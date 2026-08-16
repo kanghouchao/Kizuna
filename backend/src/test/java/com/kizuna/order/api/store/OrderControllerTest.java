@@ -19,6 +19,7 @@ import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
+import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
@@ -271,7 +272,7 @@ class OrderControllerTest {
 
     mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isOk());
     // 謝絶は結果を読まれない操作なので 204（本体なし）で返る。
-    mockMvc.perform(storePost("/store/orders/o1/decline")).andExpect(status().isNoContent());
+    mockMvc.perform(storePost("/store/orders/o1/refusal")).andExpect(status().isNoContent());
   }
 
   @Test
@@ -281,7 +282,7 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc.perform(storePost("/store/orders/o1/confirmation")).andExpect(status().isForbidden());
-    mockMvc.perform(storePost("/store/orders/o1/decline")).andExpect(status().isForbidden());
+    mockMvc.perform(storePost("/store/orders/o1/refusal")).andExpect(status().isForbidden());
   }
 
   @Test
@@ -293,7 +294,7 @@ class OrderControllerTest {
         .thenReturn(OrderWorkQueueResponse.builder().build());
 
     mockMvc
-        .perform(storePut("/store/orders/reservation-requests/o1", "{\"pax\": 3}"))
+        .perform(storePut("/store/orders/o1/reservation-request", "{\"pax\": 3}"))
         .andExpect(status().isOk());
   }
 
@@ -304,7 +305,7 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePut("/store/orders/reservation-requests/o1", "{\"pax\": 3}"))
+        .perform(storePut("/store/orders/o1/reservation-request", "{\"pax\": 3}"))
         .andExpect(status().isForbidden());
   }
 
@@ -441,6 +442,20 @@ class OrderControllerTest {
         .andExpect(status().isForbidden());
     mockMvc.perform(storePost("/store/orders/o1/receipt-token")).andExpect(status().isForbidden());
     verifyNoInteractions(orderAttributionService);
+  }
+
+  @Test
+  @DisplayName("伝票トークンの再発行は新たな資源を生むので 201 で返ること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void receiptTokenReissueRespondsCreated() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderAttributionService.reissueReceiptToken(any()))
+        .thenReturn(new OrderReceiptTokenResponse("raw-token"));
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/receipt-token"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.receipt_token").value("raw-token"));
   }
 
   @Test

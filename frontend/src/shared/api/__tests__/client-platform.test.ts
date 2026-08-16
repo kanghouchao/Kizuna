@@ -54,7 +54,7 @@ describe('apiClient platform branch', () => {
       if (key === 'platform-role') return 'platform';
       return undefined;
     });
-    const headers = await requestTo('/files/upload');
+    const headers = await requestTo('/files');
     expect(headers['X-Role']).toBe('store');
     expect(headers['X-Store-ID']).toBe('2');
   });

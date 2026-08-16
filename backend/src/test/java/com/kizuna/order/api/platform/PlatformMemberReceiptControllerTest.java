@@ -40,7 +40,7 @@ class PlatformMemberReceiptControllerTest {
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
-  private static final String PATH = "/platform/me/receipts/claim";
+  private static final String PATH = "/platform/me/receipts";
 
   private static final String BODY =
       """
@@ -58,13 +58,13 @@ class PlatformMemberReceiptControllerTest {
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test
-  @DisplayName("会員は伝票を申領できること")
+  @DisplayName("会員は伝票を申領でき、帰属記録の生成として 201 が返ること")
   @WithMockUser(authorities = "ROLE_MEMBER")
   void memberCanClaimAReceipt() throws Exception {
     when(memberReceiptClaimService.claim(anyString(), anyString()))
         .thenReturn(new MemberReceiptClaimResponse(120));
 
-    mockMvc.perform(memberPost()).andExpect(status().isOk());
+    mockMvc.perform(memberPost()).andExpect(status().isCreated());
   }
 
   @Test

@@ -511,7 +511,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> updateReservationRequest(long storeId, String id, String body) {
     return rest.exchange(
-        "/store/orders/reservation-requests/" + id,
+        "/store/orders/" + id + "/reservation-request",
         HttpMethod.PUT,
         new HttpEntity<>(body, storeHeaders(storeId)),
         JsonNode.class);
@@ -736,7 +736,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> foreignDecline =
         rest.exchange(
-            "/store/orders/" + orderId + "/decline",
+            "/store/orders/" + orderId + "/refusal",
             HttpMethod.POST,
             new HttpEntity<>(storeHeaders(STORE_B)),
             JsonNode.class);
@@ -760,7 +760,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> declined =
         rest.exchange(
-            "/store/orders/" + orderId + "/decline",
+            "/store/orders/" + orderId + "/refusal",
             HttpMethod.POST,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);

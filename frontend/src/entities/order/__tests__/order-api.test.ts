@@ -126,7 +126,7 @@ describe('orderApi', () => {
   });
   it('decline は謝絶の子リソースを POST し、本体を返さない', async () => {
     await expect(orderApi.decline('o1')).resolves.toBeUndefined();
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/orders/o1/decline');
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/orders/o1/refusal');
   });
   it('attribution は受注の帰属の現況を GET する', async () => {
     expect(await orderApi.attribution('o1')).toEqual({
@@ -204,12 +204,12 @@ describe('memberVisitApi', () => {
 });
 
 describe('memberReceiptApi', () => {
-  it('claim は /platform/me/receipts/claim を POST し、トークンを本体で送る', async () => {
+  it('claim は /platform/me/receipts を POST し、トークンを本体で送る', async () => {
     // パスや問い合わせ文字列に載せると、90 日有効の生値がアクセスログに残る
     const mockedPost = apiClient.post as jest.Mock;
     mockedPost.mockResolvedValueOnce({ data: { granted_points: 120 } });
 
     await expect(memberReceiptApi.claim('tok3n')).resolves.toEqual({ granted_points: 120 });
-    expect(mockedPost).toHaveBeenCalledWith('/platform/me/receipts/claim', { token: 'tok3n' });
+    expect(mockedPost).toHaveBeenCalledWith('/platform/me/receipts', { token: 'tok3n' });
   });
 });

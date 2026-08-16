@@ -11,9 +11,12 @@ export const systemConfigService = {
     return response.data;
   },
 
-  // 設定の更新 (Client Component用)
-  updateConfig: async (data: SystemConfigUpdateRequest): Promise<SystemConfigResponse> => {
-    const response = await apiClient.put<SystemConfigResponse>(BASE_URL, data);
+  // 設定の更新 (Client Component用)。宛先は設定キー 1 件で、本体は値だけを送る
+  updateConfig: async (
+    configKey: string,
+    data: SystemConfigUpdateRequest
+  ): Promise<SystemConfigResponse> => {
+    const response = await apiClient.put<SystemConfigResponse>(`${BASE_URL}/${configKey}`, data);
     return response.data;
   },
 };

@@ -43,11 +43,11 @@ public class SystemConfigServiceImpl implements SystemConfigService {
   @Transactional
   // どのキーが更新されても確実に無効化するため全消去（設定更新は低頻度の管理操作）
   @CacheEvict(value = "systemConfigValues", allEntries = true)
-  public SystemConfigResponse updateConfig(SystemConfigUpdateRequest request) {
+  public SystemConfigResponse updateConfig(String configKey, SystemConfigUpdateRequest request) {
     SystemConfig config =
         systemConfigRepository
-            .findByConfigKey(request.getConfigKey())
-            .orElseThrow(() -> new NotFoundException("設定キーが見つかりません: " + request.getConfigKey()));
+            .findByConfigKey(configKey)
+            .orElseThrow(() -> new NotFoundException("設定キーが見つかりません: " + configKey));
 
     validateValue(config, request.getConfigValue());
     systemConfigMapper.updateEntityFromRequest(request, config);
