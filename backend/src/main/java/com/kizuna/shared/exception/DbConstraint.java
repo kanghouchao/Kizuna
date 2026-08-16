@@ -35,8 +35,11 @@ public enum DbConstraint {
   /** t_orders → t_casts の FK（RESTRICT）。受注が担当キャストを指したまま消えないようにする。 */
   FK_T_ORDERS_CAST("fk_t_orders_cast"),
 
-  /** t_orders → t_customers の FK（RESTRICT）。受注が来店した顧客を指したまま消えないようにする。 */
-  FK_T_ORDERS_CUSTOMER("fk_t_orders_customer"),
+  /** t_orders → t_customers(id, alive) の複合 FK。受注が顧客を指したまま顧客が消える・墓標になることを拒む。 */
+  FK_T_ORDERS_CUSTOMER_ALIVE("fk_t_orders_customer_alive"),
+
+  /** t_customer_member_links → t_customers(id, alive) の複合 FK。関連が残る顧客の墓標化を拒む（削除は連鎖）。 */
+  FK_T_CUSTOMER_MEMBER_LINKS_CUSTOMER_ALIVE("fk_t_customer_member_links_customer_alive"),
 
   /** t_point_entries.idempotency_key の一意制約（ADR 0007）。 */
   UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key"),

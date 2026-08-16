@@ -207,9 +207,18 @@ public class CommonExceptionHandler {
    *
    * <p>他の整合性違反（FK・NOT NULL・CHECK）は利用者が是正できる誤りではなく実装の欠陥なので、 409 に化けさせず catch-all の 500
    * のまま大きく失敗させる。ここで一括して 409 にすると、 呼出側に「やり直せば直る」と誤って伝わり、欠陥が運用に埋もれる。
+   *
+   * <p>唯一の例外が「参照先は生きた顧客」の複合外部キーで、これは名前を名指して 409 へ写す。違反の意味が向きに依らず
+   * 一つ（指した顧客が墓標になった）で、やり直せば統合先へ着くからである。写しているのは経路ではなく制約名なので、 顧客参照を書く経路が将来増えても、解決を忘れた分がここで拾われる。
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<Map<String, Object>> handle(DataIntegrityViolationException ex) {
+    if (violatesLiveCustomerReference(ex)) {
+      log.warn(ex.getMessage());
+      Map<String, Object> body = new HashMap<>();
+      body.put("error", "統合中の顧客です。統合の完了後にやり直してください");
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
     if (!isUniqueViolation(ex)) {
       return handle((Exception) ex);
     }
@@ -217,6 +226,12 @@ public class CommonExceptionHandler {
     Map<String, Object> body = new HashMap<>();
     body.put("error", "既に登録されている値と重複しています");
     return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+  }
+
+  /** 「参照先は生きた顧客」の複合外部キーに当たったか。受注・関連のどちらの側で起きても同じ案内になる。 */
+  private static boolean violatesLiveCustomerReference(DataIntegrityViolationException ex) {
+    return IntegrityViolations.violates(ex, DbConstraint.FK_T_ORDERS_CUSTOMER_ALIVE)
+        || IntegrityViolations.violates(ex, DbConstraint.FK_T_CUSTOMER_MEMBER_LINKS_CUSTOMER_ALIVE);
   }
 
   /** SQLSTATE 23505（unique_violation）で判定する。制約名の字面照合と違い、命名規約の変更に影響されない。 */

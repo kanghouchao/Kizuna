@@ -11,6 +11,7 @@ import jakarta.validation.ValidatorFactory;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -135,6 +136,31 @@ class CommonExceptionHandlerTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
     assertThat(response.getBody()).containsEntry("error", "サーバー内部エラーが発生しました");
     assertThat(response.getBody()).doesNotContainValue("foreign key violation");
+  }
+
+  /**
+   * 「参照先は生きた顧客」の複合外部キーだけは名前で 409 へ写す。解決を通さずに顧客参照を書いた要求が、統合と競合したときに 500
+   * でなく「やり直せば届く」と読める応答になることを固定する。
+   */
+  @Test
+  @DisplayName("生きた顧客参照の複合外部キー違反は、やり直しの判る 409 になる")
+  void liveCustomerReferenceViolationReturns409() {
+    for (DbConstraint constraint :
+        List.of(
+            DbConstraint.FK_T_ORDERS_CUSTOMER_ALIVE,
+            DbConstraint.FK_T_CUSTOMER_MEMBER_LINKS_CUSTOMER_ALIVE)) {
+      ResponseEntity<Map<String, Object>> response =
+          handler.handle(
+              new DataIntegrityViolationException(
+                  "insert failed",
+                  new ConstraintViolationException(
+                      "could not execute statement",
+                      new SQLException("foreign key violation", "23503"),
+                      constraint.sqlName())));
+
+      assertThat(response.getStatusCode()).as(constraint.name()).isEqualTo(HttpStatus.CONFLICT);
+      assertThat(response.getBody()).containsEntry("error", "統合中の顧客です。統合の完了後にやり直してください");
+    }
   }
 
   @Test
