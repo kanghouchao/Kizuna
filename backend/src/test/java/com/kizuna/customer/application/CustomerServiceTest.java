@@ -225,6 +225,72 @@ class CustomerServiceTest {
     assertThat(unlinked.getLinkedMemberCode()).isNull();
   }
 
+  @Test
+  @DisplayName("詳細を旧 ID で引くと統合先の行が返り、統合済みであることと元の ID が載ること")
+  void get_resolvesAMergedIdToTheSurvivingRow() {
+    Customer surviving = new Customer();
+    surviving.setId("c2");
+    CustomerResponse resp = new CustomerResponse();
+    resp.setId("c2");
+
+    when(customerRepository.findMergedIntoId("c1")).thenReturn(Optional.of("c2"));
+    when(customerRepository.findById("c2")).thenReturn(Optional.of(surviving));
+    when(customerMapper.toResponse(surviving)).thenReturn(resp);
+
+    CustomerResponse result = customerService.get("c1");
+
+    assertThat(result.getId()).isEqualTo("c2");
+    assertThat(result.getMerged()).isTrue();
+    assertThat(result.getMergedFromId()).isEqualTo("c1");
+    // 墓標の内容は返さない。返すのは常に統合先の行そのもの
+    verify(customerRepository, never()).findById("c1");
+  }
+
+  @Test
+  @DisplayName("生きた行の詳細には統合の標識が載らないこと")
+  void get_leavesTheMergeMarkOffALiveRow() {
+    Customer c = new Customer();
+    c.setId("c1");
+    CustomerResponse resp = new CustomerResponse();
+    resp.setId("c1");
+
+    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerMapper.toResponse(c)).thenReturn(resp);
+
+    CustomerResponse result = customerService.get("c1");
+
+    assertThat(result.getMerged()).isNull();
+    assertThat(result.getMergedFromId()).isNull();
+  }
+
+  @Test
+  @DisplayName("墓標への更新は 409 で撥ねられ、統合先を編集することが判ること")
+  void update_rejectsTombstones() {
+    Customer tombstone = new Customer();
+    tombstone.setId("c1");
+    when(customerRepository.findById("c1")).thenReturn(Optional.of(tombstone));
+    when(customerRepository.isMerged("c1")).thenReturn(true);
+
+    assertThatThrownBy(() -> customerService.update("c1", new CustomerUpdateRequest()))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
+    verify(customerRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("墓標の削除は、統合に関与した行の案内より先に統合済みとして撥ねられること")
+  void delete_rejectsTombstonesBeforeTheInvolvementCheck() {
+    when(customerRepository.existsById("c1")).thenReturn(true);
+    when(customerRepository.isMerged("c1")).thenReturn(true);
+
+    assertThatThrownBy(() -> customerService.delete("c1"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
+    // 墓標は「統合に関与した行」でもあるので、後ろに置くと次の一手の違う案内に潰れる
+    verify(customerMergeRepository, never()).existsInvolving(any());
+    verify(customerRepository, never()).deleteById(any());
+  }
+
   private static CustomerMemberLink activeLink(String customerId, String memberCode) {
     return CustomerMemberLink.builder()
         .customerId(customerId)

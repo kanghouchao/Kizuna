@@ -735,8 +735,8 @@ public class OrderService {
       return;
     }
     if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
-      List<Customer> matched =
-          customerRepository.findByPhoneNumberAndStoreId(
+      List<String> matched =
+          customerRepository.findAliveIdsByPhoneNumberAndStoreId(
               req.getPhoneNumber(), storeContext.getStoreId());
       if (matched.isEmpty()) {
         // 起こしたばかりの行は他の経路の書き換えに晒されていないため、解決を経ずにそのまま着ける。
@@ -744,7 +744,7 @@ public class OrderService {
         order.linkCustomer(customerRepository.save(orderMapper.toCustomer(req)).getId());
       } else if (matched.size() == 1) {
         // 照合は行を押さえない問い合わせなので、着ける前に解決を通す（照合そのものの 3 分岐は変わらない）。
-        order.linkCustomer(customerReferenceResolver.resolveForWrite(matched.get(0).getId()));
+        order.linkCustomer(customerReferenceResolver.resolveForWrite(matched.get(0)));
       }
     }
     order.recordContactIfUnlinked(req.getCustomerName(), req.getPhoneNumber());

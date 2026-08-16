@@ -17,6 +17,10 @@ export interface CustomerResponse {
   member_linked?: boolean;
   // 紐づけ済みの会員コード。未紐づけなら欠落
   linked_member_code?: string;
+  // 統合済みの旧 ID で取得したか。生きた行を取得した応答では欠落する
+  merged?: boolean;
+  // 要求した旧 ID。本体は統合先の行なので、id との対で統合の向きが判る
+  merged_from_id?: string;
 }
 
 /**

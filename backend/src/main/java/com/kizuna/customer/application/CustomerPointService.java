@@ -7,6 +7,7 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -27,6 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class CustomerPointService {
+
+  /** 墓標そのものを名指した調整の案内。文面は顧客情報の更新・削除と揃える（同じ「統合先を編集する」次の一手）。 */
+  private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
 
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
@@ -58,6 +62,11 @@ public class CustomerPointService {
     customerRepository
         .findByIdForUpdate(customerId)
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません: " + customerId));
+    // 墓標の判定は関連の照会より前に置く。統合は関連を存続行へ移しているので、後ろに置くと
+    // 「紐づいていない顧客」の分岐に落ち、統合済みであることが利用者に伝わらない。
+    if (customerRepository.isMerged(customerId)) {
+      throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
+    }
     Long memberId = activeMemberId(customerId);
     if (memberId == null) {
       throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");

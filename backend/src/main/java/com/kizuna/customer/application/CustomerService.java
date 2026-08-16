@@ -41,6 +41,9 @@ public class CustomerService {
   private static final String MERGED_CUSTOMER_UNDELETABLE =
       "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
 
+  /** 墓標そのものを名指した書き換えの案内。統合先へ黙って向け直してよいのは参照の書き込み先だけである（ADR 0010）。 */
+  private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
+
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
@@ -79,6 +82,9 @@ public class CustomerService {
       String search, String rank, String classification) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
+      // 墓標は台帳に並ばない。「統合済みも表示」の切替は設けない — 墓標の存在を知る必要があるのは
+      // 旧 ID の解決と統合履歴の閲覧だけである（ADR 0010）。
+      predicates.add(cb.isNull(root.get("mergedIntoId")));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase()) + "%";
@@ -98,13 +104,20 @@ public class CustomerService {
     };
   }
 
+  /**
+   * 顧客詳細。旧 ID を渡されたら統合先の行を返し、統合済みであることと元の ID を応答に載せる。
+   *
+   * <p>3xx リダイレクトは採らない — HTTP クライアントが透過的に追随するため、画面が統合の発生そのものを知れなくなる。
+   */
   @StoreScoped
   @Transactional(readOnly = true)
   public CustomerResponse get(String id) {
+    String targetId = customerRepository.findMergedIntoId(id).orElse(id);
     return customerRepository
-        .findById(id)
+        .findById(targetId)
         .map(customerMapper::toResponse)
-        .map(response -> withMemberLink(response, activeMemberCodeOf(id)))
+        .map(response -> withMemberLink(response, activeMemberCodeOf(targetId)))
+        .map(response -> withMergeMark(response, id, targetId))
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
   }
 
@@ -122,6 +135,9 @@ public class CustomerService {
   public CustomerResponse update(String id, CustomerUpdateRequest request) {
     Customer customer =
         customerRepository.findById(id).orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    if (customerRepository.isMerged(id)) {
+      throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
+    }
 
     customer.apply(customerMapper.toPatch(request));
 
@@ -138,6 +154,11 @@ public class CustomerService {
   public void delete(String id) {
     if (!customerRepository.existsById(id)) {
       throw new NotFoundException("顧客が見つかりません");
+    }
+    // 墓標も「統合に関与した行」なので下の判定でも撥ねられるが、次の一手が違う — 墓標を消したい人が
+    // 求めているのは統合先の編集である。先に判定して案内を分ける。
+    if (customerRepository.isMerged(id)) {
+      throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
     }
     if (customerMergeRepository.existsInvolving(id)) {
       throw new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
@@ -168,6 +189,17 @@ public class CustomerService {
         .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
         .map(CustomerMemberLink::getMemberCode)
         .orElse(null);
+  }
+
+  /** 旧 ID で引かれたときだけ統合の標識を載せる。生きた行を引いた応答には欄そのものが現れない（non_null 直列化）ので、 欄の有無が「この ID は統合済みか」の答えになる。 */
+  private static CustomerResponse withMergeMark(
+      CustomerResponse response, String requestedId, String targetId) {
+    if (requestedId.equals(targetId)) {
+      return response;
+    }
+    response.setMerged(true);
+    response.setMergedFromId(requestedId);
+    return response;
   }
 
   /** 会員紐づけの投影を載せる。memberLinked は関連状態の有無そのものなので、常に真偽値が入る。 */

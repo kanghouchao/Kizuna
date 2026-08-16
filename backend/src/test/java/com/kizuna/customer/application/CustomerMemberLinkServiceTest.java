@@ -281,6 +281,23 @@ class CustomerMemberLinkServiceTest {
   }
 
   @Test
+  @DisplayName("墓標の解除は、関連の照会より先に統合済みとして撥ねられること")
+  void unlinkRejectsTombstonesBeforeReadingTheLink() {
+    // 解除は名指された行そのものを対象にするので統合先へ向け直さない。統合で関連は存続行へ
+    // 移っているため、後ろに置くと「紐づけられている会員がいません」に落ちて理由が伝わらない
+    givenActor();
+    givenCustomerLocked();
+    Mockito.when(customerRepository.isMerged(CUSTOMER_ID)).thenReturn(true);
+
+    assertThatThrownBy(() -> service.unlink(CUSTOMER_ID, ACTOR_EMAIL))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
+    Mockito.verify(customerMemberLinkRepository, Mockito.never())
+        .findByCustomerIdAndStatus(any(), any());
+    Mockito.verify(customerMemberLinkRepository, Mockito.never()).save(any());
+  }
+
+  @Test
   @DisplayName("紐づけは成立先を解決（＝顧客行を排他ロック）してから現在の紐づけを読むこと")
   void linkTakesTheCustomerRowLockBeforeResolving() {
     // 記帳（受注完了・手動調整）と同じ行を直列化点にすることで、置換の途中の紐づけを記帳側に見せない

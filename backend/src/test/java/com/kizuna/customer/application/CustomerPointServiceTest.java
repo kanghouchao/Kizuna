@@ -16,6 +16,7 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -174,6 +175,24 @@ class CustomerPointServiceTest {
 
     Mockito.verify(customerRepository).findByIdForUpdate(CUSTOMER_ID);
     Mockito.verify(customerRepository, Mockito.never()).existsById(anyString());
+  }
+
+  @Test
+  @DisplayName("墓標への調整は、関連の照会より先に統合済みとして撥ねられること")
+  void adjustRejectsTombstonesBeforeResolvingTheMember() {
+    // 統合は関連を存続行へ移しているので、後ろに置くと「未紐づけの顧客」の分岐に落ち、
+    // 統合済みであることが利用者に伝わらない
+    givenCustomerLocked();
+    Mockito.when(customerRepository.isMerged(CUSTOMER_ID)).thenReturn(true);
+
+    assertThatThrownBy(
+            () -> service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
+    Mockito.verify(customerMemberLinkRepository, Mockito.never())
+        .findByCustomerIdAndStatus(anyString(), any());
+    Mockito.verify(pointLedgerService, Mockito.never())
+        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any(), anyString());
   }
 
   @Test

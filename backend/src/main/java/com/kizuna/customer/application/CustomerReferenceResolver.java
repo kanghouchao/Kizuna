@@ -3,6 +3,7 @@ package com.kizuna.customer.application;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScopeExempt;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,8 @@ public class CustomerReferenceResolver {
   private final CustomerRepository customerRepository;
 
   /**
-   * 顧客参照の書き込み先。押さえられない顧客（不在・他店舗）は 404 で、存在の有無は漏れない。
+   * 顧客参照の書き込み先。押さえられない顧客（不在・他店舗）は 404 で、存在の有無は漏れない。 墓標を渡されたら統合先へ向け直す — 参照が着くのは常に生きている行である（ADR
+   * 0010）。
    *
    * <p>呼出側のトランザクションに必ず参加する（{@code MANDATORY}）。自分でトランザクションを開くと新しい Session になり、 呼出側の
    * {@code @StoreScoped} が有効にした storeFilter が掛からないまま他店舗の行を押さえたうえ、 呼出側が書き込む前に行ロックを手放してしまう。
@@ -40,9 +42,24 @@ public class CustomerReferenceResolver {
       reason = "呼出元のトランザクションに必ず参加し（MANDATORY）、店舗境界は呼出元の storeFilter か呼出元が明示する storeId が引く")
   @Transactional(propagation = Propagation.MANDATORY)
   public String resolveForWrite(String customerId) {
+    lock(customerId);
+    Optional<String> survivingCustomerId = customerRepository.findMergedIntoId(customerId);
+    if (survivingCustomerId.isEmpty()) {
+      return customerId;
+    }
+    // 着地する行も押さえる。押さえないと、存続行を更に統合する要求が付替えを済ませた後で墓標の
+    // 圧平を待つ間にこの書き込みが割り込み、付替えの済んだ行へ着いたまま取り残される。
+    lock(survivingCustomerId.get());
+    return survivingCustomerId.get();
+  }
+
+  /**
+   * 追うのは一跳だけでよい。圧平により、コミット済みの状態に二段の連鎖は存在しない（ADR 0010）。
+   * 存続行を統合する要求はこちらが押さえている墓標を圧平しなければ進めないので、押さえた時点で 存続行が墓標になっていることもない。
+   */
+  private void lock(String customerId) {
     customerRepository
         .findByIdForUpdate(customerId)
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
-    return customerId;
   }
 }

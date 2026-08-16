@@ -29,4 +29,10 @@ public class CustomerResponse {
 
   /** 紐づけ済みの会員コード。未紐づけなら null。 */
   private String linkedMemberCode;
+
+  /** 統合済みの旧 ID で引かれたか。生きた行を引いた応答では null（欄が現れない）。 */
+  private Boolean merged;
+
+  /** 要求された旧 ID。本体は統合先の行なので、{@code id} との対で「どれがどれへ統合されたか」が判る。 */
+  private String mergedFromId;
 }

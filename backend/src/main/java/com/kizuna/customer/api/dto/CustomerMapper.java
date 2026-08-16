@@ -8,9 +8,12 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface CustomerMapper {
 
-  // 会員紐づけは別集約の投影なので、application 層が写像後に補う。
+  // 会員紐づけは別集約の投影なので、application 層が写像後に補う。統合の標識も同様で、
+  // 「要求された ID が何だったか」は写す元の行が持たない事実である。
   @Mapping(target = "memberLinked", ignore = true)
   @Mapping(target = "linkedMemberCode", ignore = true)
+  @Mapping(target = "merged", ignore = true)
+  @Mapping(target = "mergedFromId", ignore = true)
   CustomerResponse toResponse(Customer customer);
 
   // 同上。一覧は紐づけの有無だけを持ち、会員コードは載せない。
