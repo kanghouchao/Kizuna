@@ -82,9 +82,8 @@ public interface OrderRepository
   /**
    * 現店舗の受注 1 件を集約として引く。
    *
-   * <p>JPQL で書くのは {@code storeFilter} を効かせるため。Order は StoreScopedEntity だが、Hibernate のフィルタは {@code
-   * EntityManager.find} には掛からず、派生の {@code findById} はそこへ落ちる。複数店舗を授権された操作者は現店舗の文脈のまま 他店舗の受注 ID
-   * を指せるので、店舗を跨がない読み書きはこの形で引く。
+   * <p>{@code storeFilter} は applyToLoadByKey により派生の {@code findById} にも掛かる（StoreScopedLoadByKeyIT
+   * が実測で固定）。JPQL で書くのは境界の明示で、フィルタの代替ではない。
    *
    * <p>受注に紐づく帰属記録・伝票トークンは platform 帰属で店舗行分離機構に載らない。それらを受注 ID で引く操作は、 先にこの読み口で店舗の所有を確かめてから行う。
    */
