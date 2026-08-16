@@ -31,6 +31,11 @@ export default function CustomerEditPage() {
     failure,
     reload: reloadCustomer,
   } = useResource(() => customerApi.get(id), [id]);
+  // 統合済みの旧 ID で開かれたときだけ、以後の読み書きを応答の id（＝統合先）へ向ける。URL の id の
+  // まま続けると、表示は存続行なのに附属区画と保存だけが墓標を相手にする。差し替えの条件を
+  // 「この URL の旧 ID に対する応答であること」に限るのは、顧客を切り替えた直後にまだ前の顧客が
+  // 残っている一瞬に、前の顧客へ向けてしまわないため。
+  const resolvedId = customer?.merged_from_id === id ? (customer.id ?? id) : id;
   // 注文履歴は附属区画。プロフィールの取得とは独立に取り、独立に再試行できる
   const {
     data: ordersData,
@@ -40,9 +45,9 @@ export default function CustomerEditPage() {
   } = useResource(
     () =>
       orderApi
-        .list({ customer_id: id, size: 20, sort: 'businessDate,desc' })
+        .list({ customer_id: resolvedId, size: 20, sort: 'businessDate,desc' })
         .then(page => page.rows),
-    [id]
+    [resolvedId]
   );
   const orders = ordersData ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,7 +55,7 @@ export default function CustomerEditPage() {
   const handleSubmit = async (data: CustomerFormData) => {
     try {
       setIsSubmitting(true);
-      await customerApi.update(id, toCustomerRequest(data));
+      await customerApi.update(resolvedId, toCustomerRequest(data));
       notify.success('顧客情報を更新しました');
       router.push(storePath(storeId, '/customers'));
     } catch {
@@ -118,7 +123,7 @@ export default function CustomerEditPage() {
       {/* 顧客が変わったら区画ごと作り直す。中の履歴はカーソルで辿る読み口で、マウント時にしか
           取りに行かない — 同じ画面位置で [id] だけが変わる遷移では前の顧客の行が残る。
           入力途中の会員コードも同時に捨てる。 */}
-      <MemberLinkSection key={id} customerId={id} />
+      <MemberLinkSection key={resolvedId} customerId={resolvedId} />
 
       {/* 注文履歴 */}
       <TableCard>
