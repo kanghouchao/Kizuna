@@ -560,6 +560,52 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(linksOn(tombstone)).as("墓標に着地した関連が 0 件であること").isZero();
   }
 
+  @Test
+  @DisplayName("統合先が別の統合に押さえられているときの解決は、待たずにやり直しの判る 409 になること")
+  void reportsAConflictInsteadOfWaitingWhenTheMergeTargetIsHeld() throws Exception {
+    // 墓標を押さえたまま統合先を待つと、その統合先を更に統合する要求（圧平で墓標の行を押さえる）と
+    // 待ちが環になる。追う先は待たずに取り、取れなければ競合として返す。
+    String tombstone = createCustomer("競合墓標-" + nonce);
+    String surviving = createCustomer("競合存続-" + nonce);
+    String memberCode = registerMember("merge-nowait");
+
+    CountDownLatch survivingHeld = new CountDownLatch(1);
+    CountDownLatch releaseSurviving = new CountDownLatch(1);
+    CountDownLatch tombstoneHeld = new CountDownLatch(1);
+    CountDownLatch releaseTombstone = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(3);
+    try {
+      Future<?> holdSurviving =
+          pool.submit(() -> holdCustomerRow(surviving, null, survivingHeld, releaseSurviving));
+      assertThat(survivingHeld.await(30, TimeUnit.SECONDS)).as("前提: 統合先が押さえられること").isTrue();
+      Future<?> holdTombstone =
+          pool.submit(() -> holdCustomerRow(tombstone, surviving, tombstoneHeld, releaseTombstone));
+      assertThat(tombstoneHeld.await(30, TimeUnit.SECONDS)).as("前提: 墓標化が確定直前で待つこと").isTrue();
+
+      Future<ResponseEntity<JsonNode>> blocked =
+          pool.submit(() -> linkResponse(tombstone, memberCode));
+      assertThatThrownBy(() -> blocked.get(3, TimeUnit.SECONDS))
+          .as("解決は墓標化の確定を待つこと")
+          .isInstanceOf(TimeoutException.class);
+
+      releaseTombstone.countDown();
+      holdTombstone.get(30, TimeUnit.SECONDS);
+
+      // 統合先はまだ押さえられたまま。ここで待たずに返ることが、待ちが環にならない根拠になる
+      ResponseEntity<JsonNode> refused = blocked.get(30, TimeUnit.SECONDS);
+      assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+      assertThat(refused.getBody().path("error").asString()).contains("統合中の顧客です");
+      releaseSurviving.countDown();
+      holdSurviving.get(30, TimeUnit.SECONDS);
+    } finally {
+      releaseTombstone.countDown();
+      releaseSurviving.countDown();
+      pool.shutdownNow();
+    }
+    assertThat(linksOn(tombstone)).as("墓標に着地した関連が無いこと").isZero();
+    assertThat(linksOn(surviving)).as("撥ねた要求は存続行にも何も残さないこと").isZero();
+  }
+
   /**
    * 顧客行を押さえたままコミットせずに待つ。{@code mergeInto} に統合先を渡すと、押さえた行を墓標にしてから待つ —
    * 統合の実行そのものは他のテストが固定するので、ここで再現するのは行の状態と保持だけである。

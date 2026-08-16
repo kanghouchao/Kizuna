@@ -115,13 +115,13 @@ public class CustomerService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CustomerResponse get(String id) {
-    String targetId = customerRepository.findMergedIntoId(id).orElse(id);
-    return customerRepository
-        .findById(targetId)
-        .map(customerMapper::toResponse)
-        .map(response -> withMemberLink(response, activeMemberCodeOf(targetId)))
-        .map(response -> withMergeMark(response, id, targetId))
-        .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    Customer customer =
+        customerRepository
+            .findResolvingMerge(id)
+            .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    CustomerResponse response = customerMapper.toResponse(customer);
+    withMemberLink(response, activeMemberCodeOf(customer.getId()));
+    return withMergeMark(response, id, customer.getId());
   }
 
   @StoreScoped

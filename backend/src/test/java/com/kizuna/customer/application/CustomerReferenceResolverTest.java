@@ -6,16 +6,17 @@ import static org.mockito.ArgumentMatchers.any;
 
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
 
 @ExtendWith(MockitoExtension.class)
 class CustomerReferenceResolverTest {
@@ -42,38 +43,68 @@ class CustomerReferenceResolverTest {
   }
 
   @Test
-  @DisplayName("墓標を渡されたら、統合先を別問い合わせで読んで存続行を返すこと")
-  void resolveFollowsTheMergeTargetReadWithASeparateQuery() {
-    // 悲観排他ロックは既に永続化文脈に載っている実体の状態を更新しない。統合先を持たない実体を
-    // 返しつつ問い合わせだけが統合先を答える形で、実体ではなく問い合わせを読んでいることを固定する
-    // （この規律は経路が実体を先に載せるかどうかに依らず、解決口の契約そのものである）。
-    Mockito.when(customerRepository.findByIdForUpdate(CUSTOMER_ID))
-        .thenReturn(Optional.of(Customer.builder().name("統合先を持たない実体").build()));
-    Mockito.when(customerRepository.findByIdForUpdate(SURVIVING_CUSTOMER_ID))
-        .thenReturn(Optional.of(Customer.builder().build()));
+  @DisplayName("墓標を渡されたとき押さえるのは着地する存続行だけで、墓標は押さえないこと")
+  void resolveLocksOnlyTheRowItLandsOn() {
     Mockito.when(customerRepository.findMergedIntoId(CUSTOMER_ID))
         .thenReturn(Optional.of(SURVIVING_CUSTOMER_ID));
+    Mockito.when(customerRepository.findByIdForUpdate(SURVIVING_CUSTOMER_ID))
+        .thenReturn(Optional.of(Customer.builder().build()));
 
     assertThat(resolver.resolveForWrite(CUSTOMER_ID)).isEqualTo(SURVIVING_CUSTOMER_ID);
+
+    // 墓標を押さえたまま統合先を待つと、その統合先を更に統合する要求（墓標の圧平で墓標の行を押さえる）
+    // と待ちが環になる
+    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(CUSTOMER_ID);
   }
 
   @Test
-  @DisplayName("統合先へ向け直すときは、着地する存続行も押さえること")
-  void resolveLocksTheSurvivingRowAsWell() {
+  @DisplayName("下見の後に統合が確定したら、統合先は待たずに取りに行くこと")
+  void resolveChasesTheLateMergeWithoutWaiting() {
+    // 下見の時点では生きていたので押さえに行き、押さえた時には墓標になっていた形。ここで待つと
+    // 「墓標を押さえたまま統合先を待つ」形になり、圧平と待ちが環になる
+    Mockito.when(customerRepository.findMergedIntoId(CUSTOMER_ID))
+        .thenReturn(Optional.empty())
+        .thenReturn(Optional.of(SURVIVING_CUSTOMER_ID));
     Mockito.when(customerRepository.findByIdForUpdate(CUSTOMER_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
-    Mockito.when(customerRepository.findByIdForUpdate(SURVIVING_CUSTOMER_ID))
+    Mockito.when(customerRepository.findByIdForUpdateNoWait(SURVIVING_CUSTOMER_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
+
+    assertThat(resolver.resolveForWrite(CUSTOMER_ID)).isEqualTo(SURVIVING_CUSTOMER_ID);
+
+    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(SURVIVING_CUSTOMER_ID);
+  }
+
+  @Test
+  @DisplayName("統合先を待たずに取れなかったら、やり直しの判る 409 になること")
+  void resolveReportsAConflictWhenTheTargetIsHeldByAMerge() {
     Mockito.when(customerRepository.findMergedIntoId(CUSTOMER_ID))
+        .thenReturn(Optional.empty())
         .thenReturn(Optional.of(SURVIVING_CUSTOMER_ID));
+    Mockito.when(customerRepository.findByIdForUpdate(CUSTOMER_ID))
+        .thenReturn(Optional.of(Customer.builder().build()));
+    Mockito.when(customerRepository.findByIdForUpdateNoWait(SURVIVING_CUSTOMER_ID))
+        .thenThrow(new CannotAcquireLockException("statement timeout"));
 
-    resolver.resolveForWrite(CUSTOMER_ID);
+    assertThatThrownBy(() -> resolver.resolveForWrite(CUSTOMER_ID))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合中の顧客です");
+  }
 
-    // 押さえるのは書き込みが着地する行。押さえないと、存続行を更に統合する要求が付替えを
-    // 済ませた後にこの書き込みが割り込み、付替えの済んだ行へ着いたまま取り残される。
-    InOrder locks = Mockito.inOrder(customerRepository);
-    locks.verify(customerRepository).findByIdForUpdate(CUSTOMER_ID);
-    locks.verify(customerRepository).findByIdForUpdate(SURVIVING_CUSTOMER_ID);
+  @Test
+  @DisplayName("統合先の判定は押さえた実体からではなく別問い合わせで行うこと")
+  void resolveReadsTheMergeTargetWithASeparateQuery() {
+    // 悲観排他ロックは既に永続化文脈に載っている実体の状態を更新しない。統合先を持たない実体を
+    // 押さえつつ問い合わせだけが統合先を答える形で、実体ではなく問い合わせを読んでいることを固定する。
+    Mockito.when(customerRepository.findByIdForUpdate(CUSTOMER_ID))
+        .thenReturn(Optional.of(Customer.builder().name("統合先を持たない実体").build()));
+    Mockito.when(customerRepository.findMergedIntoId(CUSTOMER_ID))
+        .thenReturn(Optional.empty())
+        .thenReturn(Optional.of(SURVIVING_CUSTOMER_ID));
+    Mockito.when(customerRepository.findByIdForUpdateNoWait(SURVIVING_CUSTOMER_ID))
+        .thenReturn(Optional.of(Customer.builder().build()));
+
+    assertThat(resolver.resolveForWrite(CUSTOMER_ID)).isEqualTo(SURVIVING_CUSTOMER_ID);
   }
 
   @Test

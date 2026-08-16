@@ -93,7 +93,7 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
     assertThat(customerService.get("c1").getId()).isEqualTo("c1");
@@ -101,7 +101,7 @@ class CustomerServiceTest {
 
   @Test
   void get_throwsWhenNotFound() {
-    when(customerRepository.findById("missing")).thenReturn(Optional.empty());
+    when(customerRepository.findResolvingMerge("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> customerService.get("missing"))
         .isInstanceOf(NotFoundException.class)
@@ -208,7 +208,7 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("c1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(activeLink("c1", "123456789012")));
@@ -233,8 +233,9 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c2");
 
-    when(customerRepository.findMergedIntoId("c1")).thenReturn(Optional.of("c2"));
-    when(customerRepository.findById("c2")).thenReturn(Optional.of(surviving));
+    // 解決と取得を 1 文で行う。2 文に分けると、統合先を読んだ後に連鎖統合が確定した場合に
+    // 既に墓標になった行を本体として返してしまう
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(surviving));
     when(customerMapper.toResponse(surviving)).thenReturn(resp);
 
     CustomerResponse result = customerService.get("c1");
@@ -242,8 +243,7 @@ class CustomerServiceTest {
     assertThat(result.getId()).isEqualTo("c2");
     assertThat(result.getMerged()).isTrue();
     assertThat(result.getMergedFromId()).isEqualTo("c1");
-    // 墓標の内容は返さない。返すのは常に統合先の行そのもの
-    verify(customerRepository, never()).findById("c1");
+    verify(customerRepository, never()).findById(any());
   }
 
   @Test
@@ -254,7 +254,7 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
     CustomerResponse result = customerService.get("c1");

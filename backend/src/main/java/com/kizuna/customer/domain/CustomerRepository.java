@@ -1,6 +1,7 @@
 package com.kizuna.customer.domain;
 
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 public interface CustomerRepository
@@ -43,6 +45,32 @@ public interface CustomerRepository
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select c from com.kizuna.customer.domain.Customer c where c.id = :id")
   Optional<Customer> findByIdForUpdate(@Param("id") String id);
+
+  /**
+   * {@link #findByIdForUpdate} と同じロックを、待たずに取れるときだけ取る（{@code FOR UPDATE NOWAIT}）。取れなければ {@code
+   * CannotAcquireLockException}。
+   *
+   * <p>行を押さえたまま次の行を待つ経路で使う。統合は存続行と被統合行を押さえた後で、被統合行を指す墓標を圧平（＝墓標の行を押さえる）するため、
+   * 「墓標を押さえたまま統合先を待つ」形は統合と待ちが環になる。待たない取得なら環は生まれず、取れなかった競合は案内の読める応答に写せる。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"))
+  @Query("select c from com.kizuna.customer.domain.Customer c where c.id = :id")
+  Optional<Customer> findByIdForUpdateNoWait(@Param("id") String id);
+
+  /**
+   * 旧 ID を渡されても統合先の生きた行を返す読み口。統合先参照の解決と行の取得を 1 文で行う。
+   *
+   * <p>2 文に分けると、READ COMMITTED では文ごとに異なるスナップショットを見るため、統合先を読んだ後に連鎖統合が確定すると 既に墓標になった行を本体として返してしまう。1
+   * 文なら解決と取得が同じスナップショットで、返る行は必ず生きている。
+   */
+  @Query(
+      """
+      select c from com.kizuna.customer.domain.Customer c
+      where c.id = coalesce(
+        (select m.mergedIntoId from com.kizuna.customer.domain.Customer m where m.id = :id), :id)
+      """)
+  Optional<Customer> findResolvingMerge(@Param("id") String id);
 
   Optional<Customer> findByPhoneNumber(String phoneNumber);
 
