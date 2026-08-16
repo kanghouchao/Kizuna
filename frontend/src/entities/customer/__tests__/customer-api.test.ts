@@ -88,12 +88,14 @@ describe('customerApi', () => {
         delta: 100,
         reason: '手動付与',
         expires_on: '2026-12-31',
+        idempotency_key: 'idem-1',
       })
     ).resolves.toEqual({ linked: true, balance: 220 });
     expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/point-adjustments', {
       delta: 100,
       reason: '手動付与',
       expires_on: '2026-12-31',
+      idempotency_key: 'idem-1',
     });
   });
 });
