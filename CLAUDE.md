@@ -28,6 +28,16 @@ Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/
 
 Comments justify the code **as it is now**: invariants, security rationale, non-obvious decisions. Never narrate history — what the code replaced, how it evolved, or which discussion decided it. That record belongs to git log and issues, so comments carry **no issue/PR numbers**; traceability goes through git blame → commit message → issue. Applies to backend and frontend alike.
 
+- **Javadoc/JSDoc are optional.** Never write `@param`/`@return` that only restate the signature. No numbered step comments (`// 1. ...`), no section banners.
+- **Length: a comment block stays within 3–5 lines.** Longer reasoning gets compressed to the conclusion plus its one key reason; the full argument goes to the commit message or an ADR. Practical reason: google-java-format re-wraps long CJK blocks badly, so long prose degrades on the next `spotlessApply`.
+- **Single-source the explanation.** When one rationale covers many sites, state it in exactly one place and do not duplicate it per call site (precedent: ADR 0002's dormant-filter caveat lives only in the `StoreIsolationTests` method Javadoc, not on the eight entities).
+- **Fix on touch — delete vs. compress.** Within the region you touched, **delete** the clearly-violating forms: numbered step comments, `@param`/`@return` that restate the signature, section banners, chatter that restates the code, and English comments (language policy). This is an explicit exception to the default of touching only task-related lines. A long but load-bearing comment — invariant reasoning, a security rationale, a fail-open trap — is **not** a deletion target: at most **compress** it to conclusion + key reason and move the full argument to the commit message or an ADR, and only when you were already rewriting that comment or you are confident the compression keeps the reasoning. When in doubt, leave it as is.
+- **Surviving mandatory-comment exceptions**: transitional-exception notes in `package-info.java` (backend/CLAUDE.md) and rule-disable reasons in `steiger.config.mjs` (frontend/CLAUDE.md).
+
+## API Design & API-first
+
+API contract rules live in [docs/api-guidelines.md](docs/api-guidelines.md) (Japanese) — the normative source; read it before adding or changing an endpoint. Any task spanning frontend + backend must present the API contract design (endpoints, methods, status codes, request/response fields, authorization, pagination form) for approval **before** implementation. Every controller handler must carry `@PreAuthorize` or `@PermitAll` — `SecurityConfig` is `anyRequest().permitAll()`, so a missing annotation is a silently public endpoint; `EndpointAuthorizationDeclarationTests` enforces this with no exemption list.
+
 ## Build, Test & Verify
 
 The system is built and tested with Docker Compose; all commands are driven through the `task` tool so local runs match CI/CD. Recommended workflow:
