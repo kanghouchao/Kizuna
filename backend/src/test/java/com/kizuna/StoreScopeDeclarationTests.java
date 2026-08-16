@@ -60,6 +60,7 @@ class StoreScopeDeclarationTests {
 
     List<String> undeclared = new ArrayList<>();
     List<String> multiplyDeclared = new ArrayList<>();
+    List<String> blankReasons = new ArrayList<>();
     List<String> scanned = new ArrayList<>();
     Set<String> repositories = new LinkedHashSet<>();
     int methods = 0;
@@ -86,6 +87,11 @@ class StoreScopeDeclarationTests {
         } else if (declarations > 1) {
           multiplyDeclared.add(name);
         }
+        StoreScopeExempt exempt =
+            AnnotatedElementUtils.findMergedAnnotation(method, StoreScopeExempt.class);
+        if (exempt != null && exempt.reason().isBlank()) {
+          blankReasons.add(name);
+        }
       }
     }
 
@@ -98,6 +104,7 @@ class StoreScopeDeclarationTests {
         .as("@StoreScoped / @StoreSetScoped / @StoreScopeExempt のいずれも宣言していない方法（店舗フィルタ無しで読める）")
         .isEmpty();
     assertThat(multiplyDeclared).as("作用域宣言を二つ以上持つ方法（どれが効くか読めない）").isEmpty();
+    assertThat(blankReasons).as("reason が空白の @StoreScopeExempt（理由の無い豁免は宣言にならない）").isEmpty();
   }
 
   /**
