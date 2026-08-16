@@ -13,7 +13,8 @@ COPY . .
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm,uid=1000,gid=1000,sharing=locked \
     npm run format:check && \
     npm run lint && \
-    npm run lint:fsd
+    npm run lint:fsd && \
+    npm run typecheck
 
 FROM deps AS test
 ENV NEXT_TELEMETRY_DISABLED=1

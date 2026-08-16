@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint --fix --quiet .",
     "lint:fsd": "steiger ./src",
+    "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
     "format": "prettier --write --log-level warn .",
