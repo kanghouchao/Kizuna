@@ -1,5 +1,0 @@
-# v0.12.0 = 店舗の稼働状態（準備中／稼働中）。platform 層のみ。
-databaseChangeLog:
-  - include:
-      file: platform/01-store-status.yaml
-      relativeToChangelogFile: true

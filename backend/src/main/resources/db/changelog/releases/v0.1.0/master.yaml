@@ -1,7 +1,7 @@
-# v0.1.0 = 単一ベースライン。設計変更の積み重ねで散った 17 リリース分の changeset を、
-# 終態のテーブル定義そのものへ統合したもの（作っては消す表・改名 ALTER・列の後付けを一掃）。
+# v0.1.0 = 単一ベースライン（編集規約は db/CLAUDE.md）。
 # 構成は「platform（プラットフォーム全体で単一のデータ）」「store（店舗スコープのデータ）」
-# 「seed（初期データ）」の 3 層。FK の依存順にそのまま並べてある。
+# 「seed（初期データ）」の 3 層。include は FK の依存順で、受注に依存する platform 表
+# （帰属記録・伝票トークン・ポイント台帳）は store 層の後に置く。
 databaseChangeLog:
   - include:
       file: platform/01-store.yaml
@@ -22,6 +22,9 @@ databaseChangeLog:
       file: platform/06-event-publication.yaml
       relativeToChangelogFile: true
   - include:
+      file: platform/07-member.yaml
+      relativeToChangelogFile: true
+  - include:
       file: store/01-store-profile.yaml
       relativeToChangelogFile: true
   - include:
@@ -35,6 +38,21 @@ databaseChangeLog:
       relativeToChangelogFile: true
   - include:
       file: store/05-shift.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: store/06-shift-request.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: store/07-customer-member-link.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: platform/08-order-attribution.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: platform/09-order-receipt-token.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: platform/10-point-ledger.yaml
       relativeToChangelogFile: true
   - include:
       file: seed/01-roles.yaml

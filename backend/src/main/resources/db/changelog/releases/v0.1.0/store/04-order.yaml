@@ -24,10 +24,6 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: store_name
-                  type: VARCHAR(255)
-                  remarks: 店舗名
-              - column:
                   name: receptionist_id
                   type: BIGINT
                   remarks: 受付担当者 ID（t_users 参照）
@@ -95,11 +91,6 @@ databaseChangeLog:
                   defaultValueNumeric: 0
                   remarks: 利用ポイント
               - column:
-                  name: manual_grant_points
-                  type: INTEGER
-                  defaultValueNumeric: 0
-                  remarks: 手動付与ポイント
-              - column:
                   name: auto_grant_points
                   type: INTEGER
                   defaultValueNumeric: 0
@@ -143,6 +134,54 @@ databaseChangeLog:
                   type: VARCHAR(50)
                   defaultValue: CREATED
                   remarks: 注文ステータス
+              - column:
+                  name: pax
+                  type: INTEGER
+                  remarks: 人数
+              - column:
+                  name: reception_route
+                  type: VARCHAR(20)
+                  remarks: 受付経路（WEB=Web 申請/PHONE=電話受付）
+              - column:
+                  # requester_member_code は申請時点のスナップショットで、会員行が消えて
+                  # requester_member_id が欠落した後も誰の申請だったかを読めるようにする。
+                  name: requester_member_id
+                  type: BIGINT
+                  remarks: 申請した会員。会員削除後も履歴を残すため SET NULL
+              - column:
+                  name: requester_member_code
+                  type: VARCHAR(20)
+                  remarks: 申請時点の会員コード（会員削除後も申請者を読めるようにするスナップショット）
+              - column:
+                  # プラットフォーム側プロフィールは店舗へ渡さないため、店舗が知る名前は本人が
+                  # その店舗へ名乗ると決めた名前だけ。確定まで台帳行は存在しないので申請の間はこの列が預かる。
+                  name: requester_declared_name
+                  type: VARCHAR(255)
+                  remarks: 申請時に本人が店舗へ名乗った名前（確定時の自動整備で台帳行の氏名になる）
+              - column:
+                  # 電話番号が台帳で複数顧客に一致すると自動照合を断念して顧客未設定で成立させるため
+                  # （ADR 0009）、写しが無いと録入された連絡先がどこにも残らない。
+                  name: contact_name
+                  type: VARCHAR(255)
+                  remarks: 受付で録入された連絡先の氏名（顧客未設定の受注にのみ入る）
+              - column:
+                  name: contact_phone_number
+                  type: VARCHAR(50)
+                  remarks: 受付で録入された連絡先の電話番号（顧客未設定の受注にのみ入る）
+              - column:
+                  # 確定後の取消の記録（ADR 0013）。理由は取消の根拠そのものなので取消では必須
+                  # （分類軸ではないため enum 化しない）。
+                  name: cancelled_reason
+                  type: VARCHAR(500)
+                  remarks: 取消の理由。取消していない受注では NULL
+              - column:
+                  name: cancelled_by
+                  type: BIGINT
+                  remarks: 取消の実行者。操作者削除後も記録を残すため SET NULL
+              - column:
+                  name: cancelled_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 取消の実行時刻
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -190,6 +229,20 @@ databaseChangeLog:
             referencedTableName: t_casts
             referencedColumnNames: id
             onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            constraintName: fk_t_orders_requester_member
+            baseTableName: t_orders
+            baseColumnNames: requester_member_id
+            referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_orders_cancelled_by
+            baseTableName: t_orders
+            baseColumnNames: cancelled_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
         - createIndex:
             indexName: idx_t_orders_date
             tableName: t_orders
@@ -210,3 +263,24 @@ databaseChangeLog:
             columns:
               - column:
                   name: cast_id
+        - createIndex:
+            indexName: idx_t_orders_requester_member
+            tableName: t_orders
+            columns:
+              - column:
+                  name: requester_member_id
+        # 状態別の群読み口（作業キュー・アーカイブ）が引く索引。述語は「store_id = ? かつ
+        # status in (...)」でどちらも等値なので先頭 2 列に置け、3 列目の business_date は既定の並び。
+        # 他の並び鍵は索引を増やさず、絞り込んだ後の整列に委ねる。
+        - createIndex:
+            indexName: idx_t_orders_store_status_date
+            tableName: t_orders
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: status
+              - column:
+                  name: business_date
+              - column:
+                  name: id

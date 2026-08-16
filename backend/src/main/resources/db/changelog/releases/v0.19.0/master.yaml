@@ -1,5 +1,0 @@
-# v0.19.0 = 伝票トークンの失効（再発行が前の 1 本を殺す）。platform 層のみ。
-databaseChangeLog:
-  - include:
-      file: platform/01-order-receipt-token-revocation.yaml
-      relativeToChangelogFile: true

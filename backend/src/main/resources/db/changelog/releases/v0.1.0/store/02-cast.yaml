@@ -107,6 +107,12 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: SET NULL
+        - sql:
+            # 本人ポータルは毎リクエスト platform_user_id での跨店逆引きを行う。大半の cast は
+            # 未招待で platform_user_id が NULL のため、対象を NOT NULL に絞った部分索引にする。
+            sql: >-
+              CREATE INDEX idx_t_casts_platform_user ON t_casts (platform_user_id)
+              WHERE platform_user_id IS NOT NULL
         - createTable:
             tableName: t_cast_field_definitions
             remarks: キャストのカスタムフィールド定義テーブル（店舗別動的属性）

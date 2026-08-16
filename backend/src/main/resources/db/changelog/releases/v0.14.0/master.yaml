@@ -1,5 +1,0 @@
-# v0.14.0 = 受注帰属記録（会員の来店可視性の正本）。platform 層のみ。
-databaseChangeLog:
-  - include:
-      file: platform/01-order-attribution.yaml
-      relativeToChangelogFile: true

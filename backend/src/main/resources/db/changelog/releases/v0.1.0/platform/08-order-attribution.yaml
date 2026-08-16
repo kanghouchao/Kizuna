@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: platform-v01400-001-order-attribution
+      id: platform-v0100-008-order-attribution-schema
       author: kanghouchao
       # 受注 1 件が会員へ帰属した事実。完了時（COMPLETION）と事後申領時（RECEIPT_TOKEN）にだけ生まれ、
       # 成立後は関連（t_customer_member_links）の状態に影響されない。会員の来店履歴はこの表だけから読む。
@@ -60,6 +60,21 @@ databaseChangeLog:
                     nullable: false
                   remarks: 記録の状態（ACTIVE=有効 / INVALIDATED=無効化済み）
               - column:
+                  # 誤帰属の唯一の訂正操作は理由付きの無効化で、行は削除せず status を INVALIDATED へ
+                  # 倒したうえで理由・実行者・時刻を残す。理由の必須は操作側の契約なので列は可空
+                  # （ACTIVE の行は当然 NULL）。無効化はポイント台帳へ自動波及しない（清算は手動調整）。
+                  name: invalidated_reason
+                  type: VARCHAR(500)
+                  remarks: 無効化の理由（無効化時は必須。有効な帰属記録では NULL）
+              - column:
+                  name: invalidated_by
+                  type: BIGINT
+                  remarks: 無効化を実行した操作者。操作者の削除後も記録は残るため SET NULL
+              - column:
+                  name: invalidated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 無効化した日時
+              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   defaultValueComputed: CURRENT_TIMESTAMP
@@ -94,6 +109,13 @@ databaseChangeLog:
             referencedTableName: t_members
             referencedColumnNames: id
             onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_attributions_invalidated_by
+            baseTableName: t_order_attributions
+            baseColumnNames: invalidated_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
         - createIndex:
             indexName: idx_t_order_attributions_member_created
             tableName: t_order_attributions
@@ -102,24 +124,10 @@ databaseChangeLog:
                   name: member_id
               - column:
                   name: created_at
-      rollback:
-        - dropTable:
-            tableName: t_order_attributions
-
-  - changeSet:
-      id: platform-v01400-002-order-attribution-active-index
-      author: kanghouchao
-      # 「有効な帰属は受注 1 件につき高々 1 件」という業務不変量を DB 側の最終防波堤として固定する。
-      # 無効化済み（INVALIDATED）の行は記録として残り続けるため、対象を status='ACTIVE' に絞った
-      # 部分一意索引にする（Liquibase の addUniqueConstraint は述語付き索引を表現できないため裸 SQL）。
-      preConditions:
-        - dbms:
-            type: postgresql
-      changes:
+        # 「有効な帰属は受注 1 件につき高々 1 件」という業務不変量を DB 側の最終防波堤として固定する。
+        # 無効化済み（INVALIDATED）の行は記録として残り続けるため、対象を status='ACTIVE' に絞った
+        # 部分一意索引にする。
         - sql:
             sql: >-
               CREATE UNIQUE INDEX uq_t_order_attributions_active_order
               ON t_order_attributions (order_id) WHERE status = 'ACTIVE'
-      rollback:
-        - sql:
-            sql: DROP INDEX uq_t_order_attributions_active_order

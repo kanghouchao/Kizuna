@@ -1,6 +1,0 @@
-# v0.6.0 = 出勤希望に変更申請（確定シフトの日時変更）の種別・対象シフト参照を追加する。
-# 構成は v0.1.0 〜 v0.4.0 と同じ platform / store / seed の 3 層のうち store のみ。
-databaseChangeLog:
-  - include:
-      file: store/01-shift-request-change.yaml
-      relativeToChangelogFile: true

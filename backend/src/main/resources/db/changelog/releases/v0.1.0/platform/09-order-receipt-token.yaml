@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: platform-v01700-001-order-receipt-token
+      id: platform-v0100-009-order-receipt-token-schema
       author: kanghouchao
       # 完了時に会員へ帰属しなかった受注へ発行するワンタイムの伝票トークン。所持そのものが事後帰属の証明に
       # なるため、受注 ID のように列挙できる値では代替できない。
@@ -63,7 +63,7 @@ databaseChangeLog:
                   type: VARCHAR(20)
                   constraints:
                     nullable: false
-                  remarks: 状態（ISSUED=発行済み・未申領 / CLAIMED=申領済み）
+                  remarks: 状態（ISSUED=発行済み・未申領 / CLAIMED=申領済み / REVOKED=失効済み）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -98,6 +98,13 @@ databaseChangeLog:
             columns:
               - column:
                   name: order_id
-      rollback:
-        - dropTable:
-            tableName: t_order_receipt_tokens
+        # 「1 受注につき申領できる伝票は高々 1 本」を DB 側の最終防波堤として固定する。索引が強制
+        # できるのは「ISSUED が高々 1 本」で業務の不変量より強く、差の分だけ再発行は期限切れの
+        # ISSUED も失効させる。CLAIMED / REVOKED の行は記録として残るため status='ISSUED' に絞った
+        # 部分一意索引にする。
+        # この索引は DbConstraint に載せない。再発行のロックが守る以上、発火は実装欠陥であり、
+        # 業務例外へ写像せず大きく失敗させる側にあたる。
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_order_receipt_tokens_issued_order
+              ON t_order_receipt_tokens (order_id) WHERE status = 'ISSUED'

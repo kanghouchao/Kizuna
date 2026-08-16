@@ -6,24 +6,29 @@ databaseChangeLog:
       # demo コンテキストに隔離する。実行時コンテキストは spring.liquibase.contexts（環境変数
       # LIQUIBASE_CONTEXTS）で切り替える。既定は production＝投入しないので、開発・統合テスト・E2E は
       # compose 側で demo を明示する。
-      # id は採番に委ね、FK は自然キー（domain / email / ロール名）の部分問い合わせで解決する。
+      # id は原則採番に委ね、FK は自然キー（domain / email / ロール名）の部分問い合わせで解決する
+      # （例外はアプリ側採番の t_store_profiles のみ）。
       contextFilter: demo
       preConditions:
         - dbms:
             type: postgresql
       changes:
+        # status は既定（PREPARING）に任せず ACTIVE を明示する。デモ店舗は最初から運用中の店舗として
+        # 使う前提で、準備中のままだと削除可能な状態から始まってしまう。
         - insert:
             tableName: t_stores
             columns:
               - column: { name: name, value: Sample Tenant }
               - column: { name: domain, value: store1.kizuna.test }
               - column: { name: email, value: admin@store1.kizuna.com }
+              - column: { name: status, value: ACTIVE }
         - insert:
             tableName: t_stores
             columns:
               - column: { name: name, value: Sample Tenant 2 }
               - column: { name: domain, value: store2.kizuna.test }
               - column: { name: email, value: admin@store2.kizuna.com }
+              - column: { name: status, value: ACTIVE }
 
         # 田中花子: 店長・店舗{1,2} 授権。password は changelog パラメータ demoUserPasswordHash
         # （spring.liquibase.parameters 経由。既定は平文 pass のハッシュ）から与える。
@@ -74,9 +79,11 @@ databaseChangeLog:
               - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')" }
               - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')" }
 
+        # t_store_profiles.id はアプリ側採番（Snowflake）のため、seed だけは固定 id を明示する。
         - insert:
             tableName: t_store_profiles
             columns:
+              - column: { name: id, value: "1" }
               - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')" }
               - column: { name: template_key, value: default }
               - column: { name: mv_type, value: image }
@@ -86,6 +93,7 @@ databaseChangeLog:
         - insert:
             tableName: t_store_profiles
             columns:
+              - column: { name: id, value: "2" }
               - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store2.kizuna.test')" }
               - column: { name: template_key, value: default }
               - column: { name: mv_type, value: image }
