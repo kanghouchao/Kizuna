@@ -31,7 +31,7 @@ import tools.jackson.databind.JsonNode;
  */
 class OrderLifecycleIT extends CrossStoreTestSupport {
 
-  /** v0.5.0 の山田次郎シード（STORE_STAFF・授権店舗 = 店舗1）。 */
+  /** demo シード（seed/05-demo.yaml）の山田次郎（STORE_STAFF・授権店舗 = 店舗1）。 */
   private static final long SEED_RECEPTIONIST_ID = 3L;
 
   @Autowired private OrderRepository orderRepository;

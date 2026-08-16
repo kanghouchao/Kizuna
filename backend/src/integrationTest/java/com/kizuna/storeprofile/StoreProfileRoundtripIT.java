@@ -14,7 +14,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * StoreProfile の String-PK 化後の {@code /store/config} 永続化経路を固定する IT。
  *
- * <p>変換済みシード行（旧 BIGINT id が VARCHAR へ移送された t_store_profiles）に対し、String PK ロード・@Version 楽観ロック・基類
+ * <p>demo シード行（seed が String id "1"/"2" を固定する t_store_profiles）に対し、String PK ロード・@Version 楽観ロック・基類
  * （StoreScopedEntity）のタイムスタンプが GET→PUT→GET の roundtrip で機能することを確認する。主体は種子の yamada.jiro （束「店舗スタッフ」=
  * STORE_PROFILE_MANAGE 保持、店舗1）で、{@link CrossStoreTestSupport} のログイン主体をそのまま用いる。
  */
@@ -23,7 +23,7 @@ class StoreProfileRoundtripIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("/store/config は GET→PUT→GET で更新が永続化され、id は非空 JSON 文字列であること")
   void configRoundtripPersistsAndExposesStringId() {
-    // GET: 変換済みシード行が String PK でロードでき、id が数値でなく引用符付き JSON 文字列であること。
+    // GET: シード行が String PK でロードでき、id が数値でなく引用符付き JSON 文字列であること。
     ResponseEntity<String> rawGet =
         rest.exchange(
             "/store/config", HttpMethod.GET, new HttpEntity<>(storeHeaders(STORE_A)), String.class);

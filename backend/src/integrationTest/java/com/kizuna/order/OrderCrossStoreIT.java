@@ -26,7 +26,10 @@ import tools.jackson.databind.JsonNode;
  */
 class OrderCrossStoreIT extends CrossStoreTestSupport {
 
-  /** v0.5.0 central/01 の山田次郎シード(platform_users id=3, STORE_STAFF, SPECIFIC_STORES{1})。受付担当として使用。 */
+  /**
+   * demo シード（seed/05-demo.yaml）の山田次郎(platform_users id=3, STORE_STAFF,
+   * SPECIFIC_STORES{1})。受付担当として使用。
+   */
   private static final long SEED_RECEPTIONIST_ID = 3L;
 
   @Autowired private CustomerRepository customerRepository;
