@@ -107,8 +107,8 @@ databaseChangeLog:
             referencedTableName: t_stores
             referencedColumnNames: id
             onDelete: CASCADE
-        # 自己参照の外部キーは RESTRICT — 墓標の指す先が消えると旧 ID の解決が切れるため、
-        # 統合先の削除は DB が止める（ADR 0010）。
+        # 自己参照の外部キーは削除を止める — 墓標の指す先が消えると旧 ID の解決が切れるため（ADR 0010）。
+        # 拒否を 409 の案内へ写すので NO ACTION（理由は DbConstraint の Javadoc）。
         - addForeignKeyConstraint:
             constraintName: fk_t_customers_merged_into
             baseTableName: t_customers
@@ -150,7 +150,7 @@ databaseChangeLog:
       # 根拠とする人手作業になる（ADR 0010）。移した件数は統合時の一括 UPDATE の結果をそのまま残す
       # （後から数え直すと、統合後に積まれた受注・関連まで数えてしまい根拠にならない）。
       #
-      # 顧客への外部キーは両方とも RESTRICT。結果として統合に関与した行は存続行・被統合行とも削除できなく
+      # 顧客への外部キーは両方とも削除を止める。結果として統合に関与した行は存続行・被統合行とも削除できなく
       # なるが、修復の根拠と旧 ID の解決が誤削除で消えるほうが重い。実行者は削除されても履歴が残るよう
       # SET NULL（表示名の欠落で行ごと消さない）。
       preConditions:

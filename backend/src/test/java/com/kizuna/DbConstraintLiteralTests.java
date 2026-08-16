@@ -98,15 +98,15 @@ class DbConstraintLiteralTests {
         Arrays.stream(DbConstraint.values()).map(DbConstraint::sqlName).collect(Collectors.toSet());
 
     List<String> restricted = new ArrayList<>();
-    int blocks = 0;
+    List<String> examined = new ArrayList<>();
     for (Path file : changelogFiles()) {
       Matcher block = FOREIGN_KEY_BLOCK.matcher(Files.readString(file));
       while (block.find()) {
-        blocks++;
         String body = block.group("body");
         Matcher name = BLOCK_CONSTRAINT_NAME.matcher(body);
         Matcher onDelete = BLOCK_ON_DELETE.matcher(body);
         if (name.find() && onDelete.find() && mapped.contains(name.group(1))) {
+          examined.add(name.group(1));
           if ("RESTRICT".equalsIgnoreCase(onDelete.group(1).trim())) {
             restricted.add(name.group(1));
           }
@@ -114,8 +114,9 @@ class DbConstraintLiteralTests {
       }
     }
 
-    // 暗黙の no-op 防止: 外部キー宣言そのものを捉えられていることを担保する。
-    assertThat(blocks).as("changelog が宣言する外部キーの件数").isPositive();
+    // 暗黙の no-op 防止: 数えるのは写像先を持つ外部キーだけ。走査が壊れて 0 件になれば、
+    // 「RESTRICT が無い」ではなく「何も見ていない」として赤くなる。
+    assertThat(examined).as("走査できた DbConstraint の外部キー").isNotEmpty();
 
     assertThat(restricted).as("RESTRICT で宣言されている DbConstraint の外部キー").isEmpty();
   }

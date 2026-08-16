@@ -153,7 +153,8 @@ databaseChangeLog:
             referencedColumnNames: id
             onDelete: CASCADE
         - addForeignKeyConstraint:
-            # 授与中のロールの削除は授権を黙って失わせるため RESTRICT で拒否する（fail-loud）。
+            # 授与中のロールの削除は授権を黙って失わせるため拒否する。拒否を 409 の案内へ写すので
+            # RESTRICT ではなく NO ACTION（理由は DbConstraint の Javadoc）。
             constraintName: fk_t_user_roles_role
             baseTableName: t_user_roles
             baseColumnNames: role_id

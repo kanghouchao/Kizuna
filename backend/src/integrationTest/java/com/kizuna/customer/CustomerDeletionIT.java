@@ -21,7 +21,7 @@ import tools.jackson.databind.JsonNode;
  * 顧客削除の可否を本物の PostgreSQL で検証する統合テスト。
  *
  * <p>統合に関与した行が削除できないことは {@link CustomerMergeIT} が固定する。ここが見るのは受注から参照されている行で、
- * キャストと同じく外部キー（RESTRICT）が止める日常操作の競合なので、応答は 500 ではなく理由の読める 409 になる。
+ * キャストと同じく外部キーが止める日常操作の競合なので、応答は 500 ではなく理由の読める 409 になる。
  */
 class CustomerDeletionIT extends CrossStoreTestSupport {
 

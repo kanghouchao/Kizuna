@@ -211,6 +211,55 @@ class StoreDeletionCascadeIT {
     assertThat(countStore(storeId)).isZero();
   }
 
+  @Test
+  @DisplayName("未完了の受注を抱えた準備中の店舗も削除でき、顧客・キャスト・受注が CASCADE 消去されること")
+  void storeWithPendingOrdersCanStillBeDeleted() {
+    // 受注は顧客とキャストを参照し、その 2 つは店舗を参照する。どちらの参照も削除を止める外部キーなので、
+    // 店舗削除の CASCADE が受注より先に顧客・キャストへ届けば違反で止まりうる。誤って登録した準備中の
+    // 店舗を撤回できることは店舗削除の存在理由なので、その疑いをここで潰す。
+    Store store = freshStore("受注あり検証店舗", "order-store-delete-it");
+    long storeId = store.getId();
+    String customerId = "order-cascade-customer-" + UUID.randomUUID();
+    String castId = "order-cascade-cast-" + UUID.randomUUID();
+    insertCustomer(storeId, customerId, null);
+    insertCast(storeId, castId);
+    insertOrder(storeId, customerId, castId);
+
+    assertThat(countOrders(storeId)).as("削除前は受注が 1 件あること").isEqualTo(1L);
+
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(countOrders(storeId)).as("受注は店舗と共に消えること").isZero();
+    assertThat(countCustomers(storeId)).as("顧客は店舗と共に消えること").isZero();
+    assertThat(countStore(storeId)).isZero();
+  }
+
+  private void insertCast(long storeId, String castId) {
+    jdbcTemplate.update(
+        "INSERT INTO t_casts (id, store_id, name, created_at, updated_at, version)"
+            + " VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+        castId,
+        storeId,
+        "受注カスケード検証キャスト");
+  }
+
+  private void insertOrder(long storeId, String customerId, String castId) {
+    jdbcTemplate.update(
+        "INSERT INTO t_orders (id, store_id, customer_id, cast_id, business_date, status,"
+            + " created_at, updated_at, version) VALUES (?, ?, ?, ?, CURRENT_DATE, 'CONFIRMED',"
+            + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+        "order-cascade-it-" + UUID.randomUUID(),
+        storeId,
+        customerId,
+        castId);
+  }
+
+  private long countOrders(long storeId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM t_orders WHERE store_id = ?", Long.class, storeId);
+  }
+
   private void insertCustomer(long storeId, String customerId, String mergedIntoId) {
     jdbcTemplate.update(
         "INSERT INTO t_customers (id, store_id, name, merged_into_id, created_at, updated_at,"

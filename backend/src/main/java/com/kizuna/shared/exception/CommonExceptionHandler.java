@@ -208,8 +208,9 @@ public class CommonExceptionHandler {
    * <p>他の整合性違反（FK・NOT NULL・CHECK）は利用者が是正できる誤りではなく実装の欠陥なので、 409 に化けさせず catch-all の 500
    * のまま大きく失敗させる。ここで一括して 409 にすると、 呼出側に「やり直せば直る」と誤って伝わり、欠陥が運用に埋もれる。
    *
-   * <p>唯一の例外が「参照先は生きた顧客」の複合外部キーで、これは名前を名指して 409 へ写す。違反の意味が向きに依らず
-   * 一つ（指した顧客が墓標になった）で、やり直せば統合先へ着くからである。写しているのは経路ではなく制約名なので、 顧客参照を書く経路が将来増えても、解決を忘れた分がここで拾われる。
+   * <p>唯一の例外が「参照先は生きた顧客」の複合外部キーで、これは名前を名指して 409 へ写す。ここが受けるのは参照を<b>書いた</b>側の
+   * 違反だけで、意味は一つ（指した顧客が墓標になった）— やり直せば統合先へ着く。同じ制約は顧客の削除でも違反しうるが、 その向きは唯一の削除経路が call site
+   * で先に写している（{@code CustomerService#delete}）。写しているのが経路ではなく制約名なので、 顧客参照を書く経路が将来増えても、解決を忘れた分がここで拾われる。
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<Map<String, Object>> handle(DataIntegrityViolationException ex) {
