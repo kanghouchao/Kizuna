@@ -118,10 +118,14 @@
   豁免リストは持たない。
 - **`@PermitAll` を新設するときは、公開端点の四点セットを同時に配線する**:
   1. handler に `@PermitAll`
-  2. **CSRF 免除**: 状態を変える（`GET` 以外の）匿名端点は `SecurityConfig` の `CSRF_IGNORED_MATCHERS` へパスを追加する。
+  2. **CSRF 免除**: 状態を変える（`GET` 以外の）匿名端点は `SecurityConfig` の `CSRF_IGNORED_MATCHERS` へ追加する。
      既存の一括免除は「Bearer 付きリクエスト」が条件なので、匿名 POST はそこに当たらず個別列挙が要る。
-  3. **Bearer 免除**: `PlatformBearerTokenResolver` の `BEARER_EXEMPT_MATCHERS` へパスを追加する。
+     エントリは `PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/...")` の形で
+     **メソッド + パス**を指定する。パスだけで書くと、同一パス上の認証必須な別メソッドの handler まで CSRF 保護を失う。
+  3. **Bearer 免除**: `PlatformBearerTokenResolver` の `BEARER_EXEMPT_MATCHERS` へ追加する。
      陳腐化した token cookie を持つ利用者が、`@PermitAll` の判定に届く前に 401 で弾かれるのを防ぐ。
+     こちらも **メソッド + パス**で指定する。パスだけで書くと、同一パス上の認証必須な別メソッドの handler でも Bearer が
+     捨てられ、その handler の `@PreAuthorize` は常に匿名を見ることになる — その端点は誰にも通せない恒久的な 401/403 になる。
   4. **店舗文脈**: `/store/**` と `/files/**` は `StoreIdInterceptor` の対象で、店舗文脈ヘッダ（`X-Role` / `X-Store-ID`）が
      無いリクエストを fail-closed で 403 にする。匿名でも店舗文脈は要る。文脈無しで通す端点だけが `@StoreOptional` を明示する。
 
