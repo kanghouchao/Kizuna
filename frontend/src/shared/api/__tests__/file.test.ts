@@ -1,3 +1,4 @@
+import type { AxiosAdapter } from 'axios';
 import { apiClient, fileApi } from '@/shared/api';
 
 // apiClient の既定 Content-Type は application/json のため、上書きが無いと axios の
@@ -8,7 +9,7 @@ describe('fileApi.upload', () => {
   it('multipart のまま送信する（FormData が JSON へ変換されない）', async () => {
     let capturedData: unknown;
     const original = apiClient.defaults.adapter;
-    apiClient.defaults.adapter = (async (config: { data: unknown }) => {
+    const adapter: AxiosAdapter = async config => {
       capturedData = config.data;
       return {
         data: { url: '/uploads/a.png', original_name: 'a.png', size: 1 },
@@ -17,7 +18,8 @@ describe('fileApi.upload', () => {
         headers: {},
         config,
       };
-    }) as typeof apiClient.defaults.adapter;
+    };
+    apiClient.defaults.adapter = adapter;
 
     try {
       await fileApi.upload(new File(['x'], 'a.png', { type: 'image/png' }), 'public');
