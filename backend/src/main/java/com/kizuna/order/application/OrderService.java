@@ -59,6 +59,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -106,11 +107,18 @@ public class OrderService {
    * <p>取得は 2 段。条件と並びは要求ごとに変わるので ID の並びだけを動的な問い合わせで確定させ、行の中身は 表示名の join を持つ既存の読み口で引き直す（{@link
    * com.kizuna.order.infrastructure.OrderSearchQuery} にその理由を記す）。
    *
+   * <p><b>2 段は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。既定の READ COMMITTED では文ごとに断面を取り直すため、 2
+   * 本の間に他の操作者の commit が挟まると 2 本が違う世界を見る — 境界行の並び鍵が書き換われば続きが行を飛ばし、
+   * 状態が終端へ動けば作業キューの応答に完了・取消済みの行が混じる（画面はそれを確定として描き、押せない操作を出し続ける）。 変種を 1 つずつ塞ぐのではなく、断面を 1
+   * つにして根を断つ。読み取り専用なので直列化の失敗は起こらない。
+   *
+   * <p>射程はこのトランザクションの中だけである。要求をまたぐページ送り（アーカイブのオフセット）は別の問題で、 隔離水準では解けない。
+   *
    * @param cursor 続きの位置。null なら先頭から
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<OrderResponse> listWorkQueue(
       OrderQueryCriteria criteria, String cursor, int requestedSize) {
     int size = CursorPage.clampSize(requestedSize);
@@ -132,9 +140,12 @@ public class OrderService {
    * アーカイブ（完了・取消）の読み口。作業キューと同じ検索・並び替えを、オフセットのページャで辿る。
    *
    * <p>位置をページ番号で指せるのは、終端状態の受注が処理で消えず増えるだけだからである。
+   *
+   * <p>ここも 3 本（並び・本体・総件数）を 1 つの断面で読む（{@link #listWorkQueue} と同じ理由）。件数だけが別の断面から来ると、
+   * 表示中の行数とページャの主張する総数が食い違う。
    */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<OrderResponse> listArchive(OrderQueryCriteria criteria, Pageable pageable) {
     // アーカイブは位置をページ番号で指すため、鍵の値そのものは要らない
     List<String> ids = orderSearchQuery.findIds(criteria, pageable);
