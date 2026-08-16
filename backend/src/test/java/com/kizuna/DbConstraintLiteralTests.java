@@ -6,12 +6,14 @@ import com.kizuna.shared.exception.DbConstraint;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,17 +48,22 @@ class DbConstraintLiteralTests {
   private static final Pattern DECLARED_UNIQUE_INDEX =
       Pattern.compile("CREATE UNIQUE INDEX\\s+(\\S+)");
 
+  /**
+   * Liquibase の外部キー宣言 1 件分。ダッシュより深く字下げされた行が本体で、その中の {@code constraintName} と {@code onDelete} を読む。
+   */
+  private static final Pattern FOREIGN_KEY_BLOCK =
+      Pattern.compile(
+          "(?m)^(?<indent>[ ]*)- addForeignKeyConstraint:\\n"
+              + "(?<body>(?:\\k<indent>[ ]+.*\\n|[ ]*\\n)*)");
+
+  private static final Pattern BLOCK_CONSTRAINT_NAME = Pattern.compile("constraintName:\\s*(\\S+)");
+
+  private static final Pattern BLOCK_ON_DELETE = Pattern.compile("onDelete:\\s*(.+)");
+
   @Test
   @DisplayName("DbConstraint の全成員の制約名が changelog の DDL に実在すること")
   void allDbConstraintNamesExistInChangelog() throws Exception {
-    List<Path> changelogFiles;
-    try (Stream<Path> paths = Files.walk(CHANGELOG_ROOT)) {
-      changelogFiles =
-          paths
-              .filter(Files::isRegularFile)
-              .filter(path -> path.toString().endsWith(".yaml"))
-              .toList();
-    }
+    List<Path> changelogFiles = changelogFiles();
 
     Set<String> declared = new HashSet<>();
     for (Path file : changelogFiles) {
@@ -76,6 +83,50 @@ class DbConstraintLiteralTests {
             .toList();
 
     assertThat(missing).as("changelog の DDL に実在しない DbConstraint の制約名").isEmpty();
+  }
+
+  /**
+   * 写像先を持つ外部キーが RESTRICT で宣言されていないことを見る。
+   *
+   * <p>PostgreSQL は RESTRICT 違反を SQLSTATE 23001 で報告し、その文言から Hibernate は制約名を取り出さない（{@code
+   * constraint=null}）。字面が DDL に実在していても写像は決して命中せず、削除の拒否が 500 に化ける — 前のテストと同じ欠陥類の、字面では見えないほうの穴である。
+   */
+  @Test
+  @DisplayName("DbConstraint に載る外部キーが RESTRICT で宣言されていないこと")
+  void mappedForeignKeysAreNotDeclaredWithRestrict() throws Exception {
+    Set<String> mapped =
+        Arrays.stream(DbConstraint.values()).map(DbConstraint::sqlName).collect(Collectors.toSet());
+
+    List<String> restricted = new ArrayList<>();
+    int blocks = 0;
+    for (Path file : changelogFiles()) {
+      Matcher block = FOREIGN_KEY_BLOCK.matcher(Files.readString(file));
+      while (block.find()) {
+        blocks++;
+        String body = block.group("body");
+        Matcher name = BLOCK_CONSTRAINT_NAME.matcher(body);
+        Matcher onDelete = BLOCK_ON_DELETE.matcher(body);
+        if (name.find() && onDelete.find() && mapped.contains(name.group(1))) {
+          if ("RESTRICT".equalsIgnoreCase(onDelete.group(1).trim())) {
+            restricted.add(name.group(1));
+          }
+        }
+      }
+    }
+
+    // 暗黙の no-op 防止: 外部キー宣言そのものを捉えられていることを担保する。
+    assertThat(blocks).as("changelog が宣言する外部キーの件数").isPositive();
+
+    assertThat(restricted).as("RESTRICT で宣言されている DbConstraint の外部キー").isEmpty();
+  }
+
+  private static List<Path> changelogFiles() throws Exception {
+    try (Stream<Path> paths = Files.walk(CHANGELOG_ROOT)) {
+      return paths
+          .filter(Files::isRegularFile)
+          .filter(path -> path.toString().endsWith(".yaml"))
+          .toList();
+    }
   }
 
   private static void collectNames(Matcher matcher, Set<String> into) {

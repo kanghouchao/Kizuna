@@ -159,4 +159,4 @@ databaseChangeLog:
             baseColumnNames: role_id
             referencedTableName: t_roles
             referencedColumnNames: id
-            onDelete: RESTRICT
+            onDelete: NO ACTION

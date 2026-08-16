@@ -6,7 +6,11 @@ package com.kizuna.shared.exception;
  *
  * <p>収録するのは実際に写像している制約だけで、DDL 上の全制約は載せない — 写像先を持たない制約は実装欠陥として大きく失敗させる側であり、 ここに現れると「扱える違反」に見えてしまう。
  *
- * <p>各成員の字面が DDL に実在することは適応度テスト（{@code DbConstraintLiteralTests}）が機械検証する。
+ * <p>ここに載せる外部キーは DDL 側で {@code NO ACTION} を宣言する（{@code RESTRICT} ではなく）。参照を止める力は同じだが、 PostgreSQL は
+ * RESTRICT 違反を SQLSTATE 23001 で報告し、その文言から Hibernate は制約名を取り出せない（{@code constraint=null}） —
+ * 名前で写す本目録が決して命中せず、削除の拒否が 500 に化ける。
+ *
+ * <p>各成員の字面が DDL に実在することと、上の NO ACTION 規律は適応度テスト（{@code DbConstraintLiteralTests}）が機械検証する。
  */
 public enum DbConstraint {
 
@@ -27,6 +31,12 @@ public enum DbConstraint {
 
   /** t_cast_invitations → t_casts の FK。 */
   FK_T_CAST_INVITATIONS_CAST("fk_t_cast_invitations_cast"),
+
+  /** t_orders → t_casts の FK（RESTRICT）。受注が担当キャストを指したまま消えないようにする。 */
+  FK_T_ORDERS_CAST("fk_t_orders_cast"),
+
+  /** t_orders → t_customers の FK（RESTRICT）。受注が来店した顧客を指したまま消えないようにする。 */
+  FK_T_ORDERS_CUSTOMER("fk_t_orders_customer"),
 
   /** t_point_entries.idempotency_key の一意制約（ADR 0007）。 */
   UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key"),

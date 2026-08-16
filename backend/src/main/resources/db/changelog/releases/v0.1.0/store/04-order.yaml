@@ -215,20 +215,22 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: SET NULL
+        # 顧客・キャストへの参照は削除を止める。止める力が同じ RESTRICT ではなく NO ACTION を採る理由は
+        # DbConstraint の Javadoc（違反の見え方の差）にある。
         - addForeignKeyConstraint:
             constraintName: fk_t_orders_customer
             baseTableName: t_orders
             baseColumnNames: customer_id
             referencedTableName: t_customers
             referencedColumnNames: id
-            onDelete: RESTRICT
+            onDelete: NO ACTION
         - addForeignKeyConstraint:
             constraintName: fk_t_orders_cast
             baseTableName: t_orders
             baseColumnNames: cast_id
             referencedTableName: t_casts
             referencedColumnNames: id
-            onDelete: RESTRICT
+            onDelete: NO ACTION
         - addForeignKeyConstraint:
             constraintName: fk_t_orders_requester_member
             baseTableName: t_orders
