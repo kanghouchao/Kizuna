@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import CustomerEditPage from '../ui/CustomerEditPage';
 import { customerApi } from '@/entities/customer';
@@ -146,6 +146,47 @@ describe('顧客編集ページの注文履歴', () => {
 
     expect(await screen.findByText('確定')).toBeInTheDocument();
     expect(screen.queryByText('CONFIRMED')).not.toBeInTheDocument();
+  });
+});
+
+describe('顧客編集ページを統合済みの旧 ID で開いたとき', () => {
+  const surviving = {
+    ...customer,
+    id: 'cus-2',
+    name: '山田花子',
+    merged: true,
+    merged_from_id: 'cus-1',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    currentParams.id = 'cus-1';
+    mockedCustomerApi.get.mockResolvedValue(surviving);
+    mockedCustomerApi.update.mockResolvedValue(surviving);
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
+    mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
+  });
+
+  it('附属区画と保存が、表示している存続行を相手にすること', async () => {
+    // URL の旧 ID のまま続けると、表示は存続行なのに履歴と紐づけと保存だけが墓標を相手にする。
+    // 墓標には受注も関連も残っていないので、空の区画と 409 が並ぶ画面になる
+    render(<CustomerEditPage />);
+
+    expect(await screen.findByDisplayValue('山田花子')).toBeInTheDocument();
+    expect(mockedOrderApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customer_id: 'cus-2' })
+    );
+    expect(mockedCustomerApi.memberLinkHistory).toHaveBeenLastCalledWith('cus-2', {
+      cursor: undefined,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() =>
+      expect(mockedCustomerApi.update).toHaveBeenCalledWith('cus-2', expect.anything())
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 package com.kizuna.customer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -14,8 +15,17 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +36,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -40,8 +53,10 @@ import tools.jackson.databind.JsonNode;
  * <p>統合は店長権限（{@code CUSTOMER_MERGE}）を要するため、基底クラスの店員トークン（山田次郎）ではなく {@link
  * #managerHeaders(long)}（田中花子・店舗{1,2} 授権）で叩く。店員では 403 になることも併せて見る。
  *
- * <p>墓標を電話照合・一覧から外すこと、旧 ID を渡された解決を統合先へ届けることは後続の作業の範囲で、本テストは扱わない。
- * 応答に出ない事実（統合先参照・統合履歴・付替え後の受注の顧客）は、行を直接読んで固定する。
+ * <p>統合後の読み書きは非対称になる。墓標は一覧にも電話照合にも現れない一方、旧 ID を渡された解決は統合先へ届き、
+ * 墓標そのものを名指した書き換え（更新・削除・ポイント調整・解除）は案内の読める 409 になる。
+ *
+ * <p>応答に出ない事実（統合先参照・統合履歴・付替え後の受注の顧客）は、行を直接読んで固定する。
  */
 class CustomerMergeIT extends CrossStoreTestSupport {
 
@@ -59,6 +74,9 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   @Autowired private CustomerMergeRepository customerMergeRepository;
   @Autowired private OrderRepository orderRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private PlatformTransactionManager transactionManager;
+  @PersistenceContext private EntityManager entityManager;
 
   private final long nonce = System.nanoTime();
 
@@ -148,6 +166,127 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     // ここではその競合が検出可能になる前提だけを決定的に押さえる。
     assertThat(versionOfCustomer(a)).as("圧平した墓標の版").isGreaterThan(tombstoneVersionBefore);
     assertThat(versionOfOrder(orderId)).as("付け替えた受注の版").isGreaterThan(orderVersionBefore);
+  }
+
+  // ==================== 墓標の除外 ====================
+
+  @Test
+  @DisplayName("統合後、墓標が顧客一覧に出ないこと")
+  void keepsTombstonesOutOfTheCustomerList() {
+    String marker = "一覧" + nonce;
+    String surviving = createCustomer(marker + "-存続");
+    String merged = createCustomer(marker + "-被統合");
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<JsonNode> listed =
+        rest.exchange(
+            "/store/customers?search=" + marker,
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+
+    assertThat(listed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // 「統合済みも表示」の切替は設けない。同じ人が二重に並ばないことが統合の目的である
+    assertThat(listed.getBody().path("content"))
+        .singleElement()
+        .satisfies(row -> assertThat(row.path("id").asString()).isEqualTo(surviving));
+  }
+
+  @Test
+  @DisplayName("統合前は複数一致で顧客未設定に落ちていた番号が、統合後は存続行に着くこと")
+  void collapsesAMultipleMatchIntoTheSurvivingRow() {
+    String phoneNumber = phone("照合");
+    String surviving = createCustomerWithPhone("照合存続-" + nonce, phoneNumber);
+    String merged = createCustomerWithPhone("照合被統合-" + nonce, phoneNumber);
+
+    ResponseEntity<JsonNode> beforeMerge = orderByPhone(phoneNumber, "照合前");
+    assertThat(beforeMerge.getBody().hasNonNull("customer_id"))
+        .as("前提: 統合前は複数一致で自動照合を断念すること")
+        .isFalse();
+
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 重複を畳んだ番号が 1 行へ収束する。これが果たされないと統合した意味が無い
+    ResponseEntity<JsonNode> afterMerge = orderByPhone(phoneNumber, "照合後");
+    assertThat(afterMerge.getBody().path("customer_id").asString()).isEqualTo(surviving);
+  }
+
+  // ==================== 旧 ID の解決 ====================
+
+  @Test
+  @DisplayName("詳細を旧 ID で取得すると統合先の行が返り、統合済みであることと元の ID が判ること")
+  void resolvesADetailRequestedByTheOldIdToTheSurvivingRow() {
+    String surviving = createCustomer("詳細存続-" + nonce);
+    String merged = createCustomer("詳細被統合-" + nonce);
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<JsonNode> byOldId = getCustomer(merged);
+
+    // 3xx にはしない。HTTP クライアントが透過的に追随すると、画面が統合の発生を知れなくなる
+    assertThat(byOldId.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(byOldId.getBody().path("id").asString()).isEqualTo(surviving);
+    assertThat(byOldId.getBody().path("name").asString()).isEqualTo("詳細存続-" + nonce);
+    assertThat(byOldId.getBody().path("merged").asBoolean()).isTrue();
+    assertThat(byOldId.getBody().path("merged_from_id").asString()).isEqualTo(merged);
+
+    ResponseEntity<JsonNode> live = getCustomer(surviving);
+    assertThat(live.getBody().has("merged")).as("生きた行には標識の欄そのものが現れないこと").isFalse();
+  }
+
+  @Test
+  @DisplayName("受注の顧客指定に旧 ID を渡すと、受注が存続行に着くこと")
+  void landsAnOrderOnTheSurvivingRowWhenGivenTheOldCustomerId() {
+    String surviving = createCustomer("受注存続-" + nonce);
+    String merged = createCustomer("受注被統合-" + nonce);
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    String orderId = orderFor(merged, "旧ID指定");
+
+    assertThat(customerOf(orderId)).isEqualTo(surviving);
+    assertThat(ordersOn(merged)).as("墓標に着いた受注が無いこと").isZero();
+  }
+
+  @Test
+  @DisplayName("関連の成立先に旧 ID を渡すと、存続行に対して関連が成立すること")
+  void establishesTheLinkOnTheSurvivingRowWhenGivenTheOldCustomerId() {
+    String surviving = createCustomer("関連解決存続-" + nonce);
+    String merged = createCustomer("関連解決被統合-" + nonce);
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    link(merged, registerMember("merge-resolve-link"));
+
+    assertThat(customerMemberLinkRepository.findByCustomerIdAndStatus(surviving, LinkStatus.ACTIVE))
+        .as("会員が死んだ行へ紐づかないこと")
+        .isPresent();
+    assertThat(linksOn(merged)).isZero();
+  }
+
+  @Test
+  @DisplayName("墓標そのものへの更新・削除・ポイント調整・解除は、統合先を編集することが判る 409 になること")
+  void refusesEveryWriteAimedAtTheTombstoneItself() {
+    String surviving = createCustomer("拒否存続-" + nonce);
+    String merged = createCustomer("拒否被統合-" + nonce);
+    link(surviving, registerMember("merge-refusal"));
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    List<ResponseEntity<JsonNode>> refusals =
+        List.of(
+            updateCustomer(merged, "書き換え-" + nonce),
+            deleteCustomer(merged),
+            adjustPoints(merged),
+            unlinkResponse(merged));
+
+    assertThat(refusals)
+        .allSatisfy(
+            refusal -> {
+              assertThat(refusal.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+              assertThat(refusal.getBody().path("error").asString()).contains("統合先の顧客を編集");
+            });
+    // ポイント調整と解除は、統合で関連が存続行へ移っているぶん「紐づいていない」の分岐に落ちやすい。
+    // 統合済みであることが伝わらなければ、利用者は次に何をすればよいか判らない
+    assertThat(customer(merged).getName()).as("撥ねた要求は何も書き換えないこと").isEqualTo("拒否被統合-" + nonce);
+    assertThat(customerMemberLinkRepository.findByCustomerIdAndStatus(surviving, LinkStatus.ACTIVE))
+        .isPresent();
   }
 
   // ==================== 統合履歴 ====================
@@ -302,6 +441,201 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(memberGet("/platform/me/visits", member).getBody()).isEqualTo(visitsBefore);
   }
 
+  // ==================== 並行 ====================
+
+  @Test
+  @DisplayName("統合が墓標化を済ませて保持している間に走った受注録入は、待ってから存続行に着くこと")
+  void anOrderCreatedWhileAMergeHoldsTheRowLandsOnTheSurvivingRow() throws Exception {
+    // 統合と受注録入を HTTP 2 本の外から整列させる手段が無いので、断言面を配線へ下ろす。
+    // 「墓標化を済ませてまだコミットしていない統合」を別トランザクションで作り、電話照合が
+    // 統合前の行を掴んだ受注録入がそれを待ってから、統合先へ着くことを固定する。
+    String phoneNumber = phone("並行照合");
+    String surviving = createCustomer("並行照合存続-" + nonce);
+    String tombstone = createCustomerWithPhone("並行照合被統合-" + nonce, phoneNumber);
+    String castId = createCast("並行照合キャスト-" + nonce);
+
+    CountDownLatch mergeHeld = new CountDownLatch(1);
+    CountDownLatch releaseMerge = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> inFlightMerge =
+          pool.submit(() -> holdCustomerRow(tombstone, surviving, mergeHeld, releaseMerge));
+      assertThat(mergeHeld.await(30, TimeUnit.SECONDS)).as("前提: 統合が墓標化を済ませて待つこと").isTrue();
+
+      Future<ResponseEntity<JsonNode>> concurrentOrder =
+          pool.submit(() -> orderByPhone(phoneNumber, castId, "並行照合"));
+      assertThatThrownBy(() -> concurrentOrder.get(3, TimeUnit.SECONDS))
+          .as("受注録入は統合の確定を待つこと")
+          .isInstanceOf(TimeoutException.class);
+
+      releaseMerge.countDown();
+      inFlightMerge.get(30, TimeUnit.SECONDS);
+
+      ResponseEntity<JsonNode> created = concurrentOrder.get(30, TimeUnit.SECONDS);
+      // 押さえた実体から統合先を読むと、電話照合が先に載せた古い値（統合先なし）を見て墓標に着く
+      assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+      assertThat(created.getBody().path("customer_id").asString()).isEqualTo(surviving);
+    } finally {
+      releaseMerge.countDown();
+      pool.shutdownNow();
+    }
+    assertThat(ordersOn(tombstone)).as("墓標に着地した受注が 0 件であること").isZero();
+  }
+
+  @Test
+  @DisplayName("統合が存続行のロックを待っている間に成立した受注は、統合の付替えが拾うこと")
+  void anOrderCreatedWhileAMergeWaitsIsPickedUpByTheRepointing() throws Exception {
+    // もう一方の順序。統合は顧客 ID の昇順で押さえるので、存続行を小さい方に選ぶと、統合は
+    // 被統合行に触れないまま待つ — その隙に電話照合が生きた被統合行を掴む形を決定的に作れる。
+    List<String> pair = customerPairInIdOrder("並行受注先");
+    String surviving = pair.get(0);
+    String merged = pair.get(1);
+    String phoneNumber = phone("並行受注先");
+    setPhoneNumber(merged, phoneNumber);
+    String castId = createCast("並行受注先キャスト-" + nonce);
+
+    CountDownLatch survivingHeld = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    String orderId;
+    try {
+      Future<?> holder =
+          pool.submit(() -> holdCustomerRow(surviving, null, survivingHeld, release));
+      assertThat(survivingHeld.await(30, TimeUnit.SECONDS)).as("前提: 存続行が押さえられること").isTrue();
+
+      Future<ResponseEntity<JsonNode>> blockedMerge =
+          pool.submit(() -> merge(STORE_A, surviving, merged));
+      assertThatThrownBy(() -> blockedMerge.get(3, TimeUnit.SECONDS))
+          .as("統合は存続行のロックを待つこと")
+          .isInstanceOf(TimeoutException.class);
+
+      ResponseEntity<JsonNode> created = orderByPhone(phoneNumber, castId, "並行受注先");
+      orderId = created.getBody().path("id").asString();
+      assertThat(created.getBody().path("customer_id").asString())
+          .as("前提: 統合の前に成立した受注は、まだ生きている行に着くこと")
+          .isEqualTo(merged);
+
+      release.countDown();
+      holder.get(30, TimeUnit.SECONDS);
+      assertThat(blockedMerge.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+    } finally {
+      release.countDown();
+      pool.shutdownNow();
+    }
+    assertThat(customerOf(orderId)).isEqualTo(surviving);
+    assertThat(ordersOn(merged)).as("墓標に着地した受注が 0 件であること").isZero();
+  }
+
+  @Test
+  @DisplayName("統合が墓標化を済ませて保持している間に走った関連の成立は、待ってから存続行に着くこと")
+  void aLinkEstablishedWhileAMergeHoldsTheRowLandsOnTheSurvivingRow() throws Exception {
+    String surviving = createCustomer("並行関連存続-" + nonce);
+    String tombstone = createCustomer("並行関連被統合-" + nonce);
+    String memberCode = registerMember("merge-race-link");
+
+    CountDownLatch mergeHeld = new CountDownLatch(1);
+    CountDownLatch releaseMerge = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> inFlightMerge =
+          pool.submit(() -> holdCustomerRow(tombstone, surviving, mergeHeld, releaseMerge));
+      assertThat(mergeHeld.await(30, TimeUnit.SECONDS)).as("前提: 統合が墓標化を済ませて待つこと").isTrue();
+
+      Future<ResponseEntity<JsonNode>> concurrentLink =
+          pool.submit(() -> linkResponse(tombstone, memberCode));
+      assertThatThrownBy(() -> concurrentLink.get(3, TimeUnit.SECONDS))
+          .as("関連の成立は統合の確定を待つこと")
+          .isInstanceOf(TimeoutException.class);
+
+      releaseMerge.countDown();
+      inFlightMerge.get(30, TimeUnit.SECONDS);
+
+      assertThat(concurrentLink.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+    } finally {
+      releaseMerge.countDown();
+      pool.shutdownNow();
+    }
+    assertThat(customerMemberLinkRepository.findByCustomerIdAndStatus(surviving, LinkStatus.ACTIVE))
+        .isPresent();
+    assertThat(linksOn(tombstone)).as("墓標に着地した関連が 0 件であること").isZero();
+  }
+
+  @Test
+  @DisplayName("統合先が別の統合に押さえられているときの解決は、待たずにやり直しの判る 409 になること")
+  void reportsAConflictInsteadOfWaitingWhenTheMergeTargetIsHeld() throws Exception {
+    // 墓標を押さえたまま統合先を待つと、その統合先を更に統合する要求（圧平で墓標の行を押さえる）と
+    // 待ちが環になる。追う先は待たずに取り、取れなければ競合として返す。
+    String tombstone = createCustomer("競合墓標-" + nonce);
+    String surviving = createCustomer("競合存続-" + nonce);
+    String memberCode = registerMember("merge-nowait");
+
+    CountDownLatch survivingHeld = new CountDownLatch(1);
+    CountDownLatch releaseSurviving = new CountDownLatch(1);
+    CountDownLatch tombstoneHeld = new CountDownLatch(1);
+    CountDownLatch releaseTombstone = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(3);
+    try {
+      Future<?> holdSurviving =
+          pool.submit(() -> holdCustomerRow(surviving, null, survivingHeld, releaseSurviving));
+      assertThat(survivingHeld.await(30, TimeUnit.SECONDS)).as("前提: 統合先が押さえられること").isTrue();
+      Future<?> holdTombstone =
+          pool.submit(() -> holdCustomerRow(tombstone, surviving, tombstoneHeld, releaseTombstone));
+      assertThat(tombstoneHeld.await(30, TimeUnit.SECONDS)).as("前提: 墓標化が確定直前で待つこと").isTrue();
+
+      Future<ResponseEntity<JsonNode>> blocked =
+          pool.submit(() -> linkResponse(tombstone, memberCode));
+      assertThatThrownBy(() -> blocked.get(3, TimeUnit.SECONDS))
+          .as("解決は墓標化の確定を待つこと")
+          .isInstanceOf(TimeoutException.class);
+
+      releaseTombstone.countDown();
+      holdTombstone.get(30, TimeUnit.SECONDS);
+
+      // 統合先はまだ押さえられたまま。ここで待たずに返ることが、待ちが環にならない根拠になる
+      ResponseEntity<JsonNode> refused = blocked.get(30, TimeUnit.SECONDS);
+      assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+      assertThat(refused.getBody().path("error").asString()).contains("統合中の顧客です");
+      releaseSurviving.countDown();
+      holdSurviving.get(30, TimeUnit.SECONDS);
+    } finally {
+      releaseTombstone.countDown();
+      releaseSurviving.countDown();
+      pool.shutdownNow();
+    }
+    assertThat(linksOn(tombstone)).as("墓標に着地した関連が無いこと").isZero();
+    assertThat(linksOn(surviving)).as("撥ねた要求は存続行にも何も残さないこと").isZero();
+  }
+
+  /**
+   * 顧客行を押さえたままコミットせずに待つ。{@code mergeInto} に統合先を渡すと、押さえた行を墓標にしてから待つ —
+   * 統合の実行そのものは他のテストが固定するので、ここで再現するのは行の状態と保持だけである。
+   */
+  private Object holdCustomerRow(
+      String customerId, String mergeInto, CountDownLatch held, CountDownLatch release) {
+    return new TransactionTemplate(transactionManager)
+        .execute(
+            status -> {
+              Customer row =
+                  entityManager.find(Customer.class, customerId, LockModeType.PESSIMISTIC_WRITE);
+              if (mergeInto != null) {
+                row.mergeInto(mergeInto);
+                entityManager.flush();
+              }
+              held.countDown();
+              awaitQuietly(release);
+              return null;
+            });
+  }
+
+  /** 保持側のトランザクション内で待つ。中断はテストの失敗として現れるので、ここでは握り潰さず状態だけ戻す。 */
+  private static void awaitQuietly(CountDownLatch latch) {
+    try {
+      latch.await(30, TimeUnit.SECONDS);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
   // ==================== 統合の呼び出し ====================
 
   private static String mergePath(String survivingCustomerId) {
@@ -348,6 +682,19 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     return orderRepository.findById(orderId).map(Order::getStatus).orElseThrow();
   }
 
+  /** 墓標に着地した参照の件数。行を直接数えるのは、着地の誤りが読み口からは見えないため。 */
+  private int ordersOn(String customerId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from t_orders where customer_id = ?", Integer.class, customerId);
+  }
+
+  private int linksOn(String customerId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from t_customer_member_links where customer_id = ?",
+        Integer.class,
+        customerId);
+  }
+
   private Long managerId() {
     return platformUserRepository.findByEmail(MANAGER_EMAIL).map(PlatformUser::getId).orElseThrow();
   }
@@ -359,15 +706,76 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   private String createCustomerAt(long storeId, String name) {
+    return postCustomer(storeId, "{\"name\": \"" + name + "\"}");
+  }
+
+  /** 同店同号の重複。電話照合の複数一致は正規に起こりうるので、実行ごとに違う番号で起こす。 */
+  private String createCustomerWithPhone(String name, String phoneNumber) {
+    return postCustomer(
+        STORE_A, "{\"name\": \"" + name + "\", \"phone_number\": \"" + phoneNumber + "\"}");
+  }
+
+  private String postCustomer(long storeId, String body) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/customers",
-            new HttpEntity<>("{\"name\": \"" + name + "\"}", managerHeaders(storeId)),
-            JsonNode.class);
+            "/store/customers", new HttpEntity<>(body, managerHeaders(storeId)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d での顧客作成が成功すること", storeId)
         .isTrue();
     return created.getBody().path("id").asString();
+  }
+
+  /** 顧客 2 行を ID の昇順で返す。統合がどちらを先に押さえるかを決めたいときに使う。 */
+  private List<String> customerPairInIdOrder(String label) {
+    return List.of(createCustomer(label + "甲-" + nonce), createCustomer(label + "乙-" + nonce))
+        .stream()
+        .sorted()
+        .toList();
+  }
+
+  /** 実行ごと・用途ごとに異なる照合キー。列は VARCHAR(50)。 */
+  private String phone(String label) {
+    return "090" + Math.abs((label + nonce).hashCode()) + nonce;
+  }
+
+  private ResponseEntity<JsonNode> getCustomer(String customerId) {
+    return rest.exchange(
+        "/store/customers/" + customerId,
+        HttpMethod.GET,
+        new HttpEntity<>(managerHeaders(STORE_A)),
+        JsonNode.class);
+  }
+
+  private ResponseEntity<JsonNode> updateCustomer(String customerId, String name) {
+    return putCustomer(customerId, "{\"name\": \"" + name + "\"}");
+  }
+
+  private void setPhoneNumber(String customerId, String phoneNumber) {
+    assertThat(
+            putCustomer(customerId, "{\"phone_number\": \"" + phoneNumber + "\"}").getStatusCode())
+        .as("前提: 電話番号を後から設定できること")
+        .isEqualTo(HttpStatus.OK);
+  }
+
+  private ResponseEntity<JsonNode> putCustomer(String customerId, String body) {
+    return rest.exchange(
+        "/store/customers/" + customerId,
+        HttpMethod.PUT,
+        new HttpEntity<>(body, managerHeaders(STORE_A)),
+        JsonNode.class);
+  }
+
+  private ResponseEntity<JsonNode> adjustPoints(String customerId) {
+    String body =
+        "{\"delta\": 100, \"reason\": \"統合検証の調整\", \"idempotency_key\": \"merge-it-"
+            + nonce
+            + "-"
+            + System.nanoTime()
+            + "\"}";
+    return rest.postForEntity(
+        "/store/customers/" + customerId + "/point-adjustments",
+        new HttpEntity<>(body, managerHeaders(STORE_A)),
+        JsonNode.class);
   }
 
   private ResponseEntity<JsonNode> deleteCustomer(String customerId) {
@@ -398,6 +806,32 @@ class CustomerMergeIT extends CrossStoreTestSupport {
             "/store/orders", new HttpEntity<>(body, managerHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
     return created.getBody().path("id").asString();
+  }
+
+  /** 顧客 ID を指定せず電話番号だけで録入する受注。着地先は台帳の照合が決める。 */
+  private ResponseEntity<JsonNode> orderByPhone(String phoneNumber, String label) {
+    return orderByPhone(phoneNumber, createCast(label + "-" + nonce), label);
+  }
+
+  private ResponseEntity<JsonNode> orderByPhone(
+      String phoneNumber, String castId, String customerName) {
+    String body =
+        "{\"receptionist_id\": "
+            + SEED_RECEPTIONIST_ID
+            + ", \"business_date\": \""
+            + LocalDate.now()
+            + "\", \"cast_id\": \""
+            + castId
+            + "\", \"customer_name\": \""
+            + customerName
+            + "\", \"phone_number\": \""
+            + phoneNumber
+            + "\"}";
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/store/orders", new HttpEntity<>(body, managerHeaders(STORE_A)), JsonNode.class);
+    assertThat(created.getStatusCode()).as("前提: 電話番号での受注録入が成立すること").isEqualTo(HttpStatus.CREATED);
+    return created;
   }
 
   /** 店舗が起こす受注は確定で出生するため、作成だけで確定済みになる。 */
@@ -444,25 +878,31 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   private void link(String customerId, String memberCode) {
-    ResponseEntity<JsonNode> linked =
-        rest.exchange(
-            "/store/customers/" + customerId + "/member-link",
-            HttpMethod.POST,
-            new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", managerHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(linked.getStatusCode()).as("前提: 会員の紐づけが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(linkResponse(customerId, memberCode).getStatusCode())
+        .as("前提: 会員の紐づけが成功すること")
+        .isEqualTo(HttpStatus.OK);
+  }
+
+  private ResponseEntity<JsonNode> linkResponse(String customerId, String memberCode) {
+    return rest.exchange(
+        "/store/customers/" + customerId + "/member-link",
+        HttpMethod.POST,
+        new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", managerHeaders(STORE_A)),
+        JsonNode.class);
   }
 
   private void unlink(String customerId) {
-    assertThat(
-            rest.exchange(
-                    "/store/customers/" + customerId + "/member-link",
-                    HttpMethod.DELETE,
-                    new HttpEntity<>(managerHeaders(STORE_A)),
-                    JsonNode.class)
-                .getStatusCode())
+    assertThat(unlinkResponse(customerId).getStatusCode())
         .as("前提: 会員の紐づけを解除できること")
         .isEqualTo(HttpStatus.NO_CONTENT);
+  }
+
+  private ResponseEntity<JsonNode> unlinkResponse(String customerId) {
+    return rest.exchange(
+        "/store/customers/" + customerId + "/member-link",
+        HttpMethod.DELETE,
+        new HttpEntity<>(managerHeaders(STORE_A)),
+        JsonNode.class);
   }
 
   // ==================== 会員 ====================

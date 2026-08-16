@@ -309,7 +309,8 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(1L);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", 1L)).thenReturn(List.of());
+    when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", 1L))
+        .thenReturn(List.of());
     when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
 
@@ -340,8 +341,8 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", STORE_ID))
-        .thenReturn(List.of(customerWithId("c1")));
+    when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", STORE_ID))
+        .thenReturn(List.of("c1"));
     // 照合は行を押さえない問い合わせなので、着ける前に共有の解決口を通る
     when(customerReferenceResolver.resolveForWrite("c1")).thenReturn("c1");
     stubCreateHappyPath();
@@ -363,8 +364,8 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(customerRepository.findByPhoneNumberAndStoreId("09012345678", STORE_ID))
-        .thenReturn(List.of(customerWithId("c1"), customerWithId("c2")));
+    when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", STORE_ID))
+        .thenReturn(List.of("c1", "c2"));
     stubCreateHappyPath();
 
     service.create(req, ACTOR_EMAIL);
@@ -406,12 +407,6 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
     return req;
-  }
-
-  private Customer customerWithId(String id) {
-    Customer customer = Customer.builder().phoneNumber("09012345678").build();
-    customer.setId(id);
-    return customer;
   }
 
   /** 顧客照合の後に続く検証（指名・受付担当）と応答の組み立てを通す stub。 */

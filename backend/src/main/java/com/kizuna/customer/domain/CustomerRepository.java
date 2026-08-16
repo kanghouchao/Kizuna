@@ -1,6 +1,7 @@
 package com.kizuna.customer.domain;
 
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 public interface CustomerRepository
@@ -44,31 +46,74 @@ public interface CustomerRepository
   @Query("select c from com.kizuna.customer.domain.Customer c where c.id = :id")
   Optional<Customer> findByIdForUpdate(@Param("id") String id);
 
+  /**
+   * {@link #findByIdForUpdate} と同じロックを、待たずに取れるときだけ取る（{@code FOR UPDATE NOWAIT}）。取れなければ {@code
+   * CannotAcquireLockException}。
+   *
+   * <p>行を押さえたまま次の行を待つ経路で使う。統合は存続行と被統合行を押さえた後で、被統合行を指す墓標を圧平（＝墓標の行を押さえる）するため、
+   * 「墓標を押さえたまま統合先を待つ」形は統合と待ちが環になる。待たない取得なら環は生まれず、取れなかった競合は案内の読める応答に写せる。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"))
+  @Query("select c from com.kizuna.customer.domain.Customer c where c.id = :id")
+  Optional<Customer> findByIdForUpdateNoWait(@Param("id") String id);
+
+  /**
+   * 旧 ID を渡されても統合先の生きた行を返す読み口。統合先参照の解決と行の取得を 1 文で行う。
+   *
+   * <p>2 文に分けると、READ COMMITTED では文ごとに異なるスナップショットを見るため、統合先を読んだ後に連鎖統合が確定すると 既に墓標になった行を本体として返してしまう。1
+   * 文なら解決と取得が同じスナップショットで、返る行は必ず生きている。
+   */
+  @Query(
+      """
+      select c from com.kizuna.customer.domain.Customer c
+      where c.id = coalesce(
+        (select m.mergedIntoId from com.kizuna.customer.domain.Customer m where m.id = :id), :id)
+      """)
+  Optional<Customer> findResolvingMerge(@Param("id") String id);
+
   Optional<Customer> findByPhoneNumber(String phoneNumber);
 
   /**
-   * 店舗台帳のうち電話番号が一致する顧客。索引 {@code idx_t_customers_phone (phone_number, store_id)}
+   * 店舗台帳のうち電話番号が一致する生きた顧客の ID。索引 {@code idx_t_customers_phone (phone_number, store_id)}
    * は非一意で、同店同号の行は正規に起こりうる — 同伴者が連絡先を共有する場合や旧システムからの移行分がそれにあたる。
    *
    * <p>だから戻り値は複数行を許す形でなければならない。1 件に絞る形（{@code Optional}）で受けると、重複のある番号を引いた瞬間に {@code
    * IncorrectResultSizeDataAccessException} で呼出側ごと落ちる。複数一致をどう扱うかは呼出側の判断で、 電話番号は台帳内の検索の手がかりに留まる（ADR
    * 0009）。
+   *
+   * <p>墓標は照合の候補にならない（ADR 0010）。統合の目的そのものが、重複で複数一致に落ちていた番号を 1 行へ収束させることなので、
+   * 墓標が候補に残ると統合しても自動照合は断念のままになる。統合は値を合併しないため、被統合行にしかない番号は 統合後どの行にも一致しない — 残したい値の転記は人手である。
+   *
+   * <p>実体ではなく ID を返すのは、照合した行を永続化文脈へ載せないため。載せると {@link #findByIdForUpdate}
+   * のロック獲得が版の照合を伴い、照合と着地の間に統合や顧客更新が版を上げただけで、顧客行を書きもしない受注録入が 409 に落ちる。
    */
-  List<Customer> findByPhoneNumberAndStoreId(String phoneNumber, Long storeId);
+  @Query(
+      """
+      select c.id from com.kizuna.customer.domain.Customer c
+      where c.phoneNumber = :phoneNumber and c.storeId = :storeId and c.mergedIntoId is null
+      """)
+  List<String> findAliveIdsByPhoneNumberAndStoreId(
+      @Param("phoneNumber") String phoneNumber, @Param("storeId") Long storeId);
 
   /**
-   * その顧客が既に墓標（統合済み）かどうか。
+   * その顧客の統合先。生きている行と存在しない行はどちらも空で返る — 呼出側はどちらの場合も「渡された ID がそのまま着地点」として扱うため、区別する必要がない。
    *
-   * <p>押さえた行の実体からではなく別問い合わせで判定する。悲観排他ロックは既に永続化文脈に載っている実体の状態を更新しないため、
-   * ロック後に実体のフィールドを読むと第一次キャッシュの古い値を見る（{@link #findByIdForUpdate} の契約）。集計の投影は 実体を経由しないので、押さえた直後の DB
+   * <p>押さえた行の実体からではなく別問い合わせで読む。悲観排他ロックは既に永続化文脈に載っている実体の状態を更新しないため、
+   * ロック後に実体のフィールドを読むと第一次キャッシュの古い値を見る（{@link #findByIdForUpdate} の契約）。投影は実体を経由しないので、 押さえた直後の DB
    * の値をそのまま返す。
    */
   @Query(
       """
-      select count(c) > 0 from com.kizuna.customer.domain.Customer c
-      where c.id = :id and c.mergedIntoId is not null
+      select c.mergedIntoId from com.kizuna.customer.domain.Customer c
+      where c.id = :id
       """)
-  boolean isMerged(@Param("id") String id);
+  Optional<String> findMergedIntoId(@Param("id") String id);
+
+  /** その顧客が既に墓標（統合済み）かどうか。統合先そのものは要らないが、判定の出所は一つに保つ。 */
+  default boolean isMerged(String id) {
+    return findMergedIntoId(id).isPresent();
+  }
 
   /**
    * 連鎖統合の圧平。被統合行を指していた既存の墓標を、新しい統合先へ付け替える。A→B の後で B→C を統合すると A は直接 C を指し、旧 ID の解決は常に一跳で届く（ADR

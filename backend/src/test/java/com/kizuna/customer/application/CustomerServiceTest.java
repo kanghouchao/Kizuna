@@ -93,7 +93,7 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
     assertThat(customerService.get("c1").getId()).isEqualTo("c1");
@@ -101,7 +101,7 @@ class CustomerServiceTest {
 
   @Test
   void get_throwsWhenNotFound() {
-    when(customerRepository.findById("missing")).thenReturn(Optional.empty());
+    when(customerRepository.findResolvingMerge("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> customerService.get("missing"))
         .isInstanceOf(NotFoundException.class)
@@ -208,7 +208,7 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("c1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(activeLink("c1", "123456789012")));
@@ -223,6 +223,72 @@ class CustomerServiceTest {
     CustomerResponse unlinked = customerService.get("c1");
     assertThat(unlinked.getMemberLinked()).isFalse();
     assertThat(unlinked.getLinkedMemberCode()).isNull();
+  }
+
+  @Test
+  @DisplayName("詳細を旧 ID で引くと統合先の行が返り、統合済みであることと元の ID が載ること")
+  void get_resolvesAMergedIdToTheSurvivingRow() {
+    Customer surviving = new Customer();
+    surviving.setId("c2");
+    CustomerResponse resp = new CustomerResponse();
+    resp.setId("c2");
+
+    // 解決と取得を 1 文で行う。2 文に分けると、統合先を読んだ後に連鎖統合が確定した場合に
+    // 既に墓標になった行を本体として返してしまう
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(surviving));
+    when(customerMapper.toResponse(surviving)).thenReturn(resp);
+
+    CustomerResponse result = customerService.get("c1");
+
+    assertThat(result.getId()).isEqualTo("c2");
+    assertThat(result.getMerged()).isTrue();
+    assertThat(result.getMergedFromId()).isEqualTo("c1");
+    verify(customerRepository, never()).findById(any());
+  }
+
+  @Test
+  @DisplayName("生きた行の詳細には統合の標識が載らないこと")
+  void get_leavesTheMergeMarkOffALiveRow() {
+    Customer c = new Customer();
+    c.setId("c1");
+    CustomerResponse resp = new CustomerResponse();
+    resp.setId("c1");
+
+    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
+    when(customerMapper.toResponse(c)).thenReturn(resp);
+
+    CustomerResponse result = customerService.get("c1");
+
+    assertThat(result.getMerged()).isNull();
+    assertThat(result.getMergedFromId()).isNull();
+  }
+
+  @Test
+  @DisplayName("墓標への更新は 409 で撥ねられ、統合先を編集することが判ること")
+  void update_rejectsTombstones() {
+    Customer tombstone = new Customer();
+    tombstone.setId("c1");
+    when(customerRepository.findById("c1")).thenReturn(Optional.of(tombstone));
+    when(customerRepository.isMerged("c1")).thenReturn(true);
+
+    assertThatThrownBy(() -> customerService.update("c1", new CustomerUpdateRequest()))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
+    verify(customerRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("墓標の削除は、統合に関与した行の案内より先に統合済みとして撥ねられること")
+  void delete_rejectsTombstonesBeforeTheInvolvementCheck() {
+    when(customerRepository.existsById("c1")).thenReturn(true);
+    when(customerRepository.isMerged("c1")).thenReturn(true);
+
+    assertThatThrownBy(() -> customerService.delete("c1"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
+    // 墓標は「統合に関与した行」でもあるので、後ろに置くと次の一手の違う案内に潰れる
+    verify(customerMergeRepository, never()).existsInvolving(any());
+    verify(customerRepository, never()).deleteById(any());
   }
 
   private static CustomerMemberLink activeLink(String customerId, String memberCode) {

@@ -34,6 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerMemberLinkService {
 
+  /** 文面と、4 経路で揃えている理由は {@code CustomerService} の同名の定数に記す。 */
+  private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
+
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerReferenceResolver customerReferenceResolver;
@@ -97,6 +100,10 @@ public class CustomerMemberLinkService {
     // 解除も紐づけと同じく顧客行を押さえてから現在の紐づけを読む。
     // 契約は CustomerRepository#findByIdForUpdate に記す。
     lockCustomer(customerId);
+    // 墓標の判定を関連の照会より前に置く理由は CustomerPointService#adjust に記す。
+    if (customerRepository.isMerged(customerId)) {
+      throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
+    }
     CustomerMemberLink current =
         customerMemberLinkRepository
             .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)

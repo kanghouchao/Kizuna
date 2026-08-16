@@ -91,16 +91,19 @@ class CustomerMergeServiceTest {
   }
 
   @Test
-  @DisplayName("存続行に墓標を指定した統合は 409 で拒まれ、付替えが一切走らないこと")
+  @DisplayName("存続行に墓標を指定した統合は、2 本目のロックを待つ前に 409 で拒まれること")
   void rejectsMergingIntoATombstone() {
     givenActor();
-    givenBothRowsLocked();
+    givenFirstRowLocked();
     Mockito.when(customerRepository.isMerged(SURVIVING_ID)).thenReturn(true);
 
     assertThatThrownBy(() -> service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
+    // 参照の解決は墓標 → 統合先の順に押さえるので、墓標を名指した要求がここで 2 本目を待つと
+    // ID 昇順と逆向きの待ちが環になる
+    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(SURVIVING_ID);
     verifyNothingWasMoved();
   }
 
@@ -108,7 +111,7 @@ class CustomerMergeServiceTest {
   @DisplayName("既に墓標の行を再度統合しようとすると 409 で拒まれること（応答喪失後の再送が台帳を壊さない）")
   void rejectsMergingATombstoneAgain() {
     givenActor();
-    givenBothRowsLocked();
+    givenFirstRowLocked();
     Mockito.when(customerRepository.isMerged(SURVIVING_ID)).thenReturn(false);
     Mockito.when(customerRepository.isMerged(MERGED_ID)).thenReturn(true);
 
@@ -116,6 +119,7 @@ class CustomerMergeServiceTest {
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
+    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(SURVIVING_ID);
     verifyNothingWasMoved();
   }
 
@@ -222,6 +226,12 @@ class CustomerMergeServiceTest {
   }
 
   /** 両行が押さえられた状態。戻り値は被統合行の実体（墓標化の宛先）。 */
+  /** 昇順の 1 本目（被統合行）だけを押さえられる状態。墓標の判定で 2 本目より前に撥ねる経路で使う。 */
+  private void givenFirstRowLocked() {
+    Mockito.when(customerRepository.findByIdForUpdate(MERGED_ID))
+        .thenReturn(Optional.of(Customer.builder().build()));
+  }
+
   private Customer givenBothRowsLocked() {
     Customer merged = Customer.builder().build();
     Mockito.when(customerRepository.findByIdForUpdate(MERGED_ID)).thenReturn(Optional.of(merged));
