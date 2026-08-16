@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerMemberLinkService {
 
-  /** 墓標そのものを名指した解除の案内。文面は顧客情報の更新・削除と揃える（同じ「統合先を編集する」次の一手）。 */
+  /** 文面と、4 経路で揃えている理由は {@code CustomerService} の同名の定数に記す。 */
   private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
 
   private final CustomerRepository customerRepository;
@@ -100,8 +100,7 @@ public class CustomerMemberLinkService {
     // 解除も紐づけと同じく顧客行を押さえてから現在の紐づけを読む。
     // 契約は CustomerRepository#findByIdForUpdate に記す。
     lockCustomer(customerId);
-    // 墓標の判定は関連の照会より前。統合は関連を存続行へ移しているので、後ろに置くと
-    // 「紐づけられている会員がいません」に落ち、統合済みであることが利用者に伝わらない。
+    // 墓標の判定を関連の照会より前に置く理由は CustomerPointService#adjust に記す。
     if (customerRepository.isMerged(customerId)) {
       throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
     }

@@ -41,7 +41,10 @@ public class CustomerService {
   private static final String MERGED_CUSTOMER_UNDELETABLE =
       "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
 
-  /** 墓標そのものを名指した書き換えの案内。統合先へ黙って向け直してよいのは参照の書き込み先だけである（ADR 0010）。 */
+  /**
+   * 墓標そのものを名指した書き換えの案内。更新・削除・ポイント調整・解除の 4 経路が同じ文面を返すのは、どれも次の一手が同じ
+   * （統合先の行を編集する）だからである。統合先へ黙って向け直してよいのは参照の書き込み先だけで、名指した行への書き換えは撥ねる（ADR 0010）。
+   */
   private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
 
   private final CustomerRepository customerRepository;

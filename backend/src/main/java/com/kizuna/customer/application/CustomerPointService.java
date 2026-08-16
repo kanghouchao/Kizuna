@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerPointService {
 
-  /** 墓標そのものを名指した調整の案内。文面は顧客情報の更新・削除と揃える（同じ「統合先を編集する」次の一手）。 */
+  /** 文面と、4 経路で揃えている理由は {@code CustomerService} の同名の定数に記す。 */
   private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
 
   private final CustomerRepository customerRepository;

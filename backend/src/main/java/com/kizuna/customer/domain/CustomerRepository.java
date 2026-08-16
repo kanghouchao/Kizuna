@@ -55,11 +55,10 @@ public interface CustomerRepository
    * 0009）。
    *
    * <p>墓標は照合の候補にならない（ADR 0010）。統合の目的そのものが、重複で複数一致に落ちていた番号を 1 行へ収束させることなので、
-   * 墓標が候補に残ると統合しても自動照合は断念のままになる。
+   * 墓標が候補に残ると統合しても自動照合は断念のままになる。統合は値を合併しないため、被統合行にしかない番号は 統合後どの行にも一致しない — 残したい値の転記は人手である。
    *
-   * <p>実体ではなく ID を返すのは、照合した行を永続化文脈へ載せないため。載せると、この後の {@link #findByIdForUpdate}
-   * がロックの獲得（実体は第一次キャッシュのまま）に版の照合を伴い、照合と着地の間に走った統合・顧客更新が 版を上げているだけで受注録入が 409 に落ちる —
-   * 顧客行を書きもしない経路が、読んだだけの行の版で失敗する。
+   * <p>実体ではなく ID を返すのは、照合した行を永続化文脈へ載せないため。載せると {@link #findByIdForUpdate}
+   * のロック獲得が版の照合を伴い、照合と着地の間に統合や顧客更新が版を上げただけで、顧客行を書きもしない受注録入が 409 に落ちる。
    */
   @Query(
       """
@@ -70,24 +69,11 @@ public interface CustomerRepository
       @Param("phoneNumber") String phoneNumber, @Param("storeId") Long storeId);
 
   /**
-   * その顧客が既に墓標（統合済み）かどうか。
-   *
-   * <p>押さえた行の実体からではなく別問い合わせで判定する。悲観排他ロックは既に永続化文脈に載っている実体の状態を更新しないため、
-   * ロック後に実体のフィールドを読むと第一次キャッシュの古い値を見る（{@link #findByIdForUpdate} の契約）。集計の投影は 実体を経由しないので、押さえた直後の DB
-   * の値をそのまま返す。
-   */
-  @Query(
-      """
-      select count(c) > 0 from com.kizuna.customer.domain.Customer c
-      where c.id = :id and c.mergedIntoId is not null
-      """)
-  boolean isMerged(@Param("id") String id);
-
-  /**
    * その顧客の統合先。生きている行と存在しない行はどちらも空で返る — 呼出側はどちらの場合も「渡された ID がそのまま着地点」として扱うため、区別する必要がない。
    *
-   * <p>{@link #isMerged} と同じく別問い合わせで読む。押さえた実体のフィールドから読むと第一次キャッシュの古い値を見る（{@link #findByIdForUpdate}
-   * の契約）。
+   * <p>押さえた行の実体からではなく別問い合わせで読む。悲観排他ロックは既に永続化文脈に載っている実体の状態を更新しないため、
+   * ロック後に実体のフィールドを読むと第一次キャッシュの古い値を見る（{@link #findByIdForUpdate} の契約）。投影は実体を経由しないので、 押さえた直後の DB
+   * の値をそのまま返す。
    */
   @Query(
       """
@@ -95,6 +81,11 @@ public interface CustomerRepository
       where c.id = :id
       """)
   Optional<String> findMergedIntoId(@Param("id") String id);
+
+  /** その顧客が既に墓標（統合済み）かどうか。統合先そのものは要らないが、判定の出所は一つに保つ。 */
+  default boolean isMerged(String id) {
+    return findMergedIntoId(id).isPresent();
+  }
 
   /**
    * 連鎖統合の圧平。被統合行を指していた既存の墓標を、新しい統合先へ付け替える。A→B の後で B→C を統合すると A は直接 C を指し、旧 ID の解決は常に一跳で届く（ADR

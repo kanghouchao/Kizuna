@@ -68,13 +68,7 @@ public class CustomerMergeService {
     Customer merged = lockBothInIdOrder(survivingCustomerId, mergedCustomerId);
 
     // 可否は実行の瞬間に判定し直す。確認画面を開いた時点の判定は、その後の統合で古くなりうる。
-    // 判定は押さえた実体の状態からではなく別問い合わせで行う（CustomerRepository#isMerged の契約）。
-    if (customerRepository.isMerged(survivingCustomerId)) {
-      throw new ConflictException("統合先の顧客は既に統合済みです。統合先の顧客を指定してください");
-    }
-    if (customerRepository.isMerged(mergedCustomerId)) {
-      throw new ConflictException("この顧客は既に統合済みです");
-    }
+    rejectTombstones(survivingCustomerId, mergedCustomerId);
     if (hasActiveLink(survivingCustomerId) && hasActiveLink(mergedCustomerId)) {
       // 部分一意索引により両者は必ず別会員を指す。二人の本人がそれぞれ認領している行なので、
       // 台帳級の「同一人物か」の判断と一緒に片付けさせない（ADR 0010）。
@@ -110,8 +104,22 @@ public class CustomerMergeService {
   private Customer lockBothInIdOrder(String survivingCustomerId, String mergedCustomerId) {
     boolean survivingFirst = survivingCustomerId.compareTo(mergedCustomerId) < 0;
     Customer first = lockCustomer(survivingFirst ? survivingCustomerId : mergedCustomerId);
+    // 2 本目を待つ前に、墓標を名指した要求（再送・墓標を存続行に指定）を撥ねる。参照の解決は
+    // 墓標 → 統合先の順に押さえるので、ここで待つと ID 昇順と逆向きの待ちが環になりうる。
+    // 墓標は取消が無く元に戻らないため、ロック前の読みで撥ねても判定を誤らない。
+    rejectTombstones(survivingCustomerId, mergedCustomerId);
     Customer second = lockCustomer(survivingFirst ? mergedCustomerId : survivingCustomerId);
     return survivingFirst ? second : first;
+  }
+
+  /** 判定は押さえた実体の状態からではなく別問い合わせで行う（{@code CustomerRepository#isMerged} の契約）。 */
+  private void rejectTombstones(String survivingCustomerId, String mergedCustomerId) {
+    if (customerRepository.isMerged(survivingCustomerId)) {
+      throw new ConflictException("統合先の顧客は既に統合済みです。統合先の顧客を指定してください");
+    }
+    if (customerRepository.isMerged(mergedCustomerId)) {
+      throw new ConflictException("この顧客は既に統合済みです");
+    }
   }
 
   private Customer lockCustomer(String customerId) {

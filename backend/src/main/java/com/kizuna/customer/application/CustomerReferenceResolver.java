@@ -37,6 +37,9 @@ public class CustomerReferenceResolver {
    *
    * <p>呼出側のトランザクションに必ず参加する（{@code MANDATORY}）。自分でトランザクションを開くと新しい Session になり、 呼出側の
    * {@code @StoreScoped} が有効にした storeFilter が掛からないまま他店舗の行を押さえたうえ、 呼出側が書き込む前に行ロックを手放してしまう。
+   *
+   * <p>追うのは一跳だけでよい。圧平により、コミット済みの状態に二段の連鎖は存在しない（ADR 0010）。
+   * 存続行を統合する要求はこちらが押さえている墓標を圧平しなければ進めないので、押さえた時点で 存続行が墓標になっていることもない。
    */
   @StoreScopeExempt(
       reason = "呼出元のトランザクションに必ず参加し（MANDATORY）、店舗境界は呼出元の storeFilter か呼出元が明示する storeId が引く")
@@ -53,10 +56,6 @@ public class CustomerReferenceResolver {
     return survivingCustomerId.get();
   }
 
-  /**
-   * 追うのは一跳だけでよい。圧平により、コミット済みの状態に二段の連鎖は存在しない（ADR 0010）。
-   * 存続行を統合する要求はこちらが押さえている墓標を圧平しなければ進めないので、押さえた時点で 存続行が墓標になっていることもない。
-   */
   private void lock(String customerId) {
     customerRepository
         .findByIdForUpdate(customerId)

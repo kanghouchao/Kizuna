@@ -230,7 +230,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(byOldId.getBody().path("merged_from_id").asString()).isEqualTo(merged);
 
     ResponseEntity<JsonNode> live = getCustomer(surviving);
-    assertThat(live.getBody().hasNonNull("merged")).as("生きた行には標識が載らないこと").isFalse();
+    assertThat(live.getBody().has("merged")).as("生きた行には標識の欄そのものが現れないこと").isFalse();
   }
 
   @Test
