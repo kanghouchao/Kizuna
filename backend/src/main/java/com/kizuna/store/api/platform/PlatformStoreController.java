@@ -1,5 +1,6 @@
 package com.kizuna.store.api.platform;
 
+import com.kizuna.store.api.dto.PlatformStoreCreationResponse;
 import com.kizuna.store.api.dto.PlatformStoreResponse;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
@@ -15,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -80,9 +82,10 @@ public class PlatformStoreController {
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
-  public ResponseEntity<Void> create(@Valid @RequestBody StoreCreateDTO store) {
-    storeRegistryService.create(store);
-    return ResponseEntity.noContent().build();
+  public ResponseEntity<PlatformStoreCreationResponse> create(
+      @Valid @RequestBody StoreCreateDTO store) {
+    Long id = storeRegistryService.create(store);
+    return ResponseEntity.status(HttpStatus.CREATED).body(new PlatformStoreCreationResponse(id));
   }
 
   @PutMapping("/{id}")

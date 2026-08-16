@@ -240,7 +240,7 @@ describe('店舗管理 3 画面の挙動', () => {
   });
 
   it('新規作成は name/domain/email を送信し一覧へ遷移すること', async () => {
-    mockedApi.create.mockResolvedValue(undefined);
+    mockedApi.create.mockResolvedValue({ id: 1 });
 
     render(<StoreCreatePage />);
     fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });

@@ -67,7 +67,7 @@ public class CastController {
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<Void> delete(@PathVariable String id) {
     castService.delete(id);
-    return ResponseEntity.ok().build();
+    return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/{id}/invitation")

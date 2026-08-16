@@ -39,7 +39,7 @@ public class PlatformAuthController {
 
   @PostMapping("/logout")
   @PermitAll
-  public ResponseEntity<?> logout(
+  public ResponseEntity<Void> logout(
       @RequestHeader(name = "Authorization", required = false) String authHeader) {
     authSessionService.invalidate(authHeader);
     return ResponseEntity.noContent().build();
@@ -48,9 +48,6 @@ public class PlatformAuthController {
   @GetMapping("/me")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<PlatformMeResponse> me(Principal principal) {
-    if (principal == null || principal.getName() == null) {
-      return ResponseEntity.status(401).build();
-    }
     // 行が引けない＝無効なのはセッション（トークンの指す主体が存在しない）。404 にすると
     // 前端の全域 401 経路（再ログインへの差し戻し）に乗らないため、updateMe と同じ例外へ揃える。
     return authService

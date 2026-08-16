@@ -179,7 +179,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 createBody(CASE1_EMAIL, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(created.getBody().path("id").asLong()).isPositive();
 
     ResponseEntity<String> stores =
@@ -228,7 +228,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 createBody(CASE3_EMAIL, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long staffId = created.getBody().path("id").asLong();
     long version = created.getBody().path("version").asLong();
 
@@ -274,7 +274,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> first =
         rest.postForEntity(
             "/platform/staff", new HttpEntity<>(body, bearerJson(hq)), JsonNode.class);
-    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     ResponseEntity<JsonNode> second =
         rest.postForEntity(
@@ -647,7 +647,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                     email, rolesJson("HQ管理者", "店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     String token = platformToken(email, PASSWORD);
 
@@ -677,7 +677,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long staffId = created.getBody().path("id").asLong();
     long version = created.getBody().path("version").asLong();
 
@@ -752,7 +752,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 createBody(email, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long staffId = created.getBody().path("id").asLong();
     long initialVersion = created.getBody().path("version").asLong();
 
@@ -809,7 +809,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long staffId = created.getBody().path("id").asLong();
     long preStopVersion = created.getBody().path("version").asLong();
 
@@ -908,7 +908,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 "{\"name\":\"スタッフ管理IT_受付担当\",\"permissions\":[\"ORDER_MANAGE\"]}", bearerJson(hq)),
             JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long roleId = created.getBody().path("id").asLong();
     assertThat(created.getBody().path("system").asBoolean()).isFalse();
     assertThat(created.getBody().path("permissions").get(0).asString()).isEqualTo("ORDER_MANAGE");
@@ -943,7 +943,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                     "staff-it-customrole@kizuna.test", "[" + roleId + "]", "ALL_STORES", "[]"),
                 bearerJson(hq)),
             JsonNode.class);
-    assertThat(staff.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(staff.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     ResponseEntity<String> deleteInUse =
         rest.exchange(
@@ -981,7 +981,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 "{\"name\":\"スタッフ管理IT_未授与\",\"permissions\":[\"CUSTOMER_MANAGE\"]}",
                 bearerJson(hq)),
             JsonNode.class);
-    assertThat(unused.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(unused.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     ResponseEntity<String> deleted =
         rest.exchange(
             "/platform/roles/" + unused.getBody().path("id").asLong(),

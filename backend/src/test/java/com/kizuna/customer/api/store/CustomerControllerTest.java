@@ -4,9 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.application.CustomerService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -24,12 +28,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** 呼出側の {@code ?sort=} 上書きで一意な副キー id が消えないことの単体テスト（offset ページングの安定性）。 */
+/** ハンドラ層で閉じている約束（offset ページングの全順序、生成 201 / 削除 204）の単体テスト。 */
 @WebMvcTest(CustomerController.class)
 @Import({CustomerControllerTest.MethodSecurityConfig.class, StoreContext.class})
 class CustomerControllerTest {
@@ -104,5 +109,38 @@ class CustomerControllerTest {
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isNull();
+  }
+
+  @Test
+  @DisplayName("POST /store/customers は 201 で生成された顧客を返すこと")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void createRespondsWithCreated() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(customerService.create(any())).thenReturn(CustomerResponse.builder().id("c1").build());
+
+    mockMvc
+        .perform(
+            post("/store/customers")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"山田太郎\"}")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  @DisplayName("DELETE /store/customers/{id} は本体無しの 204 で返ること")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void deleteRespondsWithNoContent() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            delete("/store/customers/c1")
+                .with(csrf())
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isNoContent());
   }
 }

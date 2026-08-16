@@ -40,7 +40,7 @@ public class CustomerMemberLinkController {
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Void> unlink(@PathVariable String customerId, Principal principal) {
     customerMemberLinkService.unlink(customerId, principal.getName());
-    return ResponseEntity.ok().build();
+    return ResponseEntity.noContent().build();
   }
 
   /** 現に有効な紐づけ。紐づいていない顧客では 404 で返る。 */

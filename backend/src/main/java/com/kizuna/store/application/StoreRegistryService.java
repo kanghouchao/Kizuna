@@ -62,7 +62,7 @@ public class StoreRegistryService {
    * <p>ドメインの重複は、制約違反を捕まえるのではなく事前に照会して判定する — 一意制約はここを擦り抜けた競合を受け止める 最後の一枚（409）であり、業務上の重複判定を委ねる先ではない。
    */
   @Transactional
-  public void create(StoreCreateDTO req) {
+  public Long create(StoreCreateDTO req) {
     if (storeRepository.findByDomain(req.getDomain()).isPresent()) {
       throw new ServiceException("このドメインは既に登録されています");
     }
@@ -72,6 +72,7 @@ public class StoreRegistryService {
     t.setEmail(req.getEmail());
     Store saved = storeRepository.save(t);
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
+    return saved.getId();
   }
 
   // storeByDomain のキーは domain。だが注釈の式から見えるのは引数の id と戻り値（void）だけで、

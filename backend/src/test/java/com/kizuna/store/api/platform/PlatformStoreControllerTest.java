@@ -8,7 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.settings.application.SystemConfigService;
@@ -84,5 +86,24 @@ class PlatformStoreControllerTest {
         .andExpect(status().isBadRequest());
 
     verify(storeRegistryService, never()).update(anyString(), any());
+  }
+
+  // 作成応答が id を載せるのは、呼出側が一覧を引き直さずに新しい店舗を名指しできるようにするため。
+  @Test
+  @DisplayName("POST /platform/stores は 201 で新規 id を返すこと")
+  @WithMockUser(authorities = "PERM_STORE_MANAGE")
+  void createRespondsWithCreatedAndTheNewId() throws Exception {
+    when(storeRegistryService.create(any())).thenReturn(42L);
+
+    mockMvc
+        .perform(
+            post("/platform/stores")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"name\": \"新店舗\", \"domain\": \"new-store.kizuna.test\","
+                        + " \"email\": \"new-store@kizuna.test\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.id").value(42));
   }
 }
