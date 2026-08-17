@@ -1,11 +1,12 @@
 package com.kizuna.customer.api.store;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
-import com.kizuna.customer.api.dto.CustomerDuplicateCandidatesResponse;
+import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
+import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -46,13 +47,16 @@ public class CustomerController {
    *
    * <p>統合と同じ {@code CUSTOMER_MERGE} で守る。候補の提示は統合画面の一部で単独の価値を持たず、重複の在り処は機微情報だからである。
    *
+   * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。
+   *
    * <p>字面セグメントは {@code /{id}} の値空間を恒久的に侵食する。顧客 ID はアプリ生成の数字列なので {@code duplicates} と衝突しえないが、 ID
    * の採番規則を変えるときはこの端点が先に隠れることを思い出すこと。
    */
   @GetMapping("/duplicates")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
-  public ResponseEntity<CustomerDuplicateCandidatesResponse> listDuplicates() {
-    return ResponseEntity.ok(customerService.listDuplicateCandidates());
+  public ResponseEntity<CursorPage<CustomerDuplicateGroupResponse>> listDuplicates(
+      @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
+    return ResponseEntity.ok(customerService.listDuplicateCandidates(cursor, size));
   }
 
   @GetMapping("/{id}")

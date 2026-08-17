@@ -110,15 +110,37 @@ public interface CustomerRepository
    * <p>店舗の絞り込みは {@code storeFilter} が担う（呼出側の {@code @StoreScoped} が前提）。native query にすると
    * {@code @Filter} が掛からず店舗境界が黙って消えるので、HQL に留める。
    */
-  @Query(
+  String DUPLICATE_PHONE_SELECT =
       """
       select c.phoneNumber from com.kizuna.customer.domain.Customer c
       where c.mergedIntoId is null and c.phoneNumber is not null
         and function('regexp_like', c.phoneNumber, '[^[:space:]]') = true
+      """;
+
+  String DUPLICATE_PHONE_GROUP_ORDER =
+      """
       group by c.phoneNumber having count(c) >= 2
       order by c.phoneNumber
-      """)
+      """;
+
+  @Query(DUPLICATE_PHONE_SELECT + DUPLICATE_PHONE_GROUP_ORDER)
   List<String> findDuplicatePhoneNumbers(Limit limit);
+
+  /**
+   * 重複候補の続き。渡された位置より後ろ（＝電話番号の昇順で先）だけを返す。
+   *
+   * <p>副キーを添えないのは、電話番号がグループの鍵そのもので、返る行の間で一意だから — 全順序が既に成立しており、同値の境界が存在しない。
+   *
+   * <p>続きを辿れることは飾りではない。上限で切って黙ると、番号を共有する同伴者のような<b>正当な偽陽性</b>が先頭側に居座ったとき、
+   * それらは決して統合されないので枠を永久に占め、以降の真の重複が一生画面に出ない。
+   */
+  @Query(
+      DUPLICATE_PHONE_SELECT
+          + """
+            and c.phoneNumber > :cursor
+            """
+          + DUPLICATE_PHONE_GROUP_ORDER)
+  List<String> findDuplicatePhoneNumbersAfter(@Param("cursor") String cursor, Limit limit);
 
   /** 与えた電話番号を持つ当店の生きた行。並びは電話番号 → ID で、同じ番号の行が隣り合う。 */
   List<Customer> findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(

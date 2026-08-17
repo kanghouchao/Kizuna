@@ -76,15 +76,6 @@ export interface CustomerDuplicateGroupResponse {
 }
 
 /**
- * 重複候補の一覧。truncated は上限で切り落としたことを示す — 黙って切ると、上限まで見た人が
- * 「もう重複は無い」と読んでしまう。
- */
-export interface CustomerDuplicateCandidatesResponse {
-  groups: CustomerDuplicateGroupResponse[];
-  truncated: boolean;
-}
-
-/**
  * 実行された顧客統合の応答。customer/api/dto/CustomerMergeResponse.java に対応。
  *
  * 件数は統合が実際に移した数で、統合履歴に残る値と同一である。取り消す端点は無い（ADR 0010）。

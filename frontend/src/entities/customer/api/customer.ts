@@ -9,7 +9,7 @@ import {
 } from '@/shared/api';
 import {
   CustomerCreateRequest,
-  CustomerDuplicateCandidatesResponse,
+  CustomerDuplicateGroupResponse,
   CustomerMemberLinkHistoryResponse,
   CustomerMemberLinkResponse,
   CustomerMergeResponse,
@@ -35,10 +35,13 @@ export const customerApi = {
   /**
    * 重複候補（同店・生きた行・第一電話番号が一致する 2 行以上のグループ）を取得する。
    * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
+   * 続きは応答の nextCursor をそのまま cursor に渡して取る。
    */
-  duplicates: async (): Promise<CustomerDuplicateCandidatesResponse> => {
-    const response = await apiClient.get('/store/customers/duplicates');
-    return response.data;
+  duplicates: async (
+    params?: CursorParams
+  ): Promise<CursorPageResult<CustomerDuplicateGroupResponse>> => {
+    const response = await apiClient.get('/store/customers/duplicates', { params });
+    return fromCursorPage(response.data);
   },
   /** 顧客詳細を取得する */
   get: async (id: string): Promise<CustomerResponse> => {

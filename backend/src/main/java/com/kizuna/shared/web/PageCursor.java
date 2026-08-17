@@ -29,6 +29,32 @@ public record PageCursor(String key, String id) {
         .encodeToString((key + SEPARATOR + id).getBytes(StandardCharsets.UTF_8));
   }
 
+  /**
+   * 副キーを持たないカーソルの符号化。並びの鍵そのものが全順序を成す一覧で使う — 重複候補は電話番号がグループの鍵で、グループ間で一意なので id を添える必要がない。
+   *
+   * <p>それでも素の値を晒さず符号化するのは {@link #encode()} と同じ理由で、鍵に現れる {@code +}（国際表記の電話番号）が問い合わせ文字列では
+   * 空白として復号され、そのままでは往復しないため。
+   */
+  public static String encodeKey(String key) {
+    return Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(key.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /** {@link #encodeKey} の逆。復号の失敗を要求誤り（400）として扱う理由は {@link #decode} と同じ。 */
+  public static String decodeKey(String encoded) {
+    String decoded;
+    try {
+      decoded = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
+    } catch (IllegalArgumentException e) {
+      throw new ServiceException(MALFORMED_MESSAGE);
+    }
+    if (decoded.isEmpty()) {
+      throw new ServiceException(MALFORMED_MESSAGE);
+    }
+    return decoded;
+  }
+
   public static PageCursor decode(String encoded) {
     String decoded;
     try {

@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { notify } from '@/shared/notify';
 import { CustomerDuplicateResponse, customerApi } from '@/entities/customer';
-import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
+import { getApiErrorMessage, storePath, useCursorList } from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
 import {
@@ -38,13 +38,18 @@ interface Selection {
 export default function CustomerDuplicatesPage() {
   const params = useParams();
   const storeId = params.storeId as string;
-  const { data, isLoading, failure, reload } = useResource(() => customerApi.duplicates(), []);
+  const {
+    rows: groups,
+    isLoading,
+    failed,
+    hasMore,
+    reload,
+    loadMore,
+  } = useCursorList(cursor => customerApi.duplicates({ cursor }));
   const [selection, setSelection] = useState<Selection | null>(null);
   const [survivingId, setSurvivingId] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const groups = data?.groups ?? [];
 
   const toggle = (phoneNumber: string, customerId: string) => {
     // 残す行の選択は選び直しのたびに捨てる。前の組み合わせで選んだ行が、次の組み合わせに
@@ -91,7 +96,8 @@ export default function CustomerDuplicatesPage() {
       setSelection(null);
       setSurvivingId(null);
       // 畳んだ番号は候補から落ちる。取り直さないと、消えたはずの行が並んだままになる
-      await reload();
+      // （続きを読んでいても先頭から取り直す — 前の位置は畳んだ後の並びでは別の場所を指す）
+      reload();
     } catch (error) {
       // 両行が会員に認領されている 409 は「先に関連を解除する」と読める文言をサーバが返す。
       // 汎用文言に潰すと、次の一手が画面から判らなくなる
@@ -116,20 +122,14 @@ export default function CustomerDuplicatesPage() {
         </Button>
       </div>
 
-      {data?.truncated && (
-        <p className="rounded-md bg-warning/10 px-4 py-3 text-sm text-warning-strong">
-          表示は上限に達しています。統合を進めると残りの候補が出てきます。
-        </p>
-      )}
-
       <TableCard>
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
-        ) : failure !== null ? (
+        ) : failed ? (
           // 読めなかった候補を空表示にすると「重複は無い」と嘘をつくことになる
           <RegionError
             message="重複候補の取得に失敗しました"
-            onRetry={() => void reload()}
+            onRetry={reload}
             className="justify-center p-8"
           />
         ) : groups.length === 0 ? (
@@ -233,6 +233,13 @@ export default function CustomerDuplicatesPage() {
               </div>
             );
           })
+        )}
+        {hasMore && !isLoading && (
+          <div className="flex justify-center border-t p-4">
+            <Button variant="outline" onClick={loadMore}>
+              さらに読み込む
+            </Button>
+          </div>
         )}
       </TableCard>
 
