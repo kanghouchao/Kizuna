@@ -14,7 +14,12 @@ const FIELDS: { label: string; value: (row: CustomerDuplicateResponse) => string
   { label: 'ランク', value: row => row.rank || '-' },
   { label: 'LINE ID', value: row => row.line_id || '-' },
   { label: '利用エリア', value: row => row.usage_areas || '-' },
-  { label: 'ペット', value: row => (row.has_pet ? 'あり' : 'なし') },
+  // 未設定は「なし」ではない。応答は non_null 直列化なので欄ごと欠けて届き、真偽値へ潰すと
+  // 持っていない事実を断言することになる（別人を見分けるための画面で、それが一番やってはいけない）
+  {
+    label: 'ペット',
+    value: row => (row.has_pet === undefined ? '-' : row.has_pet ? 'あり' : 'なし'),
+  },
   { label: 'NG 区分', value: row => row.ng_type || '-' },
   { label: 'NG 内容', value: row => row.ng_content || '-' },
   { label: '受注件数', value: row => `${row.order_count} 件` },

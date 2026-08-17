@@ -218,8 +218,6 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(afterMerge.getBody().path("customer_id").asString()).isEqualTo(surviving);
   }
 
-  // ==================== 重複候補 ====================
-
   @Test
   @DisplayName("第一電話番号が一致する 2 行が候補に出て、見比べる材料（受注件数・紐づけの有無）が並ぶこと")
   void listsDuplicateCandidatesWithTheMaterialNeededToCompareThem() {
@@ -745,8 +743,6 @@ class CustomerMergeIT extends CrossStoreTestSupport {
         new HttpEntity<>(mergeBody(mergedCustomerId), managerHeaders(storeId)),
         JsonNode.class);
   }
-
-  // ==================== 重複候補の読み出し ====================
 
   /**
    * 候補は店舗の台帳ぜんたいを見るので、他のテストが起こした行も一緒に返る。断言はどれも「この実行の番号」で絞ってから行う（{@link #phone}

@@ -359,7 +359,6 @@ class CustomerServiceTest {
     CustomerDuplicateCandidatesResponse candidates = customerService.listDuplicateCandidates();
 
     assertThat(candidates.groups()).hasSize(DUPLICATE_GROUP_LIMIT);
-    // 黙って切ると、上限まで見た人が「もう重複は無い」と読む
     assertThat(candidates.truncated()).isTrue();
   }
 
