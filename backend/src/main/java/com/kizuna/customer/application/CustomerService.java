@@ -37,6 +37,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -101,9 +102,14 @@ public class CustomerService {
    * <p>提示は手がかりであって判定ではない。確度スコアも自動統合も持たず、どれを畳むかは常に人が決める（ADR 0010）。 同じ番号の別人（連絡先を共有する同伴者）は正規に起こりうる。
    *
    * <p>受注件数と紐づけの有無を添えるのは、別人を誤って畳まないための材料だからである。無いと人手の確認が形だけになる。
+   *
+   * <p><b>4 段は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。見出し・行・紐づけ・受注件数と 4 回問い合わせるので、既定の READ
+   * COMMITTED では文ごとに断面を取り直し、間に他者の commit が挟まると同じ応答の中で違う世界を見る — 件数 {@code total} だけが古いまま行が 1
+   * つ増え、上限に収まると数えたグループが上限を超えて返る。変種ごとに手当てせず断面を固定して根を断つのは {@code OrderService} の群読み口と同じ選択で、機構そのものは
+   * {@code OrderGroupReadSnapshotIT} が実 PostgreSQL で見ている。
    */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<CustomerDuplicateGroupResponse> listDuplicateCandidates(
       String cursor, int requestedSize) {
     int size = CursorPage.clampSize(requestedSize);
