@@ -2,10 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { notify } from '@/shared/notify';
 import CustomerDuplicatesPage from '../ui/CustomerDuplicatesPage';
 import {
-  CustomerDuplicateCandidatesResponse,
+  CustomerDuplicateGroupResponse,
   CustomerDuplicateResponse,
   customerApi,
 } from '@/entities/customer';
+import { CursorPageResult } from '@/shared/api';
 
 jest.mock('@/entities/customer', () => ({
   customerApi: { duplicates: jest.fn(), merge: jest.fn() },
@@ -28,8 +29,8 @@ function candidate(overrides: Partial<CustomerDuplicateResponse>): CustomerDupli
 }
 
 /** 同じ番号の 2 行。氏名以外にも食い違う項目を持たせ、見比べる材料が出ることを確かめられるようにする。 */
-const twoRowGroup: CustomerDuplicateCandidatesResponse = {
-  groups: [
+const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
+  rows: [
     {
       phone_number: '090-1111-2222',
       customers: [
@@ -54,7 +55,7 @@ const twoRowGroup: CustomerDuplicateCandidatesResponse = {
       ],
     },
   ],
-  truncated: false,
+  nextCursor: null,
 };
 
 /** 2 行を見比べる状態まで進める（どのテストも本題はその先なので、ここまでを 1 つにまとめる）。 */
@@ -125,7 +126,7 @@ describe('CustomerDuplicatesPage', () => {
   });
 
   it('候補が無ければ、取得の失敗と区別のつく空表示になること', async () => {
-    mockedDuplicates.mockResolvedValue({ groups: [], truncated: false });
+    mockedDuplicates.mockResolvedValue({ rows: [], nextCursor: null });
 
     render(<CustomerDuplicatesPage />);
 
@@ -133,13 +134,22 @@ describe('CustomerDuplicatesPage', () => {
     expect(screen.queryByText('重複候補の取得に失敗しました')).not.toBeInTheDocument();
   });
 
-  it('上限で切り落としたときは、その旨を画面に出すこと', async () => {
-    mockedDuplicates.mockResolvedValue({ ...twoRowGroup, truncated: true });
+  it('続きがあるときは、続きを辿る導線を出すこと', async () => {
+    // 上限で黙って切ると、番号を共有する同伴者のような正当な偽陽性が先頭を占めたとき
+    // 以降の真の重複が一生画面に出ない
+    mockedDuplicates.mockResolvedValueOnce({ ...twoRowGroup, nextCursor: 'MDkw' });
 
     render(<CustomerDuplicatesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'さらに読み込む' }));
 
-    // 黙って切ると、ここまで見た人が「もう重複は無い」と読む
-    expect(await screen.findByText(/上限に達しています/)).toBeInTheDocument();
+    await waitFor(() => expect(mockedDuplicates).toHaveBeenLastCalledWith({ cursor: 'MDkw' }));
+  });
+
+  it('続きが無ければ、続きを辿る導線を出さないこと', async () => {
+    render(<CustomerDuplicatesPage />);
+    await screen.findByText('山田太郎');
+
+    expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument();
   });
 
   it('2 行を選ぶと、両行の内容が並べて表示されること', async () => {
@@ -219,7 +229,7 @@ describe('CustomerDuplicatesPage', () => {
     render(<CustomerDuplicatesPage />);
     await openConfirmation();
     // 畳んだ番号はグループを成さなくなるので、取り直した候補から丸ごと落ちる
-    mockedDuplicates.mockResolvedValue({ groups: [], truncated: false });
+    mockedDuplicates.mockResolvedValue({ rows: [], nextCursor: null });
     await confirmMerge();
 
     expect(await screen.findByText('電話番号が重複している顧客はいません')).toBeInTheDocument();

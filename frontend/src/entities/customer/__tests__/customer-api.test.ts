@@ -39,11 +39,18 @@ describe('customerApi', () => {
   it('get は /store/customers/:id を GET する', async () => {
     expect(await customerApi.get('c1')).toEqual({ ok: true, url: '/store/customers/c1' });
   });
-  it('duplicates は /store/customers/duplicates を GET する', async () => {
+  it('duplicates は /store/customers/duplicates を GET し、カーソルページを正規化する', async () => {
     // 字面セグメント。/{id} と同じパス空間に住むので、綴りが変わると詳細取得へ吸われる
-    expect(await customerApi.duplicates()).toEqual({
-      ok: true,
-      url: '/store/customers/duplicates',
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ phone_number: '090-1111-2222', customers: [] }], next_cursor: 'abc' },
+    });
+
+    await expect(customerApi.duplicates({ cursor: 'x' })).resolves.toEqual({
+      rows: [{ phone_number: '090-1111-2222', customers: [] }],
+      nextCursor: 'abc',
+    });
+    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/duplicates', {
+      params: { cursor: 'x' },
     });
   });
   it('merge は存続行の配下へ被統合行の ID を snake_case で POST する', async () => {

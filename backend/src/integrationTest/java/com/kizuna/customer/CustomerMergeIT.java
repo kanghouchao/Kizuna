@@ -13,12 +13,14 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -292,6 +294,48 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
     assertThat(hasDuplicateGroup(STORE_A, phoneNumber)).isFalse();
     assertThat(hasDuplicateGroup(STORE_B, phoneNumber)).as("前提: 起こした重複はその店舗では候補になること").isTrue();
+  }
+
+  @Test
+  @DisplayName("続きを辿ると、1 ページ目に載らなかったグループへ到達できること")
+  void reachesGroupsBeyondTheFirstPageThroughTheCursor() {
+    // 番号の昇順で並ぶので、接頭辞を共有させて隣り合わせる
+    String prefix = "0119" + Math.abs(("到達" + nonce).hashCode());
+    String first = prefix + "1";
+    String second = prefix + "2";
+    createCustomerWithPhone("到達甲-" + nonce, first);
+    createCustomerWithPhone("到達乙-" + nonce, first);
+    createCustomerWithPhone("到達丙-" + nonce, second);
+    createCustomerWithPhone("到達丁-" + nonce, second);
+
+    // 1 件ずつ辿る。上限で切って黙る形だと、番号を共有する同伴者のような正当な偽陽性が
+    // 先頭側を永久に占めたとき、以降の真の重複が一生画面に出ない
+    List<String> reached = new ArrayList<>();
+    String cursor = PageCursor.encodeKey(prefix);
+    for (int page = 0; page < 2; page++) {
+      ResponseEntity<JsonNode> response = duplicatesPage(STORE_A, cursor, 1);
+      response
+          .getBody()
+          .path("content")
+          .forEach(g -> reached.add(g.path("phone_number").asString()));
+      cursor = nextCursorOf(response.getBody());
+    }
+
+    assertThat(reached).containsExactly(first, second);
+  }
+
+  @Test
+  @DisplayName("壊れた続きの位置は、先頭から取り直さずに要求誤りとして撥ねられること")
+  void rejectsAMalformedCursorInsteadOfSilentlyRestarting() {
+    ResponseEntity<JsonNode> response =
+        rest.exchange(
+            DUPLICATES_PATH + "?cursor=%%%",
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+
+    // 黙って先頭扱いにすると、続きを求めた呼出側に 1 ページ目が返り取りこぼしが成功に見える
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   @Test
@@ -752,18 +796,42 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   /**
-   * 候補は店舗の台帳ぜんたいを見るので、他のテストが起こした行も一緒に返る。断言はどれも「この実行の番号」で絞ってから行う（{@link #phone}
-   * が実行ごと・用途ごとに異なる番号を作る）。
+   * 候補を続きも含めて集める。店舗の台帳ぜんたいを見るので他のテストが起こした行も一緒に返り、この実行の番号が 1 ページ目に載る保証が無い。
+   * 断言はどれも「この実行の番号」で絞ってから行う（{@link #phone} が実行ごと・用途ごとに異なる番号を作る）。
    */
-  private JsonNode duplicateGroups(long storeId) {
+  private List<JsonNode> duplicateGroups(long storeId) {
+    List<JsonNode> groups = new ArrayList<>();
+    String cursor = null;
+    // 続きが尽きない実装欠陥で無限に回らないよう、台帳の規模から見て十分な回数で切る
+    for (int page = 0; page < 100; page++) {
+      ResponseEntity<JsonNode> response = duplicatesPage(storeId, cursor, null);
+      response.getBody().path("content").forEach(groups::add);
+      cursor = nextCursorOf(response.getBody());
+      if (cursor == null) {
+        return groups;
+      }
+    }
+    throw new AssertionError("重複候補の続きが尽きない");
+  }
+
+  private ResponseEntity<JsonNode> duplicatesPage(long storeId, String cursor, Integer size) {
+    String query =
+        (cursor == null ? "" : "?cursor=" + cursor)
+            + (size == null ? "" : (cursor == null ? "?" : "&") + "size=" + size);
     ResponseEntity<JsonNode> response =
         rest.exchange(
-            DUPLICATES_PATH,
+            DUPLICATES_PATH + query,
             HttpMethod.GET,
             new HttpEntity<>(managerHeaders(storeId)),
             JsonNode.class);
     assertThat(response.getStatusCode()).as("前提: 重複候補を読めること").isEqualTo(HttpStatus.OK);
-    return response.getBody().path("groups");
+    return response;
+  }
+
+  /** 続きの位置。続きが無いときは non_null 直列化により欄ごと現れない。 */
+  private static String nextCursorOf(JsonNode body) {
+    JsonNode next = body.path("next_cursor");
+    return next.isMissingNode() || next.isNull() ? null : next.asString();
   }
 
   private JsonNode duplicateGroup(long storeId, String phoneNumber) {

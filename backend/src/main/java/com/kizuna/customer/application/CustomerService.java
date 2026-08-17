@@ -1,7 +1,6 @@
 package com.kizuna.customer.application;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
-import com.kizuna.customer.api.dto.CustomerDuplicateCandidatesResponse;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
 import com.kizuna.customer.api.dto.CustomerDuplicateResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
@@ -20,6 +19,8 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -44,14 +45,6 @@ public class CustomerService {
 
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
-
-  /**
-   * 1 回に返す重複候補のグループ数の上限。続きを辿る手段は持たせず、切り落としたことは応答の {@code truncated} が告げる —
-   * 絞り込みで縮められない一覧を黙って切ると「もう重複は無い」と読ませるためである。集合が有界なのは、統合を 1 件進めるたびに片方が墓標になって グループが崩れ、候補が減っていくことによる。
-   *
-   * <p>package-private なのは、切り落としの算術を固定する単体テストが上限を超える入力を組み立てるため。
-   */
-  static final int DUPLICATE_GROUP_LIMIT = 50;
 
   private static final String MERGED_CUSTOMER_UNDELETABLE =
       "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
@@ -103,16 +96,22 @@ public class CustomerService {
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public CustomerDuplicateCandidatesResponse listDuplicateCandidates() {
-    // 上限より 1 つ多く引く。切り落としたかどうかを件数だけで判るようにするため
-    List<String> phoneNumbers =
-        customerRepository.findDuplicatePhoneNumbers(Limit.of(DUPLICATE_GROUP_LIMIT + 1));
-    boolean truncated = phoneNumbers.size() > DUPLICATE_GROUP_LIMIT;
-    if (truncated) {
-      phoneNumbers = phoneNumbers.subList(0, DUPLICATE_GROUP_LIMIT);
-    }
+  public CursorPage<CustomerDuplicateGroupResponse> listDuplicateCandidates(
+      String cursor, int requestedSize) {
+    int size = CursorPage.clampSize(requestedSize);
+    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
+    Limit limit = Limit.of(size + 1);
+    CursorPage<String> page =
+        CursorPage.of(
+            cursor == null
+                ? customerRepository.findDuplicatePhoneNumbers(limit)
+                : customerRepository.findDuplicatePhoneNumbersAfter(
+                    PageCursor.decodeKey(cursor), limit),
+            size,
+            PageCursor::encodeKey);
+    List<String> phoneNumbers = page.content();
     if (phoneNumbers.isEmpty()) {
-      return new CustomerDuplicateCandidatesResponse(List.of(), false);
+      return new CursorPage<>(List.of(), page.nextCursor());
     }
 
     List<Customer> customers =
@@ -140,14 +139,15 @@ public class CustomerService {
                   linkedIds.contains(customer.getId()),
                   orderCounts.getOrDefault(customer.getId(), 0L)));
     }
-    return new CustomerDuplicateCandidatesResponse(
+    return new CursorPage<>(
         grouped.entrySet().stream()
             // 候補を数えてから引き直すまでの間に統合が確定すると、片方が墓標になって 1 行だけの
             // グループが残る。1 行は重複ではないので、候補として出さない
             .filter(group -> group.getValue().size() >= 2)
             .map(group -> new CustomerDuplicateGroupResponse(group.getKey(), group.getValue()))
             .toList(),
-        truncated);
+        // 続きの位置は電話番号から決まるので、上で落ちたグループがあっても付け替えない
+        page.nextCursor());
   }
 
   /**

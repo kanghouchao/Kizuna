@@ -1,15 +1,15 @@
 package com.kizuna.customer.application;
 
-import static com.kizuna.customer.application.CustomerService.DUPLICATE_GROUP_LIMIT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
-import com.kizuna.customer.api.dto.CustomerDuplicateCandidatesResponse;
+import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
@@ -24,6 +24,8 @@ import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +51,9 @@ class CustomerServiceTest {
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
   @Mock private CustomerMapper customerMapper;
+
+  /** 1 ページの要求件数。上限そのものではなく、呼出側が渡す値の扱いを見る。 */
+  private static final int PAGE_SIZE = 20;
 
   @InjectMocks private CustomerService customerService;
 
@@ -336,17 +341,17 @@ class CustomerServiceTest {
   }
 
   /**
-   * 上限そのものは統合テストでは固定しない。上限を超える重複を実データで起こすと、同じ店舗の台帳を共有する他のテストの候補まで
-   * 押し出して、無関係なテストが候補を見失う。切り落としの算術はサービス自身の責務なので、ここで持つ。
+   * カーソルの組み立てそのものは統合テストでは固定しない。上限を超える重複を実データで起こすと、同じ店舗の台帳を共有する
+   * 他のテストの候補まで押し出して、無関係なテストが候補を見失う。何件返して続きをどう名乗るかはサービス自身の責務なので、ここで持つ。
    */
   @Test
-  @DisplayName("重複候補が上限を超えると、超過分を落としたうえで打ち切りを名乗ること")
-  void listDuplicateCandidates_reportsTruncationInsteadOfSilentlyCutting() {
+  @DisplayName("要求件数を超えた分は返さず、続きの位置を名乗ること")
+  void listDuplicateCandidates_reportsTheNextCursorInsteadOfSilentlyCutting() {
     List<String> phoneNumbers =
-        IntStream.rangeClosed(1, DUPLICATE_GROUP_LIMIT + 1).mapToObj(i -> "0900000" + i).toList();
+        IntStream.rangeClosed(1, PAGE_SIZE + 1).mapToObj(i -> "0900000" + i).toList();
     when(customerRepository.findDuplicatePhoneNumbers(any(Limit.class))).thenReturn(phoneNumbers);
-    // 上限内に残る番号だけが引き直され、超過分の行は取りに行かない
-    List<String> keptPhoneNumbers = phoneNumbers.subList(0, DUPLICATE_GROUP_LIMIT);
+    // 要求件数に収まる番号だけが引き直され、超過分の行は取りに行かない
+    List<String> keptPhoneNumbers = phoneNumbers.subList(0, PAGE_SIZE);
     when(customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
             keptPhoneNumbers))
         .thenReturn(keptPhoneNumbers.stream().flatMap(CustomerServiceTest::duplicatePair).toList());
@@ -354,23 +359,42 @@ class CustomerServiceTest {
         .thenReturn(List.of());
     when(customerMergeRepository.countOrdersByCustomerId(any())).thenReturn(List.of());
     // 写像の結果は数えるだけなので mapper は素通し（既定の null）でよい。ここで見たいのは行の中身
-    // ではなく、何グループを返して打ち切りをどう名乗るか。
+    // ではなく、何グループを返して続きをどう名乗るか。
 
-    CustomerDuplicateCandidatesResponse candidates = customerService.listDuplicateCandidates();
+    CursorPage<CustomerDuplicateGroupResponse> page =
+        customerService.listDuplicateCandidates(null, PAGE_SIZE);
 
-    assertThat(candidates.groups()).hasSize(DUPLICATE_GROUP_LIMIT);
-    assertThat(candidates.truncated()).isTrue();
+    assertThat(page.content()).hasSize(PAGE_SIZE);
+    // 続きを名乗らないと、番号を共有する同伴者のような正当な偽陽性が先頭を占めたとき、
+    // 以降の真の重複が一生画面に出ない
+    assertThat(PageCursor.decodeKey(page.nextCursor()))
+        .isEqualTo(keptPhoneNumbers.get(PAGE_SIZE - 1));
   }
 
   @Test
-  @DisplayName("重複候補が上限に収まるときは打ち切りを名乗らないこと")
-  void listDuplicateCandidates_reportsNoTruncationWhenEverythingFits() {
+  @DisplayName("続きが無いときは次の位置を名乗らないこと")
+  void listDuplicateCandidates_reportsNoCursorWhenEverythingFits() {
     when(customerRepository.findDuplicatePhoneNumbers(any(Limit.class))).thenReturn(List.of());
 
-    CustomerDuplicateCandidatesResponse candidates = customerService.listDuplicateCandidates();
+    CursorPage<CustomerDuplicateGroupResponse> page =
+        customerService.listDuplicateCandidates(null, PAGE_SIZE);
 
-    assertThat(candidates.groups()).isEmpty();
-    assertThat(candidates.truncated()).isFalse();
+    assertThat(page.content()).isEmpty();
+    assertThat(page.nextCursor()).isNull();
+  }
+
+  @Test
+  @DisplayName("カーソルを渡された取得は、その位置より後ろだけを引くこと")
+  void listDuplicateCandidates_readsOnlyBeyondTheCursor() {
+    when(customerRepository.findDuplicatePhoneNumbersAfter(eq("090-1111-2222"), any(Limit.class)))
+        .thenReturn(List.of());
+
+    CursorPage<CustomerDuplicateGroupResponse> page =
+        customerService.listDuplicateCandidates(PageCursor.encodeKey("090-1111-2222"), PAGE_SIZE);
+
+    assertThat(page.content()).isEmpty();
+    // 先頭からの取得へ落とすと、続きを求めた呼出側に 1 ページ目が返って取りこぼしが成功に見える
+    verify(customerRepository, never()).findDuplicatePhoneNumbers(any(Limit.class));
   }
 
   /** グループを成す最小の形（同じ番号の 2 行）。 */
