@@ -167,20 +167,25 @@ export default function CustomerDuplicatesPage() {
                     {group.customers.map(row => (
                       <TableRow key={row.id}>
                         <TableCell>
-                          {/* 名前を含む aria-label を持たせる。同じ画面に同型の選択が並ぶので、
-                              「見比べる」だけでは読み上げでどの行か判らない */}
-                          <Checkbox
-                            aria-label={`${row.name} を見比べる`}
-                            checked={isSelected(phoneNumber, row.id ?? '')}
-                            // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
-                            disabled={
-                              isSubmitting ||
-                              (!isSelected(phoneNumber, row.id ?? '') &&
-                                selection?.phoneNumber === phoneNumber &&
-                                selection.ids.length >= PAIR_SIZE)
-                            }
-                            onCheckedChange={() => toggle(phoneNumber, row.id ?? '')}
-                          />
+                          {/* flex の容器が要る。Checkbox の既定の描画要素は span で、素の
+                              テーブルセルに置くと display:inline のまま size-4 が効かず 2px に潰れる
+                              （既存の呼出は FormItem の flex がこれを担っていた） */}
+                          <div className="flex items-center">
+                            {/* 名前を含む aria-label を持たせる。同じ画面に同型の選択が並ぶので、
+                                「見比べる」だけでは読み上げでどの行か判らない */}
+                            <Checkbox
+                              aria-label={`${row.name} を見比べる`}
+                              checked={isSelected(phoneNumber, row.id ?? '')}
+                              // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
+                              disabled={
+                                isSubmitting ||
+                                (!isSelected(phoneNumber, row.id ?? '') &&
+                                  selection?.phoneNumber === phoneNumber &&
+                                  selection.ids.length >= PAIR_SIZE)
+                              }
+                              onCheckedChange={() => toggle(phoneNumber, row.id ?? '')}
+                            />
+                          </div>
                         </TableCell>
                         <TableCell className="font-medium text-foreground">{row.name}</TableCell>
                         <TableCell className="text-muted-foreground">{row.rank || '-'}</TableCell>
