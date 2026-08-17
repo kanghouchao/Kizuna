@@ -3,6 +3,7 @@ package com.kizuna.customer.application;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
+import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
@@ -18,6 +19,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -27,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -48,12 +51,19 @@ public class CustomerService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   /**
-   * 1 つのグループについて返す行数の上限。総数は {@code total} が別に持つので、切っても件数は偽らない。
+   * 行を並べるグループの大きさの上限。これを超えるグループは総数だけを返し、行は 1 つも返さない。
    *
    * <p>番号の字面をいくら絞り込んでも、識別の手がかりを持たない値（移行データの代替値 {@code 0000000000} 等）は必ずすり抜ける。
    * 値の形ではなく<b>グループの大きさ</b>で頭打ちにすると、すり抜けた値がどんな字面でも取得と描画が有界になる。
+   *
+   * <p>標本を並べずに落とすのは、そういう番号を共有する数百行から取り出した先頭の数行が、本人を見分ける材料にならないからである。
+   * 並べれば「この中から選べ」と読ませることになり、番号しか一致していない別人どうしを畳ませかねない。統合は候補面の外 （顧客一覧で 2
+   * 行を選ぶ経路）からも起こせるので、上限の外に落ちた行が統合できなくなることもない。
    */
-  private static final int MAX_ROWS_PER_GROUP = 20;
+  private static final int MAX_LISTED_GROUP_SIZE = 20;
+
+  /** 見比べる対象は 2 行。3 行以上を一度に畳む形は持たない（ADR 0010）。 */
+  private static final int COMPARISON_SIZE = 2;
 
   private static final String MERGED_CUSTOMER_UNDELETABLE =
       "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
@@ -125,25 +135,12 @@ public class CustomerService {
             group -> PageCursor.encodeKey(group.getPhoneNumber()));
 
     Map<String, List<Customer>> rowsByPhoneNumber = fetchRows(page.content());
-    List<String> ids =
-        rowsByPhoneNumber.values().stream().flatMap(List::stream).map(Customer::getId).toList();
-    // 紐づけと受注件数は候補全体をまとめて 1 回ずつで引く（行ごとの追加問い合わせを作らない）。
-    Set<String> linkedIds =
-        ids.isEmpty()
-            ? Set.of()
-            : customerMemberLinkRepository
-                .findByCustomerIdInAndStatus(ids, LinkStatus.ACTIVE)
-                .stream()
-                .map(CustomerMemberLink::getCustomerId)
-                .collect(Collectors.toSet());
-    Map<String, Long> orderCounts =
-        ids.isEmpty()
-            ? Map.of()
-            : customerMergeRepository.countOrdersByCustomerId(ids).stream()
-                .collect(
-                    Collectors.toMap(
-                        CustomerOrderCountView::getCustomerId,
-                        CustomerOrderCountView::getOrderCount));
+    ComparisonMaterial material =
+        fetchComparisonMaterial(
+            rowsByPhoneNumber.values().stream()
+                .flatMap(List::stream)
+                .map(Customer::getId)
+                .toList());
 
     return new CursorPage<>(
         page.content().stream()
@@ -152,53 +149,114 @@ public class CustomerService {
                     new CustomerDuplicateGroupResponse(
                         group.getPhoneNumber(),
                         group.getTotal(),
-                        rowsByPhoneNumber.getOrDefault(group.getPhoneNumber(), List.of()).stream()
-                            .map(
-                                customer ->
-                                    customerMapper.toDuplicateResponse(
-                                        customer,
-                                        linkedIds.contains(customer.getId()),
-                                        orderCounts.getOrDefault(customer.getId(), 0L)))
-                            .toList()))
+                        toComparisonRows(
+                            rowsByPhoneNumber.getOrDefault(group.getPhoneNumber(), List.of()),
+                            material)))
             // 候補を数えてから引き直すまでの間に統合が確定すると、片方が墓標になって 1 行だけの
-            // グループが残る。1 行は重複ではないので、候補として出さない
-            .filter(group -> group.customers().size() >= 2)
+            // グループが残る。1 行は重複ではないので、候補として出さない。行を持たない桁外れの
+            // グループはこの判定の外 — そちらの 0 行は「多すぎるので並べない」の結果である
+            .filter(group -> group.customers().size() >= 2 || group.total() > MAX_LISTED_GROUP_SIZE)
             .toList(),
         // 続きの位置は電話番号から決まるので、上で落ちたグループがあっても付け替えない
         page.nextCursor());
   }
 
   /**
-   * グループごとの行を引く。上限に収まるグループはまとめて 1 回で、桁外れのグループだけを 1 本ずつ上限つきで引く。
+   * 顧客一覧から選んだ任意の 2 行を、統合の前に見比べるための読み口。重複候補に出てこない行どうしでも引ける。
    *
-   * <p>まとめて引く側に大きいグループを混ぜないのは、1 つのグループが取得を食い潰さないため。桁外れのグループは構造上まれ
-   * （移行データの代替値のような、識別の手がかりを持たない番号）なので、追加の問い合わせは通常 0 本になる。
+   * <p>顧客詳細の読み口では代わりにならない。あちらは旧 ID を統合先へ解決する（{@link #get}）ので、選んだ片方が既に墓標なら 同じ 1 行が 2 列に並ぶ。「この 2
+   * 行は同一人物か」を答える画面が、見比べる対象を静かに失う。
+   *
+   * <p>3 段は 1 つの断面で読む（{@code REPEATABLE READ}）。行・紐づけ・受注件数と 3 回問い合わせるので、既定の READ COMMITTED
+   * では文ごとに断面を取り直し、生きた行として読んだ相手の受注件数が「その行がもう墓標になった後」の値で並びうる。 取り消せない操作の判断材料なので、候補の読み口と同じく断面を固定する。
+   *
+   * @param customerIds 見比べる 2 行。並びはそのまま応答の並びになる
+   */
+  @StoreScoped
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public List<CustomerMergeComparisonResponse> mergeComparison(List<String> customerIds) {
+    if (customerIds.size() != COMPARISON_SIZE) {
+      throw new ServiceException("見比べる顧客を 2 件指定してください");
+    }
+    if (customerIds.get(0).equals(customerIds.get(1))) {
+      throw new ServiceException("同じ顧客を統合することはできません");
+    }
+    Map<String, Customer> rows =
+        customerRepository.findByIdInAndMergedIntoIdIsNull(customerIds).stream()
+            .collect(Collectors.toMap(Customer::getId, Function.identity()));
+    // 墓標・他店舗・不存在はどれもここに落ちる。区別して案内すると、他店舗の顧客の存在が漏れる
+    if (rows.size() != COMPARISON_SIZE) {
+      throw new NotFoundException("顧客が見つかりません");
+    }
+    // 並びは要求のまま返す。左右が入れ替わると、画面で選んだ「残す行」が別人を指しうる
+    return toComparisonRows(
+        customerIds.stream().map(rows::get).toList(), fetchComparisonMaterial(customerIds));
+  }
+
+  /**
+   * グループごとの行を引く。行を並べるグループの番号だけをまとめて 1 回で引く。
+   *
+   * <p>桁外れのグループの行は引かない（{@link #MAX_LISTED_GROUP_SIZE}）。返る行数は「渡した番号の数 × 上限」で頭打ちになり、
+   * グループがいくつあっても問い合わせは 1 本のままである。
    */
   private Map<String, List<Customer>> fetchRows(List<CustomerDuplicateGroupView> groups) {
-    List<String> boundedPhoneNumbers =
+    List<String> listedPhoneNumbers =
         groups.stream()
-            .filter(group -> group.getTotal() <= MAX_ROWS_PER_GROUP)
+            .filter(group -> group.getTotal() <= MAX_LISTED_GROUP_SIZE)
             .map(CustomerDuplicateGroupView::getPhoneNumber)
             .toList();
-    Map<String, List<Customer>> byPhoneNumber =
-        boundedPhoneNumbers.isEmpty()
-            ? new LinkedHashMap<>()
-            : customerRepository
-                .findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
-                    boundedPhoneNumbers)
-                .stream()
-                .collect(
-                    Collectors.groupingBy(
-                        Customer::getPhoneNumber, LinkedHashMap::new, Collectors.toList()));
-    groups.stream()
-        .filter(group -> group.getTotal() > MAX_ROWS_PER_GROUP)
-        .forEach(
-            group ->
-                byPhoneNumber.put(
-                    group.getPhoneNumber(),
-                    customerRepository.findByPhoneNumberAndMergedIntoIdIsNullOrderByIdAsc(
-                        group.getPhoneNumber(), Limit.of(MAX_ROWS_PER_GROUP))));
-    return byPhoneNumber;
+    return listedPhoneNumbers.isEmpty()
+        ? Map.of()
+        : customerRepository
+            .findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(listedPhoneNumbers)
+            .stream()
+            .collect(
+                Collectors.groupingBy(
+                    Customer::getPhoneNumber, LinkedHashMap::new, Collectors.toList()));
+  }
+
+  private List<CustomerMergeComparisonResponse> toComparisonRows(
+      List<Customer> customers, ComparisonMaterial material) {
+    return customers.stream()
+        .map(
+            customer ->
+                customerMapper.toComparisonResponse(
+                    customer,
+                    material.linked(customer.getId()),
+                    material.orderCount(customer.getId())))
+        .toList();
+  }
+
+  /**
+   * 見比べる材料（会員紐づけの有無・受注件数）を引く。どちらも顧客行が持たない事実で、候補ぜんたい・見比べる 2 行の どちらでも渡された ID をまとめて 1
+   * 回ずつ引く（行ごとの追加問い合わせを作らない）。
+   */
+  private ComparisonMaterial fetchComparisonMaterial(List<String> customerIds) {
+    if (customerIds.isEmpty()) {
+      return new ComparisonMaterial(Set.of(), Map.of());
+    }
+    return new ComparisonMaterial(
+        customerMemberLinkRepository
+            .findByCustomerIdInAndStatus(customerIds, LinkStatus.ACTIVE)
+            .stream()
+            .map(CustomerMemberLink::getCustomerId)
+            .collect(Collectors.toSet()),
+        customerMergeRepository.countOrdersByCustomerId(customerIds).stream()
+            .collect(
+                Collectors.toMap(
+                    CustomerOrderCountView::getCustomerId, CustomerOrderCountView::getOrderCount)));
+  }
+
+  /** 受注を 1 件も持たない顧客は受注件数の結果に現れないため、既定は 0 件。 */
+  private record ComparisonMaterial(Set<String> linkedIds, Map<String, Long> orderCounts) {
+
+    boolean linked(String customerId) {
+      return linkedIds.contains(customerId);
+    }
+
+    long orderCount(String customerId) {
+      return orderCounts.getOrDefault(customerId, 0L);
+    }
   }
 
   /**

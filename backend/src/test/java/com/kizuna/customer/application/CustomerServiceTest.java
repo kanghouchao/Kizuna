@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
+import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
@@ -19,12 +20,14 @@ import com.kizuna.customer.domain.CustomerDuplicateGroupView;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
+import com.kizuna.customer.domain.CustomerOrderCountView;
 import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import java.lang.reflect.Method;
@@ -58,6 +61,9 @@ class CustomerServiceTest {
 
   /** 1 ページの要求件数。上限そのものではなく、呼出側が渡す値の扱いを見る。 */
   private static final int PAGE_SIZE = 20;
+
+  /** これを超えるグループは行を並べない（{@code CustomerService} の同名の定数と揃える）。 */
+  private static final int MAX_LISTED_GROUP_SIZE = 20;
 
   @InjectMocks private CustomerService customerService;
 
@@ -407,18 +413,111 @@ class CustomerServiceTest {
   }
 
   @Test
-  @DisplayName("重複候補の読み口が 1 つの断面を要求すること")
-  void duplicateCandidatesRunInASingleSnapshot() throws NoSuchMethodException {
+  @DisplayName("見比べ材料の読み口が 1 つの断面を要求すること")
+  void comparisonReadsRunInASingleSnapshot() throws NoSuchMethodException {
     // 見出し・行・紐づけ・受注件数と 4 回問い合わせる群読み口。既定の READ COMMITTED では文ごとに
     // 断面を取り直すため、間に他者の commit が挟まると total だけ古いまま行が増え、上限に収まると
     // 数えたグループが上限を超えて返る。断面が実際に保たれることは OrderGroupReadSnapshotIT が
     // 本物の PostgreSQL で見る
-    Method method =
-        CustomerService.class.getMethod("listDuplicateCandidates", String.class, int.class);
+    // 見比べる 2 行の読み口も同じ理由で断面を固定する（行・紐づけ・受注件数の 3 段）。取り消せない
+    // 操作の判断材料が、片方がもう墓標になった後の世界の値で並ばないようにする
+    List<Method> reads =
+        List.of(
+            CustomerService.class.getMethod("listDuplicateCandidates", String.class, int.class),
+            CustomerService.class.getMethod("mergeComparison", List.class));
 
-    Transactional tx = method.getAnnotation(Transactional.class);
-    assertThat(tx).as("@Transactional があること").isNotNull();
-    assertThat(tx.isolation()).as("1 つの断面を要求すること").isEqualTo(Isolation.REPEATABLE_READ);
+    assertThat(reads)
+        .allSatisfy(
+            method -> {
+              Transactional tx = method.getAnnotation(Transactional.class);
+              assertThat(tx).as("@Transactional があること").isNotNull();
+              assertThat(tx.isolation()).as("1 つの断面を要求すること").isEqualTo(Isolation.REPEATABLE_READ);
+            });
+  }
+
+  @Test
+  @DisplayName("桁外れに大きいグループは行を並べず、総数だけを名乗ること")
+  void listDuplicateCandidates_omitsTheRowsOfAnOversizedGroup() {
+    // 識別の手がかりを持たない番号（移行時の代替値）の標本を並べても、本人を見分ける役には立たない。
+    // 統合はこの画面の外（顧客一覧）からも起こせるので、候補面は総数を告げるだけでよい
+    when(customerRepository.findDuplicatePhoneNumbers(any(Limit.class)))
+        .thenReturn(
+            List.of(
+                new GroupView("0000000000", MAX_LISTED_GROUP_SIZE + 1),
+                new GroupView("090-1111-2222", 2)));
+    when(customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
+            List.of("090-1111-2222")))
+        .thenReturn(duplicatePair("090-1111-2222").toList());
+    when(customerMemberLinkRepository.findByCustomerIdInAndStatus(any(), any()))
+        .thenReturn(List.of());
+    when(customerMergeRepository.countOrdersByCustomerId(any())).thenReturn(List.of());
+
+    CursorPage<CustomerDuplicateGroupResponse> page =
+        customerService.listDuplicateCandidates(null, PAGE_SIZE);
+
+    // 行が無くても候補からは落とさない。番号そのものと総数は、台帳に何が起きているかの手がかりである
+    assertThat(page.content())
+        .extracting(CustomerDuplicateGroupResponse::phoneNumber)
+        .containsExactly("0000000000", "090-1111-2222");
+    assertThat(page.content().get(0).customers()).isEmpty();
+    assertThat(page.content().get(0).total()).isEqualTo(MAX_LISTED_GROUP_SIZE + 1);
+    assertThat(page.content().get(1).customers()).hasSize(2);
+  }
+
+  // ==================== 見比べ ====================
+
+  @Test
+  @DisplayName("見比べる 2 行を、要求した並びのまま材料つきで返すこと")
+  void mergeComparison_returnsBothRowsInTheRequestedOrderWithTheirMaterial() {
+    List<String> requested = List.of("c2", "c1");
+    Customer c1 = aliveCustomer("c1");
+    Customer c2 = aliveCustomer("c2");
+    // DB の並びは要求の並びと一致しない
+    when(customerRepository.findByIdInAndMergedIntoIdIsNull(requested)).thenReturn(List.of(c1, c2));
+    when(customerMemberLinkRepository.findByCustomerIdInAndStatus(requested, LinkStatus.ACTIVE))
+        .thenReturn(List.of(activeLink("c1", "123456789012")));
+    when(customerMergeRepository.countOrdersByCustomerId(requested))
+        .thenReturn(List.of(new OrderCountView("c2", 3)));
+    // 材料が食い違えば写像は素通しの null になり、下の containsExactly が落ちる
+    when(customerMapper.toComparisonResponse(c2, false, 3L)).thenReturn(comparison("c2"));
+    when(customerMapper.toComparisonResponse(c1, true, 0L)).thenReturn(comparison("c1"));
+
+    List<CustomerMergeComparisonResponse> rows = customerService.mergeComparison(requested);
+
+    // 並びが要求と食い違うと、画面の左右が入れ替わって「残す行」の選択が別人を指す
+    assertThat(rows).containsExactly(comparison("c2"), comparison("c1"));
+  }
+
+  @Test
+  @DisplayName("同じ顧客を 2 つ指定した見比べは要求誤りとして撥ねること")
+  void mergeComparison_rejectsTheSameCustomerTwice() {
+    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1", "c1")))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("同じ顧客");
+    verify(customerRepository, never()).findByIdInAndMergedIntoIdIsNull(any());
+  }
+
+  @Test
+  @DisplayName("2 件でない指定は要求誤りとして撥ねること")
+  void mergeComparison_rejectsAnythingButAPair() {
+    // 3 行以上を一度に畳む導線は持たない（ADR 0010）。読み口の側でも 2 行に閉じる
+    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1", "c2", "c3")))
+        .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1")))
+        .isInstanceOf(ServiceException.class);
+    verify(customerRepository, never()).findByIdInAndMergedIntoIdIsNull(any());
+  }
+
+  @Test
+  @DisplayName("片方が当店の生きた行でなければ 404 になること")
+  void mergeComparison_rejectsWhenEitherRowIsNotAlive() {
+    // 墓標・他店舗・不存在はどれもここに落ちる（店舗の絞り込みは storeFilter が担う）
+    when(customerRepository.findByIdInAndMergedIntoIdIsNull(List.of("c1", "gone")))
+        .thenReturn(List.of(aliveCustomer("c1")));
+
+    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1", "gone")))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("顧客が見つかりません");
   }
 
   /** 読み側 projection の最小の実装。件数は行を引く前に判る（{@code having} が既に数えている）。 */
@@ -439,5 +538,31 @@ class CustomerServiceTest {
     return Stream.of(
         Customer.builder().phoneNumber(phoneNumber).build(),
         Customer.builder().phoneNumber(phoneNumber).build());
+  }
+
+  /** 受注件数の読み側 projection の最小の実装。 */
+  private record OrderCountView(String customerId, long orderCount)
+      implements CustomerOrderCountView {
+    @Override
+    public String getCustomerId() {
+      return customerId;
+    }
+
+    @Override
+    public long getOrderCount() {
+      return orderCount;
+    }
+  }
+
+  private static Customer aliveCustomer(String id) {
+    Customer customer = Customer.builder().name(id).build();
+    customer.setId(id);
+    return customer;
+  }
+
+  /** 写像の結果は同一性だけを見るので、識別のつく id 以外は空でよい。 */
+  private static CustomerMergeComparisonResponse comparison(String id) {
+    return new CustomerMergeComparisonResponse(
+        id, null, null, null, null, null, null, null, null, null, null, null, null, false, 0L);
   }
 }

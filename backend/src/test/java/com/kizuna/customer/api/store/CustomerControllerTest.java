@@ -130,6 +130,43 @@ class CustomerControllerTest {
   }
 
   @Test
+  @DisplayName("見比べは詳細ではなく専用の読み口へ届き、選んだ順の 2 件が渡ること")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
+  void mergeComparisonRoutesPastTheDetailHandlerWithBothIdsInOrder() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<List<String>> idsCaptor = ArgumentCaptor.captor();
+    when(customerService.mergeComparison(idsCaptor.capture())).thenReturn(List.of());
+
+    mockMvc
+        .perform(
+            get("/store/customers/merge-comparison")
+                .param("ids", "c2")
+                .param("ids", "c1")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
+
+    // 字面セグメントが {id} に食われると、詳細の読み口が "merge-comparison" という顧客を探しに行く
+    assertThat(idsCaptor.getValue()).containsExactly("c2", "c1");
+  }
+
+  @Test
+  @DisplayName("見比べは顧客管理の権限だけでは通らないこと")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void mergeComparisonRequiresTheMergePermission() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            get("/store/customers/merge-comparison")
+                .param("ids", "c1")
+                .param("ids", "c2")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   @DisplayName("DELETE /store/customers/{id} は本体無しの 204 で返ること")
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void deleteRespondsWithNoContent() throws Exception {

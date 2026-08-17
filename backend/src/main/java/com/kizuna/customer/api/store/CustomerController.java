@@ -2,12 +2,14 @@ package com.kizuna.customer.api.store;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
+import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -57,6 +59,20 @@ public class CustomerController {
   public ResponseEntity<CursorPage<CustomerDuplicateGroupResponse>> listDuplicates(
       @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok(customerService.listDuplicateCandidates(cursor, size));
+  }
+
+  /**
+   * 統合の前に見比べる 2 行。顧客一覧で選んだ任意の 2 件を、重複候補と同じ材料（受注件数・会員紐づけの有無・住所などの識別材料）つきで返す。
+   *
+   * <p>詳細の読み口では代わりにならない。あちらは旧 ID を統合先へ解決するので、片方が既に墓標なら同じ 1 行が 2 列に並ぶ。
+   *
+   * <p>統合と同じ {@code CUSTOMER_MERGE} で守る。読めるのは台帳の内部評価（NG・区分・住所）を含む見比べ材料で、 統合に当たる者だけが読めばよい。
+   */
+  @GetMapping("/merge-comparison")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
+  public ResponseEntity<List<CustomerMergeComparisonResponse>> mergeComparison(
+      @RequestParam List<String> ids) {
+    return ResponseEntity.ok(customerService.mergeComparison(ids));
   }
 
   @GetMapping("/{id}")

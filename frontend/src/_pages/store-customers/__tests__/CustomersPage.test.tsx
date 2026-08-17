@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CustomersPage from '../ui/CustomersPage';
 import CustomerCreatePage from '../ui/CustomerCreatePage';
 import { CustomerForm } from '../ui/CustomerForm';
@@ -18,7 +18,13 @@ jest.mock('@/entities/customer', () => ({
     linkMember: jest.fn(),
     unlinkMember: jest.fn(),
     memberLinkHistory: jest.fn(),
+    mergeComparison: jest.fn(),
+    merge: jest.fn(),
   },
+}));
+
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 jest.mock('next/navigation', () => ({
@@ -195,5 +201,167 @@ describe('顧客一覧ページ固有の要素', () => {
       'href',
       '/store/1/customers/duplicates'
     );
+  });
+});
+
+describe('顧客一覧からの統合', () => {
+  /** 一覧の行は「絞り込んで選ぶ」ための項目しか持たない（住所も受注件数も無い）。 */
+  const listRows = [
+    { id: 'c1', name: '山田太郎', phone_number: '090-1111-2222' },
+    { id: 'c2', name: 'ヤマダタロウ', phone_number: '090-1111-2222' },
+    { id: 'c3', name: '別人三郎', phone_number: '090-3333-4444' },
+  ];
+
+  /** 見比べの読み口が返す 2 行。一覧に無い材料（住所・受注件数・紐づけ）を持つ。 */
+  const comparisonPair = [
+    {
+      id: 'c1',
+      name: '山田太郎',
+      phone_number: '090-1111-2222',
+      address: '東京都渋谷区1-1',
+      rank: 'GOLD',
+      member_linked: false,
+      order_count: 3,
+    },
+    {
+      id: 'c2',
+      name: 'ヤマダタロウ',
+      phone_number: '090-1111-2222',
+      address: '東京都新宿区2-2',
+      rank: 'SILVER',
+      member_linked: true,
+      order_count: 0,
+    },
+  ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedReadClaims.mockReturnValue({
+      authorities: ['PERM_CUSTOMER_MERGE', 'PERM_CUSTOMER_MANAGE'],
+      userType: 'STAFF',
+      storeBridge: true,
+    });
+    mockedCustomerApi.list.mockResolvedValue({
+      rows: listRows,
+      page: 0,
+      pageCount: 1,
+      total: listRows.length,
+    } as never);
+    mockedCustomerApi.mergeComparison.mockResolvedValue(comparisonPair as never);
+    mockedCustomerApi.merge.mockResolvedValue({
+      surviving_customer_id: 'c1',
+      moved_order_count: 3,
+      moved_link_count: 0,
+    } as never);
+  });
+
+  /** 2 行を選び、見比べが出るところまで進める。 */
+  async function selectPair() {
+    fireEvent.click(await screen.findByLabelText('山田太郎 を見比べる'));
+    fireEvent.click(screen.getByLabelText('ヤマダタロウ を見比べる'));
+    return screen.findByRole('table', { name: '2 行の比較' });
+  }
+
+  it('統合権限が無ければ選択列を出さないこと', async () => {
+    // 強制はサーバ側（読み口も実行も CUSTOMER_MERGE）。ここは押しても 403 になる導線を描かない
+    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'STAFF', storeBridge: true });
+
+    render(<CustomersPage />);
+    await screen.findByText('山田太郎');
+
+    expect(screen.queryByLabelText('山田太郎 を見比べる')).not.toBeInTheDocument();
+  });
+
+  it('2 行を選ぶと、一覧が持たない材料を専用の読み口から引いて並べること', async () => {
+    render(<CustomersPage />);
+    const comparison = await selectPair();
+
+    expect(mockedCustomerApi.mergeComparison).toHaveBeenCalledWith('c1', 'c2');
+    // 住所も受注件数も一覧の型には無い。別人かどうかの判断はここで分かれる
+    expect(within(comparison).getByText('東京都渋谷区1-1')).toBeInTheDocument();
+    expect(within(comparison).getByText('東京都新宿区2-2')).toBeInTheDocument();
+    expect(within(comparison).getByText('3 件')).toBeInTheDocument();
+    expect(within(comparison).getByText('紐づけ済み')).toBeInTheDocument();
+  });
+
+  it('3 行目の選択を塞ぎ、まとめて畳む導線を持たないこと', async () => {
+    render(<CustomersPage />);
+    await selectPair();
+
+    // 3 行以上を一度に畳む導線は持たない（ADR 0010）。Base UI の Checkbox は span なので
+    // disabled 属性ではなく aria-disabled で表れる
+    const third = screen.getByLabelText('別人三郎 を見比べる');
+    expect(third).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(third);
+    expect(screen.getByText(/2 件を選択中/)).toBeInTheDocument();
+    expect(third).toHaveAttribute('aria-checked', 'false');
+    expect(
+      screen.queryByRole('button', { name: /まとめて統合|一括|自動統合/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('存続行を選ぶまでは統合できないこと', async () => {
+    render(<CustomersPage />);
+    await selectPair();
+
+    expect(screen.getByText('台帳に残す行を選んでください。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '統合する' })).toBeDisabled();
+  });
+
+  it('確認を経てから統合し、成功後は選択を捨てて一覧を取り直すこと', async () => {
+    render(<CustomersPage />);
+    await selectPair();
+    fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
+    fireEvent.click(screen.getByRole('button', { name: '統合する' }));
+
+    // 「統合する」は確認を開くだけ。ここで走ってしまうと取り返しがつかない
+    expect(await screen.findByText('顧客を統合しますか？')).toBeInTheDocument();
+    expect(screen.getByText(/統合は取り消せません/)).toBeInTheDocument();
+    expect(mockedCustomerApi.merge).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '統合する' }));
+
+    await waitFor(() => expect(mockedCustomerApi.merge).toHaveBeenCalledWith('c1', 'c2'));
+    // 畳んだ行が選ばれたままだと、次の操作が既に墓標の行を指す
+    await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument());
+    expect(mockedCustomerApi.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('選択がページ送りを跨いでも残ること', async () => {
+    // 統合したい 2 行が同じページに並ぶとは限らない。選択が今見えている行に依存していると、
+    // 桁外れのグループは一生統合できない
+    mockedCustomerApi.list
+      .mockResolvedValueOnce({ rows: listRows, page: 0, pageCount: 2, total: 21 } as never)
+      .mockResolvedValueOnce({
+        rows: [{ id: 'c9', name: '次頁太郎' }],
+        page: 1,
+        pageCount: 2,
+        total: 21,
+      } as never);
+
+    render(<CustomersPage />);
+    fireEvent.click(await screen.findByLabelText('山田太郎 を見比べる'));
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+
+    expect(await screen.findByText('次頁太郎')).toBeInTheDocument();
+    expect(screen.queryByText('山田太郎')).not.toBeInTheDocument();
+    expect(screen.getByText(/1 件を選択中/)).toBeInTheDocument();
+  });
+
+  it('見比べる行が引けない 404 では、再試行ではなく選び直しを出すこと', async () => {
+    // 他者の統合が先に確定した場合。押しても永久に成功しない再試行を出さない
+    mockedCustomerApi.mergeComparison.mockRejectedValue({ response: { status: 404 } });
+
+    render(<CustomersPage />);
+    fireEvent.click(await screen.findByLabelText('山田太郎 を見比べる'));
+    fireEvent.click(screen.getByLabelText('ヤマダタロウ を見比べる'));
+
+    const failed = await screen.findByRole('alert');
+    expect(within(failed).getByText(/選んだ顧客が見つかりません/)).toBeInTheDocument();
+    expect(within(failed).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    // 出口は選び直し。区画そのものが持っていないと、行き止まりのまま画面に残る
+    fireEvent.click(within(failed).getByRole('button', { name: '選択を解除' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

@@ -42,14 +42,15 @@ export interface CustomerSummaryResponse {
 }
 
 /**
- * 重複候補の 1 行（GET /store/customers/duplicates）。
- * customer/api/dto/CustomerDuplicateResponse.java に対応。
+ * 統合の前に見比べる 1 行（GET /store/customers/duplicates のグループの中身、
+ * および GET /store/customers/merge-comparison）。
+ * customer/api/dto/CustomerMergeComparisonResponse.java に対応。
  *
  * 一覧の型より項目が多いのは、この読み口の用途が「絞り込んで選ぶ」ではなく「別人を誤って
- * 畳まないための見比べ」だからである。統合済みかどうかの欄は持たない — 候補は定義上すべて
- * 生きた行である。
+ * 畳まないための見比べ」だからである。統合済みかどうかの欄は持たない — 見比べる対象は定義上
+ * すべて生きた行である。
  */
-export interface CustomerDuplicateResponse {
+export interface CustomerMergeComparisonResponse {
   id?: string;
   name?: string;
   phone_number?: string;
@@ -79,7 +80,7 @@ export interface CustomerDuplicateGroupResponse {
   phone_number?: string;
   /** その番号を持つ生きた行の総数。Java 側が primitive のため、キーは必ず応答に含まれる。 */
   total: number;
-  customers: CustomerDuplicateResponse[];
+  customers: CustomerMergeComparisonResponse[];
 }
 
 /**

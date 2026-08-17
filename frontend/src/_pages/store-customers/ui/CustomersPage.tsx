@@ -13,9 +13,11 @@ import {
   useListPage,
 } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
+import { CustomerMergePanel } from './CustomerMergePanel';
 import {
   Badge,
   Button,
+  Checkbox,
   ConfirmDialog,
   Input,
   Table,
@@ -28,6 +30,9 @@ import {
 
 /** 一覧 1 ページあたりの件数 */
 const PAGE_SIZE = 20;
+
+/** 見比べる対象は 2 行。3 行以上を一度に畳む導線は持たない（ADR 0010）。 */
+const PAIR_SIZE = 2;
 
 /** 一覧の絞り込み条件（送信で確定した値） */
 interface CustomerCriteria {
@@ -72,6 +77,21 @@ export default function CustomersPage() {
     errorMessage: '顧客の削除に失敗しました',
     onDeleted: list.reload,
   });
+
+  // 統合する 2 行の選択。行そのものではなく ID だけを持つので、ページ送りや検索で
+  // 一覧が入れ替わっても選択は残る（統合したい 2 行が同じページに並ぶとは限らない）
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const pair =
+    selectedIds.length === PAIR_SIZE ? ([selectedIds[0], selectedIds[1]] as const) : null;
+
+  const toggleSelected = (customerId: string) =>
+    setSelectedIds(current =>
+      current.includes(customerId)
+        ? current.filter(id => id !== customerId)
+        : current.length >= PAIR_SIZE
+          ? current
+          : [...current, customerId]
+    );
 
   return (
     <>
@@ -139,6 +159,7 @@ export default function CustomersPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              {canMerge && <TableHead className="w-24">見比べる</TableHead>}
               <TableHead>名前</TableHead>
               <TableHead>電話番号</TableHead>
               <TableHead>LINE ID</TableHead>
@@ -152,6 +173,26 @@ export default function CustomersPage() {
           <TableBody>
             {customers.map(customer => (
               <TableRow key={customer.id}>
+                {canMerge && (
+                  <TableCell>
+                    {/* flex の容器が要る。Checkbox の既定の描画要素は span で、素のテーブルセルに
+                        置くと display:inline のまま size-4 が効かず 2px に潰れる */}
+                    <div className="flex items-center">
+                      {/* 名前を含む aria-label を持たせる。同型の選択が行の数だけ並ぶので、
+                          「見比べる」だけでは読み上げでどの行か判らない */}
+                      <Checkbox
+                        aria-label={`${customer.name} を見比べる`}
+                        checked={selectedIds.includes(customer.id ?? '')}
+                        // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
+                        disabled={
+                          !selectedIds.includes(customer.id ?? '') &&
+                          selectedIds.length >= PAIR_SIZE
+                        }
+                        onCheckedChange={() => toggleSelected(customer.id ?? '')}
+                      />
+                    </div>
+                  </TableCell>
+                )}
                 <TableCell className="font-medium text-foreground">{customer.name}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {customer.phone_number || '-'}
@@ -204,6 +245,32 @@ export default function CustomersPage() {
           </TableBody>
         </Table>
       </ListPage>
+
+      {/* 見比べは一覧の外側に置く。外殻の children は loading / 空表示 / 失敗のときに隠れるので、
+          中に置くと「2 行を選んでから 0 件になる検索をした」だけで、選択が残ったまま区画が消える */}
+      {canMerge && selectedIds.length > 0 && (
+        <div className="mt-6 space-y-6">
+          <div className="flex items-center justify-between rounded-md border bg-muted/30 px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              {selectedIds.length} 件を選択中
+              {pair === null && '（統合するにはもう 1 行選んでください）'}
+            </p>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
+              選択を解除
+            </Button>
+          </div>
+          {pair && (
+            <CustomerMergePanel
+              customerIds={[pair[0], pair[1]]}
+              onMerged={() => {
+                setSelectedIds([]);
+                list.reload();
+              }}
+              onClear={() => setSelectedIds([])}
+            />
+          )}
+        </div>
+      )}
 
       {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <ConfirmDialog

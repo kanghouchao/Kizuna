@@ -1,10 +1,10 @@
 'use client';
 
-import { CustomerDuplicateResponse } from '@/entities/customer';
+import { CustomerMergeComparisonResponse } from '@/entities/customer';
 import { Button, Label, RadioGroup, RadioGroupItem } from '@/shared/ui';
 
 /** 見比べる項目。値の取り出しは行ごとに同じ関数を通し、左右で違う整形にならないようにする。 */
-const FIELDS: { label: string; value: (row: CustomerDuplicateResponse) => string }[] = [
+const FIELDS: { label: string; value: (row: CustomerMergeComparisonResponse) => string }[] = [
   { label: '名前', value: row => row.name || '-' },
   { label: '電話番号', value: row => row.phone_number || '-' },
   { label: '電話番号2', value: row => row.phone_number2 || '-' },
@@ -28,7 +28,7 @@ const FIELDS: { label: string; value: (row: CustomerDuplicateResponse) => string
 
 interface CustomerMergeComparisonProps {
   /** 見比べる 2 行。並びは候補一覧の並びのまま。 */
-  rows: [CustomerDuplicateResponse, CustomerDuplicateResponse];
+  rows: [CustomerMergeComparisonResponse, CustomerMergeComparisonResponse];
   /** 台帳に残す行。人が選ぶまで null で、機械は決めない。 */
   survivingId: string | null;
   onSurvivingChange: (customerId: string) => void;

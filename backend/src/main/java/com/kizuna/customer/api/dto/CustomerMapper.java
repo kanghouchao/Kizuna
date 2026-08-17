@@ -23,7 +23,7 @@ public interface CustomerMapper {
   // 受注件数と紐づけの有無は顧客行が持たない事実なので、application 層が引いた値を引数で受ける。
   @Mapping(target = "memberLinked", source = "memberLinked")
   @Mapping(target = "orderCount", source = "orderCount")
-  CustomerDuplicateResponse toDuplicateResponse(
+  CustomerMergeComparisonResponse toComparisonResponse(
       Customer customer, boolean memberLinked, long orderCount);
 
   @Mapping(target = "landmark", ignore = true)

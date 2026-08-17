@@ -153,9 +153,13 @@ public interface CustomerRepository
   List<Customer> findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
       Collection<String> phoneNumbers);
 
-  /** 1 つの番号の行を上限つきで引く。桁外れに大きいグループを、行ごと読み込まずに標本だけ見せるための口。 */
-  List<Customer> findByPhoneNumberAndMergedIntoIdIsNullOrderByIdAsc(
-      String phoneNumber, Limit limit);
+  /**
+   * 名指された顧客のうち、生きている行だけを返す。統合の前に 2 行を見比べる読み口の入口。
+   *
+   * <p>墓標を落とすのは、見比べの答えが「この 2 行は同一人物か」だからである。片方が既に墓標なら見比べる対象は もう存在せず、行を返せば「まだ畳める」と読ませることになる。店舗の絞り込みは
+   * {@code storeFilter} が担う。
+   */
+  List<Customer> findByIdInAndMergedIntoIdIsNull(Collection<String> ids);
 
   /**
    * その顧客の統合先。生きている行と存在しない行はどちらも空で返る — 呼出側はどちらの場合も「渡された ID がそのまま着地点」として扱うため、区別する必要がない。
