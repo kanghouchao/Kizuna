@@ -264,6 +264,13 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     createCustomer("無電話乙-" + nonce);
     createCustomerWithPhone("空電話甲-" + nonce, "");
     createCustomerWithPhone("空電話乙-" + nonce, "");
+    // 全角空白（U+3000）とタブ。PostgreSQL の trim はどちらも落とさないので、trim による
+    // 空判定では素通りして巨大な偽グループになる（日本語の台帳では現実に混ざる）
+    createCustomerWithPhone("全角空白甲-" + nonce, "　");
+    createCustomerWithPhone("全角空白乙-" + nonce, "　");
+    // JSON の本文へ直に制御文字は置けないため、タブはエスケープのまま送って受け側で復元させる
+    createCustomerWithPhone("タブ甲-" + nonce, "\\t");
+    createCustomerWithPhone("タブ乙-" + nonce, "\\t");
     // 番号のある重複も一組起こす。走査が空振りしたまま「空欄のグループは無い」が
     // 真になる（空集合には何でも成り立つ）のを防ぐ対照
     String phoneNumber = phone("無電話対照");

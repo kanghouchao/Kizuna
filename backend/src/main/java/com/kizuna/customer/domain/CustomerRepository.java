@@ -104,12 +104,17 @@ public interface CustomerRepository
    *
    * <p>空白を除くのは、会員申請の確定時自動整備が起こす「氏名だけ・電話は空」の行が全部ひとつの偽グループに畳まれるため。
    *
-   * <p>店舗の絞り込みは {@code storeFilter} が担う（呼出側の {@code @StoreScoped} が前提）。
+   * <p>判定に {@code trim} を使ってはならない。PostgreSQL の 1 引数 {@code trim} が落とすのは半角空白だけで、タブ・改行・全角空白（U+3000）は
+   * 残るため素通りする（実測）。日本語の台帳では全角空白が現実に混ざるので、空白そのものが巨大な偽グループになる。 「空白以外の文字を 1 つ以上含む」を正規表現で直に問う。
+   *
+   * <p>店舗の絞り込みは {@code storeFilter} が担う（呼出側の {@code @StoreScoped} が前提）。native query にすると
+   * {@code @Filter} が掛からず店舗境界が黙って消えるので、HQL に留める。
    */
   @Query(
       """
       select c.phoneNumber from com.kizuna.customer.domain.Customer c
-      where c.mergedIntoId is null and c.phoneNumber is not null and trim(c.phoneNumber) <> ''
+      where c.mergedIntoId is null and c.phoneNumber is not null
+        and function('regexp_like', c.phoneNumber, '[^[:space:]]') = true
       group by c.phoneNumber having count(c) >= 2
       order by c.phoneNumber
       """)
