@@ -145,9 +145,9 @@ export default function CustomerDuplicatesPage() {
                 <div className="bg-muted/50 px-6 py-3">
                   <span className="text-sm text-muted-foreground">電話番号</span>{' '}
                   <span className="font-medium text-foreground">{phoneNumber}</span>
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    {group.customers.length} 件
-                  </span>
+                  {/* 件数は total。customers は上限で切られうるので、length を出すと
+                      200 件のグループが 20 件と名乗る */}
+                  <span className="ml-2 text-sm text-muted-foreground">{group.total} 件</span>
                 </div>
                 <Table>
                   <TableHeader>
@@ -221,6 +221,13 @@ export default function CustomerDuplicatesPage() {
                     ))}
                   </TableBody>
                 </Table>
+                {group.customers.length < group.total && (
+                  // 黙って切ると、見えている分がその番号の全部だと読まれる
+                  <p className="border-t bg-warning/10 px-6 py-3 text-sm text-warning-strong">
+                    この番号は {group.total} 件あり、先頭の {group.customers.length}{' '}
+                    件だけを表示しています。これだけ多くが共有する番号は本人を見分ける手がかりになりません（移行時の代替値など）。顧客一覧から個別にお探しください。
+                  </p>
+                )}
                 {pair && (
                   <CustomerMergeComparison
                     rows={pair}

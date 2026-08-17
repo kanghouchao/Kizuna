@@ -78,6 +78,9 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
   private static final int TOTAL_FEE = 12000;
 
+  /** 1 グループについて返す行数の上限（{@code CustomerService} の同名の定数と揃える）。 */
+  private static final int MAX_ROWS_PER_GROUP = 20;
+
   @Autowired private CustomerRepository customerRepository;
   @Autowired private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Autowired private CustomerMergeRepository customerMergeRepository;
@@ -336,6 +339,24 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
     // 黙って先頭扱いにすると、続きを求めた呼出側に 1 ページ目が返り取りこぼしが成功に見える
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  @DisplayName("桁外れに大きいグループは行が上限で切られ、総数は切られないこと")
+  void capsTheRowsOfAnOversizedGroupWithoutLyingAboutItsSize() {
+    // 移行データの代替値のような、識別の手がかりを持たない番号。字面をいくら絞り込んでも
+    // すり抜けるので、グループの大きさで頭打ちにする
+    String placeholder = phone("代替値");
+    int total = MAX_ROWS_PER_GROUP + 3;
+    for (int i = 0; i < total; i++) {
+      createCustomerWithPhone("代替値" + i + "-" + nonce, placeholder);
+    }
+
+    JsonNode group = duplicateGroup(STORE_A, placeholder);
+
+    assertThat(group.path("customers")).hasSize(MAX_ROWS_PER_GROUP);
+    // 描いた行数を件数として名乗ると、見えている分がその番号の全部だと読まれる
+    assertThat(group.path("total").asInt()).isEqualTo(total);
   }
 
   @Test

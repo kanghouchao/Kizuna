@@ -15,6 +15,7 @@ import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerDuplicateGroupView;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
@@ -347,11 +348,16 @@ class CustomerServiceTest {
   @Test
   @DisplayName("要求件数を超えた分は返さず、続きの位置を名乗ること")
   void listDuplicateCandidates_reportsTheNextCursorInsteadOfSilentlyCutting() {
-    List<String> phoneNumbers =
-        IntStream.rangeClosed(1, PAGE_SIZE + 1).mapToObj(i -> "0900000" + i).toList();
-    when(customerRepository.findDuplicatePhoneNumbers(any(Limit.class))).thenReturn(phoneNumbers);
+    List<CustomerDuplicateGroupView> groups =
+        IntStream.rangeClosed(1, PAGE_SIZE + 1)
+            .mapToObj(i -> (CustomerDuplicateGroupView) new GroupView("0900000" + i, 2))
+            .toList();
+    when(customerRepository.findDuplicatePhoneNumbers(any(Limit.class))).thenReturn(groups);
     // 要求件数に収まる番号だけが引き直され、超過分の行は取りに行かない
-    List<String> keptPhoneNumbers = phoneNumbers.subList(0, PAGE_SIZE);
+    List<String> keptPhoneNumbers =
+        groups.subList(0, PAGE_SIZE).stream()
+            .map(CustomerDuplicateGroupView::getPhoneNumber)
+            .toList();
     when(customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
             keptPhoneNumbers))
         .thenReturn(keptPhoneNumbers.stream().flatMap(CustomerServiceTest::duplicatePair).toList());
@@ -395,6 +401,19 @@ class CustomerServiceTest {
     assertThat(page.content()).isEmpty();
     // 先頭からの取得へ落とすと、続きを求めた呼出側に 1 ページ目が返って取りこぼしが成功に見える
     verify(customerRepository, never()).findDuplicatePhoneNumbers(any(Limit.class));
+  }
+
+  /** 読み側 projection の最小の実装。件数は行を引く前に判る（{@code having} が既に数えている）。 */
+  private record GroupView(String phoneNumber, long total) implements CustomerDuplicateGroupView {
+    @Override
+    public String getPhoneNumber() {
+      return phoneNumber;
+    }
+
+    @Override
+    public long getTotal() {
+      return total;
+    }
   }
 
   /** グループを成す最小の形（同じ番号の 2 行）。 */
