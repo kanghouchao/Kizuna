@@ -12,6 +12,7 @@ import {
   CustomerDuplicateGroupResponse,
   CustomerMemberLinkHistoryResponse,
   CustomerMemberLinkResponse,
+  CustomerMergeComparisonResponse,
   CustomerMergeHistoryResponse,
   CustomerMergeResponse,
   CustomerPointAdjustmentRequest,
@@ -43,6 +44,21 @@ export const customerApi = {
   ): Promise<CursorPageResult<CustomerDuplicateGroupResponse>> => {
     const response = await apiClient.get('/store/customers/duplicates', { params });
     return fromCursorPage(response.data);
+  },
+  /**
+   * 統合の前に見比べる 2 行を取得する。重複候補に出てこない行どうしでも引ける。
+   * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
+   * 生きた行として引けない ID（統合済み・他店舗・不存在）が混じると 404 で返る。
+   */
+  mergeComparison: async (
+    firstId: string,
+    secondId: string
+  ): Promise<CustomerMergeComparisonResponse[]> => {
+    // query は自分で組む。axios の配列 params は既定で `ids[]=` になり、サーバの `ids` に
+    // 束縛されない（axios 1.18 の既定は key + '[]'）。キーの綴りを配列表現に委ねない
+    const query = [firstId, secondId].map(id => `ids=${encodeURIComponent(id)}`).join('&');
+    const response = await apiClient.get(`/store/customers/merge-comparison?${query}`);
+    return response.data;
   },
   /** 顧客詳細を取得する */
   get: async (id: string): Promise<CustomerResponse> => {

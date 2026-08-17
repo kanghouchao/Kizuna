@@ -5,7 +5,7 @@ import { ChevronLeftIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { notify } from '@/shared/notify';
-import { CustomerDuplicateResponse, customerApi } from '@/entities/customer';
+import { CustomerMergeComparisonResponse, customerApi } from '@/entities/customer';
 import { getApiErrorMessage, storePath, useCursorList } from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
@@ -72,8 +72,8 @@ export default function CustomerDuplicatesPage() {
 
   /** 選択中の 2 行を、候補一覧に並んでいる順のまま取り出す。 */
   const selectedPair = (
-    rows: CustomerDuplicateResponse[]
-  ): [CustomerDuplicateResponse, CustomerDuplicateResponse] | null => {
+    rows: CustomerMergeComparisonResponse[]
+  ): [CustomerMergeComparisonResponse, CustomerMergeComparisonResponse] | null => {
     const selected = rows.filter(row => row.id !== undefined && selection?.ids.includes(row.id));
     return selected.length === PAIR_SIZE ? [selected[0], selected[1]] : null;
   };
@@ -145,88 +145,91 @@ export default function CustomerDuplicatesPage() {
                 <div className="bg-muted/50 px-6 py-3">
                   <span className="text-sm text-muted-foreground">電話番号</span>{' '}
                   <span className="font-medium text-foreground">{phoneNumber}</span>
-                  {/* 件数は total。customers は上限で切られうるので、length を出すと
-                      200 件のグループが 20 件と名乗る */}
+                  {/* 件数は total。桁外れのグループは行を並べないので、length を出すと
+                      200 件のグループが 0 件と名乗る */}
                   <span className="ml-2 text-sm text-muted-foreground">{group.total} 件</span>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-24">見比べる</TableHead>
-                      <TableHead>名前</TableHead>
-                      <TableHead>ランク</TableHead>
-                      <TableHead>区分</TableHead>
-                      <TableHead>受注</TableHead>
-                      <TableHead>会員</TableHead>
-                      <TableHead>NG</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {group.customers.map(row => (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          {/* flex の容器が要る。Checkbox の既定の描画要素は span で、素の
+                {group.customers.length === 0 ? (
+                  // 桁外れのグループは行が返らない。数百行から取り出した標本は本人を見分ける
+                  // 材料にならず、並べれば「この中から選べ」と読ませることになる
+                  <p className="border-t bg-warning/10 px-6 py-3 text-sm text-warning-strong">
+                    この番号は {group.total} 件が共有しており、行は並べていません。
+                    これだけ多くが共有する番号は本人を見分ける手がかりになりません（移行時の代替値など）。統合したい
+                    2 行は顧客一覧で選んでください。
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-24">見比べる</TableHead>
+                        <TableHead>名前</TableHead>
+                        <TableHead>ランク</TableHead>
+                        <TableHead>区分</TableHead>
+                        <TableHead>受注</TableHead>
+                        <TableHead>会員</TableHead>
+                        <TableHead>NG</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.customers.map(row => (
+                        <TableRow key={row.id}>
+                          <TableCell>
+                            {/* flex の容器が要る。Checkbox の既定の描画要素は span で、素の
                               テーブルセルに置くと display:inline のまま size-4 が効かず 2px に潰れる
                               （既存の呼出は FormItem の flex がこれを担っていた） */}
-                          <div className="flex items-center">
-                            {/* 名前を含む aria-label を持たせる。同じ画面に同型の選択が並ぶので、
+                            <div className="flex items-center">
+                              {/* 名前を含む aria-label を持たせる。同じ画面に同型の選択が並ぶので、
                                 「見比べる」だけでは読み上げでどの行か判らない */}
-                            <Checkbox
-                              aria-label={`${row.name} を見比べる`}
-                              checked={isSelected(phoneNumber, row.id ?? '')}
-                              // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
-                              disabled={
-                                isSubmitting ||
-                                (!isSelected(phoneNumber, row.id ?? '') &&
-                                  selection?.phoneNumber === phoneNumber &&
-                                  selection.ids.length >= PAIR_SIZE)
-                              }
-                              onCheckedChange={() => toggle(phoneNumber, row.id ?? '')}
-                            />
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium text-foreground">{row.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{row.rank || '-'}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {row.classification || '-'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {row.order_count} 件
-                        </TableCell>
-                        <TableCell>
-                          {row.member_linked ? (
-                            <Badge
-                              variant="outline"
-                              className="border-transparent bg-success/10 text-success-strong"
-                            >
-                              紐づけ済み
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">未紐づけ</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {row.ng_type ? (
-                            <Badge
-                              variant="outline"
-                              className="border-transparent bg-destructive/10 text-destructive-strong"
-                            >
-                              {row.ng_type}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {group.customers.length < group.total && (
-                  // 黙って切ると、見えている分がその番号の全部だと読まれる
-                  <p className="border-t bg-warning/10 px-6 py-3 text-sm text-warning-strong">
-                    この番号は {group.total} 件あり、先頭の {group.customers.length}{' '}
-                    件だけを表示しています。これだけ多くが共有する番号は本人を見分ける手がかりになりません（移行時の代替値など）。顧客一覧から個別にお探しください。
-                  </p>
+                              <Checkbox
+                                aria-label={`${row.name} を見比べる`}
+                                checked={isSelected(phoneNumber, row.id ?? '')}
+                                // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
+                                disabled={
+                                  isSubmitting ||
+                                  (!isSelected(phoneNumber, row.id ?? '') &&
+                                    selection?.phoneNumber === phoneNumber &&
+                                    selection.ids.length >= PAIR_SIZE)
+                                }
+                                onCheckedChange={() => toggle(phoneNumber, row.id ?? '')}
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium text-foreground">{row.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{row.rank || '-'}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {row.classification || '-'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {row.order_count} 件
+                          </TableCell>
+                          <TableCell>
+                            {row.member_linked ? (
+                              <Badge
+                                variant="outline"
+                                className="border-transparent bg-success/10 text-success-strong"
+                              >
+                                紐づけ済み
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">未紐づけ</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {row.ng_type ? (
+                              <Badge
+                                variant="outline"
+                                className="border-transparent bg-destructive/10 text-destructive-strong"
+                              >
+                                {row.ng_type}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
                 {pair && (
                   <CustomerMergeComparison

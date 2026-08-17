@@ -53,6 +53,13 @@ describe('customerApi', () => {
       params: { cursor: 'x' },
     });
   });
+  it('mergeComparison は 2 つの ids を同じキーの繰り返しで GET する', async () => {
+    // axios の配列 params は既定で `ids[]=` になり、Spring の `ids` に束縛されない。
+    // 綴りが変わると読み口は常に 400 を返す
+    await customerApi.mergeComparison('c1', 'c2');
+
+    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/merge-comparison?ids=c1&ids=c2');
+  });
   it('merge は存続行の配下へ被統合行の ID を snake_case で POST する', async () => {
     expect(await customerApi.merge('c1', 'c2')).toEqual({
       ok: true,

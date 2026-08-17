@@ -10,4 +10,4 @@ import java.util.List;
  * <p>{@code total} はその番号を持つ生きた行の総数で、{@code customers} は上限で切られうる。切った件数を偽らないために両方を持つ。
  */
 public record CustomerDuplicateGroupResponse(
-    String phoneNumber, long total, List<CustomerDuplicateResponse> customers) {}
+    String phoneNumber, long total, List<CustomerMergeComparisonResponse> customers) {}

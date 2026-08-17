@@ -78,8 +78,11 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
   private static final int TOTAL_FEE = 12000;
 
-  /** 1 グループについて返す行数の上限（{@code CustomerService} の同名の定数と揃える）。 */
-  private static final int MAX_ROWS_PER_GROUP = 20;
+  /** 行を並べるグループの大きさの上限（{@code CustomerService} の同名の定数と揃える）。 */
+  private static final int MAX_LISTED_GROUP_SIZE = 20;
+
+  /** 字面セグメントなので、{@code /store/customers/{id}} ではなくこの読み口へ届くこと自体が経路の断言になる。 */
+  private static final String COMPARISON_PATH = "/store/customers/merge-comparison";
 
   @Autowired private CustomerRepository customerRepository;
   @Autowired private CustomerMemberLinkRepository customerMemberLinkRepository;
@@ -342,21 +345,27 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("桁外れに大きいグループは行が上限で切られ、総数は切られないこと")
-  void capsTheRowsOfAnOversizedGroupWithoutLyingAboutItsSize() {
+  @DisplayName("桁外れに大きいグループは行を並べず、総数は偽らないこと")
+  void omitsTheRowsOfAnOversizedGroupWithoutLyingAboutItsSize() {
     // 移行データの代替値のような、識別の手がかりを持たない番号。字面をいくら絞り込んでも
     // すり抜けるので、グループの大きさで頭打ちにする
     String placeholder = phone("代替値");
-    int total = MAX_ROWS_PER_GROUP + 3;
+    int total = MAX_LISTED_GROUP_SIZE + 3;
+    List<String> created = new ArrayList<>();
     for (int i = 0; i < total; i++) {
-      createCustomerWithPhone("代替値" + i + "-" + nonce, placeholder);
+      created.add(createCustomerWithPhone("代替値" + i + "-" + nonce, placeholder));
     }
 
     JsonNode group = duplicateGroup(STORE_A, placeholder);
 
-    assertThat(group.path("customers")).hasSize(MAX_ROWS_PER_GROUP);
+    // 数百行から取り出した先頭の数行は本人を見分ける材料にならず、並べれば「この中から選べ」と読ませる
+    assertThat(group.path("customers")).isEmpty();
     // 描いた行数を件数として名乗ると、見えている分がその番号の全部だと読まれる
     assertThat(group.path("total").asInt()).isEqualTo(total);
+    // 候補に行が出ない番号でも、顧客一覧で 2 行を選べば見比べられる（統合の入口は候補面だけではない）
+    assertThat(comparisonRows(STORE_A, created.get(0), created.get(total - 1)))
+        .extracting(row -> row.path("id").asString())
+        .containsExactly(created.get(0), created.get(total - 1));
   }
 
   @Test
@@ -365,6 +374,77 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> asStaff =
         rest.exchange(
             DUPLICATES_PATH,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+
+    assertThat(asStaff.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  // ==================== 見比べ ====================
+
+  @Test
+  @DisplayName("選んだ 2 行が、受注件数と紐づけの有無を添えて選んだ順に返ること")
+  void returnsTheComparisonMaterialOfTwoCustomersInTheRequestedOrder() {
+    String withOrder = createCustomer("見比べ受注-" + nonce);
+    String withMember = createCustomer("見比べ会員-" + nonce);
+    confirmedOrderFor(withOrder, "見比べ");
+    link(withMember, registerMember("comparison"));
+
+    List<JsonNode> rows = comparisonRows(STORE_A, withMember, withOrder);
+
+    // 並びが入れ替わると画面の左右が入れ替わり、「残す行」の選択が別人を指す
+    assertThat(rows)
+        .extracting(row -> row.path("id").asString())
+        .containsExactly(withMember, withOrder);
+    // 材料が無いと人手の確認が形だけになる
+    assertThat(rows.get(0).path("member_linked").asBoolean()).isTrue();
+    assertThat(rows.get(0).path("order_count").asInt()).isZero();
+    assertThat(rows.get(1).path("member_linked").asBoolean()).isFalse();
+    assertThat(rows.get(1).path("order_count").asInt()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("統合済みの行を含む見比べは 404 になること")
+  void refusesToCompareATombstone() {
+    String surviving = createCustomer("見比べ存続-" + nonce);
+    String merged = createCustomer("見比べ被統合-" + nonce);
+    String other = createCustomer("見比べ第三-" + nonce);
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 旧 ID を統合先へ解決する詳細の読み口とは非対称。ここで統合先へ向け直すと、
+    // 人が選んだ行とは別の行が並び、同一人物かの判断が別の 2 行についてのものになる
+    assertThat(comparisonResponse(STORE_A, other, merged).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("他店舗の顧客を混ぜた見比べは 404 で、その行の内容も返らないこと")
+  void keepsForeignStoreCustomersOutOfTheComparison() {
+    String foreignName = "見比べ越境-" + nonce;
+    String foreignFirst = createCustomerAt(STORE_B, foreignName);
+    String foreignSecond = createCustomerAt(STORE_B, "見比べ越境対照-" + nonce);
+    String mine = createCustomer("見比べ自店-" + nonce);
+
+    ResponseEntity<JsonNode> response = comparisonResponse(STORE_A, mine, foreignFirst);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(response.getBody().toString()).doesNotContain(foreignName);
+    // 空集合には何でも成り立つ。同じ 2 行がその店舗からは読めることを対照に置く
+    assertThat(comparisonRows(STORE_B, foreignFirst, foreignSecond))
+        .extracting(row -> row.path("name").asString())
+        .contains(foreignName);
+  }
+
+  @Test
+  @DisplayName("見比べの読み口は店長権限を要し、スタッフ権限では 403 になること")
+  void requiresTheManagerOnlyMergePermissionToCompare() {
+    String first = createCustomer("見比べ権限甲-" + nonce);
+    String second = createCustomer("見比べ権限乙-" + nonce);
+
+    ResponseEntity<JsonNode> asStaff =
+        rest.exchange(
+            comparisonPath(first, second),
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
@@ -1025,6 +1105,28 @@ class CustomerMergeIT extends CrossStoreTestSupport {
       }
     }
     return Optional.empty();
+  }
+
+  // ==================== 見比べの読み ====================
+
+  private static String comparisonPath(String first, String second) {
+    return COMPARISON_PATH + "?ids=" + first + "&ids=" + second;
+  }
+
+  private ResponseEntity<JsonNode> comparisonResponse(long storeId, String first, String second) {
+    return rest.exchange(
+        comparisonPath(first, second),
+        HttpMethod.GET,
+        new HttpEntity<>(managerHeaders(storeId)),
+        JsonNode.class);
+  }
+
+  private List<JsonNode> comparisonRows(long storeId, String first, String second) {
+    ResponseEntity<JsonNode> response = comparisonResponse(storeId, first, second);
+    assertThat(response.getStatusCode()).as("前提: 見比べを読めること").isEqualTo(HttpStatus.OK);
+    List<JsonNode> rows = new ArrayList<>();
+    response.getBody().forEach(rows::add);
+    return rows;
   }
 
   private JsonNode candidateRow(JsonNode group, String customerId) {

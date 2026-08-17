@@ -3,7 +3,7 @@ import { notify } from '@/shared/notify';
 import CustomerDuplicatesPage from '../ui/CustomerDuplicatesPage';
 import {
   CustomerDuplicateGroupResponse,
-  CustomerDuplicateResponse,
+  CustomerMergeComparisonResponse,
   customerApi,
 } from '@/entities/customer';
 import { CursorPageResult } from '@/shared/api';
@@ -24,7 +24,9 @@ jest.mock('next/navigation', () => ({
 const mockedDuplicates = customerApi.duplicates as jest.Mock;
 const mockedMerge = customerApi.merge as jest.Mock;
 
-function candidate(overrides: Partial<CustomerDuplicateResponse>): CustomerDuplicateResponse {
+function candidate(
+  overrides: Partial<CustomerMergeComparisonResponse>
+): CustomerMergeComparisonResponse {
   return { member_linked: false, order_count: 0, ...overrides };
 }
 
@@ -153,17 +155,20 @@ describe('CustomerDuplicatesPage', () => {
     expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument();
   });
 
-  it('上限で切ったグループは、総数と切ったことを画面に出すこと', async () => {
-    // 描いた行数を件数として出すと、200 件のグループが 20 件と名乗る
+  it('行を並べない桁外れのグループは、総数と統合できる画面を案内すること', async () => {
+    // 桁外れのグループは行が返らない（標本は本人を見分ける材料にならない）。総数だけは偽らない
     mockedDuplicates.mockResolvedValue({
-      rows: [{ ...twoRowGroup.rows[0], total: 200 }],
+      rows: [{ phone_number: '0000000000', total: 200, customers: [] }],
       nextCursor: null,
     });
 
     render(<CustomerDuplicatesPage />);
 
     expect(await screen.findByText('200 件')).toBeInTheDocument();
-    expect(screen.getByText(/先頭の 2/)).toBeInTheDocument();
+    // 案内は実際に統合できる画面を指すこと（顧客一覧で 2 行を選ぶ経路）
+    expect(screen.getByText(/顧客一覧で選んでください/)).toBeInTheDocument();
+    // 選べない行を並べない
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('2 行を選ぶと、両行の内容が並べて表示されること', async () => {
