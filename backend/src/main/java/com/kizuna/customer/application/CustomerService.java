@@ -1,6 +1,9 @@
 package com.kizuna.customer.application;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
+import com.kizuna.customer.api.dto.CustomerDuplicateCandidatesResponse;
+import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
+import com.kizuna.customer.api.dto.CustomerDuplicateResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
@@ -9,6 +12,7 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
+import com.kizuna.customer.domain.CustomerOrderCountView;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.ConflictException;
@@ -18,12 +22,15 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScoped;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -37,6 +44,16 @@ public class CustomerService {
 
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
+
+  /**
+   * 1 回に返す重複候補のグループ数の上限。続きを辿る手段は持たせず、上限に達したことを応答が告げる。
+   *
+   * <p>絞り込みで縮められない一覧なので、上限だけ置いて黙るのは「もう重複は無い」と読ませることになる。 告げたうえで切るのは、統合を 1 件進めるたびに候補が 1
+   * つ減る（片方が墓標になり、残った 1 行はグループを成さない）ためで、 進めれば残りが順に現れる。
+   *
+   * <p>package-private なのは、切り落としの算術を固定する単体テストが上限を超える入力を組み立てるため。
+   */
+  static final int DUPLICATE_GROUP_LIMIT = 50;
 
   private static final String MERGED_CUSTOMER_UNDELETABLE =
       "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
@@ -77,6 +94,62 @@ public class CustomerService {
           row.setMemberLinked(activeCodes.containsKey(customer.getId()));
           return row;
         });
+  }
+
+  /**
+   * 重複候補 — 同店の生きた行のうち、第一電話番号が一致する 2 行以上のグループ。
+   *
+   * <p>提示は手がかりであって判定ではない。確度スコアも自動統合も持たず、どれを畳むかは常に人が決める（ADR 0010）。 同じ番号の別人（連絡先を共有する同伴者）は正規に起こりうる。
+   *
+   * <p>受注件数と紐づけの有無を添えるのは、別人を誤って畳まないための材料だからである。無いと人手の確認が形だけになる。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public CustomerDuplicateCandidatesResponse listDuplicateCandidates() {
+    // 上限より 1 つ多く引く。切り落としたかどうかを件数だけで判るようにするため
+    List<String> phoneNumbers =
+        customerRepository.findDuplicatePhoneNumbers(Limit.of(DUPLICATE_GROUP_LIMIT + 1));
+    boolean truncated = phoneNumbers.size() > DUPLICATE_GROUP_LIMIT;
+    if (truncated) {
+      phoneNumbers = phoneNumbers.subList(0, DUPLICATE_GROUP_LIMIT);
+    }
+    if (phoneNumbers.isEmpty()) {
+      return new CustomerDuplicateCandidatesResponse(List.of(), false);
+    }
+
+    List<Customer> customers =
+        customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
+            phoneNumbers);
+    List<String> ids = customers.stream().map(Customer::getId).toList();
+    // 紐づけと受注件数は候補全体をまとめて 1 回ずつで引く（行ごとの追加問い合わせを作らない）。
+    Set<String> linkedIds =
+        customerMemberLinkRepository.findByCustomerIdInAndStatus(ids, LinkStatus.ACTIVE).stream()
+            .map(CustomerMemberLink::getCustomerId)
+            .collect(Collectors.toSet());
+    Map<String, Long> orderCounts =
+        customerMergeRepository.countOrdersByCustomerId(ids).stream()
+            .collect(
+                Collectors.toMap(
+                    CustomerOrderCountView::getCustomerId, CustomerOrderCountView::getOrderCount));
+
+    Map<String, List<CustomerDuplicateResponse>> grouped = new LinkedHashMap<>();
+    for (Customer customer : customers) {
+      grouped
+          .computeIfAbsent(customer.getPhoneNumber(), phoneNumber -> new ArrayList<>())
+          .add(
+              customerMapper.toDuplicateResponse(
+                  customer,
+                  linkedIds.contains(customer.getId()),
+                  orderCounts.getOrDefault(customer.getId(), 0L)));
+    }
+    return new CustomerDuplicateCandidatesResponse(
+        grouped.entrySet().stream()
+            // 候補を数えてから引き直すまでの間に統合が確定すると、片方が墓標になって 1 行だけの
+            // グループが残る。1 行は重複ではないので、候補として出さない
+            .filter(group -> group.getValue().size() >= 2)
+            .map(group -> new CustomerDuplicateGroupResponse(group.getKey(), group.getValue()))
+            .toList(),
+        truncated);
   }
 
   /**
@@ -176,8 +249,9 @@ public class CustomerService {
     } catch (DataIntegrityViolationException ex) {
       // 統合の側は事前判定と削除の間に統合が確定した競合の最終防波堤。統合に関与した行は履歴の 2 本と、
       // 存続行なら墓標からの自己参照にも指されており、どれが先に違反として現れるかは DB の検査順に依るので
-      // 3 本とも同じ案内へ写す。受注の側は事前判定を持たない（顧客モジュールから受注を数えると依存が環に
-      // なる）ので、この写像が唯一の分類になる。写像を持たない整合性違反は実装欠陥として大きく失敗させる。
+      // 3 本とも同じ案内へ写す。受注の側は事前判定を持たない — 数えること自体は HQL の中で order を
+      // 名指せば可能だが、判定と DELETE の間に受注が生まれれば覆るため、この写像が唯一の分類になる。
+      // 写像を持たない整合性違反は実装欠陥として大きく失敗させる。
       Supplier<RuntimeException> undeletable =
           () -> new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
       throw IntegrityViolations.translate(

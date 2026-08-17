@@ -9,8 +9,10 @@ import {
 } from '@/shared/api';
 import {
   CustomerCreateRequest,
+  CustomerDuplicateCandidatesResponse,
   CustomerMemberLinkHistoryResponse,
   CustomerMemberLinkResponse,
+  CustomerMergeResponse,
   CustomerPointAdjustmentRequest,
   CustomerPointBalanceResponse,
   CustomerResponse,
@@ -30,6 +32,14 @@ export const customerApi = {
     const response = await apiClient.get('/store/customers', { params });
     return fromSpringPage(response.data);
   },
+  /**
+   * 重複候補（同店・生きた行・第一電話番号が一致する 2 行以上のグループ）を取得する。
+   * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
+   */
+  duplicates: async (): Promise<CustomerDuplicateCandidatesResponse> => {
+    const response = await apiClient.get('/store/customers/duplicates');
+    return response.data;
+  },
   /** 顧客詳細を取得する */
   get: async (id: string): Promise<CustomerResponse> => {
     const response = await apiClient.get(`/store/customers/${id}`);
@@ -48,6 +58,19 @@ export const customerApi = {
   /** 顧客を削除する */
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/store/customers/${id}`);
+  },
+  /**
+   * 重複した 2 行を 1 つへまとめる。パスが名指すのが存続行で、本文が被統合行を指す。
+   * 取り消せない（ADR 0010）ので、呼び出しは人手の確認を経た後だけ。
+   */
+  merge: async (
+    survivingCustomerId: string,
+    mergedCustomerId: string
+  ): Promise<CustomerMergeResponse> => {
+    const response = await apiClient.post(`/store/customers/${survivingCustomerId}/merges`, {
+      merged_customer_id: mergedCustomerId,
+    });
+    return response.data;
   },
   /** 会員コードで会員を顧客へ紐づける（既に別の会員と紐づいていれば付け替える） */
   linkMember: async (id: string, memberCode: string): Promise<CustomerMemberLinkResponse> => {

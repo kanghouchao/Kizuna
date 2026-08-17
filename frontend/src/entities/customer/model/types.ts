@@ -41,6 +41,60 @@ export interface CustomerSummaryResponse {
   ng_type?: string;
 }
 
+/**
+ * 重複候補の 1 行（GET /store/customers/duplicates）。
+ * customer/api/dto/CustomerDuplicateResponse.java に対応。
+ *
+ * 一覧の型より項目が多いのは、この読み口の用途が「絞り込んで選ぶ」ではなく「別人を誤って
+ * 畳まないための見比べ」だからである。統合済みかどうかの欄は持たない — 候補は定義上すべて
+ * 生きた行である。
+ */
+export interface CustomerDuplicateResponse {
+  id?: string;
+  name?: string;
+  phone_number?: string;
+  phone_number2?: string;
+  address?: string;
+  building_name?: string;
+  classification?: string;
+  has_pet?: boolean;
+  rank?: string;
+  line_id?: string;
+  usage_areas?: string;
+  ng_type?: string;
+  ng_content?: string;
+  /** Java 側が primitive のため、キーは必ず応答に含まれる。 */
+  member_linked: boolean;
+  /** 状態を問わない受注の件数。Java 側が primitive のため、キーは必ず応答に含まれる。 */
+  order_count: number;
+}
+
+/** 同じ第一電話番号を持つ生きた顧客のグループ。必ず 2 行以上を含む。 */
+export interface CustomerDuplicateGroupResponse {
+  phone_number?: string;
+  customers: CustomerDuplicateResponse[];
+}
+
+/**
+ * 重複候補の一覧。truncated は上限で切り落としたことを示す — 黙って切ると、上限まで見た人が
+ * 「もう重複は無い」と読んでしまう。
+ */
+export interface CustomerDuplicateCandidatesResponse {
+  groups: CustomerDuplicateGroupResponse[];
+  truncated: boolean;
+}
+
+/**
+ * 実行された顧客統合の応答。customer/api/dto/CustomerMergeResponse.java に対応。
+ *
+ * 件数は統合が実際に移した数で、統合履歴に残る値と同一である。取り消す端点は無い（ADR 0010）。
+ */
+export interface CustomerMergeResponse {
+  surviving_customer_id: string;
+  moved_order_count: number;
+  moved_link_count: number;
+}
+
 /** 会員紐づけの関連状態。customer/domain/LinkStatus.java と対応。 */
 export type CustomerMemberLinkStatus = 'ACTIVE' | 'RELEASED';
 

@@ -39,6 +39,22 @@ describe('customerApi', () => {
   it('get は /store/customers/:id を GET する', async () => {
     expect(await customerApi.get('c1')).toEqual({ ok: true, url: '/store/customers/c1' });
   });
+  it('duplicates は /store/customers/duplicates を GET する', async () => {
+    // 字面セグメント。/{id} と同じパス空間に住むので、綴りが変わると詳細取得へ吸われる
+    expect(await customerApi.duplicates()).toEqual({
+      ok: true,
+      url: '/store/customers/duplicates',
+    });
+  });
+  it('merge は存続行の配下へ被統合行の ID を snake_case で POST する', async () => {
+    expect(await customerApi.merge('c1', 'c2')).toEqual({
+      ok: true,
+      url: '/store/customers/c1/merges',
+    });
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/merges', {
+      merged_customer_id: 'c2',
+    });
+  });
   it('create は /store/customers を POST する', async () => {
     expect(await customerApi.create({ name: 'A' })).toEqual({
       ok: true,

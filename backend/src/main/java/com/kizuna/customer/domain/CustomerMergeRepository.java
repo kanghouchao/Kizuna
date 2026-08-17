@@ -1,5 +1,6 @@
 package com.kizuna.customer.domain;
 
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -35,6 +36,22 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
       @Param("survivingId") String survivingId,
       @Param("mergedId") String mergedId,
       @Param("storeId") Long storeId);
+
+  /**
+   * 顧客ごとの受注件数。重複候補を見比べる人が「どちらの行に来店の記録が積まれているか」を判断する材料で、状態では絞らない — 統合が移すのも全状態である。
+   *
+   * <p>受注を参照する理由と、型ではなく HQL の中だけで名指す理由は {@link #repointOrders} と同じ。行ごとに数えず 1 文でまとめて引くのは、
+   * 候補が数十行になっても問い合わせが増えないようにするため。受注を 1 件も持たない顧客はこの結果に現れない（呼出側が 0 として扱う）。
+   */
+  @Query(
+      """
+      select o.customerId as customerId, count(o) as orderCount
+      from com.kizuna.order.domain.Order o
+      where o.customerId in :customerIds
+      group by o.customerId
+      """)
+  List<CustomerOrderCountView> countOrdersByCustomerId(
+      @Param("customerIds") Collection<String> customerIds);
 
   /** その顧客が統合に関与しているか（存続行として受けた統合・自分が被統合となった統合のいずれも）。 */
   @Query(
