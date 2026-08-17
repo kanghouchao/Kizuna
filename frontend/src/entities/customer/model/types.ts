@@ -71,10 +71,10 @@ export interface CustomerMergeComparisonResponse {
 }
 
 /**
- * 同じ第一電話番号を持つ生きた顧客のグループ。必ず 2 行以上を含む。
+ * 同じ第一電話番号を持つ生きた顧客のグループ。
  *
- * customers は上限で切られうるので、件数の表示には必ず total を使う（length を出すと
- * 200 件のグループが 20 件と名乗る）。
+ * customers は全行か空のいずれかで、桁外れに大きいグループでは空になる。件数の表示には
+ * 必ず total を使う（length を出すと 200 件のグループが 0 件と名乗る）。
  */
 export interface CustomerDuplicateGroupResponse {
   phone_number?: string;

@@ -317,6 +317,8 @@ describe('顧客一覧からの統合', () => {
     // 「統合する」は確認を開くだけ。ここで走ってしまうと取り返しがつかない
     expect(await screen.findByText('顧客を統合しますか？')).toBeInTheDocument();
     expect(screen.getByText(/統合は取り消せません/)).toBeInTheDocument();
+    // 転記の期限は「今」。統合後は被統合行にしかない値を読む経路が無い
+    expect(screen.getByText(/統合後どこからも読めなくなります/)).toBeInTheDocument();
     expect(mockedCustomerApi.merge).not.toHaveBeenCalled();
 
     const dialog = screen.getByRole('dialog');
@@ -326,6 +328,34 @@ describe('顧客一覧からの統合', () => {
     // 畳んだ行が選ばれたままだと、次の操作が既に墓標の行を指す
     await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument());
     expect(mockedCustomerApi.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('統合の実行中は選択を変えられないこと', async () => {
+    // 実行中に選択が変わると見比べる区画ごと消え、取り返しのつかない操作の確認が在途のまま
+    // 画面から失せる
+    let finishMerge = () => {};
+    mockedCustomerApi.merge.mockReturnValue(
+      new Promise(resolve => {
+        finishMerge = () =>
+          resolve({ surviving_customer_id: 'c1', moved_order_count: 3, moved_link_count: 0 });
+      }) as never
+    );
+
+    render(<CustomersPage />);
+    await selectPair();
+    fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
+    fireEvent.click(screen.getByRole('button', { name: '統合する' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '統合する' }));
+    await waitFor(() => expect(mockedCustomerApi.merge).toHaveBeenCalled());
+
+    const selected = screen.getByLabelText('ヤマダタロウ を見比べる');
+    expect(selected).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(selected);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    finishMerge();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('選択がページ送りを跨いでも残ること', async () => {
