@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 顧客統合の実行。パスが名指すのが存続行で、本文が被統合行を指す。
+ * 顧客統合の実行と、その履歴の閲覧。パスの {@code customerId} が指す行はメソッドで異なる（各 handler に記す）。
  *
  * <p>統合を取り消す端点は無い。誤統合の修復は統合履歴を根拠とする人手作業である（ADR 0010）。
  */
@@ -30,6 +30,7 @@ public class CustomerMergeController {
 
   private final CustomerMergeService customerMergeService;
 
+  /** 統合を実行する。パスが名指すのが存続行で、本文が被統合行を指す。 */
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
   public ResponseEntity<CustomerMergeResponse> merge(
