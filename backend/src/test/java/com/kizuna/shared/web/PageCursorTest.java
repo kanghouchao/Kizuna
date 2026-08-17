@@ -119,4 +119,22 @@ class PageCursorTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("続きの位置");
   }
+
+  @Test
+  @DisplayName("UTF-8 として不正なカーソルは、空の成功ではなく要求誤りになること")
+  void rejectsCursorsWhoseBytesAreNotValidUtf8() {
+    // "_w" は 1 バイトの 0xFF に復号される。new String(bytes, UTF_8) はこれを黙って U+FFFD へ
+    // 置き換えるため、捏造された鍵がそのまま問い合わせへ渡り、400 のはずが「空の成功」になる。
+    // 空で返ると候補が尽きたように読めるので、壊れたカーソルを先頭扱いにするのと同じ害がある
+    assertThatThrownBy(() -> PageCursor.decodeKey("_w"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("続きの位置");
+  }
+
+  @Test
+  @DisplayName("正しく符号化したカーソルは、非 ASCII を含んでも往復すること")
+  void roundTripsKeysCarryingNonAsciiCharacters() {
+    // 厳格な復号器にしたので、正当な多バイト文字まで巻き添えにしていないことを併せて見る
+    assertThat(PageCursor.decodeKey(PageCursor.encodeKey("＋８１−９０　全角"))).isEqualTo("＋８１−９０　全角");
+  }
 }

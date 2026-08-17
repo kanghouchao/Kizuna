@@ -1,6 +1,9 @@
 package com.kizuna.shared.web;
 
 import com.kizuna.shared.exception.ServiceException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -51,16 +54,40 @@ public record PageCursor(String key, String id) {
   }
 
   /**
-   * 符号を解いて中身の文字列に戻す。
+   * 符号を解いて中身の文字列に戻す。復号できない入力はすべてここで要求誤り（400）に落とす。
    *
-   * <p>NUL を含む復号結果はここで撥ねる。PostgreSQL の text は NUL を保持できないので、素通しすると問い合わせの束縛で落ち、 是正しうる要求誤り（400）のはずが
-   * DB 由来の 500 になる。鍵と id のどちらも最終的には問い合わせへ渡るため、判定は復号の直後に 1 箇所で行う。
+   * <p>判定は 2 つで、この 2 つで<b>全てである</b>。Base64 として解けたバイト列が「問い合わせへ束縛できる文字列」にならない 経路は次の 2
+   * つしかなく、どちらも塞げば残りは無い:
+   *
+   * <ul>
+   *   <li><b>UTF-8 として不正</b>: {@code new String(bytes, UTF_8)} は不正なバイトを黙って U+FFFD に置き換えるため、
+   *       捏造された鍵がそのまま問い合わせへ渡り、400 のはずが「空の成功」になる。空で返ると候補が尽きたように読めるので、
+   *       黙って先頭扱いにするのと同じ害がある。報告する復号器を使って例外にする。
+   *   <li><b>NUL を含む</b>: PostgreSQL の text は NUL を保持できないので、渡すと束縛で落ちて DB 由来の 500 になる。
+   * </ul>
+   *
+   * <p>これ以外の文字（他の制御文字・孤立サロゲート・長大な値）は text にそのまま入るか、厳格な復号器が既に弾いている。
+   *
+   * <p>鍵と id のどちらも最終的には問い合わせへ渡るため、判定は復号の直後に 1 箇所で行う。
    */
   private static String decodeBase64(String encoded) {
+    byte[] bytes;
+    try {
+      bytes = Base64.getUrlDecoder().decode(encoded);
+    } catch (IllegalArgumentException e) {
+      throw new ServiceException(MALFORMED_MESSAGE);
+    }
     String decoded;
     try {
-      decoded = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
-    } catch (IllegalArgumentException e) {
+      // CharsetDecoder は状態を持つので使い回さない
+      decoded =
+          StandardCharsets.UTF_8
+              .newDecoder()
+              .onMalformedInput(CodingErrorAction.REPORT)
+              .onUnmappableCharacter(CodingErrorAction.REPORT)
+              .decode(ByteBuffer.wrap(bytes))
+              .toString();
+    } catch (CharacterCodingException e) {
       throw new ServiceException(MALFORMED_MESSAGE);
     }
     if (decoded.indexOf('\0') >= 0) {
