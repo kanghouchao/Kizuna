@@ -43,25 +43,34 @@ public record PageCursor(String key, String id) {
 
   /** {@link #encodeKey} の逆。復号の失敗を要求誤り（400）として扱う理由は {@link #decode} と同じ。 */
   public static String decodeKey(String encoded) {
-    String decoded;
-    try {
-      decoded = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
-    } catch (IllegalArgumentException e) {
-      throw new ServiceException(MALFORMED_MESSAGE);
-    }
+    String decoded = decodeBase64(encoded);
     if (decoded.isEmpty()) {
       throw new ServiceException(MALFORMED_MESSAGE);
     }
     return decoded;
   }
 
-  public static PageCursor decode(String encoded) {
+  /**
+   * 符号を解いて中身の文字列に戻す。
+   *
+   * <p>NUL を含む復号結果はここで撥ねる。PostgreSQL の text は NUL を保持できないので、素通しすると問い合わせの束縛で落ち、 是正しうる要求誤り（400）のはずが
+   * DB 由来の 500 になる。鍵と id のどちらも最終的には問い合わせへ渡るため、判定は復号の直後に 1 箇所で行う。
+   */
+  private static String decodeBase64(String encoded) {
     String decoded;
     try {
       decoded = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
     } catch (IllegalArgumentException e) {
       throw new ServiceException(MALFORMED_MESSAGE);
     }
+    if (decoded.indexOf('\0') >= 0) {
+      throw new ServiceException(MALFORMED_MESSAGE);
+    }
+    return decoded;
+  }
+
+  public static PageCursor decode(String encoded) {
+    String decoded = decodeBase64(encoded);
     String[] parts = decoded.split(SEPARATOR, -1);
     if (parts.length != 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
       throw new ServiceException(MALFORMED_MESSAGE);

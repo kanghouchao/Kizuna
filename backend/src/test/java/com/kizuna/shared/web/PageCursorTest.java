@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.shared.exception.ServiceException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Base64;
@@ -92,5 +93,30 @@ class PageCursorTest {
     // 数として読めない副キーをそのまま問い合わせへ渡すと、要求誤りが 500 として出る。
     assertThatThrownBy(new PageCursor("2026-08-04T10:00:00+09:00", "order-1")::longId)
         .isInstanceOf(ServiceException.class);
+  }
+
+  @Test
+  @DisplayName("復号すると NUL を含むカーソルは、要求誤りとして撥ねられること")
+  void rejectsCursorsWhoseDecodedFormCarriesANulCharacter() {
+    // "AA" は 1 バイトの 0x00 に復号される。空ではないので長さの検査は素通りするが、
+    // PostgreSQL の text は NUL を保持できないため、渡すと問い合わせの束縛で落ちて
+    // 是正しうる要求誤り（400）のはずが DB 由来の 500 になる
+    assertThatThrownBy(() -> PageCursor.decodeKey("AA"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("続きの位置");
+  }
+
+  @Test
+  @DisplayName("鍵と id の組でも、NUL を含むカーソルは撥ねられること")
+  void rejectsPairCursorsCarryingANulCharacter() {
+    String encoded =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                ("2026-08-17T00:00:00Z" + (char) 0x1F + "\u0000").getBytes(StandardCharsets.UTF_8));
+
+    assertThatThrownBy(() -> PageCursor.decode(encoded))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("続きの位置");
   }
 }
