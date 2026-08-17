@@ -43,8 +43,12 @@ describe('MergeHistorySection', () => {
     mockedApi.mergeHistory.mockResolvedValue(historyPage([]));
   });
 
-  it('統合が無ければ、その旨を空表示で示すこと', async () => {
+  it('読み込み中を経て、統合が無いことを空表示で示すこと', async () => {
     render(<MergeHistorySection customerId="c1" />);
+
+    // 読み込み中を空表示と同じ姿で描くと、まだ取りに行っている間ずっと「無い」と言い続ける
+    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.queryByText('統合履歴がありません')).not.toBeInTheDocument();
 
     expect(await screen.findByText('統合履歴がありません')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
