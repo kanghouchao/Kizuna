@@ -12,6 +12,7 @@ import {
   CustomerDuplicateGroupResponse,
   CustomerMemberLinkHistoryResponse,
   CustomerMemberLinkResponse,
+  CustomerMergeHistoryResponse,
   CustomerMergeResponse,
   CustomerPointAdjustmentRequest,
   CustomerPointBalanceResponse,
@@ -74,6 +75,18 @@ export const customerApi = {
       merged_customer_id: mergedCustomerId,
     });
     return response.data;
+  },
+  /**
+   * その顧客に関する統合履歴を新しい順に取得する。存続行として受けた統合と、自分が被統合と
+   * なった統合の両方が返る。統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
+   * 続きは応答の nextCursor をそのまま cursor に渡して取る。
+   */
+  mergeHistory: async (
+    id: string,
+    params?: CursorParams
+  ): Promise<CursorPageResult<CustomerMergeHistoryResponse>> => {
+    const response = await apiClient.get(`/store/customers/${id}/merges`, { params });
+    return fromCursorPage(response.data);
   },
   /** 会員コードで会員を顧客へ紐づける（既に別の会員と紐づいていれば付け替える） */
   linkMember: async (id: string, memberCode: string): Promise<CustomerMemberLinkResponse> => {

@@ -93,6 +93,37 @@ export interface CustomerMergeResponse {
   moved_link_count: number;
 }
 
+/**
+ * 統合履歴 1 件が、開いている顧客から見てどちら側だったか。
+ * customer/api/dto/MergeDirection.java に対応。
+ *
+ * SURVIVING はこの行が存続行として統合を受けた側、MERGED はこの行が被統合となり
+ * 墓標になった側。同じ 1 件が、相手の画面では逆の値で現れる。
+ */
+export type CustomerMergeDirection = 'SURVIVING' | 'MERGED';
+
+/**
+ * 統合履歴 1 件（GET /store/customers/{id}/merges）。
+ * customer/api/dto/CustomerMergeHistoryResponse.java に対応。
+ *
+ * 統合に取消は無く、誤統合の修復は「誰が・いつ・どの行をどの行へ・何を移したか」を根拠と
+ * する人手作業である（ADR 0010）。相手の行は id と表示名の両方を持つ。
+ */
+export interface CustomerMergeHistoryResponse {
+  id: string;
+  direction: CustomerMergeDirection;
+  counterpart_customer_id: string;
+  /** 相手の行の名前。台帳の name 列は NOT NULL ではないため欠けうる。 */
+  counterpart_customer_name?: string;
+  /** 実行者の表示名。実行者が削除されると欠ける（行そのものは残る）。 */
+  merged_by_name?: string;
+  merged_at: string;
+  /** Java 側が primitive のため、キーは必ず応答に含まれる。 */
+  moved_order_count: number;
+  /** Java 側が primitive のため、キーは必ず応答に含まれる。 */
+  moved_link_count: number;
+}
+
 /** 会員紐づけの関連状態。customer/domain/LinkStatus.java と対応。 */
 export type CustomerMemberLinkStatus = 'ACTIVE' | 'RELEASED';
 

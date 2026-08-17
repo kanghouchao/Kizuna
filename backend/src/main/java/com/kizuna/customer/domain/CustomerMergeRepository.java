@@ -1,7 +1,9 @@
 package com.kizuna.customer.domain;
 
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -63,4 +65,53 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
 
   /** ある行が被統合となった統合。統合履歴を両方向で読むうちの片側で、もう一方は存続行として受けた統合。 */
   List<CustomerMerge> findByMergedCustomerId(String mergedCustomerId);
+
+  // 実行者と両行の表示名は ID 参照のため JPQL join で取得する。PlatformUser は FQCN で参照する
+  // （HQL の予約語衝突を避ける既存規約）。実行者が削除されると merged_by は NULL になるため
+  // join は left。相手の行の名前まで引くのは、誤統合の修復が「どの行をどの行へ」を根拠にする
+  // 人手作業だからで（ADR 0010）、id だけでは読み手が相手を思い出せない。統合は値を合併しないので
+  // 墓標にも名前は残る。
+  String HISTORY_SELECT =
+      """
+      select m.id as id,
+             m.survivingCustomerId as survivingCustomerId, sc.name as survivingCustomerName,
+             m.mergedCustomerId as mergedCustomerId, mc.name as mergedCustomerName,
+             mu.displayName as mergedByName, m.mergedAt as mergedAt,
+             m.movedOrderCount as movedOrderCount, m.movedLinkCount as movedLinkCount
+      from com.kizuna.customer.domain.CustomerMerge m
+        left join com.kizuna.customer.domain.Customer sc on sc.id = m.survivingCustomerId
+        left join com.kizuna.customer.domain.Customer mc on mc.id = m.mergedCustomerId
+        left join com.kizuna.user.domain.PlatformUser mu on mu.id = m.mergedBy
+      """;
+
+  // 両方向を 1 文で引く。括弧は必須 — 外すと続きの位置の条件が `or` の片方の枝にしか掛からず、
+  // 2 ページ目が 1 ページ目をそのまま返して末尾へ到達できなくなる（外して実測）。
+  String HISTORY_WHERE =
+      " where (m.survivingCustomerId = :customerId or m.mergedCustomerId = :customerId) ";
+
+  // 新しい統合が先頭。mergedAt の同値は id で決定的に解く。カーソルの比較も同じ組で行う。
+  String HISTORY_ORDER = " order by m.mergedAt desc, m.id desc";
+
+  /** 顧客 1 件の統合履歴の先頭。並びは mergedAt の降順に一意な副キー id を重ねて全順序にする。 */
+  @Query(HISTORY_SELECT + HISTORY_WHERE + HISTORY_ORDER)
+  List<CustomerMergeView> findHistory(@Param("customerId") String customerId, Limit limit);
+
+  /**
+   * 顧客 1 件の統合履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。
+   *
+   * <p>id は Snowflake の文字列で、比較も文字列の順序で行う。求めるのは全順序の決定性だけなので、 並び（{@link #HISTORY_ORDER}）と同じ順序であれば足りる。
+   */
+  @Query(
+      HISTORY_SELECT
+          + HISTORY_WHERE
+          + """
+            and (m.mergedAt < :cursorMergedAt
+                 or (m.mergedAt = :cursorMergedAt and m.id < :cursorId))
+            """
+          + HISTORY_ORDER)
+  List<CustomerMergeView> findHistoryAfter(
+      @Param("customerId") String customerId,
+      @Param("cursorMergedAt") OffsetDateTime cursorMergedAt,
+      @Param("cursorId") String cursorId,
+      Limit limit);
 }

@@ -488,6 +488,119 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(customerMergeRepository.findByMergedCustomerId(merged)).hasSize(1);
   }
 
+  @Test
+  @DisplayName("統合履歴が両方向で読め、実行者・実行時刻・相手の行・移した件数が並ぶこと")
+  void readsTheHistoryFromBothSidesOfTheMerge() {
+    String surviving = createCustomer("履歴読み存続-" + nonce);
+    String merged = createCustomer("履歴読み被統合-" + nonce);
+    orderFor(merged, "履歴読み受注");
+    link(merged, registerMember("merge-history-read"));
+
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    JsonNode fromSurviving = onlyHistoryRow(surviving);
+    assertThat(fromSurviving.path("direction").asString()).isEqualTo("SURVIVING");
+    assertThat(fromSurviving.path("counterpart_customer_id").asString()).isEqualTo(merged);
+    // 相手の名前まで出す。統合は値を合併しないので墓標にも名前が残り、これが「どの行を畳んだか」の根拠になる
+    assertThat(fromSurviving.path("counterpart_customer_name").asString())
+        .isEqualTo("履歴読み被統合-" + nonce);
+    assertThat(fromSurviving.path("merged_by_name").asString()).isEqualTo(managerDisplayName());
+    assertThat(fromSurviving.path("merged_at").asString()).isNotBlank();
+    assertThat(fromSurviving.path("moved_order_count").asInt()).isEqualTo(1);
+    assertThat(fromSurviving.path("moved_link_count").asInt()).isEqualTo(1);
+
+    // 被統合行そのものを名指した読みでは、同じ 1 件が反対向きで現れる
+    JsonNode fromMerged = onlyHistoryRow(merged);
+    assertThat(fromMerged.path("id").asString()).isEqualTo(fromSurviving.path("id").asString());
+    assertThat(fromMerged.path("direction").asString()).isEqualTo("MERGED");
+    assertThat(fromMerged.path("counterpart_customer_id").asString()).isEqualTo(surviving);
+    assertThat(fromMerged.path("counterpart_customer_name").asString())
+        .isEqualTo("履歴読み存続-" + nonce);
+  }
+
+  @Test
+  @DisplayName("統合の無い顧客の履歴は空で返り、顧客そのものが無い場合の 404 と分かれること")
+  void separatesAnEmptyHistoryFromAFailedRead() {
+    String neverMerged = createCustomer("履歴無し-" + nonce);
+
+    assertThat(historyPage(STORE_A, neverMerged, null, null).path("content")).isEmpty();
+    // 空を 404 に潰すと、呼出側は「統合が無い」と「読めなかった」を区別できない。
+    // 404 は顧客そのものが引けないときだけに留める
+    assertThat(historyResponse(STORE_A, "0", null, null).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("実行者が削除済みでも履歴の行は返り、実行者名だけが欠けること")
+  void keepsTheRowWhenTheActorIsGone() {
+    String surviving = createCustomer("実行者不明存続-" + nonce);
+    String merged = createCustomer("実行者不明被統合-" + nonce);
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 利用者の削除は FK が merged_by を NULL にする。ここで見たいのは「実行者が引けない履歴」の
+    // 読みなので、他のテストが依存する種の利用者を消さずに同じ状態を直に作る
+    jdbcTemplate.update(
+        "update t_customer_merges set merged_by = null where merged_customer_id = ?", merged);
+
+    JsonNode row = onlyHistoryRow(surviving);
+    assertThat(row.has("merged_by_name")).as("non_null 直列化で欄ごと欠けること").isFalse();
+    assertThat(row.path("counterpart_customer_id").asString()).isEqualTo(merged);
+    assertThat(row.path("merged_at").asString()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("続きを辿ると 1 ページ目に載らなかった統合へ到達でき、両方向の行が重複しないこと")
+  void reachesOlderMergesThroughTheCursor() {
+    String surviving = createCustomer("履歴頁存続-" + nonce);
+    List<String> mergedIds = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      String merged = createCustomer("履歴頁被統合" + i + "-" + nonce);
+      assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+      mergedIds.add(merged);
+    }
+
+    // 続きの条件が両方向の述語と正しく結合していないと、2 ページ目に 1 ページ目の行が混ざる
+    JsonNode firstPage = historyPage(STORE_A, surviving, null, 2);
+    List<String> collected = new ArrayList<>(counterpartsOf(firstPage));
+    assertThat(collected).hasSize(2);
+    JsonNode secondPage = historyPage(STORE_A, surviving, nextCursorOf(firstPage), 2);
+    collected.addAll(counterpartsOf(secondPage));
+
+    assertThat(collected).containsExactlyInAnyOrderElementsOf(mergedIds);
+    assertThat(nextCursorOf(secondPage)).as("3 件を取り切ったら続きは無いこと").isNull();
+  }
+
+  @Test
+  @DisplayName("統合履歴の閲覧は店長権限を要し、スタッフ権限では 403 になること")
+  void requiresTheManagerOnlyMergePermissionToReadTheHistory() {
+    String surviving = createCustomer("履歴権限存続-" + nonce);
+    String merged = createCustomer("履歴権限被統合-" + nonce);
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<JsonNode> asStaff =
+        rest.exchange(
+            mergePath(surviving),
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+
+    assertThat(asStaff.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("他店舗の顧客の統合履歴は 404 になり、存在の有無が漏れないこと")
+  void hidesForeignStoreHistoryBehindNotFound() {
+    String survivingInB = createCustomerAt(STORE_B, "履歴越境存続-" + nonce);
+    String mergedInB = createCustomerAt(STORE_B, "履歴越境被統合-" + nonce);
+    assertThat(merge(STORE_B, survivingInB, mergedInB).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 田中花子は両店舗に授権されるためヘッダは通り、越境は storeFilter による 404 として現れる
+    assertThat(historyResponse(STORE_A, survivingInB, null, null).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(historyResponse(STORE_A, mergedInB, null, null).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
   // ==================== 拒否 ====================
 
   @Test
@@ -814,6 +927,47 @@ class CustomerMergeIT extends CrossStoreTestSupport {
         HttpMethod.POST,
         new HttpEntity<>(mergeBody(mergedCustomerId), managerHeaders(storeId)),
         JsonNode.class);
+  }
+
+  // ==================== 統合履歴の読み ====================
+
+  private ResponseEntity<JsonNode> historyResponse(
+      long storeId, String customerId, String cursor, Integer size) {
+    String query =
+        (cursor == null ? "" : "?cursor=" + cursor)
+            + (size == null ? "" : (cursor == null ? "?" : "&") + "size=" + size);
+    return rest.exchange(
+        mergePath(customerId) + query,
+        HttpMethod.GET,
+        new HttpEntity<>(managerHeaders(storeId)),
+        JsonNode.class);
+  }
+
+  private JsonNode historyPage(long storeId, String customerId, String cursor, Integer size) {
+    ResponseEntity<JsonNode> response = historyResponse(storeId, customerId, cursor, size);
+    assertThat(response.getStatusCode()).as("前提: 統合履歴を読めること").isEqualTo(HttpStatus.OK);
+    return response.getBody();
+  }
+
+  /** 履歴は顧客 ID で絞られるので、他のテストが起こした統合は混ざらない。 */
+  private JsonNode onlyHistoryRow(String customerId) {
+    JsonNode content = historyPage(STORE_A, customerId, null, null).path("content");
+    assertThat(content).as("統合履歴が 1 件だけあること").hasSize(1);
+    return content.get(0);
+  }
+
+  private static List<String> counterpartsOf(JsonNode page) {
+    List<String> counterparts = new ArrayList<>();
+    page.path("content")
+        .forEach(row -> counterparts.add(row.path("counterpart_customer_id").asString()));
+    return counterparts;
+  }
+
+  private String managerDisplayName() {
+    return platformUserRepository
+        .findByEmail(MANAGER_EMAIL)
+        .map(PlatformUser::getDisplayName)
+        .orElseThrow();
   }
 
   /**
