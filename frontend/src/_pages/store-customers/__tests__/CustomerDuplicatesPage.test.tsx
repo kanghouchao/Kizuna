@@ -102,6 +102,16 @@ describe('CustomerDuplicatesPage', () => {
     expect(screen.getByText('紐づけ済み')).toBeInTheDocument();
   });
 
+  it('取得が終わるまでは読み込み中を出すこと', async () => {
+    // 解決しない取得で読み込み枝に留める。空表示に落ちると「重複は無い」と嘘をつく
+    mockedDuplicates.mockReturnValue(new Promise(() => {}));
+
+    render(<CustomerDuplicatesPage />);
+
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.queryByText('電話番号が重複している顧客はいません')).not.toBeInTheDocument();
+  });
+
   it('取得に失敗した領域が自分で名乗り、再試行を出すこと', async () => {
     mockedDuplicates.mockRejectedValueOnce(new Error('boom'));
 
@@ -143,6 +153,18 @@ describe('CustomerDuplicatesPage', () => {
     expect(within(comparison).getByText('GOLD')).toBeInTheDocument();
     expect(within(comparison).getByText('SILVER')).toBeInTheDocument();
     expect(within(comparison).getByText('3 件')).toBeInTheDocument();
+  });
+
+  it('未設定のペット有無を「なし」と断定しないこと', async () => {
+    // 応答は non_null 直列化なので未設定は欄ごと欠けて届く。真偽値へ潰すと、別人を見分ける
+    // ための画面が持っていない事実を断言する
+    render(<CustomerDuplicatesPage />);
+    await selectBothRows();
+
+    const comparison = await screen.findByRole('table', { name: '2 行の比較' });
+    const petRow = within(comparison).getByText('ペット').closest('tr');
+    expect(within(petRow!).queryByText('なし')).not.toBeInTheDocument();
+    expect(within(petRow!).getAllByText('-')).toHaveLength(2);
   });
 
   it('存続行を選ぶまでは統合できないこと（機械が残す行を決めない）', async () => {

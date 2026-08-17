@@ -13,7 +13,6 @@ import {
   Badge,
   Button,
   Checkbox,
-  Label,
   RegionError,
   Table,
   TableBody,
@@ -118,7 +117,6 @@ export default function CustomerDuplicatesPage() {
       </div>
 
       {data?.truncated && (
-        // 黙って切ると、ここまで見た人が「もう重複は無い」と読む
         <p className="rounded-md bg-warning/10 px-4 py-3 text-sm text-warning-strong">
           表示は上限に達しています。統合を進めると残りの候補が出てきます。
         </p>
