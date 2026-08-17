@@ -27,6 +27,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +45,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class CustomerServiceTest {
@@ -401,6 +404,21 @@ class CustomerServiceTest {
     assertThat(page.content()).isEmpty();
     // 先頭からの取得へ落とすと、続きを求めた呼出側に 1 ページ目が返って取りこぼしが成功に見える
     verify(customerRepository, never()).findDuplicatePhoneNumbers(any(Limit.class));
+  }
+
+  @Test
+  @DisplayName("重複候補の読み口が 1 つの断面を要求すること")
+  void duplicateCandidatesRunInASingleSnapshot() throws NoSuchMethodException {
+    // 見出し・行・紐づけ・受注件数と 4 回問い合わせる群読み口。既定の READ COMMITTED では文ごとに
+    // 断面を取り直すため、間に他者の commit が挟まると total だけ古いまま行が増え、上限に収まると
+    // 数えたグループが上限を超えて返る。断面が実際に保たれることは OrderGroupReadSnapshotIT が
+    // 本物の PostgreSQL で見る
+    Method method =
+        CustomerService.class.getMethod("listDuplicateCandidates", String.class, int.class);
+
+    Transactional tx = method.getAnnotation(Transactional.class);
+    assertThat(tx).as("@Transactional があること").isNotNull();
+    assertThat(tx.isolation()).as("1 つの断面を要求すること").isEqualTo(Isolation.REPEATABLE_READ);
   }
 
   /** 読み側 projection の最小の実装。件数は行を引く前に判る（{@code having} が既に数えている）。 */
