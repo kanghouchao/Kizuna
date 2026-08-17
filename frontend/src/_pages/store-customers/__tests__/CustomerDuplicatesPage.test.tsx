@@ -33,6 +33,7 @@ const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
   rows: [
     {
       phone_number: '090-1111-2222',
+      total: 2,
       customers: [
         candidate({
           id: 'c1',
@@ -152,6 +153,19 @@ describe('CustomerDuplicatesPage', () => {
     expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument();
   });
 
+  it('上限で切ったグループは、総数と切ったことを画面に出すこと', async () => {
+    // 描いた行数を件数として出すと、200 件のグループが 20 件と名乗る
+    mockedDuplicates.mockResolvedValue({
+      rows: [{ ...twoRowGroup.rows[0], total: 200 }],
+      nextCursor: null,
+    });
+
+    render(<CustomerDuplicatesPage />);
+
+    expect(await screen.findByText('200 件')).toBeInTheDocument();
+    expect(screen.getByText(/先頭の 2/)).toBeInTheDocument();
+  });
+
   it('2 行を選ぶと、両行の内容が並べて表示されること', async () => {
     render(<CustomerDuplicatesPage />);
     await selectBothRows();
@@ -199,6 +213,10 @@ describe('CustomerDuplicatesPage', () => {
     await openConfirmation();
 
     expect(await screen.findByText(/統合は取り消せません/)).toBeInTheDocument();
+    // 転記の期限は「今」。統合後は被統合行にしかない値を読む経路が無い（一覧からも候補からも
+    // 外れ、旧 ID の詳細は統合先の行を返す）ので、「後で転記できる」と読ませてはならない
+    expect(screen.getByText(/統合後どこからも読めなくなります/)).toBeInTheDocument();
+    expect(screen.getByText(/キャンセルして先に転記/)).toBeInTheDocument();
   });
 
   it('確認は ESC でも背景押下でも閉じないこと', async () => {

@@ -57,10 +57,12 @@ export function CustomerMergeConfirmDialog({
               は一覧から消えます。
             </p>
           </div>
-          {/* 取り消せないことは操作の前に知らせる。事後に気づいても戻す手立てが無い */}
+          {/* 取り消せないことと、転記の期限が「今」であることを操作の前に知らせる。統合後は被統合行の
+              値を読む経路が無い — 一覧からも候補からも外れ、旧 ID の詳細は統合先の行を返す */}
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive-strong">
-            統合は取り消せません。氏名・住所などの値は自動で合わさらないため、
-            {survivingName} に残したい値は統合の前後にご自身で転記してください。
+            統合は取り消せません。値は自動で合わさらず、{mergedName}{' '}
+            にしかない氏名・住所などは統合後どこからも読めなくなります。
+            {survivingName} へ残したい値がある場合は、キャンセルして先に転記してください。
           </p>
           <div className="flex justify-end gap-3 border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>

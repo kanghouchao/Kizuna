@@ -2,12 +2,12 @@ package com.kizuna.customer.application;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
-import com.kizuna.customer.api.dto.CustomerDuplicateResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerDuplicateGroupView;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
@@ -45,6 +45,14 @@ public class CustomerService {
 
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
+
+  /**
+   * 1 つのグループについて返す行数の上限。総数は {@code total} が別に持つので、切っても件数は偽らない。
+   *
+   * <p>番号の字面をいくら絞り込んでも、識別の手がかりを持たない値（移行データの代替値 {@code 0000000000} 等）は必ずすり抜ける。
+   * 値の形ではなく<b>グループの大きさ</b>で頭打ちにすると、すり抜けた値がどんな字面でも取得と描画が有界になる。
+   */
+  private static final int MAX_ROWS_PER_GROUP = 20;
 
   private static final String MERGED_CUSTOMER_UNDELETABLE =
       "統合に関与した顧客は削除できません。統合履歴と旧 ID の解決の根拠になります";
@@ -101,53 +109,90 @@ public class CustomerService {
     int size = CursorPage.clampSize(requestedSize);
     // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
     Limit limit = Limit.of(size + 1);
-    CursorPage<String> page =
+    CursorPage<CustomerDuplicateGroupView> page =
         CursorPage.of(
             cursor == null
                 ? customerRepository.findDuplicatePhoneNumbers(limit)
                 : customerRepository.findDuplicatePhoneNumbersAfter(
                     PageCursor.decodeKey(cursor), limit),
             size,
-            PageCursor::encodeKey);
-    List<String> phoneNumbers = page.content();
-    if (phoneNumbers.isEmpty()) {
-      return new CursorPage<>(List.of(), page.nextCursor());
-    }
+            group -> PageCursor.encodeKey(group.getPhoneNumber()));
 
-    List<Customer> customers =
-        customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
-            phoneNumbers);
-    List<String> ids = customers.stream().map(Customer::getId).toList();
+    Map<String, List<Customer>> rowsByPhoneNumber = fetchRows(page.content());
+    List<String> ids =
+        rowsByPhoneNumber.values().stream().flatMap(List::stream).map(Customer::getId).toList();
     // 紐づけと受注件数は候補全体をまとめて 1 回ずつで引く（行ごとの追加問い合わせを作らない）。
     Set<String> linkedIds =
-        customerMemberLinkRepository.findByCustomerIdInAndStatus(ids, LinkStatus.ACTIVE).stream()
-            .map(CustomerMemberLink::getCustomerId)
-            .collect(Collectors.toSet());
+        ids.isEmpty()
+            ? Set.of()
+            : customerMemberLinkRepository
+                .findByCustomerIdInAndStatus(ids, LinkStatus.ACTIVE)
+                .stream()
+                .map(CustomerMemberLink::getCustomerId)
+                .collect(Collectors.toSet());
     Map<String, Long> orderCounts =
-        customerMergeRepository.countOrdersByCustomerId(ids).stream()
-            .collect(
-                Collectors.toMap(
-                    CustomerOrderCountView::getCustomerId, CustomerOrderCountView::getOrderCount));
+        ids.isEmpty()
+            ? Map.of()
+            : customerMergeRepository.countOrdersByCustomerId(ids).stream()
+                .collect(
+                    Collectors.toMap(
+                        CustomerOrderCountView::getCustomerId,
+                        CustomerOrderCountView::getOrderCount));
 
-    Map<String, List<CustomerDuplicateResponse>> grouped = new LinkedHashMap<>();
-    for (Customer customer : customers) {
-      grouped
-          .computeIfAbsent(customer.getPhoneNumber(), phoneNumber -> new ArrayList<>())
-          .add(
-              customerMapper.toDuplicateResponse(
-                  customer,
-                  linkedIds.contains(customer.getId()),
-                  orderCounts.getOrDefault(customer.getId(), 0L)));
-    }
     return new CursorPage<>(
-        grouped.entrySet().stream()
+        page.content().stream()
+            .map(
+                group ->
+                    new CustomerDuplicateGroupResponse(
+                        group.getPhoneNumber(),
+                        group.getTotal(),
+                        rowsByPhoneNumber.getOrDefault(group.getPhoneNumber(), List.of()).stream()
+                            .map(
+                                customer ->
+                                    customerMapper.toDuplicateResponse(
+                                        customer,
+                                        linkedIds.contains(customer.getId()),
+                                        orderCounts.getOrDefault(customer.getId(), 0L)))
+                            .toList()))
             // 候補を数えてから引き直すまでの間に統合が確定すると、片方が墓標になって 1 行だけの
             // グループが残る。1 行は重複ではないので、候補として出さない
-            .filter(group -> group.getValue().size() >= 2)
-            .map(group -> new CustomerDuplicateGroupResponse(group.getKey(), group.getValue()))
+            .filter(group -> group.customers().size() >= 2)
             .toList(),
         // 続きの位置は電話番号から決まるので、上で落ちたグループがあっても付け替えない
         page.nextCursor());
+  }
+
+  /**
+   * グループごとの行を引く。上限に収まるグループはまとめて 1 回で、桁外れのグループだけを 1 本ずつ上限つきで引く。
+   *
+   * <p>まとめて引く側に大きいグループを混ぜないのは、1 つのグループが取得を食い潰さないため。桁外れのグループは構造上まれ
+   * （移行データの代替値のような、識別の手がかりを持たない番号）なので、追加の問い合わせは通常 0 本になる。
+   */
+  private Map<String, List<Customer>> fetchRows(List<CustomerDuplicateGroupView> groups) {
+    List<String> boundedPhoneNumbers =
+        groups.stream()
+            .filter(group -> group.getTotal() <= MAX_ROWS_PER_GROUP)
+            .map(CustomerDuplicateGroupView::getPhoneNumber)
+            .toList();
+    Map<String, List<Customer>> byPhoneNumber =
+        boundedPhoneNumbers.isEmpty()
+            ? new LinkedHashMap<>()
+            : customerRepository
+                .findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
+                    boundedPhoneNumbers)
+                .stream()
+                .collect(
+                    Collectors.groupingBy(
+                        Customer::getPhoneNumber, LinkedHashMap::new, Collectors.toList()));
+    groups.stream()
+        .filter(group -> group.getTotal() > MAX_ROWS_PER_GROUP)
+        .forEach(
+            group ->
+                byPhoneNumber.put(
+                    group.getPhoneNumber(),
+                    customerRepository.findByPhoneNumberAndMergedIntoIdIsNullOrderByIdAsc(
+                        group.getPhoneNumber(), Limit.of(MAX_ROWS_PER_GROUP))));
+    return byPhoneNumber;
   }
 
   /**

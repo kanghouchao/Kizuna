@@ -69,9 +69,16 @@ export interface CustomerDuplicateResponse {
   order_count: number;
 }
 
-/** 同じ第一電話番号を持つ生きた顧客のグループ。必ず 2 行以上を含む。 */
+/**
+ * 同じ第一電話番号を持つ生きた顧客のグループ。必ず 2 行以上を含む。
+ *
+ * customers は上限で切られうるので、件数の表示には必ず total を使う（length を出すと
+ * 200 件のグループが 20 件と名乗る）。
+ */
 export interface CustomerDuplicateGroupResponse {
   phone_number?: string;
+  /** その番号を持つ生きた行の総数。Java 側が primitive のため、キーは必ず応答に含まれる。 */
+  total: number;
   customers: CustomerDuplicateResponse[];
 }
 

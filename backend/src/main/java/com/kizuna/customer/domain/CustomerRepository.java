@@ -112,7 +112,8 @@ public interface CustomerRepository
    */
   String DUPLICATE_PHONE_SELECT =
       """
-      select c.phoneNumber from com.kizuna.customer.domain.Customer c
+      select c.phoneNumber as phoneNumber, count(c) as total
+      from com.kizuna.customer.domain.Customer c
       where c.mergedIntoId is null and c.phoneNumber is not null
         and function('regexp_like', c.phoneNumber, '[^[:space:]]') = true
       """;
@@ -124,7 +125,7 @@ public interface CustomerRepository
       """;
 
   @Query(DUPLICATE_PHONE_SELECT + DUPLICATE_PHONE_GROUP_ORDER)
-  List<String> findDuplicatePhoneNumbers(Limit limit);
+  List<CustomerDuplicateGroupView> findDuplicatePhoneNumbers(Limit limit);
 
   /**
    * 重複候補の続き。渡された位置より後ろ（＝電話番号の昇順で先）だけを返す。
@@ -140,11 +141,21 @@ public interface CustomerRepository
             and c.phoneNumber > :cursor
             """
           + DUPLICATE_PHONE_GROUP_ORDER)
-  List<String> findDuplicatePhoneNumbersAfter(@Param("cursor") String cursor, Limit limit);
+  List<CustomerDuplicateGroupView> findDuplicatePhoneNumbersAfter(
+      @Param("cursor") String cursor, Limit limit);
 
-  /** 与えた電話番号を持つ当店の生きた行。並びは電話番号 → ID で、同じ番号の行が隣り合う。 */
+  /**
+   * 与えた電話番号を持つ当店の生きた行。並びは電話番号 → ID で、同じ番号の行が隣り合う。
+   *
+   * <p>件数の上限を持たないので、呼出側は<b>グループの件数が上限に収まる番号だけ</b>を渡すこと。返る行数は「渡した番号の数 × その上限」で頭打ちになり、1
+   * つの巨大なグループが取得を食い潰す形にならない。
+   */
   List<Customer> findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
       Collection<String> phoneNumbers);
+
+  /** 1 つの番号の行を上限つきで引く。桁外れに大きいグループを、行ごと読み込まずに標本だけ見せるための口。 */
+  List<Customer> findByPhoneNumberAndMergedIntoIdIsNullOrderByIdAsc(
+      String phoneNumber, Limit limit);
 
   /**
    * その顧客の統合先。生きている行と存在しない行はどちらも空で返る — 呼出側はどちらの場合も「渡された ID がそのまま着地点」として扱うため、区別する必要がない。
