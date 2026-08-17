@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { MemberLinkSection } from './MemberLinkSection';
+import { MergeHistorySection } from './MergeHistorySection';
 import { customerApi } from '@/entities/customer';
 import { ORDER_STATUS_LABELS, orderApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
-import { storePath, useResource } from '@/shared/lib';
+import { hasPermission, readTokenClaims, storePath, useResource } from '@/shared/lib';
 import {
   RegionError,
   Table,
@@ -51,6 +52,12 @@ export default function CustomerEditPage() {
   );
   const orders = ordersData ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
+  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
+  const [canMerge, setCanMerge] = useState(false);
+  useEffect(() => {
+    setCanMerge(hasPermission(readTokenClaims(), 'CUSTOMER_MERGE'));
+  }, []);
 
   const handleSubmit = async (data: CustomerFormData) => {
     try {
@@ -124,6 +131,10 @@ export default function CustomerEditPage() {
           取りに行かない — 同じ画面位置で [id] だけが変わる遷移では前の顧客の行が残る。
           入力途中の会員コードも同時に捨てる。 */}
       <MemberLinkSection key={resolvedId} customerId={resolvedId} />
+
+      {/* 統合履歴は統合権限を持つ者だけの読み口なので、持たない利用者には区画ごと出さない。
+          出したままにすると必ず 403 になる区画が居座る（強制はサーバ側 @PreAuthorize）。 */}
+      {canMerge && <MergeHistorySection key={resolvedId} customerId={resolvedId} />}
 
       {/* 注文履歴 */}
       <TableCard>

@@ -3,6 +3,7 @@ import { notify } from '@/shared/notify';
 import CustomerEditPage from '../ui/CustomerEditPage';
 import { customerApi } from '@/entities/customer';
 import { orderApi } from '@/entities/order';
+import { TokenClaims, readTokenClaims } from '@/shared/lib';
 
 const mockPush = jest.fn();
 
@@ -15,7 +16,14 @@ jest.mock('@/entities/customer', () => ({
     memberLink: jest.fn(),
     memberLinkHistory: jest.fn(),
     memberPointBalance: jest.fn(),
+    mergeHistory: jest.fn(),
   },
+}));
+
+// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
 }));
 
 jest.mock('@/entities/order', () => ({
@@ -37,6 +45,16 @@ jest.mock('@/shared/notify', () => ({
 
 const mockedCustomerApi = customerApi as jest.Mocked<typeof customerApi>;
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
+
+/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
+function claimsWith(permissions: string[]): TokenClaims {
+  return {
+    authorities: permissions.map(permission => `PERM_${permission}`),
+    userType: 'STAFF',
+    storeBridge: true,
+  };
+}
 
 const customer = {
   id: 'cus-1',
@@ -166,6 +184,8 @@ describe('顧客編集ページを統合済みの旧 ID で開いたとき', () 
     mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
     mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
+    mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MERGE']));
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
 
@@ -181,12 +201,48 @@ describe('顧客編集ページを統合済みの旧 ID で開いたとき', () 
     expect(mockedCustomerApi.memberLinkHistory).toHaveBeenLastCalledWith('cus-2', {
       cursor: undefined,
     });
+    // 統合履歴も同じ紀律。旧 ID のまま引くと、頁が語る行と区画が語る行が食い違う
+    expect(mockedCustomerApi.mergeHistory).toHaveBeenLastCalledWith('cus-2', {
+      cursor: undefined,
+    });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() =>
       expect(mockedCustomerApi.update).toHaveBeenCalledWith('cus-2', expect.anything())
     );
+  });
+});
+
+describe('顧客編集ページの統合履歴区画', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    currentParams.id = 'cus-1';
+    mockedCustomerApi.get.mockResolvedValue(customer);
+    mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
+    mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
+  });
+
+  it('統合権限があれば区画が出て、統合の無い顧客でもその旨が読めること', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MERGE']));
+
+    render(<CustomerEditPage />);
+
+    expect(await screen.findByText('統合履歴')).toBeInTheDocument();
+    expect(await screen.findByText('統合履歴がありません')).toBeInTheDocument();
+  });
+
+  it('統合権限が無ければ区画ごと出さず、必ず 403 になる読み口も叩かないこと', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE']));
+
+    render(<CustomerEditPage />);
+
+    expect(await screen.findByDisplayValue('山田太郎')).toBeInTheDocument();
+    expect(screen.queryByText('統合履歴')).not.toBeInTheDocument();
+    expect(mockedCustomerApi.mergeHistory).not.toHaveBeenCalled();
   });
 });
 

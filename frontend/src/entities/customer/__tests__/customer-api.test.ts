@@ -62,6 +62,21 @@ describe('customerApi', () => {
       merged_customer_id: 'c2',
     });
   });
+  it('mergeHistory は同じ merges を GET し、カーソルページを正規化する', async () => {
+    // 実行（POST）と読み（GET）が同じパスに載る。GET は両方向の統合を返すので、
+    // パスの {id} は「存続行」ではなく「この統合に関与した行」を意味する
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ id: 'm1', direction: 'SURVIVING' }], next_cursor: 'abc' },
+    });
+
+    await expect(customerApi.mergeHistory('c1', { cursor: 'x' })).resolves.toEqual({
+      rows: [{ id: 'm1', direction: 'SURVIVING' }],
+      nextCursor: 'abc',
+    });
+    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/merges', {
+      params: { cursor: 'x' },
+    });
+  });
   it('create は /store/customers を POST する', async () => {
     expect(await customerApi.create({ name: 'A' })).toEqual({
       ok: true,
