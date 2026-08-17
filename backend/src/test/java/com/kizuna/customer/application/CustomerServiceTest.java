@@ -491,9 +491,10 @@ class CustomerServiceTest {
   @Test
   @DisplayName("同じ顧客を 2 つ指定した見比べは要求誤りとして撥ねること")
   void mergeComparison_rejectsTheSameCustomerTwice() {
+    // 文言は見比べの言葉で述べる。この端点は統合しないので、統合の文言を借りると事実でない案内になる
     assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1", "c1")))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("同じ顧客");
+        .hasMessageContaining("同じ顧客どうしは見比べられません");
     verify(customerRepository, never()).findByIdInAndMergedIntoIdIsNull(any());
   }
 

@@ -362,10 +362,12 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(group.path("customers")).isEmpty();
     // 描いた行数を件数として名乗ると、見えている分がその番号の全部だと読まれる
     assertThat(group.path("total").asInt()).isEqualTo(total);
-    // 候補に行が出ない番号でも、顧客一覧で 2 行を選べば見比べられる（統合の入口は候補面だけではない）
+    // 候補に行が出ない番号でも、顧客一覧で 2 行を選べば見比べて統合できる（入口は候補面だけではない）
     assertThat(comparisonRows(STORE_A, created.get(0), created.get(total - 1)))
         .extracting(row -> row.path("id").asString())
         .containsExactly(created.get(0), created.get(total - 1));
+    assertThat(merge(STORE_A, created.get(0), created.get(total - 1)).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
   }
 
   @Test

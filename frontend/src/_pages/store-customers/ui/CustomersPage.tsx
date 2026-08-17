@@ -81,6 +81,9 @@ export default function CustomersPage() {
   // 統合する 2 行の選択。行そのものではなく ID だけを持つので、ページ送りや検索で
   // 一覧が入れ替わっても選択は残る（統合したい 2 行が同じページに並ぶとは限らない）
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // 統合の実行中は選択を変えさせない。変えると見比べる区画ごと消え、取り返しのつかない操作の
+  // 確認が在途のまま画面から失せる
+  const [isMerging, setIsMerging] = useState(false);
   const pair =
     selectedIds.length === PAIR_SIZE ? ([selectedIds[0], selectedIds[1]] as const) : null;
 
@@ -185,8 +188,9 @@ export default function CustomersPage() {
                         checked={selectedIds.includes(customer.id ?? '')}
                         // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
                         disabled={
-                          !selectedIds.includes(customer.id ?? '') &&
-                          selectedIds.length >= PAIR_SIZE
+                          isMerging ||
+                          (!selectedIds.includes(customer.id ?? '') &&
+                            selectedIds.length >= PAIR_SIZE)
                         }
                         onCheckedChange={() => toggleSelected(customer.id ?? '')}
                       />
@@ -255,7 +259,13 @@ export default function CustomersPage() {
               {selectedIds.length} 件を選択中
               {pair === null && '（統合するにはもう 1 行選んでください）'}
             </p>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isMerging}
+              onClick={() => setSelectedIds([])}
+            >
               選択を解除
             </Button>
           </div>
@@ -267,6 +277,8 @@ export default function CustomersPage() {
                 list.reload();
               }}
               onClear={() => setSelectedIds([])}
+              isSubmitting={isMerging}
+              onSubmittingChange={setIsMerging}
             />
           )}
         </div>
