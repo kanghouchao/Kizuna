@@ -2,8 +2,10 @@ package com.kizuna.customer.domain;
 
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -95,6 +97,32 @@ public interface CustomerRepository
       """)
   List<String> findAliveIdsByPhoneNumberAndStoreId(
       @Param("phoneNumber") String phoneNumber, @Param("storeId") Long storeId);
+
+  /**
+   * 重複候補の手がかりになる電話番号 — 当店の生きた行のうち、同じ第一電話番号を 2 行以上が持つもの。
+   *
+   * <p>第二番号は見ない。受注録入の電話照合が第一番号だけを引く（{@link #findAliveIdsByPhoneNumberAndStoreId}）ので、
+   * 重複が実害になる（複数一致で自動照合を断念する）のも第一番号が一致したときだけである。
+   *
+   * <p>空白の番号を除くのは実害があるため。会員申請の確定時自動整備は「氏名だけ・電話は空」の台帳行を起こすので、
+   * 除かないとそれらが全部ひとつの巨大な偽グループに畳まれ、候補が候補として使えなくなる。
+   *
+   * <p>照合は完全一致で、表記の揺れ（ハイフンの有無等）は畳まない。照合の述語を電話照合と同じに保つためで、 正規化して寄せるのは別の検出器である（ADR 0010 の範囲外）。
+   *
+   * <p>店舗の絞り込みは {@code storeFilter} が担う。呼出側が {@code @StoreScoped} を宣言していることが前提。
+   */
+  @Query(
+      """
+      select c.phoneNumber from com.kizuna.customer.domain.Customer c
+      where c.mergedIntoId is null and c.phoneNumber is not null and trim(c.phoneNumber) <> ''
+      group by c.phoneNumber having count(c) >= 2
+      order by c.phoneNumber
+      """)
+  List<String> findDuplicatePhoneNumbers(Limit limit);
+
+  /** 与えた電話番号を持つ当店の生きた行。並びは電話番号 → ID で、同じ番号の行が隣り合う。 */
+  List<Customer> findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
+      Collection<String> phoneNumbers);
 
   /**
    * その顧客の統合先。生きている行と存在しない行はどちらも空で返る — 呼出側はどちらの場合も「渡された ID がそのまま着地点」として扱うため、区別する必要がない。

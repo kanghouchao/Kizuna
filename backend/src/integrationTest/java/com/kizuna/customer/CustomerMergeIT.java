@@ -20,6 +20,7 @@ import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -56,6 +57,9 @@ import tools.jackson.databind.JsonNode;
  * <p>統合後の読み書きは非対称になる。墓標は一覧にも電話照合にも現れない一方、旧 ID を渡された解決は統合先へ届き、
  * 墓標そのものを名指した書き換え（更新・削除・ポイント調整・解除）は案内の読める 409 になる。
  *
+ * <p>重複候補の読み口も同じ非対称の側にある — 見るのは生きた行だけで、統合を 1 件済ませるとその番号は候補から落ちる。候補は店舗の台帳ぜんたいを
+ * 走査するため、他のテストが起こした行も一緒に返る。断言はこの実行だけの電話番号で絞ってから行う。
+ *
  * <p>応答に出ない事実（統合先参照・統合履歴・付替え後の受注の顧客）は、行を直接読んで固定する。
  */
 class CustomerMergeIT extends CrossStoreTestSupport {
@@ -66,6 +70,9 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   private static final long SEED_RECEPTIONIST_ID = 3L;
 
   private static final String MANAGER_EMAIL = "tanaka.hanako@kizuna.test";
+
+  /** 字面セグメントなので、{@code /store/customers/{id}} ではなくこの読み口へ届くこと自体が経路の断言になる。 */
+  private static final String DUPLICATES_PATH = "/store/customers/duplicates";
 
   private static final int TOTAL_FEE = 12000;
 
@@ -209,6 +216,90 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     // 重複を畳んだ番号が 1 行へ収束する。これが果たされないと統合した意味が無い
     ResponseEntity<JsonNode> afterMerge = orderByPhone(phoneNumber, "照合後");
     assertThat(afterMerge.getBody().path("customer_id").asString()).isEqualTo(surviving);
+  }
+
+  // ==================== 重複候補 ====================
+
+  @Test
+  @DisplayName("第一電話番号が一致する 2 行が候補に出て、見比べる材料（受注件数・紐づけの有無）が並ぶこと")
+  void listsDuplicateCandidatesWithTheMaterialNeededToCompareThem() {
+    String phoneNumber = phone("候補");
+    String withOrder = createCustomerWithPhone("候補甲-" + nonce, phoneNumber);
+    String withMember = createCustomerWithPhone("候補乙-" + nonce, phoneNumber);
+    confirmedOrderFor(withOrder, "候補受注");
+    link(withMember, registerMember("merge-candidate"));
+
+    JsonNode group = duplicateGroup(STORE_A, phoneNumber);
+
+    assertThat(group.path("customers")).hasSize(2);
+    // 件数と紐づけが無ければ、どちらに来店が積まれているか判らないまま畳むことになる
+    JsonNode orderRow = candidateRow(group, withOrder);
+    assertThat(orderRow.path("name").asString()).isEqualTo("候補甲-" + nonce);
+    assertThat(orderRow.path("phone_number").asString()).isEqualTo(phoneNumber);
+    assertThat(orderRow.path("order_count").asInt()).isEqualTo(1);
+    assertThat(orderRow.path("member_linked").asBoolean()).isFalse();
+    JsonNode memberRow = candidateRow(group, withMember);
+    assertThat(memberRow.path("order_count").asInt()).isZero();
+    assertThat(memberRow.path("member_linked").asBoolean()).isTrue();
+  }
+
+  @Test
+  @DisplayName("統合すると、1 行になった番号が候補から消えること")
+  void dropsTombstonesFromTheCandidateList() {
+    String phoneNumber = phone("候補墓標");
+    String surviving = createCustomerWithPhone("候補墓標存続-" + nonce, phoneNumber);
+    String merged = createCustomerWithPhone("候補墓標被統合-" + nonce, phoneNumber);
+    assertThat(duplicateGroup(STORE_A, phoneNumber).path("customers")).hasSize(2);
+
+    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 墓標が候補に残ると、畳んだはずの重複が候補として出続ける
+    assertThat(hasDuplicateGroup(STORE_A, phoneNumber)).isFalse();
+  }
+
+  @Test
+  @DisplayName("電話番号を持たない行・空欄の行が互いの重複候補にならないこと")
+  void neverGroupsRowsWithoutAPhoneNumber() {
+    // 会員申請の確定時自動整備が起こすのがこの形（氏名だけ・電話は空）。除かないと、それらが
+    // 全部ひとつの巨大な偽グループに畳まれて候補が使えなくなる
+    createCustomer("無電話甲-" + nonce);
+    createCustomer("無電話乙-" + nonce);
+    createCustomerWithPhone("空電話甲-" + nonce, "");
+    createCustomerWithPhone("空電話乙-" + nonce, "");
+    // 番号のある重複も一組起こす。走査が空振りしたまま「空欄のグループは無い」が
+    // 真になる（空集合には何でも成り立つ）のを防ぐ対照
+    String phoneNumber = phone("無電話対照");
+    createCustomerWithPhone("対照甲-" + nonce, phoneNumber);
+    createCustomerWithPhone("対照乙-" + nonce, phoneNumber);
+
+    assertThat(duplicateGroups(STORE_A))
+        .anySatisfy(
+            group -> assertThat(group.path("phone_number").asString()).isEqualTo(phoneNumber))
+        .allSatisfy(group -> assertThat(group.path("phone_number").asString()).isNotBlank());
+  }
+
+  @Test
+  @DisplayName("他店舗で同じ番号が重複していても、当店の候補には出ないこと")
+  void keepsForeignStoreDuplicatesOutOfTheCandidateList() {
+    String phoneNumber = phone("候補越境");
+    createCustomerWithPhoneAt(STORE_B, "候補越境甲-" + nonce, phoneNumber);
+    createCustomerWithPhoneAt(STORE_B, "候補越境乙-" + nonce, phoneNumber);
+
+    assertThat(hasDuplicateGroup(STORE_A, phoneNumber)).isFalse();
+    assertThat(hasDuplicateGroup(STORE_B, phoneNumber)).as("前提: 起こした重複はその店舗では候補になること").isTrue();
+  }
+
+  @Test
+  @DisplayName("重複候補の読み口は店長権限を要し、スタッフ権限では 403 になること")
+  void requiresTheManagerOnlyMergePermissionToReadCandidates() {
+    ResponseEntity<JsonNode> asStaff =
+        rest.exchange(
+            DUPLICATES_PATH,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+
+    assertThat(asStaff.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   // ==================== 旧 ID の解決 ====================
@@ -655,6 +746,50 @@ class CustomerMergeIT extends CrossStoreTestSupport {
         JsonNode.class);
   }
 
+  // ==================== 重複候補の読み出し ====================
+
+  /**
+   * 候補は店舗の台帳ぜんたいを見るので、他のテストが起こした行も一緒に返る。断言はどれも「この実行の番号」で絞ってから行う（{@link #phone}
+   * が実行ごと・用途ごとに異なる番号を作る）。
+   */
+  private JsonNode duplicateGroups(long storeId) {
+    ResponseEntity<JsonNode> response =
+        rest.exchange(
+            DUPLICATES_PATH,
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(storeId)),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).as("前提: 重複候補を読めること").isEqualTo(HttpStatus.OK);
+    return response.getBody().path("groups");
+  }
+
+  private JsonNode duplicateGroup(long storeId, String phoneNumber) {
+    return findDuplicateGroup(storeId, phoneNumber)
+        .orElseThrow(() -> new AssertionError("重複候補に " + phoneNumber + " のグループが無い"));
+  }
+
+  private boolean hasDuplicateGroup(long storeId, String phoneNumber) {
+    return findDuplicateGroup(storeId, phoneNumber).isPresent();
+  }
+
+  private Optional<JsonNode> findDuplicateGroup(long storeId, String phoneNumber) {
+    for (JsonNode group : duplicateGroups(storeId)) {
+      if (phoneNumber.equals(group.path("phone_number").asString())) {
+        return Optional.of(group);
+      }
+    }
+    return Optional.empty();
+  }
+
+  private JsonNode candidateRow(JsonNode group, String customerId) {
+    for (JsonNode row : group.path("customers")) {
+      if (customerId.equals(row.path("id").asString())) {
+        return row;
+      }
+    }
+    throw new AssertionError("候補グループに顧客 " + customerId + " が無い");
+  }
+
   // ==================== 行の直読（応答に出ない事実） ====================
 
   /** 統合先参照。生きている行では null なので、Optional の写像で畳まずに行そのものを取り出して読む。 */
@@ -711,8 +846,12 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
   /** 同店同号の重複。電話照合の複数一致は正規に起こりうるので、実行ごとに違う番号で起こす。 */
   private String createCustomerWithPhone(String name, String phoneNumber) {
+    return createCustomerWithPhoneAt(STORE_A, name, phoneNumber);
+  }
+
+  private String createCustomerWithPhoneAt(long storeId, String name, String phoneNumber) {
     return postCustomer(
-        STORE_A, "{\"name\": \"" + name + "\", \"phone_number\": \"" + phoneNumber + "\"}");
+        storeId, "{\"name\": \"" + name + "\", \"phone_number\": \"" + phoneNumber + "\"}");
   }
 
   private String postCustomer(long storeId, String body) {

@@ -3,6 +3,13 @@ import CustomersPage from '../ui/CustomersPage';
 import CustomerCreatePage from '../ui/CustomerCreatePage';
 import { CustomerForm } from '../ui/CustomerForm';
 import { customerApi } from '@/entities/customer';
+import { readTokenClaims } from '@/shared/lib';
+
+// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
+}));
 
 jest.mock('@/entities/customer', () => ({
   customerApi: {
@@ -20,6 +27,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 const mockedCustomerApi = customerApi as jest.Mocked<typeof customerApi>;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
 describe('店側顧客画面と API JSON（snake_case）の整合', () => {
   beforeEach(() => {
@@ -160,6 +168,32 @@ describe('顧客一覧ページ固有の要素', () => {
         rank: 'GOLD',
         classification: undefined,
       })
+    );
+  });
+
+  it('統合権限が無ければ重複候補への導線を出さないこと', async () => {
+    // 強制はサーバ側。ここは押しても 403 になる導線を描かないための出し分け
+    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'STAFF', storeBridge: true });
+
+    render(<CustomersPage />);
+    await screen.findByText('顧客が登録されていません');
+
+    expect(screen.queryByRole('link', { name: '重複候補' })).not.toBeInTheDocument();
+  });
+
+  it('統合権限を持つ利用者には重複候補への導線を出すこと', async () => {
+    mockedReadClaims.mockReturnValue({
+      authorities: ['PERM_CUSTOMER_MERGE'],
+      userType: 'STAFF',
+      storeBridge: true,
+    });
+
+    render(<CustomersPage />);
+    await screen.findByText('顧客が登録されていません');
+
+    expect(screen.getByRole('link', { name: '重複候補' })).toHaveAttribute(
+      'href',
+      '/store/1/customers/duplicates'
     );
   });
 });

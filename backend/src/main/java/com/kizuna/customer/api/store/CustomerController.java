@@ -1,6 +1,7 @@
 package com.kizuna.customer.api.store;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
+import com.kizuna.customer.api.dto.CustomerDuplicateCandidatesResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
@@ -38,6 +39,20 @@ public class CustomerController {
       @RequestParam(required = false) String classification,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
     return ResponseEntity.ok(customerService.list(search, rank, classification, pageable));
+  }
+
+  /**
+   * 重複候補（同店・生きた行・第一電話番号が一致する 2 行以上のグループ）。
+   *
+   * <p>統合と同じ {@code CUSTOMER_MERGE} で守る。候補の提示は統合画面の一部で単独の価値を持たず、重複の在り処は機微情報だからである。
+   *
+   * <p>字面セグメントは {@code /{id}} の値空間を恒久的に侵食する。顧客 ID はアプリ生成の数字列なので {@code duplicates} と衝突しえないが、 ID
+   * の採番規則を変えるときはこの端点が先に隠れることを思い出すこと。
+   */
+  @GetMapping("/duplicates")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
+  public ResponseEntity<CustomerDuplicateCandidatesResponse> listDuplicates() {
+    return ResponseEntity.ok(customerService.listDuplicateCandidates());
   }
 
   @GetMapping("/{id}")

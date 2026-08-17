@@ -1,5 +1,6 @@
 package com.kizuna.customer.application;
 
+import static com.kizuna.customer.application.CustomerService.DUPLICATE_GROUP_LIMIT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
+import com.kizuna.customer.api.dto.CustomerDuplicateCandidatesResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
@@ -25,6 +27,8 @@ import com.kizuna.shared.exception.NotFoundException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +36,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -328,5 +333,51 @@ class CustomerServiceTest {
     assertThatThrownBy(() -> customerService.delete("missing"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
+  }
+
+  /**
+   * 上限そのものは統合テストでは固定しない。上限を超える重複を実データで起こすと、同じ店舗の台帳を共有する他のテストの候補まで
+   * 押し出して、無関係なテストが候補を見失う。切り落としの算術はサービス自身の責務なので、ここで持つ。
+   */
+  @Test
+  @DisplayName("重複候補が上限を超えると、超過分を落としたうえで打ち切りを名乗ること")
+  void listDuplicateCandidates_reportsTruncationInsteadOfSilentlyCutting() {
+    List<String> phoneNumbers =
+        IntStream.rangeClosed(1, DUPLICATE_GROUP_LIMIT + 1).mapToObj(i -> "0900000" + i).toList();
+    when(customerRepository.findDuplicatePhoneNumbers(any(Limit.class))).thenReturn(phoneNumbers);
+    // 上限内に残る番号だけが引き直され、超過分の行は取りに行かない
+    List<String> keptPhoneNumbers = phoneNumbers.subList(0, DUPLICATE_GROUP_LIMIT);
+    when(customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
+            keptPhoneNumbers))
+        .thenReturn(keptPhoneNumbers.stream().flatMap(CustomerServiceTest::duplicatePair).toList());
+    when(customerMemberLinkRepository.findByCustomerIdInAndStatus(any(), any()))
+        .thenReturn(List.of());
+    when(customerMergeRepository.countOrdersByCustomerId(any())).thenReturn(List.of());
+    // 写像の結果は数えるだけなので mapper は素通し（既定の null）でよい。ここで見たいのは行の中身
+    // ではなく、何グループを返して打ち切りをどう名乗るか。
+
+    CustomerDuplicateCandidatesResponse candidates = customerService.listDuplicateCandidates();
+
+    assertThat(candidates.groups()).hasSize(DUPLICATE_GROUP_LIMIT);
+    // 黙って切ると、上限まで見た人が「もう重複は無い」と読む
+    assertThat(candidates.truncated()).isTrue();
+  }
+
+  @Test
+  @DisplayName("重複候補が上限に収まるときは打ち切りを名乗らないこと")
+  void listDuplicateCandidates_reportsNoTruncationWhenEverythingFits() {
+    when(customerRepository.findDuplicatePhoneNumbers(any(Limit.class))).thenReturn(List.of());
+
+    CustomerDuplicateCandidatesResponse candidates = customerService.listDuplicateCandidates();
+
+    assertThat(candidates.groups()).isEmpty();
+    assertThat(candidates.truncated()).isFalse();
+  }
+
+  /** グループを成す最小の形（同じ番号の 2 行）。 */
+  private static Stream<Customer> duplicatePair(String phoneNumber) {
+    return Stream.of(
+        Customer.builder().phoneNumber(phoneNumber).build(),
+        Customer.builder().phoneNumber(phoneNumber).build());
   }
 }

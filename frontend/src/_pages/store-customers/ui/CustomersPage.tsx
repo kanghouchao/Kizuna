@@ -1,11 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
-import { useState } from 'react';
+import { CopyIcon, PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CustomerResponse, customerApi } from '@/entities/customer';
-import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
+import {
+  hasPermission,
+  readTokenClaims,
+  storePath,
+  useDeleteAction,
+  useListPage,
+} from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -37,6 +43,12 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [rank, setRank] = useState('');
   const [classification, setClassification] = useState('');
+  // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
+  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
+  const [canMerge, setCanMerge] = useState(false);
+  useEffect(() => {
+    setCanMerge(hasPermission(readTokenClaims(), 'CUSTOMER_MERGE'));
+  }, []);
 
   const list = useListPage<CustomerResponse, CustomerCriteria>(
     (page, criteria) =>
@@ -67,10 +79,21 @@ export default function CustomersPage() {
         title="顧客管理"
         description="顧客情報の登録・編集ができます。"
         actions={
-          <Button render={<Link href={storePath(storeId, '/customers/create')} />}>
-            <PlusIcon />
-            新規顧客登録
-          </Button>
+          <>
+            {canMerge && (
+              <Button
+                render={<Link href={storePath(storeId, '/customers/duplicates')} />}
+                variant="outline"
+              >
+                <CopyIcon />
+                重複候補
+              </Button>
+            )}
+            <Button render={<Link href={storePath(storeId, '/customers/create')} />}>
+              <PlusIcon />
+              新規顧客登録
+            </Button>
+          </>
         }
         search={{
           onSearch: () => void list.search({ search, rank, classification }),

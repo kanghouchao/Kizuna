@@ -20,6 +20,12 @@ public interface CustomerMapper {
   @Mapping(target = "memberLinked", ignore = true)
   CustomerSummaryResponse toSummaryResponse(Customer customer);
 
+  // 受注件数と紐づけの有無は顧客行が持たない事実なので、application 層が引いた値を引数で受ける。
+  @Mapping(target = "memberLinked", source = "memberLinked")
+  @Mapping(target = "orderCount", source = "orderCount")
+  CustomerDuplicateResponse toDuplicateResponse(
+      Customer customer, boolean memberLinked, long orderCount);
+
   @Mapping(target = "landmark", ignore = true)
   // rank は DB デフォルト（'SILVER'）と同義。エンティティに列をマッピングしたため明示的に補完する
   @Mapping(target = "rank", source = "rank", defaultValue = "SILVER")
