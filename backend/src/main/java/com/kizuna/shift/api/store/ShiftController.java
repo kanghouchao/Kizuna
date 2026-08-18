@@ -58,7 +58,6 @@ public class ShiftController {
     return ResponseEntity.ok(shiftService.update(id, request, principal.getName()));
   }
 
-  /** 店外への露出可否の切替。承認とは独立の軸なので、日時・状態の更新とは別の口で受ける（ADR 0015）。 */
   @PutMapping("/{id}/publication")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftResponse> changePublication(

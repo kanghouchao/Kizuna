@@ -1,5 +1,5 @@
 // シフト（Shift）レスポンス。時刻は ISO 文字列（work_date=yyyy-MM-dd / start_time・end_time=HH:mm:ss）。
-// published は店外への露出可否。店舗側の一覧は値を載せるだけで、行の絞り込みには使わない。
+// published は店外への露出可否。
 export interface ShiftResponse {
   id?: string;
   cast_id?: string;

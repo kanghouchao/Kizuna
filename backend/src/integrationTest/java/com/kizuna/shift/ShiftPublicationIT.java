@@ -151,16 +151,21 @@ class ShiftPublicationIT extends CrossStoreTestSupport {
     String tentativeCastId = createCast("公開可否_下書き公開可_" + UUID.randomUUID());
     seedShift(tentativeCastId, LocalTime.of(15, 0), ShiftStatus.TENTATIVE, true);
 
-    ResponseEntity<JsonNode> res =
-        rest.exchange(
-            "/store/shifts/public",
-            HttpMethod.GET,
-            new HttpEntity<>(anonymousStoreContext()),
-            JsonNode.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(castIdsOf(res.getBody()))
+    assertThat(anonymousCastIds())
         .as("露出関門は CONFIRMED ∧ 公開可であって、フラグ単独では通らないこと")
+        .contains(publishedCastId)
+        .doesNotContain(tentativeCastId);
+
+    // 「店外」は匿名と会員の両方。片面だけ絞ると軸が形骸化するので、候補面も同じ関門で見る。
+    ResponseEntity<JsonNode> candidates =
+        rest.exchange(
+            "/platform/shifts/casts?store_id=" + STORE_A + "&date=" + today,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(registerAndLoginAsMember())),
+            JsonNode.class);
+    assertThat(candidates.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(castIdsOf(candidates.getBody()))
+        .as("会員の候補面でもフラグ単独では通らないこと")
         .contains(publishedCastId)
         .doesNotContain(tentativeCastId);
   }
