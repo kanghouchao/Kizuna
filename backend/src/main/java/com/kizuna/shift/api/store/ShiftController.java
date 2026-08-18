@@ -2,6 +2,7 @@ package com.kizuna.shift.api.store;
 
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
+import com.kizuna.shift.api.dto.ShiftPublicationRequest;
 import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.application.ShiftService;
@@ -55,6 +56,17 @@ public class ShiftController {
       @Valid @RequestBody ShiftUpdateRequest request,
       Principal principal) {
     return ResponseEntity.ok(shiftService.update(id, request, principal.getName()));
+  }
+
+  /** 店外への露出可否の切替。承認とは独立の軸なので、日時・状態の更新とは別の口で受ける（ADR 0015）。 */
+  @PutMapping("/{id}/publication")
+  @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
+  public ResponseEntity<ShiftResponse> changePublication(
+      @PathVariable String id,
+      @Valid @RequestBody ShiftPublicationRequest request,
+      Principal principal) {
+    return ResponseEntity.ok(
+        shiftService.changePublication(id, request.getPublished(), principal.getName()));
   }
 
   @DeleteMapping("/{id}")

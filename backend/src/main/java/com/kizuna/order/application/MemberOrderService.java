@@ -171,7 +171,8 @@ public class MemberOrderService {
   /**
    * 指名は「その店舗に在籍中のキャスト」かつ「当日の確定シフトに入っていること」を満たす場合のみ受け付ける。
    *
-   * <p>在籍状態は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
+   * <p>在籍状態も公開可否も候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
+   * 非公開の確定シフトへ会員が指名予約できないのは意図した挙動で、店舗が公開していない＝集客していない（ADR 0015）。
    *
    * <p>対象は会員なので、成立しない理由を区別せず「見つからない」として返す — 区別すると、その id のキャストが当該店舗に在籍することそのものが分かってしまう。店舗スタッフ向けの
    * {@link OrderService} は同じ述語から 400 を返す。
@@ -184,7 +185,8 @@ public class MemberOrderService {
         nominatableCast
             .find(storeId, castId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
-    if (!confirmedShiftLookupService.hasConfirmedShift(storeId, cast.getId(), businessDate)) {
+    // 非公開を理由に別の文言へ分けない — 分けた瞬間、隠したはずのシフトの存在が会員に読み取れる。
+    if (!confirmedShiftLookupService.hasPubliclyVisibleShift(storeId, cast.getId(), businessDate)) {
       throw new ServiceException("指名したキャストはこの日の出勤予定がありません");
     }
   }

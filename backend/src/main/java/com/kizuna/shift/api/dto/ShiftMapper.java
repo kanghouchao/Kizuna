@@ -13,6 +13,7 @@ public interface ShiftMapper {
 
   /** 実行者は要求ではなく認証主体から来るので、要求とは別の引数で受ける。書き換えの実行者は作成時には無い。 */
   @Mapping(target = "status", source = "request.status", defaultValue = "TENTATIVE")
+  @Mapping(target = "published", source = "request.published", defaultValue = "true")
   @Mapping(target = "createdBy", source = "createdBy")
   @Mapping(target = "updatedBy", ignore = true)
   Shift toEntity(ShiftCreateRequest request, Long createdBy);

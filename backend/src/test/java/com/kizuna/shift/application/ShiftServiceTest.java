@@ -244,6 +244,50 @@ class ShiftServiceTest {
   }
 
   @Test
+  void changePublication_flipsFlagAndStampsActor() {
+    Shift shift = Shift.builder().castId("c1").status(ShiftStatus.CONFIRMED).build();
+    givenActor();
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(shiftRepository.save(shift)).thenReturn(shift);
+    when(shiftMapper.toResponse(shift)).thenReturn(new ShiftResponse());
+
+    shiftService.changePublication("s1", false, ACTOR_EMAIL);
+
+    assertThat(shift.isPublished()).isFalse();
+    assertThat(shift.getUpdatedBy()).isEqualTo(ACTOR_ID);
+  }
+
+  @Test
+  void changePublication_leavesStatusAndSlotUntouched() {
+    Shift shift =
+        Shift.builder()
+            .castId("c1")
+            .workDate(LocalDate.of(2026, 7, 8))
+            .startTime(LocalTime.of(18, 0))
+            .endTime(LocalTime.of(23, 0))
+            .status(ShiftStatus.CONFIRMED)
+            .build();
+    givenActor();
+    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(shiftRepository.save(shift)).thenReturn(shift);
+    when(shiftMapper.toResponse(shift)).thenReturn(new ShiftResponse());
+
+    shiftService.changePublication("s1", false, ACTOR_EMAIL);
+
+    assertThat(shift.getStatus()).as("公開可否は状態機械の一部ではない").isEqualTo(ShiftStatus.CONFIRMED);
+    assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(23, 0));
+  }
+
+  @Test
+  void changePublication_rejectsUnknownShift() {
+    when(shiftRepository.findById("missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> shiftService.changePublication("missing", false, ACTOR_EMAIL))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
   void listPublicToday_joinsCastInfoAndPreservesRepoOrder() {
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     Shift first =
@@ -258,7 +302,7 @@ class ShiftServiceTest {
             .startTime(LocalTime.of(21, 0))
             .endTime(LocalTime.of(23, 0))
             .build();
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of(first, second));
     when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
         .thenReturn(List.of(activeCast("cA", "キャストA", "urlA"), activeCast("cB", "キャストB", "urlB")));
@@ -277,10 +321,10 @@ class ShiftServiceTest {
   }
 
   @Test
-  void listPublicToday_queriesTodayInConfiguredTimezoneWithConfirmedStatus() {
+  void listPublicToday_queriesTodayInConfiguredTimezoneWithPublicationGate() {
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     LocalDate expectedToday = LocalDate.now(ZoneId.of("Asia/Tokyo"));
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of());
 
     shiftService.listPublicToday();
@@ -288,7 +332,8 @@ class ShiftServiceTest {
     ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
     ArgumentCaptor<ShiftStatus> statusCaptor = ArgumentCaptor.forClass(ShiftStatus.class);
     verify(shiftRepository)
-        .findByWorkDateAndStatusOrderByStartTimeAsc(dateCaptor.capture(), statusCaptor.capture());
+        .findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            dateCaptor.capture(), statusCaptor.capture());
     assertThat(dateCaptor.getValue()).isEqualTo(expectedToday);
     assertThat(statusCaptor.getValue()).isEqualTo(ShiftStatus.CONFIRMED);
   }
@@ -308,7 +353,7 @@ class ShiftServiceTest {
             .startTime(LocalTime.of(19, 0))
             .endTime(LocalTime.of(21, 0))
             .build();
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of(active, orphan));
     when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
         .thenReturn(List.of(activeCast("cA", "キャストA", "urlA")));
@@ -322,7 +367,7 @@ class ShiftServiceTest {
   @Test
   void listPublicToday_returnsEmptyWhenNoConfirmedShifts() {
     when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
-    when(shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of());
 
     assertThat(shiftService.listPublicToday()).isEmpty();

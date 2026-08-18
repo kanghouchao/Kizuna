@@ -12,7 +12,9 @@ public interface ShiftRepository
 
   List<Shift> findByWorkDateBetween(LocalDate from, LocalDate to);
 
-  List<Shift> findByWorkDateAndStatusOrderByStartTimeAsc(LocalDate workDate, ShiftStatus status);
+  /** 公式サイト出勤表の絞り。店外への露出関門は CONFIRMED ∧ 公開可（ADR 0015）なので、状態と公開可否の両方で絞る。 */
+  List<Shift> findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+      LocalDate workDate, ShiftStatus status);
 
   /**
    * 本人（cast_id 集合、跨店）の週間確定シフトを店名内联で返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか 存在しないため、cast_id
@@ -45,6 +47,7 @@ public interface ShiftRepository
       from Shift s join com.kizuna.cast.domain.Cast c on c.id = s.castId
       where s.storeId = :storeId and s.workDate = :workDate
         and s.status = com.kizuna.shift.domain.ShiftStatus.CONFIRMED
+        and s.published = true
         and c.status = 'ACTIVE'
       order by s.startTime asc, s.castId asc
       """)
@@ -53,5 +56,9 @@ public interface ShiftRepository
 
   /** 指定店舗・指定キャスト・指定日の確定シフトの有無。指名の妥当性検証に使う（店舗隔離は storeId の明示指定による）。 */
   boolean existsByStoreIdAndCastIdAndWorkDateAndStatus(
+      Long storeId, String castId, LocalDate workDate, ShiftStatus status);
+
+  /** 上と同じ問いを店外向けの露出関門（CONFIRMED ∧ 公開可）で答える。会員経由の指名の書き込み検証が候補の読み口と共有する述語。 */
+  boolean existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
       Long storeId, String castId, LocalDate workDate, ShiftStatus status);
 }

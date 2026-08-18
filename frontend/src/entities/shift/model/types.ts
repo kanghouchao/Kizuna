@@ -1,4 +1,5 @@
 // シフト（Shift）レスポンス。時刻は ISO 文字列（work_date=yyyy-MM-dd / start_time・end_time=HH:mm:ss）。
+// published は店外への露出可否。店舗側の一覧は値を載せるだけで、行の絞り込みには使わない。
 export interface ShiftResponse {
   id?: string;
   cast_id?: string;
@@ -6,17 +7,19 @@ export interface ShiftResponse {
   start_time?: string;
   end_time?: string;
   status?: string;
+  published?: boolean;
   created_at?: string;
   updated_at?: string;
 }
 
-// シフト作成リクエスト（status 省略時はサーバ側で TENTATIVE）
+// シフト作成リクエスト（status 省略時はサーバ側で TENTATIVE、published 省略時は公開可）
 export interface ShiftCreateRequest {
   cast_id: string;
   work_date: string;
   start_time: string;
   end_time: string;
   status?: string;
+  published?: boolean;
 }
 
 // シフト更新リクエスト

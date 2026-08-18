@@ -95,17 +95,24 @@ public class ShiftRequestService {
 
   /**
    * 出勤希望を承認する。NEW は request の (cast_id, store_id, work_date, start_time, end_time) を原様に CONFIRMED
-   * Shift として新規作成し、CHANGE は対象シフトの日時のみを申請値へ更新する（cast_id・status
+   * Shift として新規作成し、CHANGE は対象シフトの日時のみを申請値へ更新する（cast_id・status・公開可否
    * は保持し、承認と独立した軸を巻き込まない）。いずれも同一トランザクション。時刻調整は承認後の既存シフト編集で行う。
+   *
+   * @param published NEW で生まれるシフトの公開可否。null は既定の公開可。内密の出勤はここで非公開を指定して出生させる —
+   *     公開状態で生まれてから隠すまでの露出窓を作らない（ADR 0015）
    */
   @StoreScoped
   @Transactional
-  public StoreShiftRequestResponse approve(String id, String actorEmail) {
+  public StoreShiftRequestResponse approve(String id, Boolean published, String actorEmail) {
     ShiftRequest request = findOwnRequest(id);
     Long actorId = resolveActorId(actorEmail);
     request.approve(actorId, OffsetDateTime.now());
 
     if (request.getType() == ShiftRequestType.CHANGE) {
+      // 既存シフトの公開可否は承認では動かさないため、指定を黙って捨てずに撥ねる（切替は専用の口が受ける）。
+      if (published != null) {
+        throw new ServiceException("変更申請の承認では公開可否を指定できません");
+      }
       // 対象シフトが削除されると FK（SET NULL）で参照が落ちる。申請は履歴として残るが、適用先が無いため承認はできない。
       if (request.getShiftId() == null) {
         throw new ServiceException("対象のシフトは既に削除されています");
@@ -139,6 +146,7 @@ public class ShiftRequestService {
               .startTime(request.getStartTime())
               .endTime(request.getEndTime())
               .status(ShiftStatus.CONFIRMED)
+              .published(published == null || published)
               .createdBy(actorId)
               .build();
       // 生成したシフトを申請行へ結び、希望→確定の一跳を辿れるようにする（系列の背骨）。

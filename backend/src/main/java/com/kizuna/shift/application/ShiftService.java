@@ -48,8 +48,8 @@ public class ShiftService {
   }
 
   /**
-   * 公開出勤表用に「本日（app.timezone）」の確定（CONFIRMED）シフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧 ({@code
-   * /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
+   * 公開出勤表用に「本日（app.timezone）」の露出可能（CONFIRMED ∧ 公開可）なシフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧
+   * ({@code /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
    * 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は {@code @StoreScoped} によりセッション全体で有効なので t_casts
    * 参照も現店舗に絞られる。
    */
@@ -58,7 +58,8 @@ public class ShiftService {
   public List<PublicShiftResponse> listPublicToday() {
     LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
     List<Shift> shifts =
-        shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(today, ShiftStatus.CONFIRMED);
+        shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            today, ShiftStatus.CONFIRMED);
     if (shifts.isEmpty()) {
       return List.of();
     }
@@ -118,6 +119,21 @@ public class ShiftService {
     shift.apply(shiftMapper.toPatch(request));
     shift.stampUpdatedBy(resolveActorId(actorEmail));
 
+    return shiftMapper.toResponse(shiftRepository.save(shift));
+  }
+
+  /**
+   * 店外への露出可否を切り替える。承認とは独立の軸なので、状態や時間帯の更新とは別の口で受ける（ADR 0015）。
+   *
+   * <p>専用の留痕は持たないが、行を書いた操作の実行者を印字する規則には従う。
+   */
+  @StoreScoped
+  @Transactional
+  public ShiftResponse changePublication(String id, boolean published, String actorEmail) {
+    Shift shift =
+        shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
+    shift.changePublication(published);
+    shift.stampUpdatedBy(resolveActorId(actorEmail));
     return shiftMapper.toResponse(shiftRepository.save(shift));
   }
 

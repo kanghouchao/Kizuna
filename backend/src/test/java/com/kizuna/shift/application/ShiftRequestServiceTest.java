@@ -146,7 +146,7 @@ class ShiftRequestServiceTest {
   void approve_throwsWhenNotFound() {
     when(shiftRequestRepository.findById("missing")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftRequestService.approve("missing", ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftRequestService.approve("missing", null, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("出勤希望が見つかりません");
 
@@ -169,7 +169,7 @@ class ShiftRequestServiceTest {
     when(shiftRequestMapper.toStoreResponse(request))
         .thenReturn(StoreShiftRequestResponse.builder().id("sr1").status("APPROVED").build());
 
-    StoreShiftRequestResponse result = shiftRequestService.approve("sr1", ACTOR_EMAIL);
+    StoreShiftRequestResponse result = shiftRequestService.approve("sr1", null, ACTOR_EMAIL);
 
     assertThat(result.getStatus()).isEqualTo("APPROVED");
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
@@ -189,9 +189,60 @@ class ShiftRequestServiceTest {
   }
 
   @Test
+  void approve_defaultsNewShiftToPublished() {
+    ShiftRequest request = pendingRequest();
+    givenActor();
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRequestRepository.save(request)).thenReturn(request);
+    when(shiftRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(shiftRequestMapper.toStoreResponse(request))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").build());
+
+    shiftRequestService.approve("sr1", null, ACTOR_EMAIL);
+
+    ArgumentCaptor<Shift> shiftCaptor = ArgumentCaptor.forClass(Shift.class);
+    verify(shiftRepository).save(shiftCaptor.capture());
+    assertThat(shiftCaptor.getValue().isPublished()).as("指定なしの承認は公開可で出生させること").isTrue();
+  }
+
+  @Test
+  void approve_bearsNewShiftUnpublishedWhenAsked() {
+    ShiftRequest request = pendingRequest();
+    givenActor();
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRequestRepository.save(request)).thenReturn(request);
+    when(shiftRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(shiftRequestMapper.toStoreResponse(request))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").build());
+
+    shiftRequestService.approve("sr1", false, ACTOR_EMAIL);
+
+    ArgumentCaptor<Shift> shiftCaptor = ArgumentCaptor.forClass(Shift.class);
+    verify(shiftRepository).save(shiftCaptor.capture());
+    Shift born = shiftCaptor.getValue();
+    assertThat(born.isPublished()).as("非公開の指定は承認と同一トランザクションで効くこと").isFalse();
+    assertThat(born.getStatus()).as("非公開でも確定として生まれること").isEqualTo(ShiftStatus.CONFIRMED);
+  }
+
+  @Test
+  void approve_changeRequest_rejectsPublicationOverride() {
+    ShiftRequest request = pendingChangeRequest();
+    givenActor();
+    when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", false, ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("変更申請の承認では公開可否を指定できません");
+
+    verify(shiftRepository, never()).save(any());
+  }
+
+  @Test
   void approve_changeRequest_updatesTargetShiftPreservingStatusAndCastId() {
     ShiftRequest request = pendingChangeRequest();
     Shift target = confirmedShift();
+    // 既定値（公開可）のままだと「保持された」と「既定へ戻された」が区別できないので、非公開から始める
+    target.changePublication(false);
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
     when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
@@ -199,13 +250,14 @@ class ShiftRequestServiceTest {
     when(shiftRequestMapper.toStoreResponse(request))
         .thenReturn(StoreShiftRequestResponse.builder().id("sr2").status("APPROVED").build());
 
-    shiftRequestService.approve("sr2", ACTOR_EMAIL);
+    shiftRequestService.approve("sr2", null, ACTOR_EMAIL);
 
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
     assertThat(target.getWorkDate()).isEqualTo(request.getWorkDate());
     assertThat(target.getStartTime()).isEqualTo(request.getStartTime());
     assertThat(target.getEndTime()).isEqualTo(request.getEndTime());
     assertThat(target.getStatus()).as("承認と独立した軸（status）は保持されること").isEqualTo(ShiftStatus.CONFIRMED);
+    assertThat(target.isPublished()).as("承認と独立した軸（公開可否）は保持されること").isFalse();
     assertThat(target.getCastId()).isEqualTo("c1");
     assertThat(target.getUpdatedBy()).as("変更申請の承認は updated_by を承認者にすること").isEqualTo(ACTOR_ID);
     assertThat(request.getShiftId()).as("CHANGE の関連シフトは対象のまま").isEqualTo("sh1");
@@ -225,7 +277,7 @@ class ShiftRequestServiceTest {
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
     when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
 
-    assertThatThrownBy(() -> shiftRequestService.approve("sr2", ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("確定済みでないシフト");
 
@@ -244,7 +296,7 @@ class ShiftRequestServiceTest {
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
     when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
 
-    assertThatThrownBy(() -> shiftRequestService.approve("sr2", ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("申請後に変更されています");
 
@@ -277,7 +329,7 @@ class ShiftRequestServiceTest {
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
     when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
 
-    assertThatThrownBy(() -> shiftRequestService.approve("sr2", ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("別のキャストに変更されています");
 
@@ -301,7 +353,7 @@ class ShiftRequestServiceTest {
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
 
-    assertThatThrownBy(() -> shiftRequestService.approve("sr2", ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に削除されています");
 
@@ -316,7 +368,7 @@ class ShiftRequestServiceTest {
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
     when(shiftRepository.findById("sh1")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftRequestService.approve("sr2", ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("シフトが見つかりません");
 
@@ -383,7 +435,7 @@ class ShiftRequestServiceTest {
     givenActor();
     when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
 
-    assertThatThrownBy(() -> shiftRequestService.approve("sr1", ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", null, ACTOR_EMAIL))
         .isInstanceOf(ShiftRequestStateException.class);
 
     verify(shiftRepository, never()).save(any());
