@@ -1,6 +1,7 @@
 package com.kizuna.settings.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -24,19 +25,33 @@ public class BusinessDateService {
 
   /** 現在の営業日。日付変更時刻より前の深夜帯では前の暦日を返す。 */
   public LocalDate currentBusinessDate() {
-    return businessDateOf(LocalDateTime.now(clock));
+    return businessDateOf(clock.instant());
   }
 
   /**
-   * 暦日付き時刻が属する営業日。時刻だけでは決まらないため、呼び手は暦日を伴う値を渡す。
+   * 利用者が記入した暦日付き時刻が属する営業日。時刻だけでは決まらないため、呼び手は暦日を伴う値を渡す。
    *
-   * <p>比較は壁時計の時刻で行う。夏時間の戻し（同じ壁時計時刻が 2 度来る帯）に日付変更時刻が入る タイムゾーンでは営業日が一時的に巻き戻るが、{@code app.timezone}
-   * は夏時間を持たない日本時間で、 実需が出るまで重なりの扱いは定義しない。
+   * <p>夏時間の戻しで同じ壁時計時刻が 2 度来る帯では、先に来る方（早い側のオフセット）として解決する。 壁時計の記入からはどちらの回かを区別できないため、選び直せる規則を 1
+   * つ決めておく。
    */
   public LocalDate businessDateOf(LocalDateTime at) {
-    return at.toLocalTime().isBefore(dateChangeTime())
-        ? at.toLocalDate().minusDays(1)
-        : at.toLocalDate();
+    return businessDateOf(at.atZone(clock.getZone()).toInstant());
+  }
+
+  /**
+   * 瞬時点が属する営業日。境界は暦日ごとの日付変更時刻を瞬時点へ解決してから比べる。
+   *
+   * <p>壁時計の時刻同士で比べると、夏時間の戻しの帯で営業日が巻き戻る — 同じ壁時計時刻が 2 度来るため、
+   * 後から来た瞬時点の方が「日付変更時刻より前」に見える。瞬時点で比べれば時間の進みと同じ向きにしか動かない。
+   */
+  private LocalDate businessDateOf(Instant at) {
+    LocalDate calendarDate = at.atZone(clock.getZone()).toLocalDate();
+    return at.isBefore(dateChangeInstant(calendarDate)) ? calendarDate.minusDays(1) : calendarDate;
+  }
+
+  /** その暦日の日付変更時刻が指す瞬時点。存在しない時刻（夏時間の進み）は前へ送られ、2 度来る時刻は早い側のオフセットを採る。 */
+  private Instant dateChangeInstant(LocalDate calendarDate) {
+    return calendarDate.atTime(dateChangeTime()).atZone(clock.getZone()).toInstant();
   }
 
   /**
