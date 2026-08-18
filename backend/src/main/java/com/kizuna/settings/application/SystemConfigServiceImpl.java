@@ -10,6 +10,7 @@ import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -23,8 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SystemConfigServiceImpl implements SystemConfigService {
 
-  /** TIME の受理形。{@code LocalTime.parse} の既定（ISO）は秒・小数秒も通すため、文案どおりの分精度で撥ねる。 */
-  private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+  /**
+   * TIME の受理形。{@code LocalTime.parse} の既定（ISO）は秒・小数秒も通すため、文案どおりの分精度で撥ねる。 STRICT を明示するのは既定の SMART が
+   * {@code 24:00} を {@code 00:00} へ丸めて受理するためで、保存されるのは原文の {@code 24:00}、読み手の ISO 解析はそれを撥ねて兜底へ落ちる。
+   */
+  private static final DateTimeFormatter TIME_FORMAT =
+      DateTimeFormatter.ofPattern("HH:mm").withResolverStyle(ResolverStyle.STRICT);
 
   private final SystemConfigRepository systemConfigRepository;
   private final SystemConfigMapper systemConfigMapper;

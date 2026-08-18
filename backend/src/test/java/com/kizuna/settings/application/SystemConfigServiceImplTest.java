@@ -198,6 +198,21 @@ class SystemConfigServiceImplTest {
   }
 
   @Test
+  @DisplayName("24:00 は撥ねること（丸めて受理すると読み手が撥ねる値が保存される）")
+  void updateConfig_timeAtEndOfDay() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder().configValue("24:00").build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
+    when(systemConfigRepository.findByConfigKey("business_date_change_time"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("business_date_change_time", request));
+  }
+
+  @Test
   @DisplayName("HH:mm 形式の時刻は保存できること")
   void updateConfig_validTime() {
     SystemConfigUpdateRequest request =
