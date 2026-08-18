@@ -100,8 +100,7 @@ public class ShiftService {
   @StoreScoped
   @Transactional
   public ShiftResponse update(String id, ShiftUpdateRequest request, String actorEmail) {
-    Shift shift =
-        shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
+    Shift shift = findShift(id);
 
     if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
@@ -130,8 +129,7 @@ public class ShiftService {
   @StoreScoped
   @Transactional
   public ShiftResponse changePublication(String id, boolean published, String actorEmail) {
-    Shift shift =
-        shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
+    Shift shift = findShift(id);
     shift.changePublication(published);
     shift.stampUpdatedBy(resolveActorId(actorEmail));
     return shiftMapper.toResponse(shiftRepository.save(shift));
@@ -144,6 +142,12 @@ public class ShiftService {
       throw new NotFoundException("シフトが見つかりません: " + id);
     }
     shiftRepository.deleteById(id);
+  }
+
+  private Shift findShift(String id) {
+    return shiftRepository
+        .findById(id)
+        .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
   }
 
   private Long resolveActorId(String actorEmail) {

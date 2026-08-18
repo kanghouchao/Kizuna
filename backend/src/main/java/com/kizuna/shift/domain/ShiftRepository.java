@@ -58,7 +58,7 @@ public interface ShiftRepository
   boolean existsByStoreIdAndCastIdAndWorkDateAndStatus(
       Long storeId, String castId, LocalDate workDate, ShiftStatus status);
 
-  /** 上と同じ問いを店外向けの露出関門（CONFIRMED ∧ 公開可）で答える。会員経由の指名の書き込み検証が候補の読み口と共有する述語。 */
+  /** 上と同じ問いを店外向けの露出関門（CONFIRMED ∧ 公開可）で答える。 */
   boolean existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
       Long storeId, String castId, LocalDate workDate, ShiftStatus status);
 }
