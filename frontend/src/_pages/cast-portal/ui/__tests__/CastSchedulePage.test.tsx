@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CastSchedulePage } from '../CastSchedulePage';
 import { shiftApi } from '@/entities/shift';
+import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/shift', () => ({
   shiftApi: { mySchedule: jest.fn(), submitShiftChangeRequest: jest.fn() },
@@ -10,6 +11,7 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
+const mockedNotifyError = notify.error as jest.Mock;
 const mockedMySchedule = shiftApi.mySchedule as jest.Mock;
 const mockedSubmitChange = shiftApi.submitShiftChangeRequest as jest.Mock;
 
@@ -176,6 +178,36 @@ describe('CastSchedulePage', () => {
         end_time: '20:00:00',
         note: undefined,
       })
+    );
+  });
+
+  it('変更申請が拒否されたらサーバの文言をそのまま出すこと', async () => {
+    // 受理できる日付の下限は営業日で決まり、その境界を知るのはサーバだけ。提出フォームは日付を判定せず、
+    // 拒否の理由はサーバの文言で伝える（提出ページ側と同じ規則）。
+    mockedMySchedule.mockResolvedValue([
+      {
+        id: 'sh1',
+        work_date: '2999-07-20',
+        start_time: '18:00:00',
+        end_time: '20:00:00',
+        status: 'CONFIRMED',
+        store_id: 1,
+        store_name: '店舗A',
+      },
+    ]);
+    mockedSubmitChange.mockRejectedValue({
+      response: { status: 400, data: { error: '勤務日は本日以降を指定してください' } },
+    });
+
+    render(<CastSchedulePage />);
+    fireEvent.click(await screen.findByRole('button', { name: '変更申請' }));
+    await screen.findByText('シフトの変更申請');
+
+    fireEvent.change(screen.getByLabelText('日付'), { target: { value: '2000-01-01' } });
+    fireEvent.click(screen.getByRole('button', { name: '変更を申請する' }));
+
+    await waitFor(() =>
+      expect(mockedNotifyError).toHaveBeenCalledWith('勤務日は本日以降を指定してください')
     );
   });
 

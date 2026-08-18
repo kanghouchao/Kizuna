@@ -183,6 +183,21 @@ class SystemConfigServiceImplTest {
   }
 
   @Test
+  @DisplayName("秒より細かい時刻は撥ねること（文案どおりの分精度を強制する）")
+  void updateConfig_timeWithFinerPrecision() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder().configValue("05:00:30").build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
+    when(systemConfigRepository.findByConfigKey("business_date_change_time"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("business_date_change_time", request));
+  }
+
+  @Test
   @DisplayName("HH:mm 形式の時刻は保存できること")
   void updateConfig_validTime() {
     SystemConfigUpdateRequest request =

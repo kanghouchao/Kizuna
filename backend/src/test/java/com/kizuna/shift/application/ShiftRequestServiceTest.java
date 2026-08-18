@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -570,5 +571,6 @@ class ShiftRequestServiceTest {
 
     assertThat(result.get(0).getApprovable()).as("承認済みは承認不能").isFalse();
     assertThat(result.get(1).getApprovable()).as("正向対照: 受付済みは承認可能").isTrue();
+    verify(businessDateService, times(1)).currentBusinessDate();
   }
 }

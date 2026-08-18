@@ -8,6 +8,7 @@ import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
@@ -21,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SystemConfigServiceImpl implements SystemConfigService {
+
+  /** TIME の受理形。{@code LocalTime.parse} の既定（ISO）は秒・小数秒も通すため、文案どおりの分精度で撥ねる。 */
+  private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
   private final SystemConfigRepository systemConfigRepository;
   private final SystemConfigMapper systemConfigMapper;
@@ -157,9 +161,10 @@ public class SystemConfigServiceImpl implements SystemConfigService {
       }
     }
     // 解釈できない時刻は読み手が 00:00 へ倒すため、保存だけが成功して暦日と同じ挙動へ静かに入れ替わる。
+    // 秒より細かい値も撥ねる — 通すと境界が文案の分より内側へずれ、画面が謳う時刻と実際が食い違う。
     if ("TIME".equals(config.getValueType())) {
       try {
-        LocalTime.parse(value.trim());
+        LocalTime.parse(value.trim(), TIME_FORMAT);
       } catch (DateTimeParseException e) {
         throw new ServiceException("時刻を HH:mm 形式で指定してください: " + config.getConfigKey());
       }

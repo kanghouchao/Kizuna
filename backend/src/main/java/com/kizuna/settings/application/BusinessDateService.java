@@ -64,7 +64,12 @@ public class BusinessDateService {
     return businessDate.isBefore(currentBusinessDate());
   }
 
-  /** 未設定・不正値は 00:00（暦日と一致）へ倒す。更新時に TIME として検証済みのため不正値は通常は到達しない。 */
+  /**
+   * 未設定・不正値は 00:00（暦日と一致）へ倒す。更新時に TIME として検証済みのため不正値は通常は到達しない。
+   *
+   * <p>読み側は ISO のまま緩く解釈する（分精度の強制は書き口が担う）— DB を直に編集された秒付きの値は 一意に解釈できるので、それを 00:00
+   * へ倒して境界を丸ごと動かす方が害が大きい。
+   */
   private LocalTime dateChangeTime() {
     String raw = systemConfigService.getConfigValue(DATE_CHANGE_TIME_KEY).orElse("");
     if (raw.isBlank()) {

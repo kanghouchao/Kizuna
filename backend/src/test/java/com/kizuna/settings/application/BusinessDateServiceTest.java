@@ -123,4 +123,19 @@ class BusinessDateServiceTest {
                 .currentBusinessDate())
         .isEqualTo(LocalDate.of(2026, 3, 8));
   }
+
+  @Test
+  @DisplayName("記入された壁時計の時刻は、2 度来る帯では先に来る回として解決すること")
+  void writtenWallClockTimeResolvesToTheEarlierOccurrence() {
+    // 2026-11-01 の 01:30 は America/New_York で 2 度来る（EDT と EST）。記入からは回を区別できないので
+    // 早い側（EDT）として解決する — 遅い側なら日付変更時刻ちょうどで既に当日の営業日に入っている。
+    ZoneId newYork = ZoneId.of("America/New_York");
+    BusinessDateService service =
+        serviceAt("01:30", Instant.parse("2026-11-01T12:00:00Z"), newYork);
+
+    assertThat(service.businessDateOf(LocalDateTime.of(2026, 11, 1, 1, 29)))
+        .isEqualTo(LocalDate.of(2026, 10, 31));
+    assertThat(service.businessDateOf(LocalDateTime.of(2026, 11, 1, 1, 30)))
+        .isEqualTo(LocalDate.of(2026, 11, 1));
+  }
 }

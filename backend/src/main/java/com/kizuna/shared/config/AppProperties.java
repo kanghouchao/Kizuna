@@ -16,7 +16,7 @@ public class AppProperties {
 
   private String domain;
 
-  /** 業務のタイムゾーン。営業日を判定する時計（{@link ClockConfig}）とポイント期限の「本日」がこれで読む。 */
+  /** 業務のタイムゾーン。営業日を判定する時計（{@link ClockConfig}）と、ポイントの暦日換算（期限判定・明細の日付）がこれで読む。 */
   private String timezone = "Asia/Tokyo";
 
   /** app.jwt.* */
