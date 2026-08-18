@@ -1,8 +1,12 @@
 package com.kizuna.shift.domain;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface AttendanceRepository extends JpaRepository<Attendance, String> {
 
@@ -17,4 +21,29 @@ public interface AttendanceRepository extends JpaRepository<Attendance, String> 
   /** 上をキャストで絞った形。 */
   List<Attendance> findByBusinessDateAndCastIdAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
       LocalDate businessDate, String castId);
+
+  /**
+   * 与えたシフトのうち、未取消の実績が付いているものの id。予実交差の守衛（禁改・変更申請の三面）は 例外なくこの一本から述語を得る —
+   * 「取消済みを数えない」を単体判定と一括判定に二度書くと、片方だけが直る日が来る。
+   */
+  @Query(
+      """
+      select a.shiftId from com.kizuna.shift.domain.Attendance a
+      where a.shiftId in :shiftIds and a.cancelledAt is null
+      """)
+  Set<String> findShiftIdsWithActiveAttendance(@Param("shiftIds") Collection<String> shiftIds);
+
+  /** そのシフトに未取消の実績が付いているか。単体の判定も一括の問い合わせから導く。 */
+  default boolean hasActiveAttendance(String shiftId) {
+    return !findShiftIdsWithActiveAttendance(List.of(shiftId)).isEmpty();
+  }
+
+  /** そのシフトを参照する実績があるか。削除の可否だけは取消済みも数える（ADR 0014）。 */
+  boolean existsByShiftId(String shiftId);
+
+  /** その店舗に実績行があるか。取消済みも数える。 */
+  boolean existsByStoreId(Long storeId);
+
+  /** そのキャストを参照する実績があるか。取消済みも数える。 */
+  boolean existsByCastId(String castId);
 }

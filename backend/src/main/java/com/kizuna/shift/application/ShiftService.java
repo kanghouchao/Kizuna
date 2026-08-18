@@ -4,6 +4,7 @@ import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.settings.application.BusinessDateService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -13,6 +14,7 @@ import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
+import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
@@ -32,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ShiftService {
 
   private final ShiftRepository shiftRepository;
+  private final AttendanceRepository attendanceRepository;
   private final ShiftMapper shiftMapper;
   private final CastService castService;
   private final CastRepository castRepository;
@@ -113,10 +116,23 @@ public class ShiftService {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
 
+    // 未取消の実績が付いたシフトは勤務日とキャストを変えられない。実績は記録時に営業日とキャストを物化して
+    // おり、事後の付け替えはその事実と食い違う（ADR 0014）。逃げ道は実績の取消 → 変更 → 再記録。
+    // 時刻・status は実績の有無と無関係に通す。
+    if (movesAttribution(shift, request) && attendanceRepository.hasActiveAttendance(id)) {
+      throw new ServiceException("実績が記録されているシフトの勤務日とキャストは変更できません。実績を取り消してから変更してください");
+    }
+
     shift.apply(shiftMapper.toPatch(request));
     shift.stampUpdatedBy(resolveActorId(actorEmail));
 
     return shiftMapper.toResponse(shiftRepository.save(shift));
+  }
+
+  /** 実績が物化した帰属（営業日・キャスト）を動かす更新か。現行と同値の再送は変更ではないので通す。 */
+  private static boolean movesAttribution(Shift shift, ShiftUpdateRequest request) {
+    return (request.getWorkDate() != null && !request.getWorkDate().equals(shift.getWorkDate()))
+        || (request.getCastId() != null && !request.getCastId().equals(shift.getCastId()));
   }
 
   /**
@@ -138,6 +154,11 @@ public class ShiftService {
   public void delete(String id) {
     if (!shiftRepository.existsById(id)) {
       throw new NotFoundException("シフトが見つかりません: " + id);
+    }
+    // 実績が参照する限り削除しない。取消済みも数えるのは、参照を外して消すと「予定通りの出勤」が
+    // 「飛び込み」へ不可逆に化けるため（ADR 0014）。誤建の組は実績の取消と TENTATIVE 化で中性化する。
+    if (attendanceRepository.existsByShiftId(id)) {
+      throw new ConflictException("実績が記録されているシフトは削除できません。実績を取り消したうえで下書きに戻してください");
     }
     shiftRepository.deleteById(id);
   }

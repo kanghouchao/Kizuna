@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -53,7 +54,8 @@ class StoreRegistryServiceCacheTest {
           storeRepository,
           mock(StoreProfileRepository.class),
           mock(CompletedOrderCheck.class),
-          mock(PointLedgerService.class));
+          mock(PointLedgerService.class),
+          mock(AttendanceRecordCheck.class));
     }
   }
 

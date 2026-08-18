@@ -15,6 +15,7 @@ import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
 import com.kizuna.store.api.dto.StoreUpdateDTO;
 import com.kizuna.store.api.dto.StoreVO;
+import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -38,6 +39,7 @@ class StoreRegistryServiceTest {
   @Mock private StoreProfileRepository storeProfileRepository;
   @Mock private CompletedOrderCheck completedOrderCheck;
   @Mock private PointLedgerService pointLedgerService;
+  @Mock private AttendanceRecordCheck attendanceRecordCheck;
   @InjectMocks private StoreRegistryService storeRegistryService;
 
   @Test
@@ -227,6 +229,19 @@ class StoreRegistryServiceTest {
     assertThatThrownBy(() -> storeRegistryService.delete("1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
+    verify(storeRepository, never()).deleteById(any());
+  }
+
+  @Test
+  void delete_storeWithAttendance_isRejected() {
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
+    when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
+    when(attendanceRecordCheck.existsForStore(1L)).thenReturn(true);
+
+    assertThatThrownBy(() -> storeRegistryService.delete("1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("当日実績が記録されている店舗は削除できません");
     verify(storeRepository, never()).deleteById(any());
   }
 

@@ -13,6 +13,7 @@ import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.ShiftRequestResponse;
+import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.CastShiftRequestView;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -44,6 +45,7 @@ public class CastShiftRequestService {
   private final CastRepository castRepository;
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
+  private final AttendanceRepository attendanceRepository;
   private final ShiftRequestMapper shiftRequestMapper;
   private final BusinessDateService businessDateService;
 
@@ -89,6 +91,11 @@ public class CastShiftRequestService {
             .orElseThrow(() -> new NotFoundException("対象のシフトが見つかりません: " + request.getShiftId()));
     if (shift.getStatus() != ShiftStatus.CONFIRMED) {
       throw new ServiceException("確定済みのシフトのみ変更申請できます");
+    }
+    // 実績が物化した事実と食い違う付け替えを申請の側からも塞ぐ。提出・承認・承認可否導出の三面が同じ条件で、
+    // 提出だけ通しても承認できない申請が inbox に溜まるだけになる（ADR 0014）。
+    if (attendanceRepository.hasActiveAttendance(shift.getId())) {
+      throw new ServiceException("実績が記録されているシフトには変更申請できません");
     }
 
     ShiftRequest entity =

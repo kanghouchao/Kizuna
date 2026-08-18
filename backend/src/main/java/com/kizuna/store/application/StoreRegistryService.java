@@ -8,6 +8,7 @@ import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
 import com.kizuna.store.api.dto.StoreUpdateDTO;
 import com.kizuna.store.api.dto.StoreVO;
+import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -36,6 +37,7 @@ public class StoreRegistryService {
   private final StoreProfileRepository storeProfileRepository;
   private final CompletedOrderCheck completedOrderCheck;
   private final PointLedgerService pointLedgerService;
+  private final AttendanceRecordCheck attendanceRecordCheck;
 
   @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional(readOnly = true)
@@ -98,10 +100,13 @@ public class StoreRegistryService {
   /**
    * 削除する。削除できるのは、まだ開店しておらず確定した記録も持たない店舗だけ。
    *
-   * <p>関門は 2 つで順序に意味がある。稼働中はそれ自体が拒否の理由なので、記録を数える前に落とす。 記録の照会は跨モジュールの問い合わせであり、結論が変わらない場合に払う必要はない。
+   * <p>関門は 3 つで順序に意味がある。稼働中はそれ自体が拒否の理由なので、記録を数える前に落とす。 記録の照会は跨モジュールの問い合わせであり、結論が変わらない場合に払う必要はない。
    *
    * <p>記録の側は、完了済みの受注とポイント台帳の帰属の両方を見る。台帳の仕訳は会員が持ち店舗が消えても行は残る（発生店舗が 外れるだけ）ため、DB の外部キーは削除を止めない —
    * 「その店舗で起きた記録が読めなくなる」ことを止めるのはここだけである。
+   *
+   * <p>当日実績は別の理由で止める。実績と訂正履歴は法定保存（労基法 109 条）の対象で、店舗削除の連鎖に巻き込んで 消してよい行ではない（ADR
+   * 0014）。断りの文言を分けるのは、次の一手が「記録が読めなくなる」側と違うためである。
    */
   @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional
@@ -115,6 +120,9 @@ public class StoreRegistryService {
     if (completedOrderCheck.existsForStore(storeId)
         || pointLedgerService.hasEntriesForStore(storeId)) {
       throw new ServiceException("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
+    }
+    if (attendanceRecordCheck.existsForStore(storeId)) {
+      throw new ServiceException("当日実績が記録されている店舗は削除できません");
     }
     storeRepository.deleteById(storeId);
   }

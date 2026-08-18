@@ -21,6 +21,7 @@ import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.ShiftRequestResponse;
+import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.CastShiftRequestView;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -49,6 +50,7 @@ class CastShiftRequestServiceTest {
   @Mock private CastRepository castRepository;
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private ShiftRepository shiftRepository;
+  @Mock private AttendanceRepository attendanceRepository;
   @Mock private ShiftRequestMapper shiftRequestMapper;
   @Mock private BusinessDateService businessDateService;
 
@@ -255,6 +257,25 @@ class CastShiftRequestServiceTest {
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("対象のシフトが見つかりません");
+
+    verifyNoInteractions(shiftRequestRepository);
+  }
+
+  @Test
+  void submitChange_rejectsWhenShiftHasActiveAttendance() {
+    ShiftChangeRequestCreateRequest req = validChangeRequest();
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
+    PlatformUser user = userWithId(42L);
+    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
+    when(shiftRepository.findById("sh1"))
+        .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.CONFIRMED)));
+    when(attendanceRepository.hasActiveAttendance("sh1")).thenReturn(true);
+
+    assertThatThrownBy(() -> service.submitChange(EMAIL, req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("実績が記録されているシフト");
 
     verifyNoInteractions(shiftRequestRepository);
   }

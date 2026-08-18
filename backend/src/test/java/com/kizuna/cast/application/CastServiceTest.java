@@ -15,12 +15,14 @@ import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPatch;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.List;
@@ -42,6 +44,7 @@ class CastServiceTest {
   @Mock private CastMapper castMapper;
   @Mock private CastInvitationService castInvitationService;
   @Mock private CastFieldDefinitionRepository castFieldDefinitionRepository;
+  @Mock private AttendanceReferenceCheck attendanceReferenceCheck;
 
   @InjectMocks private CastService castService;
 
@@ -255,6 +258,17 @@ class CastServiceTest {
     when(castRepository.existsById("g1")).thenReturn(true);
     castService.delete("g1");
     verify(castRepository).deleteById("g1");
+  }
+
+  @Test
+  void delete_rejectsWhenAttendanceReferencesTheCast() {
+    when(castRepository.existsById("g1")).thenReturn(true);
+    when(attendanceReferenceCheck.existsForCast("g1")).thenReturn(true);
+
+    assertThatThrownBy(() -> castService.delete("g1"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("実績が記録されているキャストは削除できません");
+    verify(castRepository, never()).deleteById("g1");
   }
 
   @Test
