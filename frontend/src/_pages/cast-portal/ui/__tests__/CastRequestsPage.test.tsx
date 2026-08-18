@@ -53,8 +53,27 @@ describe('CastRequestsPage', () => {
     fireEvent.change(screen.getByLabelText('日付'), { target: { value: '2000-01-01' } });
     fireEvent.click(screen.getByRole('button', { name: '提出する' }));
 
-    expect(await screen.findByText('本日以降の日付を指定してください')).toBeInTheDocument();
+    expect(await screen.findByText('過去の日付は指定できません')).toBeInTheDocument();
     expect(mockedSubmit).not.toHaveBeenCalled();
+  });
+
+  it('暦日の前日は client 側で弾かないこと（日付変更時刻前の深夜帯ではそれがまだ現在の営業日）', async () => {
+    mockedSubmit.mockResolvedValue({ id: 'sr1', status: 'PENDING' });
+    render(<CastRequestsPage />);
+    await waitStoresLoaded();
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yyyymmdd = [
+      yesterday.getFullYear(),
+      String(yesterday.getMonth() + 1).padStart(2, '0'),
+      String(yesterday.getDate()).padStart(2, '0'),
+    ].join('-');
+    fireEvent.change(screen.getByLabelText('日付'), { target: { value: yyyymmdd } });
+    fireEvent.click(screen.getByRole('button', { name: '提出する' }));
+
+    await waitFor(() => expect(mockedSubmit).toHaveBeenCalledTimes(1));
+    expect(mockedSubmit.mock.calls[0][0]).toMatchObject({ work_date: yyyymmdd });
   });
 
   it('本日の日付は許容され提出されること', async () => {

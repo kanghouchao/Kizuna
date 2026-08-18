@@ -52,6 +52,15 @@ class ShiftRequestServiceTest {
   private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final Long ACTOR_ID = 42L;
 
+  /** 固定具の希望日（2999-08-01 / 08-02）の前後。一覧は営業日を 1 回だけ解決するのでこの 1 本で全行の可否が決まる。 */
+  private static final LocalDate BEFORE_REQUESTED_DATES = LocalDate.of(2026, 8, 18);
+
+  private static final LocalDate AFTER_REQUESTED_DATES = LocalDate.of(3000, 1, 1);
+
+  private void givenCurrentBusinessDate(LocalDate businessDate) {
+    when(businessDateService.currentBusinessDate()).thenReturn(businessDate);
+  }
+
   private void givenActor() {
     PlatformUser actor =
         PlatformUser.builder()
@@ -113,6 +122,7 @@ class ShiftRequestServiceTest {
 
   @Test
   void list_returnsAllWhenStatusNull() {
+    givenCurrentBusinessDate(BEFORE_REQUESTED_DATES);
     when(shiftRequestRepository.findAllByOrderByCreatedAtAsc())
         .thenReturn(List.of(pendingRequest()));
     when(shiftRequestMapper.toStoreResponse(any()))
@@ -126,6 +136,7 @@ class ShiftRequestServiceTest {
 
   @Test
   void list_filtersByStatus() {
+    givenCurrentBusinessDate(BEFORE_REQUESTED_DATES);
     when(shiftRequestRepository.findByStatusOrderByCreatedAtAsc(ShiftRequestStatus.PENDING))
         .thenReturn(List.of(pendingRequest()));
     when(shiftRequestMapper.toStoreResponse(any()))
@@ -311,6 +322,8 @@ class ShiftRequestServiceTest {
     ShiftRequest drifted = pendingChangeRequest();
     Shift editedTarget = confirmedShift();
     editedTarget.apply(new ShiftPatch(null, null, LocalTime.of(20, 0), null, null));
+    // 営業日は生きている日を与える — 承認不能の理由を対象シフトのずれだけに絞る。
+    givenCurrentBusinessDate(BEFORE_REQUESTED_DATES);
     when(shiftRequestRepository.findAllByOrderByCreatedAtAsc()).thenReturn(List.of(drifted));
     when(shiftRepository.findAllById(List.of("sh1"))).thenReturn(List.of(editedTarget));
     when(shiftRequestMapper.toStoreResponse(drifted))
@@ -403,6 +416,7 @@ class ShiftRequestServiceTest {
     newRequest.linkShift("sh_generated");
     ShiftRequest changeRequest = pendingChangeRequest();
     Shift target = confirmedShift();
+    givenCurrentBusinessDate(BEFORE_REQUESTED_DATES);
     when(shiftRequestRepository.findAllByOrderByCreatedAtAsc())
         .thenReturn(List.of(newRequest, changeRequest));
     when(shiftRepository.findAllById(List.of("sh1"))).thenReturn(List.of(target));
@@ -522,6 +536,7 @@ class ShiftRequestServiceTest {
   void list_marksExpiredRequestsUnapprovableForBothTypes() {
     ShiftRequest newRequest = pendingRequest();
     ShiftRequest changeRequest = pendingChangeRequest();
+    givenCurrentBusinessDate(AFTER_REQUESTED_DATES);
     when(shiftRequestRepository.findAllByOrderByCreatedAtAsc())
         .thenReturn(List.of(newRequest, changeRequest));
     when(shiftRepository.findAllById(List.of("sh1"))).thenReturn(List.of(confirmedShift()));
@@ -529,8 +544,6 @@ class ShiftRequestServiceTest {
         .thenReturn(StoreShiftRequestResponse.builder().id("sr1").type("NEW").build());
     when(shiftRequestMapper.toStoreResponse(changeRequest))
         .thenReturn(StoreShiftRequestResponse.builder().id("sr2").type("CHANGE").build());
-    when(businessDateService.hasEnded(newRequest.getWorkDate())).thenReturn(true);
-    when(businessDateService.hasEnded(changeRequest.getWorkDate())).thenReturn(true);
 
     List<StoreShiftRequestResponse> result = shiftRequestService.list(null);
 

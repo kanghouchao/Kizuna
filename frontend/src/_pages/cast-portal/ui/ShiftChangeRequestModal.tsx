@@ -18,7 +18,7 @@ import {
   Input,
   Textarea,
 } from '@/shared/ui';
-import { formatEndTime, formatTime, toDateStr } from '../lib/week';
+import { earliestRequestableDate, formatEndTime, formatTime } from '../lib/week';
 
 interface ChangeFormValues {
   work_date: string;
@@ -31,11 +31,6 @@ interface ShiftChangeRequestModalProps {
   /** 変更申請の対象（確定シフト）。null なら閉じている。 */
   item: CastScheduleItem | null;
   onClose: () => void;
-}
-
-/** 本日の 'yyyy-MM-dd' を返す（過去日拒否の下限）。 */
-function todayStr(): string {
-  return toDateStr(new Date());
 }
 
 /** 確定シフトへの変更申請モーダル。現行の日時を初期値に、希望する日時・備考を提出する。 */
@@ -104,7 +99,7 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
               name="work_date"
               rules={{
                 required: '希望する日付を指定してください',
-                validate: v => v >= todayStr() || '本日以降の日付を指定してください',
+                validate: v => v >= earliestRequestableDate() || '過去の日付は指定できません',
               }}
               render={({ field }) => (
                 <FormItem>

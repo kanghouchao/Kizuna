@@ -8,6 +8,19 @@ export function toDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * 提出フォームで選べる最も古い日付（'yyyy-MM-dd'）。ブラウザの暦日ではなく、その前日を下限にする。
+ *
+ * 受理の可否を決めるのは営業日（プラットフォームの日付変更時刻で区切る）で、これは暦日に対して最大 1 日遅れる
+ * — 日付変更時刻前の深夜帯では前の暦日がまだ現在の営業日である。時刻はサーバだけが知るので、client 側は
+ * サーバと食い違わない最も緩い下限だけを持ち、正確な判定はサーバに委ねる。
+ */
+export function earliestRequestableDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toDateStr(d);
+}
+
 /** 'yyyy-MM-dd' をローカルタイムの Date（時刻は 00:00）として構築する。UTC 解釈による曜日ズレを避けるため、日付文字列から曜日を導出する箇所は必ずこれを経由する。 */
 export function parseDateStr(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);

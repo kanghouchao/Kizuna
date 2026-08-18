@@ -30,7 +30,7 @@ import {
   SelectValue,
   Textarea,
 } from '@/shared/ui';
-import { toDateStr } from '../lib/week';
+import { earliestRequestableDate, toDateStr } from '../lib/week';
 
 interface RequestFormValues {
   store_id: string;
@@ -62,11 +62,6 @@ const STATUS_PILL_CLASS: Record<ShiftRequestStatus, string> = {
 function statusLabel(item: CastShiftRequestItem): string | undefined {
   if (!item.status) return undefined;
   return item.type === 'CHANGE' ? CHANGE_STATUS_LABELS[item.status] : STATUS_LABELS[item.status];
-}
-
-/** 本日の 'yyyy-MM-dd' を返す（過去日拒否の下限。当日の出勤希望は許容する）。 */
-function todayStr(): string {
-  return toDateStr(new Date());
 }
 
 /** 明日の 'yyyy-MM-dd' を返す（提出フォームの初期日付に使う）。 */
@@ -210,7 +205,7 @@ export function CastRequestsPage() {
                 name="work_date"
                 rules={{
                   required: '希望する日付を指定してください',
-                  validate: v => v >= todayStr() || '本日以降の日付を指定してください',
+                  validate: v => v >= earliestRequestableDate() || '過去の日付は指定できません',
                 }}
                 render={({ field }) => (
                   <FormItem>

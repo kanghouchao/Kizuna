@@ -16,6 +16,7 @@ import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.domain.PlatformUserRepository;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,10 @@ public class ShiftRequestService {
             .stream()
             .collect(Collectors.toMap(Shift::getId, Function.identity()));
 
+    // 営業日は行ごとではなく一覧に対して 1 回だけ決める。行ごとに引くと設定の読みが件数だけ走り、
+    // 写像の途中で境界を跨げば同じ応答の中で承認可否の基準がずれる。
+    LocalDate currentBusinessDate = businessDateService.currentBusinessDate();
+
     return requests.stream()
         .map(
             request -> {
@@ -69,7 +74,7 @@ public class ShiftRequestService {
                 response.setCurrentStartTime(target.getStartTime());
                 response.setCurrentEndTime(target.getEndTime());
               }
-              response.setApprovable(approvable(request, target));
+              response.setApprovable(approvable(request, target, currentBusinessDate));
               return response;
             })
         .toList();
@@ -80,9 +85,11 @@ public class ShiftRequestService {
    *
    * <p>目標営業日の終了は種別を問わず効く（NEW は work_date、CHANGE は申請の新 work_date — どちらも同じ欄）。
    * 変更申請だけはさらに適用先シフトの現況にも依る。
+   *
+   * @param currentBusinessDate 一覧全体で共有する現在の営業日
    */
-  private boolean approvable(ShiftRequest request, Shift target) {
-    if (businessDateService.hasEnded(request.getWorkDate())) {
+  private boolean approvable(ShiftRequest request, Shift target, LocalDate currentBusinessDate) {
+    if (request.getWorkDate().isBefore(currentBusinessDate)) {
       return false;
     }
     return request.getType() != ShiftRequestType.CHANGE || changeApplicable(request, target);
