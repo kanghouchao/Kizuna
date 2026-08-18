@@ -13,6 +13,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
+import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -44,6 +45,7 @@ class ShiftRequestServiceTest {
 
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private ShiftRepository shiftRepository;
+  @Mock private AttendanceRepository attendanceRepository;
   @Mock private ShiftRequestMapper shiftRequestMapper;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private BusinessDateService businessDateService;
@@ -316,6 +318,55 @@ class ShiftRequestServiceTest {
 
     verify(shiftRepository, never()).save(any());
     verify(shiftRequestRepository, never()).save(any());
+  }
+
+  @Test
+  void approve_changeRequest_rejectsWhenTargetShiftHasActiveAttendance() {
+    ShiftRequest request = pendingChangeRequest();
+    Shift target = confirmedShift();
+    givenActor();
+    when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
+    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+    when(attendanceRepository.hasActiveAttendance("sh1")).thenReturn(true);
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("実績が記録されているシフト");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+    assertThat(target.getWorkDate()).as("対象シフトが書き換えられないこと").isEqualTo(LocalDate.of(2999, 8, 1));
+  }
+
+  @Test
+  void list_marksChangeRequestUnapprovableWhenTargetShiftHasActiveAttendance() {
+    // 承認可否導出の面。実績以外の条件は全て満たしたうえで、実績の有無だけで true → false が翻ること。
+    ShiftRequest changeRequest = pendingChangeRequest();
+    givenCurrentBusinessDate(BEFORE_REQUESTED_DATES);
+    when(shiftRequestRepository.findAllByOrderByCreatedAtAsc()).thenReturn(List.of(changeRequest));
+    when(shiftRepository.findAllById(List.of("sh1"))).thenReturn(List.of(confirmedShift()));
+    when(attendanceRepository.findShiftIdsWithActiveAttendance(Set.of("sh1")))
+        .thenReturn(Set.of("sh1"));
+    when(shiftRequestMapper.toStoreResponse(changeRequest))
+        .thenReturn(
+            StoreShiftRequestResponse.builder().id("sr2").type("CHANGE").shiftId("sh1").build());
+
+    assertThat(shiftRequestService.list(null).get(0).getApprovable()).isFalse();
+  }
+
+  @Test
+  void list_marksChangeRequestApprovableWhenTheAttendanceWasCancelled() {
+    // 上と同じ固定具から実績の有無だけを外す。この対照が無いと「常に false」でも緑になる。
+    ShiftRequest changeRequest = pendingChangeRequest();
+    givenCurrentBusinessDate(BEFORE_REQUESTED_DATES);
+    when(shiftRequestRepository.findAllByOrderByCreatedAtAsc()).thenReturn(List.of(changeRequest));
+    when(shiftRepository.findAllById(List.of("sh1"))).thenReturn(List.of(confirmedShift()));
+    when(attendanceRepository.findShiftIdsWithActiveAttendance(Set.of("sh1"))).thenReturn(Set.of());
+    when(shiftRequestMapper.toStoreResponse(changeRequest))
+        .thenReturn(
+            StoreShiftRequestResponse.builder().id("sr2").type("CHANGE").shiftId("sh1").build());
+
+    assertThat(shiftRequestService.list(null).get(0).getApprovable()).isTrue();
   }
 
   @Test

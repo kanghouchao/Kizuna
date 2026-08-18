@@ -235,6 +235,41 @@ class StoreDeletionCascadeIT {
     assertThat(countStore(storeId)).isZero();
   }
 
+  @Test
+  @DisplayName("当日実績を持つ店舗は準備中でも削除できず、実績行が残ること")
+  void storeWithAttendanceCannotBeDeleted() {
+    // 実績と訂正履歴は法定保存の対象で、店舗削除の連鎖に巻き込んで消してよい行ではない（ADR 0014）。
+    Store store = freshStore("実績あり検証店舗", "attendance-store-delete-it");
+    long storeId = store.getId();
+    String castId = "attendance-cascade-cast-" + UUID.randomUUID();
+    insertCast(storeId, castId);
+    insertAttendance(storeId, castId);
+
+    assertThat(countAttendances(storeId)).as("削除前は実績が 1 件あること").isEqualTo(1L);
+
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("当日実績が記録されている店舗は削除できません");
+    assertThat(countAttendances(storeId)).as("実績行は残存すること").isEqualTo(1L);
+    assertThat(countStore(storeId)).as("拒否された店舗は残存すること").isEqualTo(1L);
+  }
+
+  private void insertAttendance(long storeId, String castId) {
+    jdbcTemplate.update(
+        "INSERT INTO t_attendances (id, store_id, cast_id, business_date, actual_start_at,"
+            + " created_at, updated_at, version) VALUES (?, ?, ?, CURRENT_DATE, CURRENT_TIMESTAMP,"
+            + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+        "attendance-cascade-it-" + UUID.randomUUID(),
+        storeId,
+        castId);
+  }
+
+  private long countAttendances(long storeId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM t_attendances WHERE store_id = ?", Long.class, storeId);
+  }
+
   private void insertCast(long storeId, String castId) {
     jdbcTemplate.update(
         "INSERT INTO t_casts (id, store_id, name, created_at, updated_at, version)"

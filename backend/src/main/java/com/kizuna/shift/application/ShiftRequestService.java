@@ -7,6 +7,7 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
+import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -21,6 +22,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class ShiftRequestService {
 
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
+  private final AttendanceRepository attendanceRepository;
   private final ShiftRequestMapper shiftRequestMapper;
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
@@ -64,6 +67,12 @@ public class ShiftRequestService {
     // 写像の途中で境界を跨げば同じ応答の中で承認可否の基準がずれる。
     LocalDate currentBusinessDate = businessDateService.currentBusinessDate();
 
+    // 実績の有無も一覧に対して 1 回だけ引く。空集合を渡すと in 句が空になるので、その場合は問い合わせない。
+    Set<String> shiftsWithActiveAttendance =
+        targetShifts.isEmpty()
+            ? Set.of()
+            : attendanceRepository.findShiftIdsWithActiveAttendance(targetShifts.keySet());
+
     return requests.stream()
         .map(
             request -> {
@@ -74,7 +83,8 @@ public class ShiftRequestService {
                 response.setCurrentStartTime(target.getStartTime());
                 response.setCurrentEndTime(target.getEndTime());
               }
-              response.setApprovable(approvable(request, target, currentBusinessDate));
+              response.setApprovable(
+                  approvable(request, target, currentBusinessDate, shiftsWithActiveAttendance));
               return response;
             })
         .toList();
@@ -87,23 +97,35 @@ public class ShiftRequestService {
    * 変更申請だけはさらに適用先シフトの現況にも依る。処理済みも承認できない — 絞り込み無しの一覧は 承認済み・却下済みも返すため、状態を見ないと「押せば必ず失敗する行」に可能と書くことになる。
    *
    * @param currentBusinessDate 一覧全体で共有する現在の営業日
+   * @param shiftsWithActiveAttendance 一覧全体で共有する「未取消の実績が付いたシフト」の集合
    */
-  private boolean approvable(ShiftRequest request, Shift target, LocalDate currentBusinessDate) {
+  private boolean approvable(
+      ShiftRequest request,
+      Shift target,
+      LocalDate currentBusinessDate,
+      Set<String> shiftsWithActiveAttendance) {
     if (request.getStatus() != ShiftRequestStatus.PENDING) {
       return false;
     }
     if (request.getWorkDate().isBefore(currentBusinessDate)) {
       return false;
     }
-    return request.getType() != ShiftRequestType.CHANGE || changeApplicable(request, target);
+    return request.getType() != ShiftRequestType.CHANGE
+        || changeApplicable(request, target, shiftsWithActiveAttendance);
   }
 
-  /** 変更申請の適用先シフトが今も申請時のままか（存在し、確定済み・申請者本人・申請時点の時間帯のまま）。 */
-  private boolean changeApplicable(ShiftRequest request, Shift target) {
+  /**
+   * 変更申請の適用先シフトが今も申請時のままか（存在し、確定済み・申請者本人・申請時点の時間帯のまま）で、 かつ未取消の実績が付いていないか。
+   *
+   * <p>実績の条件は提出時・承認時と同じもので、三面が食い違うと「押せると書いてあるのに必ず失敗する行」か 「押せないと書いてあるのに通る行」のどちらかが出る（ADR 0014）。
+   */
+  private boolean changeApplicable(
+      ShiftRequest request, Shift target, Set<String> shiftsWithActiveAttendance) {
     return target != null
         && target.getStatus() == ShiftStatus.CONFIRMED
         && request.getCastId().equals(target.getCastId())
-        && slotUnchanged(request, target);
+        && slotUnchanged(request, target)
+        && !shiftsWithActiveAttendance.contains(target.getId());
   }
 
   /** 対象シフトの時間帯が申請時点（original_*）から変わっていないこと。 */
@@ -157,6 +179,10 @@ public class ShiftRequestService {
       }
       if (!slotUnchanged(request, target)) {
         throw new ServiceException("対象のシフトは申請後に変更されています");
+      }
+      // 提出後に実績が記録された申請をここで止める。三面（提出・承認・承認可否導出）で同じ条件。
+      if (attendanceRepository.hasActiveAttendance(target.getId())) {
+        throw new ServiceException("実績が記録されているシフトには変更を適用できません");
       }
       target.apply(
           new ShiftPatch(

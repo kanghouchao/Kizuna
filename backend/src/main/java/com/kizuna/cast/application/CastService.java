@@ -6,6 +6,7 @@ import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
@@ -40,6 +41,7 @@ public class CastService {
   private final CastMapper castMapper;
   private final CastInvitationService castInvitationService;
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
+  private final AttendanceReferenceCheck attendanceReferenceCheck;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -116,12 +118,18 @@ public class CastService {
   /**
    * キャストを削除する。受注から参照されている行は削除できない — 過去の受注が誰の担当だったかは売上の根拠であり、 参照ごと消えてよいものではない。在籍しなくなったキャストは削除ではなく
    * INACTIVE で表す。
+   *
+   * <p>当日実績からの参照も同じく削除を止める。こちらは外部キー任せにできない — キャストの削除はシフトへ連鎖する
+   * ため、実績が先に当たるのはシフト側の外部キーでありうる。どちらが先に鳴るかで 断りの文言が変わらないよう、実績は前置の判定で見る（ADR 0014）。
    */
   @StoreScoped
   @Transactional
   public void delete(String id) {
     if (!castRepository.existsById(id)) {
       throw new NotFoundException("キャストが見つかりません");
+    }
+    if (attendanceReferenceCheck.existsForCast(id)) {
+      throw new ConflictException("実績が記録されているキャストは削除できません。在籍停止に変更してください");
     }
     try {
       castRepository.deleteById(id);
