@@ -84,12 +84,16 @@ class AttendanceServiceTest {
   }
 
   private Shift shift(String castId) {
+    return shift(castId, ShiftStatus.CONFIRMED);
+  }
+
+  private Shift shift(String castId, ShiftStatus status) {
     return Shift.builder()
         .castId(castId)
         .workDate(SHIFT_WORK_DATE)
         .startTime(LocalTime.of(19, 0))
         .endTime(LocalTime.of(2, 0))
-        .status(ShiftStatus.CONFIRMED)
+        .status(status)
         .published(true)
         .build();
   }
@@ -161,6 +165,19 @@ class AttendanceServiceTest {
   }
 
   @Test
+  @DisplayName("下書き（TENTATIVE）のシフトへ紐づけた記録を拒否すること")
+  void rejectsAttendanceLinkedToATentativeShift() {
+    givenActor();
+    when(castService.existsForCurrentStore(CAST_ID)).thenReturn(true);
+    when(shiftRepository.findById(SHIFT_ID))
+        .thenReturn(Optional.of(shift(CAST_ID, ShiftStatus.TENTATIVE)));
+
+    assertThatThrownBy(() -> attendanceService.record(createRequest(SHIFT_ID), ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("確定");
+  }
+
+  @Test
   @DisplayName("現店舗に居ないキャストの記録が 404 になること")
   void rejectsAttendanceForUnknownCast() {
     givenActor();
@@ -193,7 +210,7 @@ class AttendanceServiceTest {
   void correctionPersistsThePreEditSnapshot() {
     givenActor();
     Attendance attendance =
-        Attendance.record(CAST_ID, DERIVED_BUSINESS_DATE, START, null, null, "1番待機室", ACTOR_ID);
+        Attendance.record(CAST_ID, null, DERIVED_BUSINESS_DATE, START, null, "1番待機室", ACTOR_ID);
     when(attendanceRepository.findById("att-1")).thenReturn(Optional.of(attendance));
     when(attendanceRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
 
@@ -218,7 +235,7 @@ class AttendanceServiceTest {
   void correctionCannotDetachBusinessDateFromTheShift() {
     givenActor();
     Attendance attendance =
-        Attendance.record(CAST_ID, SHIFT_WORK_DATE, START, null, SHIFT_ID, null, ACTOR_ID);
+        Attendance.record(CAST_ID, SHIFT_ID, SHIFT_WORK_DATE, START, null, null, ACTOR_ID);
     when(attendanceRepository.findById("att-1")).thenReturn(Optional.of(attendance));
     when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(shift(CAST_ID)));
 
@@ -236,7 +253,7 @@ class AttendanceServiceTest {
   void cancellationMarksTheRow() {
     givenActor();
     Attendance attendance =
-        Attendance.record(CAST_ID, DERIVED_BUSINESS_DATE, START, null, null, null, ACTOR_ID);
+        Attendance.record(CAST_ID, null, DERIVED_BUSINESS_DATE, START, null, null, ACTOR_ID);
     when(attendanceRepository.findById("att-1")).thenReturn(Optional.of(attendance));
 
     attendanceService.cancel("att-1", ACTOR_EMAIL);
@@ -250,7 +267,7 @@ class AttendanceServiceTest {
   @DisplayName("照会がキャスト指定の有無で読み口を切り替え、どちらも取消済みを除外すること")
   void lookupSwitchesOnCastAndAlwaysExcludesCancelled() {
     Attendance attendance =
-        Attendance.record(CAST_ID, DERIVED_BUSINESS_DATE, START, null, null, null, ACTOR_ID);
+        Attendance.record(CAST_ID, null, DERIVED_BUSINESS_DATE, START, null, null, ACTOR_ID);
     when(attendanceRepository.findByBusinessDateAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
             DERIVED_BUSINESS_DATE))
         .thenReturn(List.of(attendance));
