@@ -2,6 +2,7 @@ package com.kizuna.shift.application;
 
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
@@ -12,6 +13,9 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
+import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.user.domain.PlatformUserRepository;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,6 +33,7 @@ public class ShiftRequestService {
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
   private final ShiftRequestMapper shiftRequestMapper;
+  private final PlatformUserRepository platformUserRepository;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -39,11 +44,16 @@ public class ShiftRequestService {
             : shiftRequestRepository.findByStatusOrderByCreatedAtAsc(parseStatus(status));
 
     // 変更申請は承認判断に「現行から何がどう変わるか」が必要なため、対象シフトの現行日時を内联する。
+    // 承認済みの NEW も shift_id を持つが、そちらは系列の背骨であって差分の提示先ではないので引かない。
     // storeFilter がセッション全体で有効なので、参照できるシフトは現店舗のものに限られる。
     Map<String, Shift> targetShifts =
         shiftRepository
             .findAllById(
-                requests.stream().map(ShiftRequest::getShiftId).filter(Objects::nonNull).toList())
+                requests.stream()
+                    .filter(request -> request.getType() == ShiftRequestType.CHANGE)
+                    .map(ShiftRequest::getShiftId)
+                    .filter(Objects::nonNull)
+                    .toList())
             .stream()
             .collect(Collectors.toMap(Shift::getId, Function.identity()));
 
@@ -71,7 +81,7 @@ public class ShiftRequestService {
    */
   private boolean changeApplicable(ShiftRequest request, Shift target) {
     return target != null
-        && "CONFIRMED".equals(target.getStatus())
+        && target.getStatus() == ShiftStatus.CONFIRMED
         && request.getCastId().equals(target.getCastId())
         && slotUnchanged(request, target);
   }
@@ -90,9 +100,10 @@ public class ShiftRequestService {
    */
   @StoreScoped
   @Transactional
-  public StoreShiftRequestResponse approve(String id) {
+  public StoreShiftRequestResponse approve(String id, String actorEmail) {
     ShiftRequest request = findOwnRequest(id);
-    request.approve();
+    Long actorId = resolveActorId(actorEmail);
+    request.approve(actorId, OffsetDateTime.now());
 
     if (request.getType() == ShiftRequestType.CHANGE) {
       // 対象シフトが削除されると FK（SET NULL）で参照が落ちる。申請は履歴として残るが、適用先が無いため承認はできない。
@@ -105,7 +116,7 @@ public class ShiftRequestService {
               .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + request.getShiftId()));
       // 確定済み・申請者本人・申請時点のままのシフトであることは提出時だけでなく適用時にも要求する
       // （提出後に未確定へ編集された・別キャストへ付け替えられた・時間帯を変更されたシフトを上書きしない）。
-      if (!"CONFIRMED".equals(target.getStatus())) {
+      if (target.getStatus() != ShiftStatus.CONFIRMED) {
         throw new ServiceException("確定済みでないシフトには変更を適用できません");
       }
       if (!request.getCastId().equals(target.getCastId())) {
@@ -117,6 +128,7 @@ public class ShiftRequestService {
       target.apply(
           new ShiftPatch(
               null, request.getWorkDate(), request.getStartTime(), request.getEndTime(), null));
+      target.stampUpdatedBy(actorId);
       shiftRepository.save(target);
     } else {
       // store_id は StoreScopeStampListener が @PrePersist で採番する
@@ -126,9 +138,11 @@ public class ShiftRequestService {
               .workDate(request.getWorkDate())
               .startTime(request.getStartTime())
               .endTime(request.getEndTime())
-              .status("CONFIRMED")
+              .status(ShiftStatus.CONFIRMED)
+              .createdBy(actorId)
               .build();
-      shiftRepository.save(shift);
+      // 生成したシフトを申請行へ結び、希望→確定の一跳を辿れるようにする（系列の背骨）。
+      request.linkShift(shiftRepository.save(shift).getId());
     }
 
     return shiftRequestMapper.toStoreResponse(shiftRequestRepository.save(request));
@@ -136,9 +150,9 @@ public class ShiftRequestService {
 
   @StoreScoped
   @Transactional
-  public StoreShiftRequestResponse decline(String id) {
+  public StoreShiftRequestResponse decline(String id, String actorEmail) {
     ShiftRequest request = findOwnRequest(id);
-    request.decline();
+    request.decline(resolveActorId(actorEmail), OffsetDateTime.now());
     return shiftRequestMapper.toStoreResponse(shiftRequestRepository.save(request));
   }
 
@@ -146,6 +160,13 @@ public class ShiftRequestService {
     return shiftRequestRepository
         .findById(id)
         .orElseThrow(() -> new NotFoundException("出勤希望が見つかりません: " + id));
+  }
+
+  private Long resolveActorId(String actorEmail) {
+    return platformUserRepository
+        .findByEmail(actorEmail)
+        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
+        .getId();
   }
 
   private ShiftRequestStatus parseStatus(String status) {

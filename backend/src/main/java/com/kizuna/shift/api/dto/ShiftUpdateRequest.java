@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.domain.ShiftStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import lombok.Data;
@@ -10,5 +11,5 @@ public class ShiftUpdateRequest {
   private LocalDate workDate;
   private LocalTime startTime;
   private LocalTime endTime;
-  private String status;
+  private ShiftStatus status;
 }

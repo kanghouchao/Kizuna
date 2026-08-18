@@ -7,6 +7,7 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -86,9 +87,17 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
     // 正向: 本人の確定シフト（跨店）。
     saveShift(
-        myCastA, STORE_A, LocalTime.parse(MY_A_START), LocalTime.parse(MY_A_END), "CONFIRMED");
+        myCastA,
+        STORE_A,
+        LocalTime.parse(MY_A_START),
+        LocalTime.parse(MY_A_END),
+        ShiftStatus.CONFIRMED);
     saveShift(
-        myCastB, storeBId, LocalTime.parse(MY_B_START), LocalTime.parse(MY_B_END), "CONFIRMED");
+        myCastB,
+        storeBId,
+        LocalTime.parse(MY_B_START),
+        LocalTime.parse(MY_B_END),
+        ShiftStatus.CONFIRMED);
 
     // 負向1: 別キャスト（本人と紐づかない）の確定シフト。所属店 A 内でも cast_id が違えば見えないこと。
     String foreignCastInStoreA = createCast(STORE_A, "週間集約IT別キャスト", null);
@@ -97,11 +106,16 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
         STORE_A,
         LocalTime.parse(CANARY_FOREIGN_CAST_START),
         LocalTime.parse(CANARY_FOREIGN_CAST_START).plusHours(1),
-        "CONFIRMED");
+        ShiftStatus.CONFIRMED);
 
     // 負向2: 非所属店舗（店 C）の別キャストの確定シフト。cast_id 単層自限は店舗を跨いで一切現れないこと。
     String foreignCastInStoreC = createCast(storeCId, "週間集約IT非所属店キャスト", null);
-    saveShift(foreignCastInStoreC, storeCId, LocalTime.of(14, 0), LocalTime.of(16, 0), "CONFIRMED");
+    saveShift(
+        foreignCastInStoreC,
+        storeCId,
+        LocalTime.of(14, 0),
+        LocalTime.of(16, 0),
+        ShiftStatus.CONFIRMED);
 
     // 負向3: 本人（店A）の TENTATIVE シフト。CONFIRMED のみ返す不変条件のカナリア。
     saveShift(
@@ -109,7 +123,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
         STORE_A,
         LocalTime.parse(CANARY_TENTATIVE_START),
         LocalTime.parse(CANARY_TENTATIVE_START).plusHours(1),
-        "TENTATIVE");
+        ShiftStatus.TENTATIVE);
   }
 
   private long ensureStore(String domain, String name) {
@@ -146,7 +160,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
   }
 
   private void saveShift(
-      String castId, long storeId, LocalTime start, LocalTime end, String status) {
+      String castId, long storeId, LocalTime start, LocalTime end, ShiftStatus status) {
     Shift shift =
         Shift.builder()
             .castId(castId)

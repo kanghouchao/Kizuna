@@ -2,6 +2,7 @@ package com.kizuna.shift.api.store;
 
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
 import com.kizuna.shift.application.ShiftRequestService;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -30,13 +31,15 @@ public class ShiftRequestController {
 
   @PostMapping("/{id}/approval")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<StoreShiftRequestResponse> approve(@PathVariable String id) {
-    return ResponseEntity.ok(shiftRequestService.approve(id));
+  public ResponseEntity<StoreShiftRequestResponse> approve(
+      @PathVariable String id, Principal principal) {
+    return ResponseEntity.ok(shiftRequestService.approve(id, principal.getName()));
   }
 
   @PostMapping("/{id}/rejection")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<StoreShiftRequestResponse> decline(@PathVariable String id) {
-    return ResponseEntity.ok(shiftRequestService.decline(id));
+  public ResponseEntity<StoreShiftRequestResponse> decline(
+      @PathVariable String id, Principal principal) {
+    return ResponseEntity.ok(shiftRequestService.decline(id, principal.getName()));
   }
 }

@@ -17,6 +17,7 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.domain.ConfirmedShiftCastView;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -119,12 +120,13 @@ class ConfirmedShiftLookupServiceTest {
   @DisplayName("確定シフトの有無を店舗・キャスト・日付・確定状態で問い合わせること")
   void hasConfirmedShiftQueriesWithStoreBoundary() {
     when(shiftRepository.existsByStoreIdAndCastIdAndWorkDateAndStatus(
-            anyLong(), anyString(), any(), anyString()))
+            anyLong(), anyString(), any(), any()))
         .thenReturn(true);
 
     assertThat(service.hasConfirmedShift(STORE_ID, "cast-1", today())).isTrue();
 
     verify(shiftRepository)
-        .existsByStoreIdAndCastIdAndWorkDateAndStatus(STORE_ID, "cast-1", today(), "CONFIRMED");
+        .existsByStoreIdAndCastIdAndWorkDateAndStatus(
+            STORE_ID, "cast-1", today(), ShiftStatus.CONFIRMED);
   }
 }

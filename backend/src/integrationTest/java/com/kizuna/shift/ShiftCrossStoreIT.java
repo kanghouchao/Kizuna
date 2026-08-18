@@ -7,8 +7,10 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -35,11 +37,16 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
   private static final String SHIFTS_PUBLIC = "/store/shifts/public";
   private static final String FOREIGN_STORE_DOMAIN = "shift-it.kizuna.test";
 
+  /** {@code storeHeaders} が名乗る v0.1.0 seed/05-demo.yaml の店舗スタッフ。実行者列の期待値をここから引く。 */
+  private static final String SEED_STORE_STAFF_EMAIL = "yamada.jiro@kizuna.test";
+
   @Autowired private CastRepository castRepository;
 
   @Autowired private ShiftRepository shiftRepository;
 
   @Autowired private StoreRepository storeRepository;
+
+  @Autowired private PlatformUserRepository platformUserRepository;
 
   /**
    * クロス店舗検証用の第二店舗を用意し、採番された実 id を返す（MenuCrossStoreIT と同型）。 シードには店舗 1 しか無く、定数 {@code STORE_B}=2 は
@@ -171,6 +178,59 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
 
     // 区間 GET（日=from==to）に作成分が返る
     assertThat(rangeContains(STORE_A, "from=2026-07-08&to=2026-07-08", shiftId)).isTrue();
+  }
+
+  @Test
+  @DisplayName("未知のステータスは作成・更新のどちらも 400 で拒否され、行が増えず既存値も変わらないこと")
+  void unknownStatusIsRejectedOnCreateAndUpdate() {
+    String castId = createCastAs(STORE_A, "統合テストキャスト（未知ステータス）");
+    long countBefore = shiftRepository.count();
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/store/shifts",
+            new HttpEntity<>(
+                shiftBody(castId, "2026-07-11", "18:00:00", "23:00:00", "BOGUS"),
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(shiftRepository.count()).as("拒否された作成で行が増えないこと").isEqualTo(countBefore);
+
+    String shiftId = createShiftAs(STORE_A, castId, "2026-07-11", "18:00:00", "23:00:00");
+    ResponseEntity<JsonNode> updated =
+        rest.exchange(
+            "/store/shifts/" + shiftId,
+            HttpMethod.PUT,
+            new HttpEntity<>("{\"status\": \"BOGUS\"}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(shiftRepository.findById(shiftId).orElseThrow().getStatus())
+        .as("拒否された更新で既存ステータスが変わらないこと")
+        .isEqualTo(ShiftStatus.TENTATIVE);
+  }
+
+  @Test
+  @DisplayName("直接作成・直接編集がそれぞれ created_by・updated_by に実行者を印字すること")
+  void directWriteStampsTheExecutor() {
+    Long staffId = platformUserRepository.findByEmail(SEED_STORE_STAFF_EMAIL).orElseThrow().getId();
+    String castId = createCastAs(STORE_A, "統合テストキャスト（実行者印字）");
+
+    String shiftId = createShiftAs(STORE_A, castId, "2026-07-12", "18:00:00", "23:00:00");
+    Shift afterCreate = shiftRepository.findById(shiftId).orElseThrow();
+    assertThat(afterCreate.getCreatedBy()).as("作成の実行者が印字されること").isEqualTo(staffId);
+    assertThat(afterCreate.getUpdatedBy()).as("作成だけの行は書き換えの実行者を持たないこと").isNull();
+
+    ResponseEntity<JsonNode> updated =
+        rest.exchange(
+            "/store/shifts/" + shiftId,
+            HttpMethod.PUT,
+            new HttpEntity<>("{\"status\": \"CONFIRMED\"}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    Shift afterUpdate = shiftRepository.findById(shiftId).orElseThrow();
+    assertThat(afterUpdate.getUpdatedBy()).as("編集の実行者が印字されること").isEqualTo(staffId);
+    assertThat(afterUpdate.getCreatedBy()).as("作成の実行者は書き換えで消えないこと").isEqualTo(staffId);
   }
 
   @Test
@@ -348,7 +408,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
             .workDate(workDate)
             .startTime(startTime)
             .endTime(endTime)
-            .status("CONFIRMED")
+            .status(ShiftStatus.CONFIRMED)
             .build();
     shift.setStoreId(storeId);
     shiftRepository.save(shift);

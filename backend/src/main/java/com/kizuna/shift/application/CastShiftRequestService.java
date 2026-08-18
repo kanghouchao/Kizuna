@@ -19,6 +19,7 @@ import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
+import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -87,7 +88,7 @@ public class CastShiftRequestService {
             .findById(request.getShiftId())
             .filter(s -> castIds.contains(s.getCastId()))
             .orElseThrow(() -> new NotFoundException("対象のシフトが見つかりません: " + request.getShiftId()));
-    if (!"CONFIRMED".equals(shift.getStatus())) {
+    if (shift.getStatus() != ShiftStatus.CONFIRMED) {
       throw new ServiceException("確定済みのシフトのみ変更申請できます");
     }
 

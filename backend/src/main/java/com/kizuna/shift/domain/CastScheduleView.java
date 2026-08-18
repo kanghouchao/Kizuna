@@ -18,7 +18,7 @@ public interface CastScheduleView {
 
   LocalTime getEndTime();
 
-  String getStatus();
+  ShiftStatus getStatus();
 
   Long getStoreId();
 

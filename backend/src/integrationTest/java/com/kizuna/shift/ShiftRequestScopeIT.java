@@ -12,6 +12,7 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
+import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -50,8 +51,11 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   private static final String PASSWORD = "pass";
   private static final String CAST_EMAIL = "shift-request-it-cast@kizuna.test";
 
-  /** v0.1.0 seed/05-demo.yaml の店舗スタッフ（ROLE_CAST を持たない）。役割線 403 の検証に使う。 */
-  private static final String NON_CAST_STAFF_EMAIL = "yamada.jiro@kizuna.test";
+  /**
+   * v0.1.0 seed/05-demo.yaml の店舗スタッフ（ROLE_CAST を持たない）。役割線 403 の検証に使い、{@code storeHeaders}
+   * が名乗るのもこの身分なので、承認・却下の実行者として印字される期待値もここから引く。
+   */
+  private static final String SEED_STORE_STAFF_EMAIL = "yamada.jiro@kizuna.test";
 
   private static final String STORE_FOREIGN_DOMAIN = "shift-request-it-foreign.kizuna.test";
 
@@ -141,7 +145,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   /** 確定（CONFIRMED）シフトをリポジトリ直挿で用意する（変更申請の対象）。 */
-  private Shift saveShift(String castId, long storeId, String status) {
+  private Shift saveShift(String castId, long storeId, ShiftStatus status) {
     Shift shift =
         Shift.builder()
             .castId(castId)
@@ -171,6 +175,11 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
         "/platform/me/shift-requests/changes",
         new HttpEntity<>(body, bearer(token)),
         JsonNode.class);
+  }
+
+  /** {@code storeHeaders} が名乗る店舗スタッフの PlatformUser id。実行者列の期待値に使う。 */
+  private Long storeStaffId() {
+    return platformUserRepository.findByEmail(SEED_STORE_STAFF_EMAIL).orElseThrow().getId();
   }
 
   private String platformToken(String email, String password) {
@@ -425,6 +434,21 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
     ShiftRequest reloaded = shiftRequestRepository.findById(id).orElseThrow();
     assertThat(reloaded.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
+    assertThat(reloaded.getProcessedBy()).as("承認の実行者が印字されること").isEqualTo(storeStaffId());
+    assertThat(reloaded.getProcessedAt()).as("承認の実行時刻が印字されること").isNotNull();
+
+    // 生成したシフトの id が申請行へ回写され、希望から確定へ一跳で辿れる（系列の背骨）。
+    Shift generated =
+        shiftRepository
+            .findById(reloaded.getShiftId())
+            .orElseThrow(
+                () -> new AssertionError("回写された shift_id が実在しないこと: " + reloaded.getShiftId()));
+    assertThat(generated.getCastId()).as("回写先は本人の確定シフトであること").isEqualTo(myCastId);
+    assertThat(generated.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+    assertThat(generated.getStatus()).isEqualTo(ShiftStatus.CONFIRMED);
+    assertThat(generated.getCreatedBy())
+        .as("承認で生まれた行の created_by は承認者であること")
+        .isEqualTo(storeStaffId());
 
     // 本人スケジュール（cast_id 単層自限）に確定シフトとして反映される。
     ResponseEntity<JsonNode> schedule =
@@ -478,6 +502,9 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     assertThat(declined.getBody().path("status").asString()).isEqualTo("DECLINED");
     ShiftRequest reloaded = shiftRequestRepository.findById(id).orElseThrow();
     assertThat(reloaded.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
+    assertThat(reloaded.getProcessedBy()).as("却下の実行者が印字されること").isEqualTo(storeStaffId());
+    assertThat(reloaded.getProcessedAt()).as("却下の実行時刻が印字されること").isNotNull();
+    assertThat(reloaded.getShiftId()).as("却下では関連シフトを持たないこと").isNull();
     assertThat(shiftRepository.count()).as("却下ではシフトが作成されないこと").isEqualTo(shiftCountBefore);
   }
 
@@ -538,7 +565,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("確定シフトへの変更申請が提出でき、履歴に種別 CHANGE の受付済みとして現れること")
   void submitChange_onOwnConfirmedShift_succeedsAndAppearsInHistoryAsChange() {
-    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    Shift shift = saveShift(myCastId, STORE_A, ShiftStatus.CONFIRMED);
 
     ResponseEntity<JsonNode> created =
         submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
@@ -564,7 +591,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("未確定(TENTATIVE)シフトへの変更申請は 400 で拒否されること")
   void submitChange_onTentativeShift_isRejected() {
-    Shift shift = saveShift(myCastId, STORE_A, "TENTATIVE");
+    Shift shift = saveShift(myCastId, STORE_A, ShiftStatus.TENTATIVE);
     long before = shiftRequestRepository.count();
 
     ResponseEntity<JsonNode> res =
@@ -578,7 +605,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @DisplayName("他キャストのシフトへの変更申請は拒否され、行が増えないこと(本人自限)")
   void submitChange_onOtherCastsShift_isRejected() {
     String otherCast = createCast(STORE_A, "変更申請IT他人", null);
-    Shift shift = saveShift(otherCast, STORE_A, "CONFIRMED");
+    Shift shift = saveShift(otherCast, STORE_A, ShiftStatus.CONFIRMED);
     long before = shiftRequestRepository.count();
 
     ResponseEntity<JsonNode> res =
@@ -591,7 +618,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("店舗 inbox で変更申請が種別 CHANGE と対象シフトの現行日時つきで区別表示されること")
   void storeInbox_distinguishesChangeRequestsWithCurrentShiftValues() {
-    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    Shift shift = saveShift(myCastId, STORE_A, ShiftStatus.CONFIRMED);
     ResponseEntity<JsonNode> created =
         submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
     String id = created.getBody().path("id").asString();
@@ -621,7 +648,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("変更申請の承認で対象シフトの日時が更新され、status は保持され、新規シフトは作成されないこと")
   void approveChange_updatesTargetShiftPreservingStatusWithoutCreatingNewShift() {
-    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    Shift shift = saveShift(myCastId, STORE_A, ShiftStatus.CONFIRMED);
     String requestedDate = tomorrow();
     ResponseEntity<JsonNode> created =
         submitChange(castToken, changeBody(shift.getId(), requestedDate, "19:00:00", "22:00:00"));
@@ -638,18 +665,25 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     assertThat(reloaded.getWorkDate()).isEqualTo(LocalDate.parse(requestedDate));
     assertThat(reloaded.getStartTime()).isEqualTo(LocalTime.of(19, 0));
     assertThat(reloaded.getEndTime()).isEqualTo(LocalTime.of(22, 0));
-    assertThat(reloaded.getStatus()).as("承認と独立した軸（status）が保持されること").isEqualTo("CONFIRMED");
+    assertThat(reloaded.getStatus())
+        .as("承認と独立した軸（status）が保持されること")
+        .isEqualTo(ShiftStatus.CONFIRMED);
     assertThat(reloaded.getCastId()).isEqualTo(myCastId);
+
+    assertThat(reloaded.getUpdatedBy())
+        .as("変更申請の承認は updated_by を承認者にすること")
+        .isEqualTo(storeStaffId());
 
     ShiftRequest request = shiftRequestRepository.findById(id).orElseThrow();
     assertThat(request.getType()).isEqualTo(ShiftRequestType.CHANGE);
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
+    assertThat(request.getShiftId()).as("CHANGE の関連シフトは提出時の対象のまま").isEqualTo(shift.getId());
   }
 
   @Test
   @DisplayName("変更申請の却下で対象シフトが元のまま維持されること")
   void declineChange_keepsTargetShiftUntouched() {
-    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    Shift shift = saveShift(myCastId, STORE_A, ShiftStatus.CONFIRMED);
     ResponseEntity<JsonNode> created =
         submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
     String id = created.getBody().path("id").asString();
@@ -663,7 +697,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     assertThat(reloaded.getWorkDate()).as("却下では元の確定シフトが維持されること").isEqualTo(shift.getWorkDate());
     assertThat(reloaded.getStartTime()).isEqualTo(shift.getStartTime());
     assertThat(reloaded.getEndTime()).isEqualTo(shift.getEndTime());
-    assertThat(reloaded.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(reloaded.getStatus()).isEqualTo(ShiftStatus.CONFIRMED);
 
     ShiftRequest request = shiftRequestRepository.findById(id).orElseThrow();
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
@@ -672,7 +706,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("申請後に対象シフトが編集されたら承認は 400 で拒否され、inbox が承認不能(approvable=false)を示すこと")
   void editedTargetShiftAfterSubmission_blocksApprovalAndMarksUnapprovable() {
-    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    Shift shift = saveShift(myCastId, STORE_A, ShiftStatus.CONFIRMED);
     ResponseEntity<JsonNode> created =
         submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
     String id = created.getBody().path("id").asString();
@@ -706,7 +740,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("対象シフトが削除されても変更申請は履歴に残り(SET NULL)、承認は 400・却下は可能なこと")
   void deletedTargetShift_keepsChangeRequestHistoryAndBlocksApproval() {
-    Shift shift = saveShift(myCastId, STORE_A, "CONFIRMED");
+    Shift shift = saveShift(myCastId, STORE_A, ShiftStatus.CONFIRMED);
     ResponseEntity<JsonNode> created =
         submitChange(castToken, changeBody(shift.getId(), tomorrow(), "19:00:00", "22:00:00"));
     String id = created.getBody().path("id").asString();
@@ -770,7 +804,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("ROLE_CAST を持たないユーザーは出勤希望の提出で 403(@PreAuthorize の役割線)")
   void nonCastRole_isRejectedOnSubmit() {
-    String staffToken = platformToken(NON_CAST_STAFF_EMAIL, PASSWORD);
+    String staffToken = platformToken(SEED_STORE_STAFF_EMAIL, PASSWORD);
 
     ResponseEntity<JsonNode> res =
         submit(staffToken, submitBody(STORE_A, tomorrow(), "18:00:00", "20:00:00", "権限確認"));
