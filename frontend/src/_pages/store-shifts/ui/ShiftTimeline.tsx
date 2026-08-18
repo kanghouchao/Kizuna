@@ -3,7 +3,7 @@
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
-import { Button, Input } from '@/shared/ui';
+import { Button, Input, RegionError } from '@/shared/ui';
 import { addDaysStr, shiftSpan, toDateStr } from '../lib/datetime';
 
 interface ShiftTimelineProps {
@@ -12,6 +12,9 @@ interface ShiftTimelineProps {
   shifts: ShiftResponse[];
   casts: CastResponse[];
   loading: boolean;
+  /** 取得失敗。ヘッダ（日付ナビ）は残し、本体だけが失敗を名乗る — 別の日へ動くことが復旧経路を兼ねる。 */
+  failed: boolean;
+  onRetry: () => void;
   onChangeDate: (date: string) => void;
   onAddShift: () => void;
   onEditShift: (shift: ShiftResponse) => void;
@@ -35,6 +38,8 @@ export function ShiftTimeline({
   shifts,
   casts,
   loading,
+  failed,
+  onRetry,
   onChangeDate,
   onAddShift,
   onEditShift,
@@ -128,7 +133,13 @@ export function ShiftTimeline({
         </div>
       </div>
 
-      {loading ? (
+      {failed ? (
+        <RegionError
+          message="シフトの取得に失敗しました"
+          onRetry={onRetry}
+          className="justify-center p-8"
+        />
+      ) : loading ? (
         <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
       ) : !hasShifts ? (
         <div className="p-12 text-center">

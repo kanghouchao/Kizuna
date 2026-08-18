@@ -133,6 +133,23 @@ describe('タイムラインの日付ナビゲーション', () => {
     expect(await screen.findByText(`${addDaysStr(today, 2)} の出勤`)).toBeInTheDocument();
   });
 
+  it('取得に失敗しても日付ナビは残り、別の日へ動けば取り直して復旧すること', async () => {
+    const today = await openTimeline();
+    mockedShiftList.mockRejectedValueOnce(new Error('boom'));
+
+    fireEvent.click(screen.getByRole('button', { name: '翌日' }));
+
+    // 本体だけが失敗を名乗り、ヘッダのナビは操作可能なまま
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('シフトの取得に失敗しました')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '翌日' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '翌日' }));
+
+    expect(await screen.findByText(`${addDaysStr(today, 2)} の出勤`)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
   it('日付入力で任意の日へ切り替わり、その日の区間で取り直すこと', async () => {
     await openTimeline();
 

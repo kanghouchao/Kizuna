@@ -77,8 +77,8 @@ export default function ShiftsPage() {
     setTab(TIMELINE_TAB);
   };
 
-  // シフトはカレンダーとタイムラインの二つの器に描かれる。どちらの器も同じ 1 件の取得の
-  // 産物なので、失敗の姿も同じものを置く。
+  // カレンダーは取得失敗で器ごと失敗態に差し替える。タイムラインは日付ナビが復旧経路を
+  // 兼ねる（別の日へ動けば取り直す）ため、ヘッダを残して本体だけが失敗を名乗る。
   const shiftsError = (
     <RegionError
       message="シフトの取得に失敗しました"
@@ -144,19 +144,17 @@ export default function ShiftsPage() {
           )}
         </TabsContent>
         <TabsContent value={TIMELINE_TAB} className="mt-6">
-          {shiftsFailure !== null ? (
-            shiftsError
-          ) : (
-            <ShiftTimeline
-              date={selectedDate}
-              shifts={shifts}
-              casts={casts}
-              loading={loading}
-              onChangeDate={setSelectedDate}
-              onAddShift={openAdd}
-              onEditShift={openEdit}
-            />
-          )}
+          <ShiftTimeline
+            date={selectedDate}
+            shifts={shifts}
+            casts={casts}
+            loading={loading}
+            failed={shiftsFailure !== null}
+            onRetry={() => void reloadShifts()}
+            onChangeDate={setSelectedDate}
+            onAddShift={openAdd}
+            onEditShift={openEdit}
+          />
         </TabsContent>
         <TabsContent value={REQUESTS_TAB} className="mt-6">
           <ShiftRequestInbox casts={casts} onApproved={() => void reloadShifts()} />
