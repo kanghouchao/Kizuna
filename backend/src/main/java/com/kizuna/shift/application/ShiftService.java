@@ -3,7 +3,7 @@ package com.kizuna.shift.application;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -19,7 +19,6 @@ import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -37,7 +36,7 @@ public class ShiftService {
   private final CastService castService;
   private final CastRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
-  private final AppProperties appProperties;
+  private final BusinessDateService businessDateService;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -48,18 +47,17 @@ public class ShiftService {
   }
 
   /**
-   * 公開出勤表用に「本日（app.timezone）」の露出可能（CONFIRMED ∧ 公開可）なシフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧
-   * ({@code /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
+   * 公開出勤表用に「現在の営業日」の露出可能（CONFIRMED ∧ 公開可）なシフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧 ({@code
+   * /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
    * 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は {@code @StoreScoped} によりセッション全体で有効なので t_casts
    * 参照も現店舗に絞られる。
    */
   @StoreScoped
   @Transactional(readOnly = true)
   public List<PublicShiftResponse> listPublicToday() {
-    LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
     List<Shift> shifts =
         shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
-            today, ShiftStatus.CONFIRMED);
+            businessDateService.currentBusinessDate(), ShiftStatus.CONFIRMED);
     if (shifts.isEmpty()) {
       return List.of();
     }

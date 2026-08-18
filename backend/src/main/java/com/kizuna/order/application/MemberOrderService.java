@@ -14,7 +14,7 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.ReceptionRoute;
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -25,7 +25,6 @@ import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -58,7 +57,7 @@ public class MemberOrderService {
   private final MemberLookupService memberLookupService;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final StoreExistenceCheck storeExistenceCheck;
-  private final AppProperties appProperties;
+  private final BusinessDateService businessDateService;
 
   /** 予約を申請する。申請は受注（Order）の CREATED として起き、店舗の確定で同じ行が CONFIRMED になる。 */
   @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、店舗の実在を確かめたうえで store_id を明示設定して書く")
@@ -156,9 +155,9 @@ public class MemberOrderService {
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }
 
-  /** 利用日は「本日以降かつ候補照会と同じ上限（90 日）以内」。指名なしの申請が候補照会を経ずに上限を素通りしないよう、書き込み側でも同じ範囲を見る。 */
+  /** 利用日は「現在の営業日以降かつ候補照会と同じ上限（90 日）以内」。指名なしの申請が候補照会を経ずに上限を素通りしないよう、書き込み側でも同じ範囲を見る。 */
   private void validateBusinessDate(LocalDate businessDate) {
-    LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    LocalDate today = businessDateService.currentBusinessDate();
     if (businessDate.isBefore(today)) {
       throw new ServiceException("過去の日付は申請できません");
     }

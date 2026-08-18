@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
@@ -44,6 +45,7 @@ class ShiftRequestServiceTest {
   @Mock private ShiftRepository shiftRepository;
   @Mock private ShiftRequestMapper shiftRequestMapper;
   @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private BusinessDateService businessDateService;
 
   @InjectMocks private ShiftRequestService shiftRequestService;
 
@@ -420,7 +422,7 @@ class ShiftRequestServiceTest {
     assertThat(result).hasSize(2);
     StoreShiftRequestResponse newRow = result.get(0);
     assertThat(newRow.getCurrentWorkDate()).as("承認済み NEW の関連シフトは現行日時の内联先にしない").isNull();
-    assertThat(newRow.getApprovable()).as("NEW には適用可否を付けない").isNull();
+    assertThat(newRow.getApprovable()).as("NEW にも承認可否は付く（営業日が終了していなければ可）").isTrue();
     StoreShiftRequestResponse changeRow = result.get(1);
     assertThat(changeRow.getCurrentWorkDate()).isEqualTo(target.getWorkDate());
     assertThat(changeRow.getCurrentStartTime()).isEqualTo(target.getStartTime());
@@ -467,5 +469,72 @@ class ShiftRequestServiceTest {
     assertThatThrownBy(() -> shiftRequestService.decline("missing", ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("出勤希望が見つかりません");
+  }
+
+  @Test
+  void approve_rejectsWhenTargetBusinessDateHasEnded() {
+    ShiftRequest request = pendingRequest();
+    givenActor();
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(businessDateService.hasEnded(request.getWorkDate())).thenReturn(true);
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr1", null, ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("営業日が終了した出勤希望は承認できません");
+
+    verify(shiftRepository, never()).save(any());
+    verify(shiftRequestRepository, never()).save(any());
+  }
+
+  @Test
+  void approve_changeRequest_rejectsWhenNewWorkDateBusinessDateHasEnded() {
+    ShiftRequest request = pendingChangeRequest();
+    givenActor();
+    when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
+    // 判定するのは申請の新 work_date で、対象シフトの現行日付ではない。
+    when(businessDateService.hasEnded(request.getWorkDate())).thenReturn(true);
+
+    assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("営業日が終了した出勤希望は承認できません");
+
+    verify(shiftRepository, never()).findById(any());
+    verify(shiftRepository, never()).save(any());
+  }
+
+  @Test
+  void decline_staysPossibleAfterTargetBusinessDateHasEnded() {
+    // 期限切れの申請は承認できないが、却下は無期限に可能（店舗が inbox を清掃する正規の路）。
+    ShiftRequest request = pendingRequest();
+    givenActor();
+    when(shiftRequestRepository.findById("sr1")).thenReturn(Optional.of(request));
+    when(shiftRequestRepository.save(request)).thenReturn(request);
+    when(shiftRequestMapper.toStoreResponse(request))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").status("DECLINED").build());
+
+    shiftRequestService.decline("sr1", ACTOR_EMAIL);
+
+    assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
+    verify(businessDateService, never()).hasEnded(any());
+  }
+
+  @Test
+  void list_marksExpiredRequestsUnapprovableForBothTypes() {
+    ShiftRequest newRequest = pendingRequest();
+    ShiftRequest changeRequest = pendingChangeRequest();
+    when(shiftRequestRepository.findAllByOrderByCreatedAtAsc())
+        .thenReturn(List.of(newRequest, changeRequest));
+    when(shiftRepository.findAllById(List.of("sh1"))).thenReturn(List.of(confirmedShift()));
+    when(shiftRequestMapper.toStoreResponse(newRequest))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").type("NEW").build());
+    when(shiftRequestMapper.toStoreResponse(changeRequest))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr2").type("CHANGE").build());
+    when(businessDateService.hasEnded(newRequest.getWorkDate())).thenReturn(true);
+    when(businessDateService.hasEnded(changeRequest.getWorkDate())).thenReturn(true);
+
+    List<StoreShiftRequestResponse> result = shiftRequestService.list(null);
+
+    assertThat(result.get(0).getApprovable()).as("期限切れの NEW は承認不能").isFalse();
+    assertThat(result.get(1).getApprovable()).as("期限切れの CHANGE は対象シフトが申請時のままでも承認不能").isFalse();
   }
 }

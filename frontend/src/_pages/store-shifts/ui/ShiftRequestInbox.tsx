@@ -72,8 +72,9 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
     <ul className="space-y-3">
       {requests.map(request => {
         const isChange = request.type === 'CHANGE';
-        // 対象シフトの削除・編集で承認がサーバ側で必ず拒否される変更申請には、承認操作を出さない（謝絶のみ）。
-        const unapprovable = isChange && request.approvable === false;
+        // サーバ側で必ず拒否される申請には承認操作を出さない（謝絶・辞退のみ）。理由は種別で異なり、
+        // 新規希望は目標営業日の終了だけ、変更申請はそれに対象シフトの削除・編集が重なる。
+        const unapprovable = request.approvable === false;
         return (
           <li
             key={request.id}
@@ -107,7 +108,9 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
               {request.note && <p className="mt-1 text-xs text-muted-foreground">{request.note}</p>}
               {unapprovable && (
                 <p className="mt-1 text-xs text-destructive-strong">
-                  対象のシフトが削除または変更されたため承認できません（謝絶のみ可能）
+                  {isChange
+                    ? '対象の営業日が終了したか、対象のシフトが削除または変更されたため承認できません（謝絶のみ可能）'
+                    : '対象の営業日が終了したため承認できません（辞退のみ可能）'}
                 </p>
               )}
             </div>

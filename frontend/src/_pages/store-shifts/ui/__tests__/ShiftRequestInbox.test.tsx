@@ -118,10 +118,25 @@ describe('ShiftRequestInbox', () => {
 
     expect(await screen.findByText('変更申請')).toBeInTheDocument();
     expect(
-      screen.getByText('対象のシフトが削除または変更されたため承認できません（謝絶のみ可能）')
+      screen.getByText(
+        '対象の営業日が終了したか、対象のシフトが削除または変更されたため承認できません（謝絶のみ可能）'
+      )
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '承認してシフト更新' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
+  });
+
+  it('承認不能(approvable=false)の新規希望も承認ボタンを出さず、営業日終了の説明と辞退のみ表示する', async () => {
+    mockedList.mockResolvedValue([{ ...REQUEST, approvable: false }]);
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
+
+    expect(await screen.findByText('新規希望')).toBeInTheDocument();
+    expect(
+      screen.getByText('対象の営業日が終了したため承認できません（辞退のみ可能）')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '承認' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '辞退' })).toBeInTheDocument();
   });
 
   it('変更申請の承認は同じ承認 API を呼び、シフト再取得コールバックが走ること', async () => {

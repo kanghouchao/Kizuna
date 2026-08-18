@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -32,6 +32,7 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -49,7 +50,7 @@ class CastShiftRequestServiceTest {
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private ShiftRepository shiftRepository;
   @Mock private ShiftRequestMapper shiftRequestMapper;
-  @Mock private AppProperties appProperties;
+  @Mock private BusinessDateService businessDateService;
 
   @InjectMocks private CastShiftRequestService service;
 
@@ -87,7 +88,8 @@ class CastShiftRequestServiceTest {
   void submit_rejectsWhenWorkDateBeforeToday() {
     ShiftRequestCreateRequest req = validRequest();
     req.setWorkDate(LocalDate.of(2000, 1, 1));
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
 
     assertThatThrownBy(() -> service.submit(EMAIL, req))
         .isInstanceOf(ServiceException.class)
@@ -99,7 +101,8 @@ class CastShiftRequestServiceTest {
   @Test
   void submit_throwsWhenEmailUnknown() {
     ShiftRequestCreateRequest req = validRequest();
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.submit(EMAIL, req))
@@ -113,7 +116,8 @@ class CastShiftRequestServiceTest {
   void submit_rejectsWhenNotAffiliatedWithStore() {
     ShiftRequestCreateRequest req = validRequest();
     PlatformUser user = userWithId(42L);
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserIdAndStoreId(42L, 1L)).thenReturn(List.of());
 
@@ -128,7 +132,8 @@ class CastShiftRequestServiceTest {
   void submit_savesWithResolvedCastIdAndStoreId() {
     ShiftRequestCreateRequest req = validRequest();
     PlatformUser user = userWithId(42L);
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserIdAndStoreId(42L, 1L)).thenReturn(List.of("cast-1"));
     when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -152,7 +157,8 @@ class CastShiftRequestServiceTest {
   void submit_picksOldestCastRowWhenMultipleProfilesInSameStore() {
     ShiftRequestCreateRequest req = validRequest();
     PlatformUser user = userWithId(42L);
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     // 同一店舗に本人の档案が複数並存する場合、先頭（最古の档案）が決定的に選ばれる。
     when(castRepository.findIdsByPlatformUserIdAndStoreId(42L, 1L))
@@ -208,7 +214,8 @@ class CastShiftRequestServiceTest {
   void submitChange_rejectsWhenWorkDateBeforeToday() {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
     req.setWorkDate(LocalDate.of(2000, 1, 1));
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
 
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
         .isInstanceOf(ServiceException.class)
@@ -220,7 +227,8 @@ class CastShiftRequestServiceTest {
   @Test
   void submitChange_throwsWhenShiftMissing() {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     PlatformUser user = userWithId(42L);
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
@@ -236,7 +244,8 @@ class CastShiftRequestServiceTest {
   @Test
   void submitChange_throwsWhenShiftBelongsToAnotherCast() {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     PlatformUser user = userWithId(42L);
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
@@ -253,7 +262,8 @@ class CastShiftRequestServiceTest {
   @Test
   void submitChange_rejectsWhenShiftNotConfirmed() {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     PlatformUser user = userWithId(42L);
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
@@ -270,7 +280,8 @@ class CastShiftRequestServiceTest {
   @Test
   void submitChange_savesChangeTypedRequestDerivedFromShift() {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     PlatformUser user = userWithId(42L);
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));

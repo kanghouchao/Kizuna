@@ -7,6 +7,8 @@ import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -152,6 +154,14 @@ public class SystemConfigServiceImpl implements SystemConfigService {
       if (parsed < Integer.MIN_VALUE || parsed > Integer.MAX_VALUE) {
         throw new ServiceException(
             "数値は -2147483648 から 2147483647 の範囲で指定してください: " + config.getConfigKey());
+      }
+    }
+    // 解釈できない時刻は読み手が 00:00 へ倒すため、保存だけが成功して暦日と同じ挙動へ静かに入れ替わる。
+    if ("TIME".equals(config.getValueType())) {
+      try {
+        LocalTime.parse(value.trim());
+      } catch (DateTimeParseException e) {
+        throw new ServiceException("時刻を HH:mm 形式で指定してください: " + config.getConfigKey());
       }
     }
   }

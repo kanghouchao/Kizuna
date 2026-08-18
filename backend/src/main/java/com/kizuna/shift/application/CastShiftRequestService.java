@@ -1,7 +1,7 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -23,7 +23,6 @@ import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
@@ -46,7 +45,7 @@ public class CastShiftRequestService {
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
   private final ShiftRequestMapper shiftRequestMapper;
-  private final AppProperties appProperties;
+  private final BusinessDateService businessDateService;
 
   @StoreScopeExempt(reason = "所属判定は「指定店舗に本人の cast 行が存在すること」で行い、store_id はその判定に通った店舗を明示設定する")
   @Transactional
@@ -149,13 +148,12 @@ public class CastShiftRequestService {
     return new PageCursor(view.getCreatedAt().toString(), view.getId()).encode();
   }
 
-  /** 希望する勤務枠の共通検証（新規希望・変更申請共通）: 開始≠終了、勤務日は本日以降。 */
+  /** 希望する勤務枠の共通検証（新規希望・変更申請共通）: 開始≠終了、勤務日は現在の営業日以降。 */
   private void validateRequestedSlot(LocalDate workDate, LocalTime startTime, LocalTime endTime) {
     if (startTime.equals(endTime)) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
-    LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
-    if (workDate.isBefore(today)) {
+    if (workDate.isBefore(businessDateService.currentBusinessDate())) {
       throw new ServiceException("勤務日は本日以降を指定してください");
     }
   }

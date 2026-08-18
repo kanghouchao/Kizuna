@@ -29,7 +29,7 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.ReceptionRoute;
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -78,7 +78,7 @@ class MemberOrderServiceTest {
   @Mock MemberLookupService memberLookupService;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock StoreExistenceCheck storeExistenceCheck;
-  @Mock AppProperties appProperties;
+  @Mock BusinessDateService businessDateService;
 
   @InjectMocks MemberOrderService service;
 
@@ -86,7 +86,9 @@ class MemberOrderServiceTest {
 
   @BeforeEach
   void stubAuthenticatedMember() {
-    lenient().when(appProperties.getTimezone()).thenReturn(TIMEZONE);
+    lenient()
+        .when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of(TIMEZONE)));
     PlatformUser user =
         PlatformUser.builder()
             .email(EMAIL)

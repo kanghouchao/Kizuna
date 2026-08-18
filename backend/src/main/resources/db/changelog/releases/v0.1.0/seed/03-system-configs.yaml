@@ -96,3 +96,13 @@ databaseChangeLog:
               - column: { name: category, value: "POINT" }
               - column: { name: description, value: "ポイント利用の単位" }
               - column: { name: value_type, value: "NUMBER" }
+        # 営業日の日付変更時刻。初期値 00:00 は暦日と一致する（導入自体は挙動を変えない）。
+        # 実値は運用で設定する — 25 時閉店の店の深夜勤務を前営業日へ帰属させたいなら 05:00 など。
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "business_date_change_time" }
+              - column: { name: config_value, value: "00:00" }
+              - column: { name: category, value: "SYSTEM" }
+              - column: { name: description, value: "営業日の日付変更時刻（HH:mm。プラットフォーム統一）" }
+              - column: { name: value_type, value: "TIME" }

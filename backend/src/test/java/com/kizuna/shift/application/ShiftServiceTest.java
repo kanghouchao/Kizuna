@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
@@ -46,7 +46,7 @@ class ShiftServiceTest {
   @Mock private CastService castService;
   @Mock private CastRepository castRepository;
   @Mock private PlatformUserRepository platformUserRepository;
-  @Mock private AppProperties appProperties;
+  @Mock private BusinessDateService businessDateService;
 
   @InjectMocks private ShiftService shiftService;
 
@@ -289,7 +289,8 @@ class ShiftServiceTest {
 
   @Test
   void listPublicToday_joinsCastInfoAndPreservesRepoOrder() {
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     Shift first =
         Shift.builder()
             .castId("cA")
@@ -322,7 +323,8 @@ class ShiftServiceTest {
 
   @Test
   void listPublicToday_queriesTodayInConfiguredTimezoneWithPublicationGate() {
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     LocalDate expectedToday = LocalDate.now(ZoneId.of("Asia/Tokyo"));
     when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of());
@@ -340,7 +342,8 @@ class ShiftServiceTest {
 
   @Test
   void listPublicToday_excludesShiftsWhoseCastIsNotActive() {
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     Shift active =
         Shift.builder()
             .castId("cA")
@@ -366,7 +369,8 @@ class ShiftServiceTest {
 
   @Test
   void listPublicToday_returnsEmptyWhenNoConfirmedShifts() {
-    when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
+    when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of());
 

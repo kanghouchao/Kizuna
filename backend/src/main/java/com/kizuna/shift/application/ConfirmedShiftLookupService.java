@@ -1,6 +1,6 @@
 package com.kizuna.shift.application;
 
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeExempt;
@@ -9,7 +9,6 @@ import com.kizuna.shift.domain.ConfirmedShiftCastView;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,7 +37,7 @@ public class ConfirmedShiftLookupService {
 
   private final ShiftRepository shiftRepository;
   private final StoreExistenceCheck storeExistenceCheck;
-  private final AppProperties appProperties;
+  private final BusinessDateService businessDateService;
 
   /** 指定店舗・指定日の露出可能（CONFIRMED ∧ 公開可）なシフトに入っている ACTIVE キャストを返す。 */
   @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
@@ -93,7 +92,7 @@ public class ConfirmedShiftLookupService {
   }
 
   private void validateWorkDate(LocalDate workDate) {
-    LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    LocalDate today = businessDateService.currentBusinessDate();
     if (workDate.isBefore(today) || ChronoUnit.DAYS.between(today, workDate) > MAX_LOOKAHEAD_DAYS) {
       throw new ServiceException("取得できる日付の範囲を超えています");
     }
