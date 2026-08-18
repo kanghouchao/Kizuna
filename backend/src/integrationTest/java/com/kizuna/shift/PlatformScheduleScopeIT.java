@@ -64,6 +64,9 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
   /** 本人の TENTATIVE シフトの開始時刻。CONFIRMED のみ返す不変条件のカナリア。 */
   private static final String CANARY_TENTATIVE_START = "05:05:00";
 
+  /** 本人の非公開の確定シフトの開始時刻。店外へは出ないが本人には見える、を分ける目印。 */
+  private static final String MY_A_UNPUBLISHED_START = "03:03:00";
+
   @Autowired private CastRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private StoreRepository storeRepository;
@@ -124,6 +127,9 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
         LocalTime.parse(CANARY_TENTATIVE_START),
         LocalTime.parse(CANARY_TENTATIVE_START).plusHours(1),
         ShiftStatus.TENTATIVE);
+
+    // 正向: 本人（店A）の非公開の確定シフト。公開可否は店外への露出だけを絞る軸で、本人可視は承認が担う。
+    saveUnpublishedShift(myCastA, STORE_A, LocalTime.parse(MY_A_UNPUBLISHED_START));
   }
 
   private long ensureStore(String domain, String name) {
@@ -157,6 +163,20 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
     Cast cast = Cast.builder().name(name).status("ACTIVE").platformUserId(platformUserId).build();
     cast.setStoreId(storeId);
     return castRepository.save(cast).getId();
+  }
+
+  private void saveUnpublishedShift(String castId, long storeId, LocalTime start) {
+    Shift shift =
+        Shift.builder()
+            .castId(castId)
+            .workDate(WORK_DATE)
+            .startTime(start)
+            .endTime(start.plusHours(1))
+            .status(ShiftStatus.CONFIRMED)
+            .published(false)
+            .build();
+    shift.setStoreId(storeId);
+    shiftRepository.save(shift);
   }
 
   private void saveShift(
@@ -231,6 +251,20 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
     for (JsonNode node : body) {
       assertThat(node.path("status").asString()).as("応答は常に CONFIRMED であること").isEqualTo("CONFIRMED");
     }
+  }
+
+  @Test
+  @DisplayName("本人の週間スケジュールが公開可否で絞られないこと（本人可視は承認が担う）")
+  void ownScheduleIgnoresPublication() {
+    ResponseEntity<JsonNode> res = getSchedule(platformToken(CAST_EMAIL, PASSWORD));
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(containsEntry(res.getBody(), STORE_A, MY_A_START))
+        .as("正向対照: 公開可の確定シフトが本人に見えること")
+        .isTrue();
+    assertThat(containsEntry(res.getBody(), STORE_A, MY_A_UNPUBLISHED_START))
+        .as("非公開でも本人には見えること — 公開可否が絞るのは店外への露出だけ（ADR 0015）")
+        .isTrue();
   }
 
   @Test
