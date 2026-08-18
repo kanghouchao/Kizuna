@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import ShiftsPage from '../ShiftsPage';
 import { castApi } from '@/entities/cast';
 import { shiftApi } from '@/entities/shift';
-import { toDateStr } from '../../lib/datetime';
+import { addDaysStr, toDateStr } from '../../lib/datetime';
 
 jest.mock('@/entities/cast', () => ({
   castApi: { list: jest.fn() },
@@ -92,6 +92,76 @@ describe('ShiftsPage のタブ遷移', () => {
 
     await waitFor(() => expect(mockedShiftCreate).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockedShiftList.mock.calls.length).toBeGreaterThan(callsBeforeSave));
+  });
+});
+
+describe('タイムラインの日付ナビゲーション', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedCastList.mockResolvedValue(castPage());
+    mockedShiftList.mockResolvedValue([]);
+  });
+
+  const openTimeline = async () => {
+    render(<ShiftsPage />);
+    fireEvent.click(screen.getByRole('tab', { name: 'タイムライン' }));
+    const today = toDateStr(new Date());
+    expect(await screen.findByText(`${today} の出勤`)).toBeInTheDocument();
+    return today;
+  };
+
+  it('翌日ボタンで表示日が進み、その日の区間で取り直すこと', async () => {
+    const today = await openTimeline();
+    const callsBefore = mockedShiftList.mock.calls.length;
+
+    fireEvent.click(screen.getByRole('button', { name: '翌日' }));
+
+    const tomorrow = addDaysStr(today, 1);
+    expect(await screen.findByText(`${tomorrow} の出勤`)).toBeInTheDocument();
+    await waitFor(() => expect(mockedShiftList.mock.calls.length).toBeGreaterThan(callsBefore));
+    expect(mockedShiftList.mock.calls.at(-1)?.[0]).toEqual({ from: tomorrow, to: tomorrow });
+  });
+
+  it('クイックボタンは選択中の日ではなく実際の今日を基準にジャンプすること', async () => {
+    const today = await openTimeline();
+
+    // 先に前日へ動かしてから明後日を押す — 選択中の日基準なら today+1 に化ける
+    fireEvent.click(screen.getByRole('button', { name: '前日' }));
+    expect(await screen.findByText(`${addDaysStr(today, -1)} の出勤`)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '明後日' }));
+    expect(await screen.findByText(`${addDaysStr(today, 2)} の出勤`)).toBeInTheDocument();
+  });
+
+  it('取得に失敗しても日付ナビは残り、別の日へ動けば取り直して復旧すること', async () => {
+    const today = await openTimeline();
+    mockedShiftList.mockRejectedValueOnce(new Error('boom'));
+
+    fireEvent.click(screen.getByRole('button', { name: '翌日' }));
+
+    // 本体だけが失敗を名乗り、ヘッダのナビは操作可能なまま
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('シフトの取得に失敗しました')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '翌日' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '翌日' }));
+
+    expect(await screen.findByText(`${addDaysStr(today, 2)} の出勤`)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
+  it('日付入力で任意の日へ切り替わり、その日の区間で取り直すこと', async () => {
+    await openTimeline();
+
+    fireEvent.change(screen.getByLabelText('表示する日付'), { target: { value: '2031-01-05' } });
+
+    expect(await screen.findByText('2031-01-05 の出勤')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockedShiftList.mock.calls.at(-1)?.[0]).toEqual({
+        from: '2031-01-05',
+        to: '2031-01-05',
+      })
+    );
   });
 });
 

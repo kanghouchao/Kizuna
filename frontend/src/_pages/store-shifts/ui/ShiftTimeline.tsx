@@ -1,10 +1,10 @@
 'use client';
 
-import { PlusIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
-import { Button } from '@/shared/ui';
-import { shiftSpan, toDateStr } from '../lib/datetime';
+import { Button, Input, RegionError } from '@/shared/ui';
+import { addDaysStr, shiftSpan, toDateStr } from '../lib/datetime';
 
 interface ShiftTimelineProps {
   /** 表示日 'yyyy-MM-dd'。 */
@@ -12,9 +12,21 @@ interface ShiftTimelineProps {
   shifts: ShiftResponse[];
   casts: CastResponse[];
   loading: boolean;
+  /** 取得失敗。ヘッダ（日付ナビ）は残し、本体だけが失敗を名乗る — 別の日へ動くことが復旧経路を兼ねる。 */
+  failed: boolean;
+  onRetry: () => void;
+  onChangeDate: (date: string) => void;
   onAddShift: () => void;
   onEditShift: (shift: ShiftResponse) => void;
 }
+
+/** クイックジャンプは選択中の日ではなく実際の今日を基準にする。 */
+const QUICK_JUMPS = [
+  { label: '昨日', offset: -1 },
+  { label: '今日', offset: 0 },
+  { label: '明日', offset: 1 },
+  { label: '明後日', offset: 2 },
+] as const;
 
 const SLOT_MINUTES = 30;
 const LABEL_COL = 'w-28';
@@ -26,6 +38,9 @@ export function ShiftTimeline({
   shifts,
   casts,
   loading,
+  failed,
+  onRetry,
+  onChangeDate,
   onAddShift,
   onEditShift,
 }: ShiftTimelineProps) {
@@ -65,15 +80,66 @@ export function ShiftTimeline({
 
   return (
     <div className="rounded-lg border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
         <h2 className="text-lg font-semibold text-foreground">{date} の出勤</h2>
-        <Button type="button" onClick={onAddShift}>
-          <PlusIcon />
-          シフト追加
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onChangeDate(addDaysStr(date, -1))}
+              aria-label="前日"
+            >
+              <ChevronLeftIcon />
+            </Button>
+            {/* クリアで空文字が飛んでくるため無視する（表示日が無い状態は作らない） */}
+            <Input
+              type="date"
+              value={date}
+              onChange={e => {
+                if (e.target.value) onChangeDate(e.target.value);
+              }}
+              aria-label="表示する日付"
+              className="w-40"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onChangeDate(addDaysStr(date, 1))}
+              aria-label="翌日"
+            >
+              <ChevronRightIcon />
+            </Button>
+          </div>
+          <div className="flex items-center gap-1">
+            {QUICK_JUMPS.map(({ label, offset }) => (
+              <Button
+                key={label}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChangeDate(addDaysStr(toDateStr(new Date()), offset))}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          <Button type="button" onClick={onAddShift}>
+            <PlusIcon />
+            シフト追加
+          </Button>
+        </div>
       </div>
 
-      {loading ? (
+      {failed ? (
+        <RegionError
+          message="シフトの取得に失敗しました"
+          onRetry={onRetry}
+          className="justify-center p-8"
+        />
+      ) : loading ? (
         <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
       ) : !hasShifts ? (
         <div className="p-12 text-center">

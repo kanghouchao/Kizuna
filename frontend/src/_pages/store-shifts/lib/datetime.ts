@@ -29,6 +29,12 @@ export function monthGrid(month: Date): { date: Date; inMonth: boolean }[] {
   return days;
 }
 
+/** 'yyyy-MM-dd' に日数を加算する（ローカルタイム基準。月末・年末の繰り上がりは Date が解決する）。 */
+export function addDaysStr(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return toDateStr(new Date(y, m - 1, d + days));
+}
+
 /** 'HH:mm:ss' または 'HH:mm' を深夜 0 時からの分に変換する。 */
 export function timeToMinutes(time: string | undefined): number {
   const [h, m] = (time ?? '').split(':');
