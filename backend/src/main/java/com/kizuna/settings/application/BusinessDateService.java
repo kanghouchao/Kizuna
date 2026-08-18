@@ -27,7 +27,12 @@ public class BusinessDateService {
     return businessDateOf(LocalDateTime.now(clock));
   }
 
-  /** 暦日付き時刻が属する営業日。時刻だけでは決まらないため、呼び手は暦日を伴う値を渡す。 */
+  /**
+   * 暦日付き時刻が属する営業日。時刻だけでは決まらないため、呼び手は暦日を伴う値を渡す。
+   *
+   * <p>比較は壁時計の時刻で行う。夏時間の戻し（同じ壁時計時刻が 2 度来る帯）に日付変更時刻が入る タイムゾーンでは営業日が一時的に巻き戻るが、{@code app.timezone}
+   * は夏時間を持たない日本時間で、 実需が出るまで重なりの扱いは定義しない。
+   */
   public LocalDate businessDateOf(LocalDateTime at) {
     return at.toLocalTime().isBefore(dateChangeTime())
         ? at.toLocalDate().minusDays(1)

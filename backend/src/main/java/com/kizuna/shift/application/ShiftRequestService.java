@@ -84,11 +84,14 @@ public class ShiftRequestService {
    * この申請を今も承認できるか。approve の各守衛と同じ条件の要約で、inbox が承認不能な申請に承認操作を出さないために使う。
    *
    * <p>目標営業日の終了は種別を問わず効く（NEW は work_date、CHANGE は申請の新 work_date — どちらも同じ欄）。
-   * 変更申請だけはさらに適用先シフトの現況にも依る。
+   * 変更申請だけはさらに適用先シフトの現況にも依る。処理済みも承認できない — 絞り込み無しの一覧は 承認済み・却下済みも返すため、状態を見ないと「押せば必ず失敗する行」に可能と書くことになる。
    *
    * @param currentBusinessDate 一覧全体で共有する現在の営業日
    */
   private boolean approvable(ShiftRequest request, Shift target, LocalDate currentBusinessDate) {
+    if (request.getStatus() != ShiftRequestStatus.PENDING) {
+      return false;
+    }
     if (request.getWorkDate().isBefore(currentBusinessDate)) {
       return false;
     }

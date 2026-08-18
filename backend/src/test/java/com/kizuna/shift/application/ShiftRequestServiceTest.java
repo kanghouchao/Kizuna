@@ -436,7 +436,7 @@ class ShiftRequestServiceTest {
     assertThat(result).hasSize(2);
     StoreShiftRequestResponse newRow = result.get(0);
     assertThat(newRow.getCurrentWorkDate()).as("承認済み NEW の関連シフトは現行日時の内联先にしない").isNull();
-    assertThat(newRow.getApprovable()).as("NEW にも承認可否は付く（営業日が終了していなければ可）").isTrue();
+    assertThat(newRow.getApprovable()).as("処理済みは承認できない — 押せば必ず失敗する行に可能と書かない").isFalse();
     StoreShiftRequestResponse changeRow = result.get(1);
     assertThat(changeRow.getCurrentWorkDate()).isEqualTo(target.getWorkDate());
     assertThat(changeRow.getCurrentStartTime()).isEqualTo(target.getStartTime());
@@ -549,5 +549,26 @@ class ShiftRequestServiceTest {
 
     assertThat(result.get(0).getApprovable()).as("期限切れの NEW は承認不能").isFalse();
     assertThat(result.get(1).getApprovable()).as("期限切れの CHANGE は対象シフトが申請時のままでも承認不能").isFalse();
+  }
+
+  @Test
+  void list_marksProcessedRequestsUnapprovable() {
+    // 絞り込み無しの一覧は承認済み・却下済みも返す。日付だけを見ると、再承認が必ず失敗する行に
+    // 承認可能と書いてしまう。
+    ShiftRequest approved = pendingRequest();
+    approved.approve(ACTOR_ID, OffsetDateTime.now());
+    ShiftRequest pending = pendingRequest();
+    givenCurrentBusinessDate(BEFORE_REQUESTED_DATES);
+    when(shiftRequestRepository.findAllByOrderByCreatedAtAsc())
+        .thenReturn(List.of(approved, pending));
+    when(shiftRequestMapper.toStoreResponse(approved))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1").status("APPROVED").build());
+    when(shiftRequestMapper.toStoreResponse(pending))
+        .thenReturn(StoreShiftRequestResponse.builder().id("sr1b").status("PENDING").build());
+
+    List<StoreShiftRequestResponse> result = shiftRequestService.list(null);
+
+    assertThat(result.get(0).getApprovable()).as("承認済みは承認不能").isFalse();
+    assertThat(result.get(1).getApprovable()).as("正向対照: 受付済みは承認可能").isTrue();
   }
 }

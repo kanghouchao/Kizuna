@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
+import { getApiErrorMessage } from '@/shared/lib';
 import { CastScheduleItem, ShiftChangeRequestCreateRequest, shiftApi } from '@/entities/shift';
 import {
   Button,
@@ -18,7 +19,7 @@ import {
   Input,
   Textarea,
 } from '@/shared/ui';
-import { earliestRequestableDate, formatEndTime, formatTime } from '../lib/week';
+import { formatEndTime, formatTime } from '../lib/week';
 
 interface ChangeFormValues {
   work_date: string;
@@ -68,8 +69,11 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
       await shiftApi.submitShiftChangeRequest(payload);
       notify.success('変更申請を提出しました');
       onClose();
-    } catch {
-      notify.error('変更申請の提出に失敗しました');
+    } catch (e) {
+      // 受理できる日付の下限は営業日で決まり、その境界（日付変更時刻・業務のタイムゾーン）を知るのは
+      // サーバだけ。client 側で暦日から下限を組むと深夜帯や時差でサーバと食い違うため、日付の可否は
+      // サーバの文言をそのまま見せる。
+      notify.error(getApiErrorMessage(e, '変更申請の提出に失敗しました'));
     }
   };
 
@@ -97,10 +101,7 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
             <FormField
               control={control}
               name="work_date"
-              rules={{
-                required: '希望する日付を指定してください',
-                validate: v => v >= earliestRequestableDate() || '過去の日付は指定できません',
-              }}
+              rules={{ required: '希望する日付を指定してください' }}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>日付</FormLabel>
