@@ -152,6 +152,7 @@ export default function ShiftsPage() {
               shifts={shifts}
               casts={casts}
               loading={loading}
+              onChangeDate={setSelectedDate}
               onAddShift={openAdd}
               onEditShift={openEdit}
             />
