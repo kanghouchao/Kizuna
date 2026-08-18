@@ -60,6 +60,12 @@ databaseChangeLog:
                   type: TIMESTAMP WITH TIME ZONE
                   remarks: 取消標記。物理削除の代わりで、値を持つ行は導出・照会から外れる
               - column:
+                  # 取消は法定保存対象の記録を導出・照会から外す不可逆な操作なので、理由を要る側に置く
+                  # （ADR 0013 の作法）。分類軸ではないため enum 化しない。
+                  name: cancelled_reason
+                  type: VARCHAR(500)
+                  remarks: 取消の理由。取消していない行では NULL
+              - column:
                   name: cancelled_by
                   type: BIGINT
                   remarks: 取消の実行者。利用者削除後も行を残すため SET NULL

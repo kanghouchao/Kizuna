@@ -80,18 +80,33 @@ class AttendanceTest {
     Attendance attendance = recorded();
     OffsetDateTime at = OffsetDateTime.now();
 
-    attendance.cancel(ACTOR_ID, at);
+    attendance.cancel("重複記録のため", ACTOR_ID, at);
 
     assertThat(attendance.isCancelled()).isTrue();
     assertThat(attendance.getCancelledAt()).isEqualTo(at);
     assertThat(attendance.getCancelledBy()).isEqualTo(ACTOR_ID);
+    assertThat(attendance.getCancelledReason()).isEqualTo("重複記録のため");
     assertThat(attendance.getActualStartAt()).isEqualTo(START);
 
-    assertThatThrownBy(() -> attendance.cancel(ACTOR_ID, at))
+    assertThatThrownBy(() -> attendance.cancel("二度目", ACTOR_ID, at))
         .isInstanceOf(AttendanceStateException.class);
     assertThatThrownBy(
             () -> attendance.correct(BUSINESS_DATE, START, START.plusHours(1), null, ACTOR_ID))
         .isInstanceOf(AttendanceStateException.class);
+  }
+
+  @Test
+  @DisplayName("理由なしの取消を拒否し、行が取消されないまま残ること")
+  void cancellationRequiresAReason() {
+    Attendance attendance = recorded();
+    OffsetDateTime at = OffsetDateTime.now();
+
+    assertThatThrownBy(() -> attendance.cancel(null, ACTOR_ID, at))
+        .isInstanceOf(AttendanceStateException.class)
+        .hasMessageContaining("理由");
+    assertThatThrownBy(() -> attendance.cancel("   ", ACTOR_ID, at))
+        .isInstanceOf(AttendanceStateException.class);
+    assertThat(attendance.isCancelled()).as("撥ねた取消が標記を残さないこと").isFalse();
   }
 
   @Test

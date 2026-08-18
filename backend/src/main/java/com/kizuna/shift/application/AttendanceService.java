@@ -9,6 +9,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
 import com.kizuna.shift.api.dto.AttendanceMapper;
@@ -118,10 +119,10 @@ public class AttendanceService {
   /** 誤建の実績に取消標記を付ける。行は残り、導出・照会から外れるだけである。 */
   @StoreScoped
   @Transactional
-  public void cancel(String id, String actorEmail) {
+  public void cancel(String id, AttendanceCancellationRequest request, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
     Attendance attendance = findAttendance(id);
-    attendance.cancel(actorId, OffsetDateTime.now());
+    attendance.cancel(request.getReason(), actorId, OffsetDateTime.now());
     attendanceRepository.save(attendance);
   }
 

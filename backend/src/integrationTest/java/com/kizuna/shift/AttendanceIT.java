@@ -220,7 +220,17 @@ class AttendanceIT extends CrossStoreTestSupport {
     String attendanceId =
         record(castId, null, LATE_NIGHT_START, null).getBody().path("id").asString();
 
-    assertThat(cancel(attendanceId).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    ResponseEntity<JsonNode> withoutReason =
+        rest.exchange(
+            "/store/attendances/" + attendanceId + "/cancellation",
+            HttpMethod.POST,
+            new HttpEntity<>("{}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(withoutReason.getStatusCode())
+        .as("理由なしの取消は通らないこと（ADR 0013 の作法）")
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+
+    assertThat(cancel(attendanceId, "重複記録のため").getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(cancel(attendanceId).getStatusCode())
         .as("二度目の取消は静默冪等に委ねず撥ねること")
         .isEqualTo(HttpStatus.BAD_REQUEST);
@@ -228,6 +238,7 @@ class AttendanceIT extends CrossStoreTestSupport {
     Attendance stored = attendanceRepository.findById(attendanceId).orElseThrow();
     assertThat(stored.isCancelled()).isTrue();
     assertThat(stored.getCancelledBy()).isNotNull();
+    assertThat(stored.getCancelledReason()).as("初回の理由が二度目の要求で上書きされないこと").isEqualTo("重複記録のため");
     assertThat(stored.getActualStartAt()).as("取消は標記であって上書きではないこと").isEqualTo(LATE_NIGHT_START);
   }
 
@@ -264,10 +275,14 @@ class AttendanceIT extends CrossStoreTestSupport {
   }
 
   private ResponseEntity<JsonNode> cancel(String id) {
+    return cancel(id, "誤って記録したため");
+  }
+
+  private ResponseEntity<JsonNode> cancel(String id, String reason) {
     return rest.exchange(
         "/store/attendances/" + id + "/cancellation",
         HttpMethod.POST,
-        new HttpEntity<>(storeHeaders(STORE_A)),
+        new HttpEntity<>("{\"reason\": \"" + reason + "\"}", storeHeaders(STORE_A)),
         JsonNode.class);
   }
 
