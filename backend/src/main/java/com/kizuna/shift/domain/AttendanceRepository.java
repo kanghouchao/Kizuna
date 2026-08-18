@@ -44,6 +44,19 @@ public interface AttendanceRepository extends JpaRepository<Attendance, String> 
   /** その店舗に実績行があるか。取消済みも数える。 */
   boolean existsByStoreId(Long storeId);
 
-  /** そのキャストを参照する実績があるか。取消済みも数える。 */
-  boolean existsByCastId(String castId);
+  /**
+   * そのキャストへ届く実績の件数。取消済みも数える。
+   *
+   * <p>自身の cast_id だけでは足りない。実績を取り消せばシフトの付け替えが解禁されるので（ADR 0014 の逃げ道）、 実績の cast_id とシフトの cast_id
+   * は永久に一致するとは限らない。付け替え先のキャストを削除するとシフトへ連鎖し、 実績のシフト側外部キーに当たる — その経路もここで数える。
+   */
+  @Query(
+      """
+      select count(a) from com.kizuna.shift.domain.Attendance a
+      where a.castId = :castId
+        or a.shiftId in (
+          select s.id from com.kizuna.shift.domain.Shift s where s.castId = :castId
+        )
+      """)
+  long countReferencingCast(@Param("castId") String castId);
 }

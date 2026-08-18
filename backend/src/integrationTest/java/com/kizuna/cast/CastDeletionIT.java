@@ -77,18 +77,48 @@ class CastDeletionIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("シフト紐づきの実績に参照されているキャストの削除も、飛び込みと同じ 409 になること")
-  void rejectsDeletingCastReferencedThroughItsShift() {
-    String castId = createCast("シフト実績あり");
-    recordAttendance(castId, seedConfirmedShift(castId));
+  @DisplayName("実績のキャストと違うキャストへ付け替えられたシフトでも、その引受先キャストの削除が 409 になること")
+  void rejectsDeletingCastWhoseShiftIsReferencedByAnotherCastsAttendance() {
+    // 実績の cast_id とシフトの cast_id は永久に一致するとは限らない。実績を取り消せばシフトの
+    // 付け替えが解禁されるので（それ自体は #732 の求める挙動）、実績が指すシフトを引き受けた別の
+    // キャストが生まれる。そのキャストの削除はシフトへ連鎖し、実績のシフト側外部キーに当たる。
+    String recordedCastId = createCast("実績の主");
+    String shiftId = seedConfirmedShift(recordedCastId);
+    String attendanceId = recordAttendance(recordedCastId, shiftId);
+    cancelAttendance(attendanceId);
 
-    ResponseEntity<JsonNode> response = delete(castId);
+    String inheritingCastId = createCast("付け替え先");
+    reassignShift(shiftId, inheritingCastId);
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    ResponseEntity<JsonNode> response = delete(inheritingCastId);
+
+    assertThat(response.getStatusCode())
+        .as("シフトへの連鎖が実績を道連れにしようとする経路も止まること")
+        .isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody().path("error").asString())
-        .as("シフト側の外部キーが先に鳴っても断りの文言が変わらないこと")
+        .as("どちらの外部キーが鳴りうる経路でも断りの文言が変わらないこと")
         .isEqualTo("実績が記録されているキャストは削除できません。在籍停止に変更してください");
-    assertThat(get(castId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
+    assertThat(get(inheritingCastId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
+  }
+
+  private void reassignShift(String shiftId, String castId) {
+    ResponseEntity<JsonNode> updated =
+        rest.exchange(
+            "/store/shifts/" + shiftId,
+            HttpMethod.PUT,
+            new HttpEntity<>("{\"cast_id\": \"" + castId + "\"}", managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(updated.getStatusCode()).as("前提: 取消済みの実績はシフトの付け替えを妨げないこと").isEqualTo(HttpStatus.OK);
+  }
+
+  private void cancelAttendance(String attendanceId) {
+    ResponseEntity<JsonNode> cancelled =
+        rest.exchange(
+            "/store/attendances/" + attendanceId + "/cancellation",
+            HttpMethod.POST,
+            new HttpEntity<>("{\"reason\": \"キャスト削除ITの取消\"}", managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(cancelled.getStatusCode()).as("前提: 実績の取消が成功すること").isEqualTo(HttpStatus.NO_CONTENT);
   }
 
   private String seedConfirmedShift(String castId) {
@@ -105,7 +135,7 @@ class CastDeletionIT extends CrossStoreTestSupport {
     return shiftRepository.save(shift).getId();
   }
 
-  private void recordAttendance(String castId, String shiftId) {
+  private String recordAttendance(String castId, String shiftId) {
     String body =
         "{\"cast_id\": \""
             + castId
@@ -118,6 +148,7 @@ class CastDeletionIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/store/attendances", new HttpEntity<>(body, managerHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode()).as("前提: 実績の記録が成功すること").isEqualTo(HttpStatus.CREATED);
+    return created.getBody().path("id").asString();
   }
 
   private String createCast(String label) {

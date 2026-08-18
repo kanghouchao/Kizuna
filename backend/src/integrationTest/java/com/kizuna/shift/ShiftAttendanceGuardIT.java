@@ -113,8 +113,8 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
 
     cancelAttendance(attendanceId);
 
-    // 文言まで見る。守衛が未取消しか数えなければ外部キーが同じ 409 を返すので、status だけでは
-    // 「取消済みも数えた」のか「守衛を素通りして DB に止められた」のかが分かれない。
+    // 文言まで見る。守衛が未取消しか数えなければ書き込みは外部キーに当たるが、その制約は DbConstraint に
+    // 登録が無いので 500 になる。status だけでは写像の抜けと守衛の抜けを取り違えるので、文言で決める。
     ResponseEntity<JsonNode> refusedAfterCancel = deleteShift(shiftId);
     assertThat(refusedAfterCancel.getStatusCode())
         .as("取消済みの実績も参照であることに変わりはないこと")
