@@ -61,7 +61,13 @@ public enum DbConstraint {
   FK_T_CUSTOMER_MERGES_MERGED("fk_t_customer_merges_merged"),
 
   /** t_customers.merged_into_id の自己参照 FK。墓標の指す先が消えると旧 ID の解決が切れる。 */
-  FK_T_CUSTOMERS_MERGED_INTO("fk_t_customers_merged_into");
+  FK_T_CUSTOMERS_MERGED_INTO("fk_t_customers_merged_into"),
+
+  /** t_attendances の「1 シフトにつき未取消の実績は高々 1 行」の部分一意索引。 */
+  UQ_T_ATTENDANCES_ACTIVE_SHIFT("uq_t_attendances_active_shift"),
+
+  /** t_attendances の「1 営業日・1 キャストにつき未取消の実績は高々 1 行」の部分一意索引。 */
+  UQ_T_ATTENDANCES_ACTIVE_CAST_BUSINESS_DATE("uq_t_attendances_active_cast_business_date");
 
   private final String sqlName;
 

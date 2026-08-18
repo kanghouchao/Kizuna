@@ -46,6 +46,9 @@ databaseChangeLog:
       file: store/07-customer-member-link.yaml
       relativeToChangelogFile: true
   - include:
+      file: store/08-attendance.yaml
+      relativeToChangelogFile: true
+  - include:
       file: platform/08-order-attribution.yaml
       relativeToChangelogFile: true
   - include:
