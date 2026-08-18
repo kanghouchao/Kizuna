@@ -12,7 +12,7 @@ public interface ShiftRepository
 
   List<Shift> findByWorkDateBetween(LocalDate from, LocalDate to);
 
-  List<Shift> findByWorkDateAndStatusOrderByStartTimeAsc(LocalDate workDate, String status);
+  List<Shift> findByWorkDateAndStatusOrderByStartTimeAsc(LocalDate workDate, ShiftStatus status);
 
   /**
    * 本人（cast_id 集合、跨店）の週間確定シフトを店名内联で返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか 存在しないため、cast_id
@@ -23,7 +23,7 @@ public interface ShiftRepository
       select s.id as id, s.workDate as workDate, s.startTime as startTime, s.endTime as endTime,
              s.status as status, s.storeId as storeId, st.name as storeName
       from Shift s join com.kizuna.store.domain.Store st on st.id = s.storeId
-      where s.castId in :castIds and s.status = 'CONFIRMED'
+      where s.castId in :castIds and s.status = com.kizuna.shift.domain.ShiftStatus.CONFIRMED
         and s.workDate between :from and :to
       order by s.workDate asc, s.startTime asc
       """)
@@ -43,7 +43,8 @@ public interface ShiftRepository
       select s.castId as castId, c.name as castName, c.photoUrl as castPhotoUrl,
              s.startTime as startTime, s.endTime as endTime
       from Shift s join com.kizuna.cast.domain.Cast c on c.id = s.castId
-      where s.storeId = :storeId and s.workDate = :workDate and s.status = 'CONFIRMED'
+      where s.storeId = :storeId and s.workDate = :workDate
+        and s.status = com.kizuna.shift.domain.ShiftStatus.CONFIRMED
         and c.status = 'ACTIVE'
       order by s.startTime asc, s.castId asc
       """)
@@ -52,5 +53,5 @@ public interface ShiftRepository
 
   /** 指定店舗・指定キャスト・指定日の確定シフトの有無。指名の妥当性検証に使う（店舗隔離は storeId の明示指定による）。 */
   boolean existsByStoreIdAndCastIdAndWorkDateAndStatus(
-      Long storeId, String castId, LocalDate workDate, String status);
+      Long storeId, String castId, LocalDate workDate, ShiftStatus status);
 }

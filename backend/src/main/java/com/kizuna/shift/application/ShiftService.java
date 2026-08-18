@@ -6,6 +6,7 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
@@ -14,12 +15,13 @@ import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -30,12 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ShiftService {
 
-  private static final Set<String> ALLOWED_STATUSES = Set.of("TENTATIVE", "CONFIRMED");
-
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
   private final CastService castService;
   private final CastRepository castRepository;
+  private final PlatformUserRepository platformUserRepository;
   private final AppProperties appProperties;
 
   @StoreScoped
@@ -57,7 +58,7 @@ public class ShiftService {
   public List<PublicShiftResponse> listPublicToday() {
     LocalDate today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
     List<Shift> shifts =
-        shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(today, "CONFIRMED");
+        shiftRepository.findByWorkDateAndStatusOrderByStartTimeAsc(today, ShiftStatus.CONFIRMED);
     if (shifts.isEmpty()) {
       return List.of();
     }
@@ -82,27 +83,25 @@ public class ShiftService {
 
   @StoreScoped
   @Transactional
-  public ShiftResponse create(ShiftCreateRequest request) {
+  public ShiftResponse create(ShiftCreateRequest request, String actorEmail) {
     if (request.getStartTime().equals(request.getEndTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
-    validateStatus(request.getStatus());
     if (!castService.existsForCurrentStore(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
 
     // store_id は StoreScopeStampListener が @PrePersist で採番する
-    Shift shift = shiftMapper.toEntity(request);
+    Shift shift = shiftMapper.toEntity(request, resolveActorId(actorEmail));
     return shiftMapper.toResponse(shiftRepository.save(shift));
   }
 
   @StoreScoped
   @Transactional
-  public ShiftResponse update(String id, ShiftUpdateRequest request) {
+  public ShiftResponse update(String id, ShiftUpdateRequest request, String actorEmail) {
     Shift shift =
         shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
 
-    validateStatus(request.getStatus());
     if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
@@ -117,6 +116,7 @@ public class ShiftService {
     }
 
     shift.apply(shiftMapper.toPatch(request));
+    shift.stampUpdatedBy(resolveActorId(actorEmail));
 
     return shiftMapper.toResponse(shiftRepository.save(shift));
   }
@@ -130,10 +130,10 @@ public class ShiftService {
     shiftRepository.deleteById(id);
   }
 
-  /** status が指定された場合、許可値（TENTATIVE / CONFIRMED）以外を拒否する。null は不変更として許容。 */
-  private void validateStatus(String status) {
-    if (status != null && !ALLOWED_STATUSES.contains(status)) {
-      throw new ServiceException("不正なステータスです: " + status);
-    }
+  private Long resolveActorId(String actorEmail) {
+    return platformUserRepository
+        .findByEmail(actorEmail)
+        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
+        .getId();
   }
 }

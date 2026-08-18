@@ -5,9 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 
 class ShiftRequestTest {
+
+  private static final Long ACTOR = 7L;
+  private static final OffsetDateTime PROCESSED_AT =
+      OffsetDateTime.parse("2026-08-18T10:00:00+09:00");
 
   private ShiftRequest pendingRequest() {
     return ShiftRequest.builder()
@@ -47,16 +52,17 @@ class ShiftRequestTest {
     assertThat(request.getShiftId()).isEqualTo("sh1");
 
     // 変更申請も同じ状態系列（PENDING→APPROVED/DECLINED）に従う
-    request.approve();
+    request.approve(ACTOR, PROCESSED_AT);
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
-    assertThatThrownBy(request::decline).isInstanceOf(ShiftRequestStateException.class);
+    assertThatThrownBy(() -> request.decline(ACTOR, PROCESSED_AT))
+        .isInstanceOf(ShiftRequestStateException.class);
   }
 
   @Test
   void approve_fromPending_transitionsToApproved() {
     ShiftRequest request = pendingRequest();
 
-    request.approve();
+    request.approve(ACTOR, PROCESSED_AT);
 
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.APPROVED);
   }
@@ -65,17 +71,46 @@ class ShiftRequestTest {
   void decline_fromPending_transitionsToDeclined() {
     ShiftRequest request = pendingRequest();
 
-    request.decline();
+    request.decline(ACTOR, PROCESSED_AT);
 
     assertThat(request.getStatus()).isEqualTo(ShiftRequestStatus.DECLINED);
   }
 
   @Test
+  void approve_stampsProcessorAndTime() {
+    ShiftRequest request = pendingRequest();
+
+    request.approve(ACTOR, PROCESSED_AT);
+
+    assertThat(request.getProcessedBy()).isEqualTo(ACTOR);
+    assertThat(request.getProcessedAt()).isEqualTo(PROCESSED_AT);
+  }
+
+  @Test
+  void decline_stampsProcessorAndTime() {
+    ShiftRequest request = pendingRequest();
+
+    request.decline(ACTOR, PROCESSED_AT);
+
+    assertThat(request.getProcessedBy()).isEqualTo(ACTOR);
+    assertThat(request.getProcessedAt()).isEqualTo(PROCESSED_AT);
+  }
+
+  @Test
+  void linkShift_bindsGeneratedShiftToTheRequest() {
+    ShiftRequest request = pendingRequest();
+
+    request.linkShift("sh-generated");
+
+    assertThat(request.getShiftId()).isEqualTo("sh-generated");
+  }
+
+  @Test
   void approve_whenAlreadyApproved_throwsStateException() {
     ShiftRequest request = pendingRequest();
-    request.approve();
+    request.approve(ACTOR, PROCESSED_AT);
 
-    assertThatThrownBy(request::approve)
+    assertThatThrownBy(() -> request.approve(ACTOR, PROCESSED_AT))
         .isInstanceOf(ShiftRequestStateException.class)
         .hasMessageContaining("処理済み");
   }
@@ -83,9 +118,9 @@ class ShiftRequestTest {
   @Test
   void approve_whenAlreadyDeclined_throwsStateException() {
     ShiftRequest request = pendingRequest();
-    request.decline();
+    request.decline(ACTOR, PROCESSED_AT);
 
-    assertThatThrownBy(request::approve)
+    assertThatThrownBy(() -> request.approve(ACTOR, PROCESSED_AT))
         .isInstanceOf(ShiftRequestStateException.class)
         .hasMessageContaining("処理済み");
   }
@@ -93,9 +128,9 @@ class ShiftRequestTest {
   @Test
   void decline_whenAlreadyApproved_throwsStateException() {
     ShiftRequest request = pendingRequest();
-    request.approve();
+    request.approve(ACTOR, PROCESSED_AT);
 
-    assertThatThrownBy(request::decline)
+    assertThatThrownBy(() -> request.decline(ACTOR, PROCESSED_AT))
         .isInstanceOf(ShiftRequestStateException.class)
         .hasMessageContaining("処理済み");
   }
@@ -103,9 +138,9 @@ class ShiftRequestTest {
   @Test
   void decline_whenAlreadyDeclined_throwsStateException() {
     ShiftRequest request = pendingRequest();
-    request.decline();
+    request.decline(ACTOR, PROCESSED_AT);
 
-    assertThatThrownBy(request::decline)
+    assertThatThrownBy(() -> request.decline(ACTOR, PROCESSED_AT))
         .isInstanceOf(ShiftRequestStateException.class)
         .hasMessageContaining("処理済み");
   }

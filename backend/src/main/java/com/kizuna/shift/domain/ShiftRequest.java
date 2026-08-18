@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -50,7 +51,10 @@ public class ShiftRequest extends StoreScopedEntity {
   @Builder.Default
   private ShiftRequestType type = ShiftRequestType.NEW;
 
-  /** 変更申請（CHANGE）の対象シフト id。NEW では null。対象シフトが削除されると DB 側で null に落ち、申請は履歴として残る。 */
+  /**
+   * 関連シフト id — 系列（希望→承認→変更申請）の背骨。CHANGE では提出時の対象シフト、NEW では承認で生成したシフトを指す。 PENDING・DECLINED の NEW では
+   * null。対象シフトが削除されると DB 側で null に落ち、申請は履歴として残る。
+   */
   @Column(name = "shift_id", length = 64)
   private String shiftId;
 
@@ -71,16 +75,33 @@ public class ShiftRequest extends StoreScopedEntity {
   @Builder.Default
   private ShiftRequestStatus status = ShiftRequestStatus.PENDING;
 
+  /** 承認・却下を実行した者（PlatformUser id）。未処理では null。利用者削除後も申請は残す（FK が SET NULL）。 */
+  @Column(name = "processed_by")
+  private Long processedBy;
+
+  /** 承認・却下の実行時刻。未処理では null。 */
+  @Column(name = "processed_at")
+  private OffsetDateTime processedAt;
+
   /** PENDING の希望のみ承認できる。それ以外は状態例外を投げる（処理済みへの再処理を拒否）。 */
-  public void approve() {
+  public void approve(Long processedBy, OffsetDateTime processedAt) {
     requirePending();
     this.status = ShiftRequestStatus.APPROVED;
+    this.processedBy = processedBy;
+    this.processedAt = processedAt;
   }
 
   /** PENDING の希望のみ却下できる。それ以外は状態例外を投げる。 */
-  public void decline() {
+  public void decline(Long processedBy, OffsetDateTime processedAt) {
     requirePending();
     this.status = ShiftRequestStatus.DECLINED;
+    this.processedBy = processedBy;
+    this.processedAt = processedAt;
+  }
+
+  /** NEW の承認で生成したシフトを申請行へ結ぶ。 */
+  public void linkShift(String shiftId) {
+    this.shiftId = shiftId;
   }
 
   private void requirePending() {

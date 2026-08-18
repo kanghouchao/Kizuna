@@ -67,7 +67,7 @@ databaseChangeLog:
               - column:
                   name: shift_id
                   type: VARCHAR(64)
-                  remarks: 変更申請（CHANGE）の対象シフト id。NEW では NULL。対象シフト削除時も申請は履歴として残すため SET NULL
+                  remarks: 関連シフト id。CHANGE は対象シフト、NEW は承認で生成したシフト。未承認の NEW は NULL。対象シフト削除時も申請は履歴として残すため SET NULL
               - column:
                   # original_* は変更申請時点の対象シフトのスナップショット（申請後の変更検知用）。
                   name: original_work_date
@@ -81,6 +81,14 @@ databaseChangeLog:
                   name: original_end_time
                   type: TIME
                   remarks: 変更申請時点の対象シフト終了時刻（NEW では NULL）
+              - column:
+                  name: processed_by
+                  type: BIGINT
+                  remarks: 承認・却下の実行者（未処理なら NULL）。利用者削除後も申請を残すため SET NULL
+              - column:
+                  name: processed_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 承認・却下の実行時刻（未処理なら NULL）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -119,6 +127,13 @@ databaseChangeLog:
             baseTableName: t_shift_requests
             baseColumnNames: shift_id
             referencedTableName: t_shifts
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_shift_requests_processed_by
+            baseTableName: t_shift_requests
+            baseColumnNames: processed_by
+            referencedTableName: t_users
             referencedColumnNames: id
             onDelete: SET NULL
         - createIndex:

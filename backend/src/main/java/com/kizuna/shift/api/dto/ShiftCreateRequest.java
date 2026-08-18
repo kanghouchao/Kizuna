@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.domain.ShiftStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
@@ -12,5 +13,5 @@ public class ShiftCreateRequest {
   @NotNull private LocalDate workDate;
   @NotNull private LocalTime startTime;
   @NotNull private LocalTime endTime;
-  private String status;
+  private ShiftStatus status;
 }

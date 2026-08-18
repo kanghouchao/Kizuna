@@ -20,11 +20,17 @@ import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,9 +45,29 @@ class ShiftServiceTest {
   @Mock private ShiftMapper shiftMapper;
   @Mock private CastService castService;
   @Mock private CastRepository castRepository;
+  @Mock private PlatformUserRepository platformUserRepository;
   @Mock private AppProperties appProperties;
 
   @InjectMocks private ShiftService shiftService;
+
+  private static final String ACTOR_EMAIL = "manager@kizuna.test";
+  private static final Long ACTOR_ID = 42L;
+
+  private void givenActor() {
+    PlatformUser actor =
+        PlatformUser.builder()
+            .email(ACTOR_EMAIL)
+            .password("encoded")
+            .displayName("店長")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .roleIds(Set.of(1L))
+            .build();
+    actor.setId(ACTOR_ID);
+    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+  }
 
   private ShiftCreateRequest validCreateRequest() {
     ShiftCreateRequest req = new ShiftCreateRequest();
@@ -72,10 +98,11 @@ class ShiftServiceTest {
   void create_savesAndReturns() {
     ShiftCreateRequest req = validCreateRequest();
 
-    Shift entity = Shift.builder().castId("c1").status("TENTATIVE").build();
+    Shift entity = Shift.builder().castId("c1").status(ShiftStatus.TENTATIVE).build();
 
+    givenActor();
     when(castService.existsForCurrentStore("c1")).thenReturn(true);
-    when(shiftMapper.toEntity(req)).thenReturn(entity);
+    when(shiftMapper.toEntity(req, ACTOR_ID)).thenReturn(entity);
     when(shiftRepository.save(any()))
         .thenAnswer(
             i -> {
@@ -88,8 +115,10 @@ class ShiftServiceTest {
     resp.setId("s_new");
     when(shiftMapper.toResponse(any())).thenReturn(resp);
 
-    ShiftResponse res = shiftService.create(req);
+    ShiftResponse res = shiftService.create(req, ACTOR_EMAIL);
     assertThat(res.getId()).isEqualTo("s_new");
+    // 作成の実行者は認証主体から解決して写像へ渡す（実際に列へ載ることは ShiftCrossStoreIT が見る）
+    verify(shiftMapper).toEntity(req, ACTOR_ID);
   }
 
   @Test
@@ -98,7 +127,7 @@ class ShiftServiceTest {
     req.setStartTime(LocalTime.of(20, 0));
     req.setEndTime(LocalTime.of(20, 0));
 
-    assertThatThrownBy(() -> shiftService.create(req))
+    assertThatThrownBy(() -> shiftService.create(req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
   }
@@ -109,37 +138,40 @@ class ShiftServiceTest {
 
     when(castService.existsForCurrentStore("c1")).thenReturn(false);
 
-    assertThatThrownBy(() -> shiftService.create(req))
+    assertThatThrownBy(() -> shiftService.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
 
   @Test
   void update_appliesPatchAndSaves() {
-    Shift s = Shift.builder().castId("c1").status("TENTATIVE").build();
+    Shift s = Shift.builder().castId("c1").status(ShiftStatus.TENTATIVE).build();
     s.setId("s1");
 
+    givenActor();
     when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
     when(shiftRepository.save(any())).thenReturn(s);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
-    req.setStatus("CONFIRMED");
-    when(shiftMapper.toPatch(req)).thenReturn(new ShiftPatch(null, null, null, null, "CONFIRMED"));
+    req.setStatus(ShiftStatus.CONFIRMED);
+    when(shiftMapper.toPatch(req))
+        .thenReturn(new ShiftPatch(null, null, null, null, ShiftStatus.CONFIRMED));
 
     ShiftResponse resp = new ShiftResponse();
     resp.setStatus("CONFIRMED");
     when(shiftMapper.toResponse(s)).thenReturn(resp);
 
-    ShiftResponse result = shiftService.update("s1", req);
+    ShiftResponse result = shiftService.update("s1", req, ACTOR_EMAIL);
     assertThat(result.getStatus()).isEqualTo("CONFIRMED");
-    assertThat(s.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(s.getStatus()).isEqualTo(ShiftStatus.CONFIRMED);
+    assertThat(s.getUpdatedBy()).as("直接編集は updated_by に実行者を印字すること").isEqualTo(ACTOR_ID);
   }
 
   @Test
   void update_throwsWhenNotFound() {
     when(shiftRepository.findById("missing")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftService.update("missing", new ShiftUpdateRequest()))
+    assertThatThrownBy(() -> shiftService.update("missing", new ShiftUpdateRequest(), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("シフトが見つかりません");
   }
@@ -154,7 +186,7 @@ class ShiftServiceTest {
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setCastId("foreign");
 
-    assertThatThrownBy(() -> shiftService.update("s1", req))
+    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
@@ -169,7 +201,7 @@ class ShiftServiceTest {
     req.setStartTime(LocalTime.of(20, 0));
     req.setEndTime(LocalTime.of(20, 0));
 
-    assertThatThrownBy(() -> shiftService.update("s1", req))
+    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
   }
@@ -184,33 +216,9 @@ class ShiftServiceTest {
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setStartTime(LocalTime.of(22, 0));
 
-    assertThatThrownBy(() -> shiftService.update("s1", req))
+    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
-  }
-
-  @Test
-  void create_rejectsInvalidStatus() {
-    ShiftCreateRequest req = validCreateRequest();
-    req.setStatus("BOGUS");
-
-    assertThatThrownBy(() -> shiftService.create(req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("不正なステータス");
-  }
-
-  @Test
-  void update_rejectsInvalidStatus() {
-    Shift s = Shift.builder().castId("c1").build();
-    s.setId("s1");
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
-
-    ShiftUpdateRequest req = new ShiftUpdateRequest();
-    req.setStatus("BOGUS");
-
-    assertThatThrownBy(() -> shiftService.update("s1", req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("不正なステータス");
   }
 
   @Test
@@ -278,11 +286,11 @@ class ShiftServiceTest {
     shiftService.listPublicToday();
 
     ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
-    ArgumentCaptor<String> statusCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<ShiftStatus> statusCaptor = ArgumentCaptor.forClass(ShiftStatus.class);
     verify(shiftRepository)
         .findByWorkDateAndStatusOrderByStartTimeAsc(dateCaptor.capture(), statusCaptor.capture());
     assertThat(dateCaptor.getValue()).isEqualTo(expectedToday);
-    assertThat(statusCaptor.getValue()).isEqualTo("CONFIRMED");
+    assertThat(statusCaptor.getValue()).isEqualTo(ShiftStatus.CONFIRMED);
   }
 
   @Test

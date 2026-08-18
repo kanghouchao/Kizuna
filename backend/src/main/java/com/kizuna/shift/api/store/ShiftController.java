@@ -7,6 +7,7 @@ import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.application.ShiftService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -41,15 +42,19 @@ public class ShiftController {
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<ShiftResponse> create(@Valid @RequestBody ShiftCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(shiftService.create(request));
+  public ResponseEntity<ShiftResponse> create(
+      @Valid @RequestBody ShiftCreateRequest request, Principal principal) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(shiftService.create(request, principal.getName()));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftResponse> update(
-      @PathVariable String id, @Valid @RequestBody ShiftUpdateRequest request) {
-    return ResponseEntity.ok(shiftService.update(id, request));
+      @PathVariable String id,
+      @Valid @RequestBody ShiftUpdateRequest request,
+      Principal principal) {
+    return ResponseEntity.ok(shiftService.update(id, request, principal.getName()));
   }
 
   @DeleteMapping("/{id}")

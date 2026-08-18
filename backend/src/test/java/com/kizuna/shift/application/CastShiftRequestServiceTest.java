@@ -27,6 +27,7 @@ import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
+import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
@@ -176,7 +177,7 @@ class CastShiftRequestServiceTest {
     return req;
   }
 
-  private Shift shiftOf(String castId, String status) {
+  private Shift shiftOf(String castId, ShiftStatus status) {
     Shift shift =
         Shift.builder()
             .castId(castId)
@@ -240,7 +241,7 @@ class CastShiftRequestServiceTest {
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
     when(shiftRepository.findById("sh1"))
-        .thenReturn(Optional.of(shiftOf("other-cast", "CONFIRMED")));
+        .thenReturn(Optional.of(shiftOf("other-cast", ShiftStatus.CONFIRMED)));
 
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
         .isInstanceOf(NotFoundException.class)
@@ -256,7 +257,8 @@ class CastShiftRequestServiceTest {
     PlatformUser user = userWithId(42L);
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(shiftOf("cast-1", "TENTATIVE")));
+    when(shiftRepository.findById("sh1"))
+        .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.TENTATIVE)));
 
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
         .isInstanceOf(ServiceException.class)
@@ -272,7 +274,8 @@ class CastShiftRequestServiceTest {
     PlatformUser user = userWithId(42L);
     when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByPlatformUserId(42L)).thenReturn(List.of("cast-1"));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(shiftOf("cast-1", "CONFIRMED")));
+    when(shiftRepository.findById("sh1"))
+        .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.CONFIRMED)));
     when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
     when(shiftRequestMapper.toResponse(any()))
         .thenReturn(ShiftRequestResponse.builder().id("sr2").build());

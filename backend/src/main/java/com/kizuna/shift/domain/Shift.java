@@ -3,6 +3,8 @@ package com.kizuna.shift.domain;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -12,6 +14,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
 
+/**
+ * 排班の事実の唯一の正本。系列は双起点一主幹で、キャストの出勤希望の承認から生まれる行と店舗が直接作成する行の どちらもこの表に合流する。
+ *
+ * <p>実行者は「行を書いた操作の実行者を印字する」規則で持つ。直接編集は最後の一手のみが残り、中間履歴は保たない。
+ */
 @Entity
 @Table(name = "t_shifts")
 @Filter(name = "storeFilter", condition = "store_id = :storeId")
@@ -35,8 +42,17 @@ public class Shift extends StoreScopedEntity {
   @Column(name = "end_time", nullable = false)
   private LocalTime endTime;
 
+  @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 20)
-  private String status;
+  private ShiftStatus status;
+
+  /** この行を作成した操作の実行者（PlatformUser id）。承認で生まれた行なら承認者。利用者削除後も行は残す（FK が SET NULL）。 */
+  @Column(name = "created_by", updatable = false)
+  private Long createdBy;
+
+  /** この行を最後に書き換えた操作の実行者（PlatformUser id）。作成のみの行では null。 */
+  @Column(name = "updated_by")
+  private Long updatedBy;
 
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。 */
   public void apply(ShiftPatch patch) {
@@ -55,6 +71,11 @@ public class Shift extends StoreScopedEntity {
     if (patch.status() != null) {
       this.status = patch.status();
     }
+  }
+
+  /** 書き換えの実行者を印字する。実行者は要求ではなく認証主体から来るため、部分更新コマンドとは別の口で受ける。 */
+  public void stampUpdatedBy(Long actorId) {
+    this.updatedBy = actorId;
   }
 
   @Override

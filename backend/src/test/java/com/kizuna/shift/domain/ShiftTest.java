@@ -14,7 +14,7 @@ class ShiftTest {
         .workDate(LocalDate.of(2026, 7, 8))
         .startTime(LocalTime.of(18, 0))
         .endTime(LocalTime.of(23, 0))
-        .status("TENTATIVE")
+        .status(ShiftStatus.TENTATIVE)
         .build();
   }
 
@@ -22,7 +22,7 @@ class ShiftTest {
   void apply_updatesOnlyNonNullFields() {
     Shift shift = baseShift();
 
-    shift.apply(new ShiftPatch(null, null, null, LocalTime.of(1, 0), "CONFIRMED"));
+    shift.apply(new ShiftPatch(null, null, null, LocalTime.of(1, 0), ShiftStatus.CONFIRMED));
 
     // null のフィールドは変更されない
     assertThat(shift.getCastId()).isEqualTo("c1");
@@ -30,7 +30,7 @@ class ShiftTest {
     assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
     // 非 null のフィールドだけ更新される
     assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(1, 0));
-    assertThat(shift.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(shift.getStatus()).isEqualTo(ShiftStatus.CONFIRMED);
   }
 
   @Test
@@ -39,13 +39,17 @@ class ShiftTest {
 
     shift.apply(
         new ShiftPatch(
-            "c2", LocalDate.of(2026, 7, 9), LocalTime.of(19, 0), LocalTime.of(2, 0), "CONFIRMED"));
+            "c2",
+            LocalDate.of(2026, 7, 9),
+            LocalTime.of(19, 0),
+            LocalTime.of(2, 0),
+            ShiftStatus.CONFIRMED));
 
     assertThat(shift.getCastId()).isEqualTo("c2");
     assertThat(shift.getWorkDate()).isEqualTo(LocalDate.of(2026, 7, 9));
     assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(19, 0));
     assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(2, 0));
-    assertThat(shift.getStatus()).isEqualTo("CONFIRMED");
+    assertThat(shift.getStatus()).isEqualTo(ShiftStatus.CONFIRMED);
   }
 
   @Test
@@ -58,6 +62,6 @@ class ShiftTest {
     assertThat(shift.getWorkDate()).isEqualTo(LocalDate.of(2026, 7, 8));
     assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
     assertThat(shift.getEndTime()).isEqualTo(LocalTime.of(23, 0));
-    assertThat(shift.getStatus()).isEqualTo("TENTATIVE");
+    assertThat(shift.getStatus()).isEqualTo(ShiftStatus.TENTATIVE);
   }
 }

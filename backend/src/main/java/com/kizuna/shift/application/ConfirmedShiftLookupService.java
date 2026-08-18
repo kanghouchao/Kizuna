@@ -7,6 +7,7 @@ import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.domain.ConfirmedShiftCastView;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftStatus;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -31,8 +32,6 @@ public class ConfirmedShiftLookupService {
 
   /** 予約で扱える先の上限日数。候補一覧の照会と申請の利用日検証（MemberOrderService）が共有し、無制限の未来日を防ぐ。 */
   public static final int MAX_LOOKAHEAD_DAYS = 90;
-
-  private static final String CONFIRMED = "CONFIRMED";
 
   private static final String EXPLICIT_STORE_ID_IS_THE_BOUNDARY =
       "呼び手（会員）は店舗文脈を確立できないため、問い合わせへの storeId 明示指定が唯一の境界";
@@ -72,7 +71,7 @@ public class ConfirmedShiftLookupService {
   @Transactional(readOnly = true)
   public boolean hasConfirmedShift(Long storeId, String castId, LocalDate workDate) {
     return shiftRepository.existsByStoreIdAndCastIdAndWorkDateAndStatus(
-        storeId, castId, workDate, CONFIRMED);
+        storeId, castId, workDate, ShiftStatus.CONFIRMED);
   }
 
   private void validateWorkDate(LocalDate workDate) {
