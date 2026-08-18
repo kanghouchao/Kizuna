@@ -49,6 +49,9 @@ public class Attendance extends StoreScopedEntity {
   @Column(name = "cancelled_at")
   private OffsetDateTime cancelledAt;
 
+  @Column(name = "cancelled_reason", length = 500)
+  private String cancelledReason;
+
   @Column(name = "cancelled_by")
   private Long cancelledBy;
 
@@ -111,13 +114,22 @@ public class Attendance extends StoreScopedEntity {
     this.updatedBy = actorId;
   }
 
-  /** 取消標記を付ける。二度目は静默冪等に委ねず撥ねる — 誰の取消として記録するかが一意に決まらなくなる。 */
-  public void cancel(Long actorId, OffsetDateTime at) {
+  /**
+   * 取消標記を付ける。理由は必須 — 取消は法定保存対象の記録を導出・照会から外す不可逆な操作で、
+   * 「なぜこの営業日の実績が無いのか」を後から辿れる根拠はこの行にしか残らない。訂正が編集前の姿を丸ごと 残すのに、より重い取消が何も残さないという非対称も作らない。
+   *
+   * <p>二度目は静默冪等に委ねず撥ねる — 初回の理由と実行者が黙って上書きされ、必須にした意味が消える。
+   */
+  public void cancel(String reason, Long actorId, OffsetDateTime at) {
     if (isCancelled()) {
       throw new AttendanceStateException("既に取消済みの実績です");
     }
+    if (reason == null || reason.isBlank()) {
+      throw new AttendanceStateException("取消の理由は必須です");
+    }
     this.cancelledAt = at;
     this.cancelledBy = actorId;
+    this.cancelledReason = reason;
   }
 
   public boolean isCancelled() {

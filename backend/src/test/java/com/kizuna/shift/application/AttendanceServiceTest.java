@@ -12,6 +12,7 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
 import com.kizuna.shift.api.dto.AttendanceMapper;
@@ -112,6 +113,12 @@ class AttendanceServiceTest {
     request.setActualStartAt(START);
     request.setActualEndAt(START.plusHours(4));
     request.setWaitingPlace("2番待機室");
+    return request;
+  }
+
+  private AttendanceCancellationRequest cancellationRequest(String reason) {
+    AttendanceCancellationRequest request = new AttendanceCancellationRequest();
+    request.setReason(reason);
     return request;
   }
 
@@ -256,10 +263,11 @@ class AttendanceServiceTest {
         Attendance.record(CAST_ID, null, DERIVED_BUSINESS_DATE, START, null, null, ACTOR_ID);
     when(attendanceRepository.findById("att-1")).thenReturn(Optional.of(attendance));
 
-    attendanceService.cancel("att-1", ACTOR_EMAIL);
+    attendanceService.cancel("att-1", cancellationRequest("誤って記録したため"), ACTOR_EMAIL);
 
     assertThat(attendance.isCancelled()).isTrue();
     assertThat(attendance.getCancelledBy()).isEqualTo(ACTOR_ID);
+    assertThat(attendance.getCancelledReason()).isEqualTo("誤って記録したため");
     verify(attendanceRepository).save(attendance);
   }
 

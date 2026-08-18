@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.store;
 
+import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
 import com.kizuna.shift.api.dto.AttendanceResponse;
@@ -61,8 +62,11 @@ public class AttendanceController {
 
   @PostMapping("/{id}/cancellation")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<Void> cancel(@PathVariable String id, Principal principal) {
-    attendanceService.cancel(id, principal.getName());
+  public ResponseEntity<Void> cancel(
+      @PathVariable String id,
+      @Valid @RequestBody AttendanceCancellationRequest request,
+      Principal principal) {
+    attendanceService.cancel(id, request, principal.getName());
     return ResponseEntity.noContent().build();
   }
 }
