@@ -17,21 +17,21 @@ class AttendanceTest {
 
   private Attendance recorded() {
     return Attendance.record(
-        "cast-1", BUSINESS_DATE, START, START.plusHours(5), "shift-1", "1番待機室", ACTOR_ID);
+        "cast-1", "shift-1", BUSINESS_DATE, START, START.plusHours(5), "1番待機室", ACTOR_ID);
   }
 
   @Test
   @DisplayName("実終了が実開始以前の記録を拒否すること")
   void rejectsEndNotAfterStart() {
     assertThatThrownBy(
-            () -> Attendance.record("cast-1", BUSINESS_DATE, START, START, null, null, ACTOR_ID))
+            () -> Attendance.record("cast-1", null, BUSINESS_DATE, START, START, null, ACTOR_ID))
         .isInstanceOf(AttendanceStateException.class)
         .hasMessageContaining("実終了");
 
     assertThatThrownBy(
             () ->
                 Attendance.record(
-                    "cast-1", BUSINESS_DATE, START, START.minusMinutes(1), null, null, ACTOR_ID))
+                    "cast-1", null, BUSINESS_DATE, START, START.minusMinutes(1), null, ACTOR_ID))
         .isInstanceOf(AttendanceStateException.class);
   }
 
@@ -39,13 +39,13 @@ class AttendanceTest {
   @DisplayName("実終了の未記入は許され、日跨ぎの終了も記録できること")
   void allowsNullEndAndOvernightEnd() {
     assertThat(
-            Attendance.record("cast-1", BUSINESS_DATE, START, null, null, null, ACTOR_ID)
+            Attendance.record("cast-1", null, BUSINESS_DATE, START, null, null, ACTOR_ID)
                 .getActualEndAt())
         .isNull();
 
     LocalDateTime nextMorning = START.plusHours(8);
     assertThat(
-            Attendance.record("cast-1", BUSINESS_DATE, START, nextMorning, null, null, ACTOR_ID)
+            Attendance.record("cast-1", null, BUSINESS_DATE, START, nextMorning, null, ACTOR_ID)
                 .getActualEndAt())
         .isEqualTo(nextMorning);
   }

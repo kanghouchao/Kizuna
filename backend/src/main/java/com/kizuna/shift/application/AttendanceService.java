@@ -19,6 +19,7 @@ import com.kizuna.shift.domain.AttendanceCorrectionRepository;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -85,10 +86,10 @@ public class AttendanceService {
     Attendance attendance =
         Attendance.record(
             request.getCastId(),
+            request.getShiftId(),
             resolveBusinessDate(request),
             request.getActualStartAt(),
             request.getActualEndAt(),
-            request.getShiftId(),
             request.getWaitingPlace(),
             actorId);
     return attendanceMapper.toResponse(saveWithinUniqueness(attendance));
@@ -132,6 +133,11 @@ public class AttendanceService {
     Shift shift = findShift(request.getShiftId());
     if (!shift.getCastId().equals(request.getCastId())) {
       throw new ServiceException("シフトのキャストと実績のキャストが一致しません");
+    }
+    // 実績が指せるのは確定シフトだけ（ADR 0014）。下書きに実績を付けると、店舗内で消せるはずの
+    // 下書きが法定保存対象に参照され、以後 #732 の禁改・削除拒否から出られなくなる。
+    if (shift.getStatus() != ShiftStatus.CONFIRMED) {
+      throw new ServiceException("確定していないシフトには実績を紐づけられません");
     }
     return shift.getWorkDate();
   }
