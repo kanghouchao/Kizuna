@@ -1,0 +1,267 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-008-attendance-schema
+      author: kanghouchao
+      # 当日実績はシフト（予定）と別集約の一等記録で、法定保存（労基法 109 条）が掛かる側である（ADR 0014）。
+      # したがって行削除の経路を DDL からも塞ぐ — 参照先である店舗・キャスト・シフトの削除は連鎖させず
+      # NO ACTION で止め、実績自身の取消は cancelled_at の標記で表す。4xx は応用層守衛が出す。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_attendances
+            remarks: 当日実績（実際に出勤した事実）
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_attendances
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cast_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 実際に出勤したキャスト
+              - column:
+                  name: business_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+                  remarks: 帰属営業日（物化。シフト紐づきは work_date を継承、飛び込みは実開始から自動判定）
+              - column:
+                  name: actual_start_at
+                  type: TIMESTAMP WITHOUT TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 実際の開始（暦日付き。時刻だけでは事後補記の帰属営業日が決まらない）
+              - column:
+                  name: actual_end_at
+                  type: TIMESTAMP WITHOUT TIME ZONE
+                  remarks: 実際の終了（暦日付き。閉店時の記入まで NULL 可）
+              - column:
+                  name: shift_id
+                  type: VARCHAR(64)
+                  remarks: 予定していたシフト。NULL は飛び込み出勤（予定なし）の一等記録
+              - column:
+                  name: waiting_place
+                  type: VARCHAR(200)
+                  remarks: 待機場所（自由記述）
+              - column:
+                  name: cancelled_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 取消標記。物理削除の代わりで、値を持つ行は導出・照会から外れる
+              - column:
+                  name: cancelled_by
+                  type: BIGINT
+                  remarks: 取消の実行者。利用者削除後も行を残すため SET NULL
+              - column:
+                  name: created_by
+                  type: BIGINT
+                  remarks: 記録した操作の実行者。同じ理由で SET NULL
+              - column:
+                  name: updated_by
+                  type: BIGINT
+                  remarks: 最後に訂正した操作の実行者（記録のみなら NULL）。同じ理由で SET NULL
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - createTable:
+            tableName: t_attendance_corrections
+            remarks: 当日実績の訂正履歴（編集前の行スナップショット・訂正者・時刻）
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_attendance_corrections
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: attendance_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 訂正された実績行
+              - column:
+                  name: cast_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 編集前のキャスト。訂正口を持たない項目も載せ、履歴行だけで編集前の姿が読めるようにする
+              - column:
+                  name: business_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+                  remarks: 編集前の帰属営業日
+              - column:
+                  name: actual_start_at
+                  type: TIMESTAMP WITHOUT TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 編集前の実際の開始
+              - column:
+                  name: actual_end_at
+                  type: TIMESTAMP WITHOUT TIME ZONE
+                  remarks: 編集前の実際の終了
+              - column:
+                  name: shift_id
+                  type: VARCHAR(64)
+                  remarks: 編集前のシフト参照
+              - column:
+                  name: waiting_place
+                  type: VARCHAR(200)
+                  remarks: 編集前の待機場所
+              - column:
+                  name: corrected_by
+                  type: BIGINT
+                  remarks: 訂正の実行者。利用者削除後も行を残すため SET NULL
+              - column:
+                  name: corrected_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 訂正の時刻
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 店舗・キャスト・シフトのいずれの削除も実績を道連れにしない。止める力が同じ RESTRICT ではなく
+        # NO ACTION を採る理由は DbConstraint の Javadoc（違反の見え方の差）にある。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendances_store
+            baseTableName: t_attendances
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendances_cast
+            baseTableName: t_attendances
+            baseColumnNames: cast_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendances_shift
+            baseTableName: t_attendances
+            baseColumnNames: shift_id
+            referencedTableName: t_shifts
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendances_cancelled_by
+            baseTableName: t_attendances
+            baseColumnNames: cancelled_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendances_created_by
+            baseTableName: t_attendances
+            baseColumnNames: created_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendances_updated_by
+            baseTableName: t_attendances
+            baseColumnNames: updated_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendance_corrections_store
+            baseTableName: t_attendance_corrections
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendance_corrections_attendance
+            baseTableName: t_attendance_corrections
+            baseColumnNames: attendance_id
+            referencedTableName: t_attendances
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_attendance_corrections_corrected_by
+            baseTableName: t_attendance_corrections
+            baseColumnNames: corrected_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        # 「1 シフトにつき 1 行」「1 営業日・1 キャストにつき 1 行」を DB 側で固定する。数えるのは未取消の行だけで、
+        # これは定義の要点である — 全行を数えると取消 → 再記録が自らの唯一性に阻まれる（ADR 0014）。
+        #
+        # shift_id の一意は PostgreSQL 既定の NULLS DISTINCT に依存している。飛び込み（shift_id NULL）は
+        # 互いに別値として扱われるので何行でも成立する。NULLS NOT DISTINCT に「直す」と、店舗全体で
+        # 飛び込みが 1 行しか建てられなくなる。
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_attendances_active_shift
+              ON t_attendances (shift_id) WHERE cancelled_at IS NULL
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_attendances_active_cast_business_date
+              ON t_attendances (cast_id, store_id, business_date) WHERE cancelled_at IS NULL
+        # 照会は（店舗・営業日）で引く。上の部分一意索引は未取消行しか含まないため代用できない。
+        - createIndex:
+            indexName: idx_t_attendances_store_business_date
+            tableName: t_attendances
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: business_date
+        - createIndex:
+            indexName: idx_t_attendance_corrections_attendance
+            tableName: t_attendance_corrections
+            columns:
+              - column:
+                  name: attendance_id
