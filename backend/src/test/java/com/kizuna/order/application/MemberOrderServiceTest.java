@@ -264,7 +264,8 @@ class MemberOrderServiceTest {
     assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
         .isInstanceOf(NotFoundException.class);
     // 候補に出さないだけでは、キャスト ID を直接送る要求を防げない
-    verify(confirmedShiftLookupService, never()).hasConfirmedShift(anyLong(), anyString(), any());
+    verify(confirmedShiftLookupService, never())
+        .hasPubliclyVisibleShift(anyLong(), anyString(), any());
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -283,11 +284,26 @@ class MemberOrderServiceTest {
   }
 
   @Test
+  @DisplayName("会員の指名検証が候補の読み口と同じ述語（公開可も見る）を使うこと")
+  void requestValidatesNominationThroughThePublicationGate() {
+    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
+    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
+    when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
+        .thenReturn(false);
+
+    // 非公開を理由に別の文言へ分けない — 分けると隠したシフトの存在が読み取れてしまう
+    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("指名したキャストはこの日の出勤予定がありません");
+    verify(confirmedShiftLookupService, never()).hasConfirmedShift(anyLong(), anyString(), any());
+  }
+
+  @Test
   @DisplayName("その日の確定シフトが無いキャストは指名できないこと")
   void requestRejectsCastWithoutConfirmedShift() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
     when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
-    when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", today()))
+    when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
         .thenReturn(false);
 
     assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
@@ -300,7 +316,7 @@ class MemberOrderServiceTest {
   void requestAcceptsNominationBackedByConfirmedShift() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
     when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
-    when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", today()))
+    when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
         .thenReturn(true);
     when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
             STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))

@@ -53,6 +53,38 @@ class ShiftTest {
   }
 
   @Test
+  void publication_defaultsToPublishedAndSurvivesPatches() {
+    Shift shift = baseShift();
+
+    assertThat(shift.isPublished()).as("既定は公開可（非公開化が例外操作）").isTrue();
+
+    shift.apply(
+        new ShiftPatch(
+            "c2",
+            LocalDate.of(2026, 7, 9),
+            LocalTime.of(19, 0),
+            LocalTime.of(2, 0),
+            ShiftStatus.CONFIRMED));
+
+    assertThat(shift.isPublished()).as("部分更新は公開可否を巻き込まない").isTrue();
+  }
+
+  @Test
+  void changePublication_flipsOnlyThePublicationAxis() {
+    Shift shift = baseShift();
+
+    shift.changePublication(false);
+
+    assertThat(shift.isPublished()).isFalse();
+    assertThat(shift.getStatus()).isEqualTo(ShiftStatus.TENTATIVE);
+    assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+
+    shift.changePublication(true);
+
+    assertThat(shift.isPublished()).isTrue();
+  }
+
+  @Test
   void apply_withEmptyPatch_changesNothing() {
     Shift shift = baseShift();
 

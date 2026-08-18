@@ -14,4 +14,7 @@ public class ShiftCreateRequest {
   @NotNull private LocalTime startTime;
   @NotNull private LocalTime endTime;
   private ShiftStatus status;
+
+  /** 店外への露出可否。省略時は公開可で出生する。非公開で生まれる必要がある行だけが false を送る。 */
+  private Boolean published;
 }

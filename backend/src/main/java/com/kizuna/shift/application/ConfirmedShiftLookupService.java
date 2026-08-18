@@ -40,7 +40,7 @@ public class ConfirmedShiftLookupService {
   private final StoreExistenceCheck storeExistenceCheck;
   private final AppProperties appProperties;
 
-  /** 指定店舗・指定日の確定シフトに入っている ACTIVE キャストを返す。 */
+  /** 指定店舗・指定日の露出可能（CONFIRMED ∧ 公開可）なシフトに入っている ACTIVE キャストを返す。 */
   @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public List<PublicShiftResponse> listConfirmedCasts(Long storeId, LocalDate workDate) {
@@ -66,11 +66,29 @@ public class ConfirmedShiftLookupService {
     return List.copyOf(byCast.values());
   }
 
-  /** 指定店舗・指定キャスト・指定日に確定シフトがあるか。 */
+  /**
+   * 指定店舗・指定キャスト・指定日に確定シフトがあるか。公開可否は見ない — 店舗の受注確定の内部検証が宛先で、 公開可否は店外露出のフィルタであって状態機械の一部ではない（ADR 0015
+   * の負向不変量）。
+   *
+   * <p>店外（会員）から来る指名の検証は代わりに {@link #hasPubliclyVisibleShift} を使う。
+   */
   @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public boolean hasConfirmedShift(Long storeId, String castId, LocalDate workDate) {
     return shiftRepository.existsByStoreIdAndCastIdAndWorkDateAndStatus(
+        storeId, castId, workDate, ShiftStatus.CONFIRMED);
+  }
+
+  /**
+   * 指定店舗・指定キャスト・指定日に露出可能（CONFIRMED ∧ 公開可）なシフトがあるか。会員経由の指名の書き込み検証が使う。
+   *
+   * <p>{@link #listConfirmedCasts} と同じ述語をここで共有する — 候補から隠すだけでは cast_id を直接送る要求を防げない。
+   * 粒度も候補と揃えて日単位で、時間帯の照合はしない。
+   */
+  @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
+  @Transactional(readOnly = true)
+  public boolean hasPubliclyVisibleShift(Long storeId, String castId, LocalDate workDate) {
+    return shiftRepository.existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
         storeId, castId, workDate, ShiftStatus.CONFIRMED);
   }
 

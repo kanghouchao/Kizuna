@@ -54,6 +54,13 @@ databaseChangeLog:
                     nullable: false
                   remarks: ステータス（TENTATIVE=仮/CONFIRMED=確定）
               - column:
+                  name: is_published
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+                  remarks: 店外（匿名訪問者+会員）へ露出してよいか。既定 = 公開可で、非公開化が例外操作
+              - column:
                   name: created_by
                   type: BIGINT
                   remarks: この行を作成した操作の実行者。利用者削除後も行を残すため SET NULL

@@ -255,6 +255,14 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
         JsonNode.class);
   }
 
+  private ResponseEntity<JsonNode> approveUnpublished(long storeId, String id) {
+    return rest.exchange(
+        "/store/shift-requests/" + id + "/approval",
+        HttpMethod.POST,
+        new HttpEntity<>("{\"published\": false}", storeHeaders(storeId)),
+        JsonNode.class);
+  }
+
   private ResponseEntity<JsonNode> decline(long storeId, String id) {
     return rest.exchange(
         "/store/shift-requests/" + id + "/rejection",
@@ -418,6 +426,25 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody()).as("正向対照: 自店の希望は見えること").contains(ownNote);
     assertThat(res.getBody()).as("負向: 他店の希望は見えないこと").doesNotContain(foreignNote);
+  }
+
+  @Test
+  @DisplayName("承認が非公開を同一トランザクションで指定でき、生まれた確定シフトが最初から店外に出ないこと")
+  void approve_bearsTheShiftUnpublishedWhenAsked() {
+    ResponseEntity<JsonNode> created =
+        submit(castToken, submitBody(STORE_A, today(), "13:00:00", "15:00:00", "内密の出勤"));
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<JsonNode> approved =
+        approveUnpublished(STORE_A, created.getBody().path("id").asString());
+    assertThat(approved.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(approved.getBody().path("status").asString()).isEqualTo("APPROVED");
+
+    ShiftRequest reloaded =
+        shiftRequestRepository.findById(created.getBody().path("id").asString()).orElseThrow();
+    Shift generated = shiftRepository.findById(reloaded.getShiftId()).orElseThrow();
+    assertThat(generated.getStatus()).as("非公開でも確定として生まれること").isEqualTo(ShiftStatus.CONFIRMED);
+    assertThat(generated.isPublished()).as("公開状態で生まれてから隠すまでの露出窓を作らないこと").isFalse();
   }
 
   @Test

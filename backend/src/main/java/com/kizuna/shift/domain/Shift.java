@@ -46,6 +46,14 @@ public class Shift extends StoreScopedEntity {
   @Column(name = "status", nullable = false, length = 20)
   private ShiftStatus status;
 
+  /**
+   * 店外（匿名訪問者+会員）へ露出してよいか。承認とは独立の軸で、状態機械の一部ではない（ADR 0015）。 既定は公開可 —
+   * 非公開で出生させたい行は作成・承認が同一トランザクションで指定する。
+   */
+  @Builder.Default
+  @Column(name = "is_published", nullable = false)
+  private boolean published = true;
+
   /** この行を作成した操作の実行者（PlatformUser id）。承認で生まれた行なら承認者。利用者削除後も行は残す（FK が SET NULL）。 */
   @Column(name = "created_by", updatable = false)
   private Long createdBy;
@@ -71,6 +79,11 @@ public class Shift extends StoreScopedEntity {
     if (patch.status() != null) {
       this.status = patch.status();
     }
+  }
+
+  /** 店外への露出可否を切り替える。部分更新コマンドとは別の口で受け、承認・時間帯の編集が公開可否を巻き込めないようにする。 */
+  public void changePublication(boolean published) {
+    this.published = published;
   }
 
   /** 書き換えの実行者を印字する。実行者は要求ではなく認証主体から来るため、部分更新コマンドとは別の口で受ける。 */
