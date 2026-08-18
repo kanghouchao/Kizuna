@@ -1,5 +1,6 @@
 package com.kizuna.shift.application;
 
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -15,6 +16,7 @@ import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.domain.PlatformUserRepository;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,7 @@ public class ShiftRequestService {
   private final ShiftRepository shiftRepository;
   private final ShiftRequestMapper shiftRequestMapper;
   private final PlatformUserRepository platformUserRepository;
+  private final BusinessDateService businessDateService;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -57,6 +60,10 @@ public class ShiftRequestService {
             .stream()
             .collect(Collectors.toMap(Shift::getId, Function.identity()));
 
+    // 営業日は行ごとではなく一覧に対して 1 回だけ決める。行ごとに引くと設定の読みが件数だけ走り、
+    // 写像の途中で境界を跨げば同じ応答の中で承認可否の基準がずれる。
+    LocalDate currentBusinessDate = businessDateService.currentBusinessDate();
+
     return requests.stream()
         .map(
             request -> {
@@ -67,18 +74,31 @@ public class ShiftRequestService {
                 response.setCurrentStartTime(target.getStartTime());
                 response.setCurrentEndTime(target.getEndTime());
               }
-              if (request.getType() == ShiftRequestType.CHANGE) {
-                response.setApprovable(changeApplicable(request, target));
-              }
+              response.setApprovable(approvable(request, target, currentBusinessDate));
               return response;
             })
         .toList();
   }
 
   /**
-   * 変更申請が今も適用可能か（対象シフトが存在し、確定済み・申請者本人・申請時点の時間帯のまま）。 approve の各守衛と同じ条件の要約で、inbox
-   * が承認不能な申請に承認操作を出さないために使う。
+   * この申請を今も承認できるか。approve の各守衛と同じ条件の要約で、inbox が承認不能な申請に承認操作を出さないために使う。
+   *
+   * <p>目標営業日の終了は種別を問わず効く（NEW は work_date、CHANGE は申請の新 work_date — どちらも同じ欄）。
+   * 変更申請だけはさらに適用先シフトの現況にも依る。処理済みも承認できない — 絞り込み無しの一覧は 承認済み・却下済みも返すため、状態を見ないと「押せば必ず失敗する行」に可能と書くことになる。
+   *
+   * @param currentBusinessDate 一覧全体で共有する現在の営業日
    */
+  private boolean approvable(ShiftRequest request, Shift target, LocalDate currentBusinessDate) {
+    if (request.getStatus() != ShiftRequestStatus.PENDING) {
+      return false;
+    }
+    if (request.getWorkDate().isBefore(currentBusinessDate)) {
+      return false;
+    }
+    return request.getType() != ShiftRequestType.CHANGE || changeApplicable(request, target);
+  }
+
+  /** 変更申請の適用先シフトが今も申請時のままか（存在し、確定済み・申請者本人・申請時点の時間帯のまま）。 */
   private boolean changeApplicable(ShiftRequest request, Shift target) {
     return target != null
         && target.getStatus() == ShiftStatus.CONFIRMED
@@ -107,6 +127,12 @@ public class ShiftRequestService {
     ShiftRequest request = findOwnRequest(id);
     Long actorId = resolveActorId(actorEmail);
     request.approve(actorId, OffsetDateTime.now());
+
+    // 目標営業日が終了した希望は承認できない。期限切れ NEW の承認は「過去の確定シフト＝即座の導出欠勤」を
+    // 無から作り、飛び込み実績との再結線機構も無い。自動失効は建てないので、申請は却下で終わるか PENDING のまま残る。
+    if (businessDateService.hasEnded(request.getWorkDate())) {
+      throw new ServiceException("営業日が終了した出勤希望は承認できません");
+    }
 
     if (request.getType() == ShiftRequestType.CHANGE) {
       // 既存シフトの公開可否は承認では動かさないため、指定を黙って捨てずに撥ねる（切替は専用の口が受ける）。

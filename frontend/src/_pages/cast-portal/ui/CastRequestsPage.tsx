@@ -9,7 +9,7 @@ import {
   ShiftRequestCreateRequest,
   shiftApi,
 } from '@/entities/shift';
-import { useCursorList, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useCursorList, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -62,11 +62,6 @@ const STATUS_PILL_CLASS: Record<ShiftRequestStatus, string> = {
 function statusLabel(item: CastShiftRequestItem): string | undefined {
   if (!item.status) return undefined;
   return item.type === 'CHANGE' ? CHANGE_STATUS_LABELS[item.status] : STATUS_LABELS[item.status];
-}
-
-/** 本日の 'yyyy-MM-dd' を返す（過去日拒否の下限。当日の出勤希望は許容する）。 */
-function todayStr(): string {
-  return toDateStr(new Date());
 }
 
 /** 明日の 'yyyy-MM-dd' を返す（提出フォームの初期日付に使う）。 */
@@ -142,8 +137,11 @@ export function CastRequestsPage() {
       notify.success('出勤希望を提出しました');
       reset(defaultValues(values.store_id));
       reloadHistory();
-    } catch {
-      notify.error('出勤希望の提出に失敗しました');
+    } catch (e) {
+      // 受理できる日付の下限は営業日で決まり、その境界（日付変更時刻・業務のタイムゾーン）を知るのは
+      // サーバだけ。client 側で暦日から下限を組むと深夜帯や時差でサーバと食い違うため、日付の可否は
+      // サーバの文言をそのまま見せる。
+      notify.error(getApiErrorMessage(e, '出勤希望の提出に失敗しました'));
     }
   };
 
@@ -208,10 +206,7 @@ export function CastRequestsPage() {
               <FormField
                 control={control}
                 name="work_date"
-                rules={{
-                  required: '希望する日付を指定してください',
-                  validate: v => v >= todayStr() || '本日以降の日付を指定してください',
-                }}
+                rules={{ required: '希望する日付を指定してください' }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>日付</FormLabel>

@@ -16,7 +16,7 @@ public class AppProperties {
 
   private String domain;
 
-  /** 「本日」判定に用いるタイムゾーン。公開出勤表などの当日算出に使用する。 */
+  /** 業務のタイムゾーン。営業日を判定する時計（{@link ClockConfig}）と、ポイントの暦日換算（期限判定・明細の日付）がこれで読む。 */
   private String timezone = "Asia/Tokyo";
 
   /** app.jwt.* */

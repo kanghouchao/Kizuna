@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CastRequestsPage } from '../CastRequestsPage';
 import { shiftApi } from '@/entities/shift';
+import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/shift', () => ({
   shiftApi: {
@@ -10,6 +11,11 @@ jest.mock('@/entities/shift', () => ({
   },
 }));
 
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
+}));
+
+const mockedNotifyError = notify.error as jest.Mock;
 const mockedMyStores = shiftApi.myStores as jest.Mock;
 const mockedMyShiftRequests = shiftApi.myShiftRequests as jest.Mock;
 const mockedSubmit = shiftApi.submitShiftRequest as jest.Mock;
@@ -44,7 +50,12 @@ describe('CastRequestsPage', () => {
     expect(screen.getByRole('option', { name: '店舗B' })).toBeInTheDocument();
   });
 
-  it('過去日を指定して提出すると検証エラーを表示し、提出しないこと', async () => {
+  it('過去日は client 側で弾かず、サーバの拒否文言をそのまま出すこと', async () => {
+    // 受理できる下限は営業日で決まり、その境界を知るのはサーバだけ。client 側で暦日から下限を組むと
+    // 深夜帯や時差でサーバと食い違い、サーバが受け付ける日を先に弾いてしまう。
+    mockedSubmit.mockRejectedValue({
+      response: { status: 400, data: { error: '勤務日は本日以降を指定してください' } },
+    });
     render(<CastRequestsPage />);
     // 所属店セレクタの描画完了を待つ（マウント時の非同期読み込みが未解決のまま操作すると
     // store_id の初期値設定と競合するため、react-hook-form の値確定後に操作する）。
@@ -53,8 +64,11 @@ describe('CastRequestsPage', () => {
     fireEvent.change(screen.getByLabelText('日付'), { target: { value: '2000-01-01' } });
     fireEvent.click(screen.getByRole('button', { name: '提出する' }));
 
-    expect(await screen.findByText('本日以降の日付を指定してください')).toBeInTheDocument();
-    expect(mockedSubmit).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockedSubmit).toHaveBeenCalledTimes(1));
+    expect(mockedSubmit.mock.calls[0][0]).toMatchObject({ work_date: '2000-01-01' });
+    await waitFor(() =>
+      expect(mockedNotifyError).toHaveBeenCalledWith('勤務日は本日以降を指定してください')
+    );
   });
 
   it('本日の日付は許容され提出されること', async () => {

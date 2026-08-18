@@ -167,6 +167,70 @@ class SystemConfigServiceImplTest {
   }
 
   @Test
+  @DisplayName("時刻型の設定に不正な値を指定すると例外が発生すること")
+  void updateConfig_invalidTime() {
+    // 読み手は解釈できない値を 00:00 へ倒すため、保存を通すと暦日と同じ挙動へ静かに入れ替わる。
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder().configValue("25:00").build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
+    when(systemConfigRepository.findByConfigKey("business_date_change_time"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("business_date_change_time", request));
+  }
+
+  @Test
+  @DisplayName("秒より細かい時刻は撥ねること（文案どおりの分精度を強制する）")
+  void updateConfig_timeWithFinerPrecision() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder().configValue("05:00:30").build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
+    when(systemConfigRepository.findByConfigKey("business_date_change_time"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("business_date_change_time", request));
+  }
+
+  @Test
+  @DisplayName("24:00 は撥ねること（丸めて受理すると読み手が撥ねる値が保存される）")
+  void updateConfig_timeAtEndOfDay() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder().configValue("24:00").build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
+    when(systemConfigRepository.findByConfigKey("business_date_change_time"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("business_date_change_time", request));
+  }
+
+  @Test
+  @DisplayName("HH:mm 形式の時刻は保存できること")
+  void updateConfig_validTime() {
+    SystemConfigUpdateRequest request =
+        SystemConfigUpdateRequest.builder().configValue("05:00").build();
+    SystemConfig config =
+        SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
+    when(systemConfigRepository.findByConfigKey("business_date_change_time"))
+        .thenReturn(Optional.of(config));
+    when(systemConfigRepository.save(config)).thenReturn(config);
+    when(systemConfigMapper.toResponse(config))
+        .thenReturn(SystemConfigResponse.builder().configValue("05:00").build());
+
+    assertEquals(
+        "05:00",
+        systemConfigService.updateConfig("business_date_change_time", request).getConfigValue());
+  }
+
+  @Test
   @DisplayName("秘匿設定の値はレスポンスでマスクされること")
   void getAllConfigs_masksSecret() {
     SystemConfig config =

@@ -11,7 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.shared.config.AppProperties;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
@@ -38,13 +38,15 @@ class ConfirmedShiftLookupServiceTest {
 
   @Mock ShiftRepository shiftRepository;
   @Mock StoreExistenceCheck storeExistenceCheck;
-  @Mock AppProperties appProperties;
+  @Mock BusinessDateService businessDateService;
 
   @InjectMocks ConfirmedShiftLookupService service;
 
   @BeforeEach
   void stubTimezone() {
-    lenient().when(appProperties.getTimezone()).thenReturn(TIMEZONE);
+    lenient()
+        .when(businessDateService.currentBusinessDate())
+        .thenReturn(LocalDate.now(ZoneId.of(TIMEZONE)));
   }
 
   private LocalDate today() {

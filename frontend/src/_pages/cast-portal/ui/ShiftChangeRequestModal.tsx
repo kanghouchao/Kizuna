@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
+import { getApiErrorMessage } from '@/shared/lib';
 import { CastScheduleItem, ShiftChangeRequestCreateRequest, shiftApi } from '@/entities/shift';
 import {
   Button,
@@ -18,7 +19,7 @@ import {
   Input,
   Textarea,
 } from '@/shared/ui';
-import { formatEndTime, formatTime, toDateStr } from '../lib/week';
+import { formatEndTime, formatTime } from '../lib/week';
 
 interface ChangeFormValues {
   work_date: string;
@@ -31,11 +32,6 @@ interface ShiftChangeRequestModalProps {
   /** 変更申請の対象（確定シフト）。null なら閉じている。 */
   item: CastScheduleItem | null;
   onClose: () => void;
-}
-
-/** 本日の 'yyyy-MM-dd' を返す（過去日拒否の下限）。 */
-function todayStr(): string {
-  return toDateStr(new Date());
 }
 
 /** 確定シフトへの変更申請モーダル。現行の日時を初期値に、希望する日時・備考を提出する。 */
@@ -73,8 +69,11 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
       await shiftApi.submitShiftChangeRequest(payload);
       notify.success('変更申請を提出しました');
       onClose();
-    } catch {
-      notify.error('変更申請の提出に失敗しました');
+    } catch (e) {
+      // 受理できる日付の下限は営業日で決まり、その境界（日付変更時刻・業務のタイムゾーン）を知るのは
+      // サーバだけ。client 側で暦日から下限を組むと深夜帯や時差でサーバと食い違うため、日付の可否は
+      // サーバの文言をそのまま見せる。
+      notify.error(getApiErrorMessage(e, '変更申請の提出に失敗しました'));
     }
   };
 
@@ -102,10 +101,7 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
             <FormField
               control={control}
               name="work_date"
-              rules={{
-                required: '希望する日付を指定してください',
-                validate: v => v >= todayStr() || '本日以降の日付を指定してください',
-              }}
+              rules={{ required: '希望する日付を指定してください' }}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>日付</FormLabel>

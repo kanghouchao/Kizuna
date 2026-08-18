@@ -31,6 +31,9 @@ public class StoreShiftRequestResponse {
   private LocalTime currentStartTime;
   private LocalTime currentEndTime;
 
-  /** 変更申請が今も適用可能か（対象シフトの削除・編集で承認できなくなっていないか）。NEW では null。 */
+  /**
+   * この申請を今も承認できるか。目標営業日の終了は両種別に効き、変更申請ではさらに対象シフトの削除・編集で承認できなくなっていないかを見る。 対象シフトを解決しない応答（承認・謝絶の応答）では
+   * null。
+   */
   private Boolean approvable;
 }

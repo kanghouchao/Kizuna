@@ -102,7 +102,8 @@ export interface CastStoreItem {
 }
 
 // 店舗側 inbox の出勤希望1件（GET /store/shift-requests）。
-// 変更申請（type=CHANGE）は対象シフトの現行日時（current_*）と適用可否（approvable）を内联する（NEW では null）。
+// 変更申請（type=CHANGE）は対象シフトの現行日時（current_*）を内联する（NEW では null）。
+// 承認可否（approvable）は両種別に付く。
 export interface StoreShiftRequestItem {
   id?: string;
   cast_id?: string;
