@@ -16,6 +16,8 @@ import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.store.domain.StoreRepository;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -36,6 +38,8 @@ class CastInvitationServiceTest {
 
   @Mock private CastRepository castRepository;
   @Mock private CastInvitationRepository castInvitationRepository;
+  @Mock private StoreRepository storeRepository;
+  @Mock private StoreContext storeContext;
 
   @InjectMocks private CastInvitationService castInvitationService;
 
@@ -58,7 +62,7 @@ class CastInvitationServiceTest {
 
   @Test
   void issue_createsPendingInvitationWith72hExpiry() {
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     OffsetDateTime before = OffsetDateTime.now();
@@ -73,7 +77,7 @@ class CastInvitationServiceTest {
 
   @Test
   void issue_rejectsWhenCastNotFound() {
-    when(castRepository.findById("missing")).thenReturn(Optional.empty());
+    when(castRepository.findScopedByIdForUpdate("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> castInvitationService.issue("missing"))
         .isInstanceOf(NotFoundException.class)
@@ -83,7 +87,7 @@ class CastInvitationServiceTest {
 
   @Test
   void issue_rejectsWhenAlreadyLinked() {
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", 99L)));
+    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", 99L)));
 
     assertThatThrownBy(() -> castInvitationService.issue("c1"))
         .isInstanceOf(CastInvitationStateException.class);
@@ -94,7 +98,7 @@ class CastInvitationServiceTest {
   void issue_invalidatesPendingViaConditionalUpdateBeforeReissuing() {
     // 旧 PENDING の失効は管理エンティティの invalidate() ではなく条件付き一括 UPDATE で行い、
     // それが新規 PENDING の INSERT より前に実行されることを確認する（受諾との直列化）。
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     castInvitationService.issue("c1");
@@ -111,7 +115,7 @@ class CastInvitationServiceTest {
     // 事前チェックをすり抜けた整合性違反はサービスで握りつぶさず、そのまま伝播すること。
     // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
     // サービス層で 400 に変換すると FK 等の実装欠陥まで「競合」に化けてしまう。
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
     DataIntegrityViolationException violation =
         new DataIntegrityViolationException(
             "save failed",
@@ -126,10 +130,10 @@ class CastInvitationServiceTest {
 
   @Test
   void issue_castFkViolation_convertsToNotFound() {
-    // 冒頭の findById 通過後に並行の CastService.delete（日常操作）が先にコミットすると、
-    // 招待行の INSERT が t_cast_invitations の cast FK に当たるレース。
-    // 冒頭の档案不在と同じ分類（NotFoundException → 404）へ変換する。
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    // 招待行の INSERT が t_cast_invitations の cast FK に当たったときの分類を固定する。
+    // 冒頭で档案行を押さえる（ADR 0016）ので並行削除の割り込みでは当たらなくなったが、
+    // 当たった場合の出口は冒頭の档案不在と同じ分類（NotFoundException → 404）である。
+    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
@@ -148,7 +152,7 @@ class CastInvitationServiceTest {
   void issue_abortsWhenCastGetsLinkedConcurrentlyBeforeReissuing() {
     // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が档案を紐づけた状況を模す。
     // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する。
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
     when(castRepository.findPlatformUserIdById("c1")).thenReturn(Optional.of(77L));
 
     assertThatThrownBy(() -> castInvitationService.issue("c1"))

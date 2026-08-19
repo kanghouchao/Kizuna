@@ -444,6 +444,24 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     }
   }
 
+  @Test
+  @DisplayName("再発行も旧票を失効させる前に档案行を押さえること")
+  void reissueTakesTheCastRowBeforeInvalidatingTheOldInvitation() throws Exception {
+    // 再発行は旧 PENDING を失効させてから新しい招待を建てる。その INSERT が档案行に key share を
+    // 要求するので、失効を先に済ませると「招待 → 档案」になり、受諾（档案 → 招待）と環になる。
+    String castId = createCast(STORE_A, "再発行ロック順テスト");
+    String staleToken = issue(castId, STORE_A);
+
+    assertCastRowIsHeldWhileWaitingOnTheInvitation(
+        castId,
+        staleToken,
+        () ->
+            rest.postForEntity(
+                "/store/casts/" + castId + "/invitation",
+                new HttpEntity<>(storeHeaders(STORE_A, managerToken)),
+                JsonNode.class));
+  }
+
   /**
    * 受諾が「キャスト行 → 招待行」の順に押さえることを、順序そのもので見る（ADR 0016）。
    *
