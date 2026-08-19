@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { castApi } from '@/entities/cast';
 import { InvitationButton } from '../InvitationButton';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => ({
   castApi: { issueInvitation: jest.fn() },
@@ -56,9 +57,12 @@ describe('キャスト招待の行内発行ボタン', () => {
     });
   });
 
-  it('識別子の無いキャストには発行の要求を組まず、理由を名乗ること', async () => {
-    // `?? ''` で素通しすると POST /store/casts//invitation が飛び、届いた先の 404 が
-    // 「招待の発行に失敗しました」と見分けが付かなくなる
+  it('識別子を欠いた失敗は、汎用文言に潰さずそのまま名乗ること', async () => {
+    // 識別子を欠いた要求はアダプタが組む前に止める（cast-api.test.ts）。画面が負うのは
+    // その失敗を「招待の発行に失敗しました」へ潰さないこと
+    mockedCastApi.issueInvitation.mockRejectedValue(
+      new ClientDataError('キャストの識別子が取得できていません。画面を読み直してください')
+    );
     const onIssued = jest.fn();
     render(<InvitationButton castId={undefined} status="NOT_INVITED" onIssued={onIssued} />);
 
@@ -69,7 +73,6 @@ describe('キャスト招待の行内発行ボタン', () => {
         expect.stringContaining('キャストの識別子が取得できていません')
       )
     );
-    expect(mockedCastApi.issueInvitation).not.toHaveBeenCalled();
     expect(onIssued).not.toHaveBeenCalled();
   });
 

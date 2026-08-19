@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { AttendanceResponse, attendanceApi } from '@/entities/shift';
-import { getApiErrorMessage, requireId } from '@/shared/lib';
+import { getApiErrorMessage } from '@/shared/lib';
 import { ShiftDialogShell } from './ShiftDialogShell';
 import {
   Button,
@@ -55,7 +55,7 @@ export function AttendanceCancelDialog({
   const submit = async (values: CancelFormValues) => {
     if (attendance === null) return;
     try {
-      await attendanceApi.cancel(requireId(attendance.id, '当日実績'), values.reason);
+      await attendanceApi.cancel(attendance.id, values.reason);
       notify.success('当日実績を取り消しました');
       onCancelled();
       onClose();

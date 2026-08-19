@@ -7,7 +7,7 @@ import {
   SystemConfigUpdateRequest,
   systemConfigService,
 } from '@/entities/system-config';
-import { getApiErrorMessage, requireId, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { Badge, Button, Card, Input, RegionError, Switch, Textarea } from '@/shared/ui';
 
 type ConfigGroup = {
@@ -26,7 +26,7 @@ export default function SystemSettingsPage() {
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const saveConfig = async (configKey: string, configValue: string) => {
+  const saveConfig = async (configKey: string | undefined, configValue: string) => {
     const request: SystemConfigUpdateRequest = {
       config_value: configValue,
     };
@@ -43,10 +43,7 @@ export default function SystemSettingsPage() {
   const handleToggle = async (config: SystemConfigResponse) => {
     setSaving(true);
     try {
-      await saveConfig(
-        requireId(config.config_key, '設定'),
-        config.config_value === 'true' ? 'false' : 'true'
-      );
+      await saveConfig(config.config_key, config.config_value === 'true' ? 'false' : 'true');
     } catch (error) {
       console.error('設定の更新に失敗しました', error);
       notify.error(getApiErrorMessage(error, '設定の更新に失敗しました'));

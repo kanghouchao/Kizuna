@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastInvitationStatus, castApi } from '@/entities/cast';
-import { getApiErrorMessage, requireId } from '@/shared/lib';
+import { getApiErrorMessage } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 
 export interface IssuedInvitation {
@@ -31,7 +31,7 @@ export function InvitationButton({ castId, status, onIssued }: InvitationButtonP
   const handleIssue = async () => {
     setIssuing(true);
     try {
-      const response = await castApi.issueInvitation(requireId(castId, 'キャスト'));
+      const response = await castApi.issueInvitation(castId);
       onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' });
     } catch (error) {
       notify.error(getApiErrorMessage(error, '招待の発行に失敗しました'));

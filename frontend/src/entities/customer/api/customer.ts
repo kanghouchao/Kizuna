@@ -7,6 +7,7 @@ import {
   fromCursorPage,
   fromSpringPage,
 } from '@/shared/api';
+import { requireId } from '@/shared/lib';
 import {
   CustomerCreateRequest,
   CustomerDuplicateGroupResponse,
@@ -51,18 +52,20 @@ export const customerApi = {
    * 生きた行として引けない ID（統合済み・他店舗・不存在）が混じると 404 で返る。
    */
   mergeComparison: async (
-    firstId: string,
-    secondId: string
+    firstId: string | undefined,
+    secondId: string | undefined
   ): Promise<CustomerMergeComparisonResponse[]> => {
     // query は自分で組む。axios の配列 params は既定で `ids[]=` になり、サーバの `ids` に
     // 束縛されない（axios 1.18 の既定は key + '[]'）。キーの綴りを配列表現に委ねない
-    const query = [firstId, secondId].map(id => `ids=${encodeURIComponent(id)}`).join('&');
+    const query = [firstId, secondId]
+      .map(id => `ids=${encodeURIComponent(requireId(id, '顧客'))}`)
+      .join('&');
     const response = await apiClient.get(`/store/customers/merge-comparison?${query}`);
     return response.data;
   },
   /** 顧客詳細を取得する */
-  get: async (id: string): Promise<CustomerResponse> => {
-    const response = await apiClient.get(`/store/customers/${id}`);
+  get: async (id: string | undefined): Promise<CustomerResponse> => {
+    const response = await apiClient.get(`/store/customers/${requireId(id, '顧客')}`);
     return response.data;
   },
   /** 顧客を新規作成する */
@@ -71,25 +74,29 @@ export const customerApi = {
     return response.data;
   },
   /** 顧客情報を更新する */
-  update: async (id: string, data: CustomerUpdateRequest): Promise<CustomerResponse> => {
-    const response = await apiClient.put(`/store/customers/${id}`, data);
+  update: async (
+    id: string | undefined,
+    data: CustomerUpdateRequest
+  ): Promise<CustomerResponse> => {
+    const response = await apiClient.put(`/store/customers/${requireId(id, '顧客')}`, data);
     return response.data;
   },
   /** 顧客を削除する */
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/store/customers/${id}`);
+  delete: async (id: string | undefined): Promise<void> => {
+    await apiClient.delete(`/store/customers/${requireId(id, '顧客')}`);
   },
   /**
    * 重複した 2 行を 1 つへまとめる。パスが名指すのが存続行で、本文が被統合行を指す。
    * 取り消せない（ADR 0010）ので、呼び出しは人手の確認を経た後だけ。
    */
   merge: async (
-    survivingCustomerId: string,
-    mergedCustomerId: string
+    survivingCustomerId: string | undefined,
+    mergedCustomerId: string | undefined
   ): Promise<CustomerMergeResponse> => {
-    const response = await apiClient.post(`/store/customers/${survivingCustomerId}/merges`, {
-      merged_customer_id: mergedCustomerId,
-    });
+    const response = await apiClient.post(
+      `/store/customers/${requireId(survivingCustomerId, '顧客')}/merges`,
+      { merged_customer_id: requireId(mergedCustomerId, '顧客') }
+    );
     return response.data;
   },
   /**
@@ -98,50 +105,63 @@ export const customerApi = {
    * 続きは応答の nextCursor をそのまま cursor に渡して取る。
    */
   mergeHistory: async (
-    id: string,
+    id: string | undefined,
     params?: CursorParams
   ): Promise<CursorPageResult<CustomerMergeHistoryResponse>> => {
-    const response = await apiClient.get(`/store/customers/${id}/merges`, { params });
+    const response = await apiClient.get(`/store/customers/${requireId(id, '顧客')}/merges`, {
+      params,
+    });
     return fromCursorPage(response.data);
   },
   /** 会員コードで会員を顧客へ紐づける（既に別の会員と紐づいていれば付け替える） */
-  linkMember: async (id: string, memberCode: string): Promise<CustomerMemberLinkResponse> => {
-    const response = await apiClient.post(`/store/customers/${id}/member-link`, {
+  linkMember: async (
+    id: string | undefined,
+    memberCode: string
+  ): Promise<CustomerMemberLinkResponse> => {
+    const response = await apiClient.post(`/store/customers/${requireId(id, '顧客')}/member-link`, {
       member_code: memberCode,
     });
     return response.data;
   },
   /** 会員の紐づけを解除する（履歴は残る） */
-  unlinkMember: async (id: string): Promise<void> => {
-    await apiClient.delete(`/store/customers/${id}/member-link`);
+  unlinkMember: async (id: string | undefined): Promise<void> => {
+    await apiClient.delete(`/store/customers/${requireId(id, '顧客')}/member-link`);
   },
   /**
    * 現に有効な会員紐づけを取得する。紐づいていない顧客では 404 で返る — 「紐づいていない」を
    * 本体で表すと、呼出側が読んでからもう一度分岐することになる。
    */
-  memberLink: async (id: string): Promise<CustomerMemberLinkResponse> => {
-    const response = await apiClient.get(`/store/customers/${id}/member-link`);
+  memberLink: async (id: string | undefined): Promise<CustomerMemberLinkResponse> => {
+    const response = await apiClient.get(`/store/customers/${requireId(id, '顧客')}/member-link`);
     return response.data;
   },
   /** 会員紐づけの履歴を新しい順に取得する。続きは応答の nextCursor をそのまま cursor に渡して取る。 */
   memberLinkHistory: async (
-    id: string,
+    id: string | undefined,
     params?: CursorParams
   ): Promise<CursorPageResult<CustomerMemberLinkHistoryResponse>> => {
-    const response = await apiClient.get(`/store/customers/${id}/member-link/history`, { params });
+    const response = await apiClient.get(
+      `/store/customers/${requireId(id, '顧客')}/member-link/history`,
+      { params }
+    );
     return fromCursorPage(response.data);
   },
   /** 紐づく会員のポイント残高を取得する（残高は顧客ではなく会員の台帳が持つ） */
-  memberPointBalance: async (id: string): Promise<CustomerPointBalanceResponse> => {
-    const response = await apiClient.get(`/store/customers/${id}/member-point-balance`);
+  memberPointBalance: async (id: string | undefined): Promise<CustomerPointBalanceResponse> => {
+    const response = await apiClient.get(
+      `/store/customers/${requireId(id, '顧客')}/member-point-balance`
+    );
     return response.data;
   },
   /** 会員ポイントを手動で調整し、調整後の残高を受け取る */
   adjustPoints: async (
-    id: string,
+    id: string | undefined,
     data: CustomerPointAdjustmentRequest
   ): Promise<CustomerPointBalanceResponse> => {
-    const response = await apiClient.post(`/store/customers/${id}/point-adjustments`, data);
+    const response = await apiClient.post(
+      `/store/customers/${requireId(id, '顧客')}/point-adjustments`,
+      data
+    );
     return response.data;
   },
 };

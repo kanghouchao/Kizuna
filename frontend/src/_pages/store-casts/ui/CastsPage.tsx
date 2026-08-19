@@ -10,7 +10,6 @@ import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/
 import {
   hasPermission,
   readTokenClaims,
-  requireId,
   storePath,
   useDeleteAction,
   useListPage,
@@ -71,7 +70,7 @@ export default function CastListPage() {
 
   /** キャストを削除する */
   const deletion = useDeleteAction<CastResponse>({
-    remove: cast => castApi.delete(requireId(cast.id, 'キャスト')),
+    remove: cast => castApi.delete(cast.id),
     successMessage: 'キャストを削除しました',
     errorMessage: 'キャストの削除に失敗しました',
     onDeleted: list.reload,

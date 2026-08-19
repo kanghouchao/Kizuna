@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
-import { getApiErrorMessage, requireId } from '@/shared/lib';
+import { getApiErrorMessage } from '@/shared/lib';
 import { SELECT_NONE, castValue } from '../lib/cast-select';
 import { hhmm } from '../lib/datetime';
 import { ShiftDialogShell } from './ShiftDialogShell';
@@ -132,7 +132,7 @@ export function ShiftFormModal({
     try {
       if (editing) {
         // 更新の送信物は公開可否の欄を持たない — 切替は専用の口が受ける
-        await shiftApi.update(requireId(editing.id, 'シフト'), payload);
+        await shiftApi.update(editing.id, payload);
         notify.success('シフトを更新しました');
       } else {
         await shiftApi.create({ ...payload, published: values.published });
@@ -148,7 +148,7 @@ export function ShiftFormModal({
   const handleDelete = async () => {
     if (!editing) return;
     try {
-      await shiftApi.delete(requireId(editing.id, 'シフト'));
+      await shiftApi.delete(editing.id);
       notify.success('シフトを削除しました');
       onSaved();
       onClose();

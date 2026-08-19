@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { AttendanceResponse, ShiftResponse, attendanceApi } from '@/entities/shift';
-import { getApiErrorMessage, requireId } from '@/shared/lib';
+import { getApiErrorMessage } from '@/shared/lib';
 import { SELECT_NONE, castValue } from '../lib/cast-select';
 import { dateOfDateTime, dateTimeInputOn, hhmmOfDateTime, toDateTimeInput } from '../lib/datetime';
 import { castName } from '../lib/labels';
@@ -133,7 +133,7 @@ export function AttendanceFormModal({
     };
     try {
       if (target.attendance) {
-        await attendanceApi.correct(requireId(target.attendance.id, '当日実績'), {
+        await attendanceApi.correct(target.attendance.id, {
           business_date: values.business_date,
           ...common,
         });

@@ -7,6 +7,7 @@ import {
   fromCursorPage,
   fromSpringPage,
 } from '@/shared/api';
+import { requireId } from '@/shared/lib';
 import {
   MemberOrder,
   MemberOrderCreateRequest,
@@ -58,8 +59,8 @@ export const orderApi = {
     return fromSpringPage(response.data);
   },
   /** 受注 1 件。編集モーダルは開くたびにここから読み直す（一覧の行を種にすると陳腐化した値で上書きする）。 */
-  get: async (id: string): Promise<Order> => {
-    const response = await apiClient.get(`/store/orders/${id}`);
+  get: async (id: string | undefined): Promise<Order> => {
+    const response = await apiClient.get(`/store/orders/${requireId(id, '受注')}`);
     return response.data;
   },
   create: async (data: OrderCreateRequest): Promise<Order> => {
@@ -75,8 +76,8 @@ export const orderApi = {
    * 既に設定済みの指名・受付担当だけは例外で、直していなくても毎回運ぶこと — 省略すると「外す」と
    * 区別できないため 400 になる。
    */
-  update: async (id: string, data: OrderUpdateRequest): Promise<OrderWorkQueueRow> => {
-    const response = await apiClient.put(`/store/orders/${id}`, data);
+  update: async (id: string | undefined, data: OrderUpdateRequest): Promise<OrderWorkQueueRow> => {
+    const response = await apiClient.put(`/store/orders/${requireId(id, '受注')}`, data);
     return response.data;
   },
   /**
@@ -85,8 +86,8 @@ export const orderApi = {
    * 二度目は撥ねられる（逐次なら 400、同時なら楽観ロックで 409）。応答は 204（本体なし）で、
    * 呼出側は行を消すか一覧を取り直す。
    */
-  cancel: async (id: string, data: OrderCancellationRequest): Promise<void> => {
-    await apiClient.post(`/store/orders/${id}/cancellation`, data);
+  cancel: async (id: string | undefined, data: OrderCancellationRequest): Promise<void> => {
+    await apiClient.post(`/store/orders/${requireId(id, '受注')}/cancellation`, data);
   },
   /**
    * 作業キュー（対応が要る受注）。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。
@@ -135,43 +136,58 @@ export const orderApi = {
    * 指名なしで申請できるので、必須の契約しか無いと人数や備考を直すだけで指名付きの受注に変えざるを得ない。
    */
   updateReservationRequest: async (
-    id: string,
+    id: string | undefined,
     data: ReservationRequestUpdateRequest
   ): Promise<OrderWorkQueueRow> => {
-    const response = await apiClient.put(`/store/orders/${id}/reservation-request`, data);
+    const response = await apiClient.put(
+      `/store/orders/${requireId(id, '受注')}/reservation-request`,
+      data
+    );
     return response.data;
   },
   /** 予約申請を確定する（受注として受け付ける）。 */
-  confirm: async (id: string): Promise<OrderWorkQueueRow> => {
-    const response = await apiClient.post(`/store/orders/${id}/confirmation`);
+  confirm: async (id: string | undefined): Promise<OrderWorkQueueRow> => {
+    const response = await apiClient.post(`/store/orders/${requireId(id, '受注')}/confirmation`);
     return response.data;
   },
   /** 予約申請を謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
-  decline: async (id: string): Promise<void> => {
-    await apiClient.post(`/store/orders/${id}/refusal`);
+  decline: async (id: string | undefined): Promise<void> => {
+    await apiClient.post(`/store/orders/${requireId(id, '受注')}/refusal`);
   },
   /**
    * 受注を完了する（会計の確定）。ポイントの利用と自動付与が台帳へ入るのはこの経路だけ。
    *
    * 対象は確定済みの受注に限られ、それ以外の状態はサーバ側が撥ねる。
    */
-  complete: async (id: string, data: OrderCompletionRequest): Promise<OrderCompletionResult> => {
-    const response = await apiClient.post(`/store/orders/${id}/completion`, data);
+  complete: async (
+    id: string | undefined,
+    data: OrderCompletionRequest
+  ): Promise<OrderCompletionResult> => {
+    const response = await apiClient.post(
+      `/store/orders/${requireId(id, '受注')}/completion`,
+      data
+    );
     return response.data;
   },
   /**
    * 完了処理の事前計算。付与見込みも利用単位も確定と同じ計算元から引くため、
    * 画面が独自に計算してはならない（設定変更のたびに見込みと結果が食い違う）。
    */
-  completionPreview: async (id: string, totalFee: number): Promise<OrderCompletionPreview> => {
-    const response = await apiClient.get(`/store/orders/${id}/completion-preview`, {
-      params: { total_fee: totalFee },
-    });
+  completionPreview: async (
+    id: string | undefined,
+    totalFee: number
+  ): Promise<OrderCompletionPreview> => {
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/completion-preview`,
+      {
+        params: { total_fee: totalFee },
+      }
+    );
     return response.data;
   },
   /** 受注 1 件の帰属の現況。無効化と再発行のどちらを提示するかはこの読み口で決まる。 */
-  attribution: async (id: string): Promise<OrderAttribution> => {
-    const response = await apiClient.get(`/store/orders/${id}/attribution`);
+  attribution: async (id: string | undefined): Promise<OrderAttribution> => {
+    const response = await apiClient.get(`/store/orders/${requireId(id, '受注')}/attribution`);
     return response.data;
   },
   /**
@@ -180,10 +196,13 @@ export const orderApi = {
    * ポイント台帳へは波及しない。誤って付与されたポイントは二段目の訂正で差し引く（ADR 0012）。
    */
   invalidateAttribution: async (
-    id: string,
+    id: string | undefined,
     data: OrderAttributionInvalidationRequest
   ): Promise<OrderAttribution> => {
-    const response = await apiClient.post(`/store/orders/${id}/attribution/invalidation`, data);
+    const response = await apiClient.post(
+      `/store/orders/${requireId(id, '受注')}/attribution/invalidation`,
+      data
+    );
     return response.data;
   },
   /**
@@ -191,18 +210,21 @@ export const orderApi = {
    *
    * 生値はこの応答にしか現れない（保存されるのはダイジェストだけ）。
    */
-  reissueReceiptToken: async (id: string): Promise<OrderReceiptTokenIssue> => {
-    const response = await apiClient.post(`/store/orders/${id}/receipt-token`);
+  reissueReceiptToken: async (id: string | undefined): Promise<OrderReceiptTokenIssue> => {
+    const response = await apiClient.post(`/store/orders/${requireId(id, '受注')}/receipt-token`);
     return response.data;
   },
   /** 誤帰属の訂正の進み具合。差し引く既定値（付与の全額）と引き残しはここから取る。 */
   attributionCorrection: async (
-    id: string,
+    id: string | undefined,
     attributionId: number
   ): Promise<OrderAttributionCorrection> => {
-    const response = await apiClient.get(`/store/orders/${id}/attribution/correction`, {
-      params: { attribution_id: attributionId },
-    });
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/attribution/correction`,
+      {
+        params: { attribution_id: attributionId },
+      }
+    );
     return response.data;
   },
   /**
@@ -212,10 +234,13 @@ export const orderApi = {
    * 作らず、完了時の帰属でも紐づけはあとから解除・張り替えされうる。
    */
   correctAttributionPoints: async (
-    id: string,
+    id: string | undefined,
     data: OrderAttributionCorrectionRequest
   ): Promise<OrderAttributionCorrection> => {
-    const response = await apiClient.post(`/store/orders/${id}/attribution/correction`, data);
+    const response = await apiClient.post(
+      `/store/orders/${requireId(id, '受注')}/attribution/correction`,
+      data
+    );
     return response.data;
   },
 };
@@ -230,8 +255,10 @@ export const memberOrderApi = {
     const response = await apiClient.post('/platform/me/orders', data);
     return response.data;
   },
-  cancel: async (id: string): Promise<MemberOrder> => {
-    const response = await apiClient.post(`/platform/me/orders/${id}/cancellation`);
+  cancel: async (id: string | undefined): Promise<MemberOrder> => {
+    const response = await apiClient.post(
+      `/platform/me/orders/${requireId(id, '予約')}/cancellation`
+    );
     return response.data;
   },
 };

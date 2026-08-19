@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { MEMBER_ORDER_STATUS_LABELS, MemberOrder, memberOrderApi } from '@/entities/order';
-import { getApiErrorMessage, requireId, useCursorList } from '@/shared/lib';
+import { getApiErrorMessage, useCursorList } from '@/shared/lib';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
 
 /** 予約の状態バッジ。確定前だけが取り下げ可能なので、申請中を強調する。 */
@@ -45,11 +45,10 @@ export function MemberReservationsPage() {
   const cancel = async (reservation: MemberOrder) => {
     setProcessingId(reservation.id ?? null);
     try {
-      const id = requireId(reservation.id, '予約');
       // 取り下げても予約は一覧に残る（状態が変わるだけ）ので、その行だけ差し替える。
-      const updated = await memberOrderApi.cancel(id);
+      const updated = await memberOrderApi.cancel(reservation.id);
       notify.success('予約を取り下げました');
-      setReservations(prev => prev.map(row => (row.id === id ? updated : row)));
+      setReservations(prev => prev.map(row => (row.id === reservation.id ? updated : row)));
     } catch (error) {
       notify.error(getApiErrorMessage(error, '取り下げに失敗しました'));
     } finally {

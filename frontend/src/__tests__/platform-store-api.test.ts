@@ -1,4 +1,5 @@
 import { platformStoreApi } from '@/entities/store';
+import { ClientDataError } from '@/shared/lib';
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -53,5 +54,29 @@ describe('platform store api wrappers', () => {
     const stats = await platformStoreApi.getStats();
     expect(stats).toEqual({ total: 1 });
     expect(mockGet).toHaveBeenCalledWith('/platform/stores/stats');
+  });
+});
+
+/**
+ * 識別子を欠いた呼び出しは要求そのものを組まない。応答 DTO の項目はすべて可選なので、画面側が
+ * `?? ''` で素通しすると単数の操作が一覧の URI へ飛び、届いた先の 404/405 が操作の失敗と
+ * 見分けられなくなる。守りはアダプタの内側にあり、画面ごとに書かない。
+ */
+describe('識別子を欠いた platformStoreApi', () => {
+  const calls: [string, () => Promise<unknown>][] = [
+    ['getById', () => platformStoreApi.getById(undefined)],
+    ['update', () => platformStoreApi.update(undefined, { name: 'n', email: 'e@example.com' })],
+    ['delete', () => platformStoreApi.delete(undefined)],
+  ];
+
+  it.each(calls)('%s は要求を出さず、名乗る失敗を投げる', async (_name, call) => {
+    jest.clearAllMocks();
+
+    await expect(call()).rejects.toBeInstanceOf(ClientDataError);
+    await expect(call()).rejects.toThrow('店舗の識別子が取得できていません');
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(mockPut).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 });

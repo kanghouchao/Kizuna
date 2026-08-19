@@ -8,7 +8,7 @@ import {
   CastFieldDefinitionUpdateRequest,
   castFieldDefinitionApi,
 } from '@/entities/cast';
-import { getApiErrorMessage, integerRule, requireId } from '@/shared/lib';
+import { getApiErrorMessage, integerRule } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -74,7 +74,7 @@ export function CastFieldEditModal({
         display_order: values.display_order,
         is_public: values.is_public,
       };
-      await castFieldDefinitionApi.update(requireId(definition.id, 'フィールド'), request);
+      await castFieldDefinitionApi.update(definition.id, request);
       notify.success('フィールドを更新しました');
       onUpdated();
       onClose();

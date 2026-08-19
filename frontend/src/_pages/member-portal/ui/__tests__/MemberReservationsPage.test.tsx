@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemberReservationsPage } from '../MemberReservationsPage';
 import { memberOrderApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order/model/types'),
@@ -92,11 +93,14 @@ describe('MemberReservationsPage', () => {
     expect(mockedList).toHaveBeenCalledTimes(1);
   });
 
-  it('識別子の無い予約には取り下げの要求を組まず、理由を名乗ること', async () => {
-    // `?? ''` で素通しすると POST /platform/me/orders//cancellation が飛び、届いた先の 404 が
-    // 「取り下げに失敗しました」と見分けが付かなくなる
+  it('識別子を欠いた失敗は、汎用文言に潰さずそのまま名乗ること', async () => {
+    // 識別子を欠いた要求はアダプタが組む前に止める（order-api.test.ts）。画面が負うのは
+    // その失敗を「取り下げに失敗しました」へ潰さないこと
     mockedList.mockResolvedValue(
       page([{ store_name: '店舗A', business_date: '2026-08-10', status: 'CREATED' }])
+    );
+    mockedCancel.mockRejectedValue(
+      new ClientDataError('予約の識別子が取得できていません。画面を読み直してください')
     );
 
     render(<MemberReservationsPage />);
@@ -108,7 +112,6 @@ describe('MemberReservationsPage', () => {
         expect.stringContaining('予約の識別子が取得できていません')
       )
     );
-    expect(mockedCancel).not.toHaveBeenCalled();
   });
 
   it('取得に失敗したら領域エラー態を出し、再試行で復帰できる', async () => {

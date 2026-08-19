@@ -267,8 +267,8 @@ describe('顧客編集ページの顧客切り替え', () => {
     mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
-    mockedCustomerApi.memberLinkHistory.mockImplementation((id: string) =>
-      Promise.resolve(rowFor(id) as never)
+    mockedCustomerApi.memberLinkHistory.mockImplementation((id: string | undefined) =>
+      Promise.resolve(rowFor(id ?? '') as never)
     );
   });
 

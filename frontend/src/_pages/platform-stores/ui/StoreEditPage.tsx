@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
-import { getApiErrorMessage, requireId, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
@@ -49,7 +49,7 @@ export default function EditStorePage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await platformStoreApi.update(requireId(store.id, '店舗'), formData);
+      await platformStoreApi.update(store.id, formData);
       notify.success('店舗情報を更新しました');
       router.push('/platform/stores');
     } catch (err: any) {
