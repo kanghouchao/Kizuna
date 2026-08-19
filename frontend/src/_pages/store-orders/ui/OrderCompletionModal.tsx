@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderCompletionPreview, orderApi } from '@/entities/order';
-import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
+import { getApiErrorMessage, integerRule, requireId, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
 import {
@@ -93,7 +93,10 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   } = useResource<PreviewSnapshot>(
     order === null
       ? null
-      : async () => ({ orderId, body: await orderApi.completionPreview(orderId, committedFee) }),
+      : async () => {
+          const id = requireId(order.id, '受注');
+          return { orderId: id, body: await orderApi.completionPreview(id, committedFee) };
+        },
     [orderId, committedFee]
   );
   // 別の受注へ切り替わった瞬間は見込みを持たない状態から始める（レンダー期の判定なので、前の受注の
@@ -116,12 +119,12 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   }, [order, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
-    if (!order?.id) return;
+    if (!order) return;
     // 欄が消えても react-hook-form は値を保つ。非会員の受注へ持ち越した利用を送らないよう、
     // 送信可否は入力ではなく今の見込みで決める。
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;
     try {
-      const completed = await orderApi.complete(order.id, {
+      const completed = await orderApi.complete(requireId(order.id, '受注'), {
         total_fee: values.total_fee,
         // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
         // （undefined は JSON 化の段でキーごと消える）。

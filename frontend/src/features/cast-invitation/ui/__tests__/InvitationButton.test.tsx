@@ -56,6 +56,23 @@ describe('キャスト招待の行内発行ボタン', () => {
     });
   });
 
+  it('識別子の無いキャストには発行の要求を組まず、理由を名乗ること', async () => {
+    // `?? ''` で素通しすると POST /store/casts//invitation が飛び、届いた先の 404 が
+    // 「招待の発行に失敗しました」と見分けが付かなくなる
+    const onIssued = jest.fn();
+    render(<InvitationButton castId={undefined} status="NOT_INVITED" onIssued={onIssued} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '招待を発行' }));
+
+    await waitFor(() =>
+      expect(mockedNotify.error).toHaveBeenCalledWith(
+        expect.stringContaining('キャストの識別子が取得できていません')
+      )
+    );
+    expect(mockedCastApi.issueInvitation).not.toHaveBeenCalled();
+    expect(onIssued).not.toHaveBeenCalled();
+  });
+
   it('発行失敗は親へ通知せず失敗トーストを出す', async () => {
     mockedCastApi.issueInvitation.mockRejectedValue(new Error('boom'));
     const onIssued = jest.fn();

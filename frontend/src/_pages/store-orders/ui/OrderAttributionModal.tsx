@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderAttribution, OrderAttributionSource, orderApi } from '@/entities/order';
-import { getApiErrorMessage, hasPermission, readTokenClaims, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  hasPermission,
+  readTokenClaims,
+  requireId,
+  useResource,
+} from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { AttributionCorrectionStep } from './AttributionCorrectionStep';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
@@ -110,7 +116,12 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
     failure,
     reload,
   } = useResource<AttributionSnapshot>(
-    order === null ? null : async () => ({ orderId, body: await orderApi.attribution(orderId) }),
+    order === null
+      ? null
+      : async () => {
+          const id = requireId(order.id, '受注');
+          return { orderId: id, body: await orderApi.attribution(id) };
+        },
     [orderId]
   );
   // 別の受注へ切り替わった瞬間は現況を持たない状態から始める（レンダー期の判定なので、前の受注の
@@ -151,21 +162,22 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   const invalidate = async (values: InvalidationFormValues) => {
     // 対象は画面が読み口で得た記録そのものを名指す。受注から導く形へ戻すと、開いたまま別の操作者が
     // 訂正を一巡させた場合に、この理由が新しく成立した正しい帰属へ当たって来店を消す
-    if (!order?.id || attribution?.id === undefined) return;
+    if (!order || attribution?.id === undefined) return;
     try {
-      const updated = await orderApi.invalidateAttribution(order.id, {
+      const id = requireId(order.id, '受注');
+      const updated = await orderApi.invalidateAttribution(id, {
         attribution_id: attribution.id,
         reason: values.reason,
       });
       notify.success('帰属を無効化しました');
       // 応答が訂正後の現況を持つので、取り直さず差し替える（読み込み表示で一瞬消えない）
-      setSnapshot({ orderId, body: updated });
+      setSnapshot({ orderId: id, body: updated });
       reset({ reason: '' });
       // そのまま二段目へ送る。ここで通常の画面に戻すと、誤って付与された分が相手の台帳に残ったまま
       // 「訂正が済んだ」ことになり、やり残しに気づく機会がどこにも無くなる。宛先には今まさに倒した
       // 記録を渡す（受注から導き直さない）。
       setCorrecting({
-        orderId,
+        orderId: id,
         attributionId: attribution.id,
         memberCode: attribution.member_code,
       });
@@ -176,10 +188,10 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   };
 
   const reissue = async () => {
-    if (!order?.id) return;
+    if (!order) return;
     try {
       setIsReissuing(true);
-      const issued = await orderApi.reissueReceiptToken(order.id);
+      const issued = await orderApi.reissueReceiptToken(requireId(order.id, '受注'));
       notify.success('伝票QRを再発行しました');
       setReissued({ orderId, token: issued.receipt_token });
     } catch (error) {

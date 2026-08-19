@@ -76,6 +76,22 @@ describe('SystemSettingsPage', () => {
     );
   });
 
+  it('識別子の無い設定には更新の要求を組まず、理由を名乗ること', async () => {
+    // `?? ''` で素通しすると PUT /platform/configs/ が飛び、届いた先の 404/405 が
+    // 「設定の更新に失敗しました」と見分けが付かなくなる
+    mockGetAllConfigs.mockResolvedValue([{ ...configs[0], config_key: undefined }]);
+    render(<SystemSettingsPage />);
+
+    fireEvent.click(await screen.findByRole('switch'));
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        expect.stringContaining('設定の識別子が取得できていません')
+      )
+    );
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
   it('秘匿設定は値がマスク表示される', async () => {
     render(<SystemSettingsPage />);
     expect(await screen.findByText('(秘匿設定)')).toBeInTheDocument();

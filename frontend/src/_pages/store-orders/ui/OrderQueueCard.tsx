@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon, SquarePenIcon, XIcon } from 'lucide-react';
 import { ORDER_STATUS_LABELS, OrderWorkQueueRow, orderApi } from '@/entities/order';
-import { getApiErrorMessage } from '@/shared/lib';
+import { getApiErrorMessage, requireId } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import {
@@ -81,24 +81,24 @@ export function OrderQueueCard({
   const [cancelling, setCancelling] = useState(false);
   const cancelForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
 
-  const id = order.id ?? '';
   const pending = order.status === 'CREATED';
 
   /**
    * 処理を走らせて結果を通知する。処理後にこの受注が群から外れるのか、群の中で状態が変わるだけなのかは
-   * 操作ごとに違うので、行の始末は {@code settle} が決める。
+   * 操作ごとに違うので、行の始末は {@code settle} が決める。識別子もここで解いて配る。
    */
   const run = async <T,>(
-    action: () => Promise<T>,
+    action: (id: string) => Promise<T>,
     success: string,
     failure: string,
-    settle: (updated: T) => void
+    settle: (updated: T, id: string) => void
   ) => {
     setProcessing(true);
     try {
-      const updated = await action();
+      const id = requireId(order.id, '受注');
+      const updated = await action(id);
       notify.success(success);
-      settle(updated);
+      settle(updated, id);
     } catch (error) {
       // 指名の再検証や終端の凍結など、サーバは対処方法を含む文言を返す。汎用文言に潰さない
       notify.error(getApiErrorMessage(error, failure));
@@ -108,7 +108,7 @@ export function OrderQueueCard({
   };
 
   /** 謝絶・取消の後始末。この受注はもう「対応が要る」群の対象ではないので手元から取り除く。 */
-  const leaveQueue = () => onProcessed(id);
+  const leaveQueue = (_updated: unknown, id: string) => onProcessed(id);
 
   return (
     <li className="bg-card space-y-3 rounded-lg border p-4 shadow-sm">
@@ -167,7 +167,7 @@ export function OrderQueueCard({
                   disabled={processing}
                   onClick={() =>
                     run(
-                      () => orderApi.decline(id),
+                      id => orderApi.decline(id),
                       '予約を謝絶しました',
                       '謝絶に失敗しました',
                       leaveQueue
@@ -184,7 +184,7 @@ export function OrderQueueCard({
                     // 確定した受注は「対応が要る」群に残る（次は完了・編集・取消の対象）。
                     // 応答へ差し替えるのは、確定が受付担当の補完と顧客の着け直しまで行うため。
                     run(
-                      () => orderApi.confirm(id),
+                      id => orderApi.confirm(id),
                       '予約を確定しました',
                       '確定に失敗しました',
                       onConfirmed
@@ -240,7 +240,7 @@ export function OrderQueueCard({
             noValidate
             onSubmit={cancelForm.handleSubmit(values =>
               run(
-                () => orderApi.cancel(id, { reason: values.reason.trim() }),
+                id => orderApi.cancel(id, { reason: values.reason.trim() }),
                 '受注を取消しました',
                 '取消に失敗しました',
                 leaveQueue

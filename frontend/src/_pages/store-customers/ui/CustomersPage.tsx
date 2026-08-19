@@ -8,6 +8,7 @@ import { CustomerResponse, customerApi } from '@/entities/customer';
 import {
   hasPermission,
   readTokenClaims,
+  requireId,
   storePath,
   useDeleteAction,
   useListPage,
@@ -72,7 +73,7 @@ export default function CustomersPage() {
   const customers = list.rows;
 
   const deletion = useDeleteAction<CustomerResponse>({
-    remove: customer => customerApi.delete(customer.id ?? ''),
+    remove: customer => customerApi.delete(requireId(customer.id, '顧客')),
     successMessage: '顧客を削除しました',
     errorMessage: '顧客の削除に失敗しました',
     onDeleted: list.reload,

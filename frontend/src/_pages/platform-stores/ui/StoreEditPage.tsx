@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
-import { useResource } from '@/shared/lib';
+import { getApiErrorMessage, requireId, useResource } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
@@ -49,12 +49,12 @@ export default function EditStorePage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await platformStoreApi.update(store.id ?? '', formData);
+      await platformStoreApi.update(requireId(store.id, '店舗'), formData);
       notify.success('店舗情報を更新しました');
       router.push('/platform/stores');
     } catch (err: any) {
       if (err.response?.data?.errors) setErrors(err.response.data.errors);
-      notify.error('更新に失敗しました。入力内容をご確認ください');
+      notify.error(getApiErrorMessage(err, '更新に失敗しました。入力内容をご確認ください'));
     } finally {
       setSaving(false);
     }

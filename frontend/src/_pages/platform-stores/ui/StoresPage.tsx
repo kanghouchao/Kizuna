@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ExternalLinkIcon, PlusIcon, SquarePenIcon, StoreIcon, Trash2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Store, isStoreDomain, platformStoreApi } from '@/entities/store';
-import { useDeleteAction, useListPage } from '@/shared/lib';
+import { requireId, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -37,7 +37,7 @@ export default function StoresPage() {
   const stores = list.rows;
 
   const deletion = useDeleteAction<Store>({
-    remove: store => platformStoreApi.delete(store.id ?? ''),
+    remove: store => platformStoreApi.delete(requireId(store.id, '店舗')),
     successMessage: '店舗を削除しました',
     errorMessage: '店舗の削除に失敗しました',
     onDeleted: list.reload,

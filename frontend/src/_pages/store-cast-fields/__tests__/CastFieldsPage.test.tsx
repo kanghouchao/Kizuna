@@ -80,6 +80,24 @@ describe('カスタムフィールド定義の管理ページ', () => {
     expect(mockedNotify.success).toHaveBeenCalledWith('フィールドを削除しました');
   });
 
+  it('識別子の無い定義には削除の要求を組まず、理由を名乗ること', async () => {
+    // `?? ''` で素通しすると DELETE /store/casts/fields/ が飛び、届いた先の 404/405 が
+    // 「フィールドの削除に失敗しました」と見分けが付かなくなる
+    mockedApi.list.mockResolvedValue([{ ...definitions[0], id: undefined }]);
+    render(<CastFieldsPage />);
+    await screen.findByText('blood_type');
+
+    fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
+
+    await waitFor(() =>
+      expect(mockedNotify.error).toHaveBeenCalledWith(
+        expect.stringContaining('フィールドの識別子が取得できていません')
+      )
+    );
+    expect(mockedApi.delete).not.toHaveBeenCalled();
+  });
+
   it('削除ボタンのクリックは編集モーダルを開かない', async () => {
     render(<CastFieldsPage />);
     await screen.findByText('blood_type');

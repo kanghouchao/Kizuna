@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { MEMBER_ORDER_STATUS_LABELS, MemberOrder, memberOrderApi } from '@/entities/order';
-import { useCursorList } from '@/shared/lib';
+import { getApiErrorMessage, requireId, useCursorList } from '@/shared/lib';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
 
 /** 予約の状態バッジ。確定前だけが取り下げ可能なので、申請中を強調する。 */
@@ -42,17 +42,16 @@ export function MemberReservationsPage() {
     loadMore,
   } = useCursorList<MemberOrder>(cursor => memberOrderApi.list({ cursor, size: PAGE_SIZE }));
 
-  const cancel = async (id: string) => {
-    setProcessingId(id);
+  const cancel = async (reservation: MemberOrder) => {
+    setProcessingId(reservation.id ?? null);
     try {
+      const id = requireId(reservation.id, '予約');
       // 取り下げても予約は一覧に残る（状態が変わるだけ）ので、その行だけ差し替える。
       const updated = await memberOrderApi.cancel(id);
       notify.success('予約を取り下げました');
-      setReservations(prev =>
-        prev.map(reservation => (reservation.id === id ? updated : reservation))
-      );
-    } catch {
-      notify.error('取り下げに失敗しました');
+      setReservations(prev => prev.map(row => (row.id === id ? updated : row)));
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, '取り下げに失敗しました'));
     } finally {
       setProcessingId(null);
     }
@@ -99,7 +98,7 @@ export function MemberReservationsPage() {
                       variant="outline"
                       size="sm"
                       className="mt-3"
-                      onClick={() => cancel(reservation.id ?? '')}
+                      onClick={() => cancel(reservation)}
                       disabled={loading || processingId === reservation.id}
                     >
                       取り下げる
