@@ -161,7 +161,7 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     Cast cast = cast("c1", "花子档案");
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast));
+    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast));
     when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
@@ -200,7 +200,7 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
     when(platformUserRepository.findByEmail("dup@example.com"))
         .thenReturn(Optional.of(user(9L, UserType.CAST, Set.of(1L))));
 
@@ -216,7 +216,7 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
     when(platformUserRepository.findByEmail("race@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
@@ -244,7 +244,7 @@ class CastInvitationAcceptanceServiceTest {
             Optional.of(
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
     when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("New@Example.com")))
@@ -258,7 +258,7 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
     when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
@@ -277,7 +277,7 @@ class CastInvitationAcceptanceServiceTest {
     Cast cast = cast("c2", "花子档案（店舗B）");
     PlatformUser existing = user(7L, UserType.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findById("c2")).thenReturn(Optional.of(cast));
+    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
     when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
         .thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
@@ -305,7 +305,7 @@ class CastInvitationAcceptanceServiceTest {
     Cast cast = cast("c2", "花子档案（全店）");
     PlatformUser existing = allStoresUser(7L);
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findById("c2")).thenReturn(Optional.of(cast));
+    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
     when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
         .thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
@@ -329,7 +329,7 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findById("c2")).thenReturn(Optional.of(cast("c2", "花子档案")));
+    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast("c2", "花子档案")));
     // 悲観ロック取得は招待クレーム後（招待→PlatformUser のロック順）。ロック行の本人種別が非CASTなら弾く。
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
