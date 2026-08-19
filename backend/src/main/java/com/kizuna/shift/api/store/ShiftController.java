@@ -1,9 +1,11 @@
 package com.kizuna.shift.api.store;
 
+import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftDetailResponse;
 import com.kizuna.shift.api.dto.ShiftPublicationRequest;
+import com.kizuna.shift.api.dto.ShiftRequestLineageResponse;
 import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.application.ShiftLineageService;
@@ -49,6 +51,16 @@ public class ShiftController {
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftDetailResponse> detail(@PathVariable String id) {
     return ResponseEntity.ok(shiftLineageService.detail(id));
+  }
+
+  /** シフトの変更申請履歴。詳細に埋めないのは、提出のたびに増え続けて有界でないためである （api-guidelines §5）。出生の NEW は高々 1 本なので詳細側にある。 */
+  @GetMapping("/{id}/change-requests")
+  @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
+  public ResponseEntity<CursorPage<ShiftRequestLineageResponse>> changeRequests(
+      @PathVariable String id,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "50") int size) {
+    return ResponseEntity.ok(shiftLineageService.changeRequests(id, cursor, size));
   }
 
   @PostMapping

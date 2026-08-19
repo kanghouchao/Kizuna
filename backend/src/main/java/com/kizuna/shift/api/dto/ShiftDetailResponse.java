@@ -3,7 +3,6 @@ package com.kizuna.shift.api.dto;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,12 +37,12 @@ public class ShiftDetailResponse {
   private OffsetDateTime updatedAt;
 
   /**
-   * 出生（NEW）と変更申請（CHANGE）の履歴を古い順に。店舗が直接作成したシフトでは空。
+   * このシフトを生んだ出勤希望（NEW）。店舗が直接作成したシフトでは出ない。
    *
-   * <p>裸の {@code List} で持つ。1 本のシフトへ出せる変更申請に構造上の上限は無いが、対象が確定済みかつ勤務日前の
-   * シフトに限られるため運用上は一桁に収まる（api-guidelines §5 に対する意図的な選択）。
+   * <p>1 シフトにつき高々 1 本なので詳細へ埋める。増え続ける変更申請の履歴は有界でないため {@code GET /store/shifts/{id}/change-requests}
+   * へ分け、カーソルで辿る（api-guidelines §5）。
    */
-  private List<ShiftRequestLineageResponse> requests;
+  private ShiftRequestLineageResponse origin;
 
   /** 未取消の当日実績。未記録・取消済みしか無い場合は null。 */
   private AttendanceLineageResponse attendance;

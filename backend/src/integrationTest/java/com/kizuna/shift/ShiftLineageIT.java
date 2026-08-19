@@ -16,6 +16,8 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,20 +91,25 @@ class ShiftLineageIT extends CrossStoreTestSupport {
         .as("実行主体は名前まで解決されること")
         .isEqualTo(staff.getDisplayName());
 
-    JsonNode requests = detail.path("requests");
-    assertThat(requests.size()).as("出生（NEW）と変更申請（CHANGE）の両方が背骨で辿れること").isEqualTo(2);
-    assertThat(requests.valueStream().map(r -> r.path("id").asString()).toList())
-        .containsExactly(newRequestId, changeRequestId);
-    assertThat(requests.valueStream().map(r -> r.path("type").asString()).toList())
-        .containsExactly("NEW", "CHANGE");
-    for (JsonNode request : requests) {
-      assertThat(request.path("status").asString()).isEqualTo("APPROVED");
-      assertThat(request.path("cast_id").asString()).as("申請の実行主体はキャスト本人").isEqualTo(myCastId);
-      assertThat(request.path("processed_by").path("name").asString())
-          .isEqualTo(staff.getDisplayName());
-      assertThat(request.path("processed_at").asString()).as("承認の時刻が残ること").isNotBlank();
-      assertThat(request.path("created_at").asString()).as("提出の時刻が残ること").isNotBlank();
-    }
+    JsonNode origin = detail.path("origin");
+    assertThat(origin.path("id").asString()).as("出生の希望が背骨で辿れること").isEqualTo(newRequestId);
+    assertThat(origin.path("type").asString()).isEqualTo("NEW");
+    assertThat(origin.path("status").asString()).isEqualTo("APPROVED");
+    assertThat(origin.path("cast_id").asString()).as("申請の実行主体はキャスト本人").isEqualTo(myCastId);
+    assertThat(origin.path("processed_by").path("name").asString())
+        .isEqualTo(staff.getDisplayName());
+    assertThat(origin.path("processed_at").asString()).as("承認の時刻が残ること").isNotBlank();
+    assertThat(origin.path("created_at").asString()).as("提出の時刻が残ること").isNotBlank();
+
+    JsonNode changeRequests = changeRequests(shiftId, null);
+    assertThat(
+            changeRequests.path("content").valueStream().map(r -> r.path("id").asString()).toList())
+        .as("変更申請は詳細ではなくカーソルの読み口から辿れること")
+        .containsExactly(changeRequestId);
+    assertThat(changeRequests.path("content").get(0).path("type").asString()).isEqualTo("CHANGE");
+    assertThat(changeRequests.path("content").get(0).path("processed_by").path("name").asString())
+        .isEqualTo(staff.getDisplayName());
+    assertThat(changeRequests.has("next_cursor")).as("続きが無ければカーソルは出ないこと").isFalse();
 
     JsonNode attendance = detail.path("attendance");
     assertThat(attendance.path("id").asString()).isEqualTo(attendanceId);
@@ -120,10 +127,36 @@ class ShiftLineageIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("店舗が直接作成したシフトは申請も実績も持たないこと")
   void directlyCreatedShiftHasAnEmptyLineage() {
-    JsonNode detail = detail(createShiftDirectly());
+    String shiftId = createShiftDirectly();
+    JsonNode detail = detail(shiftId);
 
-    assertThat(detail.path("requests")).isEmpty();
+    assertThat(detail.has("origin")).isFalse();
     assertThat(detail.has("attendance")).isFalse();
+    assertThat(changeRequests(shiftId, null).path("content")).isEmpty();
+  }
+
+  @Test
+  @DisplayName("変更申請履歴がカーソルで重複・欠落なく辿れること")
+  void changeRequestHistoryWalksThroughTheCursor() {
+    LocalDate workDate = LocalDate.now().plusDays(4);
+    String shiftId = approve(submitNewRequest(workDate)).path("shift_id").asString();
+
+    // 同じシフトへ変更申請を重ねる。件数の上限も一意性の守衛も無いので、実際に積み上がることを示す。
+    List<String> submitted =
+        List.of(
+            submitChangeRequest(shiftId, workDate, "19:00:00", "23:30:00"),
+            submitChangeRequest(shiftId, workDate, "19:15:00", "23:45:00"),
+            submitChangeRequest(shiftId, workDate, "19:30:00", "23:50:00"));
+
+    List<String> walked = new ArrayList<>();
+    String cursor = null;
+    do {
+      JsonNode page = changeRequests(shiftId, cursor);
+      page.path("content").valueStream().forEach(r -> walked.add(r.path("id").asString()));
+      cursor = page.has("next_cursor") ? page.path("next_cursor").asString() : null;
+    } while (cursor != null);
+
+    assertThat(walked).as("1 件ずつ辿っても重複も欠落もないこと").containsExactlyInAnyOrderElementsOf(submitted);
   }
 
   @Test
@@ -166,6 +199,20 @@ class ShiftLineageIT extends CrossStoreTestSupport {
                     JsonNode.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
+  }
+
+  private JsonNode changeRequests(String shiftId, String cursor) {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/store/shifts/"
+                + shiftId
+                + "/change-requests?size=1"
+                + (cursor == null ? "" : "&cursor=" + cursor),
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    return res.getBody();
   }
 
   private JsonNode detail(String shiftId) {
@@ -214,6 +261,11 @@ class ShiftLineageIT extends CrossStoreTestSupport {
   }
 
   private String submitChangeRequest(String shiftId, LocalDate workDate) {
+    return submitChangeRequest(shiftId, workDate, "19:00:00", "23:30:00");
+  }
+
+  private String submitChangeRequest(
+      String shiftId, LocalDate workDate, String startTime, String endTime) {
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/platform/me/shift-requests/changes",
@@ -222,7 +274,11 @@ class ShiftLineageIT extends CrossStoreTestSupport {
                     + shiftId
                     + "\", \"work_date\": \""
                     + workDate
-                    + "\", \"start_time\": \"19:00:00\", \"end_time\": \"23:30:00\"}",
+                    + "\", \"start_time\": \""
+                    + startTime
+                    + "\", \"end_time\": \""
+                    + endTime
+                    + "\"}",
                 bearer(castToken)),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: 変更申請の提出が成功すること").isEqualTo(HttpStatus.CREATED);

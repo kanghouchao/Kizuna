@@ -65,12 +65,13 @@ public class BusinessDateService {
   }
 
   /**
-   * 営業日の境界となる壁時計時刻。営業日と暦日の写像を要する呼び手（シフトの予定終了の判定など）へ渡す。
+   * その暦日に日付変更時刻が実際に来る壁時計時刻。営業日と暦日の写像を要する呼び手（シフトの予定終了の判定）へ渡す。
    *
-   * <p>公開するのは値であって判定ではない。境界そのものの解釈は本サービスが持ち続ける。
+   * <p>設定値そのままとは限らない。夏時間の進みで飛ばされる帯に境界を置くとその時刻は存在せず、実際の境界は
+   * 前へ送られた時刻になる。設定値で比べると、その帯に始まる枠だけが境界の逆側へ落ちる。
    */
-  public LocalTime currentDateChangeTime() {
-    return dateChangeTime();
+  public LocalTime effectiveDateChangeTimeOn(LocalDate date) {
+    return date.atTime(dateChangeTime()).atZone(clock.getZone()).toLocalTime();
   }
 
   /**
