@@ -36,6 +36,16 @@ describe('shiftApi', () => {
       url: '/store/shifts/s1',
     });
   });
+  it('changePublication は /store/shifts/:id/publication へ望む状態を明示して PUT する', async () => {
+    // 相対的な反転で送ると、逐行の一括操作が取りこぼした行を裏返してしまう
+    expect(await shiftApi.changePublication('s1', false)).toEqual({
+      ok: true,
+      url: '/store/shifts/s1/publication',
+    });
+    expect(apiClient.put).toHaveBeenCalledWith('/store/shifts/s1/publication', {
+      published: false,
+    });
+  });
   it('delete は /store/shifts/:id を DELETE する', async () => {
     await expect(shiftApi.delete('s1')).resolves.toBeUndefined();
   });

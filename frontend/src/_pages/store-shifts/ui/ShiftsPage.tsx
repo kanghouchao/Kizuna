@@ -2,13 +2,15 @@
 
 import { CalendarDaysIcon, ClockIcon, InboxIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { notify } from '@/shared/notify';
 import { CastResponse, castApi } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
-import { useResource } from '@/shared/lib';
+import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { RegionError, Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
 import { monthRange, toDateStr } from '../lib/datetime';
 import { ShiftCalendar } from './ShiftCalendar';
 import { ShiftFormModal } from './ShiftFormModal';
+import { ShiftPublicationPanel } from './ShiftPublicationPanel';
 import { ShiftRequestInbox } from './ShiftRequestInbox';
 import { ShiftTimeline } from './ShiftTimeline';
 
@@ -26,6 +28,7 @@ export default function ShiftsPage() {
   const [selectedDate, setSelectedDate] = useState(() => toDateStr(new Date()));
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
+  const [publishing, setPublishing] = useState(false);
 
   // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）。101 人以上でも氏名を解決できるよう
   // 全ページ取得する。途中まで読めた分は失敗として捨てられる — 欠けた名簿は「そのキャストは
@@ -56,6 +59,7 @@ export default function ShiftsPage() {
   // 応答だけが反映される（フックのリクエスト連番による stale 応答の破棄）。
   const {
     data: shiftsData,
+    setData: setShiftsData,
     isLoading: loading,
     failure: shiftsFailure,
     reload: reloadShifts,
@@ -63,6 +67,44 @@ export default function ShiftsPage() {
   // 読めなかった区間を空のまま見せると「この月は誰も出勤しない」に化けるため、失敗時は
   // 一覧そのものを出さない（下の失敗態へ倒す）
   const shifts = shiftsData ?? [];
+
+  /**
+   * 公開可否を切り替える。行内の目玉とパネルの Switch・一括はすべてここへ入る — 二つの入口が
+   * 同じ状態を映すのは、切替がこの一箇所を通るから。
+   *
+   * <p>一括は UI 上の操作にすぎず、データは逐行更新する（一括エンドポイントは無い — ADR 0015）。
+   * 途中で落ちた行があっても成功した行だけを差し替えるので、画面はそのあとも本当のことを言う。
+   */
+  const changePublication = async (targets: ShiftResponse[], published: boolean) => {
+    const ids = targets.map(s => s.id).filter((id): id is string => id !== undefined);
+    if (ids.length === 0) return;
+    setPublishing(true);
+    try {
+      const results = await Promise.allSettled(
+        ids.map(id => shiftApi.changePublication(id, published))
+      );
+      const updated = new Map<string, ShiftResponse>();
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value?.id !== undefined) updated.set(r.value.id, r.value);
+      }
+      // 取り直しに倒すと、切り替えたばかりのタイムラインが読み込み表示で一瞬消える
+      if (updated.size > 0) {
+        setShiftsData(rows =>
+          (rows ?? []).map(s => (s.id !== undefined ? (updated.get(s.id) ?? s) : s))
+        );
+      }
+      const rejected = results.filter(r => r.status === 'rejected');
+      if (rejected.length === 0) {
+        notify.success(`${ids.length}件のシフトを${published ? '公開' : '非公開に'}しました`);
+      } else if (rejected.length === ids.length) {
+        notify.error(getApiErrorMessage(rejected[0].reason, '公開状態の変更に失敗しました'));
+      } else {
+        notify.error(`${rejected.length}件のシフトの公開状態を変更できませんでした`);
+      }
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const openAdd = () => {
     setEditing(null);
@@ -143,7 +185,7 @@ export default function ShiftsPage() {
             />
           )}
         </TabsContent>
-        <TabsContent value={TIMELINE_TAB} className="mt-6">
+        <TabsContent value={TIMELINE_TAB} className="mt-6 space-y-6">
           <ShiftTimeline
             date={selectedDate}
             shifts={shifts}
@@ -154,7 +196,21 @@ export default function ShiftsPage() {
             onChangeDate={setSelectedDate}
             onAddShift={openAdd}
             onEditShift={openEdit}
+            publishing={publishing}
+            onChangePublication={(targets, published) => void changePublication(targets, published)}
           />
+          {/* 取得失敗はタイムラインが名乗る。同じ取得を映すパネルにまで二重に名乗らせず、
+              読めていない間は 0 件と読める姿も出さない。空の日もタイムラインが名乗る側 */}
+          {shiftsFailure === null && !loading && shifts.length > 0 && (
+            <ShiftPublicationPanel
+              shifts={shifts}
+              casts={casts}
+              busy={publishing}
+              onChangePublication={(targets, published) =>
+                void changePublication(targets, published)
+              }
+            />
+          )}
         </TabsContent>
         <TabsContent value={REQUESTS_TAB} className="mt-6">
           <ShiftRequestInbox casts={casts} onApproved={() => void reloadShifts()} />
