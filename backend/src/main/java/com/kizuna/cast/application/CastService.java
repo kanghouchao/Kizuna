@@ -74,6 +74,18 @@ public class CastService {
     return castRepository.findById(id).isPresent();
   }
 
+  /**
+   * {@link #existsForCurrentStore} と同じ判定を、そのキャストを指す行を建てる間だけ押さえて行う。
+   *
+   * <p>ロック順序の契約（キャスト → シフト）は {@link CastRepository#findScopedByIdForUpdate} に記す。キャストと
+   * シフトを同時に指す行を建てる操作は、この口を通ってからシフトを押さえる。
+   */
+  @StoreScoped
+  @Transactional
+  public boolean existsForCurrentStoreForUpdate(String id) {
+    return castRepository.findScopedByIdForUpdate(id).isPresent();
+  }
+
   @StoreScoped
   @Transactional
   public CastResponse create(CastCreateRequest request) {
