@@ -1,9 +1,10 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, EyeOffIcon } from 'lucide-react';
 import { ShiftResponse } from '@/entities/shift';
 import { Button } from '@/shared/ui';
 import { monthGrid, toDateStr } from '../lib/datetime';
+import { isUnpublished } from '../lib/publication';
 
 interface ShiftCalendarProps {
   month: Date;
@@ -24,12 +25,13 @@ export function ShiftCalendar({
   onNextMonth,
   onSelectDate,
 }: ShiftCalendarProps) {
-  const byDate = new Map<string, { total: number; confirmed: number }>();
+  const byDate = new Map<string, { total: number; confirmed: number; hidden: number }>();
   for (const s of shifts) {
     const workDate = s.work_date ?? '';
-    const agg = byDate.get(workDate) ?? { total: 0, confirmed: 0 };
+    const agg = byDate.get(workDate) ?? { total: 0, confirmed: 0, hidden: 0 };
     agg.total += 1;
     if (s.status === 'CONFIRMED') agg.confirmed += 1;
+    if (isUnpublished(s)) agg.hidden += 1;
     byDate.set(workDate, agg);
   }
 
@@ -124,6 +126,15 @@ export function ShiftCalendar({
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />
                         未確定
                         {tentative}
+                      </span>
+                    )}
+                    {/* 公式サイトに出ない確定シフトの数。凡例の点と同じく、隣の文字が同じことを
+                        言うのでアイコン自体はコントラストに縛られない */}
+                    {agg.hidden > 0 && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <EyeOffIcon className="h-2.5 w-2.5" aria-hidden="true" />
+                        非公開
+                        {agg.hidden}
                       </span>
                     )}
                   </div>

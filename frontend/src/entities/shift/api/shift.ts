@@ -42,6 +42,11 @@ export const shiftApi = {
     const response = await apiClient.put(`/store/shifts/${id}`, data);
     return response.data;
   },
+  /** シフトの公開可否を切り替える（承認とは独立の軸 — ADR 0015）。望む状態を明示して送る。 */
+  changePublication: async (id: string, published: boolean): Promise<ShiftResponse> => {
+    const response = await apiClient.put(`/store/shifts/${id}/publication`, { published });
+    return response.data;
+  },
   /** シフトを削除する */
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/store/shifts/${id}`);

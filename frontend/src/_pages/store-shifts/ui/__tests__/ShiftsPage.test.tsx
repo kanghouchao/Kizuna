@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import ShiftsPage from '../ShiftsPage';
 import { castApi } from '@/entities/cast';
 import { shiftApi } from '@/entities/shift';
+import { notify } from '@/shared/notify';
 import { addDaysStr, toDateStr } from '../../lib/datetime';
 
 jest.mock('@/entities/cast', () => ({
@@ -12,6 +13,7 @@ jest.mock('@/entities/shift', () => ({
   shiftApi: {
     list: jest.fn(),
     create: jest.fn(),
+    changePublication: jest.fn(),
     listShiftRequests: jest.fn(),
     approveShiftRequest: jest.fn(),
     declineShiftRequest: jest.fn(),
@@ -25,6 +27,7 @@ jest.mock('@/shared/notify', () => ({
 const mockedCastList = castApi.list as jest.Mock;
 const mockedShiftList = shiftApi.list as jest.Mock;
 const mockedShiftCreate = shiftApi.create as jest.Mock;
+const mockedChangePublication = shiftApi.changePublication as jest.Mock;
 
 /** 月グリッドの先頭 6 セル・末尾 14 セルにしか他月は現れないため、15 日は常に当月で一意。 */
 const DAY_IN_MONTH = 15;
@@ -199,5 +202,156 @@ describe('ShiftsPage の取得失敗', () => {
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+});
+
+describe('シフトの公開可否', () => {
+  const TODAY = toDateStr(new Date());
+  const SAKURA = { id: 'c1', name: 'さくら' };
+  const AOI = { id: 'c2', name: 'あおい' };
+
+  /** 公開中の確定シフト（さくら 18:00–23:00）。 */
+  const shown = {
+    id: 's1',
+    cast_id: 'c1',
+    work_date: TODAY,
+    start_time: '18:00:00',
+    end_time: '23:00:00',
+    status: 'CONFIRMED',
+    published: true,
+  };
+  /** 非公開の確定シフト（あおい 19:00–22:00）。 */
+  const hidden = {
+    ...shown,
+    id: 's2',
+    cast_id: 'c2',
+    start_time: '19:00:00',
+    end_time: '22:00:00',
+    published: false,
+  };
+  /** 仮シフト（あおい 20:00–21:00）。公開の操作面を持たない。 */
+  const tentative = {
+    ...shown,
+    id: 's3',
+    cast_id: 'c2',
+    start_time: '20:00:00',
+    end_time: '21:00:00',
+    status: 'TENTATIVE',
+    published: false,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedCastList.mockResolvedValue(castPage([SAKURA, AOI]));
+  });
+
+  const openTimeline = async () => {
+    render(<ShiftsPage />);
+    fireEvent.click(screen.getByRole('tab', { name: 'タイムライン' }));
+    expect(await screen.findByText(`${TODAY} の出勤`)).toBeInTheDocument();
+  };
+
+  it('バーの目玉で個別に切り替わり、応答がその場に反映されること', async () => {
+    mockedShiftList.mockResolvedValue([shown]);
+    mockedChangePublication.mockResolvedValue({ ...shown, published: false });
+    await openTimeline();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'さくら 18:00–23:00 を非公開にする' })
+    );
+
+    await waitFor(() => expect(mockedChangePublication).toHaveBeenCalledWith('s1', false));
+    // 取り直しではなく応答の差し替えで反映する — 目玉が裏返り、押し直せば戻せる
+    expect(
+      await screen.findByRole('button', { name: 'さくら 18:00–23:00 を公開する' })
+    ).toBeInTheDocument();
+  });
+
+  it('日単位一括は必要な行だけを逐行で切り替えること', async () => {
+    mockedShiftList.mockResolvedValue([shown, hidden]);
+    mockedChangePublication.mockImplementation(async (id: string) => ({
+      ...(id === 's1' ? shown : hidden),
+      published: true,
+    }));
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('button', { name: '全て公開' }));
+
+    // 既に公開中の s1 まで送ると、一括 API の無い逐行呼びが無用に倍化する
+    await waitFor(() => expect(mockedChangePublication).toHaveBeenCalledTimes(1));
+    expect(mockedChangePublication).toHaveBeenCalledWith('s2', true);
+  });
+
+  it('非公開のシフトが破線中抜きバーとパネルの件数で区別されること', async () => {
+    mockedShiftList.mockResolvedValue([shown, hidden]);
+    await openTimeline();
+
+    const bar = (await screen.findByRole('button', { name: 'あおい 19:00–22:00 を編集' }))
+      .parentElement;
+    expect(bar).toHaveClass('border-dashed');
+    const shownBar = screen.getByRole('button', {
+      name: 'さくら 18:00–23:00 を編集',
+    }).parentElement;
+    expect(shownBar).not.toHaveClass('border-dashed');
+
+    expect(screen.getByText('非公開 1件')).toBeInTheDocument();
+    expect(screen.getByText('公開 1件')).toBeInTheDocument();
+  });
+
+  it('カレンダーの日セルに非公開の件数が出ること', async () => {
+    mockedShiftList.mockResolvedValue([shown, hidden]);
+    render(<ShiftsPage />);
+
+    expect(await screen.findByText('非公開1')).toBeInTheDocument();
+  });
+
+  it('仮シフトには公開の操作面が現れないこと', async () => {
+    mockedShiftList.mockResolvedValue([shown, tentative]);
+    await openTimeline();
+
+    // 仮シフトはフラグ値に関わらず店外へ出ない。切替を出すと「公開した」と読める操作が
+    // 効かないまま残る（後端は TENTATIVE への切替を拒まない — 守っているのはここだけ）
+    expect(
+      await screen.findByRole('button', { name: 'あおい 20:00–21:00 を編集' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /あおい 20:00–21:00 を(非)?公開/ })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /あおい 20:00–21:00/ })).not.toBeInTheDocument();
+    expect(screen.getByText('確定すると公開できます')).toBeInTheDocument();
+  });
+
+  it('一括の途中で落ちた行があっても、通った行だけが切り替わること', async () => {
+    mockedShiftList.mockResolvedValue([
+      shown,
+      { ...shown, id: 's4', cast_id: 'c2', start_time: '19:00:00', end_time: '22:00:00' },
+    ]);
+    mockedChangePublication.mockImplementation(async (id: string) =>
+      id === 's1' ? { ...shown, published: false } : Promise.reject(new Error('boom'))
+    );
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('button', { name: '全て非公開' }));
+
+    // 落ちた行まで裏返すと、画面が「隠した」と言いながら公式サイトには出続ける
+    expect(
+      await screen.findByRole('button', { name: 'さくら 18:00–23:00 を非公開にする' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'あおい 19:00–22:00 を非公開にする' })
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith('1件のシフトの公開状態を変更できませんでした')
+    );
+  });
+
+  it('パネルの Switch も同じ切替の口へ入ること', async () => {
+    mockedShiftList.mockResolvedValue([shown]);
+    mockedChangePublication.mockResolvedValue({ ...shown, published: false });
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('switch', { name: 'さくら 18:00–23:00 を公開する' }));
+
+    await waitFor(() => expect(mockedChangePublication).toHaveBeenCalledWith('s1', false));
   });
 });

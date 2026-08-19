@@ -1,10 +1,11 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, PlusIcon } from 'lucide-react';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
 import { Button, Input, RegionError } from '@/shared/ui';
 import { addDaysStr, shiftSpan, toDateStr } from '../lib/datetime';
+import { isUnpublished } from '../lib/publication';
 
 interface ShiftTimelineProps {
   /** 表示日 'yyyy-MM-dd'。 */
@@ -18,6 +19,9 @@ interface ShiftTimelineProps {
   onChangeDate: (date: string) => void;
   onAddShift: () => void;
   onEditShift: (shift: ShiftResponse) => void;
+  /** 公開可否の切替中。逐行更新の途中で押し増されると、どの行がどちらへ向かうか読めなくなる。 */
+  publishing: boolean;
+  onChangePublication: (targets: ShiftResponse[], published: boolean) => void;
 }
 
 /** クイックジャンプは選択中の日ではなく実際の今日を基準にする。 */
@@ -43,6 +47,8 @@ export function ShiftTimeline({
   onChangeDate,
   onAddShift,
   onEditShift,
+  publishing,
+  onChangePublication,
 }: ShiftTimelineProps) {
   // id が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
   const castName = (id: string | undefined) =>
@@ -209,26 +215,51 @@ export function ShiftTimeline({
                       {rowShifts.map(s => {
                         const { start, end } = shiftSpan(s.start_time, s.end_time);
                         const confirmed = s.status === 'CONFIRMED';
+                        const hidden = isUnpublished(s);
+                        const label = `${castName(castId)} ${fmt(s.start_time)}–${fmt(s.end_time)}`;
                         return (
-                          <button
-                            type="button"
+                          // 目玉はバーの中に置くが、編集の口とは別の押しどころなので入れ子の
+                          // ボタンにはできない。バーの見た目を持つ器に、二つのボタンを並べる。
+                          <div
                             key={s.id}
-                            onClick={() => onEditShift(s)}
-                            className={`absolute top-1 flex h-7 items-center overflow-hidden rounded px-2 text-xs font-medium shadow-sm ${
-                              confirmed
-                                ? 'bg-success text-success-foreground hover:bg-success/90'
-                                : 'bg-warning text-warning-foreground hover:bg-warning/90'
+                            className={`absolute top-1 flex h-7 items-center overflow-hidden rounded text-xs font-medium shadow-sm ${
+                              !confirmed
+                                ? 'bg-warning text-warning-foreground hover:bg-warning/90'
+                                : hidden
+                                  ? 'border-2 border-dashed border-success-strong text-foreground'
+                                  : 'bg-success text-success-foreground hover:bg-success/90'
                             }`}
                             style={{
                               left: `${pct(start)}%`,
                               width: `${Math.max(pct(end) - pct(start), 4)}%`,
                             }}
-                            title={`${castName(castId)} ${fmt(s.start_time)}–${fmt(s.end_time)}`}
+                            title={label}
                           >
-                            <span className="truncate">
+                            <button
+                              type="button"
+                              onClick={() => onEditShift(s)}
+                              className="min-w-0 flex-1 truncate px-2 text-left"
+                              aria-label={`${label} を編集`}
+                            >
                               {fmt(s.start_time)}–{fmt(s.end_time)}
-                            </span>
-                          </button>
+                            </button>
+                            {/* 仮シフトは公開の操作面を持たない（TENTATIVE はフラグ値に関わらず店外へ出ない） */}
+                            {confirmed && (
+                              <button
+                                type="button"
+                                disabled={publishing}
+                                onClick={() => onChangePublication([s], hidden)}
+                                className="shrink-0 px-1.5 disabled:opacity-50"
+                                aria-label={`${label} を${hidden ? '公開する' : '非公開にする'}`}
+                              >
+                                {hidden ? (
+                                  <EyeOffIcon className="h-3.5 w-3.5" />
+                                ) : (
+                                  <EyeIcon className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
