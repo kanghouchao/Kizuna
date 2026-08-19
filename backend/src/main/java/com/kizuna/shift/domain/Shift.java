@@ -83,12 +83,13 @@ public class Shift extends StoreScopedEntity {
   }
 
   /**
-   * 予定終了の暦日付き時刻。終了時刻が開始時刻以下の行は日跨ぎとして翌日へ送る。
+   * 予定終了の暦日付き時刻。勤務日は暦日ではなく営業日なので、日付変更時刻より前に始まる枠は翌暦日に来る — 暦日へ写してから、終了が開始以下の行を日跨ぎとして更に翌日へ送る。
    *
-   * <p>跨ぎの解釈は表示側にも散っているが、判定に使う分はここへ寄せる — 欠勤導出の門が「予定終了の経過」を 問う以上、跨ぎを読み違えれば進行中のシフトがそのまま欠勤に化ける。
+   * <p>判定に使う跨ぎの解釈はここへ寄せる。欠勤導出の門が「予定終了の経過」を問う以上、読み違えれば進行中の シフトがそのまま欠勤に化ける。
    */
-  public LocalDateTime scheduledEndAt() {
-    LocalDate endDate = endTime.isAfter(startTime) ? workDate : workDate.plusDays(1);
+  public LocalDateTime scheduledEndAt(LocalTime dateChangeTime) {
+    LocalDate startDate = startTime.isBefore(dateChangeTime) ? workDate.plusDays(1) : workDate;
+    LocalDate endDate = endTime.isAfter(startTime) ? startDate : startDate.plusDays(1);
     return endDate.atTime(endTime);
   }
 

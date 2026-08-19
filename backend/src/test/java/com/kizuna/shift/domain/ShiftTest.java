@@ -87,11 +87,12 @@ class ShiftTest {
   }
 
   @Test
-  @DisplayName("終了時刻が開始より後なら予定終了は同じ勤務日")
-  void scheduledEndAt_withinTheSameDay() {
+  @DisplayName("日付変更時刻が既定 00:00 なら勤務日はそのまま暦日として読まれる")
+  void scheduledEndAt_withMidnightBoundaryKeepsCalendarSemantics() {
     Shift shift = baseShift();
 
-    assertThat(shift.scheduledEndAt()).isEqualTo(LocalDateTime.of(2026, 7, 8, 23, 0));
+    assertThat(shift.scheduledEndAt(LocalTime.MIDNIGHT))
+        .isEqualTo(LocalDateTime.of(2026, 7, 8, 23, 0));
   }
 
   @Test
@@ -100,11 +101,29 @@ class ShiftTest {
     Shift shift = baseShift();
     shift.apply(new ShiftPatch(null, null, LocalTime.of(23, 0), LocalTime.of(7, 0), null));
 
-    assertThat(shift.scheduledEndAt()).isEqualTo(LocalDateTime.of(2026, 7, 9, 7, 0));
+    assertThat(shift.scheduledEndAt(LocalTime.MIDNIGHT))
+        .isEqualTo(LocalDateTime.of(2026, 7, 9, 7, 0));
 
     // 境界: 開始と一致する終了も「以下」なので翌日、つまり 24 時間勤務として読む。
     shift.apply(new ShiftPatch(null, null, null, LocalTime.of(23, 0), null));
-    assertThat(shift.scheduledEndAt()).isEqualTo(LocalDateTime.of(2026, 7, 9, 23, 0));
+    assertThat(shift.scheduledEndAt(LocalTime.MIDNIGHT))
+        .isEqualTo(LocalDateTime.of(2026, 7, 9, 23, 0));
+  }
+
+  @Test
+  @DisplayName("日付変更時刻より前に始まる枠は、勤務日ではなくその翌暦日に来る")
+  void scheduledEndAt_whenTheShiftStartsBeforeTheDateChangeTime() {
+    Shift shift = baseShift();
+    shift.apply(new ShiftPatch(null, null, LocalTime.of(2, 0), LocalTime.of(7, 0), null));
+
+    // 勤務日 07-08 は営業日。日付変更時刻 05:00 の下では 02:00 も 07:00 も暦日 07-09 に来る。
+    assertThat(shift.scheduledEndAt(LocalTime.of(5, 0)))
+        .isEqualTo(LocalDateTime.of(2026, 7, 9, 7, 0));
+
+    // 対照: 日付変更時刻を跨いで終わる枠は、開始側だけが翌暦日へ送られる。
+    shift.apply(new ShiftPatch(null, null, LocalTime.of(18, 0), LocalTime.of(6, 0), null));
+    assertThat(shift.scheduledEndAt(LocalTime.of(5, 0)))
+        .isEqualTo(LocalDateTime.of(2026, 7, 9, 6, 0));
   }
 
   @Test

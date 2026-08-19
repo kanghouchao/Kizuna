@@ -39,7 +39,19 @@ public interface AttendanceRepository extends JpaRepository<Attendance, String> 
     return !findShiftIdsWithActiveAttendance(List.of(shiftId)).isEmpty();
   }
 
-  /** そのシフトの未取消の実績。取消済みは導出・照会から外れる（ADR 0014）ので、部分一意索引の効く範囲と一致し、 返るのは高々 1 行である。 */
+  /**
+   * 指定営業日に未取消の実績があるキャスト。欠勤導出が「出勤した」を数える唯一の口である。
+   *
+   * <p>投影で引くのは、欠勤導出が要るのがキャストの集合だけで、並びを要さないためである。
+   */
+  @Query(
+      """
+      select distinct a.castId from com.kizuna.shift.domain.Attendance a
+      where a.businessDate = :businessDate and a.cancelledAt is null
+      """)
+  Set<String> findCastIdsWithActiveAttendanceOn(@Param("businessDate") LocalDate businessDate);
+
+  /** そのシフトの未取消の実績。取消済みは照会から外れる（ADR 0014）ので、返るのは部分一意索引どおり高々 1 行である。 */
   Optional<Attendance> findByShiftIdAndCancelledAtIsNull(String shiftId);
 
   /** そのシフトを参照する実績があるか。削除の可否だけは取消済みも数える（ADR 0014）。 */

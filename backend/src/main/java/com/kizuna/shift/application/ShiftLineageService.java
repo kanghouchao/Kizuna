@@ -25,13 +25,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * シフト 1 本を起点に系列（希望・変更申請・当日実績）を辿る読み口。
- *
- * <p>系列の背骨は申請側の shift_id である。シフト自身は申請を指し返さないので、辿れるのは「シフトが存在する間」に 限られる — 削除された系列の考古学は要件に含まれない（ADR
+ * シフト 1 本を起点に系列（希望・変更申請・当日実績）を辿る読み口。背骨は申請側の shift_id で、シフトは申請を 指し返さないため、辿れるのは「シフトが存在する間」に限られる（ADR
  * 0014）。
  *
- * <p>実績は未取消の 1 行だけを載せる。取消済みを導出・照会から外すのは ADR 0014 の既決で、この読み口だけ全史を
- * 出すと「取消済みはどの読み口にも現れない」という前提が片面だけ崩れる。
+ * <p>実績は未取消の 1 行だけを載せる。ここだけ全史を出すと「取消済みはどの読み口にも現れない」という ADR 0014 の前提が片面だけ崩れる。
  */
 @Service
 @RequiredArgsConstructor
@@ -105,10 +102,8 @@ public class ShiftLineageService {
   }
 
   /**
-   * 系列に現れる実行主体の表示名を一度に引く。
-   *
-   * <p>行に残るのは id だけで、店舗側の呼び手には利用者を引く読み口が無い（{@code /platform/staff} は平台面）。 名前をここで解決しなければ「実行主体が辿れる」は
-   * 不透明な数値までで止まる。
+   * 系列に現れる実行主体の表示名を一度に引く。行に残るのは id だけで、店舗側の呼び手には利用者を引く読み口が 無い（{@code /platform/staff}
+   * は平台面）ため、ここで解決しないと「実行主体が辿れる」が数値で止まる。
    */
   private Map<Long, String> resolveActorNames(
       Shift shift, List<ShiftRequest> requests, Attendance attendance) {
