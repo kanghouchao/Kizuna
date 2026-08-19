@@ -81,7 +81,9 @@ public class AttendanceService {
   @Transactional
   public AttendanceResponse record(AttendanceCreateRequest request, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    if (!castService.existsForCurrentStore(request.getCastId())) {
+    // 実績行はキャストとシフトの両方を指す。押さえる順序は系全体で キャスト → シフト に揃える
+    // （逆順に押さえるとキャスト削除の連鎖と環になる。契約は CastRepository#findScopedByIdForUpdate）。
+    if (!castService.existsForCurrentStoreForUpdate(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
     Attendance attendance =

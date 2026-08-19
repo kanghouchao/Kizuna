@@ -1,5 +1,6 @@
 package com.kizuna.cast.domain;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
@@ -7,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -80,4 +82,18 @@ public interface CastRepository
       order by st.name asc
       """)
   List<CastStoreView> findStoresByPlatformUserId(@Param("platformUserId") Long platformUserId);
+
+  /**
+   * 現店舗のキャスト 1 件を、そのキャストを指す行を建てる間だけ押さえて引く。
+   *
+   * <p>キャストの削除はシフトへ連鎖する（{@code fk_t_shifts_cast} は CASCADE）。一方、キャストとシフトの両方を
+   * 指す行（当日実績）を建てる側は、シフトの勤務日を読むためにシフト行も押さえる。両者が逆順で押さえると
+   * 「削除がキャストを押さえてシフトを待つ」「記録がシフトを押さえてキャストを待つ」で環になり、PostgreSQL が 一方を deadlock で中断する（制約名の写像では救えない
+   * 500）。
+   *
+   * <p>そこで**キャスト → シフト**を系全体の順序とする。この読み口はその順序の入口であり、キャストとシフトを 同時に指す行を建てる操作は、シフトを押さえる前にここを通る。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select c from com.kizuna.cast.domain.Cast c where c.id = :id")
+  Optional<Cast> findScopedByIdForUpdate(@Param("id") String id);
 }

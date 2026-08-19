@@ -182,19 +182,7 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> recorded =
         whileHoldingTheShiftRow(
             shiftId,
-            () ->
-                rest.postForEntity(
-                    "/store/attendances",
-                    new HttpEntity<>(
-                        "{\"cast_id\": \""
-                            + castId
-                            + "\", \"shift_id\": \""
-                            + shiftId
-                            + "\", \"actual_start_at\": \""
-                            + LocalDateTime.of(WORK_DATE, LocalTime.of(18, 5))
-                            + "\"}",
-                        storeHeaders(STORE_A)),
-                    JsonNode.class),
+            () -> record(castId, shiftId),
             holder -> updateWorkDate(holder, shiftId, OTHER_WORK_DATE));
 
     assertThat(recorded.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -219,6 +207,60 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
         .as("待っている間に記録された実績を読み直して拒否すること")
         .isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(updated.getBody().path("error").asString()).contains("勤務日とキャストは変更できません");
+  }
+
+  @Test
+  @DisplayName("記録がシフトより先にキャストを押さえること（逆順だとキャスト削除の連鎖と環になる）")
+  void recordingTakesTheCastRowBeforeTheShiftRow() throws Exception {
+    // キャストの削除はシフトへ連鎖する（fk_t_shifts_cast は CASCADE）ので「キャスト → シフト」の順に
+    // 押さえる。記録が逆順に押さえると環になり、PostgreSQL が一方を deadlock で中断する — 制約名の
+    // 写像では救えないので、日常操作の片方が 500 を受け取る。
+    //
+    // 順序そのものを見る: キャスト行を外から押さえて記録を待たせ、その間にシフト行を「待たずに」取れるか
+    // 試す。取れれば記録はまだシフトへ手を伸ばしていない。逆順の実装なら取れない。
+    String castId = newCast();
+    String shiftId = seedConfirmedShift(castId);
+
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try (Connection holder = dataSource.getConnection()) {
+      holder.setAutoCommit(false);
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE")) {
+        statement.setString(1, castId);
+        assertThat(statement.executeQuery().next()).as("前提: キャスト行を押さえられること").isTrue();
+      }
+
+      Future<ResponseEntity<JsonNode>> waiting = pool.submit(() -> record(castId, shiftId));
+      assertThatThrownBy(() -> waiting.get(3, TimeUnit.SECONDS))
+          .as("前提: キャスト行が押さえられている間は進めないこと")
+          .isInstanceOf(TimeoutException.class);
+
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_shifts WHERE id = ? FOR UPDATE NOWAIT")) {
+        statement.setString(1, shiftId);
+        assertThat(statement.executeQuery().next()).as("キャストで待っている間、シフト行はまだ押さえられていないこと").isTrue();
+      }
+
+      holder.rollback();
+      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  private ResponseEntity<JsonNode> record(String castId, String shiftId) {
+    return rest.postForEntity(
+        "/store/attendances",
+        new HttpEntity<>(
+            "{\"cast_id\": \""
+                + castId
+                + "\", \"shift_id\": \""
+                + shiftId
+                + "\", \"actual_start_at\": \""
+                + LocalDateTime.of(WORK_DATE, LocalTime.of(18, 5))
+                + "\"}",
+            storeHeaders(STORE_A)),
+        JsonNode.class);
   }
 
   /**
