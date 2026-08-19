@@ -407,6 +407,43 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
                 JsonNode.class));
   }
 
+  @Test
+  @DisplayName("受諾が档案より先に店舗行を押さえること")
+  void acceptanceTakesTheStoreRowBeforeTheCastRow() throws Exception {
+    // 受諾は身分の所属店舗（t_user_stores）を書くので、その INSERT が店舗行に key share を要求する。
+    // 档案を先に押さえると、店舗削除（店舗行を押さえてから配下へ CASCADE）と逆順になり環になる（ADR 0016）。
+    String castId = createCast(STORE_A, "受諾ロック順店舗テスト");
+    String token = issue(castId, STORE_A);
+    String email = "cast-lockorder-store-it-" + System.nanoTime() + "@kizuna.test";
+
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try (Connection holder = dataSource.getConnection()) {
+      holder.setAutoCommit(false);
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_stores WHERE id = ? FOR UPDATE")) {
+        statement.setLong(1, STORE_A);
+        assertThat(statement.executeQuery().next()).as("前提: 店舗行を押さえられること").isTrue();
+      }
+
+      Future<ResponseEntity<JsonNode>> waiting =
+          pool.submit(() -> acceptNewUser(token, email, "password1234", "店舗順序花子"));
+      assertThatThrownBy(() -> waiting.get(3, TimeUnit.SECONDS))
+          .as("前提: 店舗行が押さえられている間は進めないこと")
+          .isInstanceOf(TimeoutException.class);
+
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE NOWAIT")) {
+        statement.setString(1, castId);
+        assertThat(statement.executeQuery().next()).as("店舗で待っている間、档案行はまだ押さえられていないこと").isTrue();
+      }
+
+      holder.rollback();
+      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode().is2xxSuccessful()).isTrue();
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
   /**
    * 受諾が「キャスト行 → 招待行」の順に押さえることを、順序そのもので見る（ADR 0016）。
    *
