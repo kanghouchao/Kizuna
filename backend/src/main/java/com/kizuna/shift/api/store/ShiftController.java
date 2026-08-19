@@ -44,7 +44,7 @@ public class ShiftController {
     return ResponseEntity.ok(shiftService.list(from, to));
   }
 
-  /** 1 本のシフトを系列（申請・当日実績）ごと返す。字面の {@code /public} とは値空間が交わらない — シフト id は 数字だけの Snowflake である。 */
+  /** 1 本のシフトを系列ごと返す。字面の {@code /public} とは値空間が交わらない（シフト id は数字だけの Snowflake）。 */
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftDetailResponse> detail(@PathVariable String id) {

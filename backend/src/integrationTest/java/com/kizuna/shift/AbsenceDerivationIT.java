@@ -27,13 +27,11 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 欠勤導出を本物の PostgreSQL で確かめる統合テスト。
+ * 欠勤導出を本物の PostgreSQL で確かめる統合テスト。主題は述語が DB に届いているかで、「取消済みを数えない」も
+ * 「他店舗を見ない」も問い合わせの側にあり、模擬したリポジトリでは決して赤にならない。
  *
- * <p>ここでの主題は述語が DB に届いているかである — 「取消済みを数えない」も「他店舗を見ない」も問い合わせの側に
- * あり、模擬したリポジトリでは決して赤にならない。門の時刻演算（営業日の終了 ∧ 最遅予定終了の経過）は AbsenceServiceTest が
- * 固定時計で押さえるので、こちらは門が通ることが自明な過去の営業日だけを使う。
- *
- * <p>実 DB は実行間で残留しうるので、断言は自分が建てたキャストの id に対する包含・非包含で行う。
+ * <p>門の時刻演算は AbsenceServiceTest が固定時計で押さえるので、こちらは門が通ることが自明な過去の営業日だけを 使う。実 DB
+ * は残留しうるので、断言は自分が建てたキャストの id への包含・非包含で行う。
  */
 class AbsenceDerivationIT extends CrossStoreTestSupport {
 

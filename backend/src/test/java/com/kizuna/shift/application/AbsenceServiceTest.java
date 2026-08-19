@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shift.api.dto.AbsenceResponse;
-import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -20,6 +19,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,15 +61,8 @@ class AbsenceServiceTest {
 
   private void givenActiveAttendanceCastIds(String... castIds) {
     lenient()
-        .when(
-            attendanceRepository.findByBusinessDateAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
-                BUSINESS_DATE))
-        .thenReturn(List.of(castIds).stream().map(AbsenceServiceTest::attendanceOf).toList());
-  }
-
-  private static Attendance attendanceOf(String castId) {
-    return Attendance.record(
-        castId, null, BUSINESS_DATE, LocalDateTime.of(2026, 8, 18, 19, 0), null, null, 1L);
+        .when(attendanceRepository.findCastIdsWithActiveAttendanceOn(BUSINESS_DATE))
+        .thenReturn(Set.of(castIds));
   }
 
   private static Shift shiftOf(String castId, LocalTime startTime, LocalTime endTime) {
@@ -104,6 +97,20 @@ class AbsenceServiceTest {
     assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(BUSINESS_DATE)).isEmpty();
 
     // 正向対照: 予定終了を過ぎれば同じシフトが欠勤として出る。
+    assertThat(castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 7, 0)).list(BUSINESS_DATE)))
+        .containsExactly(CAST_ID);
+  }
+
+  @Test
+  @DisplayName("日付変更時刻より前に始まる枠は翌暦日に来るので、その予定終了まで欠勤にならない")
+  void doesNotDeriveWhileAShiftStartingAfterMidnightIsStillRunning() {
+    // 勤務日は暦日ではなく営業日。日付変更時刻 05:00 の下では、営業日 08-18 の 02:00 は暦日 08-19 に来る。
+    givenConfirmedShifts(shiftOf(CAST_ID, LocalTime.of(2, 0), LocalTime.of(7, 0)));
+
+    // 営業日は 08-19 05:00 に終わったが、この枠は 08-19 07:00 まで勤務中である。
+    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(BUSINESS_DATE)).isEmpty();
+
+    // 正向対照: 予定終了を過ぎれば欠勤として出る。
     assertThat(castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 7, 0)).list(BUSINESS_DATE)))
         .containsExactly(CAST_ID);
   }

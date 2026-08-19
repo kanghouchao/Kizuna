@@ -10,9 +10,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * シフト 1 本の詳細＝系列の全体。希望・変更申請（shift_id の背骨で結ばれた申請）と当日実績を、 状態ごとの実行主体・日時付きで内联する。
- *
- * <p>一覧の {@link ShiftResponse} と分けるのは、系列が一覧の全行に要る情報ではないためである。
+ * シフト 1 本の詳細＝系列の全体。希望・変更申請と当日実績を、状態ごとの実行主体・日時付きで内联する。 一覧の {@link ShiftResponse}
+ * と分けるのは、系列が一覧の全行に要る情報ではないためである。
  */
 @Data
 @Builder
@@ -38,7 +37,12 @@ public class ShiftDetailResponse {
   private OffsetDateTime createdAt;
   private OffsetDateTime updatedAt;
 
-  /** 出生（NEW）と変更申請（CHANGE）の履歴を古い順に。店舗が直接作成したシフトでは空。 */
+  /**
+   * 出生（NEW）と変更申請（CHANGE）の履歴を古い順に。店舗が直接作成したシフトでは空。
+   *
+   * <p>裸の {@code List} で持つ。1 本のシフトへ出せる変更申請に構造上の上限は無いが、対象が確定済みかつ勤務日前の
+   * シフトに限られるため運用上は一桁に収まる（api-guidelines §5 に対する意図的な選択）。
+   */
   private List<ShiftRequestLineageResponse> requests;
 
   /** 未取消の当日実績。未記録・取消済みしか無い場合は null。 */
