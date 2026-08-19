@@ -6,14 +6,12 @@ import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
 import { getApiErrorMessage } from '@/shared/lib';
-import { SELECT_NONE, castValue } from '../lib/castSelect';
+import { SELECT_NONE, castValue } from '../lib/cast-select';
 import { hhmm } from '../lib/datetime';
+import { ShiftDialogShell } from './ShiftDialogShell';
 import {
   Button,
   ConfirmDialog,
-  Dialog,
-  DialogContent,
-  DialogTitle,
   Form,
   FormControl,
   FormDescription,
@@ -160,196 +158,186 @@ export function ShiftFormModal({
   };
 
   return (
-    <Dialog
+    <ShiftDialogShell
       open={open}
-      onOpenChange={next => {
-        if (!next) onClose();
-      }}
+      onClose={onClose}
+      title={editing ? 'シフトを編集' : 'シフトを追加'}
     >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
-      >
-        <DialogTitle className="border-b px-6 py-4">
-          {editing ? 'シフトを編集' : 'シフトを追加'}
-        </DialogTitle>
-        <Form {...form}>
-          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+      <Form {...form}>
+        {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。執行は各 rules が担う */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            {/* 塞いだ欄の手前で理由を述べる。無効化した控件は焦点を取れず、欄に紐づけた説明は
+        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
+          {/* 塞いだ欄の手前で理由を述べる。無効化した控件は焦点を取れず、欄に紐づけた説明は
                 読み上げに届かない — 押せない口の理由は本文の側に置く。逃げ道は操作ごとに違い、
                 削除だけは実績を取り消しても戻らない（RESTRICT — ADR 0014）ので別々に書く */}
-            {locked && (
-              <div className="rounded-md bg-muted px-3 py-2 text-xs text-foreground">
-                <p>当日実績が記録されているため、このシフトは一部の操作を受け付けません。</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  <li>勤務日とキャストの変更 — 当日実績タブで実績を取り消してから行います。</li>
-                  <li>
-                    削除 — 実績を取り消しても行えません。ステータスを未確定に戻して無効にします。
-                  </li>
-                </ul>
-              </div>
-            )}
-            <FormField
-              control={control}
-              name="cast_id"
-              rules={{ required: 'キャストを選択してください' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>キャスト</FormLabel>
-                  <Select
-                    items={castOptions}
-                    value={castValue(field.value, castOptions)}
-                    onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
-                    disabled={locked}
-                    required
-                  >
-                    <FormControl>
-                      {/* handleSubmit の焦点移動は登録された ref を叩く。ref が trigger へ
-                          届かないと、文言だけ出て焦点が動かない。 */}
-                      <SelectTrigger className="w-full" ref={field.ref}>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {castOptions.map(o => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={control}
-              name="work_date"
-              rules={{ required: '日付を入力してください' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>日付</FormLabel>
+          {locked && (
+            <div className="rounded-md bg-muted px-3 py-2 text-xs text-foreground">
+              <p>当日実績が記録されているため、このシフトは一部の操作を受け付けません。</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                <li>勤務日とキャストの変更 — 当日実績タブで実績を取り消してから行います。</li>
+                <li>
+                  削除 — 実績を取り消しても行えません。ステータスを未確定に戻して無効にします。
+                </li>
+              </ul>
+            </div>
+          )}
+          <FormField
+            control={control}
+            name="cast_id"
+            rules={{ required: 'キャストを選択してください' }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>キャスト</FormLabel>
+                <Select
+                  items={castOptions}
+                  value={castValue(field.value, castOptions)}
+                  onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                  disabled={locked}
+                  required
+                >
                   <FormControl>
-                    <Input type="date" required disabled={locked} {...field} />
+                    {/* handleSubmit の焦点移動は登録された ref を叩く。ref が trigger へ
+                          届かないと、文言だけ出て焦点が動かない。 */}
+                    <SelectTrigger className="w-full" ref={field.ref}>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {castOptions.map(o => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name="work_date"
+            rules={{ required: '日付を入力してください' }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>日付</FormLabel>
+                <FormControl>
+                  <Input type="date" required disabled={locked} {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={control}
+              name="start_time"
+              rules={{ required: '開始時刻を入力してください' }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>開始</FormLabel>
+                  <FormControl>
+                    <Input type="time" required {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={control}
-                name="start_time"
-                rules={{ required: '開始時刻を入力してください' }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>開始</FormLabel>
-                    <FormControl>
-                      <Input type="time" required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={control}
-                name="end_time"
-                rules={{ required: '終了時刻を入力してください' }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>終了</FormLabel>
-                    <FormControl>
-                      <Input type="time" required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              終了が開始以前のときは翌日にまたがる勤務として扱います。
-            </p>
             <FormField
               control={control}
-              name="status"
+              name="end_time"
+              rules={{ required: '終了時刻を入力してください' }}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>ステータス</FormLabel>
-                  <Select items={STATUS_OPTIONS} value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map(o => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>終了</FormLabel>
+                  <FormControl>
+                    <Input type="time" required {...field} />
+                  </FormControl>
+                  <FormMessage />
                 </FormItem>
               )}
             />
-            {/* 出生時だけこの口が決める（理由は lib/publication.ts）。編集では出さない — 既に目玉と
+          </div>
+          <p className="text-xs text-muted-foreground">
+            終了が開始以前のときは翌日にまたがる勤務として扱います。
+          </p>
+          <FormField
+            control={control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>ステータス</FormLabel>
+                <Select items={STATUS_OPTIONS} value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
+          />
+          {/* 出生時だけこの口が決める（理由は lib/publication.ts）。編集では出さない — 既に目玉と
                 公開パネルという二つの入口があり、三つ目は保存のたびに切替をもう一度打つ経路を
                 増やすだけになる */}
-            {!editing && (
-              <FormField
-                control={control}
-                name="published"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between gap-3">
-                    <div>
-                      <FormLabel>公式サイトに公開する</FormLabel>
-                      <FormDescription className="mt-1 text-xs">
-                        確定シフトだけが出勤表に出ます。内密の出勤はここで外してから追加します。
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            )}
-            <div className="flex items-center justify-between border-t pt-4">
-              <div>
-                {/* 未取消の実績が付いている間は削除の口を出さない。取消済みしか無くなった行は
+          {!editing && (
+            <FormField
+              control={control}
+              name="published"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between gap-3">
+                  <div>
+                    <FormLabel>公式サイトに公開する</FormLabel>
+                    <FormDescription className="mt-1 text-xs">
+                      確定シフトだけが出勤表に出ます。内密の出勤はここで外してから追加します。
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
+          <div className="flex items-center justify-between border-t pt-4">
+            <div>
+              {/* 未取消の実績が付いている間は削除の口を出さない。取消済みしか無くなった行は
                     画面からは見分けられず口が戻るが、そこは後端が同じ文言で拒む */}
-                {editing && !locked && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setConfirmOpen(true)}
-                    className="text-destructive-strong"
-                  >
-                    削除
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-3">
-                <Button type="button" variant="outline" onClick={onClose}>
-                  キャンセル
+              {editing && !locked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setConfirmOpen(true)}
+                  className="text-destructive-strong"
+                >
+                  削除
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? '保存中...' : '保存する'}
-                </Button>
-              </div>
+              )}
             </div>
-          </form>
-        </Form>
-        <ConfirmDialog
-          open={confirmOpen}
-          title="このシフトを削除しますか？"
-          onConfirm={() => void handleDelete()}
-          onClose={() => setConfirmOpen(false)}
-        />
-      </DialogContent>
-    </Dialog>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" onClick={onClose}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? '保存中...' : '保存する'}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Form>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="このシフトを削除しますか？"
+        onConfirm={() => void handleDelete()}
+        onClose={() => setConfirmOpen(false)}
+      />
+    </ShiftDialogShell>
   );
 }

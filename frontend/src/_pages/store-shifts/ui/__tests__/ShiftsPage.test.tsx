@@ -407,13 +407,19 @@ describe('当日実績の記録・訂正・取消', () => {
   const SAKURA = { id: 'c1', name: 'さくら' };
   const AOI = { id: 'c2', name: 'あおい' };
 
-  /** さくらの確定シフト 18:00–23:00。 */
+  /**
+   * さくらの確定シフト 18:00–23:00。予定の暦日は後端が写した scheduled_* が正本で、勤務日
+   * （営業日）とは別の日でありうる — ここではその区別が出るよう、わざと翌暦日に置いている。
+   */
+  const NEXT_CALENDAR_DAY = addDaysStr(TODAY, 1);
   const shift = {
     id: 's1',
     cast_id: 'c1',
     work_date: TODAY,
     start_time: '18:00:00',
     end_time: '23:00:00',
+    scheduled_start_at: `${NEXT_CALENDAR_DAY}T18:00:00`,
+    scheduled_end_at: `${NEXT_CALENDAR_DAY}T23:00:00`,
     status: 'CONFIRMED',
     published: true,
   };
@@ -468,8 +474,9 @@ describe('当日実績の記録・訂正・取消', () => {
     expect(mockedRecord).toHaveBeenCalledWith({
       cast_id: 'c1',
       shift_id: 's1',
-      // 予定の時間帯を初期値に置く。空欄は「値なし」であって空文字ではない
-      actual_start_at: `${TODAY}T18:00`,
+      // 勤務日＋開始時刻ではなく、後端が暦日へ写した予定開始を初期値に置く。営業日が
+      // 日付変更時刻を跨ぐ帯では両者が 24 時間ずれる。空欄は「値なし」であって空文字ではない
+      actual_start_at: `${NEXT_CALENDAR_DAY}T18:00`,
       actual_end_at: null,
       waiting_place: null,
     });
@@ -639,7 +646,9 @@ describe('当日実績の記録・訂正・取消', () => {
     await openBoard();
 
     expect(await screen.findByText('欠勤')).toBeInTheDocument();
-    expect(screen.getByText('欠勤 1件')).toBeInTheDocument();
+    // 欠勤は未記録の部分集合。並べて置くと同じ人が二度数えられているように読める
+    expect(screen.getByText('（うち欠勤 1件）')).toBeInTheDocument();
+    expect(screen.getByText(/未記録 1件/)).toBeInTheDocument();
     // 欠勤と判った枠に記録の口は残さない
     expect(screen.queryByRole('button', { name: /記録する/ })).not.toBeInTheDocument();
   });

@@ -127,6 +127,32 @@ class ShiftTest {
   }
 
   @Test
+  @DisplayName("日付変更時刻が既定 00:00 なら予定開始は勤務日そのままの暦日に来る")
+  void scheduledStartAt_withMidnightBoundaryKeepsCalendarSemantics() {
+    Shift shift = baseShift();
+
+    assertThat(shift.scheduledStartAt(LocalTime.MIDNIGHT))
+        .isEqualTo(LocalDateTime.of(2026, 7, 8, 18, 0));
+  }
+
+  @Test
+  @DisplayName("日付変更時刻より前に始まる枠の予定開始は、勤務日ではなくその翌暦日に来る")
+  void scheduledStartAt_whenTheShiftStartsBeforeTheDateChangeTime() {
+    Shift shift = baseShift();
+    shift.apply(new ShiftPatch(null, null, LocalTime.of(2, 0), LocalTime.of(7, 0), null));
+
+    // 勤務日 07-08 は営業日。日付変更時刻 05:00 の下で 02:00 が来るのは暦日 07-09。
+    // 勤務日をそのまま暦日として組むと 24 時間ずれる — 前端に組ませない理由がここにある。
+    assertThat(shift.scheduledStartAt(LocalTime.of(5, 0)))
+        .isEqualTo(LocalDateTime.of(2026, 7, 9, 2, 0));
+
+    // 対照: 日付変更時刻以降に始まる枠は勤務日のまま。
+    shift.apply(new ShiftPatch(null, null, LocalTime.of(18, 0), null, null));
+    assertThat(shift.scheduledStartAt(LocalTime.of(5, 0)))
+        .isEqualTo(LocalDateTime.of(2026, 7, 8, 18, 0));
+  }
+
+  @Test
   void apply_withEmptyPatch_changesNothing() {
     Shift shift = baseShift();
 

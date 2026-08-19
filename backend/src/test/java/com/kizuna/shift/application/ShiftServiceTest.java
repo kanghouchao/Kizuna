@@ -3,6 +3,7 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -92,7 +93,7 @@ class ShiftServiceTest {
     when(shiftRepository.findByWorkDateBetween(from, to)).thenReturn(List.of(s));
     ShiftResponse resp = new ShiftResponse();
     resp.setId("s1");
-    when(shiftMapper.toResponse(s)).thenReturn(resp);
+    when(shiftMapper.toResponse(eq(s), any())).thenReturn(resp);
 
     List<ShiftResponse> result = shiftService.list(from, to);
     assertThat(result).hasSize(1);
@@ -118,7 +119,7 @@ class ShiftServiceTest {
 
     ShiftResponse resp = new ShiftResponse();
     resp.setId("s_new");
-    when(shiftMapper.toResponse(any())).thenReturn(resp);
+    when(shiftMapper.toResponse(any(), any())).thenReturn(resp);
 
     ShiftResponse res = shiftService.create(req, ACTOR_EMAIL);
     assertThat(res.getId()).isEqualTo("s_new");
@@ -164,7 +165,7 @@ class ShiftServiceTest {
 
     ShiftResponse resp = new ShiftResponse();
     resp.setStatus("CONFIRMED");
-    when(shiftMapper.toResponse(s)).thenReturn(resp);
+    when(shiftMapper.toResponse(eq(s), any())).thenReturn(resp);
 
     ShiftResponse result = shiftService.update("s1", req, ACTOR_EMAIL);
     assertThat(result.getStatus()).isEqualTo("CONFIRMED");
@@ -270,7 +271,7 @@ class ShiftServiceTest {
     req.setStatus(ShiftStatus.TENTATIVE);
     when(shiftMapper.toPatch(req))
         .thenReturn(new ShiftPatch(null, null, LocalTime.of(19, 0), null, ShiftStatus.TENTATIVE));
-    when(shiftMapper.toResponse(s)).thenReturn(new ShiftResponse());
+    when(shiftMapper.toResponse(eq(s), any())).thenReturn(new ShiftResponse());
 
     shiftService.update("s1", req, ACTOR_EMAIL);
 
@@ -293,7 +294,7 @@ class ShiftServiceTest {
     req.setWorkDate(LocalDate.of(2026, 7, 8));
     when(shiftMapper.toPatch(req))
         .thenReturn(new ShiftPatch("c1", LocalDate.of(2026, 7, 8), null, null, null));
-    when(shiftMapper.toResponse(s)).thenReturn(new ShiftResponse());
+    when(shiftMapper.toResponse(eq(s), any())).thenReturn(new ShiftResponse());
 
     shiftService.update("s1", req, ACTOR_EMAIL);
 
@@ -313,7 +314,7 @@ class ShiftServiceTest {
     req.setWorkDate(LocalDate.of(2026, 7, 9));
     when(shiftMapper.toPatch(req))
         .thenReturn(new ShiftPatch(null, LocalDate.of(2026, 7, 9), null, null, null));
-    when(shiftMapper.toResponse(s)).thenReturn(new ShiftResponse());
+    when(shiftMapper.toResponse(eq(s), any())).thenReturn(new ShiftResponse());
 
     shiftService.update("s1", req, ACTOR_EMAIL);
 
@@ -375,7 +376,7 @@ class ShiftServiceTest {
     givenActor();
     when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
     when(shiftRepository.save(shift)).thenReturn(shift);
-    when(shiftMapper.toResponse(shift)).thenReturn(new ShiftResponse());
+    when(shiftMapper.toResponse(eq(shift), any())).thenReturn(new ShiftResponse());
 
     shiftService.changePublication("s1", false, ACTOR_EMAIL);
 
@@ -396,7 +397,7 @@ class ShiftServiceTest {
     givenActor();
     when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
     when(shiftRepository.save(shift)).thenReturn(shift);
-    when(shiftMapper.toResponse(shift)).thenReturn(new ShiftResponse());
+    when(shiftMapper.toResponse(eq(shift), any())).thenReturn(new ShiftResponse());
 
     shiftService.changePublication("s1", false, ACTOR_EMAIL);
 

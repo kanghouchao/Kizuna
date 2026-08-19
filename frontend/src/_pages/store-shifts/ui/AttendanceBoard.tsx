@@ -160,10 +160,14 @@ export function AttendanceBoard({
           <h2 className="text-lg font-semibold text-foreground">{date} の実績</h2>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="text-success-strong">実績 {recordedCount}件</span>
-            <span className="text-muted-foreground">未記録 {unrecordedCount}件</span>
-            {absences.length > 0 && (
-              <span className="text-destructive-strong">欠勤 {absences.length}件</span>
-            )}
+            {/* 欠勤は未記録の部分集合（確定シフトあり・実績なしのうち門を過ぎた分）。並べて置くと
+                三つの排他な桶に読めて、同じ人が二度数えられているように見える */}
+            <span className="text-muted-foreground">
+              未記録 {unrecordedCount}件
+              {absences.length > 0 && (
+                <span className="text-destructive-strong">（うち欠勤 {absences.length}件）</span>
+              )}
+            </span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

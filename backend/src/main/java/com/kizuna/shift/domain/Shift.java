@@ -83,14 +83,28 @@ public class Shift extends StoreScopedEntity {
   }
 
   /**
-   * 予定終了の暦日付き時刻。勤務日は暦日ではなく営業日なので、日付変更時刻より前に始まる枠は翌暦日に来る — 暦日へ写してから、終了が開始以下の行を日跨ぎとして更に翌日へ送る。
+   * 予定開始の暦日付き時刻。勤務日は暦日ではなく営業日なので、日付変更時刻より前に始まる枠は翌暦日に来る。
+   *
+   * <p>この写像はここにしか無い。前端は日付変更時刻を読めない（{@code PERM_SYSTEM_CONFIG_MANAGE} 管理）ので、
+   * 勤務日と開始時刻から暦日付きの値を組ませると必ずこの帯でずれる。
+   */
+  public LocalDateTime scheduledStartAt(LocalTime dateChangeTime) {
+    return startDate(dateChangeTime).atTime(startTime);
+  }
+
+  /**
+   * 予定終了の暦日付き時刻。開始を暦日へ写してから、終了が開始以下の行を日跨ぎとして更に翌日へ送る。
    *
    * <p>判定に使う跨ぎの解釈はここへ寄せる。欠勤導出の門が「予定終了の経過」を問う以上、読み違えれば進行中の シフトがそのまま欠勤に化ける。
    */
   public LocalDateTime scheduledEndAt(LocalTime dateChangeTime) {
-    LocalDate startDate = startTime.isBefore(dateChangeTime) ? workDate.plusDays(1) : workDate;
+    LocalDate startDate = startDate(dateChangeTime);
     LocalDate endDate = endTime.isAfter(startTime) ? startDate : startDate.plusDays(1);
     return endDate.atTime(endTime);
+  }
+
+  private LocalDate startDate(LocalTime dateChangeTime) {
+    return startTime.isBefore(dateChangeTime) ? workDate.plusDays(1) : workDate;
   }
 
   /** 店外への露出可否を切り替える。部分更新コマンドとは別の口で受け、承認・時間帯の編集が公開可否を巻き込めないようにする。 */
