@@ -86,14 +86,20 @@ public interface CastRepository
   /**
    * 現店舗のキャスト 1 件を、そのキャストを指す行を建てる間だけ押さえて引く。
    *
-   * <p>キャストの削除はシフトへ連鎖する（{@code fk_t_shifts_cast} は CASCADE）。一方、キャストとシフトの両方を
-   * 指す行（当日実績）を建てる側は、シフトの勤務日を読むためにシフト行も押さえる。両者が逆順で押さえると
-   * 「削除がキャストを押さえてシフトを待つ」「記録がシフトを押さえてキャストを待つ」で環になり、PostgreSQL が 一方を deadlock で中断する（制約名の写像では救えない
-   * 500）。
-   *
-   * <p>そこで**キャスト → シフト**を系全体の順序とする。この読み口はその順序の入口であり、キャストとシフトを 同時に指す行を建てる操作は、シフトを押さえる前にここを通る。
+   * <p>キャストとシフトを同時に指す行（当日実績・シフトの付け替え）を建てる操作は、シフトを押さえる前に ここを通る。キャストの削除はシフトへ連鎖する（{@code
+   * fk_t_shifts_cast} は CASCADE）ため、逆順に押さえると 環になり deadlock（500）で終わる。順序の規則そのものは ADR 0016 にある。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select c from com.kizuna.cast.domain.Cast c where c.id = :id")
   Optional<Cast> findScopedByIdForUpdate(@Param("id") String id);
+
+  /**
+   * {@link #findScopedByIdForUpdate} と同じロックを、店舗文脈を持たない経路のために全店横断で取る。
+   *
+   * <p>招待受諾は {@code @StoreScopeExempt}（境界は token）なので storeFilter が有効でない。同じ問い合わせでも
+   * 名前が「Scoped」だと効いていない絞りを主張するため、口を分けてある。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select c from com.kizuna.cast.domain.Cast c where c.id = :id")
+  Optional<Cast> findByIdForUpdate(@Param("id") String id);
 }

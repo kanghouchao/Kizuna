@@ -1,6 +1,7 @@
 package com.kizuna.cast;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.cast.application.CastInvitationAcceptanceService;
 import com.kizuna.cast.domain.CastInvitation;
@@ -12,13 +13,18 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,6 +55,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CastInvitationAcceptanceService acceptanceService;
+  @Autowired private DataSource dataSource;
 
   private String managerToken;
 
@@ -368,6 +375,76 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
         directInsertInvitation(
             usedCast, CastInvitation.Status.INVALIDATED, OffsetDateTime.now().plusHours(1));
     assertThat(viewInvitation(usedToken).getBody().path("status").asString()).isEqualTo("USED");
+  }
+
+  @Test
+  @DisplayName("新規登録受諾が招待行より先にキャスト行を押さえること")
+  void newUserAcceptanceTakesTheCastRowBeforeTheInvitationRow() throws Exception {
+    String castId = createCast(STORE_A, "受諾ロック順新規テスト");
+    String token = issue(castId, STORE_A);
+    String email = "cast-lockorder-new-it-" + System.nanoTime() + "@kizuna.test";
+
+    assertCastRowIsHeldWhileWaitingOnTheInvitation(
+        castId, token, () -> acceptNewUser(token, email, "password1234", "順序花子"));
+  }
+
+  @Test
+  @DisplayName("既存アカウント受諾が招待行より先にキャスト行を押さえること")
+  void existingAcceptanceTakesTheCastRowBeforeTheInvitationRow() throws Exception {
+    ensureExistingCastUser();
+    String castBearer = platformToken(EXISTING_CAST_EMAIL, PASSWORD);
+    String castId = createCast(STORE_B, "受諾ロック順既存テスト");
+    String token = issue(castId, STORE_B);
+
+    assertCastRowIsHeldWhileWaitingOnTheInvitation(
+        castId,
+        token,
+        () ->
+            rest.exchange(
+                "/platform/cast-invitations/acceptance/existing",
+                HttpMethod.POST,
+                new HttpEntity<>(tokenBody(token), bearer(castBearer)),
+                JsonNode.class));
+  }
+
+  /**
+   * 受諾が「キャスト行 → 招待行」の順に押さえることを、順序そのもので見る（ADR 0016）。
+   *
+   * <p>キャストの削除は招待へ連鎖する（{@code fk_t_cast_invitations_cast} は CASCADE）ため、削除は
+   * キャスト行を押さえてから招待行へ届く。受諾が逆順に押さえると環になり、PostgreSQL が一方を deadlock で 中断する — 制約名の写像では救えない 500 である。
+   *
+   * <p>「待つかどうか」では分かれない。逆順の実装でも招待行で待つからである。招待行を外から押さえて 受諾を待たせ、その間にキャスト行を待たずに取れるか試す —
+   * 取れてしまえば受諾はまだキャストへ 手を伸ばしていない。
+   */
+  private void assertCastRowIsHeldWhileWaitingOnTheInvitation(
+      String castId, String token, Callable<ResponseEntity<JsonNode>> accept) throws Exception {
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try (Connection holder = dataSource.getConnection()) {
+      holder.setAutoCommit(false);
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_cast_invitations WHERE token = ? FOR UPDATE")) {
+        statement.setString(1, token);
+        assertThat(statement.executeQuery().next()).as("前提: 招待行を押さえられること").isTrue();
+      }
+
+      Future<ResponseEntity<JsonNode>> waiting = pool.submit(accept);
+      assertThatThrownBy(() -> waiting.get(3, TimeUnit.SECONDS))
+          .as("前提: 招待行が押さえられている間は進めないこと")
+          .isInstanceOf(TimeoutException.class);
+
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE NOWAIT")) {
+        statement.setString(1, castId);
+        assertThatThrownBy(statement::executeQuery)
+            .as("招待で待っている間、キャスト行は既に押さえられていること")
+            .isInstanceOf(SQLException.class);
+      }
+
+      holder.rollback();
+      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode().is2xxSuccessful()).isTrue();
+    } finally {
+      pool.shutdownNow();
+    }
   }
 
   private PlatformUser ensureExistingCastUser() {

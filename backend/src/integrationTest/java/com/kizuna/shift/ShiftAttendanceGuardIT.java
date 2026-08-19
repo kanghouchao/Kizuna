@@ -17,6 +17,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -276,6 +277,47 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
           holder.prepareStatement("SELECT id FROM t_shifts WHERE id = ? FOR UPDATE NOWAIT")) {
         statement.setString(1, shiftId);
         assertThat(statement.executeQuery().next()).as("キャストで待っている間、シフト行はまだ押さえられていないこと").isTrue();
+      }
+
+      holder.rollback();
+      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("変更申請の承認が申請行を書く前に対象シフトを押さえること")
+  void approvalTakesTheShiftRowBeforeWritingTheRequestRow() throws Exception {
+    // シフトの削除は申請の shift_id を落とす（fk_t_shift_requests_shift は SET NULL）ため、削除は
+    // 「シフト行 → 申請行」の順に押さえる。承認が先に申請行を書けば逆順になり環になる（ADR 0016）。
+    //
+    // この順序は今、承認が申請行の書き込みを取引の終わりまで遅らせることでしか保たれていない。間に
+    // 申請行を触る問い合わせが挟まると Hibernate が先に流し、順序は黙って逆転する。だから順序を固定する。
+    String castId = newCast();
+    String shiftId = seedConfirmedShift(castId);
+    String requestId = seedPendingChangeRequest(castId, shiftId);
+
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try (Connection holder = dataSource.getConnection()) {
+      holder.setAutoCommit(false);
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_shift_requests WHERE id = ? FOR UPDATE")) {
+        statement.setString(1, requestId);
+        assertThat(statement.executeQuery().next()).as("前提: 申請行を押さえられること").isTrue();
+      }
+
+      Future<ResponseEntity<JsonNode>> waiting = pool.submit(() -> approve(requestId));
+      assertThatThrownBy(() -> waiting.get(3, TimeUnit.SECONDS))
+          .as("前提: 申請行が押さえられている間は進めないこと")
+          .isInstanceOf(TimeoutException.class);
+
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_shifts WHERE id = ? FOR UPDATE NOWAIT")) {
+        statement.setString(1, shiftId);
+        assertThatThrownBy(statement::executeQuery)
+            .as("申請行で待っている間、対象のシフト行は既に押さえられていること")
+            .isInstanceOf(SQLException.class);
       }
 
       holder.rollback();

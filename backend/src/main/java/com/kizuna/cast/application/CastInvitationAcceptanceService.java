@@ -70,7 +70,7 @@ public class CastInvitationAcceptanceService {
   @Transactional
   public CastAcceptanceResponse acceptAsNewUser(String token, CastInvitationAcceptRequest request) {
     CastInvitation invitation = findByToken(token);
-    Cast cast = requireCast(invitation.getCastId());
+    Cast cast = requireCastForUpdate(invitation.getCastId());
     if (platformUserRepository
         .findByEmail(request.getEmail().toLowerCase(Locale.ROOT))
         .isPresent()) {
@@ -101,7 +101,7 @@ public class CastInvitationAcceptanceService {
   @Transactional
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
     CastInvitation invitation = findByToken(token);
-    Cast cast = requireCast(invitation.getCastId());
+    Cast cast = requireCastForUpdate(invitation.getCastId());
     claim(invitation);
 
     // 招待をクレーム（招待行を先にロック）した後に PlatformUser 行を悲観排他ロックで取得する。
@@ -161,6 +161,18 @@ public class CastInvitationAcceptanceService {
 
   private Cast requireCast(String castId) {
     return castRepository.findById(castId).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
+  }
+
+  /**
+   * 受諾で書き換える档案を、招待行を押さえる前に押さえて引く。
+   *
+   * <p>キャストの削除は招待へ連鎖する（{@code fk_t_cast_invitations_cast} は CASCADE）。受諾が先に招待行を
+   * 押さえて後から档案を書くと、削除と逆順になって環を作る（ADR 0016）。照会（{@link #view}）は書かないので この口を通らない。
+   */
+  private Cast requireCastForUpdate(String castId) {
+    return castRepository
+        .findByIdForUpdate(castId)
+        .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
   }
 
   private String storeName(Long storeId) {
