@@ -108,6 +108,15 @@ describe('shiftApi', () => {
       ok: true,
       url: '/store/shift-requests/sr1/approval',
     });
+    // 本体を付けないことが「既定の公開可で生まれる」の表明。空オブジェクトを送ると
+    // 変更申請の承認で後端の拒否条件に触れる
+    expect(apiClient.post).toHaveBeenCalledWith('/store/shift-requests/sr1/approval', undefined);
+  });
+  it('approveShiftRequest は公開可否を渡すと本体に載せる', async () => {
+    await shiftApi.approveShiftRequest('sr1', false);
+    expect(apiClient.post).toHaveBeenCalledWith('/store/shift-requests/sr1/approval', {
+      published: false,
+    });
   });
   it('declineShiftRequest は /store/shift-requests/:id/rejection を POST する', async () => {
     expect(await shiftApi.declineShiftRequest('sr1')).toEqual({

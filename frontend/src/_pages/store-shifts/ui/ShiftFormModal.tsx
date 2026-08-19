@@ -24,6 +24,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Switch,
 } from '@/shared/ui';
 
 interface ShiftFormValues {
@@ -32,6 +33,7 @@ interface ShiftFormValues {
   start_time: string;
   end_time: string;
   status: string;
+  published: boolean;
 }
 
 interface ShiftFormModalProps {
@@ -80,6 +82,7 @@ export function ShiftFormModal({
       start_time: '',
       end_time: '',
       status: 'TENTATIVE',
+      published: true,
     },
   });
   const {
@@ -108,6 +111,7 @@ export function ShiftFormModal({
         start_time: (editing.start_time ?? '').slice(0, 5),
         end_time: (editing.end_time ?? '').slice(0, 5),
         status: editing.status ?? '',
+        published: editing.published ?? true,
       });
     } else {
       reset({
@@ -116,6 +120,7 @@ export function ShiftFormModal({
         start_time: '18:00',
         end_time: '23:00',
         status: 'TENTATIVE',
+        published: true,
       });
     }
   }, [open, editing, defaultDate, casts, reset]);
@@ -130,10 +135,11 @@ export function ShiftFormModal({
     };
     try {
       if (editing) {
+        // 更新の送信物は公開可否の欄を持たない — 切替は専用の口が受ける
         await shiftApi.update(editing.id ?? '', payload);
         notify.success('シフトを更新しました');
       } else {
-        await shiftApi.create(payload);
+        await shiftApi.create({ ...payload, published: values.published });
         notify.success('シフトを追加しました');
       }
       onSaved();
@@ -276,6 +282,30 @@ export function ShiftFormModal({
                 </FormItem>
               )}
             />
+            {/* 出生時だけこの口が決める（理由は lib/publication.ts）。編集では出さない — 既に目玉と
+                公開パネルという二つの入口があり、三つ目は保存のたびに切替をもう一度打つ経路を
+                増やすだけになる */}
+            {!editing && (
+              <FormField
+                control={control}
+                name="published"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-3">
+                    <div>
+                      <FormLabel htmlFor="shift-published">公式サイトに公開する</FormLabel>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        確定シフトだけが出勤表に出ます。内密の出勤はここで外してから追加します。
+                      </p>
+                    </div>
+                    <Switch
+                      id="shift-published"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormItem>
+                )}
+              />
+            )}
             <div className="flex items-center justify-between border-t pt-4">
               <div>
                 {editing && (

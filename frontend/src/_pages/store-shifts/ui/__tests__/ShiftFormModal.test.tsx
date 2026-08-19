@@ -120,15 +120,37 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
       start_time: '18:00:00',
       end_time: '23:00:00',
       status: 'TENTATIVE',
+      // 公開が常態・隠蔽が例外。既定 = 非公開は毎日の明示公開を強い、漏れ＝出勤表が空白になる
+      published: true,
     });
     // キー集合そのものが移行で増減しないことを固定する
     expect(Object.keys(payload).sort()).toEqual([
       'cast_id',
       'end_time',
+      'published',
       'start_time',
       'status',
       'work_date',
     ]);
+  });
+
+  it('公開の切替を外して追加すると非公開で出生すること', async () => {
+    // 内密の出勤は追加の瞬間から非公開でなければ守れない（ADR 0015）
+    renderModal();
+
+    fireEvent.click(screen.getByRole('switch', { name: '公式サイトに公開する' }));
+    submit();
+
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][0].published).toBe(false);
+  });
+
+  it('編集では公開の切替を出さないこと', async () => {
+    // 既にタイムラインの目玉と公開パネルという二つの入口がある
+    renderModal({ editing: EDITING });
+
+    await waitFor(() => expect(selectedLabel(STATUS_SELECT)).toBe('確定'));
+    expect(screen.queryByRole('switch', { name: '公式サイトに公開する' })).not.toBeInTheDocument();
   });
 
   it('新規作成時に先頭キャストと未確定が表示されること', async () => {
