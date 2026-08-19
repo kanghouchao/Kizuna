@@ -256,8 +256,7 @@ export default function ShiftsPage() {
             shifts={dayShifts}
             casts={casts}
             loading={loading}
-            failed={shiftsFailure !== null}
-            onRetry={() => void reloadShifts()}
+            failure={{ failed: shiftsFailure !== null, onRetry: () => void reloadShifts() }}
             onChangeDate={setSelectedDate}
             onAddShift={openAdd}
             onEditShift={openEdit}
@@ -287,13 +286,17 @@ export default function ShiftsPage() {
             absences={absences}
             casts={casts}
             loading={loading || attendancesLoading || absencesLoading}
-            failed={shiftsFailure !== null || attendancesFailure !== null}
-            onRetry={() => {
-              void reloadShifts();
-              void reloadAttendances();
+            recordsFailure={{
+              failed: shiftsFailure !== null || attendancesFailure !== null,
+              onRetry: () => {
+                void reloadShifts();
+                void reloadAttendances();
+              },
             }}
-            absencesFailed={absencesFailure !== null}
-            onRetryAbsences={() => void reloadAbsences()}
+            absencesFailure={{
+              failed: absencesFailure !== null,
+              onRetry: () => void reloadAbsences(),
+            }}
             onChangeDate={setSelectedDate}
             onOpenForm={setAttendanceTarget}
             onCancel={setCancelling}

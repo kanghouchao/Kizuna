@@ -4,8 +4,8 @@ import { EyeOffIcon } from 'lucide-react';
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
-import { shiftApi } from '@/entities/shift';
-import { useResource } from '@/shared/lib';
+import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
+import { getApiErrorMessage, requireId, useResource } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
@@ -31,31 +31,35 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   const castName = (castId: string | undefined) =>
     (castId === undefined ? undefined : casts.find(c => c.id === castId)?.name) ?? castId;
 
-  /** 承認する。published を渡すのは新規希望だけ — 変更申請の承認で指定すると後端が撥ねる。 */
-  const approve = async (id: string, published?: boolean) => {
-    setProcessingId(id);
+  /**
+   * 承認する。published を渡すのは新規希望だけ — 変更申請の承認で指定すると後端が撥ねる。
+   *
+   * <p>識別子の解決は try の内側に置く。押しどころの側で解くと、投げた失敗が catch を素通りする。
+   */
+  const approve = async (request: StoreShiftRequestItem, published?: boolean) => {
+    setProcessingId(request.id ?? null);
     try {
-      await shiftApi.approveShiftRequest(id, published);
+      await shiftApi.approveShiftRequest(requireId(request.id, '出勤希望'), published);
       notify.success(
         published === false ? '出勤希望を非公開で承認しました' : '出勤希望を承認しました'
       );
       void load();
       onApproved();
-    } catch {
-      notify.error('承認に失敗しました');
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, '承認に失敗しました'));
     } finally {
       setProcessingId(null);
     }
   };
 
-  const decline = async (id: string) => {
-    setProcessingId(id);
+  const decline = async (request: StoreShiftRequestItem) => {
+    setProcessingId(request.id ?? null);
     try {
-      await shiftApi.declineShiftRequest(id);
+      await shiftApi.declineShiftRequest(requireId(request.id, '出勤希望'));
       notify.success('出勤希望を却下しました');
       void load();
-    } catch {
-      notify.error('却下に失敗しました');
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, '却下に失敗しました'));
     } finally {
       setProcessingId(null);
     }
@@ -123,7 +127,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => decline(request.id ?? '')}
+                onClick={() => decline(request)}
                 disabled={processingId === request.id}
               >
                 {isChange ? '謝絶' : '辞退'}
@@ -135,7 +139,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => approve(request.id ?? '', false)}
+                  onClick={() => approve(request, false)}
                   disabled={processingId === request.id}
                 >
                   <EyeOffIcon />
@@ -146,7 +150,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => approve(request.id ?? '')}
+                  onClick={() => approve(request)}
                   disabled={processingId === request.id}
                 >
                   {isChange ? '承認してシフト更新' : '承認'}

@@ -1,6 +1,29 @@
+/**
+ * 画面が持っているデータでは要求を組めないときの失敗。後端まで行かずにここで止める。
+ *
+ * <p>応答 DTO の項目はすべて可選なので、識別子を `?? ''` で素通しすると単数の操作が一覧の URI
+ * へ飛ぶ。届いた先の 404/405 は「保存に失敗しました」と見分けが付かず、原因が画面側にあることも
+ * 消える。文言は {@link getApiErrorMessage} がそのまま出す。
+ */
+export class ClientDataError extends Error {}
+
+/**
+ * URI へ載せる識別子を取り出す。無いまま組ませない。
+ *
+ * <p>取れないのは応答が壊れているか画面が古いときだけなので、復旧は読み直しである。
+ */
+export function requireId(id: string | undefined, label: string): string {
+  if (!id) {
+    throw new ClientDataError(`${label}の識別子が取得できていません。画面を読み直してください`);
+  }
+  return id;
+}
+
 // バックエンドのエラーレスポンス（{ error } または { message }）から表示用メッセージを取り出す。
 // 各ページ・フォームで同型の抽出ロジックを複製しないこと（漂流の実績あり）。
 export function getApiErrorMessage(error: unknown, fallback: string): string {
+  // 自分で投げた失敗は文言そのものが宛先。後端の応答を探しに行っても何も無い
+  if (error instanceof ClientDataError) return error.message;
   if (error && typeof error === 'object' && 'response' in error) {
     const data = (error as { response?: { data?: { error?: string; message?: string } } }).response
       ?.data;
