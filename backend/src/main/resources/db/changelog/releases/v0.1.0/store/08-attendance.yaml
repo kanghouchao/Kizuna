@@ -256,6 +256,21 @@ databaseChangeLog:
             sql: >-
               CREATE UNIQUE INDEX uq_t_attendances_active_cast_business_date
               ON t_attendances (cast_id, store_id, business_date) WHERE cancelled_at IS NULL
+        # 削除の可否は取消済みの実績も数えるので、上の部分一意索引（未取消行しか含まない）では引けない。
+        # 参照側に索引が無ければ、シフト・キャストを消すたびに外部キーの検査が実績表の全走査になる。
+        # 実績は法定保存で伸び続けるため、参照の無い行の削除ほど時間が延びていく。
+        - createIndex:
+            indexName: idx_t_attendances_shift
+            tableName: t_attendances
+            columns:
+              - column:
+                  name: shift_id
+        - createIndex:
+            indexName: idx_t_attendances_cast
+            tableName: t_attendances
+            columns:
+              - column:
+                  name: cast_id
         # 照会は（店舗・営業日）で引く。上の部分一意索引は未取消行しか含まないため代用できない。
         - createIndex:
             indexName: idx_t_attendances_store_business_date

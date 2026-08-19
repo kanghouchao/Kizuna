@@ -130,7 +130,7 @@ public class CastService {
       throw new NotFoundException("キャストが見つかりません");
     }
     if (attendanceReferenceCheck.existsForCast(id)) {
-      throw new ConflictException("実績が記録されているキャストは削除できません。在籍停止に変更してください");
+      throw attendanceReferenced();
     }
     try {
       castRepository.deleteById(id);
@@ -143,8 +143,22 @@ public class CastService {
           ex,
           Map.of(
               DbConstraint.FK_T_ORDERS_CAST,
-              () -> new ConflictException("受注が紐づいているキャストは削除できません。在籍停止に変更してください")));
+              () -> new ConflictException("受注が紐づいているキャストは削除できません。在籍停止に変更してください"),
+              DbConstraint.FK_T_ATTENDANCES_CAST,
+              CastService::attendanceReferenced,
+              DbConstraint.FK_T_ATTENDANCES_SHIFT,
+              CastService::attendanceReferenced));
     }
+  }
+
+  /**
+   * 実績に参照されるキャストは削除できない、の断り。
+   *
+   * <p>前置の判定と外部キー違反の写像が同じ文言を返すのは、両者が同じ拒否であって利用者の次の一手が変わらないため。
+   * 判定を擦り抜けられるのは、判定と削除の間に実績が記録された並行の場合だけである — シフトへの連鎖があるので、そのとき鳴る外部キーはキャスト側とは限らない。
+   */
+  private static ConflictException attendanceReferenced() {
+    return new ConflictException("実績が記録されているキャストは削除できません。在籍停止に変更してください");
   }
 
   @StoreScoped

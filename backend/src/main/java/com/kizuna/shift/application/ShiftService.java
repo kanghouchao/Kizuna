@@ -101,7 +101,9 @@ public class ShiftService {
   @StoreScoped
   @Transactional
   public ShiftResponse update(String id, ShiftUpdateRequest request, String actorEmail) {
-    Shift shift = findShift(id);
+    // 実績の有無を読んで可否を決める以上、実績の記録・訂正と直列でなければ守衛は素通りされる。
+    // ロックはこの取引でのシフトの最初の読み込みでなければならない（{@link ShiftRepository#findScopedByIdForUpdate}）。
+    Shift shift = findShiftForUpdate(id);
 
     if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
@@ -152,9 +154,7 @@ public class ShiftService {
   @StoreScoped
   @Transactional
   public void delete(String id) {
-    if (!shiftRepository.existsById(id)) {
-      throw new NotFoundException("シフトが見つかりません: " + id);
-    }
+    findShiftForUpdate(id);
     // 実績が参照する限り削除しない。取消済みも数えるのは、参照を外して消すと「予定通りの出勤」が
     // 「飛び込み」へ不可逆に化けるため（ADR 0014）。誤建の組は実績の取消と TENTATIVE 化で中性化する。
     if (attendanceRepository.existsByShiftId(id)) {
@@ -166,6 +166,13 @@ public class ShiftService {
   private Shift findShift(String id) {
     return shiftRepository
         .findById(id)
+        .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
+  }
+
+  /** 予実の交差を触る操作のためにシフトを押さえて引く。契約は {@link ShiftRepository#findScopedByIdForUpdate} にある。 */
+  private Shift findShiftForUpdate(String id) {
+    return shiftRepository
+        .findScopedByIdForUpdate(id)
         .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
   }
 

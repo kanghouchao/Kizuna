@@ -1,9 +1,12 @@
 package com.kizuna.shift.domain;
 
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -61,4 +64,22 @@ public interface ShiftRepository
   /** 上と同じ問いを店外向けの露出関門（CONFIRMED ∧ 公開可）で答える。 */
   boolean existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
       Long storeId, String castId, LocalDate workDate, ShiftStatus status);
+
+  /**
+   * 現店舗のシフト 1 件を、予実の交差を触る間だけ押さえて引く。
+   *
+   * <p>実績の記録・訂正はシフトの勤務日を読んで自分の営業日を物化し、シフトの更新・削除・変更申請の適用は 実績の有無を読んで可否を決める。互いに相手の行を書かないので、押さえずに読むと
+   * 「実績はまだ無い」と 「勤務日はまだ旧値」が同時に真になり、双方が commit して物化済みの帰属がシフトと食い違う（ADR 0014 が
+   * 禁じている状態そのもの）。シフトが両者の共通の親であり、この直列化の単位になる。
+   *
+   * <p>押さえるのはシフト 1 行だけで、この後さらに別の行を押さえる経路は無い — 待ちが環にならない。
+   *
+   * <p>この読み口はその取引でのシフトの**最初の**読み込みでなければならない。既に永続化文脈に載った実体へ後から
+   * ロックを掛けると獲得が版の照合を伴い、シフトを書きもしない要求が版の進みだけで 409 に落ちる。
+   *
+   * <p>JPQL で書くのは {@code storeFilter} を効かせるためで、native にすると店舗境界が黙って消える。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select s from com.kizuna.shift.domain.Shift s where s.id = :id")
+  Optional<Shift> findScopedByIdForUpdate(@Param("id") String id);
 }
