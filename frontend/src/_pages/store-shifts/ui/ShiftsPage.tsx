@@ -90,7 +90,6 @@ export default function ShiftsPage() {
     failure: attendancesFailure,
     reload: reloadAttendances,
   } = useResource(() => attendanceApi.list({ business_date: selectedDate }), [selectedDate]);
-  const attendances = attendancesData ?? [];
 
   const {
     data: absencesData,
@@ -100,6 +99,18 @@ export default function ShiftsPage() {
   } = useResource(
     () => attendanceApi.listAbsences({ business_date: selectedDate }),
     [selectedDate]
+  );
+
+  // 取り直しは deps の変化を見た効果で始まるので、日を切り替えた最初のフレームには前の日の
+  // 配列が残る。シフトと同じく日で絞って渡す — 絞らないと、その一瞬だけ前日の実績が今日の
+  // 見出しの下に並び、行内の訂正・取消が前日の行を指す
+  const attendances = useMemo(
+    () => (attendancesData ?? []).filter(a => a.business_date === selectedDate),
+    [attendancesData, selectedDate]
+  );
+  const absences = useMemo(
+    () => (absencesData ?? []).filter(a => a.business_date === selectedDate),
+    [absencesData, selectedDate]
   );
 
   // シフトの編集面が塞ぐ相手。読めていない間は空集合＝塞がないので、後端の 4xx が最後の砦になる
@@ -273,7 +284,7 @@ export default function ShiftsPage() {
             date={selectedDate}
             shifts={dayShifts}
             attendances={attendances}
-            absences={absencesData ?? []}
+            absences={absences}
             casts={casts}
             loading={loading || attendancesLoading || absencesLoading}
             failed={shiftsFailure !== null || attendancesFailure !== null}
