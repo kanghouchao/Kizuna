@@ -81,15 +81,21 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 
 ## 一覧表
 
-5 表（`t_casts` / `t_shifts` / `t_shift_requests` / `t_attendances` / `t_attendance_corrections`）を
+5 表（`t_casts` / `t_shifts` / `t_shift_requests` / `t_attendances` / `t_attendance_corrections`）と、
+**外部キーで隣接する表**（`t_stores` / `t_users` / `t_cast_invitations` / `t_orders` / `t_user_stores`）を
 書く応用層の経路をすべて挙げ、明示ロック・書き込みが暗黙に要求する親行・削除の連鎖を書き出したもの。
 判定の列は上の向きに従うか否かである。
+
+**隣接表まで広げるのが要点である。** 5 表を書かない経路でも、5 表の行を key share で要求すれば対になる —
+招待の発行は `t_cast_invitations` しか書かないが、新票の INSERT が `t_casts` の key share を要求するため、
+档案を押さえる経路と順序を争う。表を 5 表の書き手だけで作ると、この一群がまるごと視野から落ちる。
 
 | 経路 | 明示的に押さえる行 | 暗黙に要求する親行（KS） | 削除の連鎖 | 判定 |
 | --- | --- | --- | --- | --- |
 | `CastService#create` | — | stores | — | 順路 |
 | `CastService#update` | — | （FK 列を変えない） | — | 順路 |
 | `CastService#delete` | casts（DELETE 自身） | — | invitations → orders 検査 → shifts（さらに shift_requests を SET NULL・attendances を検査）→ shift_requests → attendances 検査 | 順路 |
+| `CastInvitationService#issue`（発行・再発行） | **stores** → **casts** | stores, casts（新票の INSERT） | — | **本票で修正** |
 | `CastInvitationAcceptanceService#acceptAsNewUser` | **stores** → **casts** → invitations | users（档案の紐づけ）、stores・users（身分の所属店舗） | — | **本票で修正** |
 | `CastInvitationAcceptanceService#acceptAsExistingUser` | **stores** → **casts** → invitations → users | users（档案の紐づけ）、stores・users（所属店舗の追加） | — | **本票で修正** |
 | `ShiftService#create` | — | stores, casts, users | — | 順路 |
@@ -104,6 +110,7 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 | `AttendanceService#record` | casts → shifts | **stores**, casts, shifts, users | — | **窓①** |
 | `AttendanceService#correct` | shifts | **stores**, attendances, users | — | **窓①** |
 | `AttendanceService#cancel` | — | users | — | 順路 |
+| `PlatformStaffService#create` / `#update` | — | stores, users（所属店舗） | — | 順路（5 表に触れない） |
 | `StoreRegistryService#delete` | stores（DELETE 自身） | — | 店舗スコープ表すべてへ CASCADE（user_stores → … → casts → shifts → …）、attendances と attendance_corrections は検査 | 順路・**窓③** |
 
 ## 対ごとの洗い出し
@@ -117,12 +124,13 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 | --- | --- |
 | `AttendanceService#record` | casts → shifts |
 | `ShiftService#update`（付け替え時） | casts → shifts |
+| `CastInvitationService#issue` | stores → casts |
 | `CastInvitationAcceptanceService#acceptAsNewUser` | stores → casts |
 | `CastInvitationAcceptanceService#acceptAsExistingUser` | stores → casts → users |
 
 1 つしか使わない経路（`correct` / `approve`(CHANGE) / `ShiftService#delete` はいずれも shifts）は、それだけ
 では順序を作らない。同じ組を逆順に取る対は無い — `{casts, shifts}` は 2 経路とも casts → shifts、
-`{stores, casts}` は 2 経路とも stores → casts、`{casts, users}` は 1 経路のみである。**環なし。**
+`{stores, casts}` は 3 経路とも stores → casts、`{casts, users}` は 1 経路のみである。**環なし。**
 
 なお受諾が取る stores は key share（`StoreRepository#lockAgainstDeletion`）で、阻むのは店舗の削除だけである。
 待ちの結節点にはならないが、順序には参加する。
@@ -142,6 +150,9 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
   stores の key share を要求していた経路が 4 本あった。招待受諾の 2 本は**本票で直した**（店舗行を先に
   押さえる）。実績の記録・訂正の 2 本は **窓①**として残す。
 
+発行と受諾は同じ档案の招待行を書き合うので、この組が逆順だと日常操作（再発行と受諾）どうしで環になる。
+発行は旧票の失効を先に済ませて档案を後から要求していたため、**本票で档案を先に押さえるよう直した**。
+
 ### (iii) 既存の行を 2 つ以上書く経路どうし
 
 FOR NO KEY UPDATE どうしも衝突するので、UPDATE だけでも順序は生まれる。5 表のうち既存行を 2 つ以上書く
@@ -151,6 +162,7 @@ FOR NO KEY UPDATE どうしも衝突するので、UPDATE だけでも順序は�
 | --- | --- | --- |
 | `ShiftRequestService#approve`（CHANGE） | shifts, shift_requests | shifts の明示ロック（先に取る） |
 | `CastInvitationAcceptanceService#acceptAs*` | casts, invitations, users | casts の明示ロック（先に取る） |
+| `CastInvitationService#issue` | invitations（旧票の失効） | casts の明示ロック（先に取る） |
 | `AttendanceService#correct` | attendances（＋ shifts を押さえるだけ） | shifts の明示ロック（先に取る） |
 
 いずれも組の順序は先に取る明示ロックで決まっており、(i) で洗った順と同じである。残りの経路
@@ -194,6 +206,9 @@ FOR NO KEY UPDATE どうしも衝突するので、UPDATE だけでも順序は�
 - 順序を直したときの固定は、**「待つかどうか」では書けない**。逆順の実装でも外部キー検査で結局待つ
   ためである。押さえた行の隣を `FOR UPDATE NOWAIT` で試し、`55P03`（lock_not_available）で落ちるか否かで
   分ける（`ShiftAttendanceGuardIT`・`PlatformCastInvitationAcceptanceIT` が先例）。
+- **表の範囲は 5 表の書き手ではなく、5 表と外部キーで隣接する表の書き手である。** 隣接表しか書かない経路でも、
+  その書き込みが 5 表の行に key share を要求すれば順序を争う。招待の発行がまさにそれで、5 表の書き手だけを
+  数えていた最初の版では落ちていた。
 - 5 表に外部キーを足す・削除規則を変えるときは、この表の該当行を書き直す。特に **NO ACTION から CASCADE
   へ変える**と、その表が上流の削除の到達先に加わり、下流で明示ロックを取る経路と新しい対ができる。
   新しく `@Lock(PESSIMISTIC_WRITE)` の読み口を足すときも同じで、「対ごとの洗い出し」の 3 群を引き直す。

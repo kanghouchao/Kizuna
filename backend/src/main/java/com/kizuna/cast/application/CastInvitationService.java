@@ -10,8 +10,10 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.store.domain.StoreRepository;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -35,6 +37,8 @@ public class CastInvitationService {
 
   private final CastRepository castRepository;
   private final CastInvitationRepository castInvitationRepository;
+  private final StoreRepository storeRepository;
+  private final StoreContext storeContext;
 
   /**
    * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 storeFilter により他店舗の档案は見えず
@@ -53,9 +57,12 @@ public class CastInvitationService {
   @StoreScoped
   @Transactional
   public CastInvitationResponse issue(String castId) {
+    // 招待行を書く前に店舗行・档案行を押さえる（ADR 0016）。招待を先に押さえると、同じ档案を
+    // 「店舗 → 档案 → 招待」の順で辿る受諾と逆順になって環になる。
+    storeRepository.lockAgainstDeletion(storeContext.getStoreId());
     Cast cast =
         castRepository
-            .findById(castId)
+            .findScopedByIdForUpdate(castId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
     if (cast.getPlatformUserId() != null) {
       throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
@@ -84,9 +91,9 @@ public class CastInvitationService {
     // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定していた場合、部分ユニーク
     // インデックス違反となるが、ここで catch しない — CommonExceptionHandler が SQLSTATE で一意違反
     // だけを 409 へ写像し、FK 等の他の整合性違反は実装欠陥として 500 のまま大きく失敗させる分類を
-    // 持っているため、そこへ委ねる。唯一の例外は cast FK 違反 — 冒頭の findById 通過後に並行の
-    // 档案削除（日常操作）が先にコミットすると当たるレースであり、実装欠陥ではないため、
-    // 冒頭の档案不在と同じ分類（NotFoundException → 404）へ変換する。
+    // 持っているため、そこへ委ねる。唯一の例外は cast FK 違反で、档案不在と同じ分類
+    // （NotFoundException → 404）へ変換する。冒頭で档案行を押さえるようになってからは並行削除に
+    // 割り込まれないが、分類の出口としては残す。
     try {
       CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
       return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
