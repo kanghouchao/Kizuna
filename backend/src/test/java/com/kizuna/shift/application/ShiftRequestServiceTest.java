@@ -261,7 +261,7 @@ class ShiftRequestServiceTest {
     target.changePublication(false);
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+    when(shiftRepository.findScopedByIdForUpdate("sh1")).thenReturn(Optional.of(target));
     when(shiftRequestRepository.save(request)).thenReturn(request);
     when(shiftRequestMapper.toStoreResponse(request))
         .thenReturn(StoreShiftRequestResponse.builder().id("sr2").status("APPROVED").build());
@@ -291,7 +291,7 @@ class ShiftRequestServiceTest {
     target.apply(new ShiftPatch(null, null, null, null, ShiftStatus.TENTATIVE));
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+    when(shiftRepository.findScopedByIdForUpdate("sh1")).thenReturn(Optional.of(target));
 
     assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
@@ -310,7 +310,7 @@ class ShiftRequestServiceTest {
     target.apply(new ShiftPatch(null, null, LocalTime.of(20, 0), null, null));
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+    when(shiftRepository.findScopedByIdForUpdate("sh1")).thenReturn(Optional.of(target));
 
     assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
@@ -326,7 +326,7 @@ class ShiftRequestServiceTest {
     Shift target = confirmedShift();
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+    when(shiftRepository.findScopedByIdForUpdate("sh1")).thenReturn(Optional.of(target));
     when(attendanceRepository.hasActiveAttendance("sh1")).thenReturn(true);
 
     assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
@@ -394,7 +394,7 @@ class ShiftRequestServiceTest {
     target.apply(new ShiftPatch("other-cast", null, null, null, null));
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.of(target));
+    when(shiftRepository.findScopedByIdForUpdate("sh1")).thenReturn(Optional.of(target));
 
     assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
@@ -433,7 +433,7 @@ class ShiftRequestServiceTest {
     ShiftRequest request = pendingChangeRequest();
     givenActor();
     when(shiftRequestRepository.findById("sr2")).thenReturn(Optional.of(request));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.empty());
+    when(shiftRepository.findScopedByIdForUpdate("sh1")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftRequestService.approve("sr2", null, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)

@@ -131,7 +131,7 @@ public class AttendanceService {
     if (request.getShiftId() == null) {
       return businessDateService.businessDateOf(request.getActualStartAt());
     }
-    Shift shift = findShift(request.getShiftId());
+    Shift shift = findShiftForUpdate(request.getShiftId());
     if (!shift.getCastId().equals(request.getCastId())) {
       throw new ServiceException("シフトのキャストと実績のキャストが一致しません");
     }
@@ -148,7 +148,7 @@ public class AttendanceService {
     if (attendance.getShiftId() == null) {
       return;
     }
-    if (!findShift(attendance.getShiftId()).getWorkDate().equals(businessDate)) {
+    if (!findShiftForUpdate(attendance.getShiftId()).getWorkDate().equals(businessDate)) {
       throw new ServiceException("シフトに紐づく実績の営業日はシフトの勤務日と一致していなければなりません");
     }
   }
@@ -173,9 +173,15 @@ public class AttendanceService {
         .orElseThrow(() -> new NotFoundException("実績が見つかりません: " + id));
   }
 
-  private Shift findShift(String shiftId) {
+  /**
+   * 営業日の継承元になるシフトを押さえて引く。記録も訂正もここを通る。
+   *
+   * <p>押さえる理由と契約は {@link ShiftRepository#findScopedByIdForUpdate} にある。読むだけに見えて、読んだ値を
+   * 自分の行へ物化する以上、シフト側の更新と直列でなければ食い違う。
+   */
+  private Shift findShiftForUpdate(String shiftId) {
     return shiftRepository
-        .findById(shiftId)
+        .findScopedByIdForUpdate(shiftId)
         .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + shiftId));
   }
 

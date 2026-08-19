@@ -63,6 +63,12 @@ public enum DbConstraint {
   /** t_customers.merged_into_id の自己参照 FK。墓標の指す先が消えると旧 ID の解決が切れる。 */
   FK_T_CUSTOMERS_MERGED_INTO("fk_t_customers_merged_into"),
 
+  /** t_attendances → t_casts の FK。実績の指すキャストが消えることを拒む。 */
+  FK_T_ATTENDANCES_CAST("fk_t_attendances_cast"),
+
+  /** t_attendances → t_shifts の FK。キャスト削除がシフトへ連鎖する経路では、こちらが先に鳴る。 */
+  FK_T_ATTENDANCES_SHIFT("fk_t_attendances_shift"),
+
   /** t_attendances の「1 シフトにつき未取消の実績は高々 1 行」の部分一意索引。 */
   UQ_T_ATTENDANCES_ACTIVE_SHIFT("uq_t_attendances_active_shift"),
 

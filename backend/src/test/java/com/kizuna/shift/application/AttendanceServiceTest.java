@@ -133,7 +133,7 @@ class AttendanceServiceTest {
   void shiftLinkedAttendanceInheritsWorkDate() {
     givenActor();
     when(castService.existsForCurrentStore(CAST_ID)).thenReturn(true);
-    when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(shift(CAST_ID)));
+    when(shiftRepository.findScopedByIdForUpdate(SHIFT_ID)).thenReturn(Optional.of(shift(CAST_ID)));
     when(attendanceRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
 
     attendanceService.record(createRequest(SHIFT_ID), ACTOR_EMAIL);
@@ -164,7 +164,8 @@ class AttendanceServiceTest {
   void rejectsAttendanceLinkedToAnotherCastsShift() {
     givenActor();
     when(castService.existsForCurrentStore(CAST_ID)).thenReturn(true);
-    when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(shift("cast-2")));
+    when(shiftRepository.findScopedByIdForUpdate(SHIFT_ID))
+        .thenReturn(Optional.of(shift("cast-2")));
 
     assertThatThrownBy(() -> attendanceService.record(createRequest(SHIFT_ID), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
@@ -176,7 +177,7 @@ class AttendanceServiceTest {
   void rejectsAttendanceLinkedToATentativeShift() {
     givenActor();
     when(castService.existsForCurrentStore(CAST_ID)).thenReturn(true);
-    when(shiftRepository.findById(SHIFT_ID))
+    when(shiftRepository.findScopedByIdForUpdate(SHIFT_ID))
         .thenReturn(Optional.of(shift(CAST_ID, ShiftStatus.TENTATIVE)));
 
     assertThatThrownBy(() -> attendanceService.record(createRequest(SHIFT_ID), ACTOR_EMAIL))
@@ -244,7 +245,7 @@ class AttendanceServiceTest {
     Attendance attendance =
         Attendance.record(CAST_ID, SHIFT_ID, SHIFT_WORK_DATE, START, null, null, ACTOR_ID);
     when(attendanceRepository.findById("att-1")).thenReturn(Optional.of(attendance));
-    when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(shift(CAST_ID)));
+    when(shiftRepository.findScopedByIdForUpdate(SHIFT_ID)).thenReturn(Optional.of(shift(CAST_ID)));
 
     assertThatThrownBy(
             () ->

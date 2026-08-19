@@ -165,9 +165,11 @@ public class ShiftRequestService {
       if (request.getShiftId() == null) {
         throw new ServiceException("対象のシフトは既に削除されています");
       }
+      // 適用先は実績の有無を読んでから書き換えるので、実績の記録・訂正と直列にする
+      // （契約は {@link ShiftRepository#findScopedByIdForUpdate}）。
       Shift target =
           shiftRepository
-              .findById(request.getShiftId())
+              .findScopedByIdForUpdate(request.getShiftId())
               .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + request.getShiftId()));
       // 確定済み・申請者本人・申請時点のままのシフトであることは提出時だけでなく適用時にも要求する
       // （提出後に未確定へ編集された・別キャストへ付け替えられた・時間帯を変更されたシフトを上書きしない）。

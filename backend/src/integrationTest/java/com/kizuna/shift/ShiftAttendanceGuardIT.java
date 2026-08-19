@@ -1,6 +1,7 @@
 package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
@@ -15,11 +16,18 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,6 +62,7 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
   @Autowired private ShiftRequestRepository shiftRequestRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private DataSource dataSource;
 
   private Long castUserId;
   private String castToken;
@@ -156,6 +165,122 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
     assertThat(approve(pendingRequestId).getStatusCode())
         .as("取消だけで承認が通ること")
         .isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
+  @DisplayName("記録が押さえた後のシフトの勤務日を継承すること（押さえずに読むと旧値が物化する）")
+  void recordingInheritsTheWorkDateItSeesAfterTakingTheRow() throws Exception {
+    // 守衛は「実績はまだ無い」と「勤務日はまだ旧値」を別々に読む。押さえずに読むと双方が同時に真になり、
+    // どちらも commit して物化済みの帰属がシフトと食い違う（ADR 0014 が禁じる状態そのもの）。
+    //
+    // 「押さえている間は進まない」だけでは足りない — 押さえずに読んでも、実績の挿入が外部キー検査で
+    // 親行を要求するので結局待つ。分かれるのは待った後で、押さえて読めば新しい勤務日を読み直し、
+    // 押さえずに読めば待つ前に読んだ旧値のまま物化する。だから待っている間に勤務日を動かす。
+    String castId = newCast();
+    String shiftId = seedConfirmedShift(castId);
+
+    ResponseEntity<JsonNode> recorded =
+        whileHoldingTheShiftRow(
+            shiftId,
+            () ->
+                rest.postForEntity(
+                    "/store/attendances",
+                    new HttpEntity<>(
+                        "{\"cast_id\": \""
+                            + castId
+                            + "\", \"shift_id\": \""
+                            + shiftId
+                            + "\", \"actual_start_at\": \""
+                            + LocalDateTime.of(WORK_DATE, LocalTime.of(18, 5))
+                            + "\"}",
+                        storeHeaders(STORE_A)),
+                    JsonNode.class),
+            holder -> updateWorkDate(holder, shiftId, OTHER_WORK_DATE));
+
+    assertThat(recorded.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(recorded.getBody().path("business_date").asString())
+        .as("待っている間に動いた勤務日を読み直して継承すること")
+        .isEqualTo(OTHER_WORK_DATE.toString());
+  }
+
+  @Test
+  @DisplayName("帰属変更が押さえた後の実績を見て拒否すること（押さえずに読むと素通りする）")
+  void attributionChangeSeesTheAttendanceRecordedWhileItWaited() throws Exception {
+    String castId = newCast();
+    String shiftId = seedConfirmedShift(castId);
+
+    ResponseEntity<JsonNode> updated =
+        whileHoldingTheShiftRow(
+            shiftId,
+            () -> updateShift(shiftId, "{\"work_date\": \"" + OTHER_WORK_DATE + "\"}"),
+            holder -> insertAttendance(holder, shiftId, castId));
+
+    assertThat(updated.getStatusCode())
+        .as("待っている間に記録された実績を読み直して拒否すること")
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(updated.getBody().path("error").asString()).contains("勤務日とキャストは変更できません");
+  }
+
+  /**
+   * シフト行を押さえた状態で {@code call} を走らせ、待たせている間に {@code mutate} で行の周辺を動かしてから解放する。
+   *
+   * <p>戻り値は {@code call} の応答。押さえずに読む実装なら、待つ前に読んだ値のまま進むので結果が変わる。
+   */
+  private <T> T whileHoldingTheShiftRow(
+      String shiftId, java.util.concurrent.Callable<T> call, ThrowingConsumer mutate)
+      throws Exception {
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try (Connection holder = dataSource.getConnection()) {
+      holder.setAutoCommit(false);
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_shifts WHERE id = ? FOR UPDATE")) {
+        statement.setString(1, shiftId);
+        assertThat(statement.executeQuery().next()).as("前提: シフト行を押さえられること").isTrue();
+      }
+
+      Future<T> waiting = pool.submit(call);
+      assertThatThrownBy(() -> waiting.get(3, TimeUnit.SECONDS))
+          .as("前提: シフト行が押さえられている間は進めないこと")
+          .isInstanceOf(TimeoutException.class);
+
+      mutate.accept(holder);
+      holder.commit();
+
+      return waiting.get(30, TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @FunctionalInterface
+  private interface ThrowingConsumer {
+    void accept(Connection holder) throws Exception;
+  }
+
+  private void updateWorkDate(Connection holder, String shiftId, LocalDate workDate)
+      throws Exception {
+    try (var statement =
+        holder.prepareStatement("UPDATE t_shifts SET work_date = ? WHERE id = ?")) {
+      statement.setObject(1, workDate);
+      statement.setString(2, shiftId);
+      assertThat(statement.executeUpdate()).as("前提: 勤務日を動かせること").isEqualTo(1);
+    }
+  }
+
+  private void insertAttendance(Connection holder, String shiftId, String castId) throws Exception {
+    try (var statement =
+        holder.prepareStatement(
+            "INSERT INTO t_attendances (id, store_id, cast_id, shift_id, business_date,"
+                + " actual_start_at, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?,"
+                + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)")) {
+      statement.setString(1, "guard-race-" + UUID.randomUUID());
+      statement.setLong(2, STORE_A);
+      statement.setString(3, castId);
+      statement.setString(4, shiftId);
+      statement.setObject(5, WORK_DATE);
+      statement.setObject(6, LocalDateTime.of(WORK_DATE, LocalTime.of(18, 5)));
+      assertThat(statement.executeUpdate()).as("前提: 実績を記録できること").isEqualTo(1);
+    }
   }
 
   private String newCast() {

@@ -154,7 +154,7 @@ class ShiftServiceTest {
     s.setId("s1");
 
     givenActor();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
     when(shiftRepository.save(any())).thenReturn(s);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -174,7 +174,7 @@ class ShiftServiceTest {
 
   @Test
   void update_throwsWhenNotFound() {
-    when(shiftRepository.findById("missing")).thenReturn(Optional.empty());
+    when(shiftRepository.findScopedByIdForUpdate("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftService.update("missing", new ShiftUpdateRequest(), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
@@ -185,7 +185,7 @@ class ShiftServiceTest {
   void update_rejectsWhenCastNotInStore() {
     Shift s = Shift.builder().castId("c1").build();
     s.setId("s1");
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
     when(castService.existsForCurrentStore("foreign")).thenReturn(false);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -200,7 +200,7 @@ class ShiftServiceTest {
   void update_rejectsWhenEndEqualsStart() {
     Shift s = Shift.builder().build();
     s.setId("s1");
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setStartTime(LocalTime.of(20, 0));
@@ -216,7 +216,7 @@ class ShiftServiceTest {
     // 既存 18:00-22:00 に start だけ 22:00 → 既存 end 22:00 とマージで一致 → 拒否
     Shift s = Shift.builder().startTime(LocalTime.of(18, 0)).endTime(LocalTime.of(22, 0)).build();
     s.setId("s1");
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setStartTime(LocalTime.of(22, 0));
@@ -229,7 +229,7 @@ class ShiftServiceTest {
   @Test
   void update_rejectsWorkDateChangeWhenActiveAttendanceExists() {
     Shift s = shiftWithAttribution();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
     when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -244,7 +244,7 @@ class ShiftServiceTest {
   @Test
   void update_rejectsCastChangeWhenActiveAttendanceExists() {
     Shift s = shiftWithAttribution();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
     when(castService.existsForCurrentStore("c2")).thenReturn(true);
     when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
 
@@ -263,7 +263,7 @@ class ShiftServiceTest {
     // 実績「あり」を敷いたうえで通ることが主張なので、短絡で呼ばれない stub は lenient で置く。
     Shift s = shiftWithAttribution();
     givenActor();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
     lenient().when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
     when(shiftRepository.save(any())).thenReturn(s);
 
@@ -285,7 +285,7 @@ class ShiftServiceTest {
     // 同値の再送は変更ではない。全項目を送り返す客体を禁改が誤って撥ねないこと。
     Shift s = shiftWithAttribution();
     givenActor();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
     when(castService.existsForCurrentStore("c1")).thenReturn(true);
     lenient().when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
     when(shiftRepository.save(any())).thenReturn(s);
@@ -307,7 +307,7 @@ class ShiftServiceTest {
     // 取消後は変更できる。逃げ道（取消 → 変更 → 再記録）が塞がっていないこと。
     Shift s = shiftWithAttribution();
     givenActor();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
     when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(false);
     when(shiftRepository.save(any())).thenReturn(s);
 
@@ -324,14 +324,16 @@ class ShiftServiceTest {
 
   @Test
   void delete_removes() {
-    when(shiftRepository.existsById("s1")).thenReturn(true);
+    when(shiftRepository.findScopedByIdForUpdate("s1"))
+        .thenReturn(Optional.of(Shift.builder().build()));
     shiftService.delete("s1");
     verify(shiftRepository).deleteById("s1");
   }
 
   @Test
   void delete_rejectsWhenAnyAttendanceReferencesTheShift() {
-    when(shiftRepository.existsById("s1")).thenReturn(true);
+    when(shiftRepository.findScopedByIdForUpdate("s1"))
+        .thenReturn(Optional.of(Shift.builder().build()));
     when(attendanceRepository.existsByShiftId("s1")).thenReturn(true);
 
     assertThatThrownBy(() -> shiftService.delete("s1"))
@@ -342,7 +344,7 @@ class ShiftServiceTest {
 
   @Test
   void delete_throwsWhenNotFound() {
-    when(shiftRepository.existsById("missing")).thenReturn(false);
+    when(shiftRepository.findScopedByIdForUpdate("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftService.delete("missing"))
         .isInstanceOf(NotFoundException.class)
