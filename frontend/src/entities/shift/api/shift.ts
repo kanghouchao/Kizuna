@@ -85,9 +85,17 @@ export const shiftApi = {
     const response = await apiClient.get('/store/shift-requests', { params });
     return response.data;
   },
-  /** 出勤希望を承認する（確定シフトが新規作成される）。 */
-  approveShiftRequest: async (id: string): Promise<StoreShiftRequestItem> => {
-    const response = await apiClient.post(`/store/shift-requests/${id}/approval`);
+  /**
+   * 出勤希望を承認する（確定シフトが新規作成される）。
+   *
+   * published は生まれるシフトの公開可否を同一トランザクションで決める。省略時は既定の公開可で、
+   * 変更申請（CHANGE）の承認では指定できない — 呼び出し側は新規希望にだけ渡す。
+   */
+  approveShiftRequest: async (id: string, published?: boolean): Promise<StoreShiftRequestItem> => {
+    const response = await apiClient.post(
+      `/store/shift-requests/${id}/approval`,
+      published === undefined ? undefined : { published }
+    );
     return response.data;
   },
   /** 出勤希望を却下する。 */

@@ -149,7 +149,8 @@ describe('ShiftRequestInbox', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '承認してシフト更新' }));
 
-    await waitFor(() => expect(mockedApprove).toHaveBeenCalledWith('sr2'));
+    // 変更申請の承認で公開可否を指定すると後端が撥ねる（既存シフトの設定は承認では動かない）
+    await waitFor(() => expect(mockedApprove).toHaveBeenCalledWith('sr2', undefined));
     await waitFor(() => expect(onApproved).toHaveBeenCalledTimes(1));
   });
 
@@ -163,9 +164,34 @@ describe('ShiftRequestInbox', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '承認' }));
 
-    await waitFor(() => expect(mockedApprove).toHaveBeenCalledWith('sr1'));
+    // 素の承認は公開可否を指定しない — 既定の公開可で生まれる
+    await waitFor(() => expect(mockedApprove).toHaveBeenCalledWith('sr1', undefined));
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
     expect(onApproved).toHaveBeenCalledTimes(1);
+  });
+
+  it('非公開で承認すると出生時から非公開が指定されること', async () => {
+    // 内密の出勤は承認の瞬間から非公開でなければ守れない。後から隠す導線しか無いと、
+    // 生まれてから隠すまでが露出窓になる（ADR 0015）
+    mockedList.mockResolvedValue([REQUEST]);
+    mockedApprove.mockResolvedValue({ ...REQUEST, status: 'APPROVED' });
+    const onApproved = jest.fn();
+
+    render(<ShiftRequestInbox casts={CASTS} onApproved={onApproved} />);
+    await screen.findByText('キャストA');
+
+    fireEvent.click(screen.getByRole('button', { name: '非公開で承認' }));
+
+    await waitFor(() => expect(mockedApprove).toHaveBeenCalledWith('sr1', false));
+    await waitFor(() => expect(onApproved).toHaveBeenCalledTimes(1));
+  });
+
+  it('変更申請には非公開で承認を出さないこと', async () => {
+    mockedList.mockResolvedValue([CHANGE_REQUEST]);
+    render(<ShiftRequestInbox casts={CASTS} onApproved={jest.fn()} />);
+    await screen.findByText('変更申請');
+
+    expect(screen.queryByRole('button', { name: '非公開で承認' })).not.toBeInTheDocument();
   });
 
   it('辞退すると一覧のみ再取得し、シフト再取得は呼ばないこと', async () => {

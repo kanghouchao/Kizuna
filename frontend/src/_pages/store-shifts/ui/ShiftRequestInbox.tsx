@@ -1,5 +1,6 @@
 'use client';
 
+import { EyeOffIcon } from 'lucide-react';
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
@@ -30,11 +31,14 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   const castName = (castId: string | undefined) =>
     (castId === undefined ? undefined : casts.find(c => c.id === castId)?.name) ?? castId;
 
-  const approve = async (id: string) => {
+  /** 承認する。published を渡すのは新規希望だけ — 変更申請の承認で指定すると後端が撥ねる。 */
+  const approve = async (id: string, published?: boolean) => {
     setProcessingId(id);
     try {
-      await shiftApi.approveShiftRequest(id);
-      notify.success('出勤希望を承認しました');
+      await shiftApi.approveShiftRequest(id, published);
+      notify.success(
+        published === false ? '出勤希望を非公開で承認しました' : '出勤希望を承認しました'
+      );
       void load();
       onApproved();
     } catch {
@@ -124,6 +128,20 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
               >
                 {isChange ? '謝絶' : '辞退'}
               </Button>
+              {/* 出生の口が非公開を指定できる理由は lib/publication.ts。既存シフトの公開可否を
+                  動かさない変更申請には出さない */}
+              {!unapprovable && !isChange && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => approve(request.id ?? '', false)}
+                  disabled={processingId === request.id}
+                >
+                  <EyeOffIcon />
+                  非公開で承認
+                </Button>
+              )}
               {!unapprovable && (
                 <Button
                   type="button"
