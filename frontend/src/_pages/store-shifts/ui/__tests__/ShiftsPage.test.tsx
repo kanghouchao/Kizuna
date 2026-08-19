@@ -738,6 +738,22 @@ describe('当日実績の記録・訂正・取消', () => {
     expect(await screen.findByText('未記録')).toBeInTheDocument();
   });
 
+  it('別の営業日の実績と欠勤は行にも件数にも入らないこと', async () => {
+    // 取り直しは deps の変化を見た効果で始まるので、日を切り替えた最初のフレームには前の日の
+    // 配列が残る。絞らないと前日の飛び込みが今日の見出しの下に並び、訂正・取消が前日の行を指す
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([
+      { ...attendance, id: 'a9', shift_id: undefined, business_date: '2020-01-01' },
+    ]);
+    mockedAbsenceList.mockResolvedValue([{ cast_id: 'c1', business_date: '2020-01-01' }]);
+    await openBoard();
+
+    expect(await screen.findByText('未記録')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'さくらの実績を訂正' })).not.toBeInTheDocument();
+    expect(screen.queryByText('欠勤')).not.toBeInTheDocument();
+    expect(screen.getByText('実績 0件')).toBeInTheDocument();
+  });
+
   it('日付を動かすと実績と欠勤もその営業日で取り直すこと', async () => {
     await openBoard();
     await waitFor(() => expect(mockedAttendanceList).toHaveBeenCalledTimes(1));
