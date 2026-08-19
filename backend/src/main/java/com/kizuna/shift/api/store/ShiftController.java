@@ -2,9 +2,11 @@ package com.kizuna.shift.api.store;
 
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
+import com.kizuna.shift.api.dto.ShiftDetailResponse;
 import com.kizuna.shift.api.dto.ShiftPublicationRequest;
 import com.kizuna.shift.api.dto.ShiftResponse;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
+import com.kizuna.shift.application.ShiftLineageService;
 import com.kizuna.shift.application.ShiftService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShiftController {
 
   private final ShiftService shiftService;
+  private final ShiftLineageService shiftLineageService;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
@@ -39,6 +42,13 @@ public class ShiftController {
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
     return ResponseEntity.ok(shiftService.list(from, to));
+  }
+
+  /** 1 本のシフトを系列（申請・当日実績）ごと返す。字面の {@code /public} とは値空間が交わらない — シフト id は 数字だけの Snowflake である。 */
+  @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
+  public ResponseEntity<ShiftDetailResponse> detail(@PathVariable String id) {
+    return ResponseEntity.ok(shiftLineageService.detail(id));
   }
 
   @PostMapping

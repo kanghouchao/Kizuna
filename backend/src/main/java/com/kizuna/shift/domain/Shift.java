@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -79,6 +80,16 @@ public class Shift extends StoreScopedEntity {
     if (patch.status() != null) {
       this.status = patch.status();
     }
+  }
+
+  /**
+   * 予定終了の暦日付き時刻。終了時刻が開始時刻以下の行は日跨ぎとして翌日へ送る。
+   *
+   * <p>跨ぎの解釈は表示側にも散っているが、判定に使う分はここへ寄せる — 欠勤導出の門が「予定終了の経過」を 問う以上、跨ぎを読み違えれば進行中のシフトがそのまま欠勤に化ける。
+   */
+  public LocalDateTime scheduledEndAt() {
+    LocalDate endDate = endTime.isAfter(startTime) ? workDate : workDate.plusDays(1);
+    return endDate.atTime(endTime);
   }
 
   /** 店外への露出可否を切り替える。部分更新コマンドとは別の口で受け、承認・時間帯の編集が公開可否を巻き込めないようにする。 */

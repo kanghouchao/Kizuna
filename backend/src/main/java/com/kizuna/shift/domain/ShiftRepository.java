@@ -15,6 +15,9 @@ public interface ShiftRepository
 
   List<Shift> findByWorkDateBetween(LocalDate from, LocalDate to);
 
+  /** 指定勤務日の確定シフト。欠勤導出の母集合で、公開可否は見ない — 公開可否は店外露出のフィルタであって 状態機械の一部ではない（ADR 0015 の負向不変量）。 */
+  List<Shift> findByWorkDateAndStatus(LocalDate workDate, ShiftStatus status);
+
   /** 公式サイト出勤表の絞り。店外への露出関門は CONFIRMED ∧ 公開可（ADR 0015）なので、状態と公開可否の両方で絞る。 */
   List<Shift> findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
       LocalDate workDate, ShiftStatus status);

@@ -3,6 +3,7 @@ package com.kizuna.shift.domain;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -37,6 +38,9 @@ public interface AttendanceRepository extends JpaRepository<Attendance, String> 
   default boolean hasActiveAttendance(String shiftId) {
     return !findShiftIdsWithActiveAttendance(List.of(shiftId)).isEmpty();
   }
+
+  /** そのシフトの未取消の実績。取消済みは導出・照会から外れる（ADR 0014）ので、部分一意索引の効く範囲と一致し、 返るのは高々 1 行である。 */
+  Optional<Attendance> findByShiftIdAndCancelledAtIsNull(String shiftId);
 
   /** そのシフトを参照する実績があるか。削除の可否だけは取消済みも数える（ADR 0014）。 */
   boolean existsByShiftId(String shiftId);
