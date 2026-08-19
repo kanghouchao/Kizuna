@@ -6,6 +6,7 @@ import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
 import { getApiErrorMessage } from '@/shared/lib';
+import { hhmm } from '../lib/datetime';
 import {
   Button,
   ConfirmDialog,
@@ -14,6 +15,7 @@ import {
   DialogTitle,
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -108,8 +110,8 @@ export function ShiftFormModal({
       reset({
         cast_id: editing.cast_id ?? '',
         work_date: editing.work_date ?? '',
-        start_time: (editing.start_time ?? '').slice(0, 5),
-        end_time: (editing.end_time ?? '').slice(0, 5),
+        start_time: hhmm(editing.start_time),
+        end_time: hhmm(editing.end_time),
         status: editing.status ?? '',
         published: editing.published ?? true,
       });
@@ -292,16 +294,14 @@ export function ShiftFormModal({
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between gap-3">
                     <div>
-                      <FormLabel htmlFor="shift-published">公式サイトに公開する</FormLabel>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <FormLabel>公式サイトに公開する</FormLabel>
+                      <FormDescription className="mt-1 text-xs">
                         確定シフトだけが出勤表に出ます。内密の出勤はここで外してから追加します。
-                      </p>
+                      </FormDescription>
                     </div>
-                    <Switch
-                      id="shift-published"
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
                   </FormItem>
                 )}
               />

@@ -223,7 +223,7 @@ export function ShiftTimeline({
                               !confirmed
                                 ? 'bg-warning text-warning-foreground hover:bg-warning/90'
                                 : hidden
-                                  ? 'border-2 border-dashed border-success-strong text-foreground'
+                                  ? 'border-2 border-dashed border-success-strong text-foreground hover:bg-success/10'
                                   : 'bg-success text-success-foreground hover:bg-success/90'
                             }`}
                             style={{

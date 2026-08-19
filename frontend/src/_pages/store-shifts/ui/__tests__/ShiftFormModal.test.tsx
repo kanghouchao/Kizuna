@@ -145,6 +145,19 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
     expect(mockedCreate.mock.calls[0][0].published).toBe(false);
   });
 
+  it('公開の切替に説明文が読み上げで紐づくこと', async () => {
+    renderModal();
+
+    const sw = screen.getByRole('switch', { name: '公式サイトに公開する' });
+    const describedBy = sw.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    const description = describedBy!
+      .split(' ')
+      .map(id => document.getElementById(id)?.textContent ?? '')
+      .join('');
+    expect(description).toContain('内密の出勤はここで外してから追加します');
+  });
+
   it('編集では公開の切替を出さないこと', async () => {
     // 既にタイムラインの目玉と公開パネルという二つの入口がある
     renderModal({ editing: EDITING });
