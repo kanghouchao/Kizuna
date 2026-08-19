@@ -3,12 +3,14 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shift.api.dto.ShiftDetailResponse;
 import com.kizuna.shift.api.dto.ShiftRequestLineageResponse;
 import com.kizuna.shift.domain.Attendance;
@@ -124,15 +126,17 @@ class ShiftLineageServiceTest {
     when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(confirmedShift()));
   }
 
+  private void givenOrigin(ShiftRequest origin) {
+    when(shiftRequestRepository.findFirstByShiftIdAndTypeOrderByCreatedAtAscIdAsc(
+            SHIFT_ID, ShiftRequestType.NEW))
+        .thenReturn(Optional.ofNullable(origin));
+  }
+
   @Test
   @DisplayName("申請（NEW / CHANGE）と実績が実行主体・日時付きで辿れる")
   void assemblesTheWholeLineageWithActors() {
     givenShiftExists();
-    when(shiftRequestRepository.findByShiftIdOrderByCreatedAtAscIdAsc(SHIFT_ID))
-        .thenReturn(
-            List.of(
-                request(ShiftRequestType.NEW, ShiftRequestStatus.APPROVED),
-                request(ShiftRequestType.CHANGE, ShiftRequestStatus.APPROVED)));
+    givenOrigin(request(ShiftRequestType.NEW, ShiftRequestStatus.APPROVED));
     when(attendanceRepository.findByShiftIdAndCancelledAtIsNull(SHIFT_ID))
         .thenReturn(Optional.of(attendance()));
     when(platformUserRepository.findAllById(any()))
@@ -144,17 +148,11 @@ class ShiftLineageServiceTest {
     assertThat(detail.getCreatedBy().getName()).as("実行主体は id だけでなく名前まで解決すること").isEqualTo("承認した店長");
     assertThat(detail.getUpdatedBy()).as("書き換えの無い行では最終更新者を出さないこと").isNull();
 
-    assertThat(detail.getRequests())
-        .extracting(ShiftRequestLineageResponse::getType)
-        .as("出生（NEW）と変更申請（CHANGE）の両方が背骨で辿れること")
-        .containsExactly("NEW", "CHANGE");
-    assertThat(detail.getRequests())
-        .allSatisfy(
-            request -> {
-              assertThat(request.getCastId()).as("申請の実行主体はキャスト本人").isEqualTo(CAST_ID);
-              assertThat(request.getProcessedBy().getName()).isEqualTo("承認した店長");
-              assertThat(request.getProcessedAt()).isNotNull();
-            });
+    ShiftRequestLineageResponse origin = detail.getOrigin();
+    assertThat(origin.getType()).as("出生の希望が背骨で辿れること").isEqualTo("NEW");
+    assertThat(origin.getCastId()).as("申請の実行主体はキャスト本人").isEqualTo(CAST_ID);
+    assertThat(origin.getProcessedBy().getName()).isEqualTo("承認した店長");
+    assertThat(origin.getProcessedAt()).isNotNull();
 
     ArgumentCaptor<Iterable<Long>> requestedIds = ArgumentCaptor.captor();
     verify(platformUserRepository).findAllById(requestedIds.capture());
@@ -171,15 +169,14 @@ class ShiftLineageServiceTest {
   @DisplayName("取消済みしか無いシフトの実績欄は空になる")
   void cancelledAttendanceIsNotPartOfTheLineage() {
     givenShiftExists();
-    when(shiftRequestRepository.findByShiftIdOrderByCreatedAtAscIdAsc(SHIFT_ID))
-        .thenReturn(List.of());
+    givenOrigin(null);
     when(attendanceRepository.findByShiftIdAndCancelledAtIsNull(SHIFT_ID))
         .thenReturn(Optional.empty());
 
     ShiftDetailResponse detail = shiftLineageService.detail(SHIFT_ID);
 
     assertThat(detail.getAttendance()).isNull();
-    assertThat(detail.getRequests()).as("店舗が直接作成したシフトでは申請が無いこと").isEmpty();
+    assertThat(detail.getOrigin()).as("店舗が直接作成したシフトでは出生の希望が無いこと").isNull();
   }
 
   @Test
@@ -195,8 +192,7 @@ class ShiftLineageServiceTest {
             .build();
     actorless.setId(SHIFT_ID);
     when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(actorless));
-    when(shiftRequestRepository.findByShiftIdOrderByCreatedAtAscIdAsc(SHIFT_ID))
-        .thenReturn(List.of());
+    givenOrigin(null);
     when(attendanceRepository.findByShiftIdAndCancelledAtIsNull(SHIFT_ID))
         .thenReturn(Optional.empty());
 
@@ -204,6 +200,43 @@ class ShiftLineageServiceTest {
 
     assertThat(detail.getCreatedBy()).isNull();
     verify(platformUserRepository, never()).findAllById(any());
+  }
+
+  @Test
+  @DisplayName("変更申請履歴が新しい順に返り、続きのカーソルが出ること")
+  void changeRequestsArePagedNewestFirst() {
+    when(shiftRepository.existsById(SHIFT_ID)).thenReturn(true);
+    ShiftRequest newer = request(ShiftRequestType.CHANGE, ShiftRequestStatus.APPROVED);
+    newer.setId("request-newer");
+    newer.setCreatedAt(OffsetDateTime.parse("2026-08-17T12:00:00+09:00"));
+    ShiftRequest older = request(ShiftRequestType.CHANGE, ShiftRequestStatus.DECLINED);
+    older.setId("request-older");
+    older.setCreatedAt(OffsetDateTime.parse("2026-08-16T12:00:00+09:00"));
+    // 上限より 1 件多く返すことで「続きがある」を伝える契約なので、size=1 に対して 2 件返す。
+    when(shiftRequestRepository.findChangeHistoryByShiftId(eq(SHIFT_ID), any()))
+        .thenReturn(List.of(newer, older));
+    when(platformUserRepository.findAllById(any()))
+        .thenReturn(List.of(user(APPROVER_ID, "承認した店長")));
+
+    CursorPage<ShiftRequestLineageResponse> page =
+        shiftLineageService.changeRequests(SHIFT_ID, null, 1);
+
+    assertThat(page.content())
+        .extracting(ShiftRequestLineageResponse::getId)
+        .as("上限を超えた分は返さず、新しい順であること")
+        .containsExactly("request-newer");
+    assertThat(page.nextCursor()).as("続きがあればカーソルが出ること").isNotBlank();
+    assertThat(page.content().getFirst().getProcessedBy().getName()).isEqualTo("承認した店長");
+  }
+
+  @Test
+  @DisplayName("作用域の外のシフトの変更申請履歴は、空ではなく見つからないになる")
+  void changeRequestsOfUnknownShiftIsNotFound() {
+    when(shiftRepository.existsById(SHIFT_ID)).thenReturn(false);
+
+    assertThatThrownBy(() -> shiftLineageService.changeRequests(SHIFT_ID, null, 50))
+        .as("空の履歴を返すと、他店舗のシフト id と存在しない id が区別できなくなる")
+        .isInstanceOf(NotFoundException.class);
   }
 
   @Test

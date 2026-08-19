@@ -18,6 +18,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -40,9 +41,12 @@ public class AbsenceService {
    * 1 行しか立たない以上、第一枠の 終了だけで宣言すると第二枠が進行中のキャストを欠勤に数えるためである。
    *
    * <p>並びはキャスト id の昇順。行に一意な識別子が無いので、これが全順序の唯一の根拠になる。
+   *
+   * <p><b>2 つの述語は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。既定の READ COMMITTED では文ごとに
+   * 断面を取り直すので、シフトを読んだ後・実績を読む前に「確定を取り消して実績も取り消す」が commit されると、 変更前にも変更後にも存在しない欠勤を報告する。
    */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public List<AbsenceResponse> list(LocalDate businessDate) {
     if (!businessDateService.hasEnded(businessDate)) {
       return List.of();
@@ -56,7 +60,7 @@ public class AbsenceService {
     Set<String> attendedCastIds =
         attendanceRepository.findCastIdsWithActiveAttendanceOn(businessDate);
 
-    LocalTime dateChangeTime = businessDateService.currentDateChangeTime();
+    LocalTime dateChangeTime = businessDateService.effectiveDateChangeTimeOn(businessDate);
     Map<String, Instant> latestScheduledEndByCast =
         confirmed.stream()
             .collect(
