@@ -4,13 +4,13 @@ import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
 import { Button, Switch } from '@/shared/ui';
+import { shiftLabel } from '../lib/labels';
 import { isUnpublished } from '../lib/publication';
 
 interface ShiftPublicationPanelProps {
   shifts: ShiftResponse[];
   casts: CastResponse[];
-  /** 切替中は入口を塞ぐ。逐行更新の途中で押し増されると、どの行がどちらへ向かうか読めなくなる。 */
-  busy: boolean;
+  publishing: boolean;
   /** 公開可否の変更。一括もここへ複数件で入る（一括 API は無い — ADR 0015）。 */
   onChangePublication: (targets: ShiftResponse[], published: boolean) => void;
 }
@@ -22,21 +22,18 @@ interface ShiftPublicationPanelProps {
 export function ShiftPublicationPanel({
   shifts,
   casts,
-  busy,
+  publishing,
   onChangePublication,
 }: ShiftPublicationPanelProps) {
-  const castName = (id: string | undefined) =>
-    (id === undefined ? undefined : casts.find(c => c.id === id)?.name) ?? '不明';
-  const fmt = (t: string | undefined) => (t ?? '').slice(0, 5);
-  const label = (s: ShiftResponse) =>
-    `${castName(s.cast_id)} ${fmt(s.start_time)}–${fmt(s.end_time)}`;
+  const label = (s: ShiftResponse) => shiftLabel(s, casts);
 
   const confirmed = shifts.filter(s => s.status === 'CONFIRMED');
   const tentative = shifts.filter(s => s.status !== 'CONFIRMED');
   const hidden = confirmed.filter(isUnpublished);
   const shown = confirmed.filter(s => !isUnpublished(s));
 
-  // 既に望む状態の行は送らない。絶対値で送る API なので取りこぼしは起きず、無用な逐行呼びだけが消える。
+  // 既に望む状態の行は送らない。画面が古ければその行は取りこぼすが、古い画面はどちらにせよ
+  // 嘘をついており、直す道は取り直しであって無用な逐行呼びではない。
   const bulk = (published: boolean) => onChangePublication(published ? hidden : shown, published);
 
   return (
@@ -57,7 +54,7 @@ export function ShiftPublicationPanel({
             type="button"
             variant="outline"
             size="sm"
-            disabled={busy || hidden.length === 0}
+            disabled={publishing || hidden.length === 0}
             onClick={() => bulk(true)}
           >
             <EyeIcon />
@@ -67,7 +64,7 @@ export function ShiftPublicationPanel({
             type="button"
             variant="outline"
             size="sm"
-            disabled={busy || shown.length === 0}
+            disabled={publishing || shown.length === 0}
             onClick={() => bulk(false)}
           >
             <EyeOffIcon />
@@ -86,7 +83,7 @@ export function ShiftPublicationPanel({
               </span>
               <Switch
                 checked={!isUnpublished(s)}
-                disabled={busy}
+                disabled={publishing}
                 aria-label={`${label(s)} を公開する`}
                 onCheckedChange={next => onChangePublication([s], next)}
               />

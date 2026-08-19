@@ -4,7 +4,8 @@ import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, PlusIcon } from
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
 import { Button, Input, RegionError } from '@/shared/ui';
-import { addDaysStr, shiftSpan, toDateStr } from '../lib/datetime';
+import { addDaysStr, hhmm, shiftSpan, toDateStr } from '../lib/datetime';
+import { castName, shiftLabel } from '../lib/labels';
 import { isUnpublished } from '../lib/publication';
 
 interface ShiftTimelineProps {
@@ -50,10 +51,6 @@ export function ShiftTimeline({
   publishing,
   onChangePublication,
 }: ShiftTimelineProps) {
-  // id が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
-  const castName = (id: string | undefined) =>
-    (id === undefined ? undefined : casts.find(c => c.id === id)?.name) ?? '不明';
-  const fmt = (t: string | undefined) => (t ?? '').slice(0, 5);
   const hourLabel = (min: number) => `${String(Math.floor((min % 1440) / 60)).padStart(2, '0')}:00`;
 
   const spans = shifts.map(s => shiftSpan(s.start_time, s.end_time));
@@ -202,7 +199,7 @@ export function ShiftTimeline({
                     <div
                       className={`${LABEL_COL} shrink-0 truncate pr-2 text-sm font-medium text-foreground`}
                     >
-                      {castName(castId)}
+                      {castName(casts, castId)}
                     </div>
                     <div className="relative h-9 flex-1 rounded bg-muted">
                       {hourMarks.map(m => (
@@ -216,7 +213,7 @@ export function ShiftTimeline({
                         const { start, end } = shiftSpan(s.start_time, s.end_time);
                         const confirmed = s.status === 'CONFIRMED';
                         const hidden = isUnpublished(s);
-                        const label = `${castName(castId)} ${fmt(s.start_time)}–${fmt(s.end_time)}`;
+                        const label = shiftLabel(s, casts);
                         return (
                           // 目玉はバーの中に置くが、編集の口とは別の押しどころなので入れ子の
                           // ボタンにはできない。バーの見た目を持つ器に、二つのボタンを並べる。
@@ -241,9 +238,12 @@ export function ShiftTimeline({
                               className="min-w-0 flex-1 truncate px-2 text-left"
                               aria-label={`${label} を編集`}
                             >
-                              {fmt(s.start_time)}–{fmt(s.end_time)}
+                              {hhmm(s.start_time)}–{hhmm(s.end_time)}
                             </button>
-                            {/* 仮シフトは公開の操作面を持たない（TENTATIVE はフラグ値に関わらず店外へ出ない） */}
+                            {/* 仮シフトは目玉を持たない（理由は lib/publication.ts）。
+                                焦点輪はブラウザ既定のまま — バーの中に ring の載る認証済みの面が
+                                無く（bg-muted 上の ring-primary は暗色で 2.83）、overflow-hidden が
+                                外側の輪を切る。隣の編集ボタンも同じ既定に従う。 */}
                             {confirmed && (
                               <button
                                 type="button"

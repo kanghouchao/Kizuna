@@ -305,6 +305,17 @@ describe('シフトの公開可否', () => {
     expect(await screen.findByText('非公開1')).toBeInTheDocument();
   });
 
+  it('仮シフトと published 無しの行を非公開の数に入れないこと', async () => {
+    // 仮シフトはフラグ値に関わらず店外へ出ないので「隠されている確定シフト」ではない。
+    // published が載らない応答を非公開へ倒すと、日セルが全件「隠れている」に化ける
+    const noFlag = { ...shown, id: 's6', cast_id: 'c2', published: undefined };
+    mockedShiftList.mockResolvedValue([noFlag, tentative]);
+    render(<ShiftsPage />);
+
+    expect(await screen.findByText('未確定1')).toBeInTheDocument();
+    expect(screen.queryByText(/^非公開\d+$/)).not.toBeInTheDocument();
+  });
+
   it('仮シフトには公開の操作面が現れないこと', async () => {
     mockedShiftList.mockResolvedValue([shown, tentative]);
     await openTimeline();
@@ -333,9 +344,10 @@ describe('シフトの公開可否', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '全て非公開' }));
 
-    // 落ちた行まで裏返すと、画面が「隠した」と言いながら公式サイトには出続ける
+    // 通った s1 は裏返り、落ちた s4 は公開のまま。落ちた行まで裏返すと、画面が「隠した」と
+    // 言いながら公式サイトには出続ける
     expect(
-      await screen.findByRole('button', { name: 'さくら 18:00–23:00 を非公開にする' })
+      await screen.findByRole('button', { name: 'さくら 18:00–23:00 を公開する' })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'あおい 19:00–22:00 を非公開にする' })
@@ -343,6 +355,18 @@ describe('シフトの公開可否', () => {
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith('1件のシフトの公開状態を変更できませんでした')
     );
+  });
+
+  it('別の日のシフトは一括の宛先にも一覧にも入らないこと', async () => {
+    // 日を切り替えた最初のフレームは月の配列が残る。器が日で絞らないと、一括がその月全体へ及ぶ
+    mockedShiftList.mockResolvedValue([shown, { ...shown, id: 's5', work_date: '2020-01-01' }]);
+    mockedChangePublication.mockResolvedValue({ ...shown, published: false });
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('button', { name: '全て非公開' }));
+
+    await waitFor(() => expect(mockedChangePublication).toHaveBeenCalledTimes(1));
+    expect(mockedChangePublication).toHaveBeenCalledWith('s1', false);
   });
 
   it('パネルの Switch も同じ切替の口へ入ること', async () => {

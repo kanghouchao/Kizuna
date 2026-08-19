@@ -128,8 +128,6 @@ export function ShiftCalendar({
                         {tentative}
                       </span>
                     )}
-                    {/* 公式サイトに出ない確定シフトの数。凡例の点と同じく、隣の文字が同じことを
-                        言うのでアイコン自体はコントラストに縛られない */}
                     {agg.hidden > 0 && (
                       <span className="inline-flex items-center gap-0.5">
                         <EyeOffIcon className="h-2.5 w-2.5" aria-hidden="true" />
