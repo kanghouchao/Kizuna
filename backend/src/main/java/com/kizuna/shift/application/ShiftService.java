@@ -101,13 +101,17 @@ public class ShiftService {
   @StoreScoped
   @Transactional
   public ShiftResponse update(String id, ShiftUpdateRequest request, String actorEmail) {
+    // 付け替え先のキャストはシフトより先に押さえる。この更新は cast_id を書くので、書き込みが行き先の
+    // キャスト行に key share を要求する — シフトを先に押さえると、キャスト → シフト の順で進む記録と
+    // 環になる（契約は CastRepository#findScopedByIdForUpdate）。
+    if (request.getCastId() != null
+        && !castService.existsForCurrentStoreForUpdate(request.getCastId())) {
+      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
+    }
+
     // 実績の有無を読んで可否を決める以上、実績の記録・訂正と直列でなければ守衛は素通りされる。
     // ロックはこの取引でのシフトの最初の読み込みでなければならない（{@link ShiftRepository#findScopedByIdForUpdate}）。
     Shift shift = findShiftForUpdate(id);
-
-    if (request.getCastId() != null && !castService.existsForCurrentStore(request.getCastId())) {
-      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
-    }
 
     // 部分更新のマージ結果（実効の開始・終了）で判定する。片方だけ来て既存値と一致する穴を塞ぐ。
     LocalTime effectiveStart =
