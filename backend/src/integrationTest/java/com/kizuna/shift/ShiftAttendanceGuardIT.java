@@ -248,6 +248,43 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
     }
   }
 
+  @Test
+  @DisplayName("キャストの付け替えもシフトより先に行き先のキャストを押さえること")
+  void reassignmentTakesTheDestinationCastRowBeforeTheShiftRow() throws Exception {
+    // 付け替えは cast_id を書くので、書き込みが行き先のキャスト行に key share を要求する。
+    // シフトを先に押さえると、キャスト → シフト の順で進む記録と環になる。
+    String castId = newCast();
+    String shiftId = seedConfirmedShift(castId);
+    String destinationCastId = newCast();
+
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try (Connection holder = dataSource.getConnection()) {
+      holder.setAutoCommit(false);
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE")) {
+        statement.setString(1, destinationCastId);
+        assertThat(statement.executeQuery().next()).as("前提: 行き先のキャスト行を押さえられること").isTrue();
+      }
+
+      Future<ResponseEntity<JsonNode>> waiting =
+          pool.submit(() -> updateShift(shiftId, "{\"cast_id\": \"" + destinationCastId + "\"}"));
+      assertThatThrownBy(() -> waiting.get(3, TimeUnit.SECONDS))
+          .as("前提: 行き先のキャスト行が押さえられている間は進めないこと")
+          .isInstanceOf(TimeoutException.class);
+
+      try (var statement =
+          holder.prepareStatement("SELECT id FROM t_shifts WHERE id = ? FOR UPDATE NOWAIT")) {
+        statement.setString(1, shiftId);
+        assertThat(statement.executeQuery().next()).as("キャストで待っている間、シフト行はまだ押さえられていないこと").isTrue();
+      }
+
+      holder.rollback();
+      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
   private ResponseEntity<JsonNode> record(String castId, String shiftId) {
     return rest.postForEntity(
         "/store/attendances",

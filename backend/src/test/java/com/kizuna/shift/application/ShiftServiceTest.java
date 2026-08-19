@@ -183,10 +183,8 @@ class ShiftServiceTest {
 
   @Test
   void update_rejectsWhenCastNotInStore() {
-    Shift s = Shift.builder().castId("c1").build();
-    s.setId("s1");
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    when(castService.existsForCurrentStore("foreign")).thenReturn(false);
+    // 行き先のキャストはシフトより先に押さえるので、不在はシフトを読む前に決まる。
+    when(castService.existsForCurrentStoreForUpdate("foreign")).thenReturn(false);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setCastId("foreign");
@@ -245,7 +243,7 @@ class ShiftServiceTest {
   void update_rejectsCastChangeWhenActiveAttendanceExists() {
     Shift s = shiftWithAttribution();
     when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    when(castService.existsForCurrentStore("c2")).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate("c2")).thenReturn(true);
     when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -286,7 +284,7 @@ class ShiftServiceTest {
     Shift s = shiftWithAttribution();
     givenActor();
     when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    when(castService.existsForCurrentStore("c1")).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate("c1")).thenReturn(true);
     lenient().when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
     when(shiftRepository.save(any())).thenReturn(s);
 
