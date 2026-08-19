@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.domain.AttendanceRepository;
@@ -44,6 +45,7 @@ class AbsenceDerivationIT extends CrossStoreTestSupport {
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private AttendanceRepository attendanceRepository;
   @Autowired private StoreRepository storeRepository;
+  @Autowired private BusinessDateService businessDateService;
 
   @Test
   @DisplayName("確定シフトがあり未取消の実績が無い営業日が欠勤として導出されること")
@@ -96,7 +98,9 @@ class AbsenceDerivationIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("まだ終わっていない営業日は欠勤を返さないこと")
   void derivesNothingForAnUnfinishedBusinessDate() {
-    LocalDate today = LocalDate.now();
+    // JVM 既定ゾーンではなく業務時計から取る。統合テストのコンテナは UTC でアプリ時計は Asia/Tokyo なので、
+    // LocalDate.now() は JST の未明（UTC 15:00 以降）に 1 日古い値を返し、その帯でだけこのテストが赤くなる。
+    LocalDate today = businessDateService.currentBusinessDate();
     String castId = seedCast(STORE_A, "欠勤IT_当日");
     shiftRepository.save(shiftOf(STORE_A, castId, ShiftStatus.CONFIRMED, today));
 

@@ -8,8 +8,8 @@ import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
@@ -57,16 +57,16 @@ public class AbsenceService {
         attendanceRepository.findCastIdsWithActiveAttendanceOn(businessDate);
 
     LocalTime dateChangeTime = businessDateService.currentDateChangeTime();
-    Map<String, LocalDateTime> latestScheduledEndByCast =
+    Map<String, Instant> latestScheduledEndByCast =
         confirmed.stream()
             .collect(
                 Collectors.toMap(
                     Shift::getCastId,
-                    shift -> shift.scheduledEndAt(dateChangeTime),
+                    shift -> scheduledEndInstant(shift, dateChangeTime),
                     (left, right) -> left.isAfter(right) ? left : right,
                     TreeMap::new));
 
-    LocalDateTime now = LocalDateTime.now(clock);
+    Instant now = clock.instant();
     return latestScheduledEndByCast.entrySet().stream()
         .filter(entry -> !attendedCastIds.contains(entry.getKey()))
         .filter(entry -> !now.isBefore(entry.getValue()))
@@ -74,5 +74,13 @@ public class AbsenceService {
             entry ->
                 AbsenceResponse.builder().castId(entry.getKey()).businessDate(businessDate).build())
         .toList();
+  }
+
+  /**
+   * 予定終了を瞬時点へ解決する。壁時計どうしで比べると夏時間の戻しの帯で門が巻き戻り、一度出た欠勤が消えて また現れる。曖昧な時刻は早い側のオフセットを採る — {@link
+   * BusinessDateService} と同じ規則である。
+   */
+  private Instant scheduledEndInstant(Shift shift, LocalTime dateChangeTime) {
+    return shift.scheduledEndAt(dateChangeTime).atZone(clock.getZone()).toInstant();
   }
 }
