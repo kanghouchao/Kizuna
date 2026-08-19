@@ -410,9 +410,6 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   /**
    * 受諾が「キャスト行 → 招待行」の順に押さえることを、順序そのもので見る（ADR 0016）。
    *
-   * <p>キャストの削除は招待へ連鎖する（{@code fk_t_cast_invitations_cast} は CASCADE）ため、削除は
-   * キャスト行を押さえてから招待行へ届く。受諾が逆順に押さえると環になり、PostgreSQL が一方を deadlock で 中断する — 制約名の写像では救えない 500 である。
-   *
    * <p>「待つかどうか」では分かれない。逆順の実装でも招待行で待つからである。招待行を外から押さえて 受諾を待たせ、その間にキャスト行を待たずに取れるか試す —
    * 取れてしまえば受諾はまだキャストへ 手を伸ばしていない。
    */
@@ -437,7 +434,10 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
         statement.setString(1, castId);
         assertThatThrownBy(statement::executeQuery)
             .as("招待で待っている間、キャスト行は既に押さえられていること")
-            .isInstanceOf(SQLException.class);
+            .isInstanceOfSatisfying(
+                SQLException.class,
+                // 55P03 = lock_not_available。型だけ見ると表名の打ち間違いでも緑になる。
+                e -> assertThat(e.getSQLState()).isEqualTo("55P03"));
       }
 
       holder.rollback();

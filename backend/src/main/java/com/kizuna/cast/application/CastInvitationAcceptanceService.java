@@ -104,10 +104,9 @@ public class CastInvitationAcceptanceService {
     Cast cast = requireCastForUpdate(invitation.getCastId());
     claim(invitation);
 
-    // 招待をクレーム（招待行を先にロック）した後に PlatformUser 行を悲観排他ロックで取得する。
-    // 招待行 → PlatformUser 行 のロック順を維持し（逆順ロックの経路は無い＝デッドロック回避）、
-    // ロック取得後の新鮮な読み込みで storeIds の read-modify-write を直列化して並行受諾の取りこぼしを防ぐ。
-    // 非CAST・不在ユーザーの防御的拒否は RuntimeException によりトランザクションごとロールバックされ、招待は消費されない。
+    // 身分は档案・招待の後に押さえる（順序は ADR 0016）。ロック取得後の新鮮な読み込みで storeIds の
+    // read-modify-write を直列化し、並行受諾の取りこぼしを防ぐ。非CAST・不在ユーザーの防御的拒否は
+    // RuntimeException でトランザクションごとロールバックされ、招待は消費されない。
     PlatformUser user =
         platformUserRepository
             .findByEmailForUpdate(email)
@@ -166,8 +165,7 @@ public class CastInvitationAcceptanceService {
   /**
    * 受諾で書き換える档案を、招待行を押さえる前に押さえて引く。
    *
-   * <p>キャストの削除は招待へ連鎖する（{@code fk_t_cast_invitations_cast} は CASCADE）。受諾が先に招待行を
-   * 押さえて後から档案を書くと、削除と逆順になって環を作る（ADR 0016）。照会（{@link #view}）は書かないので この口を通らない。
+   * <p>押さえる順序は ADR 0016 に従う。照会（{@link #view}）は書かないのでこの口を通らない。
    */
   private Cast requireCastForUpdate(String castId) {
     return castRepository

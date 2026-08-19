@@ -86,8 +86,7 @@ public interface CastRepository
   /**
    * 現店舗のキャスト 1 件を、そのキャストを指す行を建てる間だけ押さえて引く。
    *
-   * <p>キャストとシフトを同時に指す行（当日実績・シフトの付け替え）を建てる操作は、シフトを押さえる前に ここを通る。キャストの削除はシフトへ連鎖する（{@code
-   * fk_t_shifts_cast} は CASCADE）ため、逆順に押さえると 環になり deadlock（500）で終わる。順序の規則そのものは ADR 0016 にある。
+   * <p>押さえる順序は ADR 0016（外部キーの連鎖の向き）に従う。キャストとシフトを同時に指す行を建てる操作は、 シフトを押さえる前にここを通る。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select c from com.kizuna.cast.domain.Cast c where c.id = :id")
