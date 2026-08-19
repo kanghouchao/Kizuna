@@ -3,7 +3,9 @@ package com.kizuna.shift.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ShiftTest {
@@ -82,6 +84,27 @@ class ShiftTest {
     shift.changePublication(true);
 
     assertThat(shift.isPublished()).isTrue();
+  }
+
+  @Test
+  @DisplayName("終了時刻が開始より後なら予定終了は同じ勤務日")
+  void scheduledEndAt_withinTheSameDay() {
+    Shift shift = baseShift();
+
+    assertThat(shift.scheduledEndAt()).isEqualTo(LocalDateTime.of(2026, 7, 8, 23, 0));
+  }
+
+  @Test
+  @DisplayName("終了時刻が開始以下なら予定終了は翌日へ送られる")
+  void scheduledEndAt_acrossMidnight() {
+    Shift shift = baseShift();
+    shift.apply(new ShiftPatch(null, null, LocalTime.of(23, 0), LocalTime.of(7, 0), null));
+
+    assertThat(shift.scheduledEndAt()).isEqualTo(LocalDateTime.of(2026, 7, 9, 7, 0));
+
+    // 境界: 開始と一致する終了も「以下」なので翌日、つまり 24 時間勤務として読む。
+    shift.apply(new ShiftPatch(null, null, null, LocalTime.of(23, 0), null));
+    assertThat(shift.scheduledEndAt()).isEqualTo(LocalDateTime.of(2026, 7, 9, 23, 0));
   }
 
   @Test

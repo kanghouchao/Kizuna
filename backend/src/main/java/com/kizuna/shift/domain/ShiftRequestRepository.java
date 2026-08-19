@@ -13,6 +13,13 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
 
   List<ShiftRequest> findAllByOrderByCreatedAtAsc();
 
+  /**
+   * シフトへ結ばれた申請（NEW の出生・CHANGE の履歴）を古い順に。系列照会が背骨（shift_id）を辿る唯一の口である。
+   *
+   * <p>createdAt は同一秒に並ぶ提出で同値になりうるので、一意な副キー id を重ねて全順序にする。
+   */
+  List<ShiftRequest> findByShiftIdOrderByCreatedAtAscIdAsc(String shiftId);
+
   // 本人（cast_id 集合、跨店）の出勤希望履歴を店名埋め込みで返す。where 句に店舗の絞りは書かない —
   // cast_id は当人が所属する店にしか存在しないため、cast_id 自限がそのまま店舗自限として機能する
   // （storeFilter は経由しない）。

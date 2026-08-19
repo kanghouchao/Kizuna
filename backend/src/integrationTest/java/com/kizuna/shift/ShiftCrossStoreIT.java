@@ -29,8 +29,8 @@ import tools.jackson.databind.JsonNode;
  * Shift のクロス店舗分離を本物の PostgreSQL で検証する統合テスト。
  *
  * <p>CastCrossStoreIT をミラー。store A のシフトを store B が 区間 GET で閲覧・PUT・DELETE できないことを固定し、 作成時の既定ステータス
- * TENTATIVE と区間 GET ラウンドトリップも合わせて検証する。 シフト API は GET /{id} を持たない（区間 GET のみ）ため、読取隔離は「区間 GET
- * に現れないこと」で確認する。
+ * TENTATIVE と区間 GET ラウンドトリップも合わせて検証する。読取隔離は「区間 GET に現れないこと」で確認する （単体の詳細 GET の隔離は {@code
+ * ShiftLineageIT} が持つ）。
  */
 class ShiftCrossStoreIT extends CrossStoreTestSupport {
 
