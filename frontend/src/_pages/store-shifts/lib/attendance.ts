@@ -2,7 +2,8 @@
  * 当日実績（実際に出勤した事実）の語義。実績はシフトと別の集約で、記録・訂正・取消のライフサイクルを
  * 自分で持つ（ADR 0014）。画面が同じ判定を何度も導かないよう、述語はここ一箇所に置く。
  */
-import { AttendanceResponse, ShiftResponse } from '@/entities/shift';
+import { AttendanceResponse } from '@/entities/shift';
+import { hhmmOfDateTime } from './datetime';
 
 /**
  * シフト id → そのシフトの未取消の実績。読み口に取消済みは現れないので、この写像に居ること自体が
@@ -31,24 +32,7 @@ export function castsWithAttendance(attendances: AttendanceResponse[]): Set<stri
   return casts;
 }
 
-/** 予定なしの飛び込み出勤か。 */
-export function isWalkIn(attendance: AttendanceResponse): boolean {
-  return attendance.shift_id === undefined;
-}
-
-/** 'yyyy-MM-ddTHH:mm:ss' を datetime-local 入力が読める 'yyyy-MM-ddTHH:mm' へ切り詰める。 */
-export function toDateTimeInput(value: string | undefined): string {
-  return (value ?? '').slice(0, 16);
-}
-
-/** Date を datetime-local 入力の 'yyyy-MM-ddTHH:mm'（ローカルタイム基準）へ整形する。 */
-export function nowDateTimeInput(now: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-}
-
 /** 実績 1 件の時間帯の表示。未終了は終了側を空けたまま示す — 記入漏れと閉店前を同じ姿にしない。 */
 export function attendanceSpanLabel(attendance: AttendanceResponse): string {
-  const at = (value: string | undefined) => (value ?? '').slice(11, 16);
-  return `${at(attendance.actual_start_at)}–${at(attendance.actual_end_at)}`;
+  return `${hhmmOfDateTime(attendance.actual_start_at)}–${hhmmOfDateTime(attendance.actual_end_at)}`;
 }

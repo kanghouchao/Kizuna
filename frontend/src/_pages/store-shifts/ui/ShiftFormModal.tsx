@@ -6,6 +6,7 @@ import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
 import { getApiErrorMessage } from '@/shared/lib';
+import { SELECT_NONE, castValue } from '../lib/castSelect';
 import { hhmm } from '../lib/datetime';
 import {
   Button,
@@ -59,19 +60,6 @@ const STATUS_OPTIONS = [
   { value: 'TENTATIVE', label: '未確定' },
   { value: 'CONFIRMED', label: '確定' },
 ];
-
-// 「キャスト未登録」の案内項目に与える番兵値。onValueChange で '' に戻すことで、
-// フォームが持つ値は従来どおり空文字になる。
-const SELECT_NONE = '__none__';
-
-/**
- * 引き金に出す値。候補に無い値（在籍を外れたキャストなど）は未選択として null に倒す。
- * 引き金の文言は候補一覧から引かれるので、素通しすると生の ID がそのまま出る。
- */
-function castValue(value: string, options: { value: string }[]): string | null {
-  const candidate = value || SELECT_NONE;
-  return options.some(o => o.value === candidate) ? candidate : null;
-}
 
 /** シフトの追加・編集モーダル。 */
 export function ShiftFormModal({
@@ -198,7 +186,9 @@ export function ShiftFormModal({
                 <p>当日実績が記録されているため、このシフトは一部の操作を受け付けません。</p>
                 <ul className="mt-1 list-disc space-y-0.5 pl-4">
                   <li>勤務日とキャストの変更 — 当日実績タブで実績を取り消してから行います。</li>
-                  <li>削除 — 実績を取り消しても行えません。ステータスを未確定に戻して無効にします。</li>
+                  <li>
+                    削除 — 実績を取り消しても行えません。ステータスを未確定に戻して無効にします。
+                  </li>
                 </ul>
               </div>
             )}
@@ -329,8 +319,8 @@ export function ShiftFormModal({
             )}
             <div className="flex items-center justify-between border-t pt-4">
               <div>
-                {/* 実績に参照されたシフトは取消済みの実績が相手でも消せない。必ず撥ねられる口は
-                    出さず、理由と代わりの手順は上の注記が引き受ける */}
+                {/* 未取消の実績が付いている間は削除の口を出さない。取消済みしか無くなった行は
+                    画面からは見分けられず口が戻るが、そこは後端が同じ文言で拒む */}
                 {editing && !locked && (
                   <Button
                     type="button"

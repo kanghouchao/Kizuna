@@ -41,10 +41,51 @@ interface ShiftRow {
   recordedElsewhere: boolean;
 }
 
+/** 記録済みの実績を示す行の右側。シフト紐づきの行と飛び込みの行が同じ姿を持つ。 */
+function RecordedAttendance({
+  attendance,
+  label,
+  onCorrect,
+  onCancel,
+}: {
+  attendance: AttendanceResponse;
+  /** 読み上げの宛先になるキャスト名。 */
+  label: string;
+  onCorrect: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <span className="text-sm text-foreground">{attendanceSpanLabel(attendance)}</span>
+      {attendance.waiting_place !== undefined && (
+        <span className="text-xs text-muted-foreground">待機 {attendance.waiting_place}</span>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onCorrect}
+        aria-label={`${label}の実績を訂正`}
+      >
+        訂正
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="text-destructive-strong"
+        onClick={onCancel}
+        aria-label={`${label}の実績を取消`}
+      >
+        取消
+      </Button>
+    </>
+  );
+}
+
 /**
  * 当日実績の記録・訂正・取消の面。予定（シフト）と実績を 1 行に並べ、欠勤（導出）もここで名乗る。
- *
- * <p>実績は（キャスト・営業日）に 1 行しか立たないので、同じキャストの二本目の枠には記録の口を
+ * 実績は（キャスト・営業日）に 1 行しか立たないので、同じキャストの二本目の枠には記録の口を
  * 出さない — 出しても後端の一意性で必ず撥ねられる（ADR 0014）。
  */
 export function AttendanceBoard({
@@ -176,35 +217,19 @@ export function AttendanceBoard({
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-3">
                   {attendance ? (
-                    <>
-                      <span className="text-sm text-foreground">
-                        {attendanceSpanLabel(attendance)}
-                      </span>
-                      {attendance.waiting_place !== undefined && (
-                        <span className="text-xs text-muted-foreground">
-                          待機 {attendance.waiting_place}
-                        </span>
-                      )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onOpenForm({ attendance, shift })}
-                        aria-label={`${label}の実績を訂正`}
-                      >
-                        訂正
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive-strong"
-                        onClick={() => onCancel(attendance)}
-                        aria-label={`${label}の実績を取消`}
-                      >
-                        取消
-                      </Button>
-                    </>
+                    <RecordedAttendance
+                      attendance={attendance}
+                      label={label}
+                      onCorrect={() => onOpenForm({ attendance, shift })}
+                      onCancel={() => onCancel(attendance)}
+                    />
+                  ) : !confirmed ? (
+                    // 実績を指せるのは確定シフトだけ（ADR 0014）。記録の口を出しても後端が撥ねる。
+                    // 欠勤より先に見るのは、欠勤が（キャスト・営業日）の事実であって枠の事実では
+                    // ないためで、確定していない枠に付けると「この枠を飛ばした」と読める
+                    <span className="text-xs text-muted-foreground">
+                      確定すると実績を記録できます
+                    </span>
                   ) : absent ? (
                     <Badge
                       variant="outline"
@@ -212,11 +237,6 @@ export function AttendanceBoard({
                     >
                       欠勤
                     </Badge>
-                  ) : !confirmed ? (
-                    // 実績を指せるのは確定シフトだけ（ADR 0014）。記録の口を出しても後端が撥ねる
-                    <span className="text-xs text-muted-foreground">
-                      確定すると実績を記録できます
-                    </span>
                   ) : recordedElsewhere ? (
                     <span className="text-xs text-muted-foreground">
                       同じ営業日の実績は 1 件にまとまります
@@ -248,36 +268,16 @@ export function AttendanceBoard({
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">{label}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    <Badge variant="outline">飛び込み</Badge>
-                  </p>
+                  {/* 予定の行と同じ位置なので、予定が無いこともその場所で言う */}
+                  <p className="mt-0.5 text-xs text-muted-foreground">飛び込み（予定なし）</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-3">
-                  <span className="text-sm text-foreground">{attendanceSpanLabel(attendance)}</span>
-                  {attendance.waiting_place !== undefined && (
-                    <span className="text-xs text-muted-foreground">
-                      待機 {attendance.waiting_place}
-                    </span>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onOpenForm({ attendance, shift: null })}
-                    aria-label={`${label}の実績を訂正`}
-                  >
-                    訂正
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive-strong"
-                    onClick={() => onCancel(attendance)}
-                    aria-label={`${label}の実績を取消`}
-                  >
-                    取消
-                  </Button>
+                  <RecordedAttendance
+                    attendance={attendance}
+                    label={label}
+                    onCorrect={() => onOpenForm({ attendance, shift: null })}
+                    onCancel={() => onCancel(attendance)}
+                  />
                 </div>
               </li>
             );

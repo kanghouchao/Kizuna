@@ -94,6 +94,7 @@ export default function ShiftsPage() {
 
   const {
     data: absencesData,
+    isLoading: absencesLoading,
     failure: absencesFailure,
     reload: reloadAbsences,
   } = useResource(
@@ -266,13 +267,15 @@ export default function ShiftsPage() {
           )}
         </TabsContent>
         <TabsContent value={ATTENDANCE_TAB} className="mt-6">
+          {/* 三つの取得は同じ日で同時に始まる。欠勤だけ遅れて届く間に行を描くと、その姿は
+              「誰も休んでいない」と読めるので、読み込み中は器ごと待たせる */}
           <AttendanceBoard
             date={selectedDate}
             shifts={dayShifts}
             attendances={attendances}
             absences={absencesData ?? []}
             casts={casts}
-            loading={loading || attendancesLoading}
+            loading={loading || attendancesLoading || absencesLoading}
             failed={shiftsFailure !== null || attendancesFailure !== null}
             onRetry={() => {
               void reloadShifts();
@@ -306,6 +309,7 @@ export default function ShiftsPage() {
         target={attendanceTarget}
         castOptions={walkInCastOptions}
         casts={casts}
+        defaultDate={selectedDate}
         onSaved={reloadAttendanceViews}
       />
 
