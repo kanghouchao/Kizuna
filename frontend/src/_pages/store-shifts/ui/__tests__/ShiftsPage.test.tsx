@@ -747,6 +747,26 @@ describe('当日実績の記録・訂正・取消', () => {
     expect(await screen.findByText('未記録')).toBeInTheDocument();
   });
 
+  it('識別子の無い実績には要求を組まず、理由を名乗ること', async () => {
+    // `?? ''` で素通しすると POST /store/attendances//cancellation が飛び、届いた先の
+    // 404 が「取消に失敗しました」と見分けが付かなくなる
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([{ ...attendance, id: undefined }]);
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を取消' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('取消の理由'), { target: { value: '誤記録' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '取り消す' }));
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        expect.stringContaining('当日実績の識別子が取得できていません')
+      )
+    );
+    expect(mockedCancel).not.toHaveBeenCalled();
+  });
+
   it('別の営業日の実績と欠勤は行にも件数にも入らないこと', async () => {
     // 取り直しは deps の変化を見た効果で始まるので、日を切り替えた最初のフレームには前の日の
     // 配列が残る。絞らないと前日の飛び込みが今日の見出しの下に並び、訂正・取消が前日の行を指す

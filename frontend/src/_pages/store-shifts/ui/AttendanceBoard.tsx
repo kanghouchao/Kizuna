@@ -8,6 +8,7 @@ import { Badge, Button, RegionError } from '@/shared/ui';
 import { hhmm, shiftSpan } from '../lib/datetime';
 import { castName } from '../lib/labels';
 import { attendanceByShift, attendanceSpanLabel, castsWithAttendance } from '../lib/attendance';
+import { RegionFailure } from '../lib/region';
 import { AttendanceFormTarget } from './AttendanceFormModal';
 import { ShiftDayNav } from './ShiftDayNav';
 
@@ -21,11 +22,9 @@ interface AttendanceBoardProps {
   casts: CastResponse[];
   loading: boolean;
   /** シフトか実績が読めていない。どちらが欠けても「未記録」を名乗れない。 */
-  failed: boolean;
-  onRetry: () => void;
+  recordsFailure: RegionFailure;
   /** 欠勤だけが読めていない。行は出せるが「欠勤ではない」とは言えない。 */
-  absencesFailed: boolean;
-  onRetryAbsences: () => void;
+  absencesFailure: RegionFailure;
   onChangeDate: (date: string) => void;
   onOpenForm: (target: AttendanceFormTarget) => void;
   onCancel: (attendance: AttendanceResponse) => void;
@@ -95,10 +94,8 @@ export function AttendanceBoard({
   absences,
   casts,
   loading,
-  failed,
-  onRetry,
-  absencesFailed,
-  onRetryAbsences,
+  recordsFailure,
+  absencesFailure,
   onChangeDate,
   onOpenForm,
   onCancel,
@@ -184,16 +181,16 @@ export function AttendanceBoard({
       <p className="border-b px-6 py-2 text-xs text-muted-foreground">
         欠勤は営業日が終わり、そのキャストの最後の予定終了を過ぎてから導出されます。
       </p>
-      {absencesFailed && (
+      {absencesFailure.failed && (
         <div className="border-b px-6 py-2">
-          <RegionError message="欠勤の取得に失敗しました" onRetry={onRetryAbsences} />
+          <RegionError message="欠勤の取得に失敗しました" onRetry={absencesFailure.onRetry} />
         </div>
       )}
 
-      {failed ? (
+      {recordsFailure.failed ? (
         <RegionError
           message="シフトと実績の取得に失敗しました"
-          onRetry={onRetry}
+          onRetry={recordsFailure.onRetry}
           className="justify-center p-8"
         />
       ) : loading ? (

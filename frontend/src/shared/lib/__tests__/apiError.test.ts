@@ -1,4 +1,10 @@
-import { getApiErrorMessage, isConflict, isNotFound } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  isConflict,
+  isNotFound,
+  ClientDataError,
+  requireId,
+} from '@/shared/lib';
 
 describe('getApiErrorMessage', () => {
   it('error フィールドを優先して返す', () => {
@@ -36,5 +42,26 @@ describe('isConflict / isNotFound', () => {
     expect(isNotFound(new Error('network'))).toBe(false);
     expect(isNotFound(null)).toBe(false);
     expect(isNotFound({ response: {} })).toBe(false);
+  });
+});
+
+describe('requireId', () => {
+  it('識別子が無いときは要求を組ませずに失敗させる', () => {
+    // `?? ''` で素通しすると、単数の操作が一覧の URI へ飛ぶ（DELETE /store/shifts/）。
+    // 届いた先の 404/405 は「保存に失敗しました」と見分けが付かない
+    expect(() => requireId(undefined, 'シフト')).toThrow(ClientDataError);
+    expect(() => requireId('', 'シフト')).toThrow(ClientDataError);
+    expect(requireId('s1', 'シフト')).toBe('s1');
+  });
+
+  it('投げた文言はそのまま画面へ出る', () => {
+    // 後端の応答を探しに行っても何も無いので、代替文言に潰されると原因が画面側にあることも消える
+    let thrown: unknown;
+    try {
+      requireId(undefined, '当日実績');
+    } catch (error) {
+      thrown = error;
+    }
+    expect(getApiErrorMessage(thrown, '保存に失敗しました')).toContain('当日実績の識別子');
   });
 });

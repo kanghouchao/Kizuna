@@ -7,6 +7,7 @@ import { Button, RegionError } from '@/shared/ui';
 import { hhmm, shiftSpan, toDateStr } from '../lib/datetime';
 import { castName, shiftLabel } from '../lib/labels';
 import { isUnpublished } from '../lib/publication';
+import { RegionFailure } from '../lib/region';
 import { ShiftDayNav } from './ShiftDayNav';
 
 interface ShiftTimelineProps {
@@ -16,8 +17,7 @@ interface ShiftTimelineProps {
   casts: CastResponse[];
   loading: boolean;
   /** 取得失敗。ヘッダ（日付ナビ）は残し、本体だけが失敗を名乗る — 別の日へ動くことが復旧経路を兼ねる。 */
-  failed: boolean;
-  onRetry: () => void;
+  failure: RegionFailure;
   onChangeDate: (date: string) => void;
   onAddShift: () => void;
   onEditShift: (shift: ShiftResponse) => void;
@@ -36,8 +36,7 @@ export function ShiftTimeline({
   shifts,
   casts,
   loading,
-  failed,
-  onRetry,
+  failure,
   onChangeDate,
   onAddShift,
   onEditShift,
@@ -87,10 +86,10 @@ export function ShiftTimeline({
         </div>
       </div>
 
-      {failed ? (
+      {failure.failed ? (
         <RegionError
           message="シフトの取得に失敗しました"
-          onRetry={onRetry}
+          onRetry={failure.onRetry}
           className="justify-center p-8"
         />
       ) : loading ? (
