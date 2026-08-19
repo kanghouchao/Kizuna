@@ -40,9 +40,13 @@ INSERT や外部キー列を変える UPDATE は、外部キー検査を通じ�
    両方向で確認した。本リポジトリの作成順は `db.changelog-master.yaml` の include 順＝ファイル番号順で決まる。
 
 事実 3 から効く帰結がある。本 ADR が扱う 5 表で**主キーを書き換える経路は無い**ので、これらの表の行に
-**FOR UPDATE を載せるのは DELETE と、明示的な `@Lock(PESSIMISTIC_WRITE)` の読み口の 2 種だけ**である
-（UPDATE 文はどれも FOR NO KEY UPDATE で済む）。key share どうしも、key share と FOR NO KEY UPDATE も
-衝突しないので、**待ちの結節点になれるのはこの 2 種が押さえた行に限られる**。洗うべき対もそこに絞れる。
+FOR UPDATE を載せるのは DELETE と、明示的な `@Lock(PESSIMISTIC_WRITE)` の読み口の 2 種だけである
+（UPDATE 文はどれも FOR NO KEY UPDATE で済む）。
+
+そこから、**待ちの結節点になれる行は 3 通り**に絞れる — DELETE が押さえた行、明示ロックの読み口が押さえた
+行、そして UPDATE された行（FOR NO KEY UPDATE どうしも衝突する）である。逆に、外部キー検査が要求する
+key share どうしは衝突せず、key share と FOR NO KEY UPDATE も衝突しないので、**書き込みが親行へ要求する
+だけの key share は、それ単独では誰も待たせない**。洗うべき対はこの 3 通りに対応する 3 群で尽きる。
 
 ## Decision
 
@@ -72,8 +76,8 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 #740 が固定した「キャスト → シフト」はこの規則の一断面である。順序の契約を述べる正本はこの ADR で、
 `...ForUpdate` の読み口の Javadoc はその入口を指すだけに留める。
 
-**明示的に行を押さえる経路は、この向きに従う** — 例外は下に窓①として挙げた 4 経路だけで、いずれも
-理由を付けて残している。破りやすいのは、下流の行を先に `FOR UPDATE` してから上流の親を要求する形である。
+**明示的に行を押さえる経路は、この向きに従う** — 例外は下に窓①として挙げた 2 経路だけで、理由を付けて
+残している。破りやすいのは、下流の行を先に `FOR UPDATE` してから上流の親を要求する形である。
 
 ## 一覧表
 
@@ -86,8 +90,8 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 | `CastService#create` | — | stores | — | 順路 |
 | `CastService#update` | — | （FK 列を変えない） | — | 順路 |
 | `CastService#delete` | casts（DELETE 自身） | — | invitations → orders 検査 → shifts（さらに shift_requests を SET NULL・attendances を検査）→ shift_requests → attendances 検査 | 順路 |
-| `CastInvitationAcceptanceService#acceptAsNewUser` | **casts** → invitations | users（档案の紐づけ）、**stores**・users（身分の所属店舗） | — | **本票で修正**・窓① |
-| `CastInvitationAcceptanceService#acceptAsExistingUser` | **casts** → invitations → users | users（档案の紐づけ）、**stores**・users（所属店舗の追加） | — | **本票で修正**・窓① |
+| `CastInvitationAcceptanceService#acceptAsNewUser` | **stores** → **casts** → invitations | users（档案の紐づけ）、stores・users（身分の所属店舗） | — | **本票で修正** |
+| `CastInvitationAcceptanceService#acceptAsExistingUser` | **stores** → **casts** → invitations → users | users（档案の紐づけ）、stores・users（所属店舗の追加） | — | **本票で修正** |
 | `ShiftService#create` | — | stores, casts, users | — | 順路 |
 | `ShiftService#update` | casts（付け替え時）→ shifts | casts, users | — | 順路（#740） |
 | `ShiftService#changePublication` | — | users | — | 順路 |
@@ -104,20 +108,24 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 
 ## 対ごとの洗い出し
 
-待ちの結節点になれるのは前述の 2 種（DELETE と明示ロックの読み口）が押さえた行だけなので、洗うべき対は
-次の 2 群に尽きる。この 2 群を尽くせば洗い出しは完全である。
+待ちの結節点になれる行は前述の 3 通りなので、順序を作りうる経路の対も次の 3 群に尽きる。この 3 群を
+尽くせば洗い出しは完全である。
 
-### (i) 明示ロックの読み口を 2 つ以上取る経路どうし
+### (i) 明示ロックの読み口を 2 つ以上使う経路どうし
 
 | 経路 | 取る順 |
 | --- | --- |
 | `AttendanceService#record` | casts → shifts |
 | `ShiftService#update`（付け替え時） | casts → shifts |
-| `CastInvitationAcceptanceService#acceptAsExistingUser` | casts → users |
+| `CastInvitationAcceptanceService#acceptAsNewUser` | stores → casts |
+| `CastInvitationAcceptanceService#acceptAsExistingUser` | stores → casts → users |
 
-1 つしか取らない経路（`correct` / `approve`(CHANGE) / `ShiftService#delete` は shifts、`acceptAsNewUser`
-は casts）は、それだけでは順序を作らない。同じ組を逆順に取る対は無い — `{casts, shifts}` は 2 経路とも
-casts → shifts、`{casts, users}` は 1 経路のみである。**環なし。**
+1 つしか使わない経路（`correct` / `approve`(CHANGE) / `ShiftService#delete` はいずれも shifts）は、それだけ
+では順序を作らない。同じ組を逆順に取る対は無い — `{casts, shifts}` は 2 経路とも casts → shifts、
+`{stores, casts}` は 2 経路とも stores → casts、`{casts, users}` は 1 経路のみである。**環なし。**
+
+なお受諾が取る stores は key share（`StoreRepository#lockAgainstDeletion`）で、阻むのは店舗の削除だけである。
+待ちの結節点にはならないが、順序には参加する。
 
 ### (ii) DELETE の 3 経路 × 他のすべて
 
@@ -131,25 +139,40 @@ casts → shifts、`{casts, users}` は 1 経路のみである。**環なし。
   検査は FOR KEY SHARE なので衝突しない — 待ちは「付け替えが削除を待つ」の片側通行だけで環にならず、
   削除が先に通れば付け替えは外部キー違反で落ちる（正しい結末である）。**修正後は環なし。**
 - **`StoreRegistryService#delete`**（stores を押さえ、店舗スコープ表すべてへ届く）。下流を押さえてから
-  stores の key share を要求する経路が 4 本あり、**窓①**として残す。
+  stores の key share を要求していた経路が 4 本あった。招待受諾の 2 本は**本票で直した**（店舗行を先に
+  押さえる）。実績の記録・訂正の 2 本は **窓①**として残す。
+
+### (iii) 既存の行を 2 つ以上書く経路どうし
+
+FOR NO KEY UPDATE どうしも衝突するので、UPDATE だけでも順序は生まれる。5 表のうち既存行を 2 つ以上書く
+経路は 3 本しかない。
+
+| 経路 | 書く行の組 | 組を並べているもの |
+| --- | --- | --- |
+| `ShiftRequestService#approve`（CHANGE） | shifts, shift_requests | shifts の明示ロック（先に取る） |
+| `CastInvitationAcceptanceService#acceptAs*` | casts, invitations, users | casts の明示ロック（先に取る） |
+| `AttendanceService#correct` | attendances（＋ shifts を押さえるだけ） | shifts の明示ロック（先に取る） |
+
+いずれも組の順序は先に取る明示ロックで決まっており、(i) で洗った順と同じである。残りの経路
+（`cancel` / `decline` / `changePublication` / `CastService#update` / `ShiftService#update`）は既存行を
+1 つしか書かないので、それだけでは順序を作らない。**環なし。**
 
 ## 残す窓
 
-**窓①: 店舗削除 × 下流を押さえてから店舗行を要求する書き込み（4 経路）。** 実績の記録・訂正はキャスト・
-シフトを押さえてから実績（訂正履歴）行を建て、その INSERT が店舗行に key share を要求する。招待受諾は
-档案を押さえてから身分の所属店舗（`t_user_stores`）を書き、その INSERT も店舗行を要求する。一方で店舗
-削除は店舗行を押さえてから配下へ連鎖するので、向きが逆で形の上では環である。
+**窓①: 店舗削除 × 実績の記録・訂正。** 記録と訂正はキャスト・シフトを押さえてから実績（訂正履歴）行を
+建て、その INSERT が店舗行に key share を要求する。一方で店舗削除は店舗行を押さえてから配下へ連鎖する
+ので、向きが逆で形の上では環である。
 
-揃えるには下流を押さえる前に店舗行を押さえるほかない。実績側は shift モジュールから店舗表への依存を
-新たに通し、記録・訂正のたびに問い合わせを 1 本増やすことになる。受諾側は店舗表を既に見ているが、JPA
-から取れる共有ロックは `FOR SHARE` であって `FOR KEY SHARE` ではなく、店舗の名称編集まで直列化してしまう。
+同じ形が招待受諾にもあった（身分の所属店舗 `t_user_stores` の INSERT が店舗行を要求する）。**そちらは
+閉じた** — 受諾は既に store モジュールを参照しており、配下を押さえる前に店舗行を
+`FOR KEY SHARE` で押さえるだけで揃う（`StoreRepository#lockAgainstDeletion`）。準備中の店舗に
+キャストを招くのは通常の段取りなので、その最中に店舗を消す並びは十分起こりうる。
 
-現実性は 2 群で違う。**実績側は低い** — 店舗削除は準備中かつ記録ゼロが条件で、営業していない店舗に当日
-実績は建たない。成立には「記録ゼロと判定された店舗へ、判定と DELETE の間に行が建つ」が要る。**受諾側は
-それより高い** — 準備中の店舗にキャストを招くのは通常の段取りで、その最中に店舗を消せば当たりうる。
-それでも、店舗削除と受諾は業務上そもそも両立しない操作であり、当たったときの結末は片方が deadlock（500）
-を受け取ることに留まる。**払う代価に見合わないと判断して 4 経路まとめて残す。** 閉じる判断をするなら、
-向きの問題である以上 4 経路まとめてになる。
+実績側を閉じないのは現実性が桁違いに低いためである。店舗削除は準備中かつ記録ゼロが条件で、営業して
+いない店舗に当日実績は建たない — 成立には「記録ゼロと判定された店舗へ、判定と DELETE の間に実績が
+建つ」が要る。加えて shift モジュールから店舗表を押さえる経路を新たに通し、記録・訂正のたびに問い合わせを
+1 本増やすことになる。**代価に見合わないと判断して残す。** 当たった場合の結末は、双方が業務上そもそも
+両立しない操作であるところ、片方が deadlock（500）を受け取ることに留まる。
 
 **窓②: 変更申請の提出が対象シフトを押さえない。** 権威的な判定は承認側（ロック内）にあり、提出面は
 助言的である。押さえても「承認できない申請が inbox に残る」窓は閉じない — 実績は提出が成功した後の
@@ -162,8 +185,9 @@ casts → shifts、`{casts, users}` は 1 経路のみである。**環なし。
 
 ## Consequences
 
-- 招待受諾は档案（キャスト行）を押さえてから招待行を押さえる。逆順だったため、キャスト削除
-  （キャスト行 → 招待行へ CASCADE）と環になっていた。統合テストで順序そのものを固定する。
+- 招待受諾は店舗行 → 档案（キャスト行）→ 招待行の順に押さえる。档案が招待の後だったためキャスト削除
+  （キャスト行 → 招待行へ CASCADE）と環になり、店舗行を取っていなかったため店舗削除とも環になっていた。
+  どちらも統合テストで順序そのものを固定する。
 - 承認は申請行を書く前に対象シフトを押さえる。この順序は「申請行の書き込みが取引の終わりまで遅れる」
   ことでしか保たれておらず、間に申請行を触る問い合わせが挟まれば Hibernate が先に流して黙って逆転する。
   実装は動かさず、順序を統合テストで固定した。

@@ -70,6 +70,7 @@ public class CastInvitationAcceptanceService {
   @Transactional
   public CastAcceptanceResponse acceptAsNewUser(String token, CastInvitationAcceptRequest request) {
     CastInvitation invitation = findByToken(token);
+    storeRepository.lockAgainstDeletion(invitation.getStoreId());
     Cast cast = requireCastForUpdate(invitation.getCastId());
     if (platformUserRepository
         .findByEmail(request.getEmail().toLowerCase(Locale.ROOT))
@@ -101,6 +102,7 @@ public class CastInvitationAcceptanceService {
   @Transactional
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
     CastInvitation invitation = findByToken(token);
+    storeRepository.lockAgainstDeletion(invitation.getStoreId());
     Cast cast = requireCastForUpdate(invitation.getCastId());
     claim(invitation);
 
@@ -165,7 +167,8 @@ public class CastInvitationAcceptanceService {
   /**
    * 受諾で書き換える档案を、招待行を押さえる前に押さえて引く。
    *
-   * <p>押さえる順序は ADR 0016 に従う。照会（{@link #view}）は書かないのでこの口を通らない。
+   * <p>押さえる順序は ADR 0016 に従う。受諾は身分の所属店舗も書くので、その手前で店舗行も押さえてある （{@link
+   * StoreRepository#lockAgainstDeletion}）。照会（{@link #view}）は書かないのでこの口を通らない。
    */
   private Cast requireCastForUpdate(String castId) {
     return castRepository
