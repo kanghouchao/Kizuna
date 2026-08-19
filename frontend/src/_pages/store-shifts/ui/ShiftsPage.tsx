@@ -1,13 +1,17 @@
 'use client';
 
-import { CalendarDaysIcon, ClockIcon, InboxIcon } from 'lucide-react';
+import { CalendarDaysIcon, ClipboardCheckIcon, ClockIcon, InboxIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastResponse, castApi } from '@/entities/cast';
-import { ShiftResponse, shiftApi } from '@/entities/shift';
+import { AttendanceResponse, ShiftResponse, attendanceApi, shiftApi } from '@/entities/shift';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { RegionError, Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
+import { attendanceByShift, castsWithAttendance } from '../lib/attendance';
 import { monthRange, toDateStr } from '../lib/datetime';
+import { AttendanceBoard } from './AttendanceBoard';
+import { AttendanceCancelDialog } from './AttendanceCancelDialog';
+import { AttendanceFormModal, AttendanceFormTarget } from './AttendanceFormModal';
 import { ShiftCalendar } from './ShiftCalendar';
 import { ShiftFormModal } from './ShiftFormModal';
 import { ShiftPublicationPanel } from './ShiftPublicationPanel';
@@ -16,9 +20,10 @@ import { ShiftTimeline } from './ShiftTimeline';
 
 const CALENDAR_TAB = 'calendar';
 const TIMELINE_TAB = 'timeline';
+const ATTENDANCE_TAB = 'attendance';
 const REQUESTS_TAB = 'requests';
 
-/** 出勤管理ページ。カレンダー俯瞰・日別タイムライン・出勤希望 inbox をタブで切り替える。 */
+/** 出勤管理ページ。カレンダー俯瞰・日別タイムライン・当日実績・出勤希望 inbox をタブで切り替える。 */
 export default function ShiftsPage() {
   const [tab, setTab] = useState<string>(CALENDAR_TAB);
   const [month, setMonth] = useState(() => {
@@ -29,6 +34,8 @@ export default function ShiftsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [attendanceTarget, setAttendanceTarget] = useState<AttendanceFormTarget | null>(null);
+  const [cancelling, setCancelling] = useState<AttendanceResponse | null>(null);
 
   // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）。101 人以上でも氏名を解決できるよう
   // 全ページ取得する。途中まで読めた分は失敗として捨てられる — 欠けた名簿は「そのキャストは
@@ -74,6 +81,39 @@ export default function ShiftsPage() {
     () => (shiftsData ?? []).filter(s => s.work_date === selectedDate),
     [shiftsData, selectedDate]
   );
+
+  // 実績と欠勤は帰属営業日で引く。シフト紐づきの実績は営業日を勤務日から継承するので、
+  // 単日の器が見せている日とそのまま突き合う
+  const {
+    data: attendancesData,
+    isLoading: attendancesLoading,
+    failure: attendancesFailure,
+    reload: reloadAttendances,
+  } = useResource(() => attendanceApi.list({ business_date: selectedDate }), [selectedDate]);
+  const attendances = attendancesData ?? [];
+
+  const {
+    data: absencesData,
+    failure: absencesFailure,
+    reload: reloadAbsences,
+  } = useResource(
+    () => attendanceApi.listAbsences({ business_date: selectedDate }),
+    [selectedDate]
+  );
+
+  // シフトの編集面が塞ぐ相手。読めていない間は空集合＝塞がないので、後端の 4xx が最後の砦になる
+  const attendedShifts = useMemo(() => attendanceByShift(attendances), [attendances]);
+  // 同じ営業日に実績を持つキャストは二本目を記録できない（ADR 0014 の一意性）
+  const walkInCastOptions = useMemo(() => {
+    const attended = castsWithAttendance(attendances);
+    return casts.filter(c => c.id !== undefined && !attended.has(c.id));
+  }, [casts, attendances]);
+
+  /** 実績を書き換えたら、欠勤の導出も編集面の可否も同じ書き込みで変わる。 */
+  const reloadAttendanceViews = () => {
+    void reloadAttendances();
+    void reloadAbsences();
+  };
 
   /**
    * 公開可否を切り替える。行内の目玉とパネルの Switch・一括はすべてここへ入る — 二つの入口が
@@ -172,6 +212,12 @@ export default function ShiftsPage() {
               タイムライン
             </span>
           </TabsTrigger>
+          <TabsTrigger value={ATTENDANCE_TAB} className={tabTriggerClass}>
+            <span className="inline-flex items-center gap-1.5">
+              <ClipboardCheckIcon className="h-4 w-4" />
+              当日実績
+            </span>
+          </TabsTrigger>
           <TabsTrigger value={REQUESTS_TAB} className={tabTriggerClass}>
             <span className="inline-flex items-center gap-1.5">
               <InboxIcon className="h-4 w-4" />
@@ -219,6 +265,26 @@ export default function ShiftsPage() {
             />
           )}
         </TabsContent>
+        <TabsContent value={ATTENDANCE_TAB} className="mt-6">
+          <AttendanceBoard
+            date={selectedDate}
+            shifts={dayShifts}
+            attendances={attendances}
+            absences={absencesData ?? []}
+            casts={casts}
+            loading={loading || attendancesLoading}
+            failed={shiftsFailure !== null || attendancesFailure !== null}
+            onRetry={() => {
+              void reloadShifts();
+              void reloadAttendances();
+            }}
+            absencesFailed={absencesFailure !== null}
+            onRetryAbsences={() => void reloadAbsences()}
+            onChangeDate={setSelectedDate}
+            onOpenForm={setAttendanceTarget}
+            onCancel={setCancelling}
+          />
+        </TabsContent>
         <TabsContent value={REQUESTS_TAB} className="mt-6">
           <ShiftRequestInbox casts={casts} onApproved={() => void reloadShifts()} />
         </TabsContent>
@@ -229,8 +295,25 @@ export default function ShiftsPage() {
         onClose={() => setModalOpen(false)}
         casts={casts}
         editing={editing}
+        hasAttendance={editing?.id !== undefined && attendedShifts.has(editing.id)}
         defaultDate={selectedDate}
         onSaved={() => void reloadShifts()}
+      />
+
+      <AttendanceFormModal
+        open={attendanceTarget !== null}
+        onClose={() => setAttendanceTarget(null)}
+        target={attendanceTarget}
+        castOptions={walkInCastOptions}
+        casts={casts}
+        onSaved={reloadAttendanceViews}
+      />
+
+      <AttendanceCancelDialog
+        open={cancelling !== null}
+        onClose={() => setCancelling(null)}
+        attendance={cancelling}
+        onCancelled={reloadAttendanceViews}
       />
     </div>
   );

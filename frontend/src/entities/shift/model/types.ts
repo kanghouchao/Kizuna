@@ -128,3 +128,45 @@ export interface ConfirmedShiftCast {
   start_time?: string;
   end_time?: string;
 }
+
+// 当日実績（Attendance）。実際に出勤した事実の一等記録で、シフト（予定）とは別の集約（ADR 0014）。
+// 時刻は暦日付きの 'yyyy-MM-ddTHH:mm:ss'、business_date は帰属営業日 'yyyy-MM-dd'。
+// 取消済みの行はどの読み口にも現れないため、取消の標記は無い。
+export interface AttendanceResponse {
+  id?: string;
+  cast_id?: string;
+  business_date?: string;
+  actual_start_at?: string;
+  // 未終了（閉店時にまとめて記入する運用）では載らない
+  actual_end_at?: string;
+  // 載らないときは飛び込み出勤（予定なし）
+  shift_id?: string;
+  waiting_place?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// 実績の記録リクエスト。帰属営業日は載せない — シフトからの継承か実開始時刻からの判定でサーバが決める。
+export interface AttendanceCreateRequest {
+  cast_id: string;
+  // 省略・null は飛び込み出勤の記録になる
+  shift_id?: string | null;
+  actual_start_at: string;
+  actual_end_at?: string | null;
+  waiting_place?: string | null;
+}
+
+// 実績の訂正リクエスト。訂正できる項目の全量を毎回送る（省略は「変更しない」ではなく「値なし」）。
+// キャストとシフトの付け替えは載らない — 逃げ道は取消 → 再記録に限る（ADR 0014）。
+export interface AttendanceCorrectionRequest {
+  business_date: string;
+  actual_start_at: string;
+  actual_end_at?: string | null;
+  waiting_place?: string | null;
+}
+
+// 導出された欠勤（確定シフトあり・未取消の実績なし）。行は建たないので識別子も更新時刻も持たない。
+export interface AbsenceResponse {
+  cast_id?: string;
+  business_date?: string;
+}

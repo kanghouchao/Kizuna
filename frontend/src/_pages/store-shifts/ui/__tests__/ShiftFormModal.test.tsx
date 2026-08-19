@@ -54,6 +54,7 @@ function renderModal(props: Partial<React.ComponentProps<typeof ShiftFormModal>>
       onClose={onClose}
       casts={CASTS}
       editing={null}
+      hasAttendance={false}
       defaultDate="2026-08-01"
       onSaved={onSaved}
       {...props}
@@ -325,5 +326,65 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
 
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('shift-1'));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('未取消の実績が付いたシフトの編集面', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedUpdate.mockResolvedValue({});
+    mockedDelete.mockResolvedValue(undefined);
+  });
+
+  it('勤務日とキャストが塞がれ、理由と逃げ道が示されること', async () => {
+    // 後端は付け替えを 400 で拒む（ADR 0014）。押せる口を残すと、必ず失敗する操作を
+    // 出したまま「保存できません」とだけ言うことになる
+    renderModal({ editing: EDITING, hasAttendance: true });
+
+    await waitFor(() => expect(selectedLabel(CAST_SELECT)).toBe('キャストB'));
+    expect(selectAt(CAST_SELECT)).toBeDisabled();
+    expect(screen.getByLabelText('日付')).toBeDisabled();
+    expect(
+      screen.getByText(/勤務日とキャストの変更 — 当日実績タブで実績を取り消してから/)
+    ).toBeInTheDocument();
+  });
+
+  it('時刻とステータスは塞がず、実績があっても更新できること', async () => {
+    // 塞ぐのは実績が物化した帰属（営業日・キャスト）だけで、時間帯の訂正は通す
+    renderModal({ editing: EDITING, hasAttendance: true });
+
+    await waitFor(() => expect(selectedLabel(STATUS_SELECT)).toBe('確定'));
+    expect(screen.getByLabelText('開始')).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('終了'), { target: { value: '02:00' } });
+    submit();
+
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][1]).toEqual({
+      cast_id: 'cast-2',
+      work_date: '2026-08-02',
+      start_time: '19:30:00',
+      end_time: '02:00:00',
+      status: 'CONFIRMED',
+    });
+  });
+
+  it('削除の口を出さず、中性化の手順を示すこと', async () => {
+    // 削除は取消済みの実績が相手でも拒まれる（RESTRICT）。逃げ道は取消 → 未確定への差し戻し
+    renderModal({ editing: EDITING, hasAttendance: true });
+
+    await waitFor(() => expect(selectedLabel(CAST_SELECT)).toBe('キャストB'));
+    expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/削除 — 実績を取り消しても行えません。ステータスを未確定に戻して/)
+    ).toBeInTheDocument();
+  });
+
+  it('新規作成の面は実績の有無に関わらず塞がれないこと', async () => {
+    // 実績が付き得るのは既存の行だけ。追加フォームまで塞ぐと何も作れなくなる
+    renderModal({ editing: null, hasAttendance: true });
+
+    await waitFor(() => expect(selectedLabel(CAST_SELECT)).toBe('キャストA'));
+    expect(selectAt(CAST_SELECT)).toBeEnabled();
+    expect(screen.getByLabelText('日付')).toBeEnabled();
   });
 });

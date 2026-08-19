@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ShiftsPage from '../ShiftsPage';
 import { castApi } from '@/entities/cast';
-import { shiftApi } from '@/entities/shift';
+import { attendanceApi, shiftApi } from '@/entities/shift';
 import { notify } from '@/shared/notify';
 import { addDaysStr, toDateStr } from '../../lib/datetime';
 
@@ -13,10 +13,19 @@ jest.mock('@/entities/shift', () => ({
   shiftApi: {
     list: jest.fn(),
     create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
     changePublication: jest.fn(),
     listShiftRequests: jest.fn(),
     approveShiftRequest: jest.fn(),
     declineShiftRequest: jest.fn(),
+  },
+  attendanceApi: {
+    list: jest.fn(),
+    record: jest.fn(),
+    correct: jest.fn(),
+    cancel: jest.fn(),
+    listAbsences: jest.fn(),
   },
 }));
 
@@ -28,6 +37,11 @@ const mockedCastList = castApi.list as jest.Mock;
 const mockedShiftList = shiftApi.list as jest.Mock;
 const mockedShiftCreate = shiftApi.create as jest.Mock;
 const mockedChangePublication = shiftApi.changePublication as jest.Mock;
+const mockedAttendanceList = attendanceApi.list as jest.Mock;
+const mockedAbsenceList = attendanceApi.listAbsences as jest.Mock;
+const mockedRecord = attendanceApi.record as jest.Mock;
+const mockedCorrect = attendanceApi.correct as jest.Mock;
+const mockedCancel = attendanceApi.cancel as jest.Mock;
 
 /** 月グリッドの先頭 6 セル・末尾 14 セルにしか他月は現れないため、15 日は常に当月で一意。 */
 const DAY_IN_MONTH = 15;
@@ -43,6 +57,8 @@ const castPage = (rows: { id: string; name: string }[] = []) => ({
 describe('ShiftsPage のタブ遷移', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedAttendanceList.mockResolvedValue([]);
+    mockedAbsenceList.mockResolvedValue([]);
     mockedCastList.mockResolvedValue(castPage());
     mockedShiftList.mockResolvedValue([]);
   });
@@ -101,6 +117,8 @@ describe('ShiftsPage のタブ遷移', () => {
 describe('タイムラインの日付ナビゲーション', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedAttendanceList.mockResolvedValue([]);
+    mockedAbsenceList.mockResolvedValue([]);
     mockedCastList.mockResolvedValue(castPage());
     mockedShiftList.mockResolvedValue([]);
   });
@@ -171,6 +189,8 @@ describe('タイムラインの日付ナビゲーション', () => {
 describe('ShiftsPage の取得失敗', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedAttendanceList.mockResolvedValue([]);
+    mockedAbsenceList.mockResolvedValue([]);
     mockedCastList.mockResolvedValue(castPage());
     mockedShiftList.mockResolvedValue([]);
   });
@@ -242,6 +262,8 @@ describe('シフトの公開可否', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedAttendanceList.mockResolvedValue([]);
+    mockedAbsenceList.mockResolvedValue([]);
     mockedCastList.mockResolvedValue(castPage([SAKURA, AOI]));
   });
 
@@ -377,5 +399,290 @@ describe('シフトの公開可否', () => {
     fireEvent.click(await screen.findByRole('switch', { name: 'さくら 18:00–23:00 を公開する' }));
 
     await waitFor(() => expect(mockedChangePublication).toHaveBeenCalledWith('s1', false));
+  });
+});
+
+describe('当日実績の記録・訂正・取消', () => {
+  const TODAY = toDateStr(new Date());
+  const SAKURA = { id: 'c1', name: 'さくら' };
+  const AOI = { id: 'c2', name: 'あおい' };
+
+  /** さくらの確定シフト 18:00–23:00。 */
+  const shift = {
+    id: 's1',
+    cast_id: 'c1',
+    work_date: TODAY,
+    start_time: '18:00:00',
+    end_time: '23:00:00',
+    status: 'CONFIRMED',
+    published: true,
+  };
+  /** 同じさくらの二枠目 20:00–23:00。実績は営業日に 1 行しか立たない。 */
+  const secondSlot = { ...shift, id: 's2', start_time: '20:00:00' };
+  /** 仮シフト（あおい）。確定していないシフトには実績を紐づけられない。 */
+  const tentative = { ...shift, id: 's3', cast_id: 'c2', status: 'TENTATIVE' };
+
+  /** s1 に紐づくさくらの実績。 */
+  const attendance = {
+    id: 'a1',
+    cast_id: 'c1',
+    shift_id: 's1',
+    business_date: TODAY,
+    actual_start_at: `${TODAY}T18:05:00`,
+    actual_end_at: `${TODAY}T23:10:00`,
+    waiting_place: '控室',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedAttendanceList.mockResolvedValue([]);
+    mockedAbsenceList.mockResolvedValue([]);
+    mockedCastList.mockResolvedValue(castPage([SAKURA, AOI]));
+    mockedShiftList.mockResolvedValue([]);
+  });
+
+  const openBoard = async () => {
+    render(<ShiftsPage />);
+    fireEvent.click(screen.getByRole('tab', { name: '当日実績' }));
+    expect(await screen.findByText(`${TODAY} の実績`)).toBeInTheDocument();
+  };
+
+  /** Base UI の Item は pointerdown を経ていない click を無視する。 */
+  const pickOption = async (optionName: string) => {
+    fireEvent.click(screen.getByRole('combobox'));
+    const option = await screen.findByRole('option', { name: optionName });
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+  };
+
+  it('確定シフトから実績を起こすと、シフトとキャストを紐づけて記録されること', async () => {
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedRecord.mockResolvedValue({});
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を記録する' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedRecord).toHaveBeenCalledTimes(1));
+    expect(mockedRecord).toHaveBeenCalledWith({
+      cast_id: 'c1',
+      shift_id: 's1',
+      // 予定の時間帯を初期値に置く。空欄は「値なし」であって空文字ではない
+      actual_start_at: `${TODAY}T18:00`,
+      actual_end_at: null,
+      waiting_place: null,
+    });
+  });
+
+  it('飛び込みはシフトを持たずに記録されること', async () => {
+    mockedRecord.mockResolvedValue({});
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: '飛び込みを記録' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('飛び込み（予定なし）')).toBeInTheDocument();
+    // 誰の実績かに既定値は置かない。選ばないまま保存しても送信は止まる
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+    expect(await screen.findByText('キャストを選択してください')).toBeInTheDocument();
+    expect(mockedRecord).not.toHaveBeenCalled();
+
+    await pickOption('さくら');
+    fireEvent.change(within(dialog).getByLabelText('実際の開始'), {
+      target: { value: `${TODAY}T21:00` },
+    });
+    fireEvent.change(within(dialog).getByLabelText('待機場所'), {
+      target: { value: 'カウンター' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedRecord).toHaveBeenCalledTimes(1));
+    expect(mockedRecord).toHaveBeenCalledWith({
+      cast_id: 'c1',
+      shift_id: null,
+      actual_start_at: `${TODAY}T21:00`,
+      actual_end_at: null,
+      waiting_place: 'カウンター',
+    });
+  });
+
+  it('同じ営業日に実績を持つキャストの二枠目には記録の口を出さないこと', async () => {
+    // 実績は（キャスト・営業日）に 1 行しか立たない。口を出せば必ず 409 になる
+    mockedShiftList.mockResolvedValue([shift, secondSlot]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    await openBoard();
+
+    expect(await screen.findByText('同じ営業日の実績は 1 件にまとまります')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /記録する/ })).not.toBeInTheDocument();
+  });
+
+  it('飛び込みの記録でも実績を持つキャストは候補に出ないこと', async () => {
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: '飛び込みを記録' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('combobox'));
+
+    expect(await screen.findByRole('option', { name: 'あおい' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'さくら' })).not.toBeInTheDocument();
+  });
+
+  it('仮シフトには記録の口を出さないこと', async () => {
+    // 実績を指せるのは確定シフトだけ（ADR 0014）
+    mockedShiftList.mockResolvedValue([tentative]);
+    await openBoard();
+
+    expect(await screen.findByText('確定すると実績を記録できます')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /記録する/ })).not.toBeInTheDocument();
+  });
+
+  it('訂正は帰属営業日を含む全項目を送り、空欄は値なしとして送ること', async () => {
+    // 省略が「変更しない」なら、実終了と待機場所を空へ戻す訂正が表せない
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    mockedCorrect.mockResolvedValue({});
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を訂正' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(within(dialog).getByLabelText('実際の開始')).toHaveValue(`${TODAY}T18:05`)
+    );
+    fireEvent.change(within(dialog).getByLabelText('実際の終了'), { target: { value: '' } });
+    fireEvent.change(within(dialog).getByLabelText('待機場所'), { target: { value: '' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedCorrect).toHaveBeenCalledTimes(1));
+    expect(mockedCorrect).toHaveBeenCalledWith('a1', {
+      business_date: TODAY,
+      actual_start_at: `${TODAY}T18:05`,
+      actual_end_at: null,
+      waiting_place: null,
+    });
+  });
+
+  it('シフト紐づきの実績には帰属営業日の欄を出さないこと', async () => {
+    // 営業日は勤務日の継承であって選択ではない。ずらせると予実が別の営業日へ割れる
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を訂正' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByLabelText('帰属営業日')).not.toBeInTheDocument();
+  });
+
+  it('飛び込みの訂正では帰属営業日を直せること', async () => {
+    // 日付変更時刻の変更は不遡及。変更前の飛び込みを後から補記した誤帰属はここでしか直せない
+    const walkIn = { ...attendance, id: 'a2', shift_id: undefined };
+    mockedAttendanceList.mockResolvedValue([walkIn]);
+    mockedCorrect.mockResolvedValue({});
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を訂正' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('帰属営業日'), {
+      target: { value: '2026-01-31' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedCorrect).toHaveBeenCalledTimes(1));
+    expect(mockedCorrect.mock.calls[0][1].business_date).toBe('2026-01-31');
+  });
+
+  it('取消は理由が無ければ送らず、入力すれば理由を載せて送ること', async () => {
+    // 取消は不可逆で、経緯を辿れる根拠は理由の一文しか残らない
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    mockedCancel.mockResolvedValue(undefined);
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を取消' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '取り消す' }));
+
+    expect(await screen.findByText('取消の理由を入力してください')).toBeInTheDocument();
+    expect(mockedCancel).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByLabelText('取消の理由'), {
+      target: { value: '二重記録' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '取り消す' }));
+
+    await waitFor(() => expect(mockedCancel).toHaveBeenCalledWith('a1', '二重記録'));
+  });
+
+  it('実績を書き換えたら欠勤の導出も取り直すこと', async () => {
+    // 欠勤は実績の有無から導出される。取り直しの配線が切れても取消自体は成功するので症状が出ない
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    mockedCancel.mockResolvedValue(undefined);
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を取消' }));
+    const dialog = await screen.findByRole('dialog');
+    const absenceCallsBefore = mockedAbsenceList.mock.calls.length;
+    fireEvent.change(within(dialog).getByLabelText('取消の理由'), { target: { value: '誤記録' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '取り消す' }));
+
+    await waitFor(() => expect(mockedCancel).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mockedAbsenceList.mock.calls.length).toBeGreaterThan(absenceCallsBefore)
+    );
+  });
+
+  it('導出された欠勤が行と件数に出ること', async () => {
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAbsenceList.mockResolvedValue([{ cast_id: 'c1', business_date: TODAY }]);
+    await openBoard();
+
+    expect(await screen.findByText('欠勤')).toBeInTheDocument();
+    expect(screen.getByText('欠勤 1件')).toBeInTheDocument();
+    // 欠勤と判った枠に記録の口は残さない
+    expect(screen.queryByRole('button', { name: /記録する/ })).not.toBeInTheDocument();
+  });
+
+  it('実績が読めていなければ行を出さず、その場が失敗を名乗って再試行できること', async () => {
+    // 読めていない実績を空として描くと、記録済みの枠まで「未記録」に化ける
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockRejectedValueOnce(new Error('boom'));
+    await openBoard();
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('シフトと実績の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('未記録')).not.toBeInTheDocument();
+
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('未記録')).toBeInTheDocument();
+  });
+
+  it('欠勤だけが読めなければ、行は残したままそこが失敗を名乗ること', async () => {
+    // 欠勤が読めていないのに行を素のまま出すと、画面が「誰も休んでいない」と言うことになる
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAbsenceList.mockRejectedValueOnce(new Error('boom'));
+    await openBoard();
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('欠勤の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'さくらの実績を記録する' })).toBeInTheDocument();
+  });
+
+  it('日付を動かすと実績と欠勤もその営業日で取り直すこと', async () => {
+    await openBoard();
+    await waitFor(() => expect(mockedAttendanceList).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: '翌日' }));
+
+    const tomorrow = addDaysStr(TODAY, 1);
+    expect(await screen.findByText(`${tomorrow} の実績`)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockedAttendanceList).toHaveBeenCalledWith({ business_date: tomorrow })
+    );
+    await waitFor(() =>
+      expect(mockedAbsenceList).toHaveBeenCalledWith({ business_date: tomorrow })
+    );
   });
 });

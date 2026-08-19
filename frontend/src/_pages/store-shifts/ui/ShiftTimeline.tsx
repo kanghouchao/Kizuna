@@ -1,12 +1,13 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, PlusIcon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, PlusIcon } from 'lucide-react';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse } from '@/entities/shift';
-import { Button, Input, RegionError } from '@/shared/ui';
-import { addDaysStr, hhmm, shiftSpan, toDateStr } from '../lib/datetime';
+import { Button, RegionError } from '@/shared/ui';
+import { hhmm, shiftSpan, toDateStr } from '../lib/datetime';
 import { castName, shiftLabel } from '../lib/labels';
 import { isUnpublished } from '../lib/publication';
+import { ShiftDayNav } from './ShiftDayNav';
 
 interface ShiftTimelineProps {
   /** 表示日 'yyyy-MM-dd'。 */
@@ -24,14 +25,6 @@ interface ShiftTimelineProps {
   publishing: boolean;
   onChangePublication: (targets: ShiftResponse[], published: boolean) => void;
 }
-
-/** クイックジャンプは選択中の日ではなく実際の今日を基準にする。 */
-const QUICK_JUMPS = [
-  { label: '昨日', offset: -1 },
-  { label: '今日', offset: 0 },
-  { label: '明日', offset: 1 },
-  { label: '明後日', offset: 2 },
-] as const;
 
 const SLOT_MINUTES = 30;
 const LABEL_COL = 'w-28';
@@ -86,49 +79,7 @@ export function ShiftTimeline({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
         <h2 className="text-lg font-semibold text-foreground">{date} の出勤</h2>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => onChangeDate(addDaysStr(date, -1))}
-              aria-label="前日"
-            >
-              <ChevronLeftIcon />
-            </Button>
-            {/* クリアで空文字が飛んでくるため無視する（表示日が無い状態は作らない） */}
-            <Input
-              type="date"
-              value={date}
-              onChange={e => {
-                if (e.target.value) onChangeDate(e.target.value);
-              }}
-              aria-label="表示する日付"
-              className="w-40"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => onChangeDate(addDaysStr(date, 1))}
-              aria-label="翌日"
-            >
-              <ChevronRightIcon />
-            </Button>
-          </div>
-          <div className="flex items-center gap-1">
-            {QUICK_JUMPS.map(({ label, offset }) => (
-              <Button
-                key={label}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onChangeDate(addDaysStr(toDateStr(new Date()), offset))}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
+          <ShiftDayNav date={date} onChangeDate={onChangeDate} />
           <Button type="button" onClick={onAddShift}>
             <PlusIcon />
             シフト追加
