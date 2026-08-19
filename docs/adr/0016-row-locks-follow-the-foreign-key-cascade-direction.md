@@ -196,6 +196,6 @@ FOR NO KEY UPDATE どうしも衝突するので、UPDATE だけでも順序は�
   分ける（`ShiftAttendanceGuardIT`・`PlatformCastInvitationAcceptanceIT` が先例）。
 - 5 表に外部キーを足す・削除規則を変えるときは、この表の該当行を書き直す。特に **NO ACTION から CASCADE
   へ変える**と、その表が上流の削除の到達先に加わり、下流で明示ロックを取る経路と新しい対ができる。
-  新しく `@Lock(PESSIMISTIC_WRITE)` の読み口を足すときも同じで、「対ごとの洗い出し」の 2 群を引き直す。
+  新しく `@Lock(PESSIMISTIC_WRITE)` の読み口を足すときも同じで、「対ごとの洗い出し」の 3 群を引き直す。
 - 一意索引を**部分**にすると、そのキー列を変える UPDATE は FOR UPDATE ではなく FOR NO KEY UPDATE に
   落ちる（事実 3）。同時実行の強さが変わるので、部分化は一意性の話だけでは決められない。
