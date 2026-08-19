@@ -44,9 +44,7 @@ public class ShiftService {
   @StoreScoped
   @Transactional(readOnly = true)
   public List<ShiftResponse> list(LocalDate from, LocalDate to) {
-    return shiftRepository.findByWorkDateBetween(from, to).stream()
-        .map(shiftMapper::toResponse)
-        .toList();
+    return shiftRepository.findByWorkDateBetween(from, to).stream().map(this::toResponse).toList();
   }
 
   /**
@@ -95,7 +93,7 @@ public class ShiftService {
 
     // store_id は StoreScopeStampListener が @PrePersist で採番する
     Shift shift = shiftMapper.toEntity(request, resolveActorId(actorEmail));
-    return shiftMapper.toResponse(shiftRepository.save(shift));
+    return toResponse(shiftRepository.save(shift));
   }
 
   @StoreScoped
@@ -132,7 +130,7 @@ public class ShiftService {
     shift.apply(shiftMapper.toPatch(request));
     shift.stampUpdatedBy(resolveActorId(actorEmail));
 
-    return shiftMapper.toResponse(shiftRepository.save(shift));
+    return toResponse(shiftRepository.save(shift));
   }
 
   /** 実績が物化した帰属（営業日・キャスト）を動かす更新か。現行と同値の再送は変更ではないので通す。 */
@@ -152,7 +150,7 @@ public class ShiftService {
     Shift shift = findShift(id);
     shift.changePublication(published);
     shift.stampUpdatedBy(resolveActorId(actorEmail));
-    return shiftMapper.toResponse(shiftRepository.save(shift));
+    return toResponse(shiftRepository.save(shift));
   }
 
   @StoreScoped
@@ -165,6 +163,15 @@ public class ShiftService {
       throw new ConflictException("実績が記録されているシフトは削除できません。実績を取り消したうえで下書きに戻してください");
     }
     shiftRepository.deleteById(id);
+  }
+
+  /**
+   * 予定を暦日付きの時刻ごと返す。境界は勤務日ごとに解決する — 日付変更時刻は夏時間の進みで飛ばされる帯に置くと その暦日だけ実際の境界が前へ送られる（{@link
+   * BusinessDateService#effectiveDateChangeTimeOn}）。
+   */
+  private ShiftResponse toResponse(Shift shift) {
+    return shiftMapper.toResponse(
+        shift, businessDateService.effectiveDateChangeTimeOn(shift.getWorkDate()));
   }
 
   private Shift findShift(String id) {

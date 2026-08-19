@@ -6,6 +6,10 @@ export interface ShiftResponse {
   work_date?: string;
   start_time?: string;
   end_time?: string;
+  // 予定の開始・終了を暦日付きで写した値（'yyyy-MM-ddTHH:mm:ss'）。work_date は営業日なので、
+  // 日付変更時刻より前に始まる枠の暦日は翌日になる。前端はその境界を読めないので後端が写す。
+  scheduled_start_at?: string;
+  scheduled_end_at?: string;
   status?: string;
   published?: boolean;
   created_at?: string;

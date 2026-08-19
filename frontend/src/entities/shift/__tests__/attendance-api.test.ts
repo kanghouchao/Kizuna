@@ -7,7 +7,6 @@ jest.mock('@/shared/api/client', () => ({
     get: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
     post: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
     put: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
-    delete: jest.fn(async () => ({ data: undefined })),
   },
 }));
 

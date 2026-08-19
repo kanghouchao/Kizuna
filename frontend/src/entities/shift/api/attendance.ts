@@ -14,10 +14,7 @@ import {
  */
 export const attendanceApi = {
   /** 指定営業日の実績を取得する（取消済みは常に除外される）。 */
-  list: async (params: {
-    business_date: string;
-    cast_id?: string;
-  }): Promise<AttendanceResponse[]> => {
+  list: async (params: { business_date: string }): Promise<AttendanceResponse[]> => {
     const response = await apiClient.get('/store/attendances', { params });
     return response.data;
   },

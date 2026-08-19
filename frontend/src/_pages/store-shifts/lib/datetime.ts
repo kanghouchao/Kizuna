@@ -57,6 +57,11 @@ export function shiftSpan(
   return { start, end };
 }
 
+/** 'yyyy-MM-ddTHH:mm[:ss]' の日付部分を切り出す。 */
+export function dateOfDateTime(value: string | undefined): string {
+  return (value ?? '').split('T')[0];
+}
+
 /** 'yyyy-MM-ddTHH:mm[:ss]' の時刻部分を表示用の 'HH:mm' に切り出す。 */
 export function hhmmOfDateTime(value: string | undefined): string {
   return hhmm((value ?? '').split('T')[1]);
