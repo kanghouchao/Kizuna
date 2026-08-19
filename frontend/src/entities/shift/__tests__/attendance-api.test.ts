@@ -1,5 +1,6 @@
 import { attendanceApi } from '@/entities/shift';
 import { apiClient } from '@/shared/api';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -57,5 +58,35 @@ describe('attendanceApi', () => {
       ok: true,
       url: '/store/absences',
     });
+  });
+});
+
+/**
+ * 識別子を欠いた呼び出しは要求そのものを組まない。応答 DTO の項目はすべて可選なので、画面側が
+ * `?? ''` で素通しすると単数の操作が一覧の URI へ飛び、届いた先の 404/405 が操作の失敗と
+ * 見分けられなくなる。守りはアダプタの内側にあり、画面ごとに書かない。
+ */
+describe('識別子を欠いた attendanceApi', () => {
+  const calls: [string, () => Promise<unknown>, string][] = [
+    [
+      'correct',
+      () =>
+        attendanceApi.correct(undefined, {
+          business_date: '2026-08-19',
+          actual_start_at: '2026-08-19T19:00:00',
+        }),
+      '当日実績',
+    ],
+    ['cancel', () => attendanceApi.cancel(undefined, '誤記録'), '当日実績'],
+  ];
+
+  it.each(calls)('%s は要求を出さず、名乗る失敗を投げる', async (_name, call, label) => {
+    jest.clearAllMocks();
+
+    await expect(call()).rejects.toBeInstanceOf(ClientDataError);
+    await expect(call()).rejects.toThrow(`${label}の識別子が取得できていません`);
+    expect(apiClient.get).not.toHaveBeenCalled();
+    expect(apiClient.post).not.toHaveBeenCalled();
+    expect(apiClient.put).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { castApi } from '@/entities/cast';
 import { attendanceApi, shiftApi } from '@/entities/shift';
 import { notify } from '@/shared/notify';
 import { addDaysStr, toDateStr } from '../../lib/datetime';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => ({
   castApi: { list: jest.fn() },
@@ -747,11 +748,14 @@ describe('当日実績の記録・訂正・取消', () => {
     expect(await screen.findByText('未記録')).toBeInTheDocument();
   });
 
-  it('識別子の無い実績には要求を組まず、理由を名乗ること', async () => {
-    // `?? ''` で素通しすると POST /store/attendances//cancellation が飛び、届いた先の
-    // 404 が「取消に失敗しました」と見分けが付かなくなる
+  it('識別子を欠いた失敗は、汎用文言に潰さずそのまま名乗ること', async () => {
+    // 識別子を欠いた要求はアダプタが組む前に止める（attendance-api.test.ts）。画面が負うのは
+    // その失敗を「取消に失敗しました」へ潰さないことで、潰すと原因が画面側にあることまで消える
     mockedShiftList.mockResolvedValue([shift]);
     mockedAttendanceList.mockResolvedValue([{ ...attendance, id: undefined }]);
+    mockedCancel.mockRejectedValue(
+      new ClientDataError('当日実績の識別子が取得できていません。画面を読み直してください')
+    );
     await openBoard();
 
     fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を取消' }));
@@ -764,7 +768,6 @@ describe('当日実績の記録・訂正・取消', () => {
         expect.stringContaining('当日実績の識別子が取得できていません')
       )
     );
-    expect(mockedCancel).not.toHaveBeenCalled();
   });
 
   it('別の営業日の実績と欠勤は行にも件数にも入らないこと', async () => {

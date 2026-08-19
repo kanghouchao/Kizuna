@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
 import { Order, orderApi } from '@/entities/order';
+import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/order', () => ({
   // 表示ラベル等の定数は本物を使う（API だけを差し替える）
@@ -26,6 +27,10 @@ jest.mock('@/entities/order', () => ({
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
   useParams: () => ({ storeId: '1' }),
+}));
+
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
@@ -123,6 +128,22 @@ describe('作業キューの描画', () => {
     // 応答の内容へ差し替わるので、次の操作は確定済みのものになる
     await waitFor(() => expect(screen.getByRole('button', { name: '完了' })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: '確定' })).not.toBeInTheDocument();
+  });
+
+  it('識別子の無い受注には要求を組まず、理由を名乗ること', async () => {
+    // `?? ''` で素通しすると POST /store/orders//confirmation が飛び、届いた先の 404 が
+    // 「確定に失敗しました」と見分けが付かなくなる
+    stubQueue(pendingRequest({ id: undefined }));
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '確定' }));
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        expect.stringContaining('受注の識別子が取得できていません')
+      )
+    );
+    expect(mockedOrderApi.confirm).not.toHaveBeenCalled();
   });
 
   it('取得の失敗を空表示と区別すること', async () => {

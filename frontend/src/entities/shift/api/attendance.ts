@@ -1,4 +1,5 @@
 import { apiClient } from '@/shared/api';
+import { requireId } from '@/shared/lib';
 import {
   AbsenceResponse,
   AttendanceCorrectionRequest,
@@ -24,13 +25,18 @@ export const attendanceApi = {
     return response.data;
   },
   /** 実績を訂正する。訂正できる項目の全量を送る。 */
-  correct: async (id: string, data: AttendanceCorrectionRequest): Promise<AttendanceResponse> => {
-    const response = await apiClient.put(`/store/attendances/${id}`, data);
+  correct: async (
+    id: string | undefined,
+    data: AttendanceCorrectionRequest
+  ): Promise<AttendanceResponse> => {
+    const response = await apiClient.put(`/store/attendances/${requireId(id, '当日実績')}`, data);
     return response.data;
   },
   /** 実績に取消標記を付ける。理由は必須で、経緯を辿れる根拠はここにしか残らない。 */
-  cancel: async (id: string, reason: string): Promise<void> => {
-    await apiClient.post(`/store/attendances/${id}/cancellation`, { reason });
+  cancel: async (id: string | undefined, reason: string): Promise<void> => {
+    await apiClient.post(`/store/attendances/${requireId(id, '当日実績')}/cancellation`, {
+      reason,
+    });
   },
   /**
    * 指定営業日の欠勤を取得する。行ではなく導出なので、営業日の終了と当該キャストの最遅予定終了の

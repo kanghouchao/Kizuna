@@ -1,5 +1,6 @@
 import { customerApi } from '@/entities/customer';
 import { apiClient } from '@/shared/api';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -156,5 +157,43 @@ describe('customerApi', () => {
       expires_on: '2026-12-31',
       idempotency_key: 'idem-1',
     });
+  });
+});
+
+/**
+ * 識別子を欠いた呼び出しは要求そのものを組まない。応答 DTO の項目はすべて可選なので、画面側が
+ * `?? ''` で素通しすると単数の操作が一覧の URI へ飛び、届いた先の 404/405 が操作の失敗と
+ * 見分けられなくなる。守りはアダプタの内側にあり、画面ごとに書かない。
+ */
+describe('識別子を欠いた customerApi', () => {
+  const calls: [string, () => Promise<unknown>, string][] = [
+    ['mergeComparison', () => customerApi.mergeComparison(undefined, 'c2'), '顧客'],
+    ['get', () => customerApi.get(undefined), '顧客'],
+    ['update', () => customerApi.update(undefined, {}), '顧客'],
+    ['delete', () => customerApi.delete(undefined), '顧客'],
+    ['merge（存続行）', () => customerApi.merge(undefined, 'c2'), '顧客'],
+    ['merge（被統合行）', () => customerApi.merge('c1', undefined), '顧客'],
+    ['mergeHistory', () => customerApi.mergeHistory(undefined), '顧客'],
+    ['linkMember', () => customerApi.linkMember(undefined, 'm1'), '顧客'],
+    ['unlinkMember', () => customerApi.unlinkMember(undefined), '顧客'],
+    ['memberLink', () => customerApi.memberLink(undefined), '顧客'],
+    ['memberLinkHistory', () => customerApi.memberLinkHistory(undefined), '顧客'],
+    ['memberPointBalance', () => customerApi.memberPointBalance(undefined), '顧客'],
+    [
+      'adjustPoints',
+      () => customerApi.adjustPoints(undefined, { delta: 1, reason: 'r', idempotency_key: 'k' }),
+      '顧客',
+    ],
+  ];
+
+  it.each(calls)('%s は要求を出さず、名乗る失敗を投げる', async (_name, call, label) => {
+    jest.clearAllMocks();
+
+    await expect(call()).rejects.toBeInstanceOf(ClientDataError);
+    await expect(call()).rejects.toThrow(`${label}の識別子が取得できていません`);
+    expect(apiClient.get).not.toHaveBeenCalled();
+    expect(apiClient.post).not.toHaveBeenCalled();
+    expect(apiClient.put).not.toHaveBeenCalled();
+    expect(apiClient.delete).not.toHaveBeenCalled();
   });
 });

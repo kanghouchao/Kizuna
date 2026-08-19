@@ -1,4 +1,5 @@
 import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
+import { requireId } from '@/shared/lib';
 import {
   CastCreateRequest,
   CastFieldDefinitionCreateRequest,
@@ -18,8 +19,8 @@ export const castApi = {
     return fromSpringPage(response.data);
   },
   /** キャスト詳細を取得する */
-  get: async (id: string): Promise<CastResponse> => {
-    const response = await apiClient.get(`/store/casts/${id}`);
+  get: async (id: string | undefined): Promise<CastResponse> => {
+    const response = await apiClient.get(`/store/casts/${requireId(id, 'キャスト')}`);
     return response.data;
   },
   /** キャストを新規作成する */
@@ -28,13 +29,13 @@ export const castApi = {
     return response.data;
   },
   /** キャスト情報を更新する */
-  update: async (id: string, data: CastUpdateRequest): Promise<CastResponse> => {
-    const response = await apiClient.put(`/store/casts/${id}`, data);
+  update: async (id: string | undefined, data: CastUpdateRequest): Promise<CastResponse> => {
+    const response = await apiClient.put(`/store/casts/${requireId(id, 'キャスト')}`, data);
     return response.data;
   },
   /** キャストを削除する */
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/store/casts/${id}`);
+  delete: async (id: string | undefined): Promise<void> => {
+    await apiClient.delete(`/store/casts/${requireId(id, 'キャスト')}`);
   },
   /** 公開キャスト一覧を取得する */
   listPublic: async (): Promise<CastPublicResponse[]> => {
@@ -42,8 +43,8 @@ export const castApi = {
     return response.data;
   },
   /** キャストへの招待を発行する（店長限定。再発行時は旧招待が失効する） */
-  issueInvitation: async (id: string): Promise<CastInvitationIssueResponse> => {
-    const response = await apiClient.post(`/store/casts/${id}/invitation`);
+  issueInvitation: async (id: string | undefined): Promise<CastInvitationIssueResponse> => {
+    const response = await apiClient.post(`/store/casts/${requireId(id, 'キャスト')}/invitation`);
     return response.data;
   },
 };
@@ -61,14 +62,17 @@ export const castFieldDefinitionApi = {
   },
   /** カスタムフィールド定義を更新する */
   update: async (
-    id: string,
+    id: string | undefined,
     data: CastFieldDefinitionUpdateRequest
   ): Promise<CastFieldDefinitionResponse> => {
-    const response = await apiClient.put(`/store/casts/fields/${id}`, data);
+    const response = await apiClient.put(
+      `/store/casts/fields/${requireId(id, 'フィールド')}`,
+      data
+    );
     return response.data;
   },
   /** カスタムフィールド定義を削除する */
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/store/casts/fields/${id}`);
+  delete: async (id: string | undefined): Promise<void> => {
+    await apiClient.delete(`/store/casts/fields/${requireId(id, 'フィールド')}`);
   },
 };

@@ -31,7 +31,7 @@ export function InvitationButton({ castId, status, onIssued }: InvitationButtonP
   const handleIssue = async () => {
     setIssuing(true);
     try {
-      const response = await castApi.issueInvitation(castId ?? '');
+      const response = await castApi.issueInvitation(castId);
       onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' });
     } catch (error) {
       notify.error(getApiErrorMessage(error, '招待の発行に失敗しました'));

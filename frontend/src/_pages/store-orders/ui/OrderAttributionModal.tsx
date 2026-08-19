@@ -110,7 +110,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
     failure,
     reload,
   } = useResource<AttributionSnapshot>(
-    order === null ? null : async () => ({ orderId, body: await orderApi.attribution(orderId) }),
+    order === null ? null : async () => ({ orderId, body: await orderApi.attribution(order.id) }),
     [orderId]
   );
   // 別の受注へ切り替わった瞬間は現況を持たない状態から始める（レンダー期の判定なので、前の受注の
@@ -151,7 +151,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   const invalidate = async (values: InvalidationFormValues) => {
     // 対象は画面が読み口で得た記録そのものを名指す。受注から導く形へ戻すと、開いたまま別の操作者が
     // 訂正を一巡させた場合に、この理由が新しく成立した正しい帰属へ当たって来店を消す
-    if (!order?.id || attribution?.id === undefined) return;
+    if (!order || attribution?.id === undefined) return;
     try {
       const updated = await orderApi.invalidateAttribution(order.id, {
         attribution_id: attribution.id,
@@ -176,7 +176,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   };
 
   const reissue = async () => {
-    if (!order?.id) return;
+    if (!order) return;
     try {
       setIsReissuing(true);
       const issued = await orderApi.reissueReceiptToken(order.id);

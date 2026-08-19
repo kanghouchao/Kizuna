@@ -3,6 +3,7 @@ import { notify } from '@/shared/notify';
 import type { CastFieldDefinitionResponse } from '@/entities/cast';
 import { castFieldDefinitionApi } from '@/entities/cast';
 import CastFieldsPage from '../ui/CastFieldsPage';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => ({
   castFieldDefinitionApi: {
@@ -78,6 +79,26 @@ describe('カスタムフィールド定義の管理ページ', () => {
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('def-2'));
     await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
     expect(mockedNotify.success).toHaveBeenCalledWith('フィールドを削除しました');
+  });
+
+  it('識別子を欠いた失敗は、汎用文言に潰さずそのまま名乗ること', async () => {
+    // 識別子を欠いた要求はアダプタが組む前に止める（cast-api.test.ts）。画面が負うのは
+    // その失敗を「フィールドの削除に失敗しました」へ潰さないこと
+    mockedApi.list.mockResolvedValue([{ ...definitions[0], id: undefined }]);
+    mockedApi.delete.mockRejectedValue(
+      new ClientDataError('フィールドの識別子が取得できていません。画面を読み直してください')
+    );
+    render(<CastFieldsPage />);
+    await screen.findByText('blood_type');
+
+    fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
+
+    await waitFor(() =>
+      expect(mockedNotify.error).toHaveBeenCalledWith(
+        expect.stringContaining('フィールドの識別子が取得できていません')
+      )
+    );
   });
 
   it('削除ボタンのクリックは編集モーダルを開かない', async () => {

@@ -93,7 +93,7 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   } = useResource<PreviewSnapshot>(
     order === null
       ? null
-      : async () => ({ orderId, body: await orderApi.completionPreview(orderId, committedFee) }),
+      : async () => ({ orderId, body: await orderApi.completionPreview(order.id, committedFee) }),
     [orderId, committedFee]
   );
   // 別の受注へ切り替わった瞬間は見込みを持たない状態から始める（レンダー期の判定なので、前の受注の
@@ -116,7 +116,7 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   }, [order, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
-    if (!order?.id) return;
+    if (!order) return;
     // 欄が消えても react-hook-form は値を保つ。非会員の受注へ持ち越した利用を送らないよう、
     // 送信可否は入力ではなく今の見込みで決める。
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;

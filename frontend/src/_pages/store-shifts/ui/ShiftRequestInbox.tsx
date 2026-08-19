@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
-import { getApiErrorMessage, requireId, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
@@ -31,15 +31,11 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   const castName = (castId: string | undefined) =>
     (castId === undefined ? undefined : casts.find(c => c.id === castId)?.name) ?? castId;
 
-  /**
-   * 承認する。published を渡すのは新規希望だけ — 変更申請の承認で指定すると後端が撥ねる。
-   *
-   * <p>識別子の解決は try の内側に置く。押しどころの側で解くと、投げた失敗が catch を素通りする。
-   */
+  /** 承認する。published を渡すのは新規希望だけ — 変更申請の承認で指定すると後端が撥ねる。 */
   const approve = async (request: StoreShiftRequestItem, published?: boolean) => {
     setProcessingId(request.id ?? null);
     try {
-      await shiftApi.approveShiftRequest(requireId(request.id, '出勤希望'), published);
+      await shiftApi.approveShiftRequest(request.id, published);
       notify.success(
         published === false ? '出勤希望を非公開で承認しました' : '出勤希望を承認しました'
       );
@@ -55,7 +51,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
   const decline = async (request: StoreShiftRequestItem) => {
     setProcessingId(request.id ?? null);
     try {
-      await shiftApi.declineShiftRequest(requireId(request.id, '出勤希望'));
+      await shiftApi.declineShiftRequest(request.id);
       notify.success('出勤希望を却下しました');
       void load();
     } catch (error) {

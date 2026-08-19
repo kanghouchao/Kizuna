@@ -1,5 +1,6 @@
 import { memberOrderApi, memberReceiptApi, memberVisitApi, orderApi } from '@/entities/order';
 import { apiClient } from '@/shared/api';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -211,5 +212,58 @@ describe('memberReceiptApi', () => {
 
     await expect(memberReceiptApi.claim('tok3n')).resolves.toEqual({ granted_points: 120 });
     expect(mockedPost).toHaveBeenCalledWith('/platform/me/receipts', { token: 'tok3n' });
+  });
+});
+
+/**
+ * 識別子を欠いた呼び出しは要求そのものを組まない。応答 DTO の項目はすべて可選なので、画面側が
+ * `?? ''` で素通しすると単数の操作が一覧の URI へ飛び、届いた先の 404/405 が操作の失敗と
+ * 見分けられなくなる。守りはアダプタの内側にあり、画面ごとに書かない。
+ */
+describe('識別子を欠いた orderApi / memberOrderApi', () => {
+  const calls: [string, () => Promise<unknown>, string][] = [
+    ['get', () => orderApi.get(undefined), '受注'],
+    ['update', () => orderApi.update(undefined, {}), '受注'],
+    ['cancel', () => orderApi.cancel(undefined, { reason: 'r' }), '受注'],
+    [
+      'updateReservationRequest',
+      () => orderApi.updateReservationRequest(undefined, { pax: 1 }),
+      '受注',
+    ],
+    ['confirm', () => orderApi.confirm(undefined), '受注'],
+    ['decline', () => orderApi.decline(undefined), '受注'],
+    ['complete', () => orderApi.complete(undefined, { total_fee: 1 }), '受注'],
+    ['completionPreview', () => orderApi.completionPreview(undefined, 0), '受注'],
+    ['attribution', () => orderApi.attribution(undefined), '受注'],
+    [
+      'invalidateAttribution',
+      () => orderApi.invalidateAttribution(undefined, { attribution_id: 1, reason: 'r' }),
+      '受注',
+    ],
+    ['reissueReceiptToken', () => orderApi.reissueReceiptToken(undefined), '受注'],
+    ['attributionCorrection', () => orderApi.attributionCorrection(undefined, 1), '受注'],
+    [
+      'correctAttributionPoints',
+      () =>
+        orderApi.correctAttributionPoints(undefined, {
+          attribution_id: 1,
+          points: 1,
+          reason: 'r',
+          idempotency_key: 'k',
+        }),
+      '受注',
+    ],
+    ['memberOrderApi.cancel', () => memberOrderApi.cancel(undefined), '予約'],
+  ];
+
+  it.each(calls)('%s は要求を出さず、名乗る失敗を投げる', async (_name, call, label) => {
+    jest.clearAllMocks();
+
+    await expect(call()).rejects.toBeInstanceOf(ClientDataError);
+    await expect(call()).rejects.toThrow(`${label}の識別子が取得できていません`);
+    expect(apiClient.get).not.toHaveBeenCalled();
+    expect(apiClient.post).not.toHaveBeenCalled();
+    expect(apiClient.put).not.toHaveBeenCalled();
+    expect(apiClient.delete).not.toHaveBeenCalled();
   });
 });

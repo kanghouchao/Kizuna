@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { castApi } from '@/entities/cast';
 import { InvitationButton } from '../InvitationButton';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => ({
   castApi: { issueInvitation: jest.fn() },
@@ -54,6 +55,25 @@ describe('キャスト招待の行内発行ボタン', () => {
       token: 'tok-1',
       expiresAt: '2026-07-31T15:00:00Z',
     });
+  });
+
+  it('識別子を欠いた失敗は、汎用文言に潰さずそのまま名乗ること', async () => {
+    // 識別子を欠いた要求はアダプタが組む前に止める（cast-api.test.ts）。画面が負うのは
+    // その失敗を「招待の発行に失敗しました」へ潰さないこと
+    mockedCastApi.issueInvitation.mockRejectedValue(
+      new ClientDataError('キャストの識別子が取得できていません。画面を読み直してください')
+    );
+    const onIssued = jest.fn();
+    render(<InvitationButton castId={undefined} status="NOT_INVITED" onIssued={onIssued} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '招待を発行' }));
+
+    await waitFor(() =>
+      expect(mockedNotify.error).toHaveBeenCalledWith(
+        expect.stringContaining('キャストの識別子が取得できていません')
+      )
+    );
+    expect(onIssued).not.toHaveBeenCalled();
   });
 
   it('発行失敗は親へ通知せず失敗トーストを出す', async () => {

@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import SystemSettingsPage from '../ui/SettingsPage';
+import { ClientDataError } from '@/shared/lib';
 
 const mockGetAllConfigs = jest.fn();
 const mockUpdateConfig = jest.fn();
@@ -73,6 +74,24 @@ describe('SystemSettingsPage', () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith('maintenance_mode', {
         config_value: 'true',
       })
+    );
+  });
+
+  it('識別子を欠いた失敗は、汎用文言に潰さずそのまま名乗ること', async () => {
+    // 識別子を欠いた要求はアダプタが組む前に止める（config-api.test.ts）。画面が負うのは
+    // その失敗を「設定の更新に失敗しました」へ潰さないこと
+    mockGetAllConfigs.mockResolvedValue([{ ...configs[0], config_key: undefined }]);
+    mockUpdateConfig.mockRejectedValue(
+      new ClientDataError('設定の識別子が取得できていません。画面を読み直してください')
+    );
+    render(<SystemSettingsPage />);
+
+    fireEvent.click(await screen.findByRole('switch'));
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        expect.stringContaining('設定の識別子が取得できていません')
+      )
     );
   });
 

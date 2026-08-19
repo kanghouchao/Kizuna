@@ -1,5 +1,6 @@
 import { SystemConfigResponse, SystemConfigUpdateRequest } from '../model/types';
 import { apiClient } from '@/shared/api';
+import { requireId } from '@/shared/lib';
 
 const BASE_URL = '/platform/configs';
 
@@ -13,10 +14,13 @@ export const systemConfigService = {
 
   // 設定の更新 (Client Component用)。宛先は設定キー 1 件で、本体は値だけを送る
   updateConfig: async (
-    configKey: string,
+    configKey: string | undefined,
     data: SystemConfigUpdateRequest
   ): Promise<SystemConfigResponse> => {
-    const response = await apiClient.put<SystemConfigResponse>(`${BASE_URL}/${configKey}`, data);
+    const response = await apiClient.put<SystemConfigResponse>(
+      `${BASE_URL}/${requireId(configKey, '設定')}`,
+      data
+    );
     return response.data;
   },
 };

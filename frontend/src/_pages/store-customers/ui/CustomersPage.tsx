@@ -72,7 +72,7 @@ export default function CustomersPage() {
   const customers = list.rows;
 
   const deletion = useDeleteAction<CustomerResponse>({
-    remove: customer => customerApi.delete(customer.id ?? ''),
+    remove: customer => customerApi.delete(customer.id),
     successMessage: '顧客を削除しました',
     errorMessage: '顧客の削除に失敗しました',
     onDeleted: list.reload,

@@ -70,7 +70,7 @@ export default function CastListPage() {
 
   /** キャストを削除する */
   const deletion = useDeleteAction<CastResponse>({
-    remove: cast => castApi.delete(cast.id ?? ''),
+    remove: cast => castApi.delete(cast.id),
     successMessage: 'キャストを削除しました',
     errorMessage: 'キャストの削除に失敗しました',
     onDeleted: list.reload,

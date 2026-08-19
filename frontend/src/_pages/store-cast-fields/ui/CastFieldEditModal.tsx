@@ -74,7 +74,7 @@ export function CastFieldEditModal({
         display_order: values.display_order,
         is_public: values.is_public,
       };
-      await castFieldDefinitionApi.update(definition.id ?? '', request);
+      await castFieldDefinitionApi.update(definition.id, request);
       notify.success('フィールドを更新しました');
       onUpdated();
       onClose();

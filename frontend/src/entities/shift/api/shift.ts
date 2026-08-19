@@ -1,4 +1,5 @@
 import { CursorPageResult, CursorParams, apiClient, fromCursorPage } from '@/shared/api';
+import { requireId } from '@/shared/lib';
 import {
   CastScheduleItem,
   CastShiftRequestItem,
@@ -38,18 +39,20 @@ export const shiftApi = {
     return response.data;
   },
   /** シフトを更新する */
-  update: async (id: string, data: ShiftUpdateRequest): Promise<ShiftResponse> => {
-    const response = await apiClient.put(`/store/shifts/${id}`, data);
+  update: async (id: string | undefined, data: ShiftUpdateRequest): Promise<ShiftResponse> => {
+    const response = await apiClient.put(`/store/shifts/${requireId(id, 'シフト')}`, data);
     return response.data;
   },
   /** シフトの公開可否を切り替える（承認とは独立の軸 — ADR 0015）。望む状態を明示して送る。 */
-  changePublication: async (id: string, published: boolean): Promise<ShiftResponse> => {
-    const response = await apiClient.put(`/store/shifts/${id}/publication`, { published });
+  changePublication: async (id: string | undefined, published: boolean): Promise<ShiftResponse> => {
+    const response = await apiClient.put(`/store/shifts/${requireId(id, 'シフト')}/publication`, {
+      published,
+    });
     return response.data;
   },
   /** シフトを削除する */
-  delete: async (id: string): Promise<void> => {
-    await apiClient.delete(`/store/shifts/${id}`);
+  delete: async (id: string | undefined): Promise<void> => {
+    await apiClient.delete(`/store/shifts/${requireId(id, 'シフト')}`);
   },
   /** 出勤希望を提出する（本人・cast）。 */
   submitShiftRequest: async (data: ShiftRequestCreateRequest): Promise<ShiftRequestResponse> => {
@@ -91,16 +94,21 @@ export const shiftApi = {
    * published は生まれるシフトの公開可否を同一トランザクションで決める。省略時は既定の公開可で、
    * 変更申請（CHANGE）の承認では指定できない — 呼び出し側は新規希望にだけ渡す。
    */
-  approveShiftRequest: async (id: string, published?: boolean): Promise<StoreShiftRequestItem> => {
+  approveShiftRequest: async (
+    id: string | undefined,
+    published?: boolean
+  ): Promise<StoreShiftRequestItem> => {
     const response = await apiClient.post(
-      `/store/shift-requests/${id}/approval`,
+      `/store/shift-requests/${requireId(id, '出勤希望')}/approval`,
       published === undefined ? undefined : { published }
     );
     return response.data;
   },
   /** 出勤希望を却下する。 */
-  declineShiftRequest: async (id: string): Promise<StoreShiftRequestItem> => {
-    const response = await apiClient.post(`/store/shift-requests/${id}/rejection`);
+  declineShiftRequest: async (id: string | undefined): Promise<StoreShiftRequestItem> => {
+    const response = await apiClient.post(
+      `/store/shift-requests/${requireId(id, '出勤希望')}/rejection`
+    );
     return response.data;
   },
 };

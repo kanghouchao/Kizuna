@@ -1,5 +1,6 @@
 import { castApi, castFieldDefinitionApi } from '@/entities/cast';
 import { apiClient } from '@/shared/api';
+import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -77,5 +78,37 @@ describe('castFieldDefinitionApi', () => {
   });
   it('delete は /store/casts/fields/:id を DELETE する', async () => {
     await expect(castFieldDefinitionApi.delete('f1')).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * 識別子を欠いた呼び出しは要求そのものを組まない。応答 DTO の項目はすべて可選なので、画面側が
+ * `?? ''` で素通しすると単数の操作が一覧の URI へ飛び、届いた先の 404/405 が操作の失敗と
+ * 見分けられなくなる。守りはアダプタの内側にあり、画面ごとに書かない。
+ */
+describe('識別子を欠いた castApi / castFieldDefinitionApi', () => {
+  const calls: [string, () => Promise<unknown>, string][] = [
+    ['castApi.get', () => castApi.get(undefined), 'キャスト'],
+    ['castApi.update', () => castApi.update(undefined, {}), 'キャスト'],
+    ['castApi.delete', () => castApi.delete(undefined), 'キャスト'],
+    ['castApi.issueInvitation', () => castApi.issueInvitation(undefined), 'キャスト'],
+    [
+      'castFieldDefinitionApi.update',
+      () =>
+        castFieldDefinitionApi.update(undefined, { label: 'x', display_order: 1, is_public: true }),
+      'フィールド',
+    ],
+    ['castFieldDefinitionApi.delete', () => castFieldDefinitionApi.delete(undefined), 'フィールド'],
+  ];
+
+  it.each(calls)('%s は要求を出さず、名乗る失敗を投げる', async (_name, call, label) => {
+    jest.clearAllMocks();
+
+    await expect(call()).rejects.toBeInstanceOf(ClientDataError);
+    await expect(call()).rejects.toThrow(`${label}の識別子が取得できていません`);
+    expect(apiClient.get).not.toHaveBeenCalled();
+    expect(apiClient.post).not.toHaveBeenCalled();
+    expect(apiClient.put).not.toHaveBeenCalled();
+    expect(apiClient.delete).not.toHaveBeenCalled();
   });
 });

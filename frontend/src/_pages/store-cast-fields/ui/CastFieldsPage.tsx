@@ -30,7 +30,7 @@ export default function CastFieldsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CastFieldDefinitionResponse | null>(null);
   const deletion = useDeleteAction<CastFieldDefinitionResponse>({
-    remove: definition => castFieldDefinitionApi.delete(definition.id ?? ''),
+    remove: definition => castFieldDefinitionApi.delete(definition.id),
     successMessage: 'フィールドを削除しました',
     errorMessage: 'フィールドの削除に失敗しました',
     onDeleted: refetch,
