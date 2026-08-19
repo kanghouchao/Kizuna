@@ -35,6 +35,11 @@ export function addDaysStr(date: string, days: number): string {
   return toDateStr(new Date(y, m - 1, d + days));
 }
 
+/** 'HH:mm:ss' を表示用の 'HH:mm' に切り詰める。 */
+export function hhmm(time: string | undefined): string {
+  return (time ?? '').slice(0, 5);
+}
+
 /** 'HH:mm:ss' または 'HH:mm' を深夜 0 時からの分に変換する。 */
 export function timeToMinutes(time: string | undefined): number {
   const [h, m] = (time ?? '').split(':');

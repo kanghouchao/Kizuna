@@ -161,7 +161,7 @@ The exemption is never automatic for an element whose position or extent is itse
 
 ##### Recorded exemption — timeline bars against their track
 
-The shift timeline draws solid bars (`bg-success` 確定 / `bg-warning` 未確定) on a `bg-muted` track once the `store-shifts` restyle lands. A bar's start / end position **is** the information, so the bar edge against the track is a meaningful graphic bound by 3:1 — and it does not meet it: **2.92 / 2.90 in light** (dark passes at 8.39 / 8.67).
+The shift timeline draws solid bars (`bg-success` 確定かつ公開可 / `bg-warning` 未確定) on a `bg-muted` track once the `store-shifts` restyle lands (a 確定 bar that is **not** published is drawn hollow instead, and its outline is the `border-success-strong` row above — it clears 3:1 and is outside this exemption). A bar's start / end position **is** the information, so the bar edge against the track is a meaningful graphic bound by 3:1 — and it does not meet it: **2.92 / 2.90 in light** (dark passes at 8.39 / 8.67).
 
 **The owner granted this one an explicit exemption.** The grounds: the in-bar time text carries the identical start / end at 6.18:1, the bars carry `shadow-sm`, and the pre-restyle state (green-500 on gray-50) failed the same bound, so keeping it is not a regression. The rejected alternative was returning the track to `bg-background` + `border` — that restores the certified 3.22 / 3.19, but light mode's `--background` is identical to `--card`, so the track would melt into the card and be told apart by its 1px border alone.
 

@@ -68,6 +68,13 @@ export default function ShiftsPage() {
   // 一覧そのものを出さない（下の失敗態へ倒す）
   const shifts = shiftsData ?? [];
 
+  // タイムラインタブは単日の器。取り直しは deps の変化を見た効果で始まるので、日を切り替えた
+  // 最初のフレームだけ月の配列が残る — 一括の宛先がその月全体へ広がらないよう、日で絞って渡す
+  const dayShifts = useMemo(
+    () => (shiftsData ?? []).filter(s => s.work_date === selectedDate),
+    [shiftsData, selectedDate]
+  );
+
   /**
    * 公開可否を切り替える。行内の目玉とパネルの Switch・一括はすべてここへ入る — 二つの入口が
    * 同じ状態を映すのは、切替がこの一箇所を通るから。
@@ -188,7 +195,7 @@ export default function ShiftsPage() {
         <TabsContent value={TIMELINE_TAB} className="mt-6 space-y-6">
           <ShiftTimeline
             date={selectedDate}
-            shifts={shifts}
+            shifts={dayShifts}
             casts={casts}
             loading={loading}
             failed={shiftsFailure !== null}
@@ -201,11 +208,11 @@ export default function ShiftsPage() {
           />
           {/* 取得失敗はタイムラインが名乗る。同じ取得を映すパネルにまで二重に名乗らせず、
               読めていない間は 0 件と読める姿も出さない。空の日もタイムラインが名乗る側 */}
-          {shiftsFailure === null && !loading && shifts.length > 0 && (
+          {shiftsFailure === null && !loading && dayShifts.length > 0 && (
             <ShiftPublicationPanel
-              shifts={shifts}
+              shifts={dayShifts}
               casts={casts}
-              busy={publishing}
+              publishing={publishing}
               onChangePublication={(targets, published) =>
                 void changePublication(targets, published)
               }
