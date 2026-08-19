@@ -289,11 +289,9 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("変更申請の承認が申請行を書く前に対象シフトを押さえること")
   void approvalTakesTheShiftRowBeforeWritingTheRequestRow() throws Exception {
-    // シフトの削除は申請の shift_id を落とす（fk_t_shift_requests_shift は SET NULL）ため、削除は
-    // 「シフト行 → 申請行」の順に押さえる。承認が先に申請行を書けば逆順になり環になる（ADR 0016）。
-    //
-    // この順序は今、承認が申請行の書き込みを取引の終わりまで遅らせることでしか保たれていない。間に
-    // 申請行を触る問い合わせが挟まると Hibernate が先に流し、順序は黙って逆転する。だから順序を固定する。
+    // 押さえる順序は ADR 0016 に従う。ここで固定するのは、その順序が今「承認が申請行の書き込みを
+    // 取引の終わりまで遅らせる」ことでしか保たれていないためである。間に申請行を触る問い合わせが
+    // 挟まると Hibernate が先に流し、順序は黙って逆転する。
     String castId = newCast();
     String shiftId = seedConfirmedShift(castId);
     String requestId = seedPendingChangeRequest(castId, shiftId);
@@ -317,7 +315,10 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
         statement.setString(1, shiftId);
         assertThatThrownBy(statement::executeQuery)
             .as("申請行で待っている間、対象のシフト行は既に押さえられていること")
-            .isInstanceOf(SQLException.class);
+            .isInstanceOfSatisfying(
+                SQLException.class,
+                // 55P03 = lock_not_available。型だけ見ると表名の打ち間違いでも緑になる。
+                e -> assertThat(e.getSQLState()).isEqualTo("55P03"));
       }
 
       holder.rollback();
