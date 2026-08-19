@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -39,8 +40,14 @@ public class ShiftLineageService {
   private final AttendanceRepository attendanceRepository;
   private final PlatformUserRepository platformUserRepository;
 
+  /**
+   * <b>系列は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。シフト・申請・実績・実行主体と 4 回問い合わせるので、 既定の READ COMMITTED
+   * では文ごとに断面を取り直し、間に変更申請の承認が commit されると同じ応答が「承認済みの 変更申請」と「変更前のシフト」を同時に載せる — 系列を 1
+   * 本の正本として見せるという読み口の目的が崩れる。 断面を固定して根を断つのは {@code CustomerService} / {@code OrderService}
+   * の群読み口と同じ選択である。
+   */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public ShiftDetailResponse detail(String id) {
     Shift shift =
         shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
