@@ -44,6 +44,11 @@ interface ShiftFormModalProps {
   casts: CastResponse[];
   /** 編集対象。null なら新規作成。 */
   editing: ShiftResponse | null;
+  /**
+   * 編集対象に未取消の当日実績が付いているか。実績は記録時に営業日とキャストを物化しているので、
+   * 事後の付け替えは後端が拒む（ADR 0014）。この画面はその可否を先に映す。
+   */
+  hasAttendance: boolean;
   /** 新規作成時の初期日付 'yyyy-MM-dd'。 */
   defaultDate: string;
   /** 保存・削除の成功後に呼ばれる（一覧の再取得用）。 */
@@ -74,6 +79,7 @@ export function ShiftFormModal({
   onClose,
   casts,
   editing,
+  hasAttendance,
   defaultDate,
   onSaved,
 }: ShiftFormModalProps) {
@@ -94,6 +100,8 @@ export function ShiftFormModal({
     formState: { isSubmitting },
   } = form;
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // 実績が付くのは既存のシフトだけ。新規作成の面は何も塞がない
+  const locked = editing !== null && hasAttendance;
 
   // 候補は Select と項目描画の両方が読む。引き金に出る文言は items から引かれるので、
   // 選べる値の一覧はここ一箇所に持つ。
@@ -182,6 +190,18 @@ export function ShiftFormModal({
           {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。執行は各 rules が担う */}
           <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
+            {/* 塞いだ欄の手前で理由を述べる。無効化した控件は焦点を取れず、欄に紐づけた説明は
+                読み上げに届かない — 押せない口の理由は本文の側に置く。逃げ道は操作ごとに違い、
+                削除だけは実績を取り消しても戻らない（RESTRICT — ADR 0014）ので別々に書く */}
+            {locked && (
+              <div className="rounded-md bg-muted px-3 py-2 text-xs text-foreground">
+                <p>当日実績が記録されているため、このシフトは一部の操作を受け付けません。</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>勤務日とキャストの変更 — 当日実績タブで実績を取り消してから行います。</li>
+                  <li>削除 — 実績を取り消しても行えません。ステータスを未確定に戻して無効にします。</li>
+                </ul>
+              </div>
+            )}
             <FormField
               control={control}
               name="cast_id"
@@ -193,6 +213,7 @@ export function ShiftFormModal({
                     items={castOptions}
                     value={castValue(field.value, castOptions)}
                     onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                    disabled={locked}
                     required
                   >
                     <FormControl>
@@ -222,7 +243,7 @@ export function ShiftFormModal({
                 <FormItem>
                   <FormLabel>日付</FormLabel>
                   <FormControl>
-                    <Input type="date" required {...field} />
+                    <Input type="date" required disabled={locked} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -308,7 +329,9 @@ export function ShiftFormModal({
             )}
             <div className="flex items-center justify-between border-t pt-4">
               <div>
-                {editing && (
+                {/* 実績に参照されたシフトは取消済みの実績が相手でも消せない。必ず撥ねられる口は
+                    出さず、理由と代わりの手順は上の注記が引き受ける */}
+                {editing && !locked && (
                   <Button
                     type="button"
                     variant="ghost"
