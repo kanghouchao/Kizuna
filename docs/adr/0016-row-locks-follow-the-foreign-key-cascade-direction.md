@@ -35,9 +35,9 @@ INSERT や外部キー列を変える UPDATE は、外部キー検査を通じ�
    | 一意でない索引の列 | FOR NO KEY UPDATE |
    | どの索引にも出ない列 | FOR NO KEY UPDATE |
 
-4. DELETE で走る外部キー検査・連鎖の順序は、**制約の作成順**である（名前順ではない）。同名の 2 制約を
-   作成順だけ入れ替えると、違反として鳴る制約が入れ替わることを確認した。本リポジトリの作成順は
-   `db.changelog-master.yaml` の include 順＝ファイル番号順で決まる。
+4. 外部キー検査の走る順序は、INSERT 側（親行への key share）も DELETE 側（検査と連鎖）も **制約の作成順**
+   である（名前順ではない）。同名の 2 制約を作成順だけ入れ替えると、違反として鳴る制約が入れ替わることを
+   両方向で確認した。本リポジトリの作成順は `db.changelog-master.yaml` の include 順＝ファイル番号順で決まる。
 
 3 から出る帰結が効く。本 ADR が扱う 5 表で**主キーを書き換える経路は無い**ので、これらの表に
 **FOR UPDATE を載せるのは DELETE だけ**である。つまり順序の衝突面は「削除 × それ以外」に尽きる。
@@ -86,7 +86,7 @@ t_stores → t_casts → t_shifts → t_attendances → t_attendance_corrections
 | `ShiftService#changePublication` | — | users | — | 順路 |
 | `ShiftService#delete` | shifts | — | shift_requests を SET NULL → attendances 検査 | 順路 |
 | `ShiftRequestService#approve`（NEW） | — | stores, casts, shifts, users | — | 順路 |
-| `ShiftRequestService#approve`（CHANGE） | shifts | users | — | **本票でテストに固定** |
+| `ShiftRequestService#approve`（CHANGE） | shifts | users（申請行の書き込みは取引の終わりまで遅れる） | — | **本票でテストに固定** |
 | `ShiftRequestService#decline` | — | users | — | 順路 |
 | `CastShiftRequestService#submit` | — | stores, casts | — | 順路 |
 | `CastShiftRequestService#submitChange` | —（対象シフトを押さえずに読む） | stores, casts, shifts | — | 順路・**窓②** |
