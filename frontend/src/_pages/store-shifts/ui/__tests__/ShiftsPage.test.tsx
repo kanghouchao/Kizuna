@@ -670,6 +670,74 @@ describe('当日実績の記録・訂正・取消', () => {
     expect(screen.getByRole('button', { name: 'さくらの実績を記録する' })).toBeInTheDocument();
   });
 
+  it('飛び込みの実開始が現在時刻ではなく表示中の営業日に載ること', async () => {
+    // 現在時刻だけで起こすと、別の日を見ている操作が黙って今日の営業日へ落ち、
+    // 記録した行がその画面から消える
+    mockedRecord.mockResolvedValue({});
+    await openBoard();
+    fireEvent.click(screen.getByRole('button', { name: '翌日' }));
+    const tomorrow = addDaysStr(TODAY, 1);
+    expect(await screen.findByText(`${tomorrow} の実績`)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '飛び込みを記録' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(
+        (within(dialog).getByLabelText('実際の開始') as HTMLInputElement).value.startsWith(
+          `${tomorrow}T`
+        )
+      ).toBe(true)
+    );
+
+    await pickOption('さくら');
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedRecord).toHaveBeenCalledTimes(1));
+    expect(mockedRecord.mock.calls[0][0].actual_start_at.startsWith(`${tomorrow}T`)).toBe(true);
+  });
+
+  it('必須の欄が読み上げにも必須として届くこと', async () => {
+    // rules は react-hook-form を設定するだけで markup には届かない。aria-required は
+    // 原生属性（Input）と primitive への required（Select）からしか出ない
+    const walkIn = { ...attendance, id: 'a2', shift_id: undefined };
+    mockedAttendanceList.mockResolvedValue([walkIn]);
+    await openBoard();
+
+    fireEvent.click(await screen.findByRole('button', { name: '飛び込みを記録' }));
+    const record = await screen.findByRole('dialog');
+    expect(within(record).getByRole('combobox')).toHaveAttribute('aria-required', 'true');
+    expect(within(record).getByLabelText('実際の開始')).toBeRequired();
+    fireEvent.click(within(record).getByRole('button', { name: 'キャンセル' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を訂正' }));
+    const correct = await screen.findByRole('dialog');
+    expect(within(correct).getByLabelText('帰属営業日')).toBeRequired();
+    fireEvent.click(within(correct).getByRole('button', { name: 'キャンセル' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を取消' }));
+    const cancel = await screen.findByRole('dialog');
+    expect(within(cancel).getByLabelText('取消の理由')).toBeRequired();
+  });
+
+  it('欠勤がまだ届いていない間は行を出さないこと', async () => {
+    // 欠勤だけ遅れて届く間に行を描くと、その姿は「誰も休んでいない」と読める
+    mockedShiftList.mockResolvedValue([shift]);
+    let release: (value: unknown[]) => void = () => {};
+    mockedAbsenceList.mockReturnValue(
+      new Promise<unknown[]>(resolve => {
+        release = resolve;
+      })
+    );
+    await openBoard();
+
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.queryByText('未記録')).not.toBeInTheDocument();
+
+    release([]);
+
+    expect(await screen.findByText('未記録')).toBeInTheDocument();
+  });
+
   it('日付を動かすと実績と欠勤もその営業日で取り直すこと', async () => {
     await openBoard();
     await waitFor(() => expect(mockedAttendanceList).toHaveBeenCalledTimes(1));

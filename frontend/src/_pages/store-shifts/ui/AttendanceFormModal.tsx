@@ -6,9 +6,9 @@ import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { AttendanceResponse, ShiftResponse, attendanceApi } from '@/entities/shift';
 import { getApiErrorMessage } from '@/shared/lib';
-import { hhmm } from '../lib/datetime';
+import { SELECT_NONE, castValue } from '../lib/castSelect';
+import { dateTimeInputOn, hhmm, toDateTimeInput } from '../lib/datetime';
 import { castName } from '../lib/labels';
-import { nowDateTimeInput, toDateTimeInput } from '../lib/attendance';
 import {
   Button,
   Dialog,
@@ -46,6 +46,8 @@ interface AttendanceFormModalProps {
   castOptions: CastResponse[];
   /** 名前解決用の名簿（除外前の全量）。 */
   casts: CastResponse[];
+  /** 表示中の営業日 'yyyy-MM-dd'。飛び込みの実開始の初期値がこの日に載る。 */
+  defaultDate: string;
   /** 保存の成功後に呼ばれる（実績・欠勤の再取得用）。 */
   onSaved: () => void;
 }
@@ -58,9 +60,6 @@ interface AttendanceFormValues {
   waiting_place: string;
 }
 
-// 「キャスト未登録」の案内項目に与える番兵値。Base UI の「値なし」は null であって '' ではない。
-const SELECT_NONE = '__none__';
-
 /** 当日実績の記録・訂正モーダル。キャストとシフトの付け替えは載せない — 逃げ道は取消 → 再記録（ADR 0014）。 */
 export function AttendanceFormModal({
   open,
@@ -68,6 +67,7 @@ export function AttendanceFormModal({
   target,
   castOptions,
   casts,
+  defaultDate,
   onSaved,
 }: AttendanceFormModalProps) {
   const form = useForm<AttendanceFormValues>({
@@ -92,12 +92,12 @@ export function AttendanceFormModal({
   // 飛び込みかどうかは宛先が決める。訂正では既存行が、記録ではシフトの有無が根拠になる。
   const walkIn = correcting ? attendance.shift_id === undefined : shift === null;
 
-  const noCandidates = castOptions.length === 0;
-  const selectOptions = noCandidates
-    ? [{ value: SELECT_NONE, label: '記録できるキャストがいません' }]
-    : castOptions
-        .filter(c => c.id !== undefined)
-        .map(c => ({ value: c.id as string, label: c.name ?? '' }));
+  const selectOptions =
+    castOptions.length === 0
+      ? [{ value: SELECT_NONE, label: '記録できるキャストがいません' }]
+      : castOptions
+          .filter(c => c.id !== undefined)
+          .map(c => ({ value: c.id as string, label: c.name ?? '' }));
 
   useEffect(() => {
     if (!open || target === null) return;
@@ -112,17 +112,18 @@ export function AttendanceFormModal({
       return;
     }
     // 勤務日は暦日ではなく営業日なので、日付変更時刻より前に始まる枠の実際の暦日は翌日になる。
-    // 予定の時間帯は初期値としてだけ置き、暦日の食い違いは欄の上で直してもらう。
+    // 予定と表示日は初期値としてだけ置き、暦日の食い違いは欄の上で直してもらう。飛び込みを
+    // 現在時刻だけで起こすと、別の日を見ている操作が黙って今日の営業日へ落ちる。
     reset({
       cast_id: target.shift?.cast_id ?? '',
       business_date: '',
       actual_start_at: target.shift
         ? `${target.shift.work_date}T${hhmm(target.shift.start_time)}`
-        : nowDateTimeInput(new Date()),
+        : dateTimeInputOn(defaultDate, new Date()),
       actual_end_at: '',
       waiting_place: '',
     });
-  }, [open, target, reset]);
+  }, [open, target, defaultDate, reset]);
 
   const submit = async (values: AttendanceFormValues) => {
     if (target === null) return;
@@ -194,8 +195,9 @@ export function AttendanceFormModal({
                         ついての法定保存の記録で、既定のまま保存された誤りは訂正履歴に残る */}
                     <Select
                       items={selectOptions}
-                      value={field.value ? field.value : noCandidates ? SELECT_NONE : null}
+                      value={castValue(field.value, selectOptions)}
                       onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                      required
                     >
                       <FormControl>
                         {/* handleSubmit の焦点移動は登録された ref を叩く */}
@@ -238,7 +240,7 @@ export function AttendanceFormModal({
                   <FormItem>
                     <FormLabel>帰属営業日</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" required {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -254,7 +256,7 @@ export function AttendanceFormModal({
                 <FormItem>
                   <FormLabel>実際の開始</FormLabel>
                   <FormControl>
-                    <Input type="datetime-local" {...field} />
+                    <Input type="datetime-local" required {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

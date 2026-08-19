@@ -56,3 +56,19 @@ export function shiftSpan(
   if (end <= start) end += 24 * 60;
   return { start, end };
 }
+
+/** 'yyyy-MM-ddTHH:mm[:ss]' の時刻部分を表示用の 'HH:mm' に切り出す。 */
+export function hhmmOfDateTime(value: string | undefined): string {
+  return hhmm((value ?? '').split('T')[1]);
+}
+
+/** 'yyyy-MM-ddTHH:mm:ss' を datetime-local 入力が読める 'yyyy-MM-ddTHH:mm' へ切り詰める。 */
+export function toDateTimeInput(value: string | undefined): string {
+  return (value ?? '').slice(0, 16);
+}
+
+/** 指定日 'yyyy-MM-dd' と現在の時刻から datetime-local 入力の初期値を組む。 */
+export function dateTimeInputOn(date: string, now: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}

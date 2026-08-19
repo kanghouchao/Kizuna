@@ -33,10 +33,8 @@ interface CancelFormValues {
 }
 
 /**
- * 実績の取消。理由を受け取る欄があるため確認ダイアログ（ConfirmDialog）では受けられない。
- *
- * <p>行は消えず、導出・照会から外れるだけである（法定保存 — ADR 0014）。経緯を辿れる根拠は
- * 理由の一文しか残らないので、必須の欄として扱う。
+ * 実績の取消。理由の欄があるため確認ダイアログ（ConfirmDialog）では受けられない。行は消えず
+ * 導出・照会から外れるだけで（法定保存 — ADR 0014）、経緯を辿れる根拠は理由の一文しか残らない。
  */
 export function AttendanceCancelDialog({
   open,
@@ -97,7 +95,7 @@ export function AttendanceCancelDialog({
                 <FormItem>
                   <FormLabel>取消の理由</FormLabel>
                   <FormControl>
-                    <Textarea rows={3} {...field} />
+                    <Textarea rows={3} required {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
