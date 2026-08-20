@@ -104,14 +104,16 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   // 播種は行ではなく詳細の読み口から取る。この面は作業キューの行から開かれ、行は明細もコース名も
   // 持たない（一覧と詳細の DTO は分かれている）。行だけで播くと、内訳のある受注が空行で開き、
   // そのまま完了すると既存の内訳を丸ごと上書きして失う。
-  const { data: detail } = useResource<Order>(
-    order === null ? null : () => orderApi.get(order.id),
-    [orderId]
-  );
+  const {
+    data: detail,
+    failure: detailFailure,
+    reload: reloadDetail,
+  } = useResource<Order>(order === null ? null : () => orderApi.get(order.id), [orderId]);
   // 播き終えた受注。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
   // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
+  const seededOrder = detail !== null && detail.id === orderId;
   const [seededId, setSeededId] = useState<string | null>(null);
-  const seeded = seededId === orderId && orderId !== '';
+  const seeded = seededOrder && seededId === orderId;
 
   // 閉じている間は取りに行かない（開いた時点で取り直す）。播く前に取りに行かないのは、
   // 内訳が入る前の総和 0 で見込みを引くと、明細のある受注の付与予定が最初の 1 画面だけ 0 で出るため。
@@ -147,10 +149,13 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   }, [orderId]);
 
   // 取得できたら播く。取得の到着はレンダーより後なので、初期値ではなく効果で入れる。
-  // 播き直しの引き金は印であって取得値の同一性ではない — 同じ受注を開き直すと useResource が
-  // 前と同じ値を返しうるので、値だけを見ていると印を消しても播き直らずフォームが出ない。
+  //
+  // 播き直しの引き金は<b>取得値そのものの到着</b>だけにする。useResource は取り直しの間も前の値を
+  // 持ったままなので、印の有無で播くと開き直した瞬間に陳腐化した値で播いて印が立ち、後から着いた
+  // 新しい内容が捨てられる — その内訳のまま完了すると、他の操作者が直した明細を古い値で上書きする。
+  // 取り直し中は前と同じ値のまま効果が走らず、印を消した状態が続くのでフォームは出ない。
   useEffect(() => {
-    if (detail === null || detail.id !== orderId || seededId === orderId) return;
+    if (detail === null) return;
     const existing = storeEditableFeeLines(detail.fee_lines);
     reset({
       course_name: detail.course_name ?? '',
@@ -159,9 +164,9 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
     });
     // 見込みの基準も播いた内訳の総和から始める。0 のままだと、明細のある受注の付与予定が
     // 欄を離れるまで嘘になる
-    setCommitted({ orderId, fee: feeLinesTotal(existing) });
-    setSeededId(orderId);
-  }, [detail, orderId, seededId, reset]);
+    setCommitted({ orderId: detail.id ?? '', fee: feeLinesTotal(existing) });
+    setSeededId(detail.id ?? null);
+  }, [detail, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
     if (!order) return;
@@ -220,8 +225,26 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
             onClose={onClose}
           />
         ) : !seeded ? (
-          // 播く前は出さない。空欄のフォームを 1 フレームでも見せると、そのまま送って既存の内訳を消せる
-          <p className="px-6 py-5 text-sm text-muted-foreground">読み込み中...</p>
+          // 播く前はフォームを出さない。空欄のフォームを 1 フレームでも見せると、そのまま送って
+          // 既存の内訳を消せる。失敗は領域が自分で名乗る（畳むと「読み込み中」のまま固まる）。
+          <div className="px-6 py-5">
+            {detailFailure === 'error' ? (
+              <RegionError
+                message="受注を取得できませんでした。"
+                onRetry={() => void reloadDetail()}
+              />
+            ) : detailFailure === 'notFound' ? (
+              // 404 は何度押しても取れないので再試行を出さない。背後の一覧が行き先なので出口は閉じること
+              <div role="alert" className="flex items-center gap-3">
+                <p className="text-sm text-destructive-strong">この受注は見つかりませんでした。</p>
+                <Button type="button" variant="outline" size="sm" onClick={onClose}>
+                  閉じる
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">読み込み中...</p>
+            )}
+          </div>
         ) : (
           <Form {...form}>
             {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
