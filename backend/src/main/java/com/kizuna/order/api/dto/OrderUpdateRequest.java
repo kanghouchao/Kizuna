@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -13,7 +14,7 @@ import lombok.Data;
  * <p>状態は収めない。完了は完了処理が、取消は取消操作が、未確定申請の確定・謝絶は専用操作が独占するため、この口に残る合法な状態遷移は無い（ADR
  * 0013）。終端状態（完了・取消）の受注はこの口では書き換えられない。
  *
- * <p>会計金額・利用ポイント・自動付与ポイントも収めない — 完了処理だけが確定させる。受付経路も収めない（店舗側の合法値が PHONE のみで空回りするため）。
+ * <p>合計金額・自動付与ポイントは収めない — 合計は明細の総和として導出され、付与は完了処理だけが確定させる。受付経路も収めない（店舗側の合法値が PHONE のみで空回りするため）。
  *
  * <p>指名・受付担当に必須の宣言を置かないのは、どちらも未設定のまま正規の導線で確定しうるため — 会員は指名なしで申請でき、店舗は無効になった指名を確定前に外せる。受付担当も、確定した実行者が
  * 受付候補の条件を満たさなければ未設定のまま残る。契約の側で必須にすると、そうして生まれた受注は 人数を直すだけでも指名や受付担当を作り出さないと編集できない。
@@ -37,15 +38,19 @@ public class OrderUpdateRequest {
   @Min(value = 1, message = "人数は 1 以上です")
   private Integer pax;
 
+  /** 適用されたコース名の写し。上限は {@code t_orders.course_name} = VARCHAR(255)。 */
+  @Size(max = 255, message = "コース名は 255 文字以内です")
+  private String courseName;
+
   private Integer courseMinutes;
   private Integer extensionMinutes;
-  private List<String> optionCodes;
 
-  /** 割引名。上限は {@code t_orders.discount_name} = VARCHAR(255)。 */
-  @Size(max = 255, message = "割引名は 255 文字以内です")
-  private String discountName;
-
-  private Integer manualDiscount;
+  /**
+   * 受注金額の内訳。省略は他の項目と同じく「変更しない」で、<b>空配列は「内訳を空にする」</b>を意味する。
+   *
+   * <p>行に同一性は無く、送られた内容がそのまま新しい内訳になる。ポイント利用の行は含められない（完了処理だけが書く）。
+   */
+  @Valid private List<OrderFeeLineRequest> feeLines;
 
   /**
    * 場所（住所）。誤記の訂正のために編集できる。

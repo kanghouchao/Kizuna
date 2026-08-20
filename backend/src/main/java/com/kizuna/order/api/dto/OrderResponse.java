@@ -28,14 +28,22 @@ public class OrderResponse {
   private String castId;
   private String castName;
   private Integer pax;
+
+  /** 適用されたコース名の写し。 */
+  private String courseName;
+
   private Integer courseMinutes;
   private Integer extensionMinutes;
-  private List<String> optionCodes;
-  private String discountName;
-  private Integer manualDiscount;
+
+  /** 受注金額の内訳。減項は正値で返る（符号は種別が表す）。 */
+  private List<OrderFeeLineResponse> feeLines;
+
   private String carrier;
   private String mediaName;
+
+  /** 明細の総和。ポイント利用の減算も含むため、客が現金で払う額にあたる。 */
   private Integer totalFee;
+
   private Integer usedPoints;
   private Integer autoGrantPoints;
   private String remarks;

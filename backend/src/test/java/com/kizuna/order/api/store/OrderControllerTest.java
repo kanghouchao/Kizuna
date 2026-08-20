@@ -60,6 +60,10 @@ class OrderControllerTest {
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
+  /** 完了の要求本文。会計金額は受け取らず、会計の場で確定した内訳を送る。 */
+  private static final String COMPLETION_BODY =
+      "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}";
+
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private OrderService orderService;
@@ -170,7 +174,7 @@ class OrderControllerTest {
         .thenReturn(new OrderCompletionResponse("raw-token"));
 
     mockMvc
-        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.receipt_token").value("raw-token"))
         .andExpect(jsonPath("$.id").doesNotExist())
@@ -185,7 +189,7 @@ class OrderControllerTest {
     when(orderService.complete(any(), any(), any())).thenReturn(new OrderCompletionResponse(null));
 
     mockMvc
-        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.receipt_token").doesNotExist());
   }
@@ -268,7 +272,7 @@ class OrderControllerTest {
         .thenReturn(OrderCompletionPreviewResponse.builder().build());
 
     mockMvc
-        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
         .andExpect(status().isOk());
     mockMvc
         .perform(storeGet("/store/orders/o1/completion-preview?total_fee=12000"))
@@ -282,7 +286,7 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/store/orders/o1/completion", "{\"total_fee\": 12000}"))
+        .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
         .andExpect(status().isForbidden());
     mockMvc
         .perform(storeGet("/store/orders/o1/completion-preview?total_fee=12000"))

@@ -1,6 +1,7 @@
 package com.kizuna.order.api.dto;
 
 import com.kizuna.order.domain.ReceptionRoute;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -73,15 +74,15 @@ public class OrderCreateRequest {
   @Min(value = 1, message = "人数は 1 以上です")
   private Integer pax;
 
+  /** この受注に適用するコース名の写し。基本コース料金の明細を送るなら必須になる。t_orders.course_name = VARCHAR(255)。 */
+  @Size(max = 255, message = "コース名は 255 文字以内です")
+  private String courseName;
+
   private Integer courseMinutes;
   private Integer extensionMinutes;
-  private List<String> optionCodes;
 
-  /** t_orders.discount_name = VARCHAR(255)。 */
-  @Size(max = 255, message = "割引名は 255 文字以内です")
-  private String discountName;
-
-  private Integer manualDiscount;
+  /** 受注金額の内訳。省略は「内訳なし」で、合計は 0 になる。 */
+  @Valid private List<OrderFeeLineRequest> feeLines;
 
   /**
    * 受付経路。実際の受付手段を記録する値で、未指定は「不明」を意味する（既定値で補完しない）。

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,6 +35,7 @@ import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderFeeLineRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
@@ -50,6 +52,7 @@ import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionSource;
 import com.kizuna.order.domain.OrderAttributionStatus;
+import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderReceiptToken;
@@ -90,6 +93,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
@@ -146,13 +150,13 @@ class OrderServiceTest {
   }
 
   /** {@link #patchWith} が埋める項目。テストが実際に使うものだけを持つ。 */
-  private record PatchDraft(LocalDate businessDate, Integer pax, String discountName) {
+  private record PatchDraft(LocalDate businessDate, Integer pax, String courseName) {
 
     PatchDraft pax(Integer value) {
-      return new PatchDraft(businessDate, value, discountName);
+      return new PatchDraft(businessDate, value, courseName);
     }
 
-    PatchDraft discountName(String value) {
+    PatchDraft courseName(String value) {
       return new PatchDraft(businessDate, pax, value);
     }
 
@@ -162,10 +166,9 @@ class OrderServiceTest {
           null,
           null,
           pax,
+          courseName,
           null,
           null,
-          null,
-          discountName,
           null,
           null,
           null,
@@ -186,6 +189,9 @@ class OrderServiceTest {
     lenient()
         .when(roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name()))
         .thenReturn(Set.of(STAFF_ROLE_ID));
+    // 明細の入力 → 下書きの翻訳（表示値から帯符号へ）は写像の既定実装をそのまま通す。ここを mock の
+    // 既定値（null）に任せると、内訳が黙って空になったまま合計の検証が通ってしまう。
+    lenient().when(orderMapper.toFeeLineDrafts(anyList())).thenAnswer(Answers.CALLS_REAL_METHODS);
   }
 
   private PlatformUser receptionist(
@@ -252,9 +258,11 @@ class OrderServiceTest {
     OrderView view = mock(OrderView.class);
     OrderResponse res = OrderResponse.builder().id("o1").build();
 
-    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(view));
+    // 詳細は読み口（表示名の join）と集約（明細の行）の 2 本から組む
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(Order.builder().build()));
+    when(orderRepository.findViewById(nullable(String.class))).thenReturn(Optional.of(view));
     when(orderMapper.toResponse(view)).thenReturn(res);
-    when(orderRepository.findViewById("o2")).thenReturn(Optional.empty());
+    when(orderRepository.findById("o2")).thenReturn(Optional.empty());
 
     assertThat(service.get("o1").getId()).isEqualTo("o1");
     assertThatThrownBy(() -> service.get("o2")).isInstanceOf(NotFoundException.class);
@@ -669,7 +677,7 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
-        .thenReturn(patchWith(builder -> builder.discountName("新しい割引名")));
+        .thenReturn(patchWith(builder -> builder.courseName("90 分コース")));
     when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -683,7 +691,7 @@ class OrderServiceTest {
 
     service.update("o1", req);
 
-    assertThat(existing.getDiscountName()).isEqualTo("新しい割引名");
+    assertThat(existing.getCourseName()).isEqualTo("90 分コース");
   }
 
   private OrderCancellationRequest cancellationRequest(String reason) {
@@ -918,7 +926,7 @@ class OrderServiceTest {
   /** 人数と備考だけを差し替える部分更新コマンド（汎用更新の典型的な編集）。 */
   private static OrderPatch paxAndRemarksPatch(Integer pax, String remarks) {
     return new OrderPatch(
-        null, null, null, pax, null, null, null, null, null, null, null, null, null, remarks, null);
+        null, null, null, pax, null, null, null, null, null, null, null, null, remarks, null);
   }
 
   @Test
@@ -1949,11 +1957,24 @@ class OrderServiceTest {
     when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
   }
 
+  /** 会計の内訳。合計が {@code totalFee} になる加算 1 行だけを持つ（内訳の形そのものは集約の試験が受け持つ）。 */
   private static OrderCompletionRequest completion(Integer totalFee, Integer usePoints) {
+    OrderFeeLineRequest line = new OrderFeeLineRequest();
+    line.setKind(OrderFeeLineKind.SURCHARGE);
+    line.setName("会計");
+    line.setAmount(totalFee);
     OrderCompletionRequest request = new OrderCompletionRequest();
-    request.setTotalFee(totalFee);
+    request.setFeeLines(List.of(line));
     request.setUsePoints(usePoints);
     return request;
+  }
+
+  /** 会計で利用したポイント。列は退場し、ポイント利用の明細行の総和を正値へ翻したものが正本になった。 */
+  private static int usedPointsOf(Order order) {
+    return order.getFeeLines().stream()
+        .filter(line -> line.getKind() == OrderFeeLineKind.POINT_REDEMPTION)
+        .mapToInt(line -> -line.getAmount())
+        .sum();
   }
 
   @Test
@@ -1973,8 +1994,9 @@ class OrderServiceTest {
     inOrder.verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
     inOrder.verify(pointLedgerService).grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID);
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
-    assertThat(order.getTotalFee()).isEqualTo(12000);
-    assertThat(order.getUsedPoints()).isEqualTo(300);
+    // 付与の基準は利用の行が入る前の総和で、合計は利用のぶん下がる（客が現金で払う額）
+    assertThat(order.getTotalFee()).isEqualTo(11700);
+    assertThat(usedPointsOf(order)).isEqualTo(300);
     // 実際に付与された数を受注へ書く。要求された金額から再計算すると、設定変更で台帳とずれる
     assertThat(order.getAutoGrantPoints()).isEqualTo(120);
   }
@@ -1992,7 +2014,7 @@ class OrderServiceTest {
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
     verify(pointLedgerService, never()).useForOrder(anyLong(), any(), any(), anyInt(), any());
-    assertThat(order.getUsedPoints()).isZero();
+    assertThat(usedPointsOf(order)).isZero();
   }
 
   @Test
@@ -2039,7 +2061,7 @@ class OrderServiceTest {
 
     verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
-    assertThat(order.getUsedPoints()).isEqualTo(300);
+    assertThat(usedPointsOf(order)).isEqualTo(300);
   }
 
   @Test

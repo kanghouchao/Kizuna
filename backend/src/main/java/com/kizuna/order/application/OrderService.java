@@ -31,6 +31,7 @@ import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
+import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
@@ -205,7 +206,8 @@ public class OrderService {
   @StoreScoped
   @Transactional(readOnly = true)
   public OrderResponse get(String id) {
-    return toResponse(id);
+    return toResponse(
+        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id)));
   }
 
   /**
@@ -226,6 +228,11 @@ public class OrderService {
     // MapStructを使用して基本的なフィールドをマッピング（store_id は StoreScopeStampListener が @PrePersist で採番）
     Order order = orderMapper.toEntity(request);
 
+    // 内訳は集約に差し替えさせる。合計は行の総和として集約が導出するので、作成の契約は合計を受け取らない。
+    if (request.getFeeLines() != null) {
+      order.replaceStoreFeeLines(orderMapper.toFeeLineDrafts(request.getFeeLines()));
+    }
+
     // 複雑な関連ロジックの処理（顧客のスマートリンク）
     handleCustomerLinking(request, order);
 
@@ -238,7 +245,7 @@ public class OrderService {
     order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
 
     Order saved = orderRepository.save(order);
-    return toResponse(saved.getId());
+    return toResponse(saved);
   }
 
   /**
@@ -465,7 +472,7 @@ public class OrderService {
     Order saved = orderRepository.save(order);
     application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
     orderApplicationRepository.save(application);
-    return toResponse(saved.getId());
+    return toResponse(saved);
   }
 
   /**
@@ -590,6 +597,15 @@ public class OrderService {
       throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
     }
 
+    // 会計の場で確定した内訳を先に当てる。合計は行の総和として集約が導出するので、以降の判定はすべて
+    // その総和を基準にする。撥ねる要求はトランザクションごと巻き戻る（台帳へはまだ何も積んでいない）。
+    order.apply(
+        OrderPatch.ofAccounting(
+            request.getCourseName(), orderMapper.toFeeLineDrafts(request.getFeeLines())));
+    // 付与の基準と利用の上限は、ポイント利用の行が入る前の総和で決める。利用の行を入れた後の合計は
+    // 客が現金で払う額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
+    int chargeAmount = order.getTotalFee();
+
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
     if (order.getCustomerId() != null) {
       // 積み先を決める前に顧客行を押さえ、紐づけの解除・変更と直列化する。引けない顧客はそのまま
@@ -603,7 +619,7 @@ public class OrderService {
     }
     // 会計金額を超える利用は、請求より大きい割引に相当する仕訳を台帳へ残す。意図してポイントを減らすなら
     // 理由の付く手動調整の経路があり、取り消せない完了に混ぜない。同額までは全額のポイント払いとして通す。
-    if (usePoints > request.getTotalFee()) {
+    if (usePoints > chargeAmount) {
       throw new ServiceException("利用ポイントは会計金額を超えられません");
     }
 
@@ -616,18 +632,18 @@ public class OrderService {
         pointLedgerService.useForOrder(memberId, id, order.getStoreId(), usePoints, actorId);
       }
       granted =
-          pointLedgerService.grantForOrder(
-              memberId, id, order.getStoreId(), request.getTotalFee(), actorId);
+          pointLedgerService.grantForOrder(memberId, id, order.getStoreId(), chargeAmount, actorId);
       // 帰属は付与の有無と独立している。0 円完了は台帳へ行を書かないが、来店した事実は記録として残す。
       // 会員コードは解決に使った関連のスナップショットをそのまま写す — 会員コードは発行後に変わらないため、
       // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
       orderAttributionRepository.save(
           OrderAttribution.onCompletion(id, memberId, link.getMemberCode(), OffsetDateTime.now()));
     } else {
-      receiptToken = issueReceiptToken(id, request.getTotalFee());
+      receiptToken = issueReceiptToken(id, chargeAmount);
     }
 
-    order.completeWith(request.getTotalFee(), usePoints, granted);
+    // ポイント利用は減算の明細行として内訳へ入る（台帳の減算仕訳と対になる記録）。合計はそのぶん下がる。
+    order.completeWith(usePoints, granted);
     orderRepository.save(order);
     // 生値がこの応答の外へ出る経路は無い（保存されるのはダイジェストだけ）。会員へ帰属した完了では null。
     return new OrderCompletionResponse(receiptToken);
@@ -770,11 +786,17 @@ public class OrderService {
         .map(PlatformUser::getId);
   }
 
-  private OrderResponse toResponse(String id) {
-    return orderRepository
-        .findViewById(id)
-        .map(orderMapper::toResponse)
-        .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+  /**
+   * 受注 1 件の詳細。表示名の join を持つ読み側 projection と、行の集合を持つ集約の 2 本から組む — 1 行 1 受注の projection では明細を運べない。
+   */
+  private OrderResponse toResponse(Order order) {
+    OrderResponse response =
+        orderRepository
+            .findViewById(order.getId())
+            .map(orderMapper::toResponse)
+            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + order.getId()));
+    response.setFeeLines(orderMapper.toFeeLineResponses(order.getFeeLines()));
+    return response;
   }
 
   /** 行を書き戻す操作の応答。作業キューが持つ行と同じ形で返し、呼出側がその場で 1 行だけ差し替えられるようにする。 */

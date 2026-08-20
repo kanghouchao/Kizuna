@@ -58,6 +58,12 @@ databaseChangeLog:
                   type: TIME
                   remarks: 実際の終了時間 (OUT)
               - column:
+                  # コース名・コース分数・延長分数は「本受注に実際に適用された内容」の写しで、
+                  # サービス定義の側から回写されることは無い（充填元が変わっても列は動かない）。
+                  name: course_name
+                  type: VARCHAR(255)
+                  remarks: 適用されたコース名の写し
+              - column:
                   name: course_minutes
                   type: INTEGER
                   remarks: コース分数
@@ -67,29 +73,12 @@ databaseChangeLog:
                   defaultValueNumeric: 0
                   remarks: 延長分数
               - column:
-                  name: option_codes
-                  type: JSONB
-                  defaultValueComputed: "'[]'::jsonb"
-                  remarks: オプションコード一覧 (JSON Array)
-              - column:
-                  name: discount_name
-                  type: VARCHAR(255)
-                  remarks: 割引名
-              - column:
-                  name: manual_discount
-                  type: INTEGER
-                  defaultValueNumeric: 0
-                  remarks: 手動割引金額
-              - column:
+                  # 明細（t_order_fee_lines）の帯符号金額の単純総和。手入力の口は無く、
+                  # 集約の行為メソッドが行を動かすたびに書き直す導出列。
                   name: total_fee
                   type: INTEGER
                   defaultValueNumeric: 0
-                  remarks: 総額
-              - column:
-                  name: used_points
-                  type: INTEGER
-                  defaultValueNumeric: 0
-                  remarks: 利用ポイント
+                  remarks: 会計金額（明細の総和からの導出）
               - column:
                   name: auto_grant_points
                   type: INTEGER
@@ -297,6 +286,104 @@ databaseChangeLog:
                   name: business_date
               - column:
                   name: id
+  - changeSet:
+      id: store-v0100-004-order-fee-line-schema
+      author: kanghouchao
+      # 受注金額の内訳は固定列ではなく明細行で持つ。1 行＝種別＋名称の写し＋帯符号金額で、
+      # t_orders.total_fee はこの表の単純総和として導出される。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_order_fee_lines
+            remarks: 受注明細テーブル
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_fee_lines
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 親受注
+              - column:
+                  # 閉集合。ホテル代・交通費・釣銭は受注金額外の回収・精算項目であり、
+                  # 種別を持たないことで型の側から排除される。
+                  name: kind
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+                  remarks: 明細種別（BASE_COURSE/EXTENSION/OPTION/SURCHARGE/DISCOUNT/MANUAL_ADJUST/POINT_REDEMPTION/CREDIT_SURCHARGE）
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                  remarks: 行が成立した時点の名称の写し
+              - column:
+                  name: amount
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+                  remarks: 帯符号の金額。減項は負値
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 明細は受注の構成要素であり、受注が消える唯一の経路（店舗削除の連鎖）で一緒に消える。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_fee_lines_order
+            baseTableName: t_order_fee_lines
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 種別ごとの符号約定を DB 側でも塞ぐ。集約が先に同じ判定をするので、ここへ届く違反は
+        # 集約を迂回した書き込みだけであり、業務例外へは写像しない（実装欠陥として大きく失敗する）。
+        - sql:
+            sql: >-
+              ALTER TABLE t_order_fee_lines
+              ADD CONSTRAINT ck_t_order_fee_lines_amount_sign CHECK (
+                CASE kind
+                  WHEN 'BASE_COURSE' THEN amount >= 0
+                  WHEN 'EXTENSION' THEN amount >= 0
+                  WHEN 'OPTION' THEN amount >= 0
+                  WHEN 'SURCHARGE' THEN amount >= 0
+                  WHEN 'CREDIT_SURCHARGE' THEN amount >= 0
+                  WHEN 'DISCOUNT' THEN amount <= 0
+                  WHEN 'POINT_REDEMPTION' THEN amount <= 0
+                  WHEN 'MANUAL_ADJUST' THEN true
+                  ELSE false
+                END
+              )
+        - createIndex:
+            indexName: idx_t_order_fee_lines_order
+            tableName: t_order_fee_lines
+            columns:
+              - column:
+                  name: order_id
   - changeSet:
       id: store-v0100-004-order-application-schema
       author: kanghouchao
