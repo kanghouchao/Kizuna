@@ -3,7 +3,6 @@ package com.kizuna.order.domain;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.util.List;
 
 /** 注文一覧・詳細の読み側 projection。関連集約の表示名は JPQL join で取得する（読み側は集約を経由しない）。 */
 public interface OrderView {
@@ -35,22 +34,21 @@ public interface OrderView {
 
   Integer getPax();
 
+  /** この受注に実際に適用されたコース名の写し。 */
+  String getCourseName();
+
   Integer getCourseMinutes();
 
   Integer getExtensionMinutes();
-
-  List<String> getOptionCodes();
-
-  String getDiscountName();
-
-  Integer getManualDiscount();
 
   String getCarrier();
 
   String getMediaName();
 
+  /** 明細の総和。ポイント利用の減算も含むため、客が現金で払った額にあたる。 */
   Integer getTotalFee();
 
+  /** 会計で利用したポイント。明細のポイント利用行の総和を正値へ翻した導出値で、利用の無い受注では 0。 */
   Integer getUsedPoints();
 
   Integer getAutoGrantPoints();

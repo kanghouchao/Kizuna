@@ -35,11 +35,16 @@ public interface OrderRepository
              o.contactName as contactName, o.contactPhoneNumber as contactPhoneNumber,
              o.castId as castId, k.name as castName,
              o.pax as pax,
+             o.courseName as courseName,
              o.courseMinutes as courseMinutes, o.extensionMinutes as extensionMinutes,
-             o.optionCodes as optionCodes, o.discountName as discountName,
-             o.manualDiscount as manualDiscount, o.carrier as carrier,
+             o.carrier as carrier,
              o.mediaName as mediaName, o.totalFee as totalFee,
-             o.usedPoints as usedPoints, o.autoGrantPoints as autoGrantPoints,
+             (select cast(coalesce(sum(-fl.amount), 0) as Integer)
+                from com.kizuna.order.domain.OrderFeeLine fl
+               where fl.orderId = o.id
+                 and fl.kind = com.kizuna.order.domain.OrderFeeLineKind.POINT_REDEMPTION)
+               as usedPoints,
+             o.autoGrantPoints as autoGrantPoints,
              o.remarks as remarks,
              o.castDriverMessage as castDriverMessage, o.status as status,
              o.receptionRoute as receptionRoute,

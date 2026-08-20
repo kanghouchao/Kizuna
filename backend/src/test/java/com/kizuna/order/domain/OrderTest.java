@@ -2,9 +2,11 @@ package com.kizuna.order.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,43 +17,170 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("確認済みの注文を完了すると会計金額とポイントが確定すること")
+  @DisplayName("確認済みの注文を完了すると利用ポイントが減算の明細になり、合計がそのぶん下がること")
   void completeWith_fromConfirmed() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", 12000)));
 
-    order.completeWith(12000, 500, 120);
+    order.completeWith(500, 120);
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
-    assertThat(order.getTotalFee()).isEqualTo(12000);
-    assertThat(order.getUsedPoints()).isEqualTo(500);
+    assertThat(order.getTotalFee()).isEqualTo(11500);
     assertThat(order.getAutoGrantPoints()).isEqualTo(120);
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
+        .containsExactly(
+            tuple(OrderFeeLineKind.SURCHARGE, 12000),
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -500));
   }
 
   @Test
   @DisplayName("キャンセル済みの注文は完了できないこと")
   void completeWith_fromCancelled_isRejected() {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
-    assertThatThrownBy(() -> order.completeWith(12000, 0, 120))
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", 12000)));
+
+    assertThatThrownBy(() -> order.completeWith(0, 120))
         .isInstanceOf(IllegalOrderStateTransitionException.class)
         .hasMessageContaining("CANCELLED")
         .hasMessageContaining("COMPLETED");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-    assertThat(order.getTotalFee()).as("撥ねた完了は会計金額を書かないこと").isNull();
+    assertThat(order.getTotalFee()).as("撥ねた完了は合計を動かさないこと").isEqualTo(12000);
   }
 
   @Test
-  @DisplayName("完了済みの注文を再度完了できず、確定済みの会計も上書きされないこと")
+  @DisplayName("完了済みの注文を再度完了できず、確定済みの内訳も上書きされないこと")
   void completeWith_isNotIdempotent() {
     // 完了は台帳記帳と不可分のため、同一状態への静默冪等（transitionTo）に委ねると二重記帳になる
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
-    order.completeWith(12000, 500, 120);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", 12000)));
+    order.completeWith(500, 120);
 
-    assertThatThrownBy(() -> order.completeWith(9999, 100, 99))
+    assertThatThrownBy(() -> order.completeWith(100, 99))
         .isInstanceOf(IllegalOrderStateTransitionException.class)
         .hasMessageContaining("COMPLETED");
-    assertThat(order.getTotalFee()).isEqualTo(12000);
-    assertThat(order.getUsedPoints()).isEqualTo(500);
+    assertThat(order.getTotalFee()).isEqualTo(11500);
+    assertThat(order.getFeeLines()).hasSize(2);
     assertThat(order.getAutoGrantPoints()).isEqualTo(120);
+  }
+
+  @Test
+  @DisplayName("合計は明細の帯符号金額の単純総和であること")
+  void totalFee_isSumOfFeeLines() {
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).courseName("60 分コース").build();
+
+    order.replaceStoreFeeLines(
+        List.of(
+            draft(OrderFeeLineKind.BASE_COURSE, null, 14000),
+            draft(OrderFeeLineKind.EXTENSION, "30 分延長", 6000),
+            draft(OrderFeeLineKind.OPTION, "オプション A", 2000),
+            draft(OrderFeeLineKind.DISCOUNT, "初回割", -3000),
+            draft(OrderFeeLineKind.MANUAL_ADJUST, "端数調整", -500)));
+
+    assertThat(order.getTotalFee()).isEqualTo(18500);
+  }
+
+  @Test
+  @DisplayName("明細の差し替えは前の内容を残さず、合計を取り直すこと")
+  void replaceStoreFeeLines_replacesWholeBreakdown() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.OPTION, "オプション B", 3000)));
+
+    assertThat(order.getFeeLines()).extracting(OrderFeeLine::getName).containsExactly("オプション B");
+    assertThat(order.getTotalFee()).isEqualTo(3000);
+
+    order.replaceStoreFeeLines(List.of());
+    assertThat(order.getFeeLines()).isEmpty();
+    assertThat(order.getTotalFee()).as("内訳が空なら合計も 0 であること").isZero();
+  }
+
+  @Test
+  @DisplayName("店舗の明細差し替えはポイント利用の行を作れず、既にある行も消せないこと")
+  void replaceStoreFeeLines_cannotTouchSystemOwnedLines() {
+    // 台帳の減算仕訳と対で書かれた記録が通常の編集で外れると、内訳と台帳が黙って食い違う
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", 10000)));
+    order.completeWith(500, 0);
+
+    assertThatThrownBy(
+            () ->
+                order.replaceStoreFeeLines(
+                    List.of(draft(OrderFeeLineKind.POINT_REDEMPTION, "ポイント利用", -300))))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", 8000)));
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
+        .containsExactlyInAnyOrder(
+            tuple(OrderFeeLineKind.SURCHARGE, 8000),
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -500));
+    assertThat(order.getTotalFee()).isEqualTo(7500);
+  }
+
+  @Test
+  @DisplayName("種別の符号約定に反する金額は撥ねられること")
+  void feeLine_signIsEnforcedPerKind() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+
+    assertThatThrownBy(
+            () -> order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.OPTION, "オプション", -1))))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+    assertThatThrownBy(
+            () -> order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.DISCOUNT, "割引", 1))))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+    assertThat(order.getFeeLines()).as("撥ねた差し替えは内訳を動かさないこと").isEmpty();
+
+    // 手動調整だけが符号を縛られない（合計を機械和から外す唯一の口）
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.MANUAL_ADJUST, "調整", -1200)));
+    assertThat(order.getTotalFee()).isEqualTo(-1200);
+  }
+
+  @Test
+  @DisplayName("基本コース料金の行名称はコース名の写しから採り、コース名が無ければ撥ねること")
+  void baseCourseLine_takesItsNameFromTheCourseSnapshot() {
+    Order withoutCourseName = orderWithStatus(OrderStatus.CONFIRMED);
+    assertThatThrownBy(
+            () ->
+                withoutCourseName.replaceStoreFeeLines(
+                    List.of(draft(OrderFeeLineKind.BASE_COURSE, "行から名乗ろうとした名前", 14000))))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).courseName("90 分コース").build();
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.BASE_COURSE, "行から名乗ろうとした名前", 14000)));
+
+    assertThat(order.getFeeLines()).extracting(OrderFeeLine::getName).containsExactly("90 分コース");
+  }
+
+  @Test
+  @DisplayName("明細は読み手が直接書き換えられないこと")
+  void getFeeLines_isNotWritable() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.OPTION, "オプション", 2000)));
+
+    List<OrderFeeLine> lines = order.getFeeLines();
+    assertThatThrownBy(() -> lines.add(OrderFeeLine.of(OrderFeeLineKind.OPTION, "横入り", 9999)))
+        .isInstanceOf(UnsupportedOperationException.class);
+    assertThat(order.getTotalFee()).isEqualTo(2000);
+  }
+
+  @Test
+  @DisplayName("同じ要求で送られたコース名が基本コース料金の行名称に載ること")
+  void apply_writesCourseNameBeforeFeeLines() {
+    // 順序が逆だと、コースを変えた同じ更新で行だけが古いコース名を名乗る
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).courseName("60 分コース").build();
+
+    order.apply(
+        OrderPatch.ofAccounting(
+            "120 分コース", List.of(draft(OrderFeeLineKind.BASE_COURSE, null, 22000))));
+
+    assertThat(order.getCourseName()).isEqualTo("120 分コース");
+    assertThat(order.getFeeLines()).extracting(OrderFeeLine::getName).containsExactly("120 分コース");
+  }
+
+  private static OrderFeeLineDraft draft(OrderFeeLineKind kind, String name, int amount) {
+    return new OrderFeeLineDraft(kind, name, amount);
   }
 
   @Test
@@ -132,7 +261,7 @@ class OrderTest {
 
   private OrderPatch patchWithPax(Integer pax) {
     return new OrderPatch(
-        null, null, null, pax, null, null, null, null, null, null, null, null, null, null, null);
+        null, null, null, pax, null, null, null, null, null, null, null, null, null, null);
   }
 
   @Test
@@ -149,7 +278,6 @@ class OrderTest {
     order.apply(
         new OrderPatch(
             LocalDate.parse("2026-08-20"),
-            null,
             null,
             null,
             null,
