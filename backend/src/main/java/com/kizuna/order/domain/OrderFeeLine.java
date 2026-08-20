@@ -34,7 +34,12 @@ public class OrderFeeLine extends BaseEntity {
   @Column(name = "kind", nullable = false, updatable = false, length = 30)
   private OrderFeeLineKind kind;
 
-  @Column(name = "name", nullable = false, updatable = false, length = 255)
+  /**
+   * 行が成立した時点の名称の写し。
+   *
+   * <p>基本コース料金の行だけは写し元（受注のコース名）が終端前に動きうるため、{@link #renameTo} で追随できる。 それ以外の行の名称は差し替え以外で動かない。
+   */
+  @Column(name = "name", nullable = false, length = 255)
   private String name;
 
   @Column(name = "amount", nullable = false, updatable = false)
@@ -66,6 +71,18 @@ public class OrderFeeLine extends BaseEntity {
           "明細の金額が種別の符号約定に合いません: %s（加算の種別は 0 以上、減算の種別は 0 以下）".formatted(kind));
     }
     return new OrderFeeLine(kind, name, amount);
+  }
+
+  /**
+   * 名称の写し元が直されたときに追随する。受注集約だけが呼ぶ（公開の設定子は持たない）。
+   *
+   * <p>金額と種別は動かないので、合計を取り直す必要は無い。
+   */
+  void renameTo(String newName) {
+    if (newName == null || newName.isBlank()) {
+      throw new InvalidOrderFeeLineException("明細の名称は必須です");
+    }
+    this.name = newName;
   }
 
   @Override

@@ -2,6 +2,7 @@ package com.kizuna.order.api.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -50,7 +51,7 @@ public class OrderUpdateRequest {
    *
    * <p>行に同一性は無く、送られた内容がそのまま新しい内訳になる。ポイント利用の行は含められない（完了処理だけが書く）。
    */
-  @Valid private List<OrderFeeLineRequest> feeLines;
+  @Valid private List<@NotNull(message = "明細の要素は必須です") OrderFeeLineRequest> feeLines;
 
   /**
    * 場所（住所）。誤記の訂正のために編集できる。

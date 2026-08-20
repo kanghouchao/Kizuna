@@ -179,6 +179,38 @@ class OrderTest {
     assertThat(order.getFeeLines()).extracting(OrderFeeLine::getName).containsExactly("120 分コース");
   }
 
+  @Test
+  @DisplayName("コース名だけを直した更新でも基本コース料金の行名称が追随すること")
+  void apply_courseNameAloneStillRenamesTheBaseCourseLine() {
+    // 明細を伴わない更新で写しが取り残されると、同じ受注が二つのコース名を主張する
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).courseName("60 分コース").build();
+    order.replaceStoreFeeLines(
+        List.of(
+            draft(OrderFeeLineKind.BASE_COURSE, null, 14000),
+            draft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+
+    order.apply(OrderPatch.ofAccounting("120 分コース", null));
+
+    assertThat(order.getCourseName()).isEqualTo("120 分コース");
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getKind, OrderFeeLine::getName)
+        .containsExactly(
+            tuple(OrderFeeLineKind.BASE_COURSE, "120 分コース"),
+            tuple(OrderFeeLineKind.OPTION, "オプション A"));
+    assertThat(order.getTotalFee()).as("名称の追随は合計を動かさないこと").isEqualTo(16000);
+  }
+
+  @Test
+  @DisplayName("基本コース料金の行がある受注はコース名を空にできないこと")
+  void apply_cannotBlankTheCourseNameWhileABaseCourseLineExists() {
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).courseName("60 分コース").build();
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.BASE_COURSE, null, 14000)));
+
+    assertThatThrownBy(() -> order.apply(OrderPatch.ofAccounting("  ", null)))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+    assertThat(order.getCourseName()).as("撥ねた更新は写しを動かさないこと").isEqualTo("60 分コース");
+  }
+
   private static OrderFeeLineDraft draft(OrderFeeLineKind kind, String name, int amount) {
     return new OrderFeeLineDraft(kind, name, amount);
   }
