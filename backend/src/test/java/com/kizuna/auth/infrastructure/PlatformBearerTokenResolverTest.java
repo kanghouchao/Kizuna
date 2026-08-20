@@ -42,6 +42,25 @@ class PlatformBearerTokenResolverTest {
   }
 
   @Test
+  @DisplayName("ゲスト予約申請の POST は免除対象で、壊れた Bearer があっても null を返すこと")
+  void resolvesNullForGuestOrderApplicationPost() {
+    // 公開店面を見ている来訪者は会員・キャストの陳腐な token cookie を持ちうる。免除しないと申請が 401 になる
+    MockHttpServletRequest request = requestWithBearer("POST", "/store/order-applications/public");
+
+    assertThat(resolver.resolve(request)).isNull();
+  }
+
+  @Test
+  @DisplayName("ゲスト予約申請の免除は POST 限定で、同一パスの他メソッドには及ばないこと")
+  void doesNotExemptOtherMethodsOnTheGuestOrderApplicationPath() {
+    // パスだけで免除すると、同一パスに認証必須の handler を足した日にその Bearer まで捨てられ、
+    // その端点は誰にも通せない恒久的な 401/403 になる
+    MockHttpServletRequest request = requestWithBearer("GET", "/store/order-applications/public");
+
+    assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
+  }
+
+  @Test
   @DisplayName("既存ユーザーの招待受諾(/acceptance/existing)は免除対象でなく Bearer を解決すること")
   void resolvesTokenForAcceptAsExistingUser() {
     MockHttpServletRequest request =

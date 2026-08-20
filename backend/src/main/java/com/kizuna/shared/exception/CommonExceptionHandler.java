@@ -194,6 +194,14 @@ public class CommonExceptionHandler {
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
   }
 
+  @ExceptionHandler(TooManyRequestsException.class)
+  public ResponseEntity<Map<String, Object>> handle(TooManyRequestsException ex) {
+    log.warn(ex.getMessage());
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(body);
+  }
+
   @ExceptionHandler(ServiceUnavailableException.class)
   public ResponseEntity<Map<String, Object>> handle(ServiceUnavailableException ex) {
     log.warn(ex.getMessage());
