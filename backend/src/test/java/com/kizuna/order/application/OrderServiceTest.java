@@ -1249,6 +1249,8 @@ class OrderServiceTest {
     OrderApplicationConfirmationRequest request = new OrderApplicationConfirmationRequest();
     request.setBusinessDate(CURRENT_BUSINESS_DATE);
     request.setPax(2);
+    request.setCourseName("90 分コース");
+    request.setCourseMinutes(90);
     return request;
   }
 
@@ -1319,6 +1321,9 @@ class OrderServiceTest {
     assertThat(created.getRequesterDeclaredName()).isEqualTo("名乗り太郎");
     assertThat(created.getBusinessDate()).as("受注の内容は確定内容から取ること").isEqualTo(CURRENT_BUSINESS_DATE);
     assertThat(created.getPax()).isEqualTo(2);
+    // 確定は受注の出生なので、コースの快照はこの経路でも写らなければならない
+    assertThat(created.getCourseName()).isEqualTo("90 分コース");
+    assertThat(created.getCourseMinutes()).isEqualTo(90);
     assertThat(created.getCastId()).as("確定内容が指名を持たなければ受注も指名なしであること").isNull();
 
     assertThat(application.getStatus()).isEqualTo(OrderApplicationStatus.CONFIRMED);

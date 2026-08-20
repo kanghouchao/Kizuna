@@ -117,6 +117,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private static final List<String> LEDGER_FIELD_NAMES =
       List.of(
           "\"total_fee\"",
+          "\"fee_lines\"",
           "\"used_points\"",
           "\"auto_grant_points\"",
           "\"rank\"",

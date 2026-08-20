@@ -32,6 +32,10 @@ public class OrderApplicationConfirmationRequest {
   @Min(value = 1, message = "人数は 1 以上です")
   private Integer pax;
 
+  /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。t_orders.course_name = VARCHAR(255)。 */
+  @Size(max = 255, message = "コース名は 255 文字以内です")
+  private String courseName;
+
   private Integer courseMinutes;
 
   // 備考の行き先（t_orders.remarks）は TEXT のため上限を持たない

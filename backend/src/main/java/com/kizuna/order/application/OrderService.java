@@ -442,6 +442,7 @@ public class OrderService {
             .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
             .arrivalScheduledEndTime(request.getArrivalScheduledEndTime())
             .pax(request.getPax())
+            .courseName(request.getCourseName())
             .courseMinutes(request.getCourseMinutes())
             .remarks(request.getRemarks())
             .status(OrderStatus.CONFIRMED)
