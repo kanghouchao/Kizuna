@@ -4,6 +4,8 @@ import { OrderCompletionModal } from '../ui/OrderCompletionModal';
 import { Order, orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
+  // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
+  ...jest.requireActual('@/entities/order'),
   orderApi: {
     complete: jest.fn(),
     completionPreview: jest.fn(),
@@ -36,9 +38,10 @@ const renderModal = (onCompleted = jest.fn(), onClose = jest.fn()) =>
     <OrderCompletionModal order={confirmedOrder} onClose={onClose} onCompleted={onCompleted} />
   );
 
-/** 会計金額を入れて完了する（各テストの本題は入力側なので、送信までを 1 つにまとめる）。 */
-const completeWith = async (totalFee: string) => {
-  fireEvent.change(await screen.findByLabelText('会計金額'), { target: { value: totalFee } });
+/** 会計の内訳を 1 行だけ入れて完了する（各テストの本題は入力側なので、送信までを 1 つにまとめる）。 */
+const completeWith = async (amount: string) => {
+  fireEvent.change(await screen.findByLabelText('明細1の名称'), { target: { value: '会計' } });
+  fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: amount } });
   fireEvent.click(screen.getByRole('button', { name: '完了する' }));
 };
 
@@ -82,9 +85,9 @@ describe('OrderCompletionModal', () => {
   it('会計金額を確定すると、その金額で見込みを取り直す', async () => {
     // 打鍵ごとに取りに行かないので、欄を離れるまでは前の金額の見込みのまま
     renderModal();
-    await screen.findByLabelText('会計金額');
+    await screen.findByLabelText('明細1の金額');
 
-    const input = screen.getByLabelText('会計金額');
+    const input = screen.getByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
 
@@ -116,7 +119,7 @@ describe('OrderCompletionModal', () => {
     const { rerender } = render(
       <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
     );
-    const input = await screen.findByLabelText('会計金額');
+    const input = await screen.findByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
     await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 8000));
@@ -157,7 +160,7 @@ describe('OrderCompletionModal', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
 
-    expect(await screen.findByText('会計金額を入力してください')).toBeInTheDocument();
+    expect(await screen.findByText('金額を入力してください')).toBeInTheDocument();
     expect(mockedComplete).not.toHaveBeenCalled();
   });
 
@@ -167,7 +170,7 @@ describe('OrderCompletionModal', () => {
 
     await completeWith('1500.5');
 
-    expect(await screen.findByText('会計金額は整数で入力してください')).toBeInTheDocument();
+    expect(await screen.findByText('金額は整数で入力してください')).toBeInTheDocument();
     expect(mockedComplete).not.toHaveBeenCalled();
   });
 
@@ -221,7 +224,9 @@ describe('OrderCompletionModal', () => {
 
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     expect(mockedComplete.mock.calls[0][0]).toBe('o1');
-    expect(mockedComplete.mock.calls[0][1].total_fee).toBe(8000);
+    expect(mockedComplete.mock.calls[0][1].fee_lines).toEqual([
+      { kind: 'OPTION', name: '会計', amount: 8000 },
+    ]);
     expect(mockedComplete.mock.calls[0][1].use_points).toBeUndefined();
     expect(notify.success).toHaveBeenCalledWith('オーダーを完了しました');
     expect(onCompleted).toHaveBeenCalled();
@@ -235,7 +240,11 @@ describe('OrderCompletionModal', () => {
     await completeWith('8000');
 
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
-    expect(mockedComplete.mock.calls[0][1]).toEqual({ total_fee: 8000, use_points: 200 });
+    expect(mockedComplete.mock.calls[0][1]).toEqual({
+      course_name: undefined,
+      fee_lines: [{ kind: 'OPTION', name: '会計', amount: 8000 }],
+      use_points: 200,
+    });
   });
 
   it('会員でなくなった見込みへ、打ち込み済みの利用ポイントを持ち越さない', async () => {
@@ -245,7 +254,8 @@ describe('OrderCompletionModal', () => {
 
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
     mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 80 });
-    const input = screen.getByLabelText('会計金額');
+    fireEvent.change(screen.getByLabelText('明細1の名称'), { target: { value: '会計' } });
+    const input = screen.getByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
 
@@ -321,7 +331,7 @@ describe('OrderCompletionModal', () => {
     expect(onCompleted).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     // 会計の欄は役目を終えている。QR と入れ替える
-    expect(screen.queryByLabelText('会計金額')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('明細1の金額')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expect(onClose).toHaveBeenCalled();
@@ -347,7 +357,7 @@ describe('OrderCompletionModal', () => {
     // 閉じない扱いは QR を出している間だけ。入力中まで塞ぐと、開いただけのモーダルから出られない
     const onClose = jest.fn();
     renderModal(jest.fn(), onClose);
-    await screen.findByLabelText('会計金額');
+    await screen.findByLabelText('明細1の金額');
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
@@ -371,7 +381,7 @@ describe('OrderCompletionModal', () => {
 
     await reopenAfterIssuing(otherOrder);
 
-    expect(await screen.findByLabelText('会計金額')).toBeInTheDocument();
+    expect(await screen.findByLabelText('明細1の金額')).toBeInTheDocument();
     expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
   });
 
@@ -379,7 +389,7 @@ describe('OrderCompletionModal', () => {
     // 生値は発行の応答にしか現れない。閉じた後に出し直せると、「今だけ」と書いた画面が嘘になる
     await reopenAfterIssuing({ ...confirmedOrder });
 
-    expect(await screen.findByLabelText('会計金額')).toBeInTheDocument();
+    expect(await screen.findByLabelText('明細1の金額')).toBeInTheDocument();
     expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
   });
 

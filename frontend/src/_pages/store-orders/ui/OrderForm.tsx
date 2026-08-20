@@ -2,9 +2,15 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { ReceptionRoute, WebApplicationReceptionRoute, orderApi } from '@/entities/order';
+import {
+  OrderFeeLineInput,
+  ReceptionRoute,
+  WebApplicationReceptionRoute,
+  orderApi,
+} from '@/entities/order';
 import { useResource } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
+import { OrderFeeLinesField } from './OrderFeeLinesField';
 import {
   Button,
   Card,
@@ -46,10 +52,6 @@ const COURSE_MINUTES_OPTIONS = ['60', '90', '120'].map(v => ({ value: v, label: 
 // Web 申請の群は予約申請の確定だけが名乗る値なので選択肢に出さない（後端も拒否する）。
 // 選択肢が 1 つでもセレクトを残すのは、受付経路が記録項目であって、値の追加は行の追加だから。
 const RECEPTION_ROUTE_OPTIONS = [{ value: 'PHONE', label: '電話受付' }];
-const DISCOUNT_OPTIONS = [
-  { value: SELECT_NONE, label: 'なし' },
-  { value: '一番最初割', label: '一番最初割' },
-];
 
 export interface OrderFormData {
   receptionistId: string;
@@ -68,11 +70,12 @@ export interface OrderFormData {
   pax: number;
   /** 受付経路。店舗側の合法値は電話受付だけ（Web 申請の群は予約申請の確定だけが名乗る）。 */
   receptionRoute: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
+  /** この受注に適用するコース名の写し。基本コース料金の明細を置くなら必須になる。 */
+  courseName: string;
   courseMinutes: number;
   extensionMinutes: number;
-  options: string[];
-  discountName: string;
-  manualDiscount: number;
+  /** 会計内訳。明細の欄が契約と同じ鍵で持つため、この項目だけ写像を経ずにそのまま送る。 */
+  fee_lines: OrderFeeLineInput[];
   carrier: string;
   mediaName: string;
   remarks: string;
@@ -104,16 +107,17 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
       classification: 'ーー',
       pax: 1,
       receptionRoute: 'PHONE',
+      courseName: '',
       courseMinutes: 60,
       extensionMinutes: 0,
-      discountName: '',
-      manualDiscount: 0,
+      fee_lines: [],
       hasPet: false,
       ngType: 'NG無し',
       ...initialData,
     },
   });
-  const { register, handleSubmit, control } = form;
+  const { register, handleSubmit, control, watch } = form;
+  const courseName = watch('courseName');
 
   const {
     data: receptionistOptions,
@@ -380,31 +384,20 @@ export function OrderForm({ initialData, castName, onSubmit, isSubmitting }: Ord
               </div>
               <FormField
                 control={control}
-                name="discountName"
+                name="courseName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>割引</FormLabel>
-                    <Select
-                      items={DISCOUNT_OPTIONS}
-                      value={field.value ? field.value : SELECT_NONE}
-                      onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {DISCOUNT_OPTIONS.map(o => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>コース名</FormLabel>
+                    <FormControl>
+                      <Input {...field} maxLength={255} />
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
+            <div className="mt-6">
+              <OrderFeeLinesField courseName={courseName} />
             </div>
           </CardContent>
         </Card>

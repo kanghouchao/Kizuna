@@ -5,8 +5,9 @@ import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/ent
 import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/order', () => ({
+  // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
+  ...jest.requireActual('@/entities/order'),
   // 表示ラベル等の定数は本物を使う（API だけを差し替える）
-  ...jest.requireActual('@/entities/order/model/types'),
   orderApi: {
     get: jest.fn(),
     create: jest.fn(),

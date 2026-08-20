@@ -267,7 +267,7 @@ describe('識別子を欠いた orderApi / orderApplicationApi / memberOrderAppl
       () => orderApplicationApi.decline(undefined, { reason: 'r' }),
       '予約申請',
     ],
-    ['complete', () => orderApi.complete(undefined, { total_fee: 1 }), '受注'],
+    ['complete', () => orderApi.complete(undefined, { fee_lines: [] }), '受注'],
     ['completionPreview', () => orderApi.completionPreview(undefined, 0), '受注'],
     ['attribution', () => orderApi.attribution(undefined), '受注'],
     [

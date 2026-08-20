@@ -5,11 +5,19 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ExternalLinkIcon } from 'lucide-react';
-import { Order, OrderUpdateRequest, orderApi } from '@/entities/order';
+import {
+  Order,
+  OrderFeeLineInput,
+  OrderUpdateRequest,
+  orderApi,
+  storeEditableFeeLines,
+  systemOwnedFeeLines,
+} from '@/entities/order';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerHeadingText, customerLabel } from '../lib/customerLabel';
 import { CastSearchCombobox } from './CastSearchCombobox';
+import { OrderFeeLinesField } from './OrderFeeLinesField';
 import {
   Button,
   Dialog,
@@ -43,14 +51,16 @@ interface OrderEditFormValues {
   arrival_scheduled_start_time: string;
   arrival_scheduled_end_time: string;
   pax: string;
+  /** 適用されたコース名の写し。基本コース料金の明細を置くなら必須になる。 */
+  course_name: string;
   course_minutes: string;
   extension_minutes: string;
+  /** 会計内訳。行に同一性は無く、送った内容がそのまま新しい内訳になる。 */
+  fee_lines: OrderFeeLineInput[];
   location_address: string;
   location_building: string;
   carrier: string;
   media_name: string;
-  discount_name: string;
-  manual_discount: string;
   remarks: string;
   cast_driver_message: string;
   contact_name: string;
@@ -72,14 +82,14 @@ const EMPTY_VALUES: OrderEditFormValues = {
   arrival_scheduled_start_time: '',
   arrival_scheduled_end_time: '',
   pax: '',
+  course_name: '',
   course_minutes: '',
   extension_minutes: '',
+  fee_lines: [],
   location_address: '',
   location_building: '',
   carrier: '',
   media_name: '',
-  discount_name: '',
-  manual_discount: '',
   remarks: '',
   cast_driver_message: '',
   contact_name: '',
@@ -107,6 +117,20 @@ function optionalDate(value: string): string | undefined {
   return value === '' ? undefined : value;
 }
 
+/** 基本コース料金の名称はサーバがコース名の写しから採るため、行の名称は送らない。 */
+function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineInput[] {
+  return lines.map(line => ({
+    kind: line.kind,
+    name: line.kind === 'BASE_COURSE' ? undefined : line.name,
+    amount: line.amount,
+  }));
+}
+
+/** 播いた内訳から変わったか。行の集合には「触ったか」の真偽が付かないので、値そのものを突き合わせる。 */
+function feeLinesChanged(current: OrderFeeLineInput[], seeded: OrderFeeLineInput[]): boolean {
+  return JSON.stringify(toFeeLineInputs(current)) !== JSON.stringify(toFeeLineInputs(seeded));
+}
+
 /**
  * 触った欄の項目だけを残す。欄の名前は契約の項目名と同じなので、対応表を別に持たずに名前で引ける。
  *
@@ -115,7 +139,9 @@ function optionalDate(value: string): string | undefined {
  */
 function pickEdited(
   edited: OrderUpdateRequest,
-  dirtyFields: Partial<Record<keyof OrderEditFormValues, boolean>>
+  // 明細の印は行ごとの入れ子（真偽ではない）になるため、真偽に狭めず素の値の真偽性で見る。
+  // 明細そのものはここを通らず、播いた内容との突き合わせで運ぶかを決める。
+  dirtyFields: Partial<Record<keyof OrderEditFormValues, unknown>>
 ): OrderUpdateRequest {
   // 絞り込んでも項目の型は変わらないが、Object.fromEntries は索引署名しか名乗れないため写し直す
   return Object.fromEntries(
@@ -161,7 +187,7 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
   ];
 
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
-  const { handleSubmit, control, reset, formState } = form;
+  const { handleSubmit, control, reset, watch, formState } = form;
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
   // レンダー中に読むのは、react-hook-form が formState の購読をこの読み取りで決めるため
   const { dirtyFields } = formState;
@@ -189,14 +215,14 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
       arrival_scheduled_start_time: toTimeInput(current.arrival_scheduled_start_time),
       arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
       pax: current.pax != null ? String(current.pax) : '',
+      course_name: current.course_name ?? '',
       course_minutes: current.course_minutes != null ? String(current.course_minutes) : '',
       extension_minutes: current.extension_minutes != null ? String(current.extension_minutes) : '',
+      fee_lines: storeEditableFeeLines(current.fee_lines),
       location_address: current.location_address ?? '',
       location_building: current.location_building ?? '',
       carrier: current.carrier ?? '',
       media_name: current.media_name ?? '',
-      discount_name: current.discount_name ?? '',
-      manual_discount: current.manual_discount != null ? String(current.manual_discount) : '',
       remarks: current.remarks ?? '',
       cast_driver_message: current.cast_driver_message ?? '',
       contact_name: current.contact_name ?? '',
@@ -220,14 +246,13 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
       arrival_scheduled_start_time: optionalTime(values.arrival_scheduled_start_time),
       arrival_scheduled_end_time: optionalTime(values.arrival_scheduled_end_time),
       pax: optionalNumber(values.pax),
+      course_name: values.course_name.trim(),
       course_minutes: optionalNumber(values.course_minutes),
       extension_minutes: optionalNumber(values.extension_minutes),
       location_address: values.location_address.trim(),
       location_building: values.location_building.trim(),
       carrier: values.carrier.trim(),
       media_name: values.media_name.trim(),
-      discount_name: values.discount_name.trim(),
-      manual_discount: optionalNumber(values.manual_discount),
       remarks: values.remarks.trim(),
       cast_driver_message: values.cast_driver_message.trim(),
       // 顧客が着いた受注へ送るとサーバが撥ねる。着いていない受注でだけ運ぶ
@@ -247,6 +272,11 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
         : current.receptionist_id,
       cast_id: values.cast_id || current.cast_id,
       ...pickEdited(edited, dirtyFields),
+      // 明細は行の集合なので、他の欄のような「触ったか」の真偽が付かない。播いた内容と
+      // 突き合わせて、変わったときだけ運ぶ（送れば内訳ごと差し替わるため）。
+      ...(feeLinesChanged(values.fee_lines, storeEditableFeeLines(current.fee_lines))
+        ? { fee_lines: toFeeLineInputs(values.fee_lines) }
+        : {}),
     };
     try {
       const updated = await orderApi.update(orderId, request);
@@ -436,29 +466,21 @@ export function OrderEditModal({ order, onClose, onSaved }: OrderEditModalProps)
                   />
                   <FormField
                     control={control}
-                    name="discount_name"
+                    name="course_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>割引</FormLabel>
+                        <FormLabel>コース名</FormLabel>
                         <FormControl>
-                          <Input type="text" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="manual_discount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>手動割引</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
+                          <Input type="text" maxLength={255} {...field} />
                         </FormControl>
                       </FormItem>
                     )}
                   />
                 </div>
+                <OrderFeeLinesField
+                  systemLines={systemOwnedFeeLines(current?.fee_lines)}
+                  courseName={watch('course_name')}
+                />
               </section>
 
               <section className="space-y-3">

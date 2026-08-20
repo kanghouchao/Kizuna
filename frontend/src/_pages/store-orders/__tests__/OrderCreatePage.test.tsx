@@ -3,6 +3,8 @@ import CreateOrderPage from '../ui/OrderCreatePage';
 import { orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
+  // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
+  ...jest.requireActual('@/entities/order'),
   orderApi: {
     create: jest.fn(),
     listReceptionists: jest.fn(),

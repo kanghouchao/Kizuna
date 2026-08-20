@@ -39,11 +39,15 @@ export default function CreateOrderPage() {
         // 空欄は「未入力」として送らない — Number('') は 0 になり、サーバ側の @Min(1) に撥ねられる
         pax: `${data.pax ?? ''}` === '' ? undefined : Number(data.pax),
         reception_route: data.receptionRoute,
+        course_name: data.courseName,
         course_minutes: Number(data.courseMinutes),
         extension_minutes: Number(data.extensionMinutes),
-        option_codes: data.options || [],
-        discount_name: data.discountName,
-        manual_discount: Number(data.manualDiscount),
+        // 基本コース料金の名称はサーバがコース名の写しから採るため、行の名称は送らない
+        fee_lines: data.fee_lines.map(line => ({
+          kind: line.kind,
+          name: line.kind === 'BASE_COURSE' ? undefined : line.name,
+          amount: line.amount,
+        })),
         carrier: data.carrier,
         media_name: data.mediaName,
         remarks: data.remarks,
