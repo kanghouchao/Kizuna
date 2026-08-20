@@ -219,7 +219,7 @@ public class OrderService {
   public OrderResponse create(OrderCreateRequest request, String actorEmail) {
     // Web 申請の経路（MEMBER_WEB / GUEST_WEB）は申請の確定だけが書く値。台帳を触るより先に撥ねる —
     // 広告費と効果集計の根拠になる記録が代理入力で偽装されると、後から申請と手入力を切り分ける手立てが無い。
-    if (request.getReceptionRoute() != null && request.getReceptionRoute().isWebApplication()) {
+    if (request.getReceptionRoute() != null && !request.getReceptionRoute().isStoreSelectable()) {
       throw new ServiceException("受付経路に Web 申請は指定できません。予約申請の確定だけが MEMBER_WEB / GUEST_WEB を名乗ります");
     }
 
@@ -486,12 +486,11 @@ public class OrderService {
   }
 
   /**
-   * ゲスト申請の受注が着く当店の顧客を、店員の判断のまま決める。既存の行を名指すか新しく起こすかの二択で、 どちらも無ければ顧客未設定のまま成立させ、申請の連絡先を受注側へ写す。
+   * ゲスト申請の受注が着く当店の顧客を、店員の判断のまま決める。既存の行を名指すか新しく起こすかの二択で、 どちらも無ければ顧客未設定のまま成立させ、申請の連絡先を受注側へ写す
+   * （写さないと折返し先がどこにも残らない）。
    *
-   * <p>電話番号での自動照合は行わない（ADR 0009）。同店同号は正規に起こりうるうえ、一致行の中に 会員関連付きの行があり得る以上、機械が 1
-   * 行を選ぶことが誤帰属・なりすましの入口になる。認めた常客だけを 台帳へ載せられるのは、その客を知っている店員である。
-   *
-   * <p>連絡先を写すのは、写さないと台帳にも受注にも残らないまま申請者の折返し先が消えるため。
+   * <p>電話番号での自動照合は行わない（ADR 0009）— 同店同号は正規に起こりうるうえ、一致行に会員関連付きの行があり得る以上、 機械が 1
+   * 行を選ぶことが誤帰属・なりすましの入口になる。この判断の根拠を述べるのはここだけで、他の層は繰り返さない。
    */
   private void linkCustomerChosenByStaff(
       Order order, OrderApplication application, OrderApplicationConfirmationRequest request) {

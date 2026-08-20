@@ -7,6 +7,7 @@ import {
   ORDER_STATUS_LABELS,
   OrderWorkQueueRow,
   WEB_APPLICATION_ROUTE_LABELS,
+  isWebApplicationRoute,
   orderApi,
 } from '@/entities/order';
 import { getApiErrorMessage, requireId } from '@/shared/lib';
@@ -114,8 +115,8 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
             >
               {ORDER_STATUS_LABELS[order.status ?? 'CONFIRMED']}
             </Badge>
-            {/* 受付経路が入口ごとに分かれているため、由来の判定はこの値だけで足りる */}
-            {order.reception_route && order.reception_route !== 'PHONE' && (
+            {/* 表示を持つ経路だけを出す。「電話でない」で選ると、経路が増えた日に名札の無い値が入り込む */}
+            {order.reception_route && isWebApplicationRoute(order.reception_route) && (
               <Badge
                 variant="outline"
                 className="border-transparent bg-primary/10 text-primary-strong"

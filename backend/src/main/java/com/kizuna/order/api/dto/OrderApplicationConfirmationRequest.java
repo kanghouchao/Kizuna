@@ -49,10 +49,7 @@ public class OrderApplicationConfirmationRequest {
   /** ゲスト申請の受注のために新しく起こす台帳行。画面は申請の連絡先を予填する。 */
   @Valid private NewCustomer newCustomer;
 
-  /**
-   * 新規に起こす台帳行の入力。電話番号での自動照合は行わない（ADR 0009）— 機械が 1 行を選ぶことが誤帰属の入口になるため、 既存の行へ着けるかどうかは店員が {@link
-   * #customerId} で名指す。
-   */
+  /** 新規に起こす台帳行の入力。既存の行へ着けるかどうかは店員が {@link #customerId} で名指す。 */
   @Data
   public static class NewCustomer {
 
