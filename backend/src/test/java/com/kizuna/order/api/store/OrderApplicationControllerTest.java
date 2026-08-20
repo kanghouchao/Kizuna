@@ -211,6 +211,31 @@ class OrderApplicationControllerTest {
   }
 
   @Test
+  @DisplayName("列長を超える新規顧客の氏名・電話番号は 400 で撥ねられること（DB のエラーにしない）")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void confirmationWithAnOverlongNewCustomerIsRejected() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    String overlongName =
+        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"new_customer\": {\"name\": \""
+            + "あ".repeat(256)
+            + "\"}}";
+    mockMvc
+        .perform(storePost("/store/order-applications/a1/confirmation", overlongName))
+        .andExpect(status().isBadRequest());
+
+    String overlongPhone =
+        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"new_customer\": {\"name\": \"ゲスト花子\","
+            + " \"phone_number\": \""
+            + "1".repeat(51)
+            + "\"}}";
+    mockMvc
+        .perform(storePost("/store/order-applications/a1/confirmation", overlongPhone))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderService);
+  }
+
+  @Test
   @DisplayName("受付箱の行に台帳・会計の項目が存在しないこと（申請は受注の前室に閉じる）")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void applicationRowCarriesOnlyApplicationFields() throws Exception {
@@ -271,6 +296,27 @@ class OrderApplicationControllerTest {
         .andExpect(status().isBadRequest());
 
     // 折返し先の無い申請は処理のしようがないため、行を起こす前に撥ねる
+    verifyNoInteractions(guestOrderApplicationService);
+  }
+
+  @Test
+  @DisplayName("列長を超えるゲスト予約申請の連絡先は 400 で撥ねられること（DB のエラーにしない）")
+  void guestRequestWithAnOverlongContactIsRejected() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
+
+    String overlongName =
+        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"contact_name\": \""
+            + "あ".repeat(256)
+            + "\", \"contact_phone_number\": \"09000000000\"}";
+    mockMvc.perform(guestPost(overlongName)).andExpect(status().isBadRequest());
+
+    String overlongPhone =
+        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"contact_name\": \"ゲスト花子\","
+            + " \"contact_phone_number\": \""
+            + "1".repeat(51)
+            + "\"}";
+    mockMvc.perform(guestPost(overlongPhone)).andExpect(status().isBadRequest());
     verifyNoInteractions(guestOrderApplicationService);
   }
 

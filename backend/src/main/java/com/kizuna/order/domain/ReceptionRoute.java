@@ -9,8 +9,8 @@ public enum ReceptionRoute {
   /** 店舗が電話で受け付けた予約。 */
   PHONE;
 
-  /** Web 申請の確定だけが名乗る値か。店舗・HQ の作成経路はこの群を拒否する。 */
-  public boolean isWebApplication() {
-    return this == MEMBER_WEB || this == GUEST_WEB;
+  /** 店舗・HQ が受注の作成で名乗ってよい経路か。許す値を数え上げる形にしてあるのは、値が増えたときに 既定で拒否側へ倒すため — 拒否する値を数え上げると、新しい値が守衛を素通りする。 */
+  public boolean isStoreSelectable() {
+    return this == PHONE;
   }
 }

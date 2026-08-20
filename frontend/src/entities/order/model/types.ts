@@ -17,6 +17,13 @@ export const WEB_APPLICATION_ROUTE_LABELS: Record<WebApplicationReceptionRoute, 
   GUEST_WEB: 'ゲスト申請',
 };
 
+/** 申請由来の経路か。表示を持つ値を数え上げる形なので、経路が増えても名札の無い値は入り込まない。 */
+export function isWebApplicationRoute(
+  route: ReceptionRoute
+): route is WebApplicationReceptionRoute {
+  return route in WEB_APPLICATION_ROUTE_LABELS;
+}
+
 /** 受注ステータスの日本語表示。 */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   CONFIRMED: '確定',
@@ -343,7 +350,7 @@ export interface OrderApplicationConfirmationRequest {
    * 会員申請では受け付けられない（顧客は会員の紐づけが決める）。
    */
   customer_id?: string;
-  /** ゲスト申請の受注のために新しく起こす台帳行。電話番号での自動照合は行われない。 */
+  /** ゲスト申請の受注のために新しく起こす台帳行。 */
   new_customer?: {
     name: string;
     phone_number?: string;

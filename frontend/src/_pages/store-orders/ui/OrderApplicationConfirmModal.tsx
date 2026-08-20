@@ -38,7 +38,7 @@ const CUSTOMER_MODE_OPTIONS = [
   { value: 'new', label: '新規に台帳へ登録する' },
 ];
 
-/** 確定時の顧客の決め方。電話番号での自動照合は行わないため、選ぶのは常に店員である。 */
+/** 確定時の顧客の決め方。選ぶのは常に店員である。 */
 type CustomerMode = 'none' | 'existing' | 'new';
 
 interface ConfirmFormValues {
@@ -383,8 +383,6 @@ export function OrderApplicationConfirmModal({
             </div>
             {isGuest && (
               <div className="grid gap-3 rounded-md border p-3">
-                {/* 電話番号での自動照合は行わない。機械が 1 行を選ぶことが誤帰属・なりすましの入口になる
-                    ため、常客と認めた店員だけが既存の台帳行へ着けられる */}
                 <FormField
                   control={control}
                   name="customer_mode"
