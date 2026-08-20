@@ -49,6 +49,8 @@ interface ConfirmFormValues {
   arrival_scheduled_end_time: string;
   pax: number;
   /** '' はコース未定。 */
+  /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。 */
+  course_name: string;
   course_minutes: string;
   remarks: string;
   /** 指名するキャストの id。'' は指名なし。 */
@@ -92,6 +94,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_start_time: '',
       arrival_scheduled_end_time: '',
       pax: 1,
+      course_name: '',
       course_minutes: '',
       remarks: '',
       cast_id: '',
@@ -151,6 +154,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_start_time: application.arrival_scheduled_start_time?.slice(0, 5) ?? '',
       arrival_scheduled_end_time: '',
       pax: application.pax ?? 1,
+      course_name: '',
       course_minutes: '',
       remarks: application.remarks ?? '',
       cast_id: application.cast_id ?? '',
@@ -177,6 +181,7 @@ export function OrderApplicationConfirmModal({
         arrival_scheduled_end_time: values.arrival_scheduled_end_time || undefined,
         cast_id: values.clear_cast || !values.cast_id ? undefined : values.cast_id,
         pax: Number(values.pax),
+        course_name: values.course_name.trim() === '' ? undefined : values.course_name.trim(),
         course_minutes: values.course_minutes ? Number(values.course_minutes) : undefined,
         remarks: values.remarks ? values.remarks : undefined,
         // 顧客の選択はゲスト申請だけが送る。会員申請へ送るとサーバが撥ねる（顧客は会員の紐づけが決める）
@@ -331,6 +336,19 @@ export function OrderApplicationConfirmModal({
                   <FormLabel>人数</FormLabel>
                   <FormControl>
                     <Input type="number" min={1} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name="course_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>コース名（任意）</FormLabel>
+                  <FormControl>
+                    <Input maxLength={255} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

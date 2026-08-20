@@ -8,6 +8,7 @@ import {
   OrderFeeLine,
   OrderFeeLineInput,
   OrderFeeLineKind,
+  feeLinesTotal,
 } from '@/entities/order';
 import { integerRule } from '@/shared/lib';
 import {
@@ -37,18 +38,6 @@ const KIND_ITEMS = ORDER_FEE_LINE_STORE_KINDS.map(kind => ({
   value: kind,
   label: ORDER_FEE_LINE_KIND_LABELS[kind],
 }));
-
-/** 明細の総和（表示上の値から符号を戻して足す）。合計の正本はサーバ側の導出で、これは入力中の目安。 */
-export function feeLinesTotal(lines: OrderFeeLineInput[]): number {
-  return lines.reduce((sum, line) => {
-    const amount = Number.isNaN(line.amount) ? 0 : line.amount;
-    return sum + (isDeduction(line.kind) ? -amount : amount);
-  }, 0);
-}
-
-function isDeduction(kind: OrderFeeLineKind): boolean {
-  return kind === 'DISCOUNT' || kind === 'POINT_REDEMPTION';
-}
 
 interface OrderFeeLinesFieldProps {
   /**

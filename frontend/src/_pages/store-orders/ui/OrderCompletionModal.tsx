@@ -7,13 +7,14 @@ import {
   Order,
   OrderCompletionPreview,
   OrderFeeLineInput,
+  feeLinesTotal,
   orderApi,
   storeEditableFeeLines,
   systemOwnedFeeLines,
 } from '@/entities/order';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
-import { OrderFeeLinesField, feeLinesTotal } from './OrderFeeLinesField';
+import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
 import {
   Button,

@@ -69,15 +69,6 @@ export const ORDER_FEE_LINE_KIND_LABELS: Record<OrderFeeLineKind, string> = {
   CREDIT_SURCHARGE: 'クレジット加算',
 };
 
-/** 符号が減算に固定された種別。入力も表示も正値（引くことは種別が表す）。 */
-export const ORDER_FEE_LINE_DEDUCTION_KINDS: readonly OrderFeeLineKind[] = [
-  'DISCOUNT',
-  'POINT_REDEMPTION',
-];
-
-/** 完了処理だけが書く種別。店舗の編集では作れも消せもしない。 */
-export const ORDER_FEE_LINE_SYSTEM_OWNED_KINDS: readonly OrderFeeLineKind[] = ['POINT_REDEMPTION'];
-
 /** 店舗が手入力できる種別。基本コース料金の名称はコース名の写しから採るため、行の名称は送らない。 */
 export const ORDER_FEE_LINE_STORE_KINDS: readonly OrderFeeLineKind[] = [
   'BASE_COURSE',
@@ -415,6 +406,8 @@ export interface OrderApplicationConfirmationRequest {
   /** 指名するキャスト。省略は指名なし（会員は指名なしで申請できるため、確定でも強制しない）。 */
   cast_id?: string;
   pax?: number;
+  /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。 */
+  course_name?: string;
   course_minutes?: number;
   remarks?: string;
   /**

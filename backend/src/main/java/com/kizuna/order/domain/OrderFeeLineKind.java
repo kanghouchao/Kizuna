@@ -66,11 +66,15 @@ public enum OrderFeeLineKind {
 
   /** 表示上の金額を保存する帯符号金額へ翻す。 */
   public int signedAmountOf(int displayedAmount) {
-    return isDeduction() ? -displayedAmount : displayedAmount;
+    return flipIfDeduction(displayedAmount);
   }
 
-  /** 保存された帯符号金額を表示上の金額へ翻す。 */
+  /** 保存された帯符号金額を表示上の金額へ翻す。翻しは自己逆なので、向きの違う 2 つの名前が同じ算術を指す。 */
   public int displayedAmountOf(int signedAmount) {
-    return isDeduction() ? -signedAmount : signedAmount;
+    return flipIfDeduction(signedAmount);
+  }
+
+  private int flipIfDeduction(int amount) {
+    return isDeduction() ? -amount : amount;
   }
 }
