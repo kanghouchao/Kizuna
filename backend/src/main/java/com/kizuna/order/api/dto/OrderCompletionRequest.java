@@ -24,7 +24,7 @@ public class OrderCompletionRequest {
 
   @NotNull(message = "会計の内訳は必須です")
   @Valid
-  private List<OrderFeeLineRequest> feeLines;
+  private List<@NotNull(message = "明細の要素は必須です") OrderFeeLineRequest> feeLines;
 
   @Min(value = 1, message = "利用ポイントは 1 以上です")
   private Integer usePoints;

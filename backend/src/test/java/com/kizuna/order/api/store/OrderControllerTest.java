@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -179,6 +181,20 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.receipt_token").value("raw-token"))
         .andExpect(jsonPath("$.id").doesNotExist())
         .andExpect(jsonPath("$.status").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("明細の要素が null の完了要求は 400 で撥ねられること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionRejectsANullFeeLineElement() throws Exception {
+    // 要素の null は契約の段で止める。素通しすると写像が null を触って 500 に化ける
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/completion", "{\"fee_lines\":[null]}"))
+        .andExpect(status().isBadRequest());
+
+    verify(orderService, never()).complete(any(), any(), any());
   }
 
   @Test

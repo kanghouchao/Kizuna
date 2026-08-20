@@ -82,7 +82,7 @@ public class OrderCreateRequest {
   private Integer extensionMinutes;
 
   /** 受注金額の内訳。省略は「内訳なし」で、合計は 0 になる。 */
-  @Valid private List<OrderFeeLineRequest> feeLines;
+  @Valid private List<@NotNull(message = "明細の要素は必須です") OrderFeeLineRequest> feeLines;
 
   /**
    * 受付経路。実際の受付手段を記録する値で、未指定は「不明」を意味する（既定値で補完しない）。

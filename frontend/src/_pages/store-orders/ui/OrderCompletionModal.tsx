@@ -101,17 +101,30 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   const [committed, setCommitted] = useState<{ orderId: string; fee: number } | null>(null);
   const committedFee = committed !== null && committed.orderId === orderId ? committed.fee : 0;
 
-  // 閉じている間は取りに行かない（開いた時点で取り直す）
+  // 播種は行ではなく詳細の読み口から取る。この面は作業キューの行から開かれ、行は明細もコース名も
+  // 持たない（一覧と詳細の DTO は分かれている）。行だけで播くと、内訳のある受注が空行で開き、
+  // そのまま完了すると既存の内訳を丸ごと上書きして失う。
+  const { data: detail } = useResource<Order>(
+    order === null ? null : () => orderApi.get(order.id),
+    [orderId]
+  );
+  // 播き終えた受注。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
+  // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
+  const [seededId, setSeededId] = useState<string | null>(null);
+  const seeded = seededId === orderId && orderId !== '';
+
+  // 閉じている間は取りに行かない（開いた時点で取り直す）。播く前に取りに行かないのは、
+  // 内訳が入る前の総和 0 で見込みを引くと、明細のある受注の付与予定が最初の 1 画面だけ 0 で出るため。
   const {
     data: snapshot,
     isLoading: previewLoading,
     failure: previewFailure,
     reload: reloadPreview,
   } = useResource<PreviewSnapshot>(
-    order === null
+    order === null || !seeded
       ? null
       : async () => ({ orderId, body: await orderApi.completionPreview(order.id, committedFee) }),
-    [orderId, committedFee]
+    [orderId, committedFee, seeded]
   );
   // 別の受注へ切り替わった瞬間は見込みを持たない状態から始める（レンダー期の判定なので、前の受注の
   // 紐づけで欄の可否や送信可否を決めるフレームが 1 つも無い）。同じ受注で金額を取り直している間だけ
@@ -123,19 +136,32 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   const [issued, setIssued] = useState<IssuedReceiptToken | null>(null);
   const receiptToken = issued !== null && issued.orderId === orderId ? issued.token : null;
 
+  // 開き直したら播種をやり直す。useResource は取りに行かない間も持っている値を残すので、印を消さないと
+  // 取り直しの完了を待たずに前の受注の内訳が出る。
+  //
+  // 発行済みの QR もここで戻す。播種の効果に委ねると、取り直しが同じ値を返して効果が走らなかった
+  // ときに「今だけ表示できる」と書いた画面が前の QR を出し直す。
   useEffect(() => {
-    if (!order) return;
-    const existing = storeEditableFeeLines(order.fee_lines);
+    setSeededId(null);
+    setIssued(null);
+  }, [orderId]);
+
+  // 取得できたら播く。取得の到着はレンダーより後なので、初期値ではなく効果で入れる。
+  // 播き直しの引き金は印であって取得値の同一性ではない — 同じ受注を開き直すと useResource が
+  // 前と同じ値を返しうるので、値だけを見ていると印を消しても播き直らずフォームが出ない。
+  useEffect(() => {
+    if (detail === null || detail.id !== orderId || seededId === orderId) return;
+    const existing = storeEditableFeeLines(detail.fee_lines);
     reset({
-      course_name: order.course_name ?? '',
+      course_name: detail.course_name ?? '',
       fee_lines: existing.length > 0 ? existing : [EMPTY_FEE_LINE],
       use_points: NaN,
     });
-    // 確定値も欄と一緒に戻す。同じ受注を開き直したとき、空の欄のまま前回の金額で付与予定が出る
-    setCommitted(null);
-    // 発行済みの QR も一緒に戻す。「今だけ表示できる」と書いた画面が、開き直しで前の QR を出し直さない
-    setIssued(null);
-  }, [order, reset]);
+    // 見込みの基準も播いた内訳の総和から始める。0 のままだと、明細のある受注の付与予定が
+    // 欄を離れるまで嘘になる
+    setCommitted({ orderId, fee: feeLinesTotal(existing) });
+    setSeededId(orderId);
+  }, [detail, orderId, seededId, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
     if (!order) return;
@@ -144,7 +170,9 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;
     try {
       const completed = await orderApi.complete(order.id, {
-        course_name: values.course_name.trim() === '' ? undefined : values.course_name,
+        // 空欄はそのまま空文字で送る。undefined はキーごと落ちてサーバが「変更しない」と読むため、
+        // 消したい意図が黙って捨てられる（他の文字列項目と同じ作法）。
+        course_name: values.course_name.trim(),
         fee_lines: toFeeLineInputs(values.fee_lines),
         // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
         // （undefined は JSON 化の段でキーごと消える）。
@@ -191,6 +219,9 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
             claimNote="お客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（完了から 90 日以内）。"
             onClose={onClose}
           />
+        ) : !seeded ? (
+          // 播く前は出さない。空欄のフォームを 1 フレームでも見せると、そのまま送って既存の内訳を消せる
+          <p className="px-6 py-5 text-sm text-muted-foreground">読み込み中...</p>
         ) : (
           <Form {...form}>
             {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、

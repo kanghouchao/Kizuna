@@ -7,6 +7,7 @@ jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
   ...jest.requireActual('@/entities/order'),
   orderApi: {
+    get: jest.fn(),
     complete: jest.fn(),
     completionPreview: jest.fn(),
   },
@@ -23,6 +24,7 @@ jest.mock('qrcode.react', () => ({
   ),
 }));
 
+const mockedGet = orderApi.get as jest.Mock;
 const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
@@ -55,6 +57,54 @@ describe('OrderCompletionModal', () => {
       grant_points: 50,
     });
     mockedComplete.mockResolvedValue(confirmedOrder);
+    // 完了モーダルは作業キューの行から開かれる。行は明細もコース名も持たないので、
+    // 播種は詳細の読み口から取り直す（既存の内訳を空で上書きしないため）。
+    mockedGet.mockImplementation(async (id: string) => ({ ...confirmedOrder, id }));
+  });
+
+  it('作業キューの行から開いても、既存の内訳を詳細の読み口から播き直す', async () => {
+    // 行は fee_lines も course_name も持たない。行だけで播くと、明細のある受注が空行で開き、
+    // そのまま完了すると既存の内訳を丸ごと上書きして失う
+    mockedGet.mockResolvedValue({
+      ...confirmedOrder,
+      course_name: '90 分コース',
+      fee_lines: [
+        { kind: 'BASE_COURSE', name: '90 分コース', amount: 18000, system_owned: false },
+        { kind: 'OPTION', name: '指名', amount: 2000, system_owned: false },
+      ],
+    });
+    const queueRow: Order = { id: 'o1', status: 'CONFIRMED', customer_name: '山田太郎' };
+
+    render(<OrderCompletionModal order={queueRow} onClose={jest.fn()} onCompleted={jest.fn()} />);
+
+    expect(await screen.findByLabelText('コース名')).toHaveValue('90 分コース');
+    expect(screen.getByLabelText('明細2の名称')).toHaveValue('指名');
+    expect(mockedGet).toHaveBeenCalledWith('o1');
+  });
+
+  it('播いた内訳の総和で初回の見込みを取る', async () => {
+    // committed の初期値を 0 のままにすると、明細のある受注の付与予定が最初の 1 画面だけ 0 で出る
+    mockedGet.mockResolvedValue({
+      ...confirmedOrder,
+      fee_lines: [{ kind: 'OPTION', name: '指名', amount: 12000, system_owned: false }],
+    });
+
+    renderModal();
+
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledWith('o1', 12000));
+    expect(mockedPreview).not.toHaveBeenCalledWith('o1', 0);
+  });
+
+  it('コース名を空にしたら、省略ではなく空文字で送って消せる', async () => {
+    // undefined はキーごと落ちてサーバが「変更しない」と読むため、消したい意図が黙って捨てられる
+    mockedGet.mockResolvedValue({ ...confirmedOrder, course_name: '90 分コース' });
+    renderModal();
+
+    fireEvent.change(await screen.findByLabelText('コース名'), { target: { value: '' } });
+    await completeWith('8000');
+
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
+    expect(mockedComplete.mock.calls[0][1].course_name).toBe('');
   });
 
   it('閉じている間は事前計算を取りに行かない', () => {
@@ -110,7 +160,8 @@ describe('OrderCompletionModal', () => {
     );
 
     expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
-    expect(mockedPreview).toHaveBeenLastCalledWith('o2', 0);
+    // 見込みは播種の後に走る。播く前に引くと、内訳の入る前の総和で付与予定が嘘になる
+    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o2', 0));
     expect(screen.queryByLabelText('利用ポイント')).not.toBeInTheDocument();
   });
 
@@ -241,7 +292,7 @@ describe('OrderCompletionModal', () => {
 
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     expect(mockedComplete.mock.calls[0][1]).toEqual({
-      course_name: undefined,
+      course_name: '',
       fee_lines: [{ kind: 'OPTION', name: '会計', amount: 8000 }],
       use_points: 200,
     });

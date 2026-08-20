@@ -242,6 +242,9 @@ public class Order extends StoreScopedEntity {
       this.pax = patch.pax();
     }
     if (patch.courseName() != null) {
+      // 基本コース料金の行名称はコース名の写しなので、明細を伴わない更新でも追随させる。
+      // 取り残すと同じ受注が二つのコース名を主張する。
+      renameBaseCourseLines(patch.courseName());
       this.courseName = patch.courseName();
     }
     if (patch.courseMinutes() != null) {
@@ -300,6 +303,23 @@ public class Order extends StoreScopedEntity {
     feeLines.removeIf(line -> !line.getKind().isSystemOwned());
     feeLines.addAll(replaced);
     recalculateTotalFee();
+  }
+
+  /**
+   * 基本コース料金の行の名称を新しいコース名へ揃える。
+   *
+   * <p>行が在るのにコース名を空へ直す要求は撥ねる — 名称の必須を破るうえ、その受注が適用したコースが読めなくなる。
+   */
+  private void renameBaseCourseLines(String newCourseName) {
+    List<OrderFeeLine> baseCourseLines =
+        feeLines.stream().filter(line -> line.getKind() == OrderFeeLineKind.BASE_COURSE).toList();
+    if (baseCourseLines.isEmpty()) {
+      return;
+    }
+    if (newCourseName.isBlank()) {
+      throw new InvalidOrderFeeLineException("基本コース料金の明細があるためコース名は空にできません");
+    }
+    baseCourseLines.forEach(line -> line.renameTo(newCourseName));
   }
 
   private String lineNameFor(OrderFeeLineDraft draft) {
