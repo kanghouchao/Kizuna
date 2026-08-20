@@ -52,6 +52,7 @@ import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionSource;
 import com.kizuna.order.domain.OrderAttributionStatus;
+import com.kizuna.order.domain.OrderFeeLineDraft;
 import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderQueryCriteria;
@@ -981,6 +982,33 @@ class OrderServiceTest {
     assertThat(confirmed.getPax()).isEqualTo(4);
     assertThat(confirmed.getReceptionistId()).as("未設定のままであること").isNull();
     verify(platformUserRepository, never()).findById(any());
+  }
+
+  @Test
+  void updateClearsTheBreakdownWhenTheRequestCarriesAnEmptyFeeLineList() {
+    // 空配列は「内訳を空にする」で、省略（null）だけが「変更しない」。取り違えると内訳を消す口が消える。
+    // 指名・受付担当を添えるのは、既に付いている受注では省略が「外す」と区別できず撥ねられるため
+    // （汎用更新の契約）— 内訳だけを送る要求はこの守衛に先に捕まる。
+    Order storeOrder =
+        Order.builder().status(OrderStatus.CONFIRMED).castId("g1").receptionistId(1L).build();
+    storeOrder.replaceStoreFeeLines(
+        List.of(new OrderFeeLineDraft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+    assertThat(storeOrder.getTotalFee()).as("前提: 内訳と合計が入っていること").isEqualTo(2000);
+
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+    when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
+        .thenReturn(OrderPatch.ofAccounting(null, List.of()));
+    stubWriteBackResponse();
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setCastId("g1");
+    req.setReceptionistId(1L);
+    req.setFeeLines(List.of());
+
+    service.update("o1", req);
+
+    assertThat(storeOrder.getFeeLines()).isEmpty();
+    assertThat(storeOrder.getTotalFee()).as("内訳が空なら合計も 0 であること").isZero();
   }
 
   @Test

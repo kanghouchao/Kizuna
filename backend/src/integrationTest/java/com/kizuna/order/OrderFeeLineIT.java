@@ -87,6 +87,8 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
             "\"fee_lines\": [{\"kind\": \"POINT_REDEMPTION\", \"name\": \"ポイント利用\", \"amount\": 300}]");
 
     assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    // 理由まで縛る。指名・受付担当の守衛も 400 を返すため、状態だけ見ると別の理由で緑になる
+    assertThat(rejected.getBody().path("error").asString()).contains("ポイント利用の明細");
     assertThat(storedLineCount(orderId)).isZero();
   }
 
@@ -95,18 +97,18 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
   void theAggregateRefusesAmountsThatContradictTheKind() {
     String orderId = createOrder("\"fee_lines\": []");
 
-    assertThat(
-            update(
-                    orderId,
-                    "\"fee_lines\": [{\"kind\": \"DISCOUNT\", \"name\": \"割引\", \"amount\": -1}]")
-                .getStatusCode())
-        .isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(
-            update(
-                    orderId,
-                    "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"追加\", \"amount\": -1}]")
-                .getStatusCode())
-        .isEqualTo(HttpStatus.BAD_REQUEST);
+    ResponseEntity<JsonNode> negativeDiscount =
+        update(
+            orderId, "\"fee_lines\": [{\"kind\": \"DISCOUNT\", \"name\": \"割引\", \"amount\": -1}]");
+    assertThat(negativeDiscount.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    // 減算の種別へ負値を送ると翻した先が正の割引になる。理由まで縛って別の守衛の 400 と取り違えない
+    assertThat(negativeDiscount.getBody().path("error").asString()).contains("減算の明細の金額");
+
+    ResponseEntity<JsonNode> negativeOption =
+        update(
+            orderId, "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"追加\", \"amount\": -1}]");
+    assertThat(negativeOption.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(negativeOption.getBody().path("error").asString()).contains("符号約定");
     assertThat(storedLineCount(orderId)).isZero();
   }
 
@@ -164,11 +166,26 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
     return created.getBody().path("id").asString();
   }
 
+  /**
+   * 受注を部分更新する。
+   *
+   * <p>指名と受付担当を毎回添えるのは汎用更新の契約による — 既に付いている受注では省略が「変更しない」なのか
+   * 「外す」なのか契約の側で区別できないため、要求そのものが撥ねられる。添えないと明細の規則へ届く前にその守衛で 400 になり、明細を主題にした検査が別の理由で緑にも赤にもなる。
+   */
   private ResponseEntity<JsonNode> update(String orderId, String extraFields) {
+    JsonNode current = orderJson(orderId);
+    String body =
+        "{\"cast_id\": \""
+            + current.path("cast_id").asString()
+            + "\", \"receptionist_id\": "
+            + current.path("receptionist_id").asLong()
+            + ", "
+            + extraFields
+            + "}";
     return rest.exchange(
         "/store/orders/" + orderId,
         HttpMethod.PUT,
-        new HttpEntity<>("{" + extraFields + "}", storeHeaders(STORE_A)),
+        new HttpEntity<>(body, storeHeaders(STORE_A)),
         JsonNode.class);
   }
 
