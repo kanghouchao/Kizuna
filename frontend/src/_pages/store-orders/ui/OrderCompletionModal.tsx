@@ -3,9 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { Order, OrderCompletionPreview, orderApi } from '@/entities/order';
+import {
+  Order,
+  OrderCompletionPreview,
+  OrderFeeLineInput,
+  orderApi,
+  storeEditableFeeLines,
+  systemOwnedFeeLines,
+} from '@/entities/order';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
+import { OrderFeeLinesField, feeLinesTotal } from './OrderFeeLinesField';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
 import {
   Button,
@@ -22,15 +30,17 @@ import {
   RegionError,
 } from '@/shared/ui';
 
-/** 空欄と 0 は別物なので、未入力の文言は 1 箇所に持って両方の規則から指す。 */
-const TOTAL_FEE_REQUIRED = '会計金額を入力してください';
-
 interface OrderCompletionFormValues {
-  /** 空欄は NaN。「未入力」と 0 円の会計を取り違えないため、valueAsNumber の写像をそのまま持つ。 */
-  total_fee: number;
+  /** 適用されたコース名の写し。会計の場が快照の最後の更新機会になる。 */
+  course_name: string;
+  /** 会計の内訳。合計はこの総和としてサーバが導出するので、画面に会計金額の欄は無い。 */
+  fee_lines: OrderFeeLineInput[];
   /** 空欄（NaN）は利用なし。 */
   use_points: number;
 }
+
+/** 内訳を持たない受注を開いたときの初期行。打ち始められる空の 1 行を出す。 */
+const EMPTY_FEE_LINE: OrderFeeLineInput = { kind: 'OPTION', name: '', amount: NaN };
 
 /**
  * 取得した見込みと、その取得元の受注。取得フックは取り直しの間も前の値を保つため、
@@ -68,16 +78,21 @@ interface OrderCompletionModalProps {
  */
 export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompletionModalProps) {
   const form = useForm<OrderCompletionFormValues>({
-    defaultValues: { total_fee: NaN, use_points: NaN },
+    defaultValues: { course_name: '', fee_lines: [EMPTY_FEE_LINE], use_points: NaN },
   });
   const {
     handleSubmit,
     reset,
     control,
+    watch,
     formState: { isSubmitting },
   } = form;
 
   const orderId = order?.id ?? '';
+  // 合計はサーバが行から導出する。ここで足すのは、見込みの取得と利用ポイントの上限判定に要る
+  // 「ポイント利用が入る前の総和」を手元で持つためだけ。
+  const chargeAmount = feeLinesTotal(watch('fee_lines') ?? []);
+  const courseName = watch('course_name');
   // 見込みは打鍵ごとではなく、欄を離れた時点の金額で取り直す。確定値を「どの受注で確定したか」
   // ごと持つのは、別の受注へ切り替わったフレームで前の受注の金額の見込みを出さないため
   // （欄は空に戻っているので、金額だけ残ると付与予定が嘘になる）。
@@ -108,7 +123,12 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
 
   useEffect(() => {
     if (!order) return;
-    reset({ total_fee: NaN, use_points: NaN });
+    const existing = storeEditableFeeLines(order.fee_lines);
+    reset({
+      course_name: order.course_name ?? '',
+      fee_lines: existing.length > 0 ? existing : [EMPTY_FEE_LINE],
+      use_points: NaN,
+    });
     // 確定値も欄と一緒に戻す。同じ受注を開き直したとき、空の欄のまま前回の金額で付与予定が出る
     setCommitted(null);
     // 発行済みの QR も一緒に戻す。「今だけ表示できる」と書いた画面が、開き直しで前の QR を出し直さない
@@ -122,7 +142,13 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;
     try {
       const completed = await orderApi.complete(order.id, {
-        total_fee: values.total_fee,
+        course_name: values.course_name.trim() === '' ? undefined : values.course_name,
+        // 基本コース料金の名称はサーバがコース名の写しから採るため、行の名称は送らない
+        fee_lines: values.fee_lines.map(line => ({
+          kind: line.kind,
+          name: line.kind === 'BASE_COURSE' ? undefined : line.name,
+          amount: line.amount,
+        })),
         // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
         // （undefined は JSON 化の段でキーごと消える）。
         use_points: usePoints > 0 ? usePoints : undefined,
@@ -172,44 +198,30 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
           <Form {...form}>
             {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。required と min={0} は下の規則が引き継ぐ */}
-            <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
+            <form
+              onSubmit={handleSubmit(submit)}
+              className="space-y-4 px-6 py-5"
+              noValidate
+              // 見込みは打鍵ごとではなく、欄を離れた時点の内訳で取り直す。行が増減しても
+              // 取り直しの引き金が 1 つで済むよう、個々の欄ではなくフォームの focusout で拾う。
+              onBlur={() => setCommitted({ orderId, fee: chargeAmount })}
+            >
               <FormField
                 control={control}
-                name="total_fee"
-                rules={{
-                  required: TOTAL_FEE_REQUIRED,
-                  min: { value: 0, message: '会計金額は 0 以上です' },
-                  validate: {
-                    // 空欄は NaN であって null でも空文字でもないため required は素通りする
-                    notEmpty: value => !Number.isNaN(value) || TOTAL_FEE_REQUIRED,
-                    // noValidate は type="number" の暗黙の step=1 も止める。これが無いと
-                    // 1.5 が Integer の totalFee へ届く
-                    integer: integerRule('会計金額'),
-                  },
-                }}
+                name="course_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>会計金額</FormLabel>
+                    <FormLabel>コース名</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        required
-                        min={0}
-                        {...field}
-                        // register の valueAsNumber と同じ写像。Number() は空欄を 0 にしてしまい、
-                        // 「未入力」を表す NaN が失われる。
-                        value={Number.isNaN(field.value) ? '' : field.value}
-                        onChange={event => field.onChange(event.target.valueAsNumber)}
-                        onBlur={event => {
-                          field.onBlur();
-                          const fee = event.target.valueAsNumber;
-                          setCommitted({ orderId, fee: Number.isNaN(fee) ? 0 : fee });
-                        }}
-                      />
+                      <Input {...field} maxLength={255} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+              <OrderFeeLinesField
+                systemLines={systemOwnedFeeLines(order?.fee_lines)}
+                courseName={courseName}
               />
               {/* 見込みが読めなくても送信は塞がない。単位も残高も会員資格もサーバ側が再検証する */}
               {previewLoading ? (
@@ -260,12 +272,11 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
                         value <= preview.point_balance ||
                         `残高を超えています（残高: ${preview.point_balance}）`,
                       // 請求より大きい割引に相当する利用は台帳へ積ませない。同額までは全額のポイント払い。
-                      // 金額が未入力（NaN）なら会計金額側の規則が名乗るので、ここでは重ねて名乗らない
-                      withinTotalFee: (value, values) =>
+                      // 上限は「ポイント利用が入る前の総和」で、サーバの判定と同じ基準を使う
+                      withinTotalFee: value =>
                         Number.isNaN(value) ||
-                        Number.isNaN(values.total_fee) ||
-                        value <= values.total_fee ||
-                        `会計金額を超えています（会計金額: ${values.total_fee}）`,
+                        value <= chargeAmount ||
+                        `会計金額を超えています（会計金額: ${chargeAmount}）`,
                     },
                   }}
                   render={({ field }) => (

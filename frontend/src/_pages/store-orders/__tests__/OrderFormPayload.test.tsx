@@ -5,6 +5,8 @@ import { orderApi } from '@/entities/order';
 import type { OrderReceptionist } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
+  // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
+  ...jest.requireActual('@/entities/order'),
   orderApi: {
     listReceptionists: jest.fn(),
     listCastCandidates: jest.fn(),
@@ -72,7 +74,8 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     expect(body.classification).toBe('ーー');
     expect(body.hasPet).toBe(false);
     expect(body.courseMinutes).toBe(60);
-    expect(body.discountName).toBe('');
+    expect(body.courseName).toBe('');
+    expect(body.fee_lines).toEqual([]);
   });
 
   it('受付の選択が番兵を経て素の ID 文字列で送られること', async () => {
@@ -128,25 +131,31 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     expect(typeof body.courseMinutes).toBe('number');
   });
 
-  it('割引の選択と解除が番兵を経て文字列・空文字で送られること', async () => {
+  it('追加した明細が種別・名称・金額の行としてそのまま送られること', async () => {
     const { onSubmit } = renderForm();
 
     await selectReceptionist();
-    await pickOption('割引', '一番最初割');
+    fireEvent.click(screen.getByRole('button', { name: '明細を追加' }));
+    fireEvent.change(await screen.findByLabelText('明細1の名称'), {
+      target: { value: '指名オプション' },
+    });
+    fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: '3000' } });
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.discountName).toBe('一番最初割');
+    // 金額は表示上の値。符号は種別が表すので、画面は正値しか受けない
+    expect(body.fee_lines).toEqual([{ kind: 'OPTION', name: '指名オプション', amount: 3000 }]);
   });
 
-  it('割引を「なし」へ戻すと番兵ではなく空文字で送られること', async () => {
+  it('削除した明細が送信から消えること', async () => {
     const { onSubmit } = renderForm();
 
     await selectReceptionist();
-    await pickOption('割引', '一番最初割');
-    await pickOption('割引', 'なし');
+    fireEvent.click(screen.getByRole('button', { name: '明細を追加' }));
+    fireEvent.change(await screen.findByLabelText('明細1の金額'), { target: { value: '3000' } });
+    fireEvent.click(screen.getByRole('button', { name: '明細1を削除' }));
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.discountName).toBe('');
+    expect(body.fee_lines).toEqual([]);
   });
 });
 

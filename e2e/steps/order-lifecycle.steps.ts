@@ -118,7 +118,9 @@ Then('取消アーカイブに理由 {string} の行が現れる', async ({ page
 When('カードから完了モーダルを開き会計 {string} 円で完了する', async ({ page }, fee: string) => {
   await ownCard(page).getByRole('button', { name: '完了', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('会計金額', { exact: true }).fill(fee);
+  // 会計金額の欄は無く、合計は明細の総和としてサーバが導出する。1 行だけ入れて総額を作る
+  await dialog.getByLabel('明細1の名称', { exact: true }).fill('会計');
+  await dialog.getByLabel('明細1の金額', { exact: true }).fill(fee);
   await Promise.all([
     page.waitForResponse(
       resp => resp.url().includes('/completion') && resp.request().method() === 'POST',

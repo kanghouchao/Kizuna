@@ -42,6 +42,72 @@ export const ORDER_APPLICATION_STATUS_LABELS: Record<OrderApplicationStatus, str
   WITHDRAWN: '取り下げ',
 };
 
+/**
+ * 受注明細の種別（閉集合）。ホテル代・交通費・釣銭は受注金額外の回収・精算項目なので含まない。
+ *
+ * 符号は種別が決める — 割引とポイント利用は減算、手動調整だけが両方を取り、残りは加算。
+ */
+export type OrderFeeLineKind =
+  | 'BASE_COURSE'
+  | 'EXTENSION'
+  | 'OPTION'
+  | 'SURCHARGE'
+  | 'DISCOUNT'
+  | 'MANUAL_ADJUST'
+  | 'POINT_REDEMPTION'
+  | 'CREDIT_SURCHARGE';
+
+/** 明細種別の日本語表示。 */
+export const ORDER_FEE_LINE_KIND_LABELS: Record<OrderFeeLineKind, string> = {
+  BASE_COURSE: '基本コース料金',
+  EXTENSION: '延長料金',
+  OPTION: 'オプション',
+  SURCHARGE: '加算',
+  DISCOUNT: '割引',
+  MANUAL_ADJUST: '手動調整',
+  POINT_REDEMPTION: 'ポイント利用',
+  CREDIT_SURCHARGE: 'クレジット加算',
+};
+
+/** 符号が減算に固定された種別。入力も表示も正値（引くことは種別が表す）。 */
+export const ORDER_FEE_LINE_DEDUCTION_KINDS: readonly OrderFeeLineKind[] = [
+  'DISCOUNT',
+  'POINT_REDEMPTION',
+];
+
+/** 完了処理だけが書く種別。店舗の編集では作れも消せもしない。 */
+export const ORDER_FEE_LINE_SYSTEM_OWNED_KINDS: readonly OrderFeeLineKind[] = ['POINT_REDEMPTION'];
+
+/** 店舗が手入力できる種別。基本コース料金の名称はコース名の写しから採るため、行の名称は送らない。 */
+export const ORDER_FEE_LINE_STORE_KINDS: readonly OrderFeeLineKind[] = [
+  'BASE_COURSE',
+  'EXTENSION',
+  'OPTION',
+  'SURCHARGE',
+  'DISCOUNT',
+  'MANUAL_ADJUST',
+  'CREDIT_SURCHARGE',
+];
+
+/**
+ * 受注明細 1 行。金額は表示上の値で、減項も正値で届く（符号は kind が表す）。
+ *
+ * system_owned が真の行は完了処理が台帳仕訳と対で書いた記録で、店舗の編集からは触れない。
+ */
+export interface OrderFeeLine {
+  kind: OrderFeeLineKind;
+  name?: string;
+  amount: number;
+  system_owned: boolean;
+}
+
+/** 明細の入力 1 行。応答と同じく金額は表示上の値。 */
+export interface OrderFeeLineInput {
+  kind: OrderFeeLineKind;
+  name?: string;
+  amount: number;
+}
+
 export interface Order {
   id?: string;
   receptionist_id?: number;
@@ -54,15 +120,17 @@ export interface Order {
   cast_id?: string;
   cast_name?: string;
   pax?: number;
+  /** この受注に実際に適用されたコース名の写し。 */
+  course_name?: string;
   course_minutes?: number;
   extension_minutes?: number;
-  option_codes?: string[];
-  discount_name?: string;
-  manual_discount?: number;
+  /** 受注金額の内訳。減項は正値で返る。 */
+  fee_lines?: OrderFeeLine[];
   carrier?: string;
   media_name?: string;
-  /** 会計金額。完了処理でのみ確定する。 */
+  /** 明細の総和。ポイント利用の減算も含むため、客が現金で払う額にあたる。 */
   total_fee?: number;
+  /** 会計で利用したポイント。明細のポイント利用行からの導出値。 */
   used_points?: number;
   /** 会計金額から自動計算された付与ポイント。完了処理でのみ確定する。 */
   auto_grant_points?: number;
@@ -223,11 +291,15 @@ export interface OrderUpdateRequest {
   arrival_scheduled_start_time?: string;
   arrival_scheduled_end_time?: string;
   pax?: number;
+  /** 適用されたコース名の写し。基本コース料金の明細を送るなら必須になる。 */
+  course_name?: string;
   course_minutes?: number;
   extension_minutes?: number;
-  option_codes?: string[];
-  discount_name?: string;
-  manual_discount?: number;
+  /**
+   * 受注金額の内訳。**省略は「変更しない」、空配列は「内訳を空にする」**。行に同一性は無く、
+   * 送った内容がそのまま新しい内訳になる。ポイント利用は含められない（完了処理だけが書く）。
+   */
+  fee_lines?: OrderFeeLineInput[];
   location_address?: string;
   location_building?: string;
   carrier?: string;
@@ -277,11 +349,12 @@ export interface OrderCreateRequest {
   customer_name?: string;
   cast_id: string;
   pax?: number;
+  /** 適用するコース名の写し。基本コース料金の明細を送るなら必須になる。 */
+  course_name?: string;
   course_minutes?: number;
   extension_minutes?: number;
-  option_codes?: string[];
-  discount_name?: string;
-  manual_discount?: number;
+  /** 受注金額の内訳。省略は「内訳なし」で、合計は 0 になる。 */
+  fee_lines?: OrderFeeLineInput[];
   /** 受付経路。Web 申請の群は予約申請の確定だけが名乗るため、この契約では拒否される（400）。 */
   reception_route?: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   carrier?: string;
@@ -384,10 +457,15 @@ export interface OrderApplicationDeclineRequest {
 /**
  * 受注完了（会計）の内容（POST /store/orders/{id}/completion）。
  *
+ * 会計金額は送らない — 合計は明細の総和として導出される。会計の場で確定した内訳をここで送り、
+ * サーバが差し替えてから完了する。内訳は省略できない（未指定を「内訳なし」として通すと合計 0 の完了になる）。
+ *
  * ポイント利用は任意だが、送るなら 1 以上（Java 側が @Min(1)）。利用しない完了では項目ごと省略する — 0 は撥ねられる。
  */
 export interface OrderCompletionRequest {
-  total_fee: number;
+  /** 適用されたコース名の写し。会計の場が快照の最後の更新機会になる。 */
+  course_name?: string;
+  fee_lines: OrderFeeLineInput[];
   use_points?: number;
 }
 
