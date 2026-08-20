@@ -46,17 +46,19 @@ class GuestApplicationRateLimiterTest {
   }
 
   @Test
-  @DisplayName("窓の最初の 1 件で期限を張ること（期限の無い鍵を残さない）")
-  void setsTheWindowExpiryOnTheFirstRequest() {
+  @DisplayName("鍵の生成と期限を 1 手で行うこと（期限の無い鍵が残るとその発信元は二度と申請できない）")
+  void opensTheWindowAtomicallyWithItsExpiry() {
     when(valueOperations.increment(anyString())).thenReturn(1L);
 
     limiter.tryConsume(1L, "203.0.113.7");
 
-    verify(redisTemplate).expire(anyString(), any(Duration.class));
+    verify(valueOperations).setIfAbsent(anyString(), any(), any(Duration.class));
+    // 期限を別手で張らない — 2 手の間で取りこぼすと期限なしの鍵が残る
+    verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
   }
 
   @Test
-  @DisplayName("2 件目以降は期限を張り直さないこと（張り直すと窓が滑り、連投で永久に切れない）")
+  @DisplayName("2 件目以降で期限を張り直さないこと（張り直すと窓が滑り、連投で永久に切れない）")
   void doesNotRefreshTheExpiryOnSubsequentRequests() {
     when(valueOperations.increment(anyString())).thenReturn(2L);
 

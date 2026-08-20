@@ -358,7 +358,6 @@ export interface GuestOrderApplicationCreateRequest {
   business_date: string;
   arrival_scheduled_start_time?: string;
   pax?: number;
-  cast_id?: string;
   remarks?: string;
   /** 折返し先。確定は店舗が折返し連絡で内容を詰める操作なので必須。 */
   contact_name: string;

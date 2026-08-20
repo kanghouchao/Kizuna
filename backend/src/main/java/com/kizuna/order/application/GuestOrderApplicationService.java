@@ -33,8 +33,8 @@ public class GuestOrderApplicationService {
   @Transactional
   public GuestOrderApplicationResponse request(GuestOrderApplicationCreateRequest request) {
     Long storeId = storeContext.getStoreId();
-    orderApplicationIntake.validateRequestedVisit(
-        storeId, request.getBusinessDate(), request.getCastId());
+    // 指名はこの経路では受けないため常に指名なしで検める（会員の入口と同じ判定を通す）
+    orderApplicationIntake.validateRequestedVisit(storeId, request.getBusinessDate(), null);
 
     // store_id は StoreScopeStampListener が @PrePersist で採番する
     OrderApplication application =
@@ -43,7 +43,6 @@ public class GuestOrderApplicationService {
             .businessDate(request.getBusinessDate())
             .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
             .pax(request.getPax())
-            .castId(request.getCastId())
             .remarks(request.getRemarks())
             .contactName(request.getContactName())
             .contactPhoneNumber(request.getContactPhoneNumber())
