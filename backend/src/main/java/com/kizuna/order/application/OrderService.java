@@ -217,10 +217,10 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderResponse create(OrderCreateRequest request, String actorEmail) {
-    // 受付経路の WEB は会員ポータルの申請だけが書く値。台帳を触るより先に撥ねる — 広告費と効果集計の
-    // 根拠になる記録が代理入力で偽装されると、後から申請と手入力を切り分ける手立てが無い。
-    if (request.getReceptionRoute() == ReceptionRoute.WEB) {
-      throw new ServiceException("受付経路に WEB は指定できません。会員ポータルからの申請だけが WEB を名乗ります");
+    // Web 申請の経路（MEMBER_WEB / GUEST_WEB）は申請の確定だけが書く値。台帳を触るより先に撥ねる —
+    // 広告費と効果集計の根拠になる記録が代理入力で偽装されると、後から申請と手入力を切り分ける手立てが無い。
+    if (request.getReceptionRoute() != null && request.getReceptionRoute().isWebApplication()) {
+      throw new ServiceException("受付経路に Web 申請は指定できません。予約申請の確定だけが MEMBER_WEB / GUEST_WEB を名乗ります");
     }
 
     // MapStructを使用して基本的なフィールドをマッピング（store_id は StoreScopeStampListener が @PrePersist で採番）
@@ -377,6 +377,8 @@ public class OrderService {
         .status(view.getStatus() == null ? null : view.getStatus().name())
         .requesterMemberCode(view.getRequesterMemberCode())
         .requesterDeclaredName(view.getRequesterDeclaredName())
+        .contactName(view.getContactName())
+        .contactPhoneNumber(view.getContactPhoneNumber())
         .orderId(view.getOrderId())
         .declinedReason(view.getDeclinedReason())
         .expired(
@@ -435,8 +437,11 @@ public class OrderService {
             .courseMinutes(request.getCourseMinutes())
             .remarks(request.getRemarks())
             .status(OrderStatus.CONFIRMED)
-            // 受付経路 WEB は会員申請由来の受注だけが名乗る。店舗の作成経路（create）は WEB を拒否する
-            .receptionRoute(ReceptionRoute.WEB)
+            // 受付経路は申請が入ってきた入口を写す。店舗の作成経路（create）はこの群を拒否する。
+            // 判定を会員コードのスナップショットで行うのは、会員行の削除で requesterMemberId が
+            // 欠落した会員申請をゲスト由来として記録しないため。
+            .receptionRoute(
+                application.isGuest() ? ReceptionRoute.GUEST_WEB : ReceptionRoute.MEMBER_WEB)
             .requesterMemberId(application.getRequesterMemberId())
             .requesterMemberCode(application.getRequesterMemberCode())
             .requesterDeclaredName(application.getRequesterDeclaredName())

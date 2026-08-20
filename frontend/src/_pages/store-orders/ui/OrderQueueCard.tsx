@@ -3,7 +3,12 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon, SquarePenIcon, XIcon } from 'lucide-react';
-import { ORDER_STATUS_LABELS, OrderWorkQueueRow, orderApi } from '@/entities/order';
+import {
+  ORDER_STATUS_LABELS,
+  OrderWorkQueueRow,
+  WEB_APPLICATION_ROUTE_LABELS,
+  orderApi,
+} from '@/entities/order';
 import { getApiErrorMessage, requireId } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
@@ -109,13 +114,13 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
             >
               {ORDER_STATUS_LABELS[order.status ?? 'CONFIRMED']}
             </Badge>
-            {/* 申請の判定は受付経路だけでは足りない。サーバ側と同じく申請者の有無まで見る */}
-            {order.reception_route === 'WEB' && order.requester_member_code && (
+            {/* 受付経路が入口ごとに分かれているため、由来の判定はこの値だけで足りる */}
+            {order.reception_route && order.reception_route !== 'PHONE' && (
               <Badge
                 variant="outline"
                 className="border-transparent bg-primary/10 text-primary-strong"
               >
-                WEB申請
+                {WEB_APPLICATION_ROUTE_LABELS[order.reception_route]}
               </Badge>
             )}
             <span className="text-muted-foreground text-sm">{order.business_date}</span>

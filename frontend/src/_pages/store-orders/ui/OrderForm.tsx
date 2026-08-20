@@ -2,7 +2,7 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { ReceptionRoute, orderApi } from '@/entities/order';
+import { ReceptionRoute, WebApplicationReceptionRoute, orderApi } from '@/entities/order';
 import { useResource } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
@@ -43,7 +43,7 @@ const HAS_PET_OPTIONS = [
   { value: 'true', label: 'あり' },
 ];
 const COURSE_MINUTES_OPTIONS = ['60', '90', '120'].map(v => ({ value: v, label: v }));
-// WEB は会員ポータルの申請だけが名乗る値なので選択肢に出さない（後端も拒否する）。
+// Web 申請の群は予約申請の確定だけが名乗る値なので選択肢に出さない（後端も拒否する）。
 // 選択肢が 1 つでもセレクトを残すのは、受付経路が記録項目であって、値の追加は行の追加だから。
 const RECEPTION_ROUTE_OPTIONS = [{ value: 'PHONE', label: '電話受付' }];
 const DISCOUNT_OPTIONS = [
@@ -66,8 +66,8 @@ export interface OrderFormData {
   hasPet: boolean;
   castId: string;
   pax: number;
-  /** 受付経路。店舗側の合法値は電話受付だけ（WEB は会員ポータルの申請だけが名乗る）。 */
-  receptionRoute: Exclude<ReceptionRoute, 'WEB'>;
+  /** 受付経路。店舗側の合法値は電話受付だけ（Web 申請の群は予約申請の確定だけが名乗る）。 */
+  receptionRoute: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   courseMinutes: number;
   extensionMinutes: number;
   options: string[];

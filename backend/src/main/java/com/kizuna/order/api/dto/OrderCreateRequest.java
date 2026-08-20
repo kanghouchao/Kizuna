@@ -86,7 +86,7 @@ public class OrderCreateRequest {
   /**
    * 受付経路。実際の受付手段を記録する値で、未指定は「不明」を意味する（既定値で補完しない）。
    *
-   * <p>{@code WEB} は会員ポータルの申請だけが書く値のため、この契約では拒否される（{@link
+   * <p>{@code MEMBER_WEB} / {@code GUEST_WEB} は予約申請の確定だけが書く値のため、この契約では拒否される（{@link
    * com.kizuna.order.application.OrderService#create}）。広告費・効果集計の根拠になる経路記録が代理入力で偽装されないようにするため。
    */
   private ReceptionRoute receptionRoute;

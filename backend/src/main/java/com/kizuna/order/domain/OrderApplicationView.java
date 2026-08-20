@@ -26,6 +26,10 @@ public interface OrderApplicationView {
 
   String getRequesterDeclaredName();
 
+  String getContactName();
+
+  String getContactPhoneNumber();
+
   String getOrderId();
 
   String getDeclinedReason();

@@ -18,7 +18,8 @@ import org.hibernate.annotations.Filter;
 /**
  * 予約申請。受注（Order）とは別の付随記録で、店舗の確定時に CONFIRMED の Order を生成して {@code orderId} を回写する（ADR 0017）。
  *
- * <p>申請原文（希望内容）は終端に入った後も不変のまま残り、確定した受注の内容と対照できる。会員・ゲスト共用の受け皿である （ゲストの入口は未提供）。
+ * <p>申請原文（希望内容）は終端に入った後も不変のまま残り、確定した受注の内容と対照できる。会員ポータルと公開店面の共用の受け皿で、
+ * どちらの入口から来たかは会員コードのスナップショットの有無が表す（{@link #isGuest()}）。
  */
 @Entity
 @Table(name = "t_order_applications")
@@ -67,6 +68,14 @@ public class OrderApplication extends StoreScopedEntity {
   @Column(name = "requester_declared_name")
   private String requesterDeclaredName;
 
+  /** ゲスト申請で本人が残した連絡先の氏名。会員申請では null（会員は名乗った名前を上の列が預かる）。 */
+  @Column(name = "contact_name")
+  private String contactName;
+
+  /** ゲスト申請で本人が残した折返し先の電話番号。確定＝店舗が折返し連絡で内容を詰める操作なので、ゲスト申請では必須になる。 */
+  @Column(name = "contact_phone_number", length = 50)
+  private String contactPhoneNumber;
+
   /** 謝絶の理由。謝絶の根拠そのものなので謝絶では必須で、謝絶していない申請では null。分類軸ではない（enum 化しない）。 */
   @Column(name = "declined_reason", length = 500)
   private String declinedReason;
@@ -84,6 +93,14 @@ public class OrderApplication extends StoreScopedEntity {
   /** 確定時に生成した受注の回写。確定していない申請では null（シフトの申請行 shift_id 回写と同じ背骨）。 */
   @Column(name = "order_id")
   private String orderId;
+
+  /**
+   * 公開店面からのゲスト申請か。判定を会員コードのスナップショットで行うのは、会員行が削除されて {@code requesterMemberId} が欠落した会員申請を
+   * ゲスト扱いへ倒さないため（会員コードは発行後に変わらず、削除でも消えない）。
+   */
+  public boolean isGuest() {
+    return requesterMemberCode == null;
+  }
 
   /**
    * 申請者の会員参照を外す。会員行の削除に伴う FK の SET NULL と同じ意味で、会員コードのスナップショットは残す。

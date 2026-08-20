@@ -5,8 +5,17 @@
 // 受注ステータス。すべての受注は CONFIRMED で出生する（ADR 0017）。未処理の申請は別記録（OrderApplication）。
 export type OrderStatus = 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 
-// 受付経路。WEB=会員ポータルの申請確定由来/PHONE=電話受付。
-export type ReceptionRoute = 'WEB' | 'PHONE';
+// 受付経路。MEMBER_WEB=会員ポータルの申請確定由来/GUEST_WEB=公開店面のゲスト申請確定由来/PHONE=電話受付。
+export type ReceptionRoute = 'MEMBER_WEB' | 'GUEST_WEB' | 'PHONE';
+
+/** 予約申請の確定だけが名乗る受付経路。店舗・HQ の作成契約はこの群を拒否する。 */
+export type WebApplicationReceptionRoute = 'MEMBER_WEB' | 'GUEST_WEB';
+
+/** 申請由来の受注に出す由来の表示。電話受付は申請ではないので持たない。 */
+export const WEB_APPLICATION_ROUTE_LABELS: Record<WebApplicationReceptionRoute, string> = {
+  MEMBER_WEB: '会員申請',
+  GUEST_WEB: 'ゲスト申請',
+};
 
 /** 受注ステータスの日本語表示。 */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -266,8 +275,8 @@ export interface OrderCreateRequest {
   option_codes?: string[];
   discount_name?: string;
   manual_discount?: number;
-  /** 受付経路。WEB は会員ポータルの申請だけが名乗るため、この契約では拒否される（400）。 */
-  reception_route?: Exclude<ReceptionRoute, 'WEB'>;
+  /** 受付経路。Web 申請の群は予約申請の確定だけが名乗るため、この契約では拒否される（400）。 */
+  reception_route?: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   carrier?: string;
   media_name?: string;
   remarks?: string;
