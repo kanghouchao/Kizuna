@@ -141,4 +141,25 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     expect(mockedConfirm.mock.calls[0][1].customer_id).toBe('cust-1');
     expect(mockedConfirm.mock.calls[0][1].new_customer).toBeUndefined();
   });
+
+  it('ゲスト申請の確定でも、顧客の決め方と一緒にコース名の快照を運ぶ', async () => {
+    // 確定は受注の出生なので、快照が写る経路は会員申請とゲスト申請で分かれない。
+    // 顧客の決め方（ゲスト専用）と快照（両方）が同じ要求に同居することを固定する
+    renderModal(guestApplication());
+    await screen.findByText('顧客（ゲスト申請）');
+    await pickCustomerMode('新規に台帳へ登録する');
+    await screen.findByLabelText('お客様名');
+    fireEvent.change(screen.getByLabelText('コース名（任意）'), {
+      target: { value: '90 分コース' },
+    });
+
+    fireEvent.click(confirmButton());
+
+    await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
+    expect(mockedConfirm.mock.calls[0][1].course_name).toBe('90 分コース');
+    expect(mockedConfirm.mock.calls[0][1].new_customer).toEqual({
+      name: 'ゲスト花子',
+      phone_number: '09000000000',
+    });
+  });
 });
