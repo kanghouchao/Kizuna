@@ -14,10 +14,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
+import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
+import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -57,6 +61,8 @@ class OrderApplicationControllerTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private OrderService orderService;
+  @MockitoBean private GuestOrderApplicationService guestOrderApplicationService;
+  @MockitoBean private GuestApplicationRateLimiter guestApplicationRateLimiter;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
@@ -230,6 +236,80 @@ class OrderApplicationControllerTest {
             "could not execute statement",
             new SQLException("duplicate key value", "23505"),
             constraintName));
+  }
+
+  // ==================== 公開店面のゲスト予約申請 ====================
+
+  private static final String GUEST_BODY =
+      "{\"business_date\": \"2026-08-20\", \"pax\": 2,"
+          + " \"contact_name\": \"ゲスト花子\", \"contact_phone_number\": \"09000000000\"}";
+
+  @Test
+  @DisplayName("ゲスト予約申請が受け付けられ、受付番号だけが 201 で返ること")
+  void guestRequestIsAcceptedAndReturnsOnlyTheIdentifier() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
+    when(guestOrderApplicationService.request(any(GuestOrderApplicationCreateRequest.class)))
+        .thenReturn(new GuestOrderApplicationResponse("app-1"));
+
+    mockMvc
+        .perform(guestPost(GUEST_BODY))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.id").value("app-1"))
+        // 申請の内容は返さない — 送った本人だけが読めることを保証する手立てがこの経路には無い
+        .andExpect(jsonPath("$.contact_phone_number").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("連絡先を欠いたゲスト予約申請が 400 で撥ねられること")
+  void guestRequestWithoutContactIsRejected() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
+
+    mockMvc
+        .perform(guestPost("{\"business_date\": \"2026-08-20\", \"pax\": 2}"))
+        .andExpect(status().isBadRequest());
+
+    // 折返し先の無い申請は処理のしようがないため、行を起こす前に撥ねる
+    verifyNoInteractions(guestOrderApplicationService);
+  }
+
+  @Test
+  @DisplayName("流量制限を超えたゲスト予約申請が 429 になり、申請が起きないこと")
+  void guestRequestOverTheRateLimitIsRefused() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(false);
+
+    mockMvc.perform(guestPost(GUEST_BODY)).andExpect(status().isTooManyRequests());
+
+    verifyNoInteractions(guestOrderApplicationService);
+  }
+
+  @Test
+  @DisplayName("流量を数える発信元に X-Forwarded-For の末尾を使うこと（手前の要素は申請者が書ける）")
+  void guestRequestCountsTheProxyAppendedHop() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
+    when(guestOrderApplicationService.request(any(GuestOrderApplicationCreateRequest.class)))
+        .thenReturn(new GuestOrderApplicationResponse("app-1"));
+
+    mockMvc
+        .perform(guestPost(GUEST_BODY).header("X-Forwarded-For", "10.0.0.9, 203.0.113.7"))
+        .andExpect(status().isCreated());
+
+    ArgumentCaptor<String> origin = ArgumentCaptor.forClass(String.class);
+    verify(guestApplicationRateLimiter).tryConsume(any(), origin.capture());
+    assertThat(origin.getValue()).isEqualTo("203.0.113.7");
+  }
+
+  /** 匿名の来訪者を模す。店舗文脈だけをヘッダで名乗り、認証主体は載せない。 */
+  private MockHttpServletRequestBuilder guestPost(String body) {
+    return post("/store/order-applications/public")
+        .header("X-Role", "store")
+        .header("X-Store-ID", "1")
+        .with(csrf())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(body);
   }
 
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。

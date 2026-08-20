@@ -1,14 +1,22 @@
 package com.kizuna.order.api.store;
 
+import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
+import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
+import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
+import com.kizuna.shared.exception.TooManyRequestsException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
+import jakarta.annotation.security.PermitAll;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.Set;
@@ -32,6 +40,41 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderApplicationController {
 
   private final OrderService orderService;
+  private final GuestOrderApplicationService guestOrderApplicationService;
+  private final GuestApplicationRateLimiter guestApplicationRateLimiter;
+  private final StoreContext storeContext;
+
+  /**
+   * 公開店面からのゲスト予約申請を受け付ける。匿名で、店舗は店面 middleware が域名から解決してヘッダで運ぶ（{@code StoreIdInterceptor}）。
+   *
+   * <p>流量制限はサービスのトランザクション境界の外で判定する。撥ねる要求のためにトランザクションを開けない。
+   *
+   * <p>応答は受付番号だけで、申請の内容は返さない — 送った本人だけが読めることを保証する手立てがこの経路には無い。
+   */
+  @PostMapping("/public")
+  @PermitAll
+  public ResponseEntity<GuestOrderApplicationResponse> requestAsGuest(
+      @Valid @RequestBody GuestOrderApplicationCreateRequest request,
+      HttpServletRequest httpRequest) {
+    if (!guestApplicationRateLimiter.tryConsume(storeContext.getStoreId(), originOf(httpRequest))) {
+      throw new TooManyRequestsException("送信が続いたため受け付けられませんでした。しばらく時間をおいてからお試しください");
+    }
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(guestOrderApplicationService.request(request));
+  }
+
+  /**
+   * 流量を数える発信元。読むのは {@code X-Forwarded-For} の<b>末尾</b>で、これが逆プロキシ自身が書いた直前の相手である。 手前の要素は client
+   * が自由に書けるので、先頭を採ると計数の鍵を申請者側から選べてしまう。
+   */
+  private static String originOf(HttpServletRequest request) {
+    String forwarded = request.getHeader("X-Forwarded-For");
+    if (forwarded == null || forwarded.isBlank()) {
+      return request.getRemoteAddr();
+    }
+    String[] hops = forwarded.split(",");
+    return hops[hops.length - 1].trim();
+  }
 
   /**
    * 予約申請の一覧。状態の群を指定してカーソルで辿る（受付箱は PENDING）。

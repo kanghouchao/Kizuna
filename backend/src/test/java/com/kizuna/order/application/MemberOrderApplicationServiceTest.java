@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -29,7 +30,6 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
-import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -63,10 +63,9 @@ class MemberOrderApplicationServiceTest {
   private static final String TIMEZONE = "Asia/Tokyo";
 
   @Mock OrderApplicationRepository orderApplicationRepository;
-  @Mock NominatableCastLookup nominatableCast;
+  @Mock OrderApplicationIntake orderApplicationIntake;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock MemberLookupService memberLookupService;
-  @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock StoreExistenceCheck storeExistenceCheck;
   @Mock BusinessDateService businessDateService;
 
@@ -162,98 +161,33 @@ class MemberOrderApplicationServiceTest {
   }
 
   @Test
-  @DisplayName("過去日の申請を拒否すること")
-  void requestRejectsPastDate() {
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today().minusDays(1), null)))
-        .isInstanceOf(ServiceException.class);
-    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
-  }
-
-  @Test
-  @DisplayName("候補照会と同じ上限（90 日）を超える先の申請を拒否すること")
-  void requestRejectsDateBeyondLookaheadLimit() {
-    // 指名なしの申請は候補照会（ConfirmedShiftLookupService.validateWorkDate）を経ないため、
-    // 書き込み側で上限を見ないと無制限の未来日が素通りする
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today().plusDays(91), null)))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("範囲");
-    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
-  }
-
-  @Test
-  @DisplayName("上限ちょうど（90 日先）の申請は受け付けること")
-  void requestAcceptsDateAtLookaheadLimit() {
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
+  @DisplayName("希望内容の判定を共有の受け付け判定へ、申請先の店舗・希望日・指名のまま委ねること")
+  void requestDelegatesTheRequestedVisitToTheSharedIntake() {
+    // 判定そのものは OrderApplicationIntakeTest が固定する。ここで見るのは、会員の入口が
+    // 自前の判定を持たず、申請先の店舗で共有の判定を通すことだけ
+    when(storeExistenceCheck.exists(OTHER_STORE_ID)).thenReturn(true);
     stubSavedView();
 
-    service.request(EMAIL, requestFor(today().plusDays(90), null));
-
-    verify(orderApplicationRepository).save(any(OrderApplication.class));
-  }
-
-  @Test
-  @DisplayName("指名先として成立しないキャストは、理由を区別せず「見つからない」として返すこと")
-  void requestRejectsACastThatIsNotNominatable() {
-    // 対象は会員なので、他店舗・在籍停止・不在を区別しない — 区別すると、その id のキャストが当該店舗に
-    // 在籍することそのものが分かってしまう（店舗スタッフ向けの OrderService は同じ述語から 400 を返す）。
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
-        .isInstanceOf(NotFoundException.class);
-    // 候補に出さないだけでは、キャスト ID を直接送る要求を防げない
-    verify(confirmedShiftLookupService, never())
-        .hasPubliclyVisibleShift(anyLong(), anyString(), any());
-    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
-  }
-
-  @Test
-  @DisplayName("指名の判定は申請先の店舗で行うこと")
-  void requestChecksTheNominationAgainstTheRequestedStore() {
-    // 会員は店舗を授権されず storeFilter も働かないため、店舗の一致は問い合わせ自体に載せるしかない
-    when(storeExistenceCheck.exists(OTHER_STORE_ID)).thenReturn(true);
-    when(nominatableCast.find(OTHER_STORE_ID, "cast-1")).thenReturn(Optional.empty());
-
-    MemberOrderApplicationCreateRequest request = requestFor(today(), "cast-1");
+    MemberOrderApplicationCreateRequest request = requestFor(today().plusDays(3), "cast-1");
     request.setStoreId(OTHER_STORE_ID);
 
-    assertThatThrownBy(() -> service.request(EMAIL, request)).isInstanceOf(NotFoundException.class);
-    verify(nominatableCast).find(OTHER_STORE_ID, "cast-1");
+    service.request(EMAIL, request);
+
+    verify(orderApplicationIntake)
+        .validateRequestedVisit(OTHER_STORE_ID, today().plusDays(3), "cast-1");
   }
 
   @Test
-  @DisplayName("会員の指名検証が候補の読み口と同じ述語（公開可も見る）を使うこと")
-  void requestValidatesNominationThroughThePublicationGate() {
+  @DisplayName("受け付け判定が撥ねた申請では行が起きないこと")
+  void requestDoesNotWriteWhenTheSharedIntakeRejects() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
-    when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
-        .thenReturn(false);
+    doThrow(new ServiceException("過去の日付は申請できません"))
+        .when(orderApplicationIntake)
+        .validateRequestedVisit(anyLong(), any(), any());
 
-    // 非公開を理由に別の文言へ分けない — 分けると隠したシフトの存在が読み取れてしまう
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("指名したキャストはこの日の出勤予定がありません");
-    verify(confirmedShiftLookupService, never()).hasConfirmedShift(anyLong(), anyString(), any());
+    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), null)))
+        .isInstanceOf(ServiceException.class);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
-  }
-
-  @Test
-  @DisplayName("確定シフトのあるキャストは指名できること")
-  void requestAcceptsNominationBackedByConfirmedShift() {
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
-    when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
-        .thenReturn(true);
-    stubSavedView();
-
-    service.request(EMAIL, requestFor(today(), "cast-1"));
-
-    verify(orderApplicationRepository).save(applicationCaptor.capture());
-    assertThat(applicationCaptor.getValue().getCastId()).isEqualTo("cast-1");
   }
 
   @Test

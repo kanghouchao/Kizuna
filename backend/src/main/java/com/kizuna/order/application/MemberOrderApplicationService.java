@@ -1,6 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.cast.domain.Cast;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.order.api.dto.MemberOrderApplicationCreateRequest;
@@ -17,11 +16,9 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
-import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
@@ -45,10 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberOrderApplicationService {
 
   private final OrderApplicationRepository orderApplicationRepository;
-  private final NominatableCastLookup nominatableCast;
+  private final OrderApplicationIntake orderApplicationIntake;
   private final PlatformUserRepository platformUserRepository;
   private final MemberLookupService memberLookupService;
-  private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final StoreExistenceCheck storeExistenceCheck;
   private final BusinessDateService businessDateService;
 
@@ -62,8 +58,8 @@ public class MemberOrderApplicationService {
     if (!storeExistenceCheck.exists(storeId)) {
       throw new ServiceException("店舗が見つかりません");
     }
-    validateBusinessDate(request.getBusinessDate());
-    validateNomination(storeId, request.getCastId(), request.getBusinessDate());
+    orderApplicationIntake.validateRequestedVisit(
+        storeId, request.getBusinessDate(), request.getCastId());
 
     OrderApplication application =
         OrderApplication.builder()
@@ -156,40 +152,6 @@ public class MemberOrderApplicationService {
     return memberLookupService
         .findByPlatformUserId(platformUserId)
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
-  }
-
-  /** 利用日は「現在の営業日以降かつ候補照会と同じ上限（90 日）以内」。指名なしの申請が候補照会を経ずに上限を素通りしないよう、書き込み側でも同じ範囲を見る。 */
-  private void validateBusinessDate(LocalDate businessDate) {
-    LocalDate today = businessDateService.currentBusinessDate();
-    if (businessDate.isBefore(today)) {
-      throw new ServiceException("過去の日付は申請できません");
-    }
-    if (ChronoUnit.DAYS.between(today, businessDate)
-        > ConfirmedShiftLookupService.MAX_LOOKAHEAD_DAYS) {
-      throw new ServiceException("申請できる日付の範囲を超えています");
-    }
-  }
-
-  /**
-   * 指名は「その店舗に在籍中のキャスト」かつ「当日の確定シフトに入っていること」を満たす場合のみ受け付ける。
-   *
-   * <p>在籍状態も公開可否も候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
-   *
-   * <p>対象は会員なので、成立しない理由を区別せず「見つからない」として返す — 区別すると、その id のキャストが当該店舗に在籍することそのものが分かってしまう。店舗スタッフ向けの
-   * {@link OrderService} は同じ述語から 400 を返す。
-   */
-  private void validateNomination(Long storeId, String castId, LocalDate businessDate) {
-    if (castId == null) {
-      return;
-    }
-    Cast cast =
-        nominatableCast
-            .find(storeId, castId)
-            .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
-    // 失敗の文言を非公開かどうかで分けない — 分けた瞬間、隠したはずのシフトの存在が会員に読み取れる。
-    if (!confirmedShiftLookupService.hasPubliclyVisibleShift(storeId, cast.getId(), businessDate)) {
-      throw new ServiceException("指名したキャストはこの日の出勤予定がありません");
-    }
   }
 
   private MemberOrderApplicationResponse toResponse(Long memberId, String applicationId) {

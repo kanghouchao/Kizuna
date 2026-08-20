@@ -1,6 +1,7 @@
 package com.kizuna.auth.infrastructure;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
@@ -38,6 +39,10 @@ public class PlatformBearerTokenResolver implements BearerTokenResolver {
     PathPatternRequestMatcher.withDefaults().matcher("/store/config/public"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/casts/public"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/shifts/public"),
+    // 公開店面からの匿名 POST（ゲスト予約申請）。店面を見ている来訪者は会員・キャストの陳腐な
+    // token cookie を持ちうるため、免除しないと申請そのものが 401 で通らなくなる。
+    PathPatternRequestMatcher.withDefaults()
+        .matcher(HttpMethod.POST, "/store/order-applications/public"),
   };
 
   private final BearerTokenResolver delegate = new DefaultBearerTokenResolver();
