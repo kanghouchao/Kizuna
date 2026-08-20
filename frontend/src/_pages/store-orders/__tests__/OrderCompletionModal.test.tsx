@@ -107,6 +107,47 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[0][1].course_name).toBe('');
   });
 
+  it('開き直しは陳腐化した内訳で播かず、取り直した内容で播く', async () => {
+    // useResource は取り直しの間も前の値を持ったまま。その値で播いて印を立てると、後から着いた
+    // 新しい内容が捨てられ、他の操作者が直したばかりの明細を古い内訳で上書きして完了できてしまう
+    mockedGet
+      .mockResolvedValueOnce({
+        ...confirmedOrder,
+        fee_lines: [{ kind: 'OPTION', name: '古い明細', amount: 1000, system_owned: false }],
+      })
+      .mockResolvedValueOnce({
+        ...confirmedOrder,
+        fee_lines: [{ kind: 'OPTION', name: '新しい明細', amount: 5000, system_owned: false }],
+      });
+    const { rerender } = renderModal();
+    expect(await screen.findByDisplayValue('古い明細')).toBeInTheDocument();
+
+    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    rerender(
+      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+    );
+
+    expect(await screen.findByDisplayValue('新しい明細')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('古い明細')).not.toBeInTheDocument();
+  });
+
+  it('受注を取得できなければ、その領域が失敗を名乗り再試行を出す', async () => {
+    // 失敗を捨てると「読み込み中」のまま固まり、閉じる以外に何も起こせない画面になる
+    mockedGet.mockRejectedValueOnce(new Error('boom'));
+    renderModal();
+
+    expect(await screen.findByText('受注を取得できませんでした。')).toBeInTheDocument();
+    expect(screen.queryByLabelText('明細1の金額')).not.toBeInTheDocument();
+
+    mockedGet.mockResolvedValueOnce({
+      ...confirmedOrder,
+      fee_lines: [{ kind: 'OPTION', name: '再取得できた明細', amount: 3000, system_owned: false }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByDisplayValue('再取得できた明細')).toBeInTheDocument();
+  });
+
   it('閉じている間は事前計算を取りに行かない', () => {
     // 一覧に常時 mount されているので、開くまで取りに行くと 1 件も完了しない画面が毎回読む
     render(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
