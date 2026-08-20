@@ -563,7 +563,7 @@ describe('新規オーダー登録', () => {
   it('受付経路の選択肢に Web 申請を出さないこと', async () => {
     render(<CreateOrderPage />);
 
-    // WEB は会員ポータルの申請だけが名乗る値（後端も拒否する）
+    // Web 申請の群（MEMBER_WEB / GUEST_WEB）は予約申請の確定だけが名乗る値（後端も拒否する）
     expect(screen.queryByText('Web 申請')).not.toBeInTheDocument();
   });
 });

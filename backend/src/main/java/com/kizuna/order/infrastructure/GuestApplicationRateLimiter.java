@@ -31,16 +31,14 @@ public class GuestApplicationRateLimiter {
    * 1 件ぶん消費し、窓の上限を超えていれば false を返す。
    *
    * <p>撥ねた要求も消費する。窓の中で撥ねられ続ける限り数え続けるのが固定窓の意味で、 拒否を無償にすると上限に達した後の連投が計数を素通りする。
-   *
-   * @param origin 発信元の識別子（呼出側が解決した発信元 IP）
    */
   public boolean tryConsume(Long storeId, String origin) {
     String key = KEY_PREFIX + storeId + ":" + origin;
+    // 窓は鍵の生成と同時に期限付きで開く（SET NX + 有効期限の 1 手）。数えてから期限を張る 2 手だと、
+    // 間で取りこぼした鍵が期限なしで残り、その発信元は二度と申請できなくなる。
+    redisTemplate.opsForValue().setIfAbsent(key, "0", WINDOW);
+    // 増分は期限を触らないため、窓は最初の 1 件からの固定長のまま滑らない。
     Long count = redisTemplate.opsForValue().increment(key);
-    // 窓の起点はその窓の最初の 1 件。件数が確定した後に期限を張るので、期限の無い鍵が残る余地は無い
-    if (count != null && count == 1L) {
-      redisTemplate.expire(key, WINDOW);
-    }
     return count == null || count <= MAX_PER_WINDOW;
   }
 }

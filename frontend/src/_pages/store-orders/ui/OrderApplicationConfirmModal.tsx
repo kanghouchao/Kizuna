@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
-import { CustomerSummaryResponse, customerApi } from '@/entities/customer';
+import { customerApi } from '@/entities/customer';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
@@ -85,9 +85,6 @@ export function OrderApplicationConfirmModal({
   onClose,
   onConfirmed,
 }: OrderApplicationConfirmModalProps) {
-  // 既存顧客の候補は押したときだけ引く（開いただけで台帳を読みに行かない）
-  const [customerMatches, setCustomerMatches] = useState<CustomerSummaryResponse[] | null>(null);
-  const [customerSearchFailed, setCustomerSearchFailed] = useState(false);
   const form = useForm<ConfirmFormValues>({
     defaultValues: {
       receptionist_id: '',
@@ -121,6 +118,21 @@ export function OrderApplicationConfirmModal({
     failure: receptionistsFailure,
     reload: loadReceptionists,
   } = useResource(application === null ? null : () => orderApi.listReceptionists(), [application]);
+  // 台帳の照会は押したときだけ走らせる（開いただけで顧客を読みに行かない）。確定した語を state に
+  // 移してから取得の deps に載せることで、入力中の 1 文字ごとに問い合わせが飛ぶこともない。
+  const [customerQuery, setCustomerQuery] = useState<string | null>(null);
+  const {
+    data: customerPage,
+    isLoading: customersLoading,
+    failure: customersFailure,
+    reload: reloadCustomers,
+  } = useResource(
+    customerQuery === null
+      ? null
+      : () => customerApi.list({ search: customerQuery || undefined, size: 10 }),
+    [customerQuery]
+  );
+  const customerMatches = customerPage?.rows ?? null;
   const receptionistItems = [
     { value: SELECT_NONE, label: '未設定（自分が受付なら自動で補われます）' },
     ...(receptionistOptions ?? [])
@@ -151,8 +163,7 @@ export function OrderApplicationConfirmModal({
       new_customer_phone: application.contact_phone_number ?? '',
       customer_search: application.contact_name ?? '',
     });
-    setCustomerMatches(null);
-    setCustomerSearchFailed(false);
+    setCustomerQuery(null);
   }, [application, reset]);
 
   const submit = async (values: ConfirmFormValues) => {
@@ -198,16 +209,13 @@ export function OrderApplicationConfirmModal({
   const chosenCustomerId = watch('customer_id');
   const customerSearch = watch('customer_search');
 
-  const searchCustomers = async () => {
-    setCustomerSearchFailed(false);
-    try {
-      const page = await customerApi.list({ search: customerSearch || undefined, size: 10 });
-      setCustomerMatches(page.rows);
-    } catch {
-      // 顧客管理の権限が無い実行者ではサーバが 403 を返す。確定そのものは塞がない
-      setCustomerSearchFailed(true);
-      setCustomerMatches(null);
+  const searchCustomers = () => {
+    // 同じ語で押し直したときは deps が動かないので、取得そのものをやり直す
+    if (customerQuery === customerSearch) {
+      void reloadCustomers();
+      return;
     }
+    setCustomerQuery(customerSearch);
   };
 
   return (
@@ -419,21 +427,22 @@ export function OrderApplicationConfirmModal({
                           </FormItem>
                         )}
                       />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void searchCustomers()}
-                      >
+                      <Button type="button" variant="outline" onClick={searchCustomers}>
                         検索
                       </Button>
                     </div>
-                    {customerSearchFailed && (
+                    {customersLoading ? (
+                      <p className="text-muted-foreground text-sm">読み込み中...</p>
+                    ) : customersFailure !== null ? (
+                      // 顧客管理の権限が無い実行者ではサーバが拒否する。確定そのものは塞がない
                       <p className="text-muted-foreground text-sm">
                         台帳を検索できませんでした（顧客管理の権限が要ります）。新規作成か未設定で確定できます
                       </p>
-                    )}
-                    {customerMatches !== null && customerMatches.length === 0 && (
-                      <p className="text-muted-foreground text-sm">一致する顧客がいません</p>
+                    ) : (
+                      customerMatches !== null &&
+                      customerMatches.length === 0 && (
+                        <p className="text-muted-foreground text-sm">一致する顧客がいません</p>
+                      )
                     )}
                     <ul className="grid gap-1">
                       {(customerMatches ?? []).map(candidate => (

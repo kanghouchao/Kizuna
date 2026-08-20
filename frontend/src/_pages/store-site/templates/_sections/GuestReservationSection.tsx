@@ -66,7 +66,9 @@ export default function GuestReservationSection() {
   };
   const labelClass =
     'block text-[11px] tracking-[0.2em] mb-2 text-[color-mix(in_srgb,var(--storefront-fg)_55%,transparent)]';
-  const errorClass = 'mt-2 text-xs text-[color-mix(in_srgb,red_70%,var(--storefront-fg))]';
+  // 失敗の色も模版のトークンから採る（生の色相を持ち込むと模版ごとの配色から外れる）
+  const errorClass =
+    'mt-2 text-xs text-[color-mix(in_srgb,var(--storefront-danger)_60%,var(--storefront-fg))]';
 
   if (acceptedId !== null) {
     return (
