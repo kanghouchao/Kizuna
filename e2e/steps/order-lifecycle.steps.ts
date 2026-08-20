@@ -136,9 +136,9 @@ Then('完了した受注が「対応が要る」群から消える', async ({ pa
   await expect(ownCard(page)).toHaveCount(0, { timeout: 15000 });
 });
 
-Then('完了アーカイブに会計 {string} の行が現れる', async ({ page }, amount: string) => {
+Then('完了アーカイブに請求 {string} の行が現れる', async ({ page }, amount: string) => {
   await page.getByRole('button', { name: /^完了 \d+ 件$/ }).click();
-  await expect(page.getByText(`会計 ${amount}`, { exact: false })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(`請求 ${amount}`, { exact: false })).toBeVisible({ timeout: 15000 });
 });
 
 After(async ({ request }) => {

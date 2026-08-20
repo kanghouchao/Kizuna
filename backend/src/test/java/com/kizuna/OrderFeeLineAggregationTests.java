@@ -31,9 +31,17 @@ class OrderFeeLineAggregationTests {
   /** 集約の外から合計・明細を組み立てる形（builder 経由の書き込み）。読み出しは含まない。 */
   private static final Pattern AGGREGATE_BYPASS = Pattern.compile("\\.totalFee\\(|\\.feeLines\\(");
 
-  /** 受注の集約が持つ表と列。一括更新から名指されれば迂回である。 */
+  /**
+   * 受注の集約が持つ表・列・実体属性。一括更新から名指されれば迂回である。
+   *
+   * <p>素の SQL の字面（表名・列名）だけでなく JPQL の字面（属性名・実体名）も見る。同じ迂回が 2 つの書き方で
+   * 書けるのに片方しか見ないと、検査の通過が「迂回が無いこと」を意味しなくなる。
+   *
+   * <p>受注を名指す一括更新そのものは正当なものがある（顧客統合の付け替えが {@code o.customerId} を書く）ため、 実体側は<b>書き込み先の属性</b>で見分ける —
+   * 名指す実体ではなく、何を代入するかが迂回か否かを決める。
+   */
   private static final List<String> ORDER_WRITE_TARGETS =
-      List.of("t_order_fee_lines", "total_fee", "t_orders");
+      List.of("t_order_fee_lines", "total_fee", "t_orders", "totalFee", "OrderFeeLine");
 
   @Test
   @DisplayName("合計と明細に公開の書き込み口が無いこと")

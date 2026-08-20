@@ -41,7 +41,7 @@ public class OrderResponse {
   private String carrier;
   private String mediaName;
 
-  /** 明細の総和。ポイント利用の減算も含むため、客が現金で払う額にあたる。 */
+  /** 明細の総和。ポイント利用の減算も含むため、ポイント控除後の請求額にあたる。 */
   private Integer totalFee;
 
   private Integer usedPoints;

@@ -4,7 +4,7 @@ import { OrderForm, OrderFormData } from './OrderForm';
 import { notify } from '@/shared/notify';
 import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
-import { OrderCreateRequest, orderApi } from '@/entities/order';
+import { OrderCreateRequest, orderApi, toFeeLineInputs } from '@/entities/order';
 import { storePath } from '@/shared/lib';
 
 export default function CreateOrderPage() {
@@ -42,12 +42,7 @@ export default function CreateOrderPage() {
         course_name: data.courseName,
         course_minutes: Number(data.courseMinutes),
         extension_minutes: Number(data.extensionMinutes),
-        // 基本コース料金の名称はサーバがコース名の写しから採るため、行の名称は送らない
-        fee_lines: data.fee_lines.map(line => ({
-          kind: line.kind,
-          name: line.kind === 'BASE_COURSE' ? undefined : line.name,
-          amount: line.amount,
-        })),
+        fee_lines: toFeeLineInputs(data.fee_lines),
         carrier: data.carrier,
         media_name: data.mediaName,
         remarks: data.remarks,

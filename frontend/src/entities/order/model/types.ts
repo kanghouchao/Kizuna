@@ -119,7 +119,7 @@ export interface Order {
   fee_lines?: OrderFeeLine[];
   carrier?: string;
   media_name?: string;
-  /** 明細の総和。ポイント利用の減算も含むため、客が現金で払う額にあたる。 */
+  /** 明細の総和。ポイント利用の減算も含むため、ポイント控除後の請求額にあたる。 */
   total_fee?: number;
   /** 会計で利用したポイント。明細のポイント利用行からの導出値。 */
   used_points?: number;

@@ -604,7 +604,7 @@ public class OrderService {
         OrderPatch.ofAccounting(
             request.getCourseName(), orderMapper.toFeeLineDrafts(request.getFeeLines())));
     // 付与の基準と利用の上限は、ポイント利用の行が入る前の総和で決める。利用の行を入れた後の合計は
-    // 客が現金で払う額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
+    // ポイント控除後の請求額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
     int chargeAmount = order.getTotalFee();
 
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
