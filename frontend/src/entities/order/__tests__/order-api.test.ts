@@ -1,4 +1,10 @@
-import { memberOrderApi, memberReceiptApi, memberVisitApi, orderApi } from '@/entities/order';
+import {
+  memberOrderApplicationApi,
+  memberReceiptApi,
+  memberVisitApi,
+  orderApi,
+  orderApplicationApi,
+} from '@/entities/order';
 import { apiClient } from '@/shared/api';
 import { ClientDataError } from '@/shared/lib';
 
@@ -75,7 +81,7 @@ describe('orderApi', () => {
     // 絞り込みは専用読み口の責務。受注一覧を取って手元で選り分ける形へは戻さない。
     await expect(
       orderApi.listWorkQueue({
-        statuses: ['CREATED', 'CONFIRMED'],
+        statuses: ['CONFIRMED', 'COMPLETED'],
         sort_key: 'PAX',
         desc: true,
         cursor: 'abc',
@@ -84,7 +90,7 @@ describe('orderApi', () => {
     ).resolves.toEqual({ rows: [{ id: 'o1' }], nextCursor: 'abc' });
     expect(mockedGet).toHaveBeenCalledWith('/store/orders/work-queue', {
       params: {
-        statuses: 'CREATED,CONFIRMED',
+        statuses: 'CONFIRMED,COMPLETED',
         sort_key: 'PAX',
         desc: true,
         cursor: 'abc',
@@ -119,16 +125,6 @@ describe('orderApi', () => {
       params: { statuses: 'COMPLETED', page: 1, size: 5 },
     });
   });
-  it('confirm は確定の子リソースを POST する', async () => {
-    expect(await orderApi.confirm('o1')).toEqual({
-      ok: true,
-      url: '/store/orders/o1/confirmation',
-    });
-  });
-  it('decline は謝絶の子リソースを POST し、本体を返さない', async () => {
-    await expect(orderApi.decline('o1')).resolves.toBeUndefined();
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/orders/o1/refusal');
-  });
   it('attribution は受注の帰属の現況を GET する', async () => {
     expect(await orderApi.attribution('o1')).toEqual({
       ok: true,
@@ -156,34 +152,70 @@ describe('orderApi', () => {
   });
 });
 
-describe('memberOrderApi', () => {
-  it('list は /platform/me/orders を GET し、カーソルページを正規化する', async () => {
-    // 続きが無いときサーバは next_cursor を省く（null 非出力方針）
-    mockedGet.mockResolvedValueOnce({ data: { content: [{ id: 'o1' }] } });
+describe('orderApplicationApi', () => {
+  it('list は受付箱を GET し、状態をカンマ区切りで送ってカーソルページを正規化する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ id: 'a1' }], next_cursor: 'abc' },
+    });
 
-    await expect(memberOrderApi.list()).resolves.toEqual({
-      rows: [{ id: 'o1' }],
+    await expect(
+      orderApplicationApi.list({ statuses: ['PENDING'], cursor: 'c0', size: 20 })
+    ).resolves.toEqual({ rows: [{ id: 'a1' }], nextCursor: 'abc' });
+    expect(mockedGet).toHaveBeenCalledWith('/store/order-applications', {
+      params: { statuses: 'PENDING', cursor: 'c0', size: 20 },
+    });
+  });
+  it('confirm は確定の子リソースへ確定内容を POST し、生成された受注を返す', async () => {
+    expect(
+      await orderApplicationApi.confirm('a1', { business_date: '2026-08-20', pax: 2 })
+    ).toEqual({
+      ok: true,
+      url: '/store/order-applications/a1/confirmation',
+    });
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/order-applications/a1/confirmation', {
+      business_date: '2026-08-20',
+      pax: 2,
+    });
+  });
+  it('decline は謝絶の子リソースへ理由を POST し、本体を返さない', async () => {
+    // 理由は謝絶の唯一の根拠。省略できる形にすると、後から経緯を辿れなくなる
+    await expect(orderApplicationApi.decline('a1', { reason: '満席' })).resolves.toBeUndefined();
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/order-applications/a1/refusal', {
+      reason: '満席',
+    });
+  });
+});
+
+describe('memberOrderApplicationApi', () => {
+  it('list は /platform/me/order-applications を GET し、カーソルページを正規化する', async () => {
+    // 続きが無いときサーバは next_cursor を省く（null 非出力方針）
+    mockedGet.mockResolvedValueOnce({ data: { content: [{ id: 'a1' }] } });
+
+    await expect(memberOrderApplicationApi.list()).resolves.toEqual({
+      rows: [{ id: 'a1' }],
       nextCursor: null,
     });
-    expect(mockedGet).toHaveBeenCalledWith('/platform/me/orders', { params: undefined });
-  });
-  it('create は /platform/me/orders を POST する', async () => {
-    expect(await memberOrderApi.create({} as never)).toEqual({
-      ok: true,
-      url: '/platform/me/orders',
+    expect(mockedGet).toHaveBeenCalledWith('/platform/me/order-applications', {
+      params: undefined,
     });
   });
-  it('cancel は取り下げの子リソースを POST する', async () => {
-    expect(await memberOrderApi.cancel('o1')).toEqual({
+  it('create は /platform/me/order-applications を POST する', async () => {
+    expect(await memberOrderApplicationApi.create({} as never)).toEqual({
       ok: true,
-      url: '/platform/me/orders/o1/cancellation',
+      url: '/platform/me/order-applications',
+    });
+  });
+  it('withdraw は取り下げの子リソースを POST する', async () => {
+    expect(await memberOrderApplicationApi.withdraw('a1')).toEqual({
+      ok: true,
+      url: '/platform/me/order-applications/a1/withdrawal',
     });
   });
 });
 
 describe('memberVisitApi', () => {
   it('list は来店履歴を GET し、カーソルページを正規化する', async () => {
-    // 申請の追跡（/platform/me/orders）とは別の読み口で、確定した来店だけを返す
+    // 申請の追跡（/platform/me/order-applications）とは別の読み口で、確定した来店だけを返す
     mockedGet.mockResolvedValueOnce({
       data: { content: [{ granted_points: 120 }], next_cursor: 'c1' },
     });
@@ -220,18 +252,21 @@ describe('memberReceiptApi', () => {
  * `?? ''` で素通しすると単数の操作が一覧の URI へ飛び、届いた先の 404/405 が操作の失敗と
  * 見分けられなくなる。守りはアダプタの内側にあり、画面ごとに書かない。
  */
-describe('識別子を欠いた orderApi / memberOrderApi', () => {
+describe('識別子を欠いた orderApi / orderApplicationApi / memberOrderApplicationApi', () => {
   const calls: [string, () => Promise<unknown>, string][] = [
     ['get', () => orderApi.get(undefined), '受注'],
     ['update', () => orderApi.update(undefined, {}), '受注'],
     ['cancel', () => orderApi.cancel(undefined, { reason: 'r' }), '受注'],
     [
-      'updateReservationRequest',
-      () => orderApi.updateReservationRequest(undefined, { pax: 1 }),
-      '受注',
+      'orderApplicationApi.confirm',
+      () => orderApplicationApi.confirm(undefined, { business_date: '2026-08-20' }),
+      '予約申請',
     ],
-    ['confirm', () => orderApi.confirm(undefined), '受注'],
-    ['decline', () => orderApi.decline(undefined), '受注'],
+    [
+      'orderApplicationApi.decline',
+      () => orderApplicationApi.decline(undefined, { reason: 'r' }),
+      '予約申請',
+    ],
     ['complete', () => orderApi.complete(undefined, { total_fee: 1 }), '受注'],
     ['completionPreview', () => orderApi.completionPreview(undefined, 0), '受注'],
     ['attribution', () => orderApi.attribution(undefined), '受注'],
@@ -253,7 +288,11 @@ describe('識別子を欠いた orderApi / memberOrderApi', () => {
         }),
       '受注',
     ],
-    ['memberOrderApi.cancel', () => memberOrderApi.cancel(undefined), '予約'],
+    [
+      'memberOrderApplicationApi.withdraw',
+      () => memberOrderApplicationApi.withdraw(undefined),
+      '予約申請',
+    ],
   ];
 
   it.each(calls)('%s は要求を出さず、名乗る失敗を投げる', async (_name, call, label) => {

@@ -2,6 +2,9 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.order.domain.OrderApplication;
+import com.kizuna.order.domain.OrderApplicationRepository;
+import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
@@ -23,16 +26,19 @@ import tools.jackson.databind.JsonNode;
 /**
  * 会員の予約申請から店舗確定までを本物の PostgreSQL で検証する統合テスト。
  *
- * <p>会員は店舗を授権されず storeFilter が働かないため、会員向け経路の隔離は問い合わせに載せた申請者の一致だけが担う。 そこで「他会員の予約が生ボディに一切現れないこと」を
+ * <p>申請は受注と別の付随記録（t_order_applications）で、店舗の確定が CONFIRMED の受注を生成して order_id を回写する（ADR 0017）。
+ *
+ * <p>会員は店舗を授権されず storeFilter が働かないため、会員向け経路の隔離は問い合わせに載せた申請者の一致だけが担う。 そこで「他会員の申請が生ボディに一切現れないこと」を
  * カナリアで強く見る（帰属不一致の確認では、実データが混ざっていないことの証明にならない）。
  */
 class MemberOrderIT extends CrossStoreTestSupport {
 
   @Autowired private OrderRepository orderRepository;
+  @Autowired private OrderApplicationRepository orderApplicationRepository;
 
   private static final String PASSWORD = "password1234";
 
-  /** 他会員の予約だけが持つ、他に一致しようがない備考。 */
+  /** 他会員の申請だけが持つ、他に一致しようがない備考。 */
   private static final String CANARY_REMARKS = "MEMBER-ORDER-CANARY-4f2b91c7";
 
   private String memberAToken;
@@ -74,15 +80,19 @@ class MemberOrderIT extends CrossStoreTestSupport {
     return token;
   }
 
+  private static LocalDate today() {
+    return LocalDate.now(ZoneId.of("Asia/Tokyo"));
+  }
+
   private String requestReservation(String memberToken, long storeId, String remarks) {
     ResponseEntity<JsonNode> requested =
         rest.postForEntity(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             new HttpEntity<>(
                 "{\"store_id\": "
                     + storeId
                     + ", \"business_date\": \""
-                    + LocalDate.now(ZoneId.of("Asia/Tokyo"))
+                    + today()
                     + "\", \"pax\": 3, \"declared_name\": \"名乗り太郎\", \"remarks\": \""
                     + remarks
                     + "\"}",
@@ -94,32 +104,67 @@ class MemberOrderIT extends CrossStoreTestSupport {
     return id;
   }
 
-  @Test
-  @DisplayName("会員の申請が Web 受付の未確定受注として起き、店舗の確定で同じ受注が確定になること")
-  void requestBecomesConfirmedOrder() {
-    String orderId = requestReservation(memberAToken, STORE_A, "統合テスト申請");
+  /** 店舗の確定操作。内容の調整が主題でないテストは、申請どおりの内容（当日・3 名）で確定する。 */
+  private ResponseEntity<JsonNode> confirm(long storeId, String applicationId) {
+    return confirm(storeId, applicationId, "{\"business_date\": \"" + today() + "\", \"pax\": 3}");
+  }
 
-    // 店舗側から見ると申請は未確定（CREATED）の Web 受付として現れる
-    ResponseEntity<JsonNode> storeView =
+  private ResponseEntity<JsonNode> confirm(long storeId, String applicationId, String body) {
+    return rest.exchange(
+        "/store/order-applications/" + applicationId + "/confirmation",
+        HttpMethod.POST,
+        new HttpEntity<>(body, storeHeaders(storeId)),
+        JsonNode.class);
+  }
+
+  private ResponseEntity<JsonNode> decline(long storeId, String applicationId, String reason) {
+    return rest.exchange(
+        "/store/order-applications/" + applicationId + "/refusal",
+        HttpMethod.POST,
+        new HttpEntity<>("{\"reason\": \"" + reason + "\"}", storeHeaders(storeId)),
+        JsonNode.class);
+  }
+
+  @Test
+  @DisplayName("会員の申請は申請行だけを起こし、受注には行が生まれないこと")
+  void requestCreatesAnApplicationRowAndNoOrderRow() {
+    String applicationId = requestReservation(memberAToken, STORE_A, "統合テスト申請");
+
+    OrderApplication application = orderApplicationRepository.findById(applicationId).orElseThrow();
+    assertThat(application.getStatus()).isEqualTo(OrderApplicationStatus.PENDING);
+    assertThat(application.getOrderId()).as("申請時点では受注が生まれていないこと").isNull();
+    assertThat(application.getRequesterMemberCode()).isNotBlank();
+    assertThat(orderRepository.findById(applicationId))
+        .as("申請の id が受注の空間に現れないこと（別記録である）")
+        .isEmpty();
+
+    // 店舗の受注読み口からも申請には到達できない（申請は受注の前室で、受注ではない）
+    ResponseEntity<JsonNode> asOrder =
         rest.exchange(
-            "/store/orders/" + orderId,
+            "/store/orders/" + applicationId,
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(storeView.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(storeView.getBody().path("status").asString()).isEqualTo("CREATED");
-    assertThat(storeView.getBody().path("reception_route").asString()).isEqualTo("WEB");
-    assertThat(storeView.getBody().path("pax").asInt()).isEqualTo(3);
-    assertThat(storeView.getBody().path("requester_member_code").asString()).isNotBlank();
+    assertThat(asOrder.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+  }
 
+  @Test
+  @DisplayName("店舗確定が申請内容を基に CONFIRMED の受注を生成し、申請行へ order_id を回写し、申請原文が不変のまま対照できること")
+  void confirmationCreatesAConfirmedOrderAndWritesItBack() {
+    String applicationId = requestReservation(memberAToken, STORE_A, "確定対象の申請");
+
+    // 店舗は確定時に内容を調整できる（人数 3 → 5）。申請原文はそのまま残る
     ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        confirm(
+            STORE_A,
+            applicationId,
+            "{\"business_date\": \"" + today() + "\", \"pax\": 5, \"remarks\": \"店舗が調整した\"}");
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String orderId = confirmed.getBody().path("id").asString();
+    assertThat(orderId).isNotBlank();
     assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(confirmed.getBody().path("reception_route").asString()).isEqualTo("WEB");
+    assertThat(confirmed.getBody().path("pax").asInt()).as("受注は確定内容を持つこと").isEqualTo(5);
     assertThat(confirmed.getBody().path("receptionist_id").asLong())
         .as("確定した店舗スタッフが受付担当として補われること")
         .isPositive();
@@ -127,36 +172,35 @@ class MemberOrderIT extends CrossStoreTestSupport {
         .as("確定後も申請者が追跡できること")
         .isNotBlank();
 
-    // 会員側の一覧でも確定として見える（申請と受注が同一の行であることの現れ）
+    OrderApplication application = orderApplicationRepository.findById(applicationId).orElseThrow();
+    assertThat(application.getStatus()).isEqualTo(OrderApplicationStatus.CONFIRMED);
+    assertThat(application.getOrderId()).as("申請行へ受注の id が回写されること").isEqualTo(orderId);
+    assertThat(application.getPax()).as("申請原文（人数 3）は確定の調整で書き換わらないこと").isEqualTo(3);
+    assertThat(application.getRemarks()).isEqualTo("確定対象の申請");
+
+    // 会員側の一覧では申請が確定として見える
     JsonNode own = firstReservation(memberAToken);
-    assertThat(own.path("id").asString()).isEqualTo(orderId);
+    assertThat(own.path("id").asString()).isEqualTo(applicationId);
     assertThat(own.path("status").asString()).isEqualTo("CONFIRMED");
     assertThat(own.path("store_name").asString()).isNotBlank();
   }
 
   @Test
-  @DisplayName("「未確定」群には会員の未処理の申請が現れ、処理し終えると外れること")
-  void pendingGroupHoldsMemberRequestsUntilTheyAreProcessed() {
-    String requestId = requestReservation(memberAToken, STORE_A, "未確定群の対象");
-    // 店舗が起こした受注は確定で出生するため、この群には現れない
-    String storeOrderId = createStoreOrder(createCastAs(STORE_A, "未確定群の判定用キャスト"));
+  @DisplayName("受付箱には未処理の申請だけが現れ、処理し終えると外れること")
+  void inboxHoldsPendingApplicationsUntilTheyAreProcessed() {
+    String applicationId = requestReservation(memberAToken, STORE_A, "受付箱の対象");
 
     List<String> ids = allPendingIds();
-    assertThat(ids).as("会員の未処理の申請は現れること").contains(requestId);
-    assertThat(ids).as("店舗が起こした受注は確定で出生するので現れないこと").doesNotContain(storeOrderId);
+    assertThat(ids).as("未処理の申請は現れること").contains(applicationId);
 
-    // 確定したものは処理済みなので群から外れる
-    rest.exchange(
-        "/store/orders/" + requestId + "/confirmation",
-        HttpMethod.POST,
-        new HttpEntity<>(storeHeaders(STORE_A)),
-        JsonNode.class);
-    assertThat(allPendingIds()).doesNotContain(requestId);
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, applicationId);
+    assertThat(confirmed.getStatusCode()).as("前提: 確定が成功すること").isEqualTo(HttpStatus.CREATED);
+    assertThat(allPendingIds()).doesNotContain(applicationId);
   }
 
   @Test
   @DisplayName("取得件数の上限を超えた未処理の申請にも、続きを辿れば到達できること")
-  void inboxPagesThroughEveryPendingRequest() {
+  void inboxPagesThroughEveryPendingApplication() {
     List<String> requested =
         List.of(
             requestReservation(memberAToken, STORE_A, "ページング 1"),
@@ -179,7 +223,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
 
   @Test
   @DisplayName("読み込み済みの申請を確定した直後に続きを取っても、境界の申請を飛ばさないこと")
-  void inboxDoesNotSkipTheBoundaryRequestAfterOneIsConfirmed() {
+  void inboxDoesNotSkipTheBoundaryApplicationAfterOneIsConfirmed() {
     String first = requestReservation(memberAToken, STORE_A, "境界 1");
     String second = requestReservation(memberAToken, STORE_A, "境界 2");
     String third = requestReservation(memberAToken, STORE_A, "境界 3");
@@ -188,13 +232,8 @@ class MemberOrderIT extends CrossStoreTestSupport {
     String cursor = cursorAfter(first);
 
     // 読み込み済みの範囲にある申請を処理する。位置を「何件目か」で指す取得だと、ここで後続が繰り上がる。
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + first + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).as("前提: 確定が成功すること").isEqualTo(HttpStatus.OK);
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, first);
+    assertThat(confirmed.getStatusCode()).as("前提: 確定が成功すること").isEqualTo(HttpStatus.CREATED);
 
     JsonNode resumed = fetchInbox(cursor, 1);
     assertThat(idsOf(resumed)).as("処理で後続が繰り上がらず、直後の申請が飛ばされないこと").containsExactly(second);
@@ -217,7 +256,8 @@ class MemberOrderIT extends CrossStoreTestSupport {
     do {
       ResponseEntity<JsonNode> list =
           rest.exchange(
-              "/platform/me/orders?size=1" + (cursor == null ? "" : "&cursor=" + cursor),
+              "/platform/me/order-applications?size=1"
+                  + (cursor == null ? "" : "&cursor=" + cursor),
               HttpMethod.GET,
               new HttpEntity<>(bearer(memberAToken)),
               JsonNode.class);
@@ -228,7 +268,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
       cursor = nextCursor(body);
     } while (cursor != null && collected.size() <= PAGING_GUARD);
 
-    assertThat(collected).as("本人の予約がすべて取得窓に現れること").containsAll(requested);
+    assertThat(collected).as("本人の申請がすべて取得窓に現れること").containsAll(requested);
   }
 
   /** 続きを辿る試験が、位置が進まない不具合でぶら下がらないための打ち切り。 */
@@ -237,7 +277,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
   private JsonNode fetchInbox(String cursor, int size) {
     ResponseEntity<JsonNode> inbox =
         rest.exchange(
-            "/store/orders/work-queue?statuses=CREATED&size="
+            "/store/order-applications?statuses=PENDING&size="
                 + size
                 + (cursor == null ? "" : "&cursor=" + cursor),
             HttpMethod.GET,
@@ -275,18 +315,18 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   /** 古い順に 1 件ずつ辿り、指定の申請を返した取得の「続きの位置」を返す。 */
-  private String cursorAfter(String orderId) {
+  private String cursorAfter(String applicationId) {
     String cursor = null;
     for (int visited = 0; visited < PAGING_GUARD; visited++) {
       JsonNode body = fetchInbox(cursor, 1);
       List<String> ids = idsOf(body);
       cursor = nextCursor(body);
-      if (ids.contains(orderId)) {
+      if (ids.contains(applicationId)) {
         return cursor;
       }
       assertThat(cursor).as("前提: 対象の申請まで読み進められること").isNotNull();
     }
-    throw new AssertionError("前提: 対象の申請に到達できること: " + orderId);
+    throw new AssertionError("前提: 対象の申請に到達できること: " + applicationId);
   }
 
   private String createCastAs(long storeId, String name) {
@@ -306,7 +346,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
             "/store/orders",
             new HttpEntity<>(
                 "{\"receptionist_id\": 3, \"business_date\": \""
-                    + LocalDate.now(ZoneId.of("Asia/Tokyo"))
+                    + today()
                     + "\", \"cast_id\": \""
                     + castId
                     + "\"}",
@@ -317,37 +357,31 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("会員行が消えても未確定の申請は inbox に残り、処理し終えられること")
-  void inboxKeepsPendingRequestAfterTheMemberRowIsGone() {
-    String orderId = requestReservation(memberAToken, STORE_A, "会員削除後も処理する申請");
+  @DisplayName("会員行が消えても未処理の申請は受付箱に残り、処理し終えられること")
+  void inboxKeepsPendingApplicationAfterTheMemberRowIsGone() {
+    String applicationId = requestReservation(memberAToken, STORE_A, "会員削除後も処理する申請");
 
     // 会員行の削除を DB 側の FK（SET NULL）と同じ形で再現する。会員コードのスナップショットは残る。
-    orderRepository
-        .findById(orderId)
-        .ifPresent(
-            order -> {
-              order.detachRequesterMember();
-              orderRepository.save(order);
-            });
+    OrderApplication application = orderApplicationRepository.findById(applicationId).orElseThrow();
+    application.detachRequesterMember();
+    orderApplicationRepository.save(application);
 
-    assertThat(allPendingIds()).as("会員 ID が欠落しても未確定の申請は処理対象として残ること").contains(orderId);
+    assertThat(allPendingIds()).as("会員 ID が欠落しても未処理の申請は処理対象として残ること").contains(applicationId);
 
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, applicationId);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(confirmed.getBody().path("customer_id").isMissingNode())
+        .as("整備する先が無いため顧客未設定のまま成立すること（無帰属受注は正規の状態）")
+        .isTrue();
   }
 
   @Test
   @DisplayName("申請後に台帳へ紐づけた会員でも、確定した受注が顧客の受注履歴に載ること")
   void confirmationAttachesCustomerLinkedAfterTheRequest() {
     // 初回来店の順序: 申請（このとき紐づけは無い）→ 店舗が会員コードを読んで台帳に紐づけ → 確定
-    String orderId = requestReservation(memberAToken, STORE_A, "初回来店の申請");
-    String memberCode = firstReservationMemberCode(memberAToken, orderId);
+    String applicationId = requestReservation(memberAToken, STORE_A, "初回来店の申請");
+    String memberCode = inboxMemberCode(applicationId);
 
     ResponseEntity<JsonNode> customer =
         rest.postForEntity(
@@ -365,11 +399,9 @@ class MemberOrderIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(linked.getStatusCode()).as("前提: 紐づけが成功すること").isEqualTo(HttpStatus.OK);
 
-    rest.exchange(
-        "/store/orders/" + orderId + "/confirmation",
-        HttpMethod.POST,
-        new HttpEntity<>(storeHeaders(STORE_A)),
-        JsonNode.class);
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, applicationId);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String orderId = confirmed.getBody().path("id").asString();
 
     ResponseEntity<JsonNode> history =
         rest.exchange(
@@ -380,78 +412,68 @@ class MemberOrderIT extends CrossStoreTestSupport {
     assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
     List<String> ids = new ArrayList<>();
     history.getBody().path("content").forEach(node -> ids.add(node.path("id").asString()));
-    assertThat(ids).as("確定した申請が顧客の受注履歴に現れること").contains(orderId);
+    assertThat(ids).as("確定で生まれた受注が顧客の受注履歴に現れること").contains(orderId);
   }
 
-  /** 店舗側から見た申請の会員コード（紐づけ操作に使う）。 */
-  private String firstReservationMemberCode(String memberToken, String orderId) {
-    ResponseEntity<JsonNode> storeView =
-        rest.exchange(
-            "/store/orders/" + orderId,
-            HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    String code = storeView.getBody().path("requester_member_code").asString();
-    assertThat(code).as("前提: 店舗側から申請者の会員コードが読めること").isNotBlank();
+  /** 受付箱から見た申請の会員コード（紐づけ操作に使う）。 */
+  private String inboxMemberCode(String applicationId) {
+    OrderApplication application = orderApplicationRepository.findById(applicationId).orElseThrow();
+    String code = application.getRequesterMemberCode();
+    assertThat(code).as("前提: 申請者の会員コードが読めること").isNotBlank();
     return code;
   }
 
   @Test
-  @DisplayName("会員の一覧に他会員の予約が一切現れないこと")
-  void memberListNeverExposesOtherMembersReservations() {
-    String canaryOrderId = requestReservation(memberBToken, STORE_A, CANARY_REMARKS);
+  @DisplayName("会員の一覧に他会員の申請が一切現れないこと")
+  void memberListNeverExposesOtherMembersApplications() {
+    String canaryApplicationId = requestReservation(memberBToken, STORE_A, CANARY_REMARKS);
 
-    // 正向対照: カナリアは店舗側からは確かに読める（断言対象が「漏れうるデータ」であることの証明）
-    ResponseEntity<String> storeView =
+    // 正向対照: カナリアは店舗の受付箱からは確かに読める（断言対象が「漏れうるデータ」であることの証明)
+    ResponseEntity<String> inbox =
         rest.exchange(
-            "/store/orders/" + canaryOrderId,
+            "/store/order-applications?statuses=PENDING&size=2000",
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(STORE_A)),
             String.class);
-    assertThat(storeView.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(storeView.getBody()).contains(CANARY_REMARKS);
+    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(inbox.getBody()).contains(CANARY_REMARKS);
 
     requestReservation(memberAToken, STORE_A, "会員Aの申請");
 
     ResponseEntity<String> list =
         rest.exchange(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             HttpMethod.GET,
             new HttpEntity<>(bearer(memberAToken)),
             String.class);
     assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(list.getBody())
-        .as("他会員の予約の実データ・ID が生ボディに現れないこと")
+        .as("他会員の申請の実データ・ID が生ボディに現れないこと")
         .doesNotContain(CANARY_REMARKS)
-        .doesNotContain(canaryOrderId);
+        .doesNotContain(canaryApplicationId);
   }
 
   @Test
   @DisplayName("確定前は本人が取り下げられ、確定後は取り下げられないこと")
   void memberCanWithdrawOnlyBeforeConfirmation() {
-    String orderId = requestReservation(memberAToken, STORE_A, "取り下げ対象");
+    String applicationId = requestReservation(memberAToken, STORE_A, "取り下げ対象");
 
-    ResponseEntity<JsonNode> cancelled =
+    ResponseEntity<JsonNode> withdrawn =
         rest.exchange(
-            "/platform/me/orders/" + orderId + "/cancellation",
+            "/platform/me/order-applications/" + applicationId + "/withdrawal",
             HttpMethod.POST,
             new HttpEntity<>(bearer(memberAToken)),
             JsonNode.class);
-    assertThat(cancelled.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(cancelled.getBody().path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(withdrawn.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(withdrawn.getBody().path("status").asString()).isEqualTo("WITHDRAWN");
 
     String confirmedId = requestReservation(memberAToken, STORE_A, "確定後は取り下げ不可");
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + confirmedId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, confirmedId);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     ResponseEntity<JsonNode> tooLate =
         rest.exchange(
-            "/platform/me/orders/" + confirmedId + "/cancellation",
+            "/platform/me/order-applications/" + confirmedId + "/withdrawal",
             HttpMethod.POST,
             new HttpEntity<>(bearer(memberAToken)),
             JsonNode.class);
@@ -459,202 +481,82 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("他会員の予約は取り下げられず、存在も明かさないこと")
-  void memberCannotWithdrawAnotherMembersReservation() {
-    String othersOrderId = requestReservation(memberBToken, STORE_A, "他会員の予約");
+  @DisplayName("他会員の申請は取り下げられず、存在も明かさないこと")
+  void memberCannotWithdrawAnotherMembersApplication() {
+    String othersApplicationId = requestReservation(memberBToken, STORE_A, "他会員の申請");
 
     ResponseEntity<JsonNode> denied =
         rest.exchange(
-            "/platform/me/orders/" + othersOrderId + "/cancellation",
+            "/platform/me/order-applications/" + othersApplicationId + "/withdrawal",
             HttpMethod.POST,
             new HttpEntity<>(bearer(memberAToken)),
             JsonNode.class);
     assertThat(denied.getStatusCode())
-        .as("権限違反ではなく不在として扱うこと（予約の存在を明かさない）")
+        .as("権限違反ではなく不在として扱うこと（申請の存在を明かさない）")
         .isEqualTo(HttpStatus.NOT_FOUND);
 
-    // 会員B の予約は健在
+    // 会員B の申請は健在
     JsonNode own = firstReservation(memberBToken);
-    assertThat(own.path("id").asString()).isEqualTo(othersOrderId);
-    assertThat(own.path("status").asString()).isEqualTo("CREATED");
+    assertThat(own.path("id").asString()).isEqualTo(othersApplicationId);
+    assertThat(own.path("status").asString()).isEqualTo("PENDING");
   }
 
   @Test
-  @DisplayName("申請の状態は汎用更新（PUT）では変更できず、専用の確定操作でのみ変わること")
-  void genericUpdateCannotTransitionReservationRequests() {
-    String orderId = requestReservation(memberAToken, STORE_A, "汎用更新の対象外");
-    String castId = createCastAs(STORE_A, "汎用更新ガード用キャスト");
+  @DisplayName("申請は受注の汎用更新（PUT /store/orders）から到達できないこと")
+  void genericOrderUpdateCannotReachApplications() {
+    String applicationId = requestReservation(memberAToken, STORE_A, "汎用更新の対象外");
 
-    // 汎用更新の契約には状態が無い。未知の項目として撥ねられ、確定時の指名再検証・顧客補完は迂回できない
+    // 申請は受注ではない。受注の書き込み口をどう叩いても申請行には届かない
     ResponseEntity<JsonNode> tampered =
         rest.exchange(
-            "/store/orders/" + orderId,
+            "/store/orders/" + applicationId,
             HttpMethod.PUT,
-            new HttpEntity<>(
-                "{\"receptionist_id\": 3, \"cast_id\": \""
-                    + castId
-                    + "\", \"status\": \"CONFIRMED\"}",
-                storeHeaders(STORE_A)),
+            new HttpEntity<>("{\"pax\": 9}", storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
-    // 申請は未確定のまま残り、専用の確定操作では引き続き処理できる
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
-  }
-
-  private ResponseEntity<JsonNode> updateReservationRequest(long storeId, String id, String body) {
-    return rest.exchange(
-        "/store/orders/" + id + "/reservation-request",
-        HttpMethod.PUT,
-        new HttpEntity<>(body, storeHeaders(storeId)),
-        JsonNode.class);
+    // 申請は未処理のまま残り、専用の確定操作では引き続き処理できる
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, applicationId);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
   }
 
   @Test
-  @DisplayName("指名なしの申請を、キャストを設定せずに編集して確定できること")
-  void nominationFreeRequestCanBeEditedWithoutSettingACast() {
-    String orderId = requestReservation(memberAToken, STORE_A, "編集前の備考");
-    String businessDate =
-        rest.exchange(
-                "/store/orders/" + orderId,
-                HttpMethod.GET,
-                new HttpEntity<>(storeHeaders(STORE_A)),
-                JsonNode.class)
-            .getBody()
-            .path("business_date")
-            .asString();
+  @DisplayName("希望日を過ぎた申請は失効し、確定も謝絶も拒否されること（行は PENDING のまま残る）")
+  void expiredApplicationRejectsConfirmationAndDecline() {
+    // 過去日の申請は作成 API が拒否するため、失効した申請は DB へ直接植える（FK に触れる会員参照は持たせない）
+    OrderApplication stale =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.PENDING)
+            .businessDate(today().minusDays(1))
+            .pax(2)
+            .requesterMemberCode("000000000000")
+            .requesterDeclaredName("失効太郎")
+            .build();
+    stale.setStoreId(STORE_A);
+    String applicationId = orderApplicationRepository.save(stale).getId();
 
-    ResponseEntity<JsonNode> edited =
-        updateReservationRequest(
-            STORE_A, orderId, "{\"receptionist_id\": 3, \"pax\": 5, \"remarks\": \"店舗が人数を直した\"}");
-    assertThat(edited.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(edited.getBody().path("pax").asInt()).isEqualTo(5);
-    assertThat(edited.getBody().path("remarks").asString()).isEqualTo("店舗が人数を直した");
-    assertThat(edited.getBody().path("receptionist_id").asLong()).isEqualTo(3L);
-    assertThat(edited.getBody().path("cast_id").isMissingNode())
-        .as("キャストを埋めずに編集できること（指名付きの受注へ変換されない）")
-        .isTrue();
-    assertThat(edited.getBody().path("business_date").asString())
-        .as("編集の契約が持たない項目は書き換わらないこと")
-        .isEqualTo(businessDate);
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, applicationId);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(confirmed.getBody().path("error").asString()).contains("失効");
 
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
-  }
+    ResponseEntity<JsonNode> declined = decline(STORE_A, applicationId, "失効後の謝絶");
+    assertThat(declined.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
-  @Test
-  @DisplayName("指名を明示的に外しても申請者の記録が壊れず、そのまま確定できること")
-  void nominationCanBeClearedBeforeConfirmation() {
-    String orderId = requestReservation(memberAToken, STORE_A, "指名解除の対象");
-    // 指名先は在籍中のキャストに限るため、状態を明示して作る（作成 API は既定値を持たない）
-    ResponseEntity<JsonNode> cast =
-        rest.postForEntity(
-            "/store/casts",
-            new HttpEntity<>(
-                "{\"name\": \"指名解除テスト用キャスト\", \"status\": \"ACTIVE\"}", storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(cast.getStatusCode().is2xxSuccessful()).as("前提: キャスト作成が成功すること").isTrue();
-    String castId = cast.getBody().path("id").asString();
-
-    ResponseEntity<JsonNode> nominated =
-        updateReservationRequest(STORE_A, orderId, "{\"cast_id\": \"" + castId + "\", \"pax\": 3}");
-    assertThat(nominated.getStatusCode()).as("前提: 店舗が指名を設定できること").isEqualTo(HttpStatus.OK);
-    assertThat(nominated.getBody().path("cast_id").asString()).isEqualTo(castId);
-
-    // 撥ねられた編集は元の指名を残す（拒否の健全さをトランザクションの巻き戻しだけに委ねない）
-    ResponseEntity<JsonNode> rejected =
-        updateReservationRequest(STORE_A, orderId, "{\"cast_id\": \"does-not-exist\", \"pax\": 9}");
-    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    ResponseEntity<JsonNode> afterRejection =
-        rest.exchange(
-            "/store/orders/" + orderId,
-            HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(afterRejection.getBody().path("cast_id").asString()).isEqualTo(castId);
-    assertThat(afterRejection.getBody().path("pax").asInt()).isEqualTo(3);
-
-    ResponseEntity<JsonNode> cleared = updateReservationRequest(STORE_A, orderId, "{\"pax\": 3}");
-    assertThat(cleared.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(cleared.getBody().path("cast_id").isMissingNode()).isTrue();
-    assertThat(cleared.getBody().path("cast_name").isMissingNode()).isTrue();
-    assertThat(cleared.getBody().path("requester_member_code").asString())
-        .as("申請者のスナップショットが指名解除で欠けないこと")
-        .isNotBlank();
-    assertThat(cleared.getBody().path("reception_route").asString()).isEqualTo("WEB");
-
-    // 会員側から見た予約も残り続ける（同じ行であることの現れ）
-    JsonNode own = firstReservation(memberAToken);
-    assertThat(own.path("id").asString()).isEqualTo(orderId);
-    assertThat(own.path("status").asString()).isEqualTo("CREATED");
-
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).as("無効になった指名を外してから確定できること").isEqualTo(HttpStatus.OK);
-  }
-
-  @Test
-  @DisplayName("申請編集の収口が、他店舗・店舗起点の受注・確定済みの申請に届かないこと")
-  void reservationRequestUpdateReachesOnlyPendingRequestsOfTheOwningStore() {
-    String orderId = requestReservation(memberAToken, STORE_A, "編集収口のガード対象");
-
-    assertThat(updateReservationRequest(STORE_B, orderId, "{\"pax\": 2}").getStatusCode())
-        .as("他店舗からは到達できないこと")
-        .isEqualTo(HttpStatus.FORBIDDEN);
-
-    String castId = createCastAs(STORE_A, "編集収口ガード用キャスト");
-    String storeOrderId = createStoreOrder(castId);
-    assertThat(updateReservationRequest(STORE_A, storeOrderId, "{\"pax\": 2}").getStatusCode())
-        .as("店舗が起こした受注は申請専用の可空な契約では変更できないこと")
-        .isEqualTo(HttpStatus.NOT_FOUND);
-
-    rest.exchange(
-        "/store/orders/" + orderId + "/confirmation",
-        HttpMethod.POST,
-        new HttpEntity<>(storeHeaders(STORE_A)),
-        JsonNode.class);
-    assertThat(updateReservationRequest(STORE_A, orderId, "{\"pax\": 2}").getStatusCode())
-        .as("確定後は通常の受注として汎用更新が受け持つこと")
-        .isEqualTo(HttpStatus.BAD_REQUEST);
-  }
-
-  private ResponseEntity<JsonNode> updateOrder(String id, String body) {
-    return rest.exchange(
-        "/store/orders/" + id,
-        HttpMethod.PUT,
-        new HttpEntity<>(body, storeHeaders(STORE_A)),
-        JsonNode.class);
+    OrderApplication after = orderApplicationRepository.findById(applicationId).orElseThrow();
+    assertThat(after.getStatus())
+        .as("失効は導出であり、行の状態は動かないこと")
+        .isEqualTo(OrderApplicationStatus.PENDING);
+    assertThat(after.getOrderId()).isNull();
   }
 
   @Test
   @DisplayName("指名なしで確定した受注を、キャストを設定せずに汎用更新で編集できること")
   void confirmedNominationFreeOrderCanBeEditedByTheGenericUpdate() {
-    String orderId = requestReservation(memberAToken, STORE_A, "確定後に人数を直す");
-    ResponseEntity<JsonNode> confirmed =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(confirmed.getStatusCode()).as("前提: 指名なしのまま確定できること").isEqualTo(HttpStatus.OK);
+    String applicationId = requestReservation(memberAToken, STORE_A, "確定後に人数を直す");
+    ResponseEntity<JsonNode> confirmed = confirm(STORE_A, applicationId);
+    assertThat(confirmed.getStatusCode()).as("前提: 指名なしのまま確定できること").isEqualTo(HttpStatus.CREATED);
     assertThat(confirmed.getBody().path("cast_id").isMissingNode()).as("前提: 指名なしであること").isTrue();
+    String orderId = confirmed.getBody().path("id").asString();
     long receptionistId = confirmed.getBody().path("receptionist_id").asLong();
 
     ResponseEntity<JsonNode> edited =
@@ -684,6 +586,14 @@ class MemberOrderIT extends CrossStoreTestSupport {
     assertThat(withoutReceptionist.getBody().path("receptionist_id").isMissingNode())
         .as("受付担当を作り出さずに済むこと")
         .isTrue();
+  }
+
+  private ResponseEntity<JsonNode> updateOrder(String id, String body) {
+    return rest.exchange(
+        "/store/orders/" + id,
+        HttpMethod.PUT,
+        new HttpEntity<>(body, storeHeaders(STORE_A)),
+        JsonNode.class);
   }
 
   @Test
@@ -724,70 +634,67 @@ class MemberOrderIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("他店舗は会員の申請を確定も謝絶もできず、申請はその後も処理できること")
   void otherStoreCannotConfirmOrDeclineForeignApplication() {
-    String orderId = requestReservation(memberAToken, STORE_A, "他店舗からの操作対象外");
+    String applicationId = requestReservation(memberAToken, STORE_A, "他店舗からの操作対象外");
 
-    ResponseEntity<JsonNode> foreignConfirm =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_B)),
-            JsonNode.class);
+    ResponseEntity<JsonNode> foreignConfirm = confirm(STORE_B, applicationId);
     assertThat(foreignConfirm.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-    ResponseEntity<JsonNode> foreignDecline =
-        rest.exchange(
-            "/store/orders/" + orderId + "/refusal",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_B)),
-            JsonNode.class);
+    ResponseEntity<JsonNode> foreignDecline = decline(STORE_B, applicationId, "他店舗の謝絶");
     assertThat(foreignDecline.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
     // 正向対照: 申請先の店舗ではそのまま確定できる（負向がルーティング起因でない証明）
-    ResponseEntity<JsonNode> ownConfirm =
-        rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(ownConfirm.getStatusCode()).isEqualTo(HttpStatus.OK);
+    ResponseEntity<JsonNode> ownConfirm = confirm(STORE_A, applicationId);
+    assertThat(ownConfirm.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(ownConfirm.getBody().path("status").asString()).isEqualTo("CONFIRMED");
   }
 
   @Test
-  @DisplayName("店舗が謝絶した申請が会員側でキャンセルとして見えること")
-  void declinedRequestAppearsCancelledToMember() {
-    String orderId = requestReservation(memberAToken, STORE_A, "謝絶対象");
+  @DisplayName("店舗が理由付きで謝絶した申請が会員側で謝絶として見え、理由が記録に残ること")
+  void declinedApplicationAppearsDeclinedToMember() {
+    String applicationId = requestReservation(memberAToken, STORE_A, "謝絶対象");
 
-    ResponseEntity<JsonNode> declined =
-        rest.exchange(
-            "/store/orders/" + orderId + "/refusal",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
     // 謝絶は結果を読まれない操作なので 204（本体なし）
+    ResponseEntity<JsonNode> declined = decline(STORE_A, applicationId, "満席のためお受けできません");
     assertThat(declined.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     JsonNode own = firstReservation(memberAToken);
-    assertThat(own.path("id").asString()).isEqualTo(orderId);
-    assertThat(own.path("status").asString()).isEqualTo("CANCELLED");
+    assertThat(own.path("id").asString()).isEqualTo(applicationId);
+    assertThat(own.path("status").asString()).isEqualTo("DECLINED");
+
+    OrderApplication application = orderApplicationRepository.findById(applicationId).orElseThrow();
+    assertThat(application.getDeclinedReason()).isEqualTo("満席のためお受けできません");
+    assertThat(application.getProcessedBy()).as("謝絶の実行者が残ること").isNotNull();
+
+    // 理由の無い謝絶は撥ねられる（記録の根拠を欠く謝絶を成立させない）
+    String another = requestReservation(memberAToken, STORE_A, "理由なし謝絶の対象");
+    ResponseEntity<JsonNode> reasonless =
+        rest.exchange(
+            "/store/order-applications/" + another + "/refusal",
+            HttpMethod.POST,
+            new HttpEntity<>("{}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(reasonless.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   // トークンを持たない要求は認証の失敗ではなく認可の拒否として扱われる（401 は失効・改竄トークンの側）。
   @Test
-  @DisplayName("匿名では会員の予約経路に到達できないこと")
-  void anonymousCannotReachMemberReservationRoutes() {
+  @DisplayName("匿名では会員の予約申請経路に到達できないこと")
+  void anonymousCannotReachMemberApplicationRoutes() {
     ResponseEntity<JsonNode> anonymous =
         rest.exchange(
-            "/platform/me/orders", HttpMethod.GET, new HttpEntity<>(jsonHeaders()), JsonNode.class);
+            "/platform/me/order-applications",
+            HttpMethod.GET,
+            new HttpEntity<>(jsonHeaders()),
+            JsonNode.class);
     assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
-  @DisplayName("壊れた Bearer トークンでは会員の予約経路が 401 になること")
+  @DisplayName("壊れた Bearer トークンでは会員の予約申請経路が 401 になること")
   void brokenBearerIsUnauthorized() {
     ResponseEntity<JsonNode> broken =
         rest.exchange(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             HttpMethod.GET,
             new HttpEntity<>(bearer("not-a-real-token")),
             JsonNode.class);
@@ -795,25 +702,28 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("店舗スタッフは会員の予約経路に到達できないこと")
-  void storeStaffCannotReachMemberReservationRoutes() {
+  @DisplayName("店舗スタッフは会員の予約申請経路に到達できないこと")
+  void storeStaffCannotReachMemberApplicationRoutes() {
     ResponseEntity<JsonNode> staff =
         rest.exchange(
-            "/platform/me/orders", HttpMethod.GET, new HttpEntity<>(bearer(token)), JsonNode.class);
+            "/platform/me/order-applications",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(token)),
+            JsonNode.class);
     assertThat(staff.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
-  /** 会員本人の一覧の先頭（業務日降順・id 降順のため、最後に申請したものが先頭に来る）。 */
+  /** 会員本人の一覧の先頭（希望日降順・id 降順のため、最後に申請したものが先頭に来る）。 */
   private JsonNode firstReservation(String memberToken) {
     ResponseEntity<JsonNode> list =
         rest.exchange(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             HttpMethod.GET,
             new HttpEntity<>(bearer(memberToken)),
             JsonNode.class);
     assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
     JsonNode first = list.getBody().path("content").path(0);
-    assertThat(first.isObject()).as("前提: 一覧に予約が現れること").isTrue();
+    assertThat(first.isObject()).as("前提: 一覧に申請が現れること").isTrue();
     return first;
   }
 

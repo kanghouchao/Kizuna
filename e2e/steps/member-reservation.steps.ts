@@ -5,7 +5,7 @@ import {
   createCast,
   createCustomer,
   createShift,
-  declineOrder,
+  declineApplication,
   deleteCast,
   deleteCustomer,
   cancelOrder,
@@ -42,20 +42,20 @@ let createdOrderId = '';
 
 /**
  * 未処理の予約申請のうち、このシナリオの会員が出したものの id を引く
- * （GET /api/store/orders/work-queue の未確定群）。UI から出した申請は応答を取り損ねると id が
+ * （GET /api/store/order-applications の受付箱）。UI から出した申請は応答を取り損ねると id が
  * 手元に無いため、後片付けはこの引き直しを拠り所にする。
  */
-async function findPendingRequestIds(
+async function findPendingApplicationIds(
   request: APIRequestContext,
   token: string,
   code: string
 ): Promise<string[]> {
-  const res = await request.get('/api/store/orders/work-queue', {
+  const res = await request.get('/api/store/order-applications', {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    params: { statuses: 'CREATED', size: 100 },
+    params: { statuses: 'PENDING', size: 100 },
   });
   if (!res.ok()) {
-    throw new Error(`list work queue failed: ${res.status()} ${await res.text()}`);
+    throw new Error(`list applications failed: ${res.status()} ${await res.text()}`);
   }
   const body = await res.json();
   const rows = body.content as Array<{ id: string; requester_member_code: string | null }>;
@@ -142,15 +142,16 @@ When('人数 {string} で予約を申請する', async ({ page }, pax: string) =
   await page.getByLabel('利用日').fill(todayInTokyo());
   await page.getByLabel('店舗へ名乗るお名前').fill(DECLARED_NAME);
   await page.getByLabel('人数').fill(pax);
-  const [response] = await Promise.all([
+  // 後片付けは会員コードで申請を引き直すため id は控えない。POST の完了だけを待つ。
+  await Promise.all([
     page.waitForResponse(
-      resp => resp.url().includes('/platform/me/orders') && resp.request().method() === 'POST',
+      resp =>
+        resp.url().includes('/platform/me/order-applications') &&
+        resp.request().method() === 'POST',
       { timeout: 15000 }
     ),
     page.getByRole('button', { name: 'この内容で申請する' }).click(),
   ]);
-  const body = await response.json();
-  createdOrderId = body.id as string;
 });
 
 Then('予約一覧に {string} の予約が表示される', async ({ page }, statusLabel: string) => {
@@ -159,23 +160,27 @@ Then('予約一覧に {string} の予約が表示される', async ({ page }, st
   await expect(item.getByText(statusLabel, { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
-When('店舗管理者が受注一覧の「未確定」群で予約を確定する', async ({ page }) => {
+When('店舗管理者が受付箱で予約を確定する', async ({ page }) => {
   const storeId = await loginViaUiAndEnterStore(page);
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
-  // 群は店舗共有なので、先頭を掴むと先に残っている他人の申請を確定してしまう。
+  // 受付箱は店舗共有なので、先頭を掴むと先に残っている他人の申請を確定してしまう。
   // カードに出る会員コードでこのシナリオの申請だけを名指す。
-  const request = page
-    .getByRole('listitem')
-    .filter({ hasText: 'WEB申請' })
-    .filter({ hasText: memberCode });
-  await expect(request).toBeVisible({ timeout: 15000 });
-  await Promise.all([
+  const application = page.getByRole('listitem').filter({ hasText: memberCode });
+  await expect(application).toBeVisible({ timeout: 15000 });
+  // 確定は申請内容を予填したモーダル（受注の作成操作）。内容はそのまま確定する。
+  await application.getByRole('button', { name: '確定' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 15000 });
+  const [response] = await Promise.all([
     page.waitForResponse(
       resp => resp.url().includes('/confirmation') && resp.request().method() === 'POST',
       { timeout: 15000 }
     ),
-    request.getByRole('button', { name: '確定' }).click(),
+    dialog.getByRole('button', { name: '確定する' }).click(),
   ]);
+  // 後片付けは受注を理由付き取消で終端へ送るため、生成された受注の id を控える。
+  const body = await response.json();
+  createdOrderId = body.id as string;
 });
 
 When('予約一覧を開き直す', async ({ page }) => {
@@ -191,7 +196,7 @@ When('予約一覧を開き直す', async ({ page }) => {
 When('予約を取り下げる', async ({ page }) => {
   await Promise.all([
     page.waitForResponse(
-      resp => resp.url().includes('/cancellation') && resp.request().method() === 'POST',
+      resp => resp.url().includes('/withdrawal') && resp.request().method() === 'POST',
       { timeout: 15000 }
     ),
     page.getByRole('button', { name: '取り下げる' }).first().click(),
@@ -203,17 +208,17 @@ When('予約を取り下げる', async ({ page }) => {
 // 受注は顧客・キャストを参照する（FK RESTRICT）ため、必ず受注 → シフト → キャスト → 顧客の順で消す。
 After(async ({ request }) => {
   const adminToken = await loginAsStoreAdmin(request);
-  // 受注を消す口は無い（ADR 0013）。未確定のまま終わった申請は謝絶で、確定まで進んだものは
-  // 理由付きの取消で終端へ送り、対応が要る群から外す。
+  // 申請行を消す口は無い。未処理のまま終わった申請は理由付きの謝絶で終端へ送り、受付箱から外す。
+  // 確定まで進んだ受注は理由付きの取消で終端へ送る（ADR 0013）。
   // 対象は id ではなく会員コードで引き直す — 申請の POST 応答を取り損ねた中断でも残さないため。
   const pendingIds = memberCode
-    ? await findPendingRequestIds(request, adminToken, memberCode).catch(error => {
+    ? await findPendingApplicationIds(request, adminToken, memberCode).catch(error => {
         warnCleanupFailure(error);
         return [] as string[];
       })
     : [];
   for (const id of pendingIds) {
-    await declineOrder(request, adminToken, id).catch(warnCleanupFailure);
+    await declineApplication(request, adminToken, id, 'e2e の後片付け').catch(warnCleanupFailure);
   }
   if (createdOrderId) {
     // 確定まで進んだ受注は取消で終端へ送る。既に終端なら撥ねられるが、それは想定内なので

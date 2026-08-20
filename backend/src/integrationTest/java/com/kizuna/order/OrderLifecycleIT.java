@@ -337,26 +337,6 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("未確定の申請は取消の専用操作では取り消せないこと（謝絶が受け持つ）")
-  void pendingRequestsCannotBeCancelled() {
-    // 定義域は CONFIRMED → CANCELLED のみ。未確定の申請は店舗がまだ受諾していないので謝絶で扱う。
-    // 会員申請は API から起こせないため、行を直挿しして未確定の状態を作る。
-    Order pending =
-        Order.builder()
-            .businessDate(LocalDate.now())
-            .pax(2)
-            .status(OrderStatus.CREATED)
-            .receptionRoute(ReceptionRoute.WEB)
-            .requesterMemberCode("999999999999")
-            .build();
-    pending.setStoreId(STORE_A);
-    String orderId = orderRepository.save(pending).getId();
-
-    assertThat(cancel(orderId, "未確定を取消そうとした").getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(statusOf(orderId)).isEqualTo("CREATED");
-  }
-
-  @Test
   @DisplayName("受注 1 件を名指して消す口が存在しないこと")
   void thereIsNoEndpointToDeleteASingleOrder() {
     String orderId = orderId(createOrder(body -> body));
@@ -383,7 +363,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     String cancelledId = orderId(createOrder(body -> body.field("remarks", "\"" + label + "\"")));
     assertThat(cancel(cancelledId, "群の確認").getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
-    List<String> queue = idsOf(workQueue("statuses=CREATED,CONFIRMED&size=2000"));
+    List<String> queue = idsOf(workQueue("statuses=CONFIRMED&size=2000"));
 
     assertThat(queue).contains(confirmedId);
     assertThat(queue).doesNotContain(cancelledId);
@@ -424,28 +404,25 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     String other = orderId(createOrder(body -> body.field("customer_name", "\"無関係の客\"")));
 
     List<String> byName =
-        idsOf(
-            workQueue(
-                "statuses=CREATED,CONFIRMED&size=2000&customer_name=" + unique.substring(0, 6)));
+        idsOf(workQueue("statuses=CONFIRMED&size=2000&customer_name=" + unique.substring(0, 6)));
     assertThat(byName).containsExactly(target);
     assertThat(byName).doesNotContain(other);
 
-    List<String> byDate =
-        idsOf(workQueue("statuses=CREATED,CONFIRMED&size=2000&business_date=" + day));
+    List<String> byDate = idsOf(workQueue("statuses=CONFIRMED&size=2000&business_date=" + day));
     assertThat(byDate).contains(target).doesNotContain(other);
   }
 
   @Test
-  @DisplayName("台帳にも連絡先にも名の無い会員申請を、申請時の名乗りで検索できること")
+  @DisplayName("台帳にも連絡先にも名の無い会員申請由来の受注を、申請時の名乗りで検索できること")
   void workQueueFindsMemberRequestsByTheirDeclaredName() {
-    // 当店に台帳行の無い会員の初回申請は顧客が着かず、受付で録入する連絡先も持たない。名乗りまで
+    // 会員行が消えた申請の確定は顧客が着かず、受付で録入する連絡先も持たない。名乗りまで
     // 見ないと、画面に出ている行が検索した途端に消える（呼び名の出所と検索の出所が食い違うため）。
     String declared = "名乗り" + nonce;
     Order request =
         Order.builder()
             .businessDate(LocalDate.now())
             .pax(2)
-            .status(OrderStatus.CREATED)
+            .status(OrderStatus.CONFIRMED)
             .receptionRoute(ReceptionRoute.WEB)
             .requesterMemberCode("999999999999")
             .requesterDeclaredName(declared)
@@ -453,7 +430,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     request.setStoreId(STORE_A);
     String orderId = orderRepository.save(request).getId();
 
-    JsonNode found = workQueue("statuses=CREATED&size=2000&customer_name=" + declared);
+    JsonNode found = workQueue("statuses=CONFIRMED&size=2000&customer_name=" + declared);
     assertThat(idsOf(found)).contains(orderId);
 
     // null の項目はキーごと応答から消えるため、欠落は has() で見る（isNull() は欠落に対して偽）
@@ -478,7 +455,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
         orderId(
             createOrder(body -> body.field("customer_name", "\"" + unique + "\"").without("pax")));
 
-    String query = "statuses=CREATED,CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=1";
+    String query = "statuses=CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=1";
     JsonNode first = workQueue(query);
     List<String> collected = new ArrayList<>(idsOf(first));
     String cursor = first.path("next_cursor").asString();
@@ -505,7 +482,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
                           .field("pax", String.valueOf(value)))));
     }
 
-    String query = "statuses=CREATED,CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=1";
+    String query = "statuses=CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=1";
     JsonNode first = workQueue(query);
     assertThat(idsOf(first)).containsExactly(created.get(0));
     String cursor = first.path("next_cursor").asString();
@@ -531,7 +508,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
             createOrder(
                 body -> body.field("customer_name", "\"" + unique + "\"").field("pax", "9")));
 
-    String base = "statuses=CREATED,CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=2000";
+    String base = "statuses=CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=2000";
     assertThat(idsOf(workQueue(base + "&desc=false"))).containsExactly(small, large);
     assertThat(idsOf(workQueue(base + "&desc=true"))).containsExactly(large, small);
   }

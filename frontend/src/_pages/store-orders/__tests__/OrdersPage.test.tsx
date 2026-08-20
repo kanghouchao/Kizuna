@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
-import { Order, orderApi } from '@/entities/order';
+import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/order', () => ({
@@ -16,11 +16,13 @@ jest.mock('@/entities/order', () => ({
     listCastCandidates: jest.fn(),
     listWorkQueue: jest.fn(),
     listArchive: jest.fn(),
-    confirm: jest.fn(),
-    decline: jest.fn(),
     complete: jest.fn(),
     completionPreview: jest.fn(),
-    updateReservationRequest: jest.fn(),
+  },
+  orderApplicationApi: {
+    list: jest.fn(),
+    confirm: jest.fn(),
+    decline: jest.fn(),
   },
 }));
 
@@ -34,6 +36,7 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
+const mockedApplicationApi = orderApplicationApi as jest.Mocked<typeof orderApplicationApi>;
 
 /** 確定済みの受注 1 件。fixture は手書きで、Order 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<Order> = {}): Order {
@@ -55,16 +58,16 @@ function confirmedOrder(overrides: Partial<Order> = {}): Order {
   };
 }
 
-/** 会員ポータルからの未確定申請 1 件。 */
-function pendingRequest(overrides: Partial<Order> = {}): Order {
+/** 受付箱の未処理申請 1 件。fixture は手書きで、型との照合は tsc の側で効く。 */
+function pendingApplication(overrides: Partial<OrderApplicationRow> = {}): OrderApplicationRow {
   return {
-    id: 'r1',
+    id: 'a1',
     business_date: '2026-07-05',
-    customer_name: '高橋美咲',
-    pax: 2,
-    status: 'CREATED',
-    reception_route: 'WEB',
+    requester_declared_name: '高橋美咲',
     requester_member_code: '000123456789',
+    pax: 2,
+    status: 'PENDING',
+    expired: false,
     ...overrides,
   };
 }
@@ -75,10 +78,16 @@ function stubQueue(...rows: Order[]) {
   mockedOrderApi.listWorkQueue.mockResolvedValue({ rows, nextCursor: null });
 }
 
+function stubInbox(...rows: OrderApplicationRow[]) {
+  mockedApplicationApi.list.mockResolvedValue({ rows, nextCursor: null });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockedOrderApi.listWorkQueue.mockResolvedValue({ rows: [], nextCursor: null });
   mockedOrderApi.listArchive.mockResolvedValue(EMPTY_ARCHIVE);
+  mockedApplicationApi.list.mockResolvedValue({ rows: [], nextCursor: null });
+  mockedOrderApi.listReceptionists.mockResolvedValue([]);
 });
 
 describe('作業キューの描画', () => {
@@ -92,58 +101,113 @@ describe('作業キューの描画', () => {
     expect(screen.getByText(/2 名/)).toBeInTheDocument();
   });
 
-  it('群の指定は未確定と確定だけで、終端状態は読み口へ要求しないこと', async () => {
+  it('作業キューの群は確定済みだけで、未処理の申請は受付箱の読み口へ要求すること', async () => {
     render(<OrderListPage />);
 
     await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
-    // 終端を混ぜると、完了が積み上がった店舗で対応が要る受注が取得窓から落ちる
+    // すべての受注は確定で出生する（ADR 0017）。終端を混ぜると、完了が積み上がった店舗で
+    // 対応が要る受注が取得窓から落ちる
     expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(
-      expect.objectContaining({ statuses: ['CREATED', 'CONFIRMED'] })
+      expect.objectContaining({ statuses: ['CONFIRMED'] })
+    );
+    expect(mockedApplicationApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({ statuses: ['PENDING'] })
     );
   });
 
-  it('未確定の会員申請には確定・謝絶が出て、確定済みには出ないこと', async () => {
-    stubQueue(pendingRequest(), confirmedOrder());
+  it('受付箱の申請には確定・謝絶が出て、作業キューの受注は完了・取消を持つこと', async () => {
+    stubInbox(pendingApplication());
+    stubQueue(confirmedOrder());
     render(<OrderListPage />);
 
     expect(await screen.findByRole('button', { name: '確定' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
-    expect(screen.getByText('WEB申請')).toBeInTheDocument();
+    expect(screen.getByText('高橋美咲')).toBeInTheDocument();
+    expect(screen.getByText(/会員コード: 000123456789/)).toBeInTheDocument();
     // 確定済みの側は完了と取消を持つ
     expect(screen.getByRole('button', { name: '完了' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
   });
 
-  it('確定した受注は群に残り、確定後の操作へ入れ替わること', async () => {
-    stubQueue(pendingRequest());
-    mockedOrderApi.confirm.mockResolvedValue(pendingRequest({ status: 'CONFIRMED' }));
+  it('失効した申請は失効を名乗り、確定・謝絶を出さないこと', async () => {
+    // サーバも拒否する操作を出し続けない。行は導出のまま残る（状態は PENDING のまま動かない）
+    stubInbox(pendingApplication({ expired: true }));
     render(<OrderListPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '確定' }));
-
-    await waitFor(() => expect(mockedOrderApi.confirm).toHaveBeenCalledWith('r1'));
-    // 確定は「対応が要る」群の中の移動（未確定 → 確定）で、群からは外れない。取り除くと
-    // 続けて完了させたい受注が画面から消え、取り直すまで戻ってこない
-    expect(screen.getByText('高橋美咲')).toBeInTheDocument();
-    // 応答の内容へ差し替わるので、次の操作は確定済みのものになる
-    await waitFor(() => expect(screen.getByRole('button', { name: '完了' })).toBeInTheDocument());
+    expect(await screen.findByText('失効')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '確定' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '謝絶' })).not.toBeInTheDocument();
   });
 
-  it('識別子の無い受注には要求を組まず、理由を名乗ること', async () => {
-    // `?? ''` で素通しすると POST /store/orders//confirmation が飛び、届いた先の 404 が
-    // 「確定に失敗しました」と見分けが付かなくなる
-    stubQueue(pendingRequest({ id: undefined }));
+  it('確定は申請内容を予填したモーダルで行い、申請が受付箱から外れて作業キューを取り直すこと', async () => {
+    stubInbox(pendingApplication());
+    mockedApplicationApi.confirm.mockResolvedValue(confirmedOrder({ id: 'order-9' }));
     render(<OrderListPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: '確定' }));
+
+    const dialog = await screen.findByRole('dialog');
+    // 申請内容が予填される。ここで直した値は受注にだけ現れ、申請原文は動かない
+    await waitFor(() => expect(within(dialog).getByLabelText('人数')).toHaveValue(2));
+    fireEvent.change(within(dialog).getByLabelText('人数'), { target: { value: '5' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
+
+    await waitFor(() =>
+      expect(mockedApplicationApi.confirm).toHaveBeenCalledWith(
+        'a1',
+        expect.objectContaining({ business_date: '2026-07-05', pax: 5 })
+      )
+    );
+    // 申請は受付箱から外れ、生まれた受注は作業キューの取り直しで現れる
+    await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(2));
+  });
+
+  it('識別子の無い申請の謝絶は要求を組まず、理由を名乗ること', async () => {
+    // `?? ''` で素通しすると POST /store/order-applications//refusal が飛び、届いた先の 404 が
+    // 「謝絶に失敗しました」と見分けが付かなくなる
+    stubInbox(pendingApplication({ id: undefined }));
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '謝絶' }));
+    fireEvent.change(screen.getByLabelText('謝絶の理由'), { target: { value: '満席' } });
+    fireEvent.click(screen.getByRole('button', { name: '謝絶する' }));
 
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith(
-        expect.stringContaining('受注の識別子が取得できていません')
+        expect.stringContaining('予約申請の識別子が取得できていません')
       )
     );
-    expect(mockedOrderApi.confirm).not.toHaveBeenCalled();
+    expect(mockedApplicationApi.decline).not.toHaveBeenCalled();
+  });
+
+  it('謝絶は理由が空のまま実行できず、理由を添えると申請が受付箱から外れること', async () => {
+    stubInbox(pendingApplication());
+    mockedApplicationApi.decline.mockResolvedValue(undefined);
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '謝絶' }));
+    // 検証で押せなくしない — 灰色のボタンは何が足りないかを言わない（DESIGN.md）
+    fireEvent.click(screen.getByRole('button', { name: '謝絶する' }));
+    expect(await screen.findByText('謝絶の理由を入力してください')).toBeInTheDocument();
+    expect(mockedApplicationApi.decline).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('謝絶の理由'), { target: { value: '満席' } });
+    fireEvent.click(screen.getByRole('button', { name: '謝絶する' }));
+
+    await waitFor(() =>
+      expect(mockedApplicationApi.decline).toHaveBeenCalledWith('a1', { reason: '満席' })
+    );
+    await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
+  });
+
+  it('受付箱の取得の失敗を空表示と区別すること', async () => {
+    mockedApplicationApi.list.mockRejectedValue(new Error('boom'));
+    render(<OrderListPage />);
+
+    // 「申請なし」に見せると未処理を見落とす
+    expect(await screen.findByRole('alert')).toHaveTextContent('予約申請を取得できませんでした');
+    expect(screen.queryByText('未処理の予約申請はありません')).not.toBeInTheDocument();
   });
 
   it('取得の失敗を空表示と区別すること', async () => {
@@ -382,17 +446,6 @@ describe('一覧内の編集モーダル', () => {
       )
     );
   });
-
-  it('未確定の申請は申請専用のモーダルで編集すること', async () => {
-    stubQueue(pendingRequest());
-    render(<OrderListPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-
-    // 申請は指名・受付担当を可空として扱う専用の契約で編集する（端点も契約も従来どおり）
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(mockedOrderApi.get).not.toHaveBeenCalled();
-  });
 });
 
 describe('アーカイブ', () => {
@@ -428,26 +481,6 @@ describe('アーカイブ', () => {
     // 時刻は閲覧者の時間帯へ直して出す。応答の文字列を切って出すと、末尾の +09:00 が落ちた壁時計が
     // そのまま日本時間の顔をして並ぶ（実行環境の時間帯に依らないよう、切った形が無いことで見る）
     expect(screen.queryByText(/2026-07-03 17:42/)).not.toBeInTheDocument();
-  });
-
-  it('取消の記録を持たない CANCELLED を「実行者不明」と呼ばないこと', async () => {
-    // 謝絶と会員の取り下げは確定へ至らないまま消えた申請で、理由も実行者も構造的に存在しない
-    mockedOrderApi.listArchive.mockImplementation(async params =>
-      params.statuses[0] === 'CANCELLED'
-        ? {
-            rows: [pendingRequest({ id: 'x3', status: 'CANCELLED' })],
-            page: 0,
-            pageCount: 1,
-            total: 1,
-          }
-        : EMPTY_ARCHIVE
-    );
-    render(<OrderListPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: /取消 \d+ 件/ }));
-
-    expect(await screen.findByText('確定前に取り消された申請')).toBeInTheDocument();
-    expect(screen.queryByText(/実行者不明/)).not.toBeInTheDocument();
   });
 
   it('受注が移ってきた群を取り直すこと', async () => {

@@ -130,9 +130,10 @@ databaseChangeLog:
                   type: TEXT
                   remarks: キャスト・ドライバーへのメッセージ
               - column:
+                  # すべての受注は確定で出生する（ADR 0017）。未処理の申請は t_order_applications が受ける。
                   name: status
                   type: VARCHAR(50)
-                  defaultValue: CREATED
+                  defaultValue: CONFIRMED
                   remarks: 注文ステータス
               - column:
                   name: pax
@@ -296,3 +297,175 @@ databaseChangeLog:
                   name: business_date
               - column:
                   name: id
+  - changeSet:
+      id: store-v0100-004-order-application-schema
+      author: kanghouchao
+      # 予約申請は受注と別の付随記録（ADR 0017）。店舗の確定で CONFIRMED の受注を生成し order_id を回写する。
+      # 会員・ゲスト共用の受け皿（ゲスト入口の追加列はその導入時に拡充する）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_order_applications
+            remarks: 予約申請テーブル
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_applications
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  # 終端（CONFIRMED/DECLINED/WITHDRAWN）に入った申請行は以後動かない。失効は状態に
+                  # 持たず、希望日経過の PENDING を導出で失効扱いする（バッチ無し）。
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 申請ステータス（PENDING/CONFIRMED/DECLINED/WITHDRAWN）
+              - column:
+                  name: business_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+                  remarks: 希望する利用日（営業日）
+              - column:
+                  name: arrival_scheduled_start_time
+                  type: TIME
+                  remarks: 希望する到着時刻
+              - column:
+                  name: pax
+                  type: INTEGER
+                  remarks: 人数
+              - column:
+                  name: cast_id
+                  type: VARCHAR(64)
+                  remarks: 希望する指名キャスト。NULL は指名なし
+              - column:
+                  name: remarks
+                  type: VARCHAR(500)
+                  remarks: 申請時の備考・要望
+              - column:
+                  name: requester_member_id
+                  type: BIGINT
+                  remarks: 申請した会員。会員削除後も履歴を残すため SET NULL
+              - column:
+                  name: requester_member_code
+                  type: VARCHAR(20)
+                  remarks: 申請時点の会員コード（会員削除後も申請者を読めるようにするスナップショット）
+              - column:
+                  name: requester_declared_name
+                  type: VARCHAR(255)
+                  remarks: 申請時に本人が店舗へ名乗った名前（確定時の自動整備で台帳行の氏名になる）
+              - column:
+                  name: declined_reason
+                  type: VARCHAR(500)
+                  remarks: 謝絶の理由。謝絶していない申請では NULL
+              - column:
+                  name: processed_by
+                  type: BIGINT
+                  remarks: 終端遷移（確定・謝絶・取り下げ）の実行者。操作者削除後も記録を残すため SET NULL
+              - column:
+                  name: processed_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 終端遷移の実行時刻
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  remarks: 確定時に生成した受注の回写。確定していない申請では NULL
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_applications_store
+            baseTableName: t_order_applications
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 指名キャストへの参照は削除を止める（業務例外へ写像するため NO ACTION — DbConstraint の Javadoc 参照）。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_applications_cast
+            baseTableName: t_order_applications
+            baseColumnNames: cast_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_applications_requester_member
+            baseTableName: t_order_applications
+            baseColumnNames: requester_member_id
+            referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_applications_processed_by
+            baseTableName: t_order_applications
+            baseColumnNames: processed_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        # 受注を名指して消す口は無く（ADR 0013）、受注が消えるのは店舗削除の連鎖だけ。そのとき申請行も
+        # 同じ連鎖で消えるため、回写の参照は削除を止める宣言でよい（業務例外への写像は持たない）。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_applications_order
+            baseTableName: t_order_applications
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        # 受付箱の読み口が引く索引。述語は「store_id = ? かつ status in (...)」でどちらも等値なので
+        # 先頭 2 列に置け、後続の (business_date, id) は既定の並びそのもの。
+        - createIndex:
+            indexName: idx_t_order_applications_store_status_date
+            tableName: t_order_applications
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: status
+              - column:
+                  name: business_date
+              - column:
+                  name: id
+        - createIndex:
+            indexName: idx_t_order_applications_cast
+            tableName: t_order_applications
+            columns:
+              - column:
+                  name: cast_id
+        - createIndex:
+            indexName: idx_t_order_applications_requester_member
+            tableName: t_order_applications
+            columns:
+              - column:
+                  name: requester_member_id
+        - createIndex:
+            indexName: idx_t_order_applications_order
+            tableName: t_order_applications
+            columns:
+              - column:
+                  name: order_id

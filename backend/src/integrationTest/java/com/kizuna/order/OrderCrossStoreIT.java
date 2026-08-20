@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderApplication;
+import com.kizuna.order.domain.OrderApplicationRepository;
+import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
@@ -34,6 +37,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
 
   @Autowired private CustomerRepository customerRepository;
   @Autowired private OrderRepository orderRepository;
+  @Autowired private OrderApplicationRepository orderApplicationRepository;
 
   private final long nonce = System.nanoTime();
 
@@ -170,7 +174,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
 
     ResponseEntity<String> queue =
         rest.exchange(
-            "/store/orders/work-queue?statuses=CREATED,CONFIRMED&size=2000",
+            "/store/orders/work-queue?statuses=CONFIRMED&size=2000",
             HttpMethod.GET,
             new HttpEntity<>(storeHeaders(STORE_A)),
             String.class);
@@ -230,56 +234,29 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("店舗起点の受注は申請専用の確定・謝絶で変更できず、他店舗からは到達もできないこと")
-  void otherStoreCannotConfirmOrDeclineForeignOrder() {
-    String castId = createCastAs(STORE_A, "統合テストキャスト（確定謝絶用）");
+  @DisplayName("店舗起点の受注は申請の空間に現れず、確定・謝絶の対象にならないこと")
+  void ordersAreUnreachableThroughApplicationOperations() {
+    String castId = createCastAs(STORE_A, "統合テスト（確定謝絶用）");
 
-    // 店舗が起こした受注は会員申請ではないため、自店舗でも申請専用の操作では変更できない
-    // （会員申請での正向対照は MemberOrderIT が持つ）。ステータス変更は通常の更新経路が受け持つ。
-    String controlId = createOrderAs(STORE_A, castId);
-    ResponseEntity<JsonNode> ownConfirm =
-        rest.exchange(
-            "/store/orders/" + controlId + "/confirmation",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(ownConfirm.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-
-    String declineControlId = createOrderAs(STORE_A, castId);
-    ResponseEntity<JsonNode> ownDecline =
-        rest.exchange(
-            "/store/orders/" + declineControlId + "/refusal",
-            HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(ownDecline.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-    ResponseEntity<JsonNode> untouched =
-        rest.exchange(
-            "/store/orders/" + declineControlId,
-            HttpMethod.GET,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            JsonNode.class);
-    assertThat(untouched.getBody().path("status").asString())
-        .as("謝絶が拒否された受注はキャンセルへ落ちないこと")
-        .isEqualTo("CONFIRMED");
-
-    // 負向: store B は store A の受注に申請専用経路でも到達できない
+    // 受注と申請は別記録。受注の id を申請の操作へ渡しても、その id の申請は存在しない
     String orderId = createOrderAs(STORE_A, castId);
-    ResponseEntity<JsonNode> foreignConfirm =
+    ResponseEntity<JsonNode> confirmAttempt =
         rest.exchange(
-            "/store/orders/" + orderId + "/confirmation",
+            "/store/order-applications/" + orderId + "/confirmation",
             HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_B)),
+            new HttpEntity<>(
+                "{\"business_date\": \"" + LocalDate.now() + "\", \"pax\": 2}",
+                storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(foreignConfirm.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(confirmAttempt.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
-    ResponseEntity<JsonNode> foreignDecline =
+    ResponseEntity<JsonNode> declineAttempt =
         rest.exchange(
-            "/store/orders/" + orderId + "/refusal",
+            "/store/order-applications/" + orderId + "/refusal",
             HttpMethod.POST,
-            new HttpEntity<>(storeHeaders(STORE_B)),
+            new HttpEntity<>("{\"reason\": \"対象外\"}", storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(foreignDecline.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(declineAttempt.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     // 拒否された受注は出生時のまま（確定）残っている
     ResponseEntity<JsonNode> after =
@@ -290,6 +267,74 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(after.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(after.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+  }
+
+  @Test
+  @DisplayName("予約受付箱が他店舗の申請を返さず、他店舗からは確定・謝絶にも到達できないこと")
+  void applicationInboxDoesNotLeakForeignApplications() {
+    // 会員経路は店舗を選べるため、他店舗の申請は直挿しで用意する（基底のシードユーザーは店舗1のみ授権）。
+    // 名乗った名前は受付箱の応答にそのまま載る項目であり、漏れれば文字列として現れる。
+    String foreignName = "他店舗申請カナリア-" + nonce;
+    OrderApplication foreign =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.PENDING)
+            .businessDate(LocalDate.now())
+            .pax(2)
+            .requesterMemberCode("000000000001")
+            .requesterDeclaredName(foreignName)
+            .build();
+    foreign.setStoreId(STORE_B);
+    String foreignId = orderApplicationRepository.save(foreign).getId();
+
+    // 正向対照: 自店舗の申請は現れる（負向が読み口の書き損じ由来でない証明）
+    String ownName = "自店舗申請対照-" + nonce;
+    OrderApplication own =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.PENDING)
+            .businessDate(LocalDate.now())
+            .pax(2)
+            .requesterMemberCode("000000000002")
+            .requesterDeclaredName(ownName)
+            .build();
+    own.setStoreId(STORE_A);
+    orderApplicationRepository.save(own);
+
+    ResponseEntity<String> inbox =
+        rest.exchange(
+            "/store/order-applications?statuses=PENDING&size=2000",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            String.class);
+    assertThat(inbox.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(inbox.getBody()).as("正向対照: 自店舗の申請は現れること").contains(ownName);
+    assertThat(inbox.getBody())
+        .as("他店舗の申請の実データ・ID が生ボディに現れないこと")
+        .doesNotContain(foreignName)
+        .doesNotContain(foreignId);
+
+    // 他店舗の申請は ID を知っていても確定・謝絶に到達できない（storeFilter は主キー直接ロードにも掛かる）
+    ResponseEntity<JsonNode> foreignConfirm =
+        rest.exchange(
+            "/store/order-applications/" + foreignId + "/confirmation",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                "{\"business_date\": \"" + LocalDate.now() + "\", \"pax\": 2}",
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(foreignConfirm.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    ResponseEntity<JsonNode> foreignDecline =
+        rest.exchange(
+            "/store/order-applications/" + foreignId + "/refusal",
+            HttpMethod.POST,
+            new HttpEntity<>("{\"reason\": \"他店舗の謝絶\"}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(foreignDecline.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    OrderApplication untouched = orderApplicationRepository.findById(foreignId).orElseThrow();
+    assertThat(untouched.getStatus())
+        .as("拒否された申請は未処理のまま残ること")
+        .isEqualTo(OrderApplicationStatus.PENDING);
   }
 
   @Test

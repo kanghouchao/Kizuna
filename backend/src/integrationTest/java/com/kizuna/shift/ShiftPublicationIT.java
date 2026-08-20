@@ -261,7 +261,7 @@ class ShiftPublicationIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> requestReservation(String memberToken, String castId) {
     return rest.postForEntity(
-        "/platform/me/orders",
+        "/platform/me/order-applications",
         new HttpEntity<>(
             "{\"store_id\": "
                 + STORE_A

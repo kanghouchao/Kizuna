@@ -3,23 +3,36 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
-import { MEMBER_ORDER_STATUS_LABELS, MemberOrder, memberOrderApi } from '@/entities/order';
+import {
+  MemberOrderApplication,
+  ORDER_APPLICATION_STATUS_LABELS,
+  memberOrderApplicationApi,
+} from '@/entities/order';
 import { getApiErrorMessage, useCursorList } from '@/shared/lib';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
 
-/** 予約の状態バッジ。確定前だけが取り下げ可能なので、申請中を強調する。 */
-function StatusBadge({ status }: { status: MemberOrder['status'] }) {
-  if (!status) return null;
+/**
+ * 予約申請の状態バッジ。行の状態は PENDING のままでも、希望日を過ぎた申請はサーバの導出（expired）に
+ * 従って失効と表示する — 画面が日時を比べると、営業日の区切り（日付変更時刻）とずれる。
+ */
+function StatusBadge({ application }: { application: MemberOrderApplication }) {
+  if (!application.status) return null;
+  if (application.status === 'PENDING' && application.expired) {
+    return (
+      <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
+        失効
+      </Badge>
+    );
+  }
+  const styles: Record<MemberOrderApplication['status'] & string, string> = {
+    PENDING: 'border-transparent bg-warning/10 text-warning-strong',
+    CONFIRMED: 'border-transparent bg-success/10 text-success-strong',
+    DECLINED: 'border-transparent bg-destructive/10 text-destructive-strong',
+    WITHDRAWN: 'border-transparent bg-muted text-foreground',
+  };
   return (
-    <Badge
-      variant="outline"
-      className={
-        status === 'CREATED'
-          ? 'border-transparent bg-primary/10 text-primary-strong'
-          : 'border-transparent bg-muted text-foreground'
-      }
-    >
-      {MEMBER_ORDER_STATUS_LABELS[status]}
+    <Badge variant="outline" className={styles[application.status]}>
+      {ORDER_APPLICATION_STATUS_LABELS[application.status]}
     </Badge>
   );
 }
@@ -27,11 +40,11 @@ function StatusBadge({ status }: { status: MemberOrder['status'] }) {
 /** 1 回に読み込む件数。会員の画面は縦に伸ばす前提なので、追加読み込みで過去へ遡る。 */
 const PAGE_SIZE = 20;
 
-/** 会員ポータルの予約一覧。全店舗を集約し、確定前のものは本人が取り下げられる。 */
+/** 会員ポータルの予約申請一覧。全店舗を集約し、未処理のものは本人が取り下げられる。 */
 export function MemberReservationsPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。要求サイズ自体を
-  // 膨らませると、サーバ側の取得上限に当たった時点でそれ以降の予約へ到達できなくなる。
+  // 膨らませると、サーバ側の取得上限に当たった時点でそれ以降の申請へ到達できなくなる。
   const {
     rows: reservations,
     setRows: setReservations,
@@ -40,13 +53,15 @@ export function MemberReservationsPage() {
     hasMore,
     reload,
     loadMore,
-  } = useCursorList<MemberOrder>(cursor => memberOrderApi.list({ cursor, size: PAGE_SIZE }));
+  } = useCursorList<MemberOrderApplication>(cursor =>
+    memberOrderApplicationApi.list({ cursor, size: PAGE_SIZE })
+  );
 
-  const cancel = async (reservation: MemberOrder) => {
+  const withdraw = async (reservation: MemberOrderApplication) => {
     setProcessingId(reservation.id ?? null);
     try {
-      // 取り下げても予約は一覧に残る（状態が変わるだけ）ので、その行だけ差し替える。
-      const updated = await memberOrderApi.cancel(reservation.id);
+      // 取り下げても申請は一覧に残る（状態が変わるだけ）ので、その行だけ差し替える。
+      const updated = await memberOrderApplicationApi.withdraw(reservation.id);
       notify.success('予約を取り下げました');
       setReservations(prev => prev.map(row => (row.id === reservation.id ? updated : row)));
     } catch (error) {
@@ -78,7 +93,7 @@ export function MemberReservationsPage() {
                 <li key={reservation.id} className="rounded-[10px] border bg-card p-4 shadow-sm">
                   <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                     {reservation.store_name}
-                    <StatusBadge status={reservation.status} />
+                    <StatusBadge application={reservation} />
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {reservation.business_date}
@@ -90,14 +105,14 @@ export function MemberReservationsPage() {
                   <p className="text-xs text-muted-foreground">
                     指名: {reservation.cast_name ?? 'なし'}
                   </p>
-                  {reservation.status === 'CREATED' && (
+                  {reservation.status === 'PENDING' && (
                     // 取り下げの結果が返るまで同じ行を押せると、済んだ取り下げをもう一度投げてしまう。
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="mt-3"
-                      onClick={() => cancel(reservation)}
+                      onClick={() => withdraw(reservation)}
                       disabled={loading || processingId === reservation.id}
                     >
                       取り下げる

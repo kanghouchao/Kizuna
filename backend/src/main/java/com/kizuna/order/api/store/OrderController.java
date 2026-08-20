@@ -17,7 +17,6 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
-import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderService;
@@ -164,42 +163,6 @@ public class OrderController {
         .body(orderService.create(request, principal.getName()));
   }
 
-  /**
-   * 未確定の予約申請を編集する。指名・受付担当を可空で扱う専用の契約で、汎用更新（{@link #update}）の必須項目に縛られずに
-   * 人数・備考を直したり指名を外したりできる。受け取った内容がそのまま新しい申請内容になる。
-   */
-  @PutMapping("/{id}/reservation-request")
-  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderWorkQueueResponse> updateReservationRequest(
-      @PathVariable String id, @Valid @RequestBody ReservationRequestUpdateRequest request) {
-    return ResponseEntity.ok(orderService.updateReservationRequest(id, request));
-  }
-
-  /**
-   * 予約申請を確定する（受注として受け付ける）。
-   *
-   * <p>確定は当店の台帳行と関連を自動で整えるため、同一会員・同一店舗の申請 2 件が同時に確定すると双方が「関連なし」を観測し、遅い側が関連の部分一意索引に敗れる。 敗者は取り直す —
-   * 勝者の関連は既に commit されているので、2 度目の確定は自動整備の再利用の枝へ落ちて収束する。
-   *
-   * <p>この分岐はサービスのトランザクション境界の外に置かなければならない（ADR 0007 と同じ紀律）— 制約違反の時点で敗者のトランザクションは作廃されており、内側で catch
-   * しても勝者の関連を読み直せない。取り直しは 1 度だけで、それでも敗れる場合（勝者の関連がその間に解除される等）は一意違反として 409
-   * に落ちる。他の整合性違反は実装欠陥なのでそのまま上げる。
-   */
-  @PostMapping("/{id}/confirmation")
-  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderWorkQueueResponse> confirm(
-      @PathVariable String id, Principal principal) {
-    try {
-      return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
-    } catch (DataIntegrityViolationException ex) {
-      if (!IntegrityViolations.violates(
-          ex, DbConstraint.UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER)) {
-        throw ex;
-      }
-      return ResponseEntity.ok(orderService.confirm(id, principal.getName()));
-    }
-  }
-
   /** 受注を完了する（会計の確定）。ポイントの付与・利用はこの経路でのみ台帳へ入る。 */
   @PostMapping("/{id}/completion")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
@@ -306,18 +269,10 @@ public class OrderController {
     return ResponseEntity.ok(orderService.completionPreview(id, totalFee));
   }
 
-  /** 予約申請を謝絶する。確定後の取消は理由必須の専用操作（{@link #cancel}）が受け持つ。 */
-  @PostMapping("/{id}/refusal")
-  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<Void> decline(@PathVariable String id) {
-    orderService.decline(id);
-    return ResponseEntity.noContent().build();
-  }
-
   /**
    * 確定済みの受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は終端状態として凍結される（ADR 0013）。
    *
-   * <p>対象は確定済みの受注のみ。未確定の申請は謝絶が、誤って完了した受注の救済は（まだ存在しない）別の経路が受け持つ。 二度目の取消は撥ねられる（逐次なら集約の守衛で
+   * <p>対象は確定済みの受注のみ。未処理の予約申請は申請側の謝絶が、誤って完了した受注の救済は（まだ存在しない）別の経路が受け持つ。 二度目の取消は撥ねられる（逐次なら集約の守衛で
    * 400、同時なら楽観ロックで 409）。
    */
   @PostMapping("/{id}/cancellation")
@@ -331,7 +286,7 @@ public class OrderController {
   }
 
   /**
-   * 受注の内容を部分更新する。状態は動かさない — 完了・取消・確定・謝絶はいずれも専用の操作が独占する。
+   * 受注の内容を部分更新する。状態は動かさない — 完了・取消はいずれも専用の操作が独占する。
    *
    * <p>終端状態（完了・取消）の受注は撥ねられる。受注 1 件を名指して消す口は無い（誤登録も取消として記録に残す。ADR 0013）。
    */

@@ -102,8 +102,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   void movesOrdersOfEveryStatusAndLeavesATombstone() {
     String surviving = createCustomer("存続-" + nonce);
     String merged = createCustomer("被統合-" + nonce);
-    // 未確定（CREATED）は会員申請だけが持つ状態になったため、店舗の作成経路では作れない。
-    // 統合が状態を条件にしないことは、店舗が到達できる 3 状態で固定する。
+    // すべての受注は確定で出生する（ADR 0017 — 未処理の申請は別記録で顧客を持たない）ため、
+    // 統合が状態を条件にしないことは受注の全 3 状態で固定する。
     String confirmed = confirmedOrderFor(merged, "確定");
     String completed = completedOrderFor(merged, "完了");
     String cancelled = cancelledOrderFor(merged, "取消");
@@ -1275,7 +1275,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
         JsonNode.class);
   }
 
-  /** 予約中（CREATED）の受注を 1 件作る。 */
+  /** 店舗の作成経路で受注を 1 件作る（確定で出生する）。 */
   private String orderFor(String customerId, String label) {
     String castId = createCast(label + "-" + nonce);
     String body =

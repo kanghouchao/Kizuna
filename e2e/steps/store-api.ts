@@ -341,19 +341,21 @@ export async function linkMemberToCustomer(
 }
 
 /**
- * 予約申請を謝絶する（POST /api/store/orders/{id}/refusal, hasAuthority('ORDER_MANAGE')）。
- * 未確定（CREATED）の申請は削除が拒否されるため、後片付けはこちらで CANCELLED にしてから削除する。
+ * 予約申請を理由付きで謝絶する（POST /api/store/order-applications/{id}/refusal,
+ * hasAuthority('ORDER_MANAGE')）。申請行は終端（DECLINED）で残り続けるが、受付箱からは外れる。
  */
-export async function declineOrder(
+export async function declineApplication(
   request: APIRequestContext,
   token: string,
-  id: string
+  id: string,
+  reason: string
 ): Promise<void> {
-  const res = await request.post(`/api/store/orders/${id}/refusal`, {
+  const res = await request.post(`/api/store/order-applications/${id}/refusal`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { reason },
   });
   if (!res.ok()) {
-    throw new Error(`refuse order failed: ${res.status()} ${await res.text()}`);
+    throw new Error(`refuse application failed: ${res.status()} ${await res.text()}`);
   }
 }
 

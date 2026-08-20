@@ -30,8 +30,8 @@ public interface OrderMapper {
   /** 注文作成リクエストDTOを注文エンティティに変換します。 */
   @Mapping(target = "locationAddress", source = "address")
   @Mapping(target = "locationBuilding", source = "buildingName")
-  // 店舗・HQ が起こす受注は確定で出生する。電話口で受けると決めた時点で可否は判断済みであり、
-  // 画面上でもう一度確定し直す段は無い。CREATED は会員申請だけが持つ状態
+  // すべての受注は確定で出生する（ADR 0017）。会員の申請は別記録（OrderApplication）が受け、
+  // 店舗の確定操作が同じく CONFIRMED の受注を生む
   @Mapping(target = "status", constant = "CONFIRMED")
   @Mapping(target = "surveyStatus", ignore = true)
   @Mapping(target = "actualArrivalTime", ignore = true)

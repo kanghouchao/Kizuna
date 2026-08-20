@@ -7,6 +7,9 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
+import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
+import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
@@ -20,9 +23,12 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
-import com.kizuna.order.api.dto.ReservationRequestUpdateRequest;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderApplication;
+import com.kizuna.order.domain.OrderApplicationRepository;
+import com.kizuna.order.domain.OrderApplicationStatus;
+import com.kizuna.order.domain.OrderApplicationView;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderQueryCriteria;
@@ -36,6 +42,7 @@ import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -50,6 +57,7 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.UserType;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -59,6 +67,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -77,6 +86,7 @@ public class OrderService {
   private static final String DEFAULT_RANK = "SILVER";
 
   private final OrderRepository orderRepository;
+  private final OrderApplicationRepository orderApplicationRepository;
   private final OrderSearchQuery orderSearchQuery;
   private final OrderAttributionRepository orderAttributionRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
@@ -90,6 +100,7 @@ public class OrderService {
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final StoreContext storeContext;
+  private final BusinessDateService businessDateService;
   private final OrderMapper orderMapper;
 
   @StoreScoped
@@ -246,7 +257,7 @@ public class OrderService {
   }
 
   /**
-   * 受注の内容を部分更新する。状態は動かさない — 完了は完了処理が、取消は取消操作が、未確定申請の確定・謝絶は専用操作が独占する（ADR 0013）。
+   * 受注の内容を部分更新する。状態は動かさない — 完了は完了処理が、取消は取消操作が独占する（ADR 0013）。
    *
    * <p>終端状態（完了・取消）の受注はこの口では書き換えられない。受注には変更履歴が無いため、ここを開けておくことは 「誰が・いつ・何を」のどれも残さずに確定した記録を動かす裏口になる。
    */
@@ -320,35 +331,138 @@ public class OrderService {
   }
 
   /**
-   * 予約申請を確定する。受付担当が未設定（会員の Web 申請）で、確定した本人が受付候補の条件を満たす場合はその本人を受付担当として補う。
+   * 予約受付箱（申請一覧）の読み口。状態の群を指定してカーソルで辿る（受付箱は PENDING）。
    *
-   * <p>条件を満たさない実行者（店舗を授権する HQ 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
+   * <p>行が処理で消えていく一覧をカーソルで辿る作法（位置を件数で指さない・上限より 1 件多く取る・ 続きの位置は並びと同じ組で作る）は {@link #listWorkQueue}
+   * と同じ。
    *
-   * <p>顧客は申請時に着いていても<b>この時点で取り直す</b>（{@link
-   * #ensureCustomerForRequester}）。申請時に紐づけが無ければ整えて着けるのが第一の目的だが、 申請時に着いた顧客参照も確定までの間に陳腐化しうる —
-   * 関連が解除・付け替えられると、その顧客行は別の会員を指す行に化けている。完了時の会員解決は顧客の 現在の関連だけを見る（ADR 0008
-   * の一本道）ため、取り直さないと申請者の来店とポイントが別会員へ積まれる。
+   * @param cursor 続きの位置。null なら先頭から
+   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public CursorPage<OrderApplicationResponse> listApplications(
+      Set<OrderApplicationStatus> statuses, String cursor, int requestedSize) {
+    int size = CursorPage.clampSize(requestedSize);
+    Limit limit = Limit.of(size + 1);
+    List<OrderApplicationView> fetched =
+        cursor == null
+            ? orderApplicationRepository.findViews(statuses, limit)
+            : fetchApplicationsAfter(statuses, PageCursor.decode(cursor), limit);
+    LocalDate today = businessDateService.currentBusinessDate();
+    return CursorPage.of(fetched, size, OrderService::applicationCursorOf)
+        .map(view -> toApplicationResponse(view, today));
+  }
+
+  private List<OrderApplicationView> fetchApplicationsAfter(
+      Set<OrderApplicationStatus> statuses, PageCursor cursor, Limit limit) {
+    return orderApplicationRepository.findViewsAfter(
+        statuses, cursor.dateKey(), cursor.id(), limit);
+  }
+
+  private static String applicationCursorOf(OrderApplicationView view) {
+    return new PageCursor(view.getBusinessDate().toString(), view.getId()).encode();
+  }
+
+  private OrderApplicationResponse toApplicationResponse(
+      OrderApplicationView view, LocalDate currentBusinessDate) {
+    return OrderApplicationResponse.builder()
+        .id(view.getId())
+        .businessDate(view.getBusinessDate())
+        .arrivalScheduledStartTime(view.getArrivalScheduledStartTime())
+        .pax(view.getPax())
+        .castId(view.getCastId())
+        .castName(view.getCastName())
+        .remarks(view.getRemarks())
+        .status(view.getStatus() == null ? null : view.getStatus().name())
+        .requesterMemberCode(view.getRequesterMemberCode())
+        .requesterDeclaredName(view.getRequesterDeclaredName())
+        .orderId(view.getOrderId())
+        .declinedReason(view.getDeclinedReason())
+        .expired(
+            OrderApplication.isExpired(
+                view.getStatus(), view.getBusinessDate(), currentBusinessDate))
+        .build();
+  }
+
+  /**
+   * 予約申請を確定する — 申請内容を予填した<b>受注の作成操作</b>。店舗が補完・調整した確定内容で Order を CONFIRMED で生成し、 申請行へ {@code
+   * order_id} を回写する。申請原文は不変のまま残り、確定内容と対照できる（ADR 0017）。
+   *
+   * <p>指名は申請時と同じ在籍述語に加えて当日の確定シフトを要求する。申請から確定までの間にキャストの在籍停止や
+   * 確定シフトの取り消しが起こりうるため、そのまま確定すると来店時に指名キャストがいない受注が成立してしまう。 対象は店舗スタッフなので、列挙を防ぐ 404 ではなく理由の分かる 400
+   * で返す。
+   *
+   * <p>受付担当が未指定で、確定した本人が受付候補の条件を満たす場合はその本人を補う。条件を満たさない実行者 （店舗を授権する HQ
+   * 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
+   *
+   * <p>顧客は確定の時点で決め直す（{@link #ensureCustomerForRequester}）。完了時の会員解決は顧客の現在の関連だけを見る （ADR 0008
+   * の一本道）ため、古い参照を持ち回ると申請者の来店とポイントが別会員へ積まれる。
    */
   @StoreScoped
   @Transactional
-  public OrderWorkQueueResponse confirm(String id, String actorEmail) {
-    Order order = findReservationRequest(id);
-    revalidateNomination(order);
-    order.confirm();
-    if (order.getReceptionistId() == null) {
+  public OrderResponse confirmApplication(
+      String id, OrderApplicationConfirmationRequest request, String actorEmail) {
+    OrderApplication application =
+        orderApplicationRepository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
+
+    // 検証は書き換えより先にすべて済ませる。撥ねる要求が集約や台帳を触った後だと、拒否の健全さが
+    // トランザクションの巻き戻しだけに掛かる。
+    LocalDate today = businessDateService.currentBusinessDate();
+    application.ensureDecidable(today);
+    if (request.getCastId() != null) {
+      nominatableCast
+          .find(storeContext.getStoreId(), request.getCastId())
+          .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
+      if (!confirmedShiftLookupService.hasConfirmedShift(
+          storeContext.getStoreId(), request.getCastId(), request.getBusinessDate())) {
+        throw new ServiceException("指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
+      }
+    }
+    if (request.getReceptionistId() != null) {
+      validateReceptionist(request.getReceptionistId());
+    }
+    Long actorId = resolveActorId(actorEmail);
+
+    Order order =
+        Order.builder()
+            .businessDate(request.getBusinessDate())
+            .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
+            .arrivalScheduledEndTime(request.getArrivalScheduledEndTime())
+            .pax(request.getPax())
+            .courseMinutes(request.getCourseMinutes())
+            .remarks(request.getRemarks())
+            .status(OrderStatus.CONFIRMED)
+            // 受付経路 WEB は会員申請由来の受注だけが名乗る。店舗の作成経路（create）は WEB を拒否する
+            .receptionRoute(ReceptionRoute.WEB)
+            .requesterMemberId(application.getRequesterMemberId())
+            .requesterMemberCode(application.getRequesterMemberCode())
+            .requesterDeclaredName(application.getRequesterDeclaredName())
+            .build();
+    if (request.getCastId() != null) {
+      order.assignCast(request.getCastId());
+    }
+    if (request.getReceptionistId() != null) {
+      order.assignReceptionist(request.getReceptionistId());
+    } else {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
     }
-    // 申請者の会員 ID が欠落した申請（会員行の削除後）は取り直す先が無いため、着いている顧客をそのまま残す。
-    if (order.getRequesterMemberId() != null) {
-      order.linkCustomer(ensureCustomerForRequester(order, actorEmail));
+    // 申請者の会員 ID が欠落した申請（会員行の削除後）は整える先が無いため、顧客未設定のまま成立させる
+    // （無帰属受注は正規の状態）。
+    if (application.getRequesterMemberId() != null) {
+      order.linkCustomer(ensureCustomerForRequester(application, actorEmail));
     }
-    orderRepository.save(order);
-    return toWorkQueueResponse(id);
+    Order saved = orderRepository.save(order);
+    application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
+    orderApplicationRepository.save(application);
+    return toResponse(saved.getId());
   }
 
   /**
    * 会員申請の受注が着く当店の顧客を、確定の時点で決め直す。当店に申請者会員の有効な関連があればその顧客を使い、無ければ台帳行と関連（根拠 {@link
-   * LinkReason#MEMBER_REQUEST}）を起こす。判断の材料は「今の関連」だけで、申請時に着いた顧客参照は見ない — 関連が解除された行に着け続けると完了しても
+   * LinkReason#MEMBER_REQUEST}）を起こす。判断の材料は「今の関連」だけ — 関連が解除された行に着け続けると完了しても
    * 会員へ達さず、付け替えられた行に着け続けると別会員へ達する。
    *
    * <p>自動で整えるのは、ログイン態が本人証明・当該店舗への申請が明示の確認であり、帰属の成立要件をこの経路が構造的に満たすため（ADR 0008）。
@@ -359,12 +473,12 @@ public class OrderService {
    *
    * <p>関連は flush まで進めて書く。同一会員・同一店舗の申請 2 件の並行確定は双方が「関連なし」を観測しうるため、収束は部分一意索引 {@link
    * DbConstraint#UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER} の違反として現れなければならない（掴む位置は controller —
-   * {@code OrderController#confirm}）。
+   * {@code OrderApplicationController#confirm}）。
    */
-  private String ensureCustomerForRequester(Order order, String actorEmail) {
+  private String ensureCustomerForRequester(OrderApplication application, String actorEmail) {
     Optional<CustomerMemberLink> established =
         customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
-            order.getStoreId(), order.getRequesterMemberId(), LinkStatus.ACTIVE);
+            application.getStoreId(), application.getRequesterMemberId(), LinkStatus.ACTIVE);
     if (established.isPresent()) {
       // 関連の照会は行を押さえないため、着ける前に顧客参照の解決を通す。
       return customerReferenceResolver.resolveForWrite(established.get().getCustomerId());
@@ -374,12 +488,15 @@ public class OrderService {
     // （通常作成・電話番号からの作成）と同じ既定を明示する — 列を写像している以上、省略は DB 既定ではなく null になる。
     Customer customer =
         customerRepository.save(
-            Customer.builder().name(order.getRequesterDeclaredName()).rank(DEFAULT_RANK).build());
+            Customer.builder()
+                .name(application.getRequesterDeclaredName())
+                .rank(DEFAULT_RANK)
+                .build());
     customerMemberLinkRepository.saveAndFlush(
         CustomerMemberLink.builder()
             .customerId(customer.getId())
-            .memberId(order.getRequesterMemberId())
-            .memberCode(order.getRequesterMemberCode())
+            .memberId(application.getRequesterMemberId())
+            .memberCode(application.getRequesterMemberCode())
             .reason(LinkReason.MEMBER_REQUEST)
             .linkedBy(actorId)
             .linkedAt(OffsetDateTime.now())
@@ -534,42 +651,6 @@ public class OrderService {
   }
 
   /**
-   * 未確定の予約申請を店舗が編集する。汎用更新（{@link #update}）と別の収口なのは、指名と受付担当を可空として扱うため —
-   * 会員は指名なしで申請できるので、必須の契約しか無いと人数や備考を直すだけで指名付きの受注に変えざるを得ず、 無効になった指名を確定前に外すこともできない。
-   *
-   * <p>受け取った内容がそのまま新しい申請内容になる（省略＝未設定にする）。確定・謝絶と同じく対象は未確定の申請だけで、 確定後は通常の受注として汎用更新が引き続き受け持つ。
-   */
-  @StoreScoped
-  @Transactional
-  public OrderWorkQueueResponse updateReservationRequest(
-      String id, ReservationRequestUpdateRequest request) {
-    Order order = findReservationRequest(id);
-    if (order.getStatus() != OrderStatus.CREATED) {
-      throw new ServiceException("確定・謝絶済みの予約は編集できません");
-    }
-
-    // 検証は書き換えより先にすべて済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
-    // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
-    if (request.getReceptionistId() != null) {
-      validateReceptionist(request.getReceptionistId());
-    }
-    if (request.getCastId() != null) {
-      // 対象は店舗スタッフなので、確定時の再検証と同じく列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す。
-      // 汎用更新と違い据え置きも縛るのは、未確定の申請は確定前に直っている必要がある作業だからで、
-      // 素通しは 400 を確定時へ先送りするだけになる。
-      nominatableCast
-          .find(order.getStoreId(), request.getCastId())
-          .orElseThrow(() -> new ServiceException("指名できるキャストではありません。在籍中のキャストを選ぶか、指名を外してください"));
-    }
-
-    order.revise(
-        request.getReceptionistId(), request.getCastId(), request.getPax(), request.getRemarks());
-
-    Order saved = orderRepository.save(order);
-    return toWorkQueueResponse(saved.getId());
-  }
-
-  /**
    * 確定済みの受注を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみで、理由・実行者・時刻を記録に残す（ADR 0013）。
    *
    * <p>汎用更新から状態を動かす裏口を閉じた代わりに立てた専用の口。未確定申請の謝絶（{@link #decline}）とは別物で、
@@ -587,43 +668,21 @@ public class OrderService {
     orderRepository.save(order);
   }
 
-  /** 予約申請を謝絶する。確定前の申請のみが対象で、確定後の取り消しは理由必須の取消操作（{@link #cancel}）に委ねる。 */
+  /** 予約申請を謝絶する。理由は必須で、実行者と時刻を記録に残す（取消 ADR 0013 の先例）。確定後の取り消しは理由必須の取消操作（{@link #cancel}）に委ねる。 */
   @StoreScoped
   @Transactional
-  public void decline(String id) {
-    Order order = findReservationRequest(id);
-    order.cancelRequest();
-    orderRepository.save(order);
-  }
-
-  /**
-   * 確定・謝絶の対象となる予約申請を引く。店舗が起こした受注は、ID を知っていても申請専用の操作では変更させない — 受注のステータス変更は通常の更新経路が受け持つ。判定は予約受付 inbox
-   * の抽出条件と同じ（{@link Order#isReservationRequest()}）。
-   */
-  private Order findReservationRequest(String id) {
-    return orderRepository
-        .findById(id)
-        .filter(Order::isReservationRequest)
-        .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
-  }
-
-  /**
-   * 確定時に指名の前提を取り直す。申請から確定までの間にキャストの在籍停止や確定シフトの取り消しが起こりうるため、 申請時（MemberOrderService
-   * の検証）と同じ条件を満たさなくなった指名付き申請は確定させない — そのまま確定すると、来店時に指名キャストがいない受注が成立してしまう。
-   *
-   * <p>申請時の検証と違い対象は店舗スタッフなので、列挙を防ぐ 404 ではなく理由の分かる 400 で返す。
-   */
-  private void revalidateNomination(Order order) {
-    if (order.getCastId() == null) {
-      return;
-    }
-    nominatableCast
-        .find(order.getStoreId(), order.getCastId())
-        .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
-    if (!confirmedShiftLookupService.hasConfirmedShift(
-        order.getStoreId(), order.getCastId(), order.getBusinessDate())) {
-      throw new ServiceException("指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
-    }
+  public void declineApplication(
+      String id, OrderApplicationDeclineRequest request, String actorEmail) {
+    OrderApplication application =
+        orderApplicationRepository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
+    application.decline(
+        request.getReason(),
+        resolveActorId(actorEmail),
+        OffsetDateTime.now(),
+        businessDateService.currentBusinessDate());
+    orderApplicationRepository.save(application);
   }
 
   /**

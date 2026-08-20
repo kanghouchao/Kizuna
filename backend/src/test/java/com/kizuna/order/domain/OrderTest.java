@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -13,14 +12,6 @@ class OrderTest {
 
   private Order orderWithStatus(OrderStatus status) {
     return Order.builder().status(status).build();
-  }
-
-  @Test
-  @DisplayName("作成直後の注文を確認済みにできること")
-  void confirm_fromCreated() {
-    Order order = orderWithStatus(OrderStatus.CREATED);
-    order.confirm();
-    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
   }
 
   @Test
@@ -37,24 +28,15 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("確認を飛ばして注文を完了できないこと")
-  void completeWith_fromCreated_isRejected() {
-    Order order = orderWithStatus(OrderStatus.CREATED);
-    assertThatThrownBy(() -> order.completeWith(12000, 0, 120))
-        .isInstanceOf(IllegalOrderStateTransitionException.class)
-        .hasMessageContaining("CREATED")
-        .hasMessageContaining("COMPLETED");
-    assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED);
-    assertThat(order.getTotalFee()).as("撥ねた完了は会計金額を書かないこと").isNull();
-  }
-
-  @Test
   @DisplayName("キャンセル済みの注文は完了できないこと")
   void completeWith_fromCancelled_isRejected() {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
     assertThatThrownBy(() -> order.completeWith(12000, 0, 120))
-        .isInstanceOf(IllegalOrderStateTransitionException.class);
+        .isInstanceOf(IllegalOrderStateTransitionException.class)
+        .hasMessageContaining("CANCELLED")
+        .hasMessageContaining("COMPLETED");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    assertThat(order.getTotalFee()).as("撥ねた完了は会計金額を書かないこと").isNull();
   }
 
   @Test
@@ -101,18 +83,15 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("未確定・完了済みの注文は専用取消の経路では取り消せないこと")
+  @DisplayName("完了済みの注文は専用取消の経路では取り消せないこと")
   void cancelWith_outsideConfirmed_isRejected() {
-    // 定義域は CONFIRMED → CANCELLED のみ。未確定の申請は謝絶（cancelRequest）が、
-    // 誤完了の救済は #380 が受け持つ
-    for (OrderStatus status : List.of(OrderStatus.CREATED, OrderStatus.COMPLETED)) {
-      Order order = orderWithStatus(status);
-      assertThatThrownBy(() -> order.cancelWith("理由", 7L, OffsetDateTime.now()))
-          .as("状態 %s からの取消が拒否されること", status)
-          .isInstanceOf(IllegalOrderStateTransitionException.class);
-      assertThat(order.getStatus()).as("拒否時に状態が変わらないこと").isEqualTo(status);
-      assertThat(order.getCancelledReason()).as("拒否時に理由が書かれないこと").isNull();
-    }
+    // 定義域は CONFIRMED → CANCELLED のみ。未処理の予約申請は申請側の謝絶が受け持ち、
+    // 誤完了の救済経路はまだ存在しない（ADR 0013）
+    Order order = orderWithStatus(OrderStatus.COMPLETED);
+    assertThatThrownBy(() -> order.cancelWith("理由", 7L, OffsetDateTime.now()))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThat(order.getStatus()).as("拒否時に状態が変わらないこと").isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getCancelledReason()).as("拒否時に理由が書かれないこと").isNull();
   }
 
   @Test
@@ -133,62 +112,16 @@ class OrderTest {
   @DisplayName("キャンセル済みの注文からは一切遷移できないこと")
   void transitions_fromCancelled_areRejected() {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
-    assertThatThrownBy(order::confirm).isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThatThrownBy(() -> order.transitionTo(OrderStatus.CONFIRMED))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
     assertThatThrownBy(() -> order.transitionTo(OrderStatus.COMPLETED))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
   }
 
   @Test
-  @DisplayName("未確定の申請を取り下げられること")
-  void cancelRequest_fromCreated() {
-    Order order = orderWithStatus(OrderStatus.CREATED);
-    order.cancelRequest();
-    assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-  }
-
-  @Test
-  @DisplayName("確定済み・完了済み・キャンセル済みの注文は申請取り下げの経路では取り消せないこと")
-  void cancelRequest_afterConfirmation_isRejected() {
-    for (OrderStatus status :
-        List.of(OrderStatus.CONFIRMED, OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
-      Order order = orderWithStatus(status);
-      assertThatThrownBy(order::cancelRequest)
-          .as("状態 %s からの申請取り下げが拒否されること", status)
-          .isInstanceOf(IllegalOrderStateTransitionException.class);
-      assertThat(order.getStatus()).as("拒否時に状態が変わらないこと").isEqualTo(status);
-    }
-  }
-
-  @Test
-  @DisplayName("Web 受付かつ申請者の会員コードが揃って初めて予約申請と判定されること")
-  void isReservationRequest_requiresRouteAndRequesterSnapshot() {
-    assertThat(
-            Order.builder()
-                .receptionRoute(ReceptionRoute.WEB)
-                .requesterMemberCode("123456789012")
-                .build()
-                .isReservationRequest())
-        .isTrue();
-    assertThat(Order.builder().build().isReservationRequest())
-        .as("受付経路の記録が無い受注は申請ではないこと")
-        .isFalse();
-    assertThat(Order.builder().receptionRoute(ReceptionRoute.WEB).build().isReservationRequest())
-        .as("店舗が WEB を手入力しただけの受注は申請ではないこと")
-        .isFalse();
-    assertThat(
-            Order.builder()
-                .receptionRoute(ReceptionRoute.PHONE)
-                .requesterMemberCode("123456789012")
-                .build()
-                .isReservationRequest())
-        .as("電話受付は申請ではないこと")
-        .isFalse();
-  }
-
-  @Test
   @DisplayName("部分更新で人数を変更でき、null は変更しないこと")
   void apply_pax() {
-    Order order = Order.builder().status(OrderStatus.CREATED).pax(2).build();
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).pax(2).build();
 
     order.apply(patchWithPax(5));
     assertThat(order.getPax()).isEqualTo(5);
@@ -262,11 +195,10 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("終端状態は完了・取消の 2 つで、未確定・確定は終端でないこと")
+  @DisplayName("終端状態は完了・取消の 2 つで、確定は終端でないこと")
   void isTerminal_coversCompletedAndCancelled() {
     assertThat(OrderStatus.COMPLETED.isTerminal()).isTrue();
     assertThat(OrderStatus.CANCELLED.isTerminal()).isTrue();
-    assertThat(OrderStatus.CREATED.isTerminal()).isFalse();
     assertThat(OrderStatus.CONFIRMED.isTerminal()).isFalse();
   }
 
@@ -285,31 +217,6 @@ class OrderTest {
     linked.recordContactIfUnlinked("重複照合の来客", "09012345678");
     assertThat(linked.getContactName()).isNull();
     assertThat(linked.getContactPhoneNumber()).isNull();
-  }
-
-  @Test
-  @DisplayName("申請の書き換えは渡した値で置き換え、null は未設定にすること")
-  void revise_replacesInsteadOfPatching() {
-    Order order =
-        Order.builder()
-            .status(OrderStatus.CREATED)
-            .receptionistId(3L)
-            .castId("cast-1")
-            .pax(2)
-            .remarks("元の備考")
-            .build();
-
-    order.revise(4L, "cast-2", 5, "書き換えた備考");
-    assertThat(order.getReceptionistId()).isEqualTo(4L);
-    assertThat(order.getCastId()).isEqualTo("cast-2");
-    assertThat(order.getPax()).isEqualTo(5);
-    assertThat(order.getRemarks()).isEqualTo("書き換えた備考");
-
-    // 部分更新（apply）では消せない項目を、この経路では空に戻せる
-    order.revise(null, null, 5, null);
-    assertThat(order.getReceptionistId()).isNull();
-    assertThat(order.getCastId()).isNull();
-    assertThat(order.getRemarks()).isNull();
   }
 
   @Test

@@ -155,7 +155,8 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           "arrival_scheduled_start_time",
           "pax",
           "cast_name",
-          "status");
+          "status",
+          "expired");
 
   /** ポイント明細 1 行が返してよい項目名。増えたら落ちる。 */
   private static final List<String> MEMBER_POINT_ENTRY_ALLOWED_FIELDS =
@@ -183,7 +184,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
       List.of(
           new MemberEndpoint("/platform/me", false),
           new MemberEndpoint("/platform/me/member", false),
-          new MemberEndpoint("/platform/me/orders", false),
+          new MemberEndpoint("/platform/me/order-applications", false),
           new MemberEndpoint("/platform/me/visits", false),
           new MemberEndpoint("/platform/me/points/balance", true),
           new MemberEndpoint("/platform/me/points/entries", true));
@@ -423,7 +424,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> reservations =
         rest.exchange(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             HttpMethod.GET,
             new HttpEntity<>(bearer(memberToken)),
             JsonNode.class);
@@ -500,7 +501,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     headers.setContentType(MediaType.APPLICATION_JSON);
     ResponseEntity<JsonNode> requested =
         rest.postForEntity(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             new HttpEntity<>(
                 "{\"store_id\": "
                     + STORE_A

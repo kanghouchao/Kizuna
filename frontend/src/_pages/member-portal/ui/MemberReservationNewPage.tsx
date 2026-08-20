@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { useRouter } from 'next/navigation';
-import { memberOrderApi } from '@/entities/order';
+import { memberOrderApplicationApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
 import { platformStoreApi } from '@/entities/store';
 import { integerRule, useResource } from '@/shared/lib';
@@ -104,7 +104,7 @@ export function MemberReservationNewPage() {
     if (storeId === null) return;
     setSubmitting(true);
     try {
-      await memberOrderApi.create({
+      await memberOrderApplicationApi.create({
         store_id: storeId,
         declared_name: values.declared_name,
         business_date: values.business_date,

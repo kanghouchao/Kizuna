@@ -14,7 +14,7 @@ import lombok.Data;
  * <p>受付担当・顧客は申請時点では決まらないため受け取らない。受付経路も会員経路であることがサーバ側で自明なため受け取らない。
  */
 @Data
-public class MemberOrderCreateRequest {
+public class MemberOrderApplicationCreateRequest {
 
   @NotNull(message = "店舗は必須です")
   private Long storeId;
@@ -22,7 +22,8 @@ public class MemberOrderCreateRequest {
   /**
    * 店舗へ名乗る名前。確定時の自動整備で台帳行の氏名になるため必須で受け取る。
    *
-   * <p>上限は台帳の氏名列（{@code t_customers.name}）と受注側の預かり列（{@code t_orders.requester_declared_name}）に揃える。
+   * <p>上限は台帳の氏名列（{@code t_customers.name}）と申請の預かり列（{@code
+   * t_order_applications.requester_declared_name}）に揃える。
    */
   @NotBlank(message = "店舗へ名乗るお名前は必須です")
   @Size(max = 255, message = "店舗へ名乗るお名前は 255 文字以内です")

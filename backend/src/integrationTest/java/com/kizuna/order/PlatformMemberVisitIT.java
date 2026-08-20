@@ -149,7 +149,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
     assertThat(content.path(0).path("cast_name").asString()).isEqualTo("対照担当-" + nonce);
 
     // 申請の追跡は別の読み口として並置される。来店に出ないのは「消えた」からではない。
-    ResponseEntity<JsonNode> orders = get("/platform/me/orders");
+    ResponseEntity<JsonNode> orders = get("/platform/me/order-applications");
     assertThat(orders.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(idsOf(orders.getBody().path("content")))
         .as("未完了の申請は申請一覧には残ること")
@@ -383,7 +383,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
   private String requestReservation() {
     ResponseEntity<JsonNode> requested =
         rest.postForEntity(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             new HttpEntity<>(
                 "{\"store_id\": "
                     + STORE_A

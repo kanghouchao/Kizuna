@@ -24,13 +24,8 @@ const CANCEL_REASON_MAX_LENGTH = 500;
 
 interface OrderQueueCardProps {
   order: OrderWorkQueueRow;
-  /** 謝絶・取消のように、この受注が群から外れる処理が終わったとき。 */
+  /** 取消のように、この受注が群から外れる処理が終わったとき。 */
   onProcessed: (id: string) => void;
-  /**
-   * 確定が終わったとき。確定は「対応が要る」群の中の移動（未確定 → 確定）で群からは外れないため、
-   * 取り除かずに応答の内容へ差し替える。
-   */
-  onConfirmed: (confirmed: OrderWorkQueueRow) => void;
   /** 編集モーダルを開く。 */
   onEdit: (order: OrderWorkQueueRow) => void;
   /** 完了モーダルを開く。 */
@@ -63,25 +58,14 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
 }
 
 /**
- * 対応が要る受注 1 件のカード。
- *
- * <p>未確定（会員申請）は確定・謝絶・申請編集を、確定済みは完了・編集・取消を担う。受付箱を別に持たず この 1 枚に寄せているのは、同じ申請を 2
- * 箇所で見比べさせないため。
+ * 対応が要る受注 1 件のカード。完了・編集・取消を担う（未処理の予約申請は受付箱のカードが受け持つ）。
  *
  * <p>取消はモーダルを開かず、カードがその場で理由入力に変わる（二段）。一覧の中で完結させるのが この画面の主張なので、確認だけを外へ出さない。
  */
-export function OrderQueueCard({
-  order,
-  onProcessed,
-  onConfirmed,
-  onEdit,
-  onComplete,
-}: OrderQueueCardProps) {
+export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: OrderQueueCardProps) {
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancelForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
-
-  const pending = order.status === 'CREATED';
 
   /**
    * 処理を走らせて結果を通知する。処理後にこの受注が群から外れるのか、群の中で状態が変わるだけなのかは
@@ -110,7 +94,7 @@ export function OrderQueueCard({
     }
   };
 
-  /** 謝絶・取消の後始末。この受注はもう「対応が要る」群の対象ではないので手元から取り除く。 */
+  /** 取消の後始末。この受注はもう「対応が要る」群の対象ではないので手元から取り除く。 */
   const leaveQueue = (_updated: unknown, id: string) => onProcessed(id);
 
   return (
@@ -121,13 +105,9 @@ export function OrderQueueCard({
             <CustomerName order={order} />
             <Badge
               variant="outline"
-              className={
-                pending
-                  ? 'border-transparent bg-muted text-foreground'
-                  : 'border-transparent bg-success/10 text-success-strong'
-              }
+              className="border-transparent bg-success/10 text-success-strong"
             >
-              {ORDER_STATUS_LABELS[order.status ?? 'CREATED']}
+              {ORDER_STATUS_LABELS[order.status ?? 'CONFIRMED']}
             </Badge>
             {/* 申請の判定は受付経路だけでは足りない。サーバ側と同じく申請者の有無まで見る */}
             {order.reception_route === 'WEB' && order.requester_member_code && (
@@ -141,97 +121,42 @@ export function OrderQueueCard({
             <span className="text-muted-foreground text-sm">{order.business_date}</span>
           </div>
           <CardMeta order={order} />
-          {pending && order.requester_member_code && (
-            <p className="text-muted-foreground text-xs">
-              会員コード: {order.requester_member_code}
-            </p>
-          )}
           {order.remarks && <p className="text-muted-foreground text-xs">{order.remarks}</p>}
         </div>
 
         {!cancelling && (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-            {pending ? (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={processing}
-                  onClick={() => onEdit(order)}
-                >
-                  <SquarePenIcon aria-hidden="true" />
-                  編集
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={processing}
-                  onClick={() =>
-                    run(
-                      id => orderApi.decline(id),
-                      '予約を謝絶しました',
-                      '謝絶に失敗しました',
-                      leaveQueue
-                    )
-                  }
-                >
-                  謝絶
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={processing}
-                  onClick={() =>
-                    // 確定した受注は「対応が要る」群に残る（次は完了・編集・取消の対象）。
-                    // 応答へ差し替えるのは、確定が受付担当の補完と顧客の着け直しまで行うため。
-                    run(
-                      id => orderApi.confirm(id),
-                      '予約を確定しました',
-                      '確定に失敗しました',
-                      onConfirmed
-                    )
-                  }
-                >
-                  確定
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={processing}
-                  onClick={() => onComplete(order)}
-                >
-                  <CircleCheckIcon aria-hidden="true" />
-                  完了
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={processing}
-                  onClick={() => onEdit(order)}
-                >
-                  <SquarePenIcon aria-hidden="true" />
-                  編集
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive-strong"
-                  disabled={processing}
-                  onClick={() => setCancelling(true)}
-                >
-                  <XIcon aria-hidden="true" />
-                  取消
-                </Button>
-              </>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={processing}
+              onClick={() => onComplete(order)}
+            >
+              <CircleCheckIcon aria-hidden="true" />
+              完了
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={processing}
+              onClick={() => onEdit(order)}
+            >
+              <SquarePenIcon aria-hidden="true" />
+              編集
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive-strong"
+              disabled={processing}
+              onClick={() => setCancelling(true)}
+            >
+              <XIcon aria-hidden="true" />
+              取消
+            </Button>
           </div>
         )}
       </div>

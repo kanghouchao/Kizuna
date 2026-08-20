@@ -10,25 +10,18 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.Cast;
-import com.kizuna.customer.application.CustomerReferenceResolver;
-import com.kizuna.customer.domain.CustomerMemberLink;
-import com.kizuna.customer.domain.CustomerMemberLinkRepository;
-import com.kizuna.customer.domain.LinkReason;
-import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.order.api.dto.MemberOrderCreateRequest;
-import com.kizuna.order.api.dto.MemberOrderResponse;
-import com.kizuna.order.domain.IllegalOrderStateTransitionException;
-import com.kizuna.order.domain.MemberOrderView;
-import com.kizuna.order.domain.Order;
-import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.order.domain.ReceptionRoute;
+import com.kizuna.order.api.dto.MemberOrderApplicationCreateRequest;
+import com.kizuna.order.api.dto.MemberOrderApplicationResponse;
+import com.kizuna.order.domain.InvalidOrderApplicationOperationException;
+import com.kizuna.order.domain.MemberOrderApplicationView;
+import com.kizuna.order.domain.OrderApplication;
+import com.kizuna.order.domain.OrderApplicationRepository;
+import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -42,7 +35,6 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -59,7 +51,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Limit;
 
 @ExtendWith(MockitoExtension.class)
-class MemberOrderServiceTest {
+class MemberOrderApplicationServiceTest {
 
   private static final long STORE_ID = 1L;
   private static final long OTHER_STORE_ID = 2L;
@@ -70,19 +62,17 @@ class MemberOrderServiceTest {
   private static final String DECLARED_NAME = "名乗り太郎";
   private static final String TIMEZONE = "Asia/Tokyo";
 
-  @Mock OrderRepository orderRepository;
+  @Mock OrderApplicationRepository orderApplicationRepository;
   @Mock NominatableCastLookup nominatableCast;
-  @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
-  @Mock CustomerReferenceResolver customerReferenceResolver;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock MemberLookupService memberLookupService;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock StoreExistenceCheck storeExistenceCheck;
   @Mock BusinessDateService businessDateService;
 
-  @InjectMocks MemberOrderService service;
+  @InjectMocks MemberOrderApplicationService service;
 
-  @Captor ArgumentCaptor<Order> orderCaptor;
+  @Captor ArgumentCaptor<OrderApplication> applicationCaptor;
 
   @BeforeEach
   void stubAuthenticatedMember() {
@@ -111,8 +101,8 @@ class MemberOrderServiceTest {
     return LocalDate.now(ZoneId.of(TIMEZONE));
   }
 
-  private MemberOrderCreateRequest requestFor(LocalDate date, String castId) {
-    MemberOrderCreateRequest request = new MemberOrderCreateRequest();
+  private MemberOrderApplicationCreateRequest requestFor(LocalDate date, String castId) {
+    MemberOrderApplicationCreateRequest request = new MemberOrderApplicationCreateRequest();
     request.setStoreId(STORE_ID);
     request.setBusinessDate(date);
     request.setPax(2);
@@ -134,77 +124,31 @@ class MemberOrderServiceTest {
   }
 
   private void stubSavedView() {
-    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    MemberOrderView view = mock(MemberOrderView.class);
-    when(orderRepository.findMemberView(anyLong(), any())).thenReturn(Optional.of(view));
+    when(orderApplicationRepository.save(any(OrderApplication.class)))
+        .thenAnswer(i -> i.getArgument(0));
+    MemberOrderApplicationView view = mock(MemberOrderApplicationView.class);
+    when(orderApplicationRepository.findMemberView(anyLong(), any())).thenReturn(Optional.of(view));
   }
 
   @Test
-  @DisplayName("申請が Web 経路の CREATED 受注として、人数と申請会員を持って起きること")
-  void requestCreatesWebOriginatedOrder() {
+  @DisplayName("申請が予約申請の PENDING 行として、人数と申請会員を持って起きること")
+  void requestCreatesPendingApplication() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
-            STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
-        .thenReturn(Optional.empty());
     stubSavedView();
 
     service.request(EMAIL, requestFor(today(), null));
 
-    verify(orderRepository).save(orderCaptor.capture());
-    Order saved = orderCaptor.getValue();
-    assertThat(saved.getStatus()).isEqualTo(OrderStatus.CREATED);
-    assertThat(saved.getReceptionRoute()).isEqualTo(ReceptionRoute.WEB);
+    verify(orderApplicationRepository).save(applicationCaptor.capture());
+    OrderApplication saved = applicationCaptor.getValue();
+    assertThat(saved.getStatus()).isEqualTo(OrderApplicationStatus.PENDING);
     assertThat(saved.getRequesterMemberId()).isEqualTo(MEMBER_ID);
     assertThat(saved.getRequesterMemberCode()).isEqualTo(MEMBER_CODE);
     assertThat(saved.getPax()).isEqualTo(2);
     assertThat(saved.getStoreId()).as("店舗文脈が無い経路でも店舗が確定していること").isEqualTo(STORE_ID);
-    assertThat(saved.getReceptionistId()).as("申請時点では受付担当がいないこと").isNull();
-    assertThat(saved.getCustomerId()).as("紐づけが無ければ顧客は空のままであること").isNull();
+    assertThat(saved.getOrderId()).as("申請時点では受注が生まれていないこと").isNull();
     assertThat(saved.getRequesterDeclaredName())
-        .as("店舗へ名乗る名前が受注に残ること（確定時の自動整備が台帳行の氏名に使う）")
+        .as("店舗へ名乗る名前が申請に残ること（確定時の自動整備が台帳行の氏名に使う）")
         .isEqualTo(DECLARED_NAME);
-  }
-
-  @Test
-  @DisplayName("申請先店舗に紐づけ済み顧客があれば結び付けること")
-  void requestLinksCustomerWhenMemberLinkExists() {
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    CustomerMemberLink link =
-        CustomerMemberLink.builder()
-            .customerId("cust-1")
-            .memberId(MEMBER_ID)
-            .memberCode(MEMBER_CODE)
-            .reason(LinkReason.MEMBER_CODE)
-            .linkedBy(9L)
-            .linkedAt(OffsetDateTime.now())
-            .build();
-    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
-            STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
-        .thenReturn(Optional.of(link));
-    // 関連の照会は行を押さえないため、着ける前に顧客参照を書く経路が共有する解決口を通る
-    when(customerReferenceResolver.resolveForWrite("cust-1")).thenReturn("cust-1");
-    stubSavedView();
-
-    service.request(EMAIL, requestFor(today(), null));
-
-    verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("cust-1");
-  }
-
-  @Test
-  @DisplayName("紐づけが無ければ解決口を通らないこと（顧客未設定の申請は正規の状態）")
-  void requestResolvesNothingWhenThereIsNoMemberLink() {
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
-            STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
-        .thenReturn(Optional.empty());
-    stubSavedView();
-
-    service.request(EMAIL, requestFor(today(), null));
-
-    verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCustomerId()).isNull();
-    verifyNoInteractions(customerReferenceResolver);
   }
 
   @Test
@@ -214,7 +158,7 @@ class MemberOrderServiceTest {
 
     assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), null)))
         .isInstanceOf(ServiceException.class);
-    verify(orderRepository, never()).save(any(Order.class));
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
@@ -224,7 +168,7 @@ class MemberOrderServiceTest {
 
     assertThatThrownBy(() -> service.request(EMAIL, requestFor(today().minusDays(1), null)))
         .isInstanceOf(ServiceException.class);
-    verify(orderRepository, never()).save(any(Order.class));
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
@@ -237,21 +181,18 @@ class MemberOrderServiceTest {
     assertThatThrownBy(() -> service.request(EMAIL, requestFor(today().plusDays(91), null)))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("範囲");
-    verify(orderRepository, never()).save(any(Order.class));
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
   @DisplayName("上限ちょうど（90 日先）の申請は受け付けること")
   void requestAcceptsDateAtLookaheadLimit() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
-            STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
-        .thenReturn(Optional.empty());
     stubSavedView();
 
     service.request(EMAIL, requestFor(today().plusDays(90), null));
 
-    verify(orderRepository).save(any(Order.class));
+    verify(orderApplicationRepository).save(any(OrderApplication.class));
   }
 
   @Test
@@ -259,7 +200,6 @@ class MemberOrderServiceTest {
   void requestRejectsACastThatIsNotNominatable() {
     // 対象は会員なので、他店舗・在籍停止・不在を区別しない — 区別すると、その id のキャストが当該店舗に
     // 在籍することそのものが分かってしまう（店舗スタッフ向けの OrderService は同じ述語から 400 を返す）。
-    // 成立しない理由の判定そのものは NominatableCastLookupTest が持つ
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
     when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.empty());
 
@@ -268,7 +208,7 @@ class MemberOrderServiceTest {
     // 候補に出さないだけでは、キャスト ID を直接送る要求を防げない
     verify(confirmedShiftLookupService, never())
         .hasPubliclyVisibleShift(anyLong(), anyString(), any());
-    verify(orderRepository, never()).save(any(Order.class));
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
@@ -278,7 +218,7 @@ class MemberOrderServiceTest {
     when(storeExistenceCheck.exists(OTHER_STORE_ID)).thenReturn(true);
     when(nominatableCast.find(OTHER_STORE_ID, "cast-1")).thenReturn(Optional.empty());
 
-    MemberOrderCreateRequest request = requestFor(today(), "cast-1");
+    MemberOrderApplicationCreateRequest request = requestFor(today(), "cast-1");
     request.setStoreId(OTHER_STORE_ID);
 
     assertThatThrownBy(() -> service.request(EMAIL, request)).isInstanceOf(NotFoundException.class);
@@ -298,19 +238,7 @@ class MemberOrderServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("指名したキャストはこの日の出勤予定がありません");
     verify(confirmedShiftLookupService, never()).hasConfirmedShift(anyLong(), anyString(), any());
-  }
-
-  @Test
-  @DisplayName("その日の確定シフトが無いキャストは指名できないこと")
-  void requestRejectsCastWithoutConfirmedShift() {
-    when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
-    when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
-        .thenReturn(false);
-
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), "cast-1")))
-        .isInstanceOf(ServiceException.class);
-    verify(orderRepository, never()).save(any(Order.class));
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
@@ -320,106 +248,146 @@ class MemberOrderServiceTest {
     when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
     when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
         .thenReturn(true);
-    when(customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
-            STORE_ID, MEMBER_ID, LinkStatus.ACTIVE))
-        .thenReturn(Optional.empty());
     stubSavedView();
 
     service.request(EMAIL, requestFor(today(), "cast-1"));
 
-    verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCastId()).isEqualTo("cast-1");
+    verify(orderApplicationRepository).save(applicationCaptor.capture());
+    assertThat(applicationCaptor.getValue().getCastId()).isEqualTo("cast-1");
   }
 
   @Test
   @DisplayName("一覧は本人が申請した予約に限って引くこと")
-  void listQueriesOwnRequestsOnly() {
-    when(orderRepository.findMemberViews(anyLong(), any(Limit.class))).thenReturn(List.of());
+  void listQueriesOwnApplicationsOnly() {
+    when(orderApplicationRepository.findMemberViews(anyLong(), any(Limit.class)))
+        .thenReturn(List.of());
 
     service.list(EMAIL, null, 20);
 
-    verify(orderRepository).findMemberViews(eq(MEMBER_ID), any(Limit.class));
+    verify(orderApplicationRepository).findMemberViews(eq(MEMBER_ID), any(Limit.class));
   }
 
   @Test
   @DisplayName("続きの取得でも申請者の一致を問い合わせに載せ続けること")
   void listKeepsTheRequesterPredicateWhenResumingFromACursor() {
-    when(orderRepository.findMemberViewsAfter(anyLong(), any(), anyString(), any(Limit.class)))
+    when(orderApplicationRepository.findMemberViewsAfter(
+            anyLong(), any(), anyString(), any(Limit.class)))
         .thenReturn(List.of());
 
-    service.list(EMAIL, new PageCursor("2026-08-04", "o1").encode(), 20);
+    service.list(EMAIL, new PageCursor("2026-08-04", "a1").encode(), 20);
 
-    // カーソルは位置を指すだけで隔離境界ではない。ここが抜けると他会員の予約に続きから到達できる。
-    verify(orderRepository)
+    // カーソルは位置を指すだけで隔離境界ではない。ここが抜けると他会員の申請に続きから到達できる。
+    verify(orderApplicationRepository)
         .findMemberViewsAfter(
-            eq(MEMBER_ID), eq(LocalDate.parse("2026-08-04")), eq("o1"), any(Limit.class));
+            eq(MEMBER_ID), eq(LocalDate.parse("2026-08-04")), eq("a1"), any(Limit.class));
   }
 
   @Test
-  @DisplayName("続きがあるときは最後に返した予約を指すカーソルを添えること")
-  void listHandsBackTheCursorOfTheLastReturnedReservation() {
-    List<MemberOrderView> fetched =
-        List.of(memberView("o1", "2026-08-04"), memberView("o2", "2026-08-03"));
-    when(orderRepository.findMemberViews(anyLong(), eq(Limit.of(2)))).thenReturn(fetched);
+  @DisplayName("続きがあるときは最後に返した申請を指すカーソルを添えること")
+  void listHandsBackTheCursorOfTheLastReturnedApplication() {
+    List<MemberOrderApplicationView> fetched =
+        List.of(memberView("a1", "2026-08-04"), memberView("a2", "2026-08-03"));
+    when(orderApplicationRepository.findMemberViews(anyLong(), eq(Limit.of(2))))
+        .thenReturn(fetched);
 
-    CursorPage<MemberOrderResponse> page = service.list(EMAIL, null, 1);
+    CursorPage<MemberOrderApplicationResponse> page = service.list(EMAIL, null, 1);
 
     assertThat(page.content()).hasSize(1);
-    assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("2026-08-04", "o1"));
+    assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("2026-08-04", "a1"));
   }
 
-  private static MemberOrderView memberView(String id, String businessDate) {
-    MemberOrderView view = mock(MemberOrderView.class);
+  @Test
+  @DisplayName("希望日を過ぎた PENDING は失効として返り、終端や当日以降の申請は失効でないこと")
+  void listDerivesExpiryForStalePendingOnly() {
+    MemberOrderApplicationView stale = memberView("a1", today().minusDays(1).toString());
+    lenient().when(stale.getStatus()).thenReturn(OrderApplicationStatus.PENDING);
+    MemberOrderApplicationView fresh = memberView("a2", today().toString());
+    lenient().when(fresh.getStatus()).thenReturn(OrderApplicationStatus.PENDING);
+    MemberOrderApplicationView declined = memberView("a3", today().minusDays(1).toString());
+    lenient().when(declined.getStatus()).thenReturn(OrderApplicationStatus.DECLINED);
+    when(orderApplicationRepository.findMemberViews(anyLong(), any(Limit.class)))
+        .thenReturn(List.of(stale, fresh, declined));
+
+    CursorPage<MemberOrderApplicationResponse> page = service.list(EMAIL, null, 20);
+
+    assertThat(page.content())
+        .extracting(MemberOrderApplicationResponse::isExpired)
+        .containsExactly(true, false, false);
+  }
+
+  private static MemberOrderApplicationView memberView(String id, String businessDate) {
+    MemberOrderApplicationView view = mock(MemberOrderApplicationView.class);
     lenient().when(view.getId()).thenReturn(id);
     lenient().when(view.getBusinessDate()).thenReturn(LocalDate.parse(businessDate));
     return view;
   }
 
   @Test
-  @DisplayName("未確定の予約を本人が取り下げられること")
-  void cancelWithdrawsPendingRequest() {
-    Order own = Order.builder().status(OrderStatus.CREATED).requesterMemberId(MEMBER_ID).build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(own));
-    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findMemberView(MEMBER_ID, "o1"))
-        .thenReturn(Optional.of(mock(MemberOrderView.class)));
+  @DisplayName("未処理の申請を本人が取り下げられ、実行者として本人が残ること")
+  void withdrawTerminatesPendingApplication() {
+    OrderApplication own =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.PENDING)
+            .businessDate(today())
+            .requesterMemberId(MEMBER_ID)
+            .build();
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(own));
+    when(orderApplicationRepository.save(any(OrderApplication.class)))
+        .thenAnswer(i -> i.getArgument(0));
+    when(orderApplicationRepository.findMemberView(MEMBER_ID, "a1"))
+        .thenReturn(Optional.of(mock(MemberOrderApplicationView.class)));
 
-    service.cancel(EMAIL, "o1");
+    service.withdraw(EMAIL, "a1");
 
-    assertThat(own.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    assertThat(own.getStatus()).isEqualTo(OrderApplicationStatus.WITHDRAWN);
+    assertThat(own.getProcessedBy()).isEqualTo(PLATFORM_USER_ID);
   }
 
   @Test
-  @DisplayName("確定後は本人でも取り下げられないこと")
-  void cancelRejectsConfirmedOrder() {
-    Order own = Order.builder().status(OrderStatus.CONFIRMED).requesterMemberId(MEMBER_ID).build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(own));
+  @DisplayName("確定・謝絶の後は本人でも取り下げられないこと")
+  void withdrawRejectsProcessedApplication() {
+    OrderApplication own =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.CONFIRMED)
+            .businessDate(today())
+            .requesterMemberId(MEMBER_ID)
+            .build();
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(own));
 
-    assertThatThrownBy(() -> service.cancel(EMAIL, "o1"))
-        .isInstanceOf(IllegalOrderStateTransitionException.class);
-    assertThat(own.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-    verify(orderRepository, never()).save(any(Order.class));
+    assertThatThrownBy(() -> service.withdraw(EMAIL, "a1"))
+        .isInstanceOf(InvalidOrderApplicationOperationException.class);
+    assertThat(own.getStatus()).isEqualTo(OrderApplicationStatus.CONFIRMED);
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
-  @DisplayName("他人の予約は見つからないものとして扱うこと（存在を漏らさない）")
-  void cancelTreatsOthersOrderAsNotFound() {
-    Order othersOrder = Order.builder().status(OrderStatus.CREATED).requesterMemberId(999L).build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(othersOrder));
+  @DisplayName("他人の申請は見つからないものとして扱うこと（存在を漏らさない）")
+  void withdrawTreatsOthersApplicationAsNotFound() {
+    OrderApplication others =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.PENDING)
+            .businessDate(today())
+            .requesterMemberId(999L)
+            .build();
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(others));
 
-    assertThatThrownBy(() -> service.cancel(EMAIL, "o1")).isInstanceOf(NotFoundException.class);
-    assertThat(othersOrder.getStatus()).isEqualTo(OrderStatus.CREATED);
-    verify(orderRepository, never()).save(any(Order.class));
+    assertThatThrownBy(() -> service.withdraw(EMAIL, "a1")).isInstanceOf(NotFoundException.class);
+    assertThat(others.getStatus()).isEqualTo(OrderApplicationStatus.PENDING);
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
-  @DisplayName("店舗が起こした受注（申請者なし）は本人経路から取り下げられないこと")
-  void cancelTreatsStoreOriginatedOrderAsNotFound() {
-    Order storeOrder = Order.builder().status(OrderStatus.CREATED).build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
+  @DisplayName("申請者会員が欠落した申請（会員行の削除後）は本人経路から取り下げられないこと")
+  void withdrawTreatsDetachedApplicationAsNotFound() {
+    OrderApplication detached =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.PENDING)
+            .businessDate(today())
+            .build();
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(detached));
 
-    assertThatThrownBy(() -> service.cancel(EMAIL, "o1")).isInstanceOf(NotFoundException.class);
-    verify(orderRepository, never()).save(any(Order.class));
+    assertThatThrownBy(() -> service.withdraw(EMAIL, "a1")).isInstanceOf(NotFoundException.class);
+    verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
   @Test
@@ -429,7 +397,7 @@ class MemberOrderServiceTest {
 
     assertThatThrownBy(() -> service.list(EMAIL, null, 20))
         .isInstanceOf(StaleSessionException.class);
-    verify(orderRepository, never()).findMemberViews(anyLong(), any(Limit.class));
+    verify(orderApplicationRepository, never()).findMemberViews(anyLong(), any(Limit.class));
   }
 
   @Test
