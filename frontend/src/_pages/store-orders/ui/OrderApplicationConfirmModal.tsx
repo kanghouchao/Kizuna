@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
+import { CustomerSummaryResponse, customerApi } from '@/entities/customer';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
@@ -31,6 +32,15 @@ import {
 // 受付担当なしを表す番兵値。フォームが持つ値は従来どおり空文字に戻す。
 const SELECT_NONE = '__none__';
 
+const CUSTOMER_MODE_OPTIONS = [
+  { value: 'none', label: '顧客に着けない（連絡先は受注に残る）' },
+  { value: 'existing', label: '既存の顧客を選ぶ' },
+  { value: 'new', label: '新規に台帳へ登録する' },
+];
+
+/** 確定時の顧客の決め方。電話番号での自動照合は行わないため、選ぶのは常に店員である。 */
+type CustomerMode = 'none' | 'existing' | 'new';
+
 interface ConfirmFormValues {
   /** '' は受付担当なし（実行者本人が候補の条件を満たせばサーバが補う）。 */
   receptionist_id: string;
@@ -45,6 +55,14 @@ interface ConfirmFormValues {
   cast_id: string;
   /** 指名を外して確定するか。申請が指名を持つときだけ意味を持つ。 */
   clear_cast: boolean;
+  /** 顧客の決め方（ゲスト申請でだけ意味を持つ）。 */
+  customer_mode: CustomerMode;
+  /** 既存顧客を選んだときの id。 */
+  customer_id: string;
+  new_customer_name: string;
+  new_customer_phone: string;
+  /** 既存顧客の絞り込み語。送信ペイロードには乗らない画面だけの値。 */
+  customer_search: string;
 }
 
 interface OrderApplicationConfirmModalProps {
@@ -67,6 +85,9 @@ export function OrderApplicationConfirmModal({
   onClose,
   onConfirmed,
 }: OrderApplicationConfirmModalProps) {
+  // 既存顧客の候補は押したときだけ引く（開いただけで台帳を読みに行かない）
+  const [customerMatches, setCustomerMatches] = useState<CustomerSummaryResponse[] | null>(null);
+  const [customerSearchFailed, setCustomerSearchFailed] = useState(false);
   const form = useForm<ConfirmFormValues>({
     defaultValues: {
       receptionist_id: '',
@@ -78,6 +99,11 @@ export function OrderApplicationConfirmModal({
       remarks: '',
       cast_id: '',
       clear_cast: false,
+      customer_mode: 'none',
+      customer_id: '',
+      new_customer_name: '',
+      new_customer_phone: '',
+      customer_search: '',
     },
   });
   const {
@@ -117,7 +143,16 @@ export function OrderApplicationConfirmModal({
       remarks: application.remarks ?? '',
       cast_id: application.cast_id ?? '',
       clear_cast: false,
+      // 既定は顧客未設定。既定で台帳行を起こすと、店員が判断しないまま重複した行が積み上がる
+      customer_mode: 'none',
+      customer_id: '',
+      // 新規作成を選んだ時点で使えるよう、申請の連絡先をここで予填しておく
+      new_customer_name: application.contact_name ?? '',
+      new_customer_phone: application.contact_phone_number ?? '',
+      customer_search: application.contact_name ?? '',
     });
+    setCustomerMatches(null);
+    setCustomerSearchFailed(false);
   }, [application, reset]);
 
   const submit = async (values: ConfirmFormValues) => {
@@ -133,6 +168,18 @@ export function OrderApplicationConfirmModal({
         pax: Number(values.pax),
         course_minutes: values.course_minutes ? Number(values.course_minutes) : undefined,
         remarks: values.remarks ? values.remarks : undefined,
+        // 顧客の選択はゲスト申請だけが送る。会員申請へ送るとサーバが撥ねる（顧客は会員の紐づけが決める）
+        customer_id:
+          isGuest && values.customer_mode === 'existing' && values.customer_id
+            ? values.customer_id
+            : undefined,
+        new_customer:
+          isGuest && values.customer_mode === 'new'
+            ? {
+                name: values.new_customer_name,
+                phone_number: values.new_customer_phone || undefined,
+              }
+            : undefined,
       });
       notify.success('予約を確定しました');
       onConfirmed(created);
@@ -145,6 +192,23 @@ export function OrderApplicationConfirmModal({
 
   const clearCast = watch('clear_cast');
   const selectedCastId = watch('cast_id');
+  // 会員コードのスナップショットの有無がそのまま入口の別。サーバ側の判定と同じ根拠を使う
+  const isGuest = application !== null && !application.requester_member_code;
+  const customerMode = watch('customer_mode');
+  const chosenCustomerId = watch('customer_id');
+  const customerSearch = watch('customer_search');
+
+  const searchCustomers = async () => {
+    setCustomerSearchFailed(false);
+    try {
+      const page = await customerApi.list({ search: customerSearch || undefined, size: 10 });
+      setCustomerMatches(page.rows);
+    } catch {
+      // 顧客管理の権限が無い実行者ではサーバが 403 を返す。確定そのものは塞がない
+      setCustomerSearchFailed(true);
+      setCustomerMatches(null);
+    }
+  };
 
   return (
     <Dialog
@@ -309,6 +373,120 @@ export function OrderApplicationConfirmModal({
                 />
               )}
             </div>
+            {isGuest && (
+              <div className="grid gap-3 rounded-md border p-3">
+                {/* 電話番号での自動照合は行わない。機械が 1 行を選ぶことが誤帰属・なりすましの入口になる
+                    ため、常客と認めた店員だけが既存の台帳行へ着けられる */}
+                <FormField
+                  control={control}
+                  name="customer_mode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>顧客（ゲスト申請）</FormLabel>
+                      <Select
+                        items={CUSTOMER_MODE_OPTIONS}
+                        value={field.value}
+                        onValueChange={v => field.onChange(v as CustomerMode)}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CUSTOMER_MODE_OPTIONS.map(o => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                {customerMode === 'existing' && (
+                  <div className="grid gap-2">
+                    <div className="flex items-end gap-2">
+                      <FormField
+                        control={control}
+                        name="customer_search"
+                        render={({ field }) => (
+                          <FormItem className="grow">
+                            <FormLabel>台帳を名前で探す</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void searchCustomers()}
+                      >
+                        検索
+                      </Button>
+                    </div>
+                    {customerSearchFailed && (
+                      <p className="text-muted-foreground text-sm">
+                        台帳を検索できませんでした（顧客管理の権限が要ります）。新規作成か未設定で確定できます
+                      </p>
+                    )}
+                    {customerMatches !== null && customerMatches.length === 0 && (
+                      <p className="text-muted-foreground text-sm">一致する顧客がいません</p>
+                    )}
+                    <ul className="grid gap-1">
+                      {(customerMatches ?? []).map(candidate => (
+                        <li key={candidate.id}>
+                          <button
+                            type="button"
+                            onClick={() => setValue('customer_id', candidate.id ?? '')}
+                            className={
+                              chosenCustomerId === candidate.id
+                                ? 'w-full rounded-md border border-primary px-3 py-2 text-left text-sm'
+                                : 'w-full rounded-md border px-3 py-2 text-left text-sm'
+                            }
+                          >
+                            {candidate.name}
+                            {candidate.phone_number ? '（' + candidate.phone_number + '）' : ''}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {customerMode === 'new' && (
+                  <div className="grid gap-3">
+                    <FormField
+                      control={control}
+                      name="new_customer_name"
+                      rules={{ required: 'お客様名を入力してください' }}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>お客様名</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name="new_customer_phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>電話番号</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             <FormField
               control={control}
               name="remarks"

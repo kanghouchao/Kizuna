@@ -1,5 +1,6 @@
 export * from './model/types';
 export {
+  guestOrderApplicationApi,
   memberOrderApplicationApi,
   memberReceiptApi,
   memberVisitApi,

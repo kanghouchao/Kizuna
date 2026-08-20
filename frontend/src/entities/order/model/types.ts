@@ -310,6 +310,9 @@ export interface OrderApplicationRow {
   requester_member_code?: string;
   /** 申請時に会員が店舗へ名乗った名前。確定まで台帳行は無いので、これが申請の唯一の名乗りになる。 */
   requester_declared_name?: string;
+  /** ゲスト申請の連絡先。折返し先であり、確定時の新規顧客フォームの予填値になる（会員申請では応答から消える）。 */
+  contact_name?: string;
+  contact_phone_number?: string;
   /** 確定時に生成した受注の id。確定していない申請では応答から消える。 */
   order_id?: string;
   declined_reason?: string;
@@ -334,6 +337,37 @@ export interface OrderApplicationConfirmationRequest {
   pax?: number;
   course_minutes?: number;
   remarks?: string;
+  /**
+   * ゲスト申請の受注を着ける既存の台帳行。new_customer との併用は 400。
+   * どちらも省略すると顧客未設定のまま成立し、申請の連絡先が受注側へ写る。
+   * 会員申請では受け付けられない（顧客は会員の紐づけが決める）。
+   */
+  customer_id?: string;
+  /** ゲスト申請の受注のために新しく起こす台帳行。電話番号での自動照合は行われない。 */
+  new_customer?: {
+    name: string;
+    phone_number?: string;
+  };
+}
+
+/**
+ * 公開店面からのゲスト予約申請（POST /store/order-applications/public・匿名）。
+ * 店舗は訪問された域名から解決されるため、この本体では名乗らない。
+ */
+export interface GuestOrderApplicationCreateRequest {
+  business_date: string;
+  arrival_scheduled_start_time?: string;
+  pax?: number;
+  cast_id?: string;
+  remarks?: string;
+  /** 折返し先。確定は店舗が折返し連絡で内容を詰める操作なので必須。 */
+  contact_name: string;
+  contact_phone_number: string;
+}
+
+/** ゲスト予約申請の受理応答。匿名の申請者に申請を読む口は無いため、受付番号だけが返る。 */
+export interface GuestOrderApplicationResponse {
+  id: string;
 }
 
 /** 予約申請の謝絶（POST /store/order-applications/{id}/refusal）。理由は必須（500 文字以内）。 */

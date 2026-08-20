@@ -16,6 +16,8 @@ const navLinks = [
   { href: '/schedule', label: '出勤表' },
   { href: '/menu', label: '料金' },
   { href: '/about', label: '店舗情報' },
+  // 未ログインの来訪者の申請入口。会員は右の WEB予約（会員ポータル）から入る
+  { href: '/reservation', label: 'ご予約' },
 ];
 
 export default function Header({ storeName, logoUrl }: HeaderProps) {
