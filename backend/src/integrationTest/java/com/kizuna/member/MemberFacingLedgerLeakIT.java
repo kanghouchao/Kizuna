@@ -485,7 +485,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             .customerId(customerId)
             .pax(2)
             .status(OrderStatus.CANCELLED)
-            .receptionRoute(ReceptionRoute.WEB)
+            .receptionRoute(ReceptionRoute.MEMBER_WEB)
             .requesterMemberId(memberId)
             .requesterMemberCode(memberCode)
             .cancelledReason(CANARY_CANCELLATION_REASON)

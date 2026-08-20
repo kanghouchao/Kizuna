@@ -30,6 +30,11 @@ public class OrderApplicationResponse {
   /** 申請時に会員が店舗へ名乗った名前。確定まで台帳行は無いので、これが申請の唯一の名乗りになる。 */
   private String requesterDeclaredName;
 
+  /** ゲスト申請の連絡先。折返し連絡の宛先であり、確定時の新規顧客フォームの予填値になる（会員申請では null）。 */
+  private String contactName;
+
+  private String contactPhoneNumber;
+
   /** 確定時に生成した受注の id。確定していない申請では null。 */
   private String orderId;
 

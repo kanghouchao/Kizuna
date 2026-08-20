@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -24,7 +26,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * スタッフ起点の受注のライフサイクル（出生確定 → 編集 → 取消／完了）と、状態別の群読み口を本物の PostgreSQL で検証する統合テスト。
  *
- * <p>固定するのは ADR 0013 と #680〜#683 の裁定 — 出生確定 / 受付経路 WEB の拒否 / 受付担当の省略補完 / 更新契約の拡張項目 / 連絡先の訂正 /
+ * <p>固定するのは ADR 0013 と #680〜#683 の裁定 — 出生確定 / 受付経路の Web 申請の群の拒否 / 受付担当の省略補完 / 更新契約の拡張項目 / 連絡先の訂正 /
  * 終端状態の凍結 / 理由必須の取消と二度目の拒否 / 受注 1 件を消す口が無いこと / 群読み口の絞り込み・検索・並び替えとカーソルの継続。
  *
  * <p>並行取消の 409 は既存の楽観ロック → 例外写像の機構によるもので、ここでは逐次の 400 だけを固定する（並行の決定性は統合テストでは作れない）。
@@ -50,14 +52,17 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     assertThat(created.getBody().path("status").asString()).isEqualTo("CONFIRMED");
   }
 
-  @Test
-  @DisplayName("作成で受付経路に WEB を指定できないこと")
-  void createRejectsWebAsTheReceptionRoute() {
+  @ParameterizedTest
+  @ValueSource(strings = {"MEMBER_WEB", "GUEST_WEB"})
+  @DisplayName("作成で受付経路に Web 申請の経路を指定できないこと")
+  void createRejectsEveryWebApplicationReceptionRoute(String route) {
     ResponseEntity<JsonNode> rejected =
-        createOrder(body -> body.field("reception_route", "\"WEB\""));
+        createOrder(body -> body.field("reception_route", "\"" + route + "\""));
 
     // 広告費と効果集計の根拠になる経路記録が代理入力で偽装されないため
     assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    // 値が enum に無いだけの解読失敗と区別する。区別しないと、値域が変わった日に守衛が消えても緑のまま残る
+    assertThat(rejected.getBody().path("error").asString()).contains("Web 申請");
   }
 
   @Test
@@ -128,7 +133,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("HQ 経由の作成にも同じ規則（出生確定・WEB 拒否）が効くこと")
+  @DisplayName("HQ 経由の作成にも同じ規則（出生確定・Web 申請の経路の拒否）が効くこと")
   void hqOriginatedOrdersFollowTheSameRules() {
     // 入口によって受注の生まれ方が変わらないこと。HQ は店舗側の作成へ委譲するので規則を共有する
     String hqToken = login("admin@kizuna.test");
@@ -152,12 +157,15 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(created.getBody().path("status").asString()).isEqualTo("CONFIRMED");
 
-    ResponseEntity<JsonNode> web =
-        rest.postForEntity(
-            "/platform/orders",
-            new HttpEntity<>(body + ", \"reception_route\": \"WEB\"}", headers),
-            JsonNode.class);
-    assertThat(web.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    for (String route : new String[] {"MEMBER_WEB", "GUEST_WEB"}) {
+      ResponseEntity<JsonNode> web =
+          rest.postForEntity(
+              "/platform/orders",
+              new HttpEntity<>(body + ", \"reception_route\": \"" + route + "\"}", headers),
+              JsonNode.class);
+      assertThat(web.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+      assertThat(web.getBody().path("error").asString()).contains("Web 申請");
+    }
   }
 
   // ==================== 編集の契約（#681） ====================
@@ -423,7 +431,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
             .businessDate(LocalDate.now())
             .pax(2)
             .status(OrderStatus.CONFIRMED)
-            .receptionRoute(ReceptionRoute.WEB)
+            .receptionRoute(ReceptionRoute.MEMBER_WEB)
             .requesterMemberCode("999999999999")
             .requesterDeclaredName(declared)
             .build();

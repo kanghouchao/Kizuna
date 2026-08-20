@@ -142,7 +142,7 @@ databaseChangeLog:
               - column:
                   name: reception_route
                   type: VARCHAR(20)
-                  remarks: 受付経路（WEB=Web 申請/PHONE=電話受付）
+                  remarks: 受付経路（MEMBER_WEB=会員ポータルの申請/GUEST_WEB=公開店面のゲスト申請/PHONE=電話受付）
               - column:
                   # requester_member_code は申請時点のスナップショットで、会員行が消えて
                   # requester_member_id が欠落した後も誰の申請だったかを読めるようにする。
@@ -364,6 +364,16 @@ databaseChangeLog:
                   name: requester_declared_name
                   type: VARCHAR(255)
                   remarks: 申請時に本人が店舗へ名乗った名前（確定時の自動整備で台帳行の氏名になる）
+              - column:
+                  # ゲスト申請の連絡先。確定は店舗が折返し連絡で内容を詰める操作なので、この 2 列が
+                  # 無いとゲスト申請は処理しようがない。会員申請では NULL（名乗りは上の列が預かる）。
+                  name: contact_name
+                  type: VARCHAR(255)
+                  remarks: ゲスト申請の連絡先氏名。会員申請では NULL
+              - column:
+                  name: contact_phone_number
+                  type: VARCHAR(50)
+                  remarks: ゲスト申請の折返し先電話番号。会員申請では NULL
               - column:
                   name: declined_reason
                   type: VARCHAR(500)

@@ -22,6 +22,7 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
              a.remarks as remarks, a.status as status,
              a.requesterMemberCode as requesterMemberCode,
              a.requesterDeclaredName as requesterDeclaredName,
+             a.contactName as contactName, a.contactPhoneNumber as contactPhoneNumber,
              a.orderId as orderId, a.declinedReason as declinedReason
       from com.kizuna.order.domain.OrderApplication a
         left join com.kizuna.cast.domain.Cast k on k.id = a.castId

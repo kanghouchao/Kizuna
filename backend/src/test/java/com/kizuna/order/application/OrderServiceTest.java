@@ -88,6 +88,8 @@ import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
@@ -537,17 +539,20 @@ class OrderServiceTest {
     verify(orderRepository, never()).save(any());
   }
 
-  @Test
-  void createRejectsWebAsTheReceptionRoute() {
-    // WEB は会員ポータルの申請だけが書く値。代理入力で経路記録を偽装させない
+  @ParameterizedTest
+  @EnumSource(
+      value = ReceptionRoute.class,
+      names = {"MEMBER_WEB", "GUEST_WEB"})
+  void createRejectsEveryWebApplicationReceptionRoute(ReceptionRoute route) {
+    // Web 申請の経路は申請の確定だけが書く値。代理入力で経路記録を偽装させない
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCastId("g1");
     req.setReceptionistId(1L);
-    req.setReceptionRoute(ReceptionRoute.WEB);
+    req.setReceptionRoute(route);
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("WEB");
+        .hasMessageContaining("Web 申請");
     // 台帳を触るより先に撥ねる（拒否の健全さを巻き戻しに委ねない）
     verifyNoInteractions(orderMapper, customerRepository, customerReferenceResolver);
     verify(orderRepository, never()).save(any());
@@ -922,7 +927,7 @@ class OrderServiceTest {
     Order confirmed =
         Order.builder()
             .status(OrderStatus.CONFIRMED)
-            .receptionRoute(ReceptionRoute.WEB)
+            .receptionRoute(ReceptionRoute.MEMBER_WEB)
             .requesterMemberCode("123456789012")
             .receptionistId(3L)
             .pax(2)
@@ -951,7 +956,7 @@ class OrderServiceTest {
     Order confirmed =
         Order.builder()
             .status(OrderStatus.CONFIRMED)
-            .receptionRoute(ReceptionRoute.WEB)
+            .receptionRoute(ReceptionRoute.MEMBER_WEB)
             .requesterMemberCode("123456789012")
             .pax(2)
             .build();
@@ -1299,8 +1304,8 @@ class OrderServiceTest {
     Order created = orderCaptor.getValue();
     assertThat(created.getStatus()).as("受注は出生即 CONFIRMED であること").isEqualTo(OrderStatus.CONFIRMED);
     assertThat(created.getReceptionRoute())
-        .as("会員申請由来の受注だけが WEB を名乗ること")
-        .isEqualTo(ReceptionRoute.WEB);
+        .as("会員ポータル由来の申請の確定は MEMBER_WEB を名乗ること")
+        .isEqualTo(ReceptionRoute.MEMBER_WEB);
     assertThat(created.getRequesterMemberId()).isEqualTo(100L);
     assertThat(created.getRequesterMemberCode()).isEqualTo("123456789012");
     assertThat(created.getRequesterDeclaredName()).isEqualTo("名乗り太郎");
@@ -1313,6 +1318,46 @@ class OrderServiceTest {
     assertThat(application.getProcessedBy()).isEqualTo(7L);
     assertThat(application.getCastId()).as("申請原文は確定で書き換わらないこと").isEqualTo("cast-希望");
     assertThat(application.getRemarks()).isEqualTo("窓際の席を希望");
+  }
+
+  @Test
+  void confirmRecordsGuestWebForAnApplicationWithoutAMemberCode() {
+    // 受付経路は入口を写す。会員コードのスナップショットを持たない申請が公開店面のゲスト申請である
+    OrderApplication application =
+        OrderApplication.builder()
+            .status(OrderApplicationStatus.PENDING)
+            .businessDate(CURRENT_BUSINESS_DATE)
+            .contactName("ゲスト花子")
+            .contactPhoneNumber("09000000000")
+            .build();
+    application.setStoreId(STORE_ID);
+    stubBusinessDate();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
+    stubConfirmActor();
+    stubOrderCreation();
+
+    service.confirmApplication("a1", confirmation(), "staff@kizuna.test");
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getReceptionRoute()).isEqualTo(ReceptionRoute.GUEST_WEB);
+  }
+
+  @Test
+  void confirmRecordsMemberWebEvenAfterTheMemberRowWasDeleted() {
+    // 会員行の削除で requesterMemberId は欠落するが、会員コードは残る。入口の記録がゲストへ倒れてはならない
+    OrderApplication application = pendingApplication().build();
+    application.setStoreId(STORE_ID);
+    stubBusinessDate();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
+    stubConfirmActor();
+    stubOrderCreation();
+
+    service.confirmApplication("a1", confirmation(), "staff@kizuna.test");
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getReceptionRoute()).isEqualTo(ReceptionRoute.MEMBER_WEB);
   }
 
   @Test

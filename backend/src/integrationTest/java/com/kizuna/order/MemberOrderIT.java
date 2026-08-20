@@ -163,7 +163,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
     String orderId = confirmed.getBody().path("id").asString();
     assertThat(orderId).isNotBlank();
     assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
-    assertThat(confirmed.getBody().path("reception_route").asString()).isEqualTo("WEB");
+    assertThat(confirmed.getBody().path("reception_route").asString()).isEqualTo("MEMBER_WEB");
     assertThat(confirmed.getBody().path("pax").asInt()).as("受注は確定内容を持つこと").isEqualTo(5);
     assertThat(confirmed.getBody().path("receptionist_id").asLong())
         .as("確定した店舗スタッフが受付担当として補われること")
