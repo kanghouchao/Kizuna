@@ -231,7 +231,9 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
-            new HttpEntity<>("{\"total_fee\": 12000}", storeHeaders(STORE_A)),
+            new HttpEntity<>(
+                "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}",
+                storeHeaders(STORE_A)),
             JsonNode.class);
 
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);

@@ -362,7 +362,11 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
-            new HttpEntity<>("{\"total_fee\": " + totalFee + "}", storeHeaders(STORE_A)),
+            new HttpEntity<>(
+                "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+                    + totalFee
+                    + "}]}",
+                storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(completed.getStatusCode()).as("前提: 受注を完了できること").isEqualTo(HttpStatus.OK);
     String raw = completed.getBody().path("receipt_token").asString();

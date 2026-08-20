@@ -94,6 +94,12 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     JsonNode spentDetail = orderJson(STORE_B, managerToken, spent);
     assertThat(spentDetail.path("used_points").asInt()).isEqualTo(100);
     assertThat(spentDetail.path("auto_grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
+    // 利用は台帳の減算仕訳と対で明細へも入る。合計はそのぶん下がり、内訳の和と一致し続ける
+    assertThat(spentDetail.path("total_fee").asInt()).isEqualTo(TOTAL_FEE - 100);
+    JsonNode redemption = spentDetail.path("fee_lines").get(1);
+    assertThat(redemption.path("kind").asString()).isEqualTo("POINT_REDEMPTION");
+    assertThat(redemption.path("amount").asInt()).as("減項は正値で返ること").isEqualTo(100);
+    assertThat(redemption.path("system_owned").asBoolean()).isTrue();
 
     long memberId = memberIdOf(memberCode);
     PointEntry usage = usageEntryOf(memberId);
@@ -268,8 +274,9 @@ class OrderCompletionIT extends CrossStoreTestSupport {
   private ResponseEntity<JsonNode> complete(
       long storeId, String bearerToken, String orderId, int totalFee, Integer usePoints) {
     String body =
-        "{\"total_fee\": "
+        "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
             + totalFee
+            + "}]"
             + (usePoints == null ? "" : ", \"use_points\": " + usePoints)
             + "}";
     return rest.exchange(
