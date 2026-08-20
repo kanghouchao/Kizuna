@@ -11,6 +11,7 @@ import {
   orderApi,
   storeEditableFeeLines,
   systemOwnedFeeLines,
+  toFeeLineInputs,
 } from '@/entities/order';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
@@ -144,12 +145,7 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
     try {
       const completed = await orderApi.complete(order.id, {
         course_name: values.course_name.trim() === '' ? undefined : values.course_name,
-        // 基本コース料金の名称はサーバがコース名の写しから採るため、行の名称は送らない
-        fee_lines: values.fee_lines.map(line => ({
-          kind: line.kind,
-          name: line.kind === 'BASE_COURSE' ? undefined : line.name,
-          amount: line.amount,
-        })),
+        fee_lines: toFeeLineInputs(values.fee_lines),
         // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
         // （undefined は JSON 化の段でキーごと消える）。
         use_points: usePoints > 0 ? usePoints : undefined,

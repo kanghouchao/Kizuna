@@ -34,7 +34,8 @@ function OutcomeLine({ order }: { order: Order }) {
   if (order.status === 'COMPLETED') {
     return (
       <p className="text-muted-foreground text-sm">
-        会計 ¥{(order.total_fee ?? 0).toLocaleString()}
+        {/* 合計は明細の総和で、ポイント利用の減算も含む。旧義の「会計金額」ではなく控除後の請求額を指す */}
+        請求 ¥{(order.total_fee ?? 0).toLocaleString()}
         {/* 0 を畳むと「付与なし」と「名乗っていない」が区別できなくなる（完了した受注は必ず持つ） */}
         {order.auto_grant_points != null ? ` ・ 付与 ${order.auto_grant_points}pt` : ''}
         {order.used_points ? ` ・ 利用 ${order.used_points}pt` : ''}

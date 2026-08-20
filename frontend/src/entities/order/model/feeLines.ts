@@ -16,6 +16,18 @@ export function systemOwnedFeeLines(lines: OrderFeeLine[] | undefined): OrderFee
   return (lines ?? []).filter(line => line.system_owned);
 }
 
+/**
+ * 送信する形へ整える。基本コース料金の名称はサーバが受注のコース名の写しから採るため、行の名称は送らない
+ * （送ると同じ受注が二つのコース名を主張しうる）。
+ */
+export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineInput[] {
+  return lines.map(line => ({
+    kind: line.kind,
+    name: line.kind === 'BASE_COURSE' ? undefined : line.name,
+    amount: line.amount,
+  }));
+}
+
 /** 符号が減算に固定された種別。入力も表示も正値なので、足すときだけ符号を戻す。 */
 function isDeduction(kind: OrderFeeLineKind): boolean {
   return kind === 'DISCOUNT' || kind === 'POINT_REDEMPTION';

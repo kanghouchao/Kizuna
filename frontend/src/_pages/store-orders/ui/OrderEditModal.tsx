@@ -12,6 +12,7 @@ import {
   orderApi,
   storeEditableFeeLines,
   systemOwnedFeeLines,
+  toFeeLineInputs,
 } from '@/entities/order';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -115,15 +116,6 @@ function optionalTime(value: string): string | undefined {
 
 function optionalDate(value: string): string | undefined {
   return value === '' ? undefined : value;
-}
-
-/** 基本コース料金の名称はサーバがコース名の写しから採るため、行の名称は送らない。 */
-function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineInput[] {
-  return lines.map(line => ({
-    kind: line.kind,
-    name: line.kind === 'BASE_COURSE' ? undefined : line.name,
-    amount: line.amount,
-  }));
 }
 
 /** 播いた内訳から変わったか。行の集合には「触ったか」の真偽が付かないので、値そのものを突き合わせる。 */

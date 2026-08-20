@@ -525,7 +525,8 @@ describe('アーカイブ', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
 
-    expect(await screen.findByText(/会計 ¥28,000/)).toBeInTheDocument();
+    // 合計はポイント控除後の請求額なので、行は「会計」ではなく「請求」と名乗る
+    expect(await screen.findByText(/請求 ¥28,000/)).toBeInTheDocument();
     expect(screen.getByText(/付与 280pt/)).toBeInTheDocument();
   });
 });
