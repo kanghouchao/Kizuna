@@ -75,9 +75,10 @@ export function OrderApplicationCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            {application.requester_declared_name ? (
+            {/* 名乗りの出所は入口で違う。会員は名乗った名前、ゲストは連絡先の氏名しか持たない */}
+            {application.requester_declared_name || application.contact_name ? (
               <span className="text-foreground font-medium">
-                {application.requester_declared_name}
+                {application.requester_declared_name ?? application.contact_name}
               </span>
             ) : (
               <span className="text-muted-foreground">お名前なし</span>
@@ -103,6 +104,12 @@ export function OrderApplicationCard({
           {application.requester_member_code && (
             <p className="text-muted-foreground text-xs">
               会員コード: {application.requester_member_code}
+            </p>
+          )}
+          {/* 確定は店舗の折返し連絡を経る操作なので、ゲスト申請では折返し先が行の必須情報になる */}
+          {application.contact_phone_number && (
+            <p className="text-muted-foreground text-xs">
+              連絡先: {application.contact_phone_number}
             </p>
           )}
           {application.remarks && (

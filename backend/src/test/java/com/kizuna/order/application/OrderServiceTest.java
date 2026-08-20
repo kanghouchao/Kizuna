@@ -1360,6 +1360,126 @@ class OrderServiceTest {
     assertThat(orderCaptor.getValue().getReceptionRoute()).isEqualTo(ReceptionRoute.MEMBER_WEB);
   }
 
+  // ==================== ゲスト申請の確定時の顧客化（人工判断） ====================
+
+  private static OrderApplication.OrderApplicationBuilder pendingGuestApplication() {
+    return OrderApplication.builder()
+        .status(OrderApplicationStatus.PENDING)
+        .businessDate(CURRENT_BUSINESS_DATE)
+        .contactName("ゲスト花子")
+        .contactPhoneNumber("09000000000");
+  }
+
+  @Test
+  void confirmLinksTheExistingCustomerNamedByTheStaff() {
+    OrderApplication application = pendingGuestApplication().build();
+    application.setStoreId(STORE_ID);
+    stubBusinessDate();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
+    when(customerReferenceResolver.resolveForWrite("cust-既存")).thenReturn("cust-既存");
+    stubConfirmActor();
+    stubOrderCreation();
+
+    OrderApplicationConfirmationRequest request = confirmation();
+    request.setCustomerId("cust-既存");
+    service.confirmApplication("a1", request, "staff@kizuna.test");
+
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("cust-既存");
+    // 電話番号での自動照合は行わない（機械が 1 行を選ぶことが誤帰属の入口になる）
+    verify(customerRepository, never()).findAliveIdsByPhoneNumberAndStoreId(anyString(), anyLong());
+  }
+
+  @Test
+  void confirmCreatesTheLedgerRowTheStaffFilledIn() {
+    OrderApplication application = pendingGuestApplication().build();
+    application.setStoreId(STORE_ID);
+    stubBusinessDate();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
+    Customer created = Customer.builder().name("ゲスト花子").build();
+    created.setId("cust-new");
+    when(customerRepository.save(any(Customer.class))).thenReturn(created);
+    stubConfirmActor();
+    stubOrderCreation();
+
+    OrderApplicationConfirmationRequest request = confirmation();
+    OrderApplicationConfirmationRequest.NewCustomer newCustomer =
+        new OrderApplicationConfirmationRequest.NewCustomer();
+    newCustomer.setName("ゲスト花子");
+    newCustomer.setPhoneNumber("09000000000");
+    request.setNewCustomer(newCustomer);
+
+    service.confirmApplication("a1", request, "staff@kizuna.test");
+
+    verify(customerRepository).save(customerCaptor.capture());
+    assertThat(customerCaptor.getValue().getName()).isEqualTo("ゲスト花子");
+    assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09000000000");
+    assertThat(customerCaptor.getValue().getRank()).as("台帳行のランクは既定を明示すること").isEqualTo("SILVER");
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("cust-new");
+  }
+
+  @Test
+  void confirmKeepsTheGuestContactOnTheOrderWhenNoCustomerIsChosen() {
+    // 顧客を選ばない確定も正規（無帰属受注）。写さないと折返し先がどこにも残らない
+    OrderApplication application = pendingGuestApplication().build();
+    application.setStoreId(STORE_ID);
+    stubBusinessDate();
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
+    stubConfirmActor();
+    stubOrderCreation();
+
+    service.confirmApplication("a1", confirmation(), "staff@kizuna.test");
+
+    verify(orderRepository).save(orderCaptor.capture());
+    Order created = orderCaptor.getValue();
+    assertThat(created.getCustomerId()).isNull();
+    assertThat(created.getContactName()).isEqualTo("ゲスト花子");
+    assertThat(created.getContactPhoneNumber()).isEqualTo("09000000000");
+    verify(customerRepository, never()).save(any(Customer.class));
+  }
+
+  @Test
+  void confirmRejectsChoosingBothAnExistingCustomerAndANewOne() {
+    OrderApplication application = pendingGuestApplication().build();
+    application.setStoreId(STORE_ID);
+    stubBusinessDate();
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
+
+    OrderApplicationConfirmationRequest request = confirmation();
+    request.setCustomerId("cust-既存");
+    OrderApplicationConfirmationRequest.NewCustomer newCustomer =
+        new OrderApplicationConfirmationRequest.NewCustomer();
+    newCustomer.setName("ゲスト花子");
+    request.setNewCustomer(newCustomer);
+
+    assertThatThrownBy(() -> service.confirmApplication("a1", request, "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("どちらか一方");
+    // 検証は書き換えより先に済ませる（拒否の健全さを巻き戻しに委ねない）
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void confirmRejectsAStaffChosenCustomerOnAMemberApplication() {
+    // 会員の顧客は「今の関連」だけが決める一本道。店員が別の行を選べると完了時のポイントが別会員へ積まれる
+    OrderApplication application = pendingApplication().requesterMemberId(100L).build();
+    application.setStoreId(STORE_ID);
+    stubBusinessDate();
+    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
+
+    OrderApplicationConfirmationRequest request = confirmation();
+    request.setCustomerId("cust-別人");
+
+    assertThatThrownBy(() -> service.confirmApplication("a1", request, "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("会員の申請では顧客を選べません");
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
   @Test
   void confirmAssignsActorAsReceptionistWhenSlotIsEmpty() {
     OrderApplication application = pendingApplication().build();

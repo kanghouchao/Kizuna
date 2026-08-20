@@ -426,6 +426,7 @@ public class OrderService {
     if (request.getReceptionistId() != null) {
       validateReceptionist(request.getReceptionistId());
     }
+    validateCustomerChoice(application, request);
     Long actorId = resolveActorId(actorEmail);
 
     Order order =
@@ -454,15 +455,68 @@ public class OrderService {
     } else {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
     }
-    // 申請者の会員 ID が欠落した申請（会員行の削除後）は整える先が無いため、顧客未設定のまま成立させる
-    // （無帰属受注は正規の状態）。
-    if (application.getRequesterMemberId() != null) {
+    if (application.isGuest()) {
+      linkCustomerChosenByStaff(order, application, request);
+    } else if (application.getRequesterMemberId() != null) {
+      // 申請者の会員 ID が欠落した申請（会員行の削除後）は整える先が無いため、顧客未設定のまま成立させる
+      // （無帰属受注は正規の状態）。
       order.linkCustomer(ensureCustomerForRequester(application, actorEmail));
     }
     Order saved = orderRepository.save(order);
     application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
     orderApplicationRepository.save(application);
     return toResponse(saved.getId());
+  }
+
+  /**
+   * 確定要求が名乗る顧客の選択を検める。書き換えより先に済ませる。
+   *
+   * <p>会員申請では受け付けない。会員の顧客は「今の関連」だけが決める一本道であり（ADR 0008）、店員が別の行を 選べると完了時のポイントが別会員へ積まれる。
+   */
+  private static void validateCustomerChoice(
+      OrderApplication application, OrderApplicationConfirmationRequest request) {
+    boolean choosesExisting = request.getCustomerId() != null && !request.getCustomerId().isBlank();
+    boolean createsNew = request.getNewCustomer() != null;
+    if (!application.isGuest() && (choosesExisting || createsNew)) {
+      throw new ServiceException("会員の申請では顧客を選べません。顧客は会員の紐づけから決まります");
+    }
+    if (choosesExisting && createsNew) {
+      throw new ServiceException("既存の顧客と新規作成のどちらか一方を選んでください");
+    }
+  }
+
+  /**
+   * ゲスト申請の受注が着く当店の顧客を、店員の判断のまま決める。既存の行を名指すか新しく起こすかの二択で、 どちらも無ければ顧客未設定のまま成立させ、申請の連絡先を受注側へ写す。
+   *
+   * <p>電話番号での自動照合は行わない（ADR 0009 / #320 既決）。同店同号は正規に起こりうるうえ、一致行の中に 会員関連付きの行があり得る以上、機械が 1
+   * 行を選ぶことが誤帰属・なりすましの入口になる。認めた常客だけを 台帳へ載せられるのは、その客を知っている店員である。
+   *
+   * <p>連絡先を写すのは、写さないと台帳にも受注にも残らないまま申請者の折返し先が消えるため。
+   */
+  private void linkCustomerChosenByStaff(
+      Order order, OrderApplication application, OrderApplicationConfirmationRequest request) {
+    if (request.getCustomerId() != null && !request.getCustomerId().isBlank()) {
+      // 既存の行へ着ける ID は顧客参照の解決口から得る。書く直前に対象の行を押さえ、
+      // 取得できない顧客（不在・他店舗・墓標）はそこで 404 になる。
+      order.linkCustomer(customerReferenceResolver.resolveForWrite(request.getCustomerId()));
+      return;
+    }
+    if (request.getNewCustomer() != null) {
+      // store_id は StoreScopeStampListener が @PrePersist で採番する。ランクは他の台帳行の作成経路と
+      // 同じ既定を明示する — 列を写像している以上、省略は DB 既定ではなく null になる。
+      // 起こしたばかりの行は他の経路の書き換えに晒されていないため、解決を経ずにそのまま着ける。
+      Customer customer =
+          customerRepository.save(
+              Customer.builder()
+                  .name(request.getNewCustomer().getName())
+                  .phoneNumber(request.getNewCustomer().getPhoneNumber())
+                  .rank(DEFAULT_RANK)
+                  .build());
+      order.linkCustomer(customer.getId());
+      return;
+    }
+    order.recordContactIfUnlinked(
+        application.getContactName(), application.getContactPhoneNumber());
   }
 
   /**

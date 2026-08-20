@@ -9,6 +9,8 @@ import {
 } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
+  GuestOrderApplicationCreateRequest,
+  GuestOrderApplicationResponse,
   MemberOrderApplication,
   MemberOrderApplicationCreateRequest,
   MemberReceiptClaim,
@@ -256,6 +258,19 @@ export const orderApplicationApi = {
   /** 予約申請を理由付きで謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
   decline: async (id: string | undefined, data: OrderApplicationDeclineRequest): Promise<void> => {
     await apiClient.post(`/store/order-applications/${requireId(id, '予約申請')}/refusal`, data);
+  },
+};
+
+/**
+ * 公開店面からのゲスト予約申請 API（匿名）。店舗は proxy が焼いた x-mw cookie 由来の
+ * 店舗文脈ヘッダで決まるため、申請本体では名乗らない。
+ */
+export const guestOrderApplicationApi = {
+  request: async (
+    data: GuestOrderApplicationCreateRequest
+  ): Promise<GuestOrderApplicationResponse> => {
+    const response = await apiClient.post('/store/order-applications/public', data);
+    return response.data;
   },
 };
 

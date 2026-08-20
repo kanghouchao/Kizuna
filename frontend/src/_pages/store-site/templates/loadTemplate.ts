@@ -1,7 +1,8 @@
 import type { ComponentType } from 'react';
 
 /** 公開站の固定ページ名（templates/<key>/<page>.tsx 契約）。 */
-export type StoreSitePageName = 'page' | 'casts' | 'cast-detail' | 'schedule' | 'menu' | 'about';
+export type StoreSitePageName =
+  'page' | 'casts' | 'cast-detail' | 'schedule' | 'menu' | 'about' | 'reservation';
 
 // Turbopack は動的セグメントを 2 つ含む import 式をチャンク化できず
 // 本番ビルドが panic するため、page 側は静的に分岐し、
@@ -21,6 +22,8 @@ function importPage(
       return import(`./${templateKey}/menu`);
     case 'about':
       return import(`./${templateKey}/about`);
+    case 'reservation':
+      return import(`./${templateKey}/reservation`);
     default:
       return import(`./${templateKey}/page`);
   }
