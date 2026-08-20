@@ -11,6 +11,8 @@ import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
+import com.kizuna.order.domain.OrderFeeLineDraft;
+import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.ReceptionRoute;
@@ -457,13 +459,15 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             .customerId(customerId)
             .castId(castId)
             .pax(2)
-            .status(OrderStatus.COMPLETED)
+            .status(OrderStatus.CONFIRMED)
             .receptionRoute(ReceptionRoute.PHONE)
-            .totalFee(CANARY_TOTAL_FEE)
-            .usedPoints(CANARY_USED_POINTS)
-            .autoGrantPoints(CANARY_GRANTED_POINTS)
             .build();
     order.setStoreId(STORE_A);
+    // 会計は明細から導出されるため、狙った値は行として置く。合計はこの 2 つの差になるが、カナリアの
+    // 字面はどちらも DB に残るので、漏出の検査は変わらず効く。
+    order.replaceStoreFeeLines(
+        List.of(new OrderFeeLineDraft(OrderFeeLineKind.SURCHARGE, "カナリア会計", CANARY_TOTAL_FEE)));
+    order.completeWith(CANARY_USED_POINTS, CANARY_GRANTED_POINTS);
     String orderId = orderRepository.save(order).getId();
 
     orderAttributionRepository.save(
@@ -569,7 +573,9 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
-            new HttpEntity<>("{\"total_fee\": 3000}", storeHeaders(STORE_A)),
+            new HttpEntity<>(
+                "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":3000}]}",
+                storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(completed.getStatusCode()).as("前提: 受注を完了できること").isEqualTo(HttpStatus.OK);
     String rawToken = completed.getBody().path("receipt_token").asString();

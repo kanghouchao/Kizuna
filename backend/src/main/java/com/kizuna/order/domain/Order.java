@@ -102,6 +102,8 @@ public class Order extends StoreScopedEntity {
    *
    * <p>{@code nullable = false} は子側 INSERT に order_id を含めさせるための指定で、これが無いと NULL で挿入してから UPDATE
    * する経路になり NOT NULL 制約に触れる。
+   *
+   * <p>並びは永続化された行の id 順（＝行が起きた順）で、差し替え途中のメモリ上の並びは契約ではない。
    */
   @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
   @JoinColumn(name = "order_id", nullable = false)

@@ -251,8 +251,9 @@ class OrderAttributionIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> complete(String orderId, int totalFee, Integer usePoints) {
     String body =
-        "{\"total_fee\": "
+        "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
             + totalFee
+            + "}]"
             + (usePoints == null ? "" : ", \"use_points\": " + usePoints)
             + "}";
     return rest.exchange(

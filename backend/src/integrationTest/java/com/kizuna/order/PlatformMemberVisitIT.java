@@ -370,7 +370,11 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
     return rest.exchange(
         "/store/orders/" + orderId + "/completion",
         HttpMethod.POST,
-        new HttpEntity<>("{\"total_fee\": " + totalFee + "}", storeHeaders(STORE_A)),
+        new HttpEntity<>(
+            "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+                + totalFee
+                + "}]}",
+            storeHeaders(STORE_A)),
         JsonNode.class);
   }
 

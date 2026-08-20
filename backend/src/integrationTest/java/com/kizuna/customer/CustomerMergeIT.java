@@ -1334,7 +1334,11 @@ class CustomerMergeIT extends CrossStoreTestSupport {
             rest.exchange(
                     "/store/orders/" + orderId + "/completion",
                     HttpMethod.POST,
-                    new HttpEntity<>("{\"total_fee\": " + TOTAL_FEE + "}", managerHeaders(STORE_A)),
+                    new HttpEntity<>(
+                        "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+                            + TOTAL_FEE
+                            + "}]}",
+                        managerHeaders(STORE_A)),
                     JsonNode.class)
                 .getStatusCode())
         .as("前提: 受注を完了できること")
