@@ -110,7 +110,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
         Order.builder()
             .remarks(remarks)
             .businessDate(businessDate)
-            .status(OrderStatus.CREATED)
+            .status(OrderStatus.CONFIRMED)
             .build();
     order.setStoreId(storeId);
     orderRepository.save(order);

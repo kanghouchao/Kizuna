@@ -138,20 +138,18 @@ public class Order extends StoreScopedEntity {
   @Column(name = "cancelled_at")
   private OffsetDateTime cancelledAt;
 
-  /** 申請した会員。店舗が直接起こした受注では null。 */
+  /** 申請した会員。予約申請（OrderApplication）の確定で生まれた受注だけが持ち、店舗が直接起こした受注では null。 */
   @Column(name = "requester_member_id")
   private Long requesterMemberId;
 
-  /** 申請時点の会員コード。会員行が消えて requesterMemberId が欠落した後も申請者を読めるようにする。 */
+  /** 申請時点の会員コードのスナップショット。会員行が消えて requesterMemberId が欠落した後も申請者を読めるようにする。 */
   @Column(name = "requester_member_code", length = 20)
   private String requesterMemberCode;
 
   /**
-   * 申請時に本人が店舗へ名乗った名前。確定時の自動整備で起こす台帳行の氏名になる。
+   * 申請時に本人が店舗へ名乗った名前の写し（正本は申請行と、確定時の自動整備が起こした台帳行）。
    *
    * <p>店舗はプラットフォーム側プロフィール（表示名・メール）へ到達しないため、店舗が知る名前は本人がその店舗へ名乗ると決めたこの名前だけになる。
-   *
-   * <p>氏名の正本は成立した台帳行だが、確定まで台帳行は存在しない。その間の名乗りをこの列が預かる。
    */
   @Column(name = "requester_declared_name")
   private String requesterDeclaredName;
@@ -186,40 +184,6 @@ public class Order extends StoreScopedEntity {
     }
     this.contactName = name;
     this.contactPhoneNumber = phoneNumber;
-  }
-
-  /**
-   * 申請者の会員参照を外す。会員行の削除に伴う FK の SET NULL と同じ意味で、会員コードのスナップショットは残す。
-   *
-   * <p>誰の申請だったかは残り続けるため、未確定の申請は会員が消えた後も店舗が処理し終えられる。
-   */
-  public void detachRequesterMember() {
-    this.requesterMemberId = null;
-  }
-
-  /**
-   * 会員ポータル発の予約申請かどうか。予約受付 inbox の抽出と確定・謝絶の対象判定が共有する。
-   *
-   * <p>受付経路は店舗が手入力の受注にも自由に付けられる記録項目のため、申請者の会員コードまで見て初めて申請と言える。 判定に会員 ID を使わないのは、会員行が消えて FK が SET
-   * NULL になった後も未確定の申請を店舗が処理し終える必要があるため。
-   */
-  public boolean isReservationRequest() {
-    return receptionRoute == ReceptionRoute.WEB && requesterMemberCode != null;
-  }
-
-  /**
-   * 未確定の申請の内容を店舗が書き換える。渡された値がそのまま新しい内容になり、null は「未設定にする」を意味する。
-   *
-   * <p>「null は変更しない」の {@link #apply(OrderPatch)} と意味が逆なのは、指名・受付担当・備考を空に戻せる必要があるため —
-   * 部分更新では消せる項目と消せない項目が生まれ、申請を確定できる形に直しきれない。
-   *
-   * <p>編集できる項目を一度に置き換えるのは、書き換えの途中で撥ねられた集約が中途半端な状態で残らないようにするため（存在確認は application 層が呼び出しより前に済ませる）。
-   */
-  public void revise(Long receptionistId, String castId, Integer pax, String remarks) {
-    this.receptionistId = receptionistId;
-    this.castId = castId;
-    this.pax = pax;
-    this.remarks = remarks;
   }
 
   /**
@@ -291,11 +255,6 @@ public class Order extends StoreScopedEntity {
     }
   }
 
-  /** 注文を確認済みにする。 */
-  public void confirm() {
-    transitionTo(OrderStatus.CONFIRMED);
-  }
-
   /**
    * 会計を確定して注文を完了する。確認済みの注文のみ完了でき、会計金額・利用ポイント・自動付与ポイントはこの経路でのみ確定する。
    *
@@ -313,8 +272,8 @@ public class Order extends StoreScopedEntity {
   }
 
   /**
-   * 確定済みの注文を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみ — 未確定の申請は謝絶（{@link
-   * #cancelRequest}）が受け持ち、誤って完了した受注の救済経路はまだ存在しない（ADR 0013）。
+   * 確定済みの注文を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみ — 未処理の予約申請は申請側の謝絶が受け持ち、
+   * 誤って完了した受注の救済経路はまだ存在しない（ADR 0013）。
    *
    * <p>二度目の取消は同一状態への静默冪等（{@link #transitionTo}）に委ねず明示的に撥ねる。通せば初回の理由と実行者が黙って上書きされ、理由を必須にした意味が消える。
    */
@@ -334,18 +293,6 @@ public class Order extends StoreScopedEntity {
     this.cancelledReason = reason;
     this.cancelledBy = actorId;
     this.cancelledAt = at;
-    transitionTo(OrderStatus.CANCELLED);
-  }
-
-  /**
-   * 未確定の申請を取り下げる。確定前（CREATED）のみ可能で、確定後は店舗との調整を要するため通常のキャンセル経路に委ねる。
-   *
-   * <p>会員の自己キャンセルと店舗の謝絶が共有する。
-   */
-  public void cancelRequest() {
-    if (status != OrderStatus.CREATED) {
-      throw new IllegalOrderStateTransitionException(status, OrderStatus.CANCELLED);
-    }
     transitionTo(OrderStatus.CANCELLED);
   }
 

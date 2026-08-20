@@ -7,19 +7,22 @@ import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
   Order,
+  OrderApplicationRow,
   OrderListCriteria,
   OrderSortKey,
   OrderStatus,
   orderApi,
+  orderApplicationApi,
 } from '@/entities/order';
 import { storePath, useCursorList } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
+import { OrderApplicationCard } from './OrderApplicationCard';
+import { OrderApplicationConfirmModal } from './OrderApplicationConfirmModal';
 import { OrderArchiveSection } from './OrderArchiveSection';
 import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderCompletionModal } from './OrderCompletionModal';
 import { OrderEditModal } from './OrderEditModal';
 import { OrderQueueCard } from './OrderQueueCard';
-import { ReservationRequestEditModal } from './ReservationRequestEditModal';
 import {
   Button,
   Card,
@@ -37,8 +40,8 @@ import {
 /** 作業キューの 1 回の読み込み件数。処理で行が消える一覧なので継ぎ足しで辿る。 */
 const QUEUE_PAGE_SIZE = 20;
 
-/** 対応が要る受注の群。未確定（会員申請）と確定済みを 1 つの面に出す。 */
-const ACTIVE_STATUSES: OrderStatus[] = ['CREATED', 'CONFIRMED'];
+/** 対応が要る受注の群。すべての受注は確定で出生するため、確定済みだけが対象（未処理の申請は受付箱が持つ）。 */
+const ACTIVE_STATUSES: OrderStatus[] = ['CONFIRMED'];
 
 /** 作業キューを離れた受注の行き先。終端状態はこの 2 つしかない（ADR 0013）。 */
 type ArchiveStatus = Extract<OrderStatus, 'COMPLETED' | 'CANCELLED'>;
@@ -76,7 +79,7 @@ export default function OrderListPage() {
   const [descending, setDescending] = useState(false);
 
   const [editing, setEditing] = useState<Order | null>(null);
-  const [editingRequest, setEditingRequest] = useState<Order | null>(null);
+  const [confirming, setConfirming] = useState<OrderApplicationRow | null>(null);
   const [completing, setCompleting] = useState<Order | null>(null);
   const [correcting, setCorrecting] = useState<Order | null>(null);
 
@@ -96,6 +99,24 @@ export default function OrderListPage() {
       }),
     criteria
   );
+
+  // 受付箱（未処理の予約申請）。検索・並びの条件は持たない — 希望日の早い順に処理するだけの箱で、
+  // 条件を持たせると作業キューと 2 つの母集合を主張し合う。
+  const inbox = useCursorList<OrderApplicationRow>(cursor =>
+    orderApplicationApi.list({ statuses: ['PENDING'], cursor, size: QUEUE_PAGE_SIZE })
+  );
+
+  /** 謝絶し終えた申請を受付箱から取り除く。 */
+  const removeFromInbox = (id: string) => inbox.setRows(prev => prev.filter(row => row.id !== id));
+
+  /** 確定し終えた申請の後始末。申請は受付箱から外れ、生まれた受注が作業キューへ現れる。 */
+  const settleConfirmed = (application: OrderApplicationRow | null) => {
+    if (application?.id) {
+      removeFromInbox(application.id);
+    }
+    // 生まれた受注は検索・並びの条件次第でどこに入るか分からないため、行の差し込みではなく取り直す
+    queue.reload();
+  };
 
   const apply = (next: SearchDraft) => {
     setApplied(next);
@@ -214,6 +235,42 @@ export default function OrderListPage() {
       </Card>
 
       <section className="space-y-3">
+        <h2 className="text-foreground text-sm font-medium">予約申請</h2>
+        {/* 取得の失敗を空表示と区別する — 「申請なし」に見せると未処理を見落とす */}
+        {inbox.failed ? (
+          <RegionError message="予約申請を取得できませんでした。" onRetry={inbox.reload} />
+        ) : inbox.isLoading && inbox.rows.length === 0 ? (
+          <p className="text-muted-foreground text-sm">読み込み中...</p>
+        ) : inbox.rows.length === 0 && !inbox.hasMore ? (
+          <p className="text-muted-foreground bg-card rounded-lg border p-4 text-sm">
+            未処理の予約申請はありません
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {inbox.rows.map(application => (
+              <OrderApplicationCard
+                key={application.id}
+                application={application}
+                onDeclined={removeFromInbox}
+                onConfirm={setConfirming}
+              />
+            ))}
+          </ul>
+        )}
+        {inbox.hasMore && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={inbox.isLoading}
+            onClick={inbox.loadMore}
+          >
+            もっと見る
+          </Button>
+        )}
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-foreground text-sm font-medium">対応が要る</h2>
         {/* 取得の失敗を空表示と区別する — 「受注なし」に見せると未対応を見落とす */}
         {queue.failed ? (
@@ -231,12 +288,8 @@ export default function OrderListPage() {
               <OrderQueueCard
                 key={order.id}
                 order={order}
-                // 謝絶も取消も行き先は取消の群（謝絶は取消の記録を持たない CANCELLED）
                 onProcessed={id => removeFromQueue(id, 'CANCELLED')}
-                onConfirmed={replaceRow}
-                onEdit={target =>
-                  target.status === 'CREATED' ? setEditingRequest(target) : setEditing(target)
-                }
+                onEdit={setEditing}
                 onComplete={setCompleting}
               />
             ))}
@@ -273,11 +326,11 @@ export default function OrderListPage() {
       </div>
 
       <OrderEditModal order={editing} onClose={() => setEditing(null)} onSaved={replaceRow} />
-      {/* 未確定の申請は指名・受付担当を可空として扱う専用の契約で編集する（端点も契約も従来どおり） */}
-      <ReservationRequestEditModal
-        request={editingRequest}
-        onClose={() => setEditingRequest(null)}
-        onSaved={replaceRow}
+      {/* 確定は申請内容を予填した受注の作成操作。申請原文はモーダルの外（受付箱の行）に残り続ける */}
+      <OrderApplicationConfirmModal
+        application={confirming}
+        onClose={() => setConfirming(null)}
+        onConfirmed={() => settleConfirmed(confirming)}
       />
       <OrderCompletionModal
         order={completing}

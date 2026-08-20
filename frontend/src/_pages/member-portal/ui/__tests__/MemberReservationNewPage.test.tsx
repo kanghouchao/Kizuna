@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemberReservationNewPage } from '../MemberReservationNewPage';
-import { memberOrderApi } from '@/entities/order';
+import { memberOrderApplicationApi } from '@/entities/order';
 import { shiftApi } from '@/entities/shift';
 import { platformStoreApi } from '@/entities/store';
 
@@ -13,7 +13,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/entities/order', () => ({
-  memberOrderApi: { create: jest.fn() },
+  memberOrderApplicationApi: { create: jest.fn() },
 }));
 jest.mock('@/entities/shift', () => ({
   shiftApi: { confirmedCasts: jest.fn() },
@@ -24,7 +24,7 @@ jest.mock('@/entities/store', () => ({
 
 const mockedLookup = platformStoreApi.lookupByDomain as jest.Mock;
 const mockedCasts = shiftApi.confirmedCasts as jest.Mock;
-const mockedCreate = memberOrderApi.create as jest.Mock;
+const mockedCreate = memberOrderApplicationApi.create as jest.Mock;
 
 const submitButton = () => screen.getByRole('button', { name: 'この内容で申請する' });
 

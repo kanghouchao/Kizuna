@@ -39,6 +39,9 @@ public enum DbConstraint {
   /** t_orders → t_casts の FK。受注が担当キャストを指したまま消えないようにする。 */
   FK_T_ORDERS_CAST("fk_t_orders_cast"),
 
+  /** t_order_applications → t_casts の FK。予約申請が指名キャストを指したまま消えないようにする。 */
+  FK_T_ORDER_APPLICATIONS_CAST("fk_t_order_applications_cast"),
+
   /** t_orders → t_customers(id, alive) の複合 FK。受注が顧客を指したまま顧客が消える・墓標になることを拒む。 */
   FK_T_ORDERS_CUSTOMER_ALIVE("fk_t_orders_customer_alive"),
 

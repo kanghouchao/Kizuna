@@ -41,17 +41,13 @@ function OutcomeLine({ order }: { order: Order }) {
       </p>
     );
   }
-  // 取消の記録を持たない CANCELLED は、確定へ至らないまま消えた申請（店舗の謝絶か会員の取り下げ）。
-  // 理由も実行者も構造的に存在しないので、欠落として「実行者不明」と呼ばずそう名乗る — どちらだったかは
-  // 記録が無く、読み口に無い区別を画面が作ってはならない。
-  if (!order.cancelled_at) {
-    return <p className="text-muted-foreground text-sm">確定前に取り消された申請</p>;
-  }
-  // 取消は誰が・いつ・なぜを行そのものが名乗る（詳細を開かずに経緯を辿れるように）。
+  // 取消は誰が・いつ・なぜを行そのものが名乗る（詳細を開かずに経緯を辿れるように）。すべての受注は
+  // 確定で出生するため、CANCELLED は必ず取消の記録を伴う（未処理の申請の謝絶・取り下げは申請側に残る）。
   // 実行者の欠落はここだけで起こる — 操作者が削除された取消（FK が SET NULL）。
   return (
     <p className="text-muted-foreground text-sm">
-      {formatDateTime(order.cancelled_at)} {order.cancelled_by_name ?? '実行者不明'}
+      {order.cancelled_at ? `${formatDateTime(order.cancelled_at)} ` : ''}
+      {order.cancelled_by_name ?? '実行者不明'}
       {order.cancelled_reason ? ` — ${order.cancelled_reason}` : ''}
     </p>
   );

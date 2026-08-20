@@ -9,11 +9,15 @@ import {
 } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
-  MemberOrder,
-  MemberOrderCreateRequest,
+  MemberOrderApplication,
+  MemberOrderApplicationCreateRequest,
   MemberReceiptClaim,
   MemberVisit,
   Order,
+  OrderApplicationConfirmationRequest,
+  OrderApplicationDeclineRequest,
+  OrderApplicationRow,
+  OrderApplicationStatus,
   OrderAttribution,
   OrderAttributionCorrection,
   OrderAttributionCorrectionRequest,
@@ -31,7 +35,6 @@ import {
   OrderSummaryRow,
   OrderUpdateRequest,
   OrderWorkQueueRow,
-  ReservationRequestUpdateRequest,
 } from '../model/types';
 
 /**
@@ -130,31 +133,6 @@ export const orderApi = {
     return response.data;
   },
   /**
-   * 未確定の予約申請を編集する。送った内容がそのまま新しい申請内容になる（省略＝未設定）。
-   *
-   * 汎用更新（{@link orderApi.update}）と別の口なのは、指名と受付担当を可空として扱うため — 会員は
-   * 指名なしで申請できるので、必須の契約しか無いと人数や備考を直すだけで指名付きの受注に変えざるを得ない。
-   */
-  updateReservationRequest: async (
-    id: string | undefined,
-    data: ReservationRequestUpdateRequest
-  ): Promise<OrderWorkQueueRow> => {
-    const response = await apiClient.put(
-      `/store/orders/${requireId(id, '受注')}/reservation-request`,
-      data
-    );
-    return response.data;
-  },
-  /** 予約申請を確定する（受注として受け付ける）。 */
-  confirm: async (id: string | undefined): Promise<OrderWorkQueueRow> => {
-    const response = await apiClient.post(`/store/orders/${requireId(id, '受注')}/confirmation`);
-    return response.data;
-  },
-  /** 予約申請を謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
-  decline: async (id: string | undefined): Promise<void> => {
-    await apiClient.post(`/store/orders/${requireId(id, '受注')}/refusal`);
-  },
-  /**
    * 受注を完了する（会計の確定）。ポイントの利用と自動付与が台帳へ入るのはこの経路だけ。
    *
    * 対象は確定済みの受注に限られ、それ以外の状態はサーバ側が撥ねる。
@@ -245,25 +223,62 @@ export const orderApi = {
   },
 };
 
-/** 会員本人の予約 API。店舗文脈を要さない（/platform/me 配下）。 */
-export const memberOrderApi = {
-  list: async (params?: CursorParams): Promise<CursorPageResult<MemberOrder>> => {
-    const response = await apiClient.get('/platform/me/orders', { params });
+/** 店舗の予約受付箱 API。申請（OrderApplication）の一覧・確定・謝絶を受け持つ。 */
+export const orderApplicationApi = {
+  /**
+   * 予約申請の一覧。状態の群を指定してカーソルで辿る（受付箱は PENDING）。
+   *
+   * 続きは応答の nextCursor をそのまま cursor に渡して取る。確定・謝絶で行が消えても位置がずれない。
+   */
+  list: async (
+    params: { statuses: OrderApplicationStatus[] } & CursorParams
+  ): Promise<CursorPageResult<OrderApplicationRow>> => {
+    const { statuses, ...rest } = params;
+    const response = await apiClient.get('/store/order-applications', {
+      params: { ...rest, statuses: statuses.join(',') },
+    });
     return fromCursorPage(response.data);
   },
-  create: async (data: MemberOrderCreateRequest): Promise<MemberOrder> => {
-    const response = await apiClient.post('/platform/me/orders', data);
+  /**
+   * 予約申請を確定する — 確定内容で受注を CONFIRMED で生成し、申請行へ order_id を回写する。
+   * 応答は生成された受注（申請の行ではない）。申請原文は不変のまま残る。
+   */
+  confirm: async (
+    id: string | undefined,
+    data: OrderApplicationConfirmationRequest
+  ): Promise<Order> => {
+    const response = await apiClient.post(
+      `/store/order-applications/${requireId(id, '予約申請')}/confirmation`,
+      data
+    );
     return response.data;
   },
-  cancel: async (id: string | undefined): Promise<MemberOrder> => {
+  /** 予約申請を理由付きで謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
+  decline: async (id: string | undefined, data: OrderApplicationDeclineRequest): Promise<void> => {
+    await apiClient.post(`/store/order-applications/${requireId(id, '予約申請')}/refusal`, data);
+  },
+};
+
+/** 会員本人の予約申請 API。店舗文脈を要さない（/platform/me 配下）。 */
+export const memberOrderApplicationApi = {
+  list: async (params?: CursorParams): Promise<CursorPageResult<MemberOrderApplication>> => {
+    const response = await apiClient.get('/platform/me/order-applications', { params });
+    return fromCursorPage(response.data);
+  },
+  create: async (data: MemberOrderApplicationCreateRequest): Promise<MemberOrderApplication> => {
+    const response = await apiClient.post('/platform/me/order-applications', data);
+    return response.data;
+  },
+  /** 未処理の申請を取り下げる（WITHDRAWN）。確定・謝絶の後は 400 で撥ねられる。 */
+  withdraw: async (id: string | undefined): Promise<MemberOrderApplication> => {
     const response = await apiClient.post(
-      `/platform/me/orders/${requireId(id, '予約')}/cancellation`
+      `/platform/me/order-applications/${requireId(id, '予約申請')}/withdrawal`
     );
     return response.data;
   },
 };
 
-/** 会員本人の来店履歴 API。申請の追跡（memberOrderApi）とは別の読み口で、確定した来店だけを返す。 */
+/** 会員本人の来店履歴 API。申請の追跡（memberOrderApplicationApi）とは別の読み口で、確定した来店だけを返す。 */
 export const memberVisitApi = {
   list: async (params?: CursorParams): Promise<CursorPageResult<MemberVisit>> => {
     const response = await apiClient.get('/platform/me/visits', { params });

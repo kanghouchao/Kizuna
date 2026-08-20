@@ -1,20 +1,20 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemberReservationsPage } from '../MemberReservationsPage';
-import { memberOrderApi } from '@/entities/order';
+import { memberOrderApplicationApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
 import { ClientDataError } from '@/shared/lib';
 
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order/model/types'),
-  memberOrderApi: { list: jest.fn(), cancel: jest.fn() },
+  memberOrderApplicationApi: { list: jest.fn(), withdraw: jest.fn() },
 }));
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedList = memberOrderApi.list as jest.Mock;
-const mockedCancel = memberOrderApi.cancel as jest.Mock;
+const mockedList = memberOrderApplicationApi.list as jest.Mock;
+const mockedWithdraw = memberOrderApplicationApi.withdraw as jest.Mock;
 
 const page = (rows: unknown[], nextCursor: string | null = null) => ({ rows, nextCursor });
 
@@ -26,7 +26,8 @@ const cursorServer = (total: number) => (params: { cursor?: string; size: number
     id: `o${start + i}`,
     store_name: `店舗${start + i}`,
     business_date: '2026-08-10',
-    status: 'CREATED',
+    status: 'PENDING',
+    expired: false,
   }));
   return Promise.resolve(page(rows, end < total ? String(end) : null));
 };
@@ -39,13 +40,21 @@ describe('MemberReservationsPage', () => {
   it('全店舗の予約を状態つきで表示する', async () => {
     mockedList.mockResolvedValue(
       page([
-        { id: 'o1', store_name: '店舗A', business_date: '2026-08-10', pax: 2, status: 'CREATED' },
+        {
+          id: 'o1',
+          store_name: '店舗A',
+          business_date: '2026-08-10',
+          pax: 2,
+          status: 'PENDING',
+          expired: false,
+        },
         {
           id: 'o2',
           store_name: '店舗B',
           business_date: '2026-08-11',
           cast_name: 'さくら',
           status: 'CONFIRMED',
+          expired: false,
         },
       ])
     );
@@ -61,8 +70,20 @@ describe('MemberReservationsPage', () => {
   it('取り下げボタンは確定前の予約にだけ出す', async () => {
     mockedList.mockResolvedValue(
       page([
-        { id: 'o1', store_name: '店舗A', business_date: '2026-08-10', status: 'CREATED' },
-        { id: 'o2', store_name: '店舗B', business_date: '2026-08-11', status: 'CONFIRMED' },
+        {
+          id: 'o1',
+          store_name: '店舗A',
+          business_date: '2026-08-10',
+          status: 'PENDING',
+          expired: false,
+        },
+        {
+          id: 'o2',
+          store_name: '店舗B',
+          business_date: '2026-08-11',
+          status: 'CONFIRMED',
+          expired: false,
+        },
       ])
     );
 
@@ -74,22 +95,31 @@ describe('MemberReservationsPage', () => {
 
   it('取り下げると本人取り下げの API を呼び、その行だけ差し替える', async () => {
     mockedList.mockResolvedValue(
-      page([{ id: 'o1', store_name: '店舗A', business_date: '2026-08-10', status: 'CREATED' }])
+      page([
+        {
+          id: 'o1',
+          store_name: '店舗A',
+          business_date: '2026-08-10',
+          status: 'PENDING',
+          expired: false,
+        },
+      ])
     );
-    mockedCancel.mockResolvedValue({
+    mockedWithdraw.mockResolvedValue({
       id: 'o1',
       store_name: '店舗A',
       business_date: '2026-08-10',
-      status: 'CANCELLED',
+      status: 'WITHDRAWN',
+      expired: false,
     });
 
     render(<MemberReservationsPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: '取り下げる' }));
 
-    await waitFor(() => expect(mockedCancel).toHaveBeenCalledWith('o1'));
-    // 取り下げても予約は一覧に残る（状態が変わるだけ）ので、取り直しに行く必要がない
-    expect(await screen.findByText('キャンセル')).toBeInTheDocument();
+    await waitFor(() => expect(mockedWithdraw).toHaveBeenCalledWith('o1'));
+    // 取り下げても申請は一覧に残る（状態が変わるだけ）ので、取り直しに行く必要がない
+    expect(await screen.findByText('取り下げ')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledTimes(1);
   });
 
@@ -97,10 +127,12 @@ describe('MemberReservationsPage', () => {
     // 識別子を欠いた要求はアダプタが組む前に止める（order-api.test.ts）。画面が負うのは
     // その失敗を「取り下げに失敗しました」へ潰さないこと
     mockedList.mockResolvedValue(
-      page([{ store_name: '店舗A', business_date: '2026-08-10', status: 'CREATED' }])
+      page([
+        { store_name: '店舗A', business_date: '2026-08-10', status: 'PENDING', expired: false },
+      ])
     );
-    mockedCancel.mockRejectedValue(
-      new ClientDataError('予約の識別子が取得できていません。画面を読み直してください')
+    mockedWithdraw.mockRejectedValue(
+      new ClientDataError('予約申請の識別子が取得できていません。画面を読み直してください')
     );
 
     render(<MemberReservationsPage />);
@@ -109,7 +141,7 @@ describe('MemberReservationsPage', () => {
 
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith(
-        expect.stringContaining('予約の識別子が取得できていません')
+        expect.stringContaining('予約申請の識別子が取得できていません')
       )
     );
   });

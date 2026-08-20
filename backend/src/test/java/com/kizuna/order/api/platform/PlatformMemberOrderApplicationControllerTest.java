@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.order.api.dto.MemberOrderResponse;
-import com.kizuna.order.application.MemberOrderService;
+import com.kizuna.order.api.dto.MemberOrderApplicationResponse;
+import com.kizuna.order.application.MemberOrderApplicationService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -31,10 +31,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 会員本人の予約経路が会員にだけ開いていることの単体テスト。 */
-@WebMvcTest(PlatformMemberOrderController.class)
-@Import({PlatformMemberOrderControllerTest.MethodSecurityConfig.class, StoreContext.class})
-class PlatformMemberOrderControllerTest {
+/** 会員本人の予約申請経路が会員にだけ開いていることの単体テスト。 */
+@WebMvcTest(PlatformMemberOrderApplicationController.class)
+@Import({
+  PlatformMemberOrderApplicationControllerTest.MethodSecurityConfig.class,
+  StoreContext.class
+})
+class PlatformMemberOrderApplicationControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
@@ -48,7 +51,7 @@ class PlatformMemberOrderControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockitoBean private MemberOrderService memberOrderService;
+  @MockitoBean private MemberOrderApplicationService memberOrderApplicationService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
@@ -59,49 +62,53 @@ class PlatformMemberOrderControllerTest {
   @Test
   @DisplayName("会員は予約の申請・一覧・取り下げができること")
   @WithMockUser(authorities = "ROLE_MEMBER")
-  void memberCanUseOwnReservationRoutes() throws Exception {
-    when(memberOrderService.request(anyString(), any()))
-        .thenReturn(MemberOrderResponse.builder().build());
-    when(memberOrderService.list(anyString(), any(), anyInt()))
+  void memberCanUseOwnApplicationRoutes() throws Exception {
+    when(memberOrderApplicationService.request(anyString(), any()))
+        .thenReturn(MemberOrderApplicationResponse.builder().build());
+    when(memberOrderApplicationService.list(anyString(), any(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(), null));
-    when(memberOrderService.cancel(anyString(), anyString()))
-        .thenReturn(MemberOrderResponse.builder().build());
+    when(memberOrderApplicationService.withdraw(anyString(), anyString()))
+        .thenReturn(MemberOrderApplicationResponse.builder().build());
 
     mockMvc
         .perform(
-            memberPost("/platform/me/orders").contentType(MediaType.APPLICATION_JSON).content(BODY))
+            memberPost("/platform/me/order-applications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY))
         .andExpect(status().isCreated());
     mockMvc
-        .perform(get("/platform/me/orders").principal(() -> "member@kizuna.test"))
+        .perform(get("/platform/me/order-applications").principal(() -> "member@kizuna.test"))
         .andExpect(status().isOk());
-    mockMvc.perform(memberPost("/platform/me/orders/o1/cancellation")).andExpect(status().isOk());
+    mockMvc
+        .perform(memberPost("/platform/me/order-applications/a1/withdrawal"))
+        .andExpect(status().isOk());
   }
 
   @Test
-  @DisplayName("キャストは会員の予約経路に到達できないこと")
+  @DisplayName("キャストは会員の予約申請経路に到達できないこと")
   @WithMockUser(authorities = "ROLE_CAST")
   void castIsRejected() throws Exception {
     mockMvc
-        .perform(get("/platform/me/orders").principal(() -> "cast@kizuna.test"))
+        .perform(get("/platform/me/order-applications").principal(() -> "cast@kizuna.test"))
         .andExpect(status().isForbidden());
   }
 
   @Test
-  @DisplayName("受注管理権限を持つスタッフでも会員の予約経路に到達できないこと")
+  @DisplayName("受注管理権限を持つスタッフでも会員の予約申請経路に到達できないこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void staffIsRejected() throws Exception {
     mockMvc
-        .perform(get("/platform/me/orders").principal(() -> "staff@kizuna.test"))
+        .perform(get("/platform/me/order-applications").principal(() -> "staff@kizuna.test"))
         .andExpect(status().isForbidden());
   }
 
   // 本番は未認証の拒否を PlatformAuthenticationEntryPoint が 401 に変換するが、@WebMvcTest の
   // 最小チェーンにはその entry point が載らないため、ここで見えるのは認可拒否そのもの（403）である。
   @Test
-  @DisplayName("匿名では会員の予約経路に到達できないこと")
+  @DisplayName("匿名では会員の予約申請経路に到達できないこと")
   @WithAnonymousUser
   void anonymousIsRejected() throws Exception {
-    mockMvc.perform(get("/platform/me/orders")).andExpect(status().isForbidden());
+    mockMvc.perform(get("/platform/me/order-applications")).andExpect(status().isForbidden());
   }
 
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。

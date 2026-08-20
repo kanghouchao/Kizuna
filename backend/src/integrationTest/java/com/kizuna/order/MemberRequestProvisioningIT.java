@@ -60,12 +60,12 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
   void confirmationProvisionsTheLedgerRowAndTheLink() {
     Applicant applicant = register("整備");
     String declaredName = "名乗り一郎-" + nonce;
-    String orderId = request(applicant, STORE_A, declaredName);
+    String applicationId = request(applicant, STORE_A, declaredName);
 
-    ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));
+    ResponseEntity<JsonNode> confirmed = confirm(applicationId, storeHeaders(STORE_A));
 
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    // 確定の応答は作業キューの行の形で顧客 ID を載せない。着いた先は詳細の読み口で確かめる
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String orderId = confirmed.getBody().path("id").asString();
     String customerId = customerIdOf(orderId, storeHeaders(STORE_A));
     assertThat(customerId).as("確定した受注が顧客に着くこと").isNotBlank();
 
@@ -92,11 +92,12 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     linkByMemberCode(established, applicant.memberCode());
     String declaredName = "使われない名乗り-" + nonce;
 
-    String orderId = request(applicant, STORE_A, declaredName);
-    ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));
+    String applicationId = request(applicant, STORE_A, declaredName);
+    ResponseEntity<JsonNode> confirmed = confirm(applicationId, storeHeaders(STORE_A));
 
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(customerIdOf(orderId, storeHeaders(STORE_A))).isEqualTo(established);
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(customerIdOf(confirmed.getBody().path("id").asString(), storeHeaders(STORE_A)))
+        .isEqualTo(established);
     List<CustomerMemberLink> links = activeLinks(applicant);
     assertThat(links).hasSize(1);
     assertThat(links.get(0).getReason())
@@ -113,9 +114,9 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     String declined = request(applicant, STORE_A, declinedName);
     assertThat(
             rest.exchange(
-                    "/store/orders/" + declined + "/refusal",
+                    "/store/order-applications/" + declined + "/refusal",
                     HttpMethod.POST,
-                    new HttpEntity<>(storeHeaders(STORE_A)),
+                    new HttpEntity<>("{\"reason\": \"満席\"}", storeHeaders(STORE_A)),
                     JsonNode.class)
                 .getStatusCode())
         .as("前提: 謝絶が成功すること")
@@ -125,7 +126,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     String withdrawn = request(applicant, STORE_A, withdrawnName);
     assertThat(
             rest.exchange(
-                    "/platform/me/orders/" + withdrawn + "/cancellation",
+                    "/platform/me/order-applications/" + withdrawn + "/withdrawal",
                     HttpMethod.POST,
                     new HttpEntity<>(bearer(applicant.token())),
                     JsonNode.class)
@@ -142,7 +143,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     assertThat(
             confirm(request(applicant, STORE_A, confirmedName), storeHeaders(STORE_A))
                 .getStatusCode())
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
     assertThat(activeLinks(applicant)).hasSize(1);
     assertThat(searchCustomers(confirmedName)).hasSize(1);
   }
@@ -166,7 +167,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
             response ->
                 assertThat(response.getStatusCode())
                     .as("敗者も失敗せず収束すること（本文: %s）", response.getBody())
-                    .isEqualTo(HttpStatus.OK));
+                    .isEqualTo(HttpStatus.CREATED));
     List<CustomerMemberLink> links = activeLinks(applicant);
     assertThat(links).as("有効な関連は店舗ごとに 1 本だけであること").hasSize(1);
     assertThat(searchCustomers(sharedName)).as("台帳行も 1 行だけであること").hasSize(1);
@@ -188,8 +189,8 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     String shared = createCustomer("付け替えられる行");
     linkByMemberCode(shared, applicant.memberCode());
 
-    // 申請の時点では申請者に紐づく顧客が着く
-    String orderId = request(applicant, STORE_A, "付替えの名乗り-" + nonce);
+    // 申請は顧客を持たず、着く先は確定の時点の「今の関連」だけで決まる
+    String applicationId = request(applicant, STORE_A, "付替えの名乗り-" + nonce);
 
     // 店舗が同じ台帳行を別の会員へ付け替える（解除 → 別会員で再成立）
     assertThat(
@@ -203,10 +204,11 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.NO_CONTENT);
     linkByMemberCode(shared, other.memberCode());
 
-    ResponseEntity<JsonNode> confirmed = confirm(orderId, storeHeaders(STORE_A));
+    ResponseEntity<JsonNode> confirmed = confirm(applicationId, storeHeaders(STORE_A));
 
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    String landedCustomerId = customerIdOf(orderId, storeHeaders(STORE_A));
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String landedCustomerId =
+        customerIdOf(confirmed.getBody().path("id").asString(), storeHeaders(STORE_A));
     assertThat(landedCustomerId).as("別会員を指す行に着け続けないこと（完了すればその会員へ記帳されてしまう）").isNotEqualTo(shared);
     List<CustomerMemberLink> links = activeLinks(applicant);
     assertThat(links).as("申請者には当店の関連が整うこと").hasSize(1);
@@ -220,10 +222,10 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
   @DisplayName("自動整備で作られた顧客の受注を完了するとポイントが記帳されること")
   void completingAProvisionedOrderRecordsPoints() {
     Applicant applicant = register("記帳");
-    String orderId = request(applicant, STORE_A, "記帳の名乗り-" + nonce);
-    assertThat(confirm(orderId, storeHeaders(STORE_A)).getStatusCode())
-        .as("前提: 確定できること")
-        .isEqualTo(HttpStatus.OK);
+    String applicationId = request(applicant, STORE_A, "記帳の名乗り-" + nonce);
+    ResponseEntity<JsonNode> confirmed = confirm(applicationId, storeHeaders(STORE_A));
+    assertThat(confirmed.getStatusCode()).as("前提: 確定できること").isEqualTo(HttpStatus.CREATED);
+    String orderId = confirmed.getBody().path("id").asString();
 
     ResponseEntity<JsonNode> completed =
         rest.exchange(
@@ -259,10 +261,10 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     String canaryEmail = "platform-email-canary-" + nonce + "@kizuna.test";
     Applicant applicant = register(canaryDisplayName, canaryEmail);
     String declaredName = "CANARY-DECLARED-" + nonce;
-    String orderId = request(applicant, STORE_A, declaredName);
-    assertThat(confirm(orderId, storeHeaders(STORE_A)).getStatusCode())
-        .as("前提: 確定が成功すること")
-        .isEqualTo(HttpStatus.OK);
+    String applicationId = request(applicant, STORE_A, declaredName);
+    ResponseEntity<JsonNode> confirmed = confirm(applicationId, storeHeaders(STORE_A));
+    assertThat(confirmed.getStatusCode()).as("前提: 確定が成功すること").isEqualTo(HttpStatus.CREATED);
+    String orderId = confirmed.getBody().path("id").asString();
     String customerId = customerIdOf(orderId, storeHeaders(STORE_A));
 
     String customerBody = rawStoreBody("/store/customers/" + customerId);
@@ -272,13 +274,16 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     // 構造上ここにだけある（join の相手を会員側へ広げた瞬間に漏れる）。
     String linkHistoryBody =
         rawStoreBody("/store/customers/" + customerId + "/member-link/history");
+    // 申請の行も本人由来のデータ（名乗り・会員コード）を運ぶ面であり、掃く対象に含める。
+    String inboxBody = rawStoreBody("/store/order-applications?statuses=CONFIRMED&size=2000");
 
     assertThat(customerBody).as("正向対照: 台帳行が名乗った名前を運ぶこと").contains(declaredName);
     assertThat(listBody).as("正向対照: 一覧も同じ行を返すこと").contains(declaredName);
     assertThat(orderBody).as("正向対照: 受注が申請者の会員コードを運ぶこと").contains(applicant.memberCode());
     assertThat(linkHistoryBody).as("正向対照: 自動作成された関連が履歴に現れること").contains(applicant.memberCode());
+    assertThat(inboxBody).as("正向対照: 申請の行が名乗った名前を運ぶこと").contains(declaredName);
 
-    assertThat(List.of(customerBody, listBody, orderBody, linkHistoryBody))
+    assertThat(List.of(customerBody, listBody, orderBody, linkHistoryBody, inboxBody))
         .allSatisfy(
             body ->
                 assertThat(body)
@@ -294,12 +299,15 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     String storeACustomer = createCustomer("店舗Aの行");
     linkByMemberCode(storeACustomer, applicant.memberCode());
 
-    String orderId = request(applicant, STORE_B, "店舗Bへの名乗り-" + nonce);
+    String applicationId = request(applicant, STORE_B, "店舗Bへの名乗り-" + nonce);
     ResponseEntity<JsonNode> confirmed =
-        confirm(orderId, headersFor(STORE_B, loginAs(MULTI_STORE_MANAGER_EMAIL)));
+        confirm(applicationId, headersFor(STORE_B, loginAs(MULTI_STORE_MANAGER_EMAIL)));
 
-    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(customerIdOf(orderId, headersFor(STORE_B, loginAs(MULTI_STORE_MANAGER_EMAIL))))
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(
+            customerIdOf(
+                confirmed.getBody().path("id").asString(),
+                headersFor(STORE_B, loginAs(MULTI_STORE_MANAGER_EMAIL))))
         .as("他店舗の台帳行を跨いで使わないこと")
         .isNotBlank()
         .isNotEqualTo(storeACustomer);
@@ -317,7 +325,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
   private String request(Applicant applicant, long storeId, String declaredName) {
     ResponseEntity<JsonNode> requested =
         rest.postForEntity(
-            "/platform/me/orders",
+            "/platform/me/order-applications",
             new HttpEntity<>(
                 "{\"store_id\": "
                     + storeId
@@ -332,7 +340,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     return requested.getBody().path("id").asString();
   }
 
-  /** 受注が着いた顧客の ID。確定の応答は作業キューの行の形になり顧客 ID を載せないため、詳細の読み口から取る。 */
+  /** 受注が着いた顧客の ID。確定の応答と詳細の読み口が同じ着地を報告することも兼ねて、詳細の読み口から取る。 */
   private String customerIdOf(String orderId, HttpHeaders headers) {
     return rest.exchange(
             "/store/orders/" + orderId, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class)
@@ -341,11 +349,13 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
         .asString();
   }
 
-  private ResponseEntity<JsonNode> confirm(String orderId, HttpHeaders headers) {
+  private ResponseEntity<JsonNode> confirm(String applicationId, HttpHeaders headers) {
     return rest.exchange(
-        "/store/orders/" + orderId + "/confirmation",
+        "/store/order-applications/" + applicationId + "/confirmation",
         HttpMethod.POST,
-        new HttpEntity<>(headers),
+        new HttpEntity<>(
+            "{\"business_date\": \"" + LocalDate.now(ZoneId.of("Asia/Tokyo")) + "\", \"pax\": 2}",
+            headers),
         JsonNode.class);
   }
 

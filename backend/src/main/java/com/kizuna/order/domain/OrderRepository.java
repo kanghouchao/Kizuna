@@ -1,11 +1,9 @@
 package com.kizuna.order.domain;
 
 import jakarta.persistence.LockModeType;
-import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -120,50 +118,4 @@ public interface OrderRepository
       value = PLATFORM_VIEW_SELECT,
       countQuery = "select count(o) from com.kizuna.order.domain.Order o")
   Page<PlatformOrderView> findPlatformViews(Pageable pageable);
-
-  String MEMBER_VIEW_SELECT =
-      """
-      select o.id as id, o.storeId as storeId, st.name as storeName,
-             o.businessDate as businessDate,
-             o.arrivalScheduledStartTime as arrivalScheduledStartTime,
-             o.pax as pax, k.name as castName, o.status as status
-      from com.kizuna.order.domain.Order o
-        join com.kizuna.store.domain.Store st on st.id = o.storeId
-        left join com.kizuna.cast.domain.Cast k on k.id = o.castId
-      """;
-
-  // 本人は店舗文脈を確立できず storeFilter は働かないため、申請者の一致が唯一の隔離境界である。先頭と続きの
-  // 問い合わせが同じ条件を共有する。
-  String MEMBER_VIEW_WHERE = " where o.requesterMemberId = :memberId ";
-
-  // 新しい業務日から。カーソルの比較（下記 AFTER 条件）はこの並びと同じ列の組で行う。
-  String MEMBER_VIEW_ORDER = " order by o.businessDate desc, o.id desc";
-
-  /**
-   * 会員本人の予約一覧（跨店集約）の先頭。
-   *
-   * <p>並びは業務日の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
-   */
-  @Query(MEMBER_VIEW_SELECT + MEMBER_VIEW_WHERE + MEMBER_VIEW_ORDER)
-  List<MemberOrderView> findMemberViews(@Param("memberId") Long memberId, Limit limit);
-
-  /** 会員本人の予約一覧の続き。渡された位置より後ろだけを返す。 */
-  @Query(
-      MEMBER_VIEW_SELECT
-          + MEMBER_VIEW_WHERE
-          + """
-            and (o.businessDate < :cursorBusinessDate
-                 or (o.businessDate = :cursorBusinessDate and o.id < :cursorId))
-            """
-          + MEMBER_VIEW_ORDER)
-  List<MemberOrderView> findMemberViewsAfter(
-      @Param("memberId") Long memberId,
-      @Param("cursorBusinessDate") LocalDate cursorBusinessDate,
-      @Param("cursorId") String cursorId,
-      Limit limit);
-
-  /** 会員本人の予約 1 件。一覧と同じく申請者の一致を問い合わせに載せ、他人の予約には到達させない。 */
-  @Query(MEMBER_VIEW_SELECT + " where o.requesterMemberId = :memberId and o.id = :orderId")
-  Optional<MemberOrderView> findMemberView(
-      @Param("memberId") Long memberId, @Param("orderId") String orderId);
 }

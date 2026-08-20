@@ -2,29 +2,28 @@
 // 応答の任意性は Java 側の可空性が正本。wrapper 型のフィールドは
 // default-property-inclusion: non_null によりキーごと応答から消えるため optional にする。
 
-// 受注ステータス。CREATED=未確定/CONFIRMED=確定/COMPLETED=完了/CANCELLED=キャンセル。
-export type OrderStatus = 'CREATED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+// 受注ステータス。すべての受注は CONFIRMED で出生する（ADR 0017）。未処理の申請は別記録（OrderApplication）。
+export type OrderStatus = 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 
-// 受付経路。WEB=会員ポータルからの申請/PHONE=電話受付。
+// 受付経路。WEB=会員ポータルの申請確定由来/PHONE=電話受付。
 export type ReceptionRoute = 'WEB' | 'PHONE';
 
-/**
- * 受注ステータスの日本語表示（既定）。
- *
- * CREATED は会員の申請でも店舗が手入力した受注でも起きるため、中立に「未確定」と呼ぶ。
- * 申請かどうかは別途 WEB申請 バッジが担う。
- */
+/** 受注ステータスの日本語表示。 */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  CREATED: '未確定',
   CONFIRMED: '確定',
   COMPLETED: '完了',
   CANCELLED: 'キャンセル',
 };
 
-/** 会員ポータルでの表示。会員本人の予約は必ず申請として起きるので、CREATED を「申請中」と呼べる。 */
-export const MEMBER_ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  ...ORDER_STATUS_LABELS,
-  CREATED: '申請中',
+// 予約申請のステータス。PENDING 以外はすべて終端で、申請行は以後動かない（失効は状態ではなく expired の導出）。
+export type OrderApplicationStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'WITHDRAWN';
+
+/** 予約申請ステータスの日本語表示。店舗の受付箱と会員ポータルが同じ呼び名を使う。 */
+export const ORDER_APPLICATION_STATUS_LABELS: Record<OrderApplicationStatus, string> = {
+  PENDING: '申請中',
+  CONFIRMED: '確定',
+  DECLINED: '謝絶',
+  WITHDRAWN: '取り下げ',
 };
 
 export interface Order {
@@ -58,8 +57,8 @@ export interface Order {
   /** 申請した会員の会員コード。店舗が起こした受注では応答から消える。 */
   requester_member_code?: string;
   /**
-   * 申請時に会員が店舗へ名乗った名前。当店に台帳行の無い会員の未確定申請では、顧客も録入された連絡先も
-   * 無いため、これが受注の唯一の名乗りになる。確定すると台帳行が起きてそちらが正本になる。
+   * 申請時に会員が店舗へ名乗った名前の写し（正本は申請行と、確定時の自動整備が起こした台帳行）。
+   * 会員行が消えた申請の確定では顧客が着かず、これが受注の唯一の名乗りになる。
    */
   requester_declared_name?: string;
   location_address?: string;
@@ -82,9 +81,9 @@ export interface Order {
 }
 
 /**
- * 作業キューの 1 行（GET /store/orders/work-queue）。対応の要否を判断し、その場で確定・謝絶するのに
- * 要る項目だけを持つ。行を書き戻す操作（確定・更新・申請編集）の応答も同じ形で返るため、受け取った
- * ものをそのまま 1 行の差し替えに使える。
+ * 作業キューの 1 行（GET /store/orders/work-queue）。対応の要否を判断し、その場で処理するのに
+ * 要る項目だけを持つ。行を書き戻す操作（更新）の応答も同じ形で返るため、受け取ったものを
+ * そのまま 1 行の差し替えに使える。
  */
 export interface OrderWorkQueueRow {
   id?: string;
@@ -105,7 +104,7 @@ export interface OrderWorkQueueRow {
   /** 受付で録入された連絡先。台帳の顧客に着かなかった受注にだけ残る。 */
   contact_name?: string;
   contact_phone_number?: string;
-  /** 申請時に会員が店舗へ名乗った名前。台帳行の無い会員の未確定申請では唯一の名乗りになる。 */
+  /** 申請時に会員が店舗へ名乗った名前。会員行が消えた申請由来の受注では唯一の名乗りになる。 */
   requester_declared_name?: string;
 }
 
@@ -284,15 +283,53 @@ export interface OrderCreateRequest {
   ng_content?: string;
 }
 
-// 未確定の予約申請に対する店舗側の編集（PUT /store/orders/{id}/reservation-request）。
-// 送った内容がそのまま新しい申請内容になる部分更新ではない契約で、省略した項目は未設定になる。
-// 指名・受付担当を外せることがこの契約の目的なので、両者は可空。
-export interface ReservationRequestUpdateRequest {
-  receptionist_id?: number;
+/**
+ * 店舗の予約受付箱の 1 行（GET /store/order-applications）。申請原文（希望内容）と処理に要る項目だけを持つ。
+ *
+ * 確定済みの行は order_id で生成された受注と対照できる。
+ */
+export interface OrderApplicationRow {
+  id?: string;
+  business_date?: string;
+  arrival_scheduled_start_time?: string;
+  pax?: number;
   cast_id?: string;
-  // Java 側が @NotNull @Min(1)
-  pax: number;
+  cast_name?: string;
   remarks?: string;
+  status?: OrderApplicationStatus;
+  /** 申請した会員の会員コード。会員行が消えた申請でもスナップショットとして残る。 */
+  requester_member_code?: string;
+  /** 申請時に会員が店舗へ名乗った名前。確定まで台帳行は無いので、これが申請の唯一の名乗りになる。 */
+  requester_declared_name?: string;
+  /** 確定時に生成した受注の id。確定していない申請では応答から消える。 */
+  order_id?: string;
+  declined_reason?: string;
+  /** 希望日を過ぎても処理されていない申請（失効）。確定・謝絶はサーバ側でも拒否される。Java 側が primitive のため必ず現れる。 */
+  expired: boolean;
+}
+
+/**
+ * 予約申請の確定内容（POST /store/order-applications/{id}/confirmation）。確定は申請内容を予填した
+ * 受注の作成操作で、送った内容がそのまま受注になる（申請原文は動かない）。
+ *
+ * ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新で整える。
+ */
+export interface OrderApplicationConfirmationRequest {
+  /** 受付担当。省略すると、実行者本人が受付候補の条件を満たす場合にだけ補われる。 */
+  receptionist_id?: number;
+  business_date: string;
+  arrival_scheduled_start_time?: string;
+  arrival_scheduled_end_time?: string;
+  /** 指名するキャスト。省略は指名なし（会員は指名なしで申請できるため、確定でも強制しない）。 */
+  cast_id?: string;
+  pax?: number;
+  course_minutes?: number;
+  remarks?: string;
+}
+
+/** 予約申請の謝絶（POST /store/order-applications/{id}/refusal）。理由は必須（500 文字以内）。 */
+export interface OrderApplicationDeclineRequest {
+  reason: string;
 }
 
 /**
@@ -384,8 +421,8 @@ export interface OrderReceiptTokenIssue {
   receipt_token: string;
 }
 
-// 会員本人の予約1件（GET /platform/me/orders）。店舗の顧客台帳の項目は含まない。
-export interface MemberOrder {
+// 会員本人の予約申請1件（GET /platform/me/order-applications）。店舗の顧客台帳の項目は含まない。
+export interface MemberOrderApplication {
   id?: string;
   store_id?: number;
   store_name?: string;
@@ -393,10 +430,12 @@ export interface MemberOrder {
   arrival_scheduled_start_time?: string;
   pax?: number;
   cast_name?: string;
-  status?: OrderStatus;
+  status?: OrderApplicationStatus;
+  /** 希望日を過ぎても店舗が処理していない申請（失効）。Java 側が primitive のため必ず現れる。 */
+  expired: boolean;
 }
 
-// 会員本人の来店1件（GET /platform/me/visits）。確定した来店の記録で、申請の追跡（MemberOrder）とは別。
+// 会員本人の来店1件（GET /platform/me/visits）。確定した来店の記録で、申請の追跡（MemberOrderApplication）とは別。
 // 会計金額・利用ポイント・顧客台帳の項目は含まない。
 export interface MemberVisit {
   /** 来店日（受注の業務日）。 */
@@ -416,8 +455,8 @@ export interface MemberReceiptClaim {
   granted_points: number;
 }
 
-// 会員本人の予約申請（POST /platform/me/orders）。受付担当・顧客・受付経路はサーバ側が決める。
-export interface MemberOrderCreateRequest {
+// 会員本人の予約申請（POST /platform/me/order-applications）。受付担当・顧客はサーバ側（確定時）が決める。
+export interface MemberOrderApplicationCreateRequest {
   store_id: number;
   business_date: string;
   pax: number;

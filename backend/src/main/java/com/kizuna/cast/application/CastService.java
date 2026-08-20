@@ -156,6 +156,8 @@ public class CastService {
           Map.of(
               DbConstraint.FK_T_ORDERS_CAST,
               () -> new ConflictException("受注が紐づいているキャストは削除できません。在籍停止に変更してください"),
+              DbConstraint.FK_T_ORDER_APPLICATIONS_CAST,
+              () -> new ConflictException("予約申請が紐づいているキャストは削除できません。在籍停止に変更してください"),
               DbConstraint.FK_T_ATTENDANCES_CAST,
               CastService::attendanceReferenced,
               DbConstraint.FK_T_ATTENDANCES_SHIFT,

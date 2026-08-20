@@ -107,7 +107,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
         Order.builder()
             .remarks(remarks)
             .businessDate(MARKER_DATE)
-            .status(OrderStatus.CREATED)
+            .status(OrderStatus.CONFIRMED)
             .build();
     order.setStoreId(storeId);
     orderRepository.save(order);
@@ -189,7 +189,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
    */
   private ResponseEntity<String> getStoreOrdersRaw(HttpHeaders headers) {
     return rest.exchange(
-        "/store/orders/work-queue?statuses=CREATED,CONFIRMED&size=2000",
+        "/store/orders/work-queue?statuses=CONFIRMED&size=2000",
         HttpMethod.GET,
         new HttpEntity<>(headers),
         String.class);
