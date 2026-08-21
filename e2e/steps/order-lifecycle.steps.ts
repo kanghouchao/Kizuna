@@ -65,7 +65,7 @@ Then('登録した受注が「対応が要る」群に確定として現れる',
 });
 
 When('受注の編集ページを開き人数を {string} に直して保存する', async ({ page }, pax: string) => {
-  await ownCard(page).getByRole('link', { name: '編集', exact: true }).click();
+  await ownCard(page).getByRole('button', { name: '編集', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/${createdOrderId}/edit$`), {
     timeout: 15000,
   });

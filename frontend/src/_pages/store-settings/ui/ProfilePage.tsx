@@ -43,7 +43,7 @@ export default function StoreProfilePage() {
   // 無い応答はフックが失敗へ倒すので、ここには失敗の姿として届く
   if (failure !== null || !config) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">店舗情報</h1>
         <RegionError message="店舗情報の取得に失敗しました" onRetry={() => void loadConfig()} />
       </div>
@@ -51,7 +51,7 @@ export default function StoreProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">店舗情報</h1>
         <p className="text-sm text-muted-foreground mt-1">店舗サイトの外観をカスタマイズします。</p>
