@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon, SquarePenIcon, XIcon } from 'lucide-react';
@@ -10,7 +12,7 @@ import {
   isWebApplicationRoute,
   orderApi,
 } from '@/entities/order';
-import { getApiErrorMessage, requireId } from '@/shared/lib';
+import { getApiErrorMessage, requireId, storePath } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import {
@@ -32,8 +34,6 @@ interface OrderQueueCardProps {
   order: OrderWorkQueueRow;
   /** 取消のように、この受注が群から外れる処理が終わったとき。 */
   onProcessed: (id: string) => void;
-  /** 編集モーダルを開く。 */
-  onEdit: (order: OrderWorkQueueRow) => void;
   /** 完了モーダルを開く。 */
   onComplete: (order: OrderWorkQueueRow) => void;
 }
@@ -64,11 +64,13 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
 }
 
 /**
- * 対応が要る受注 1 件のカード。完了・編集・取消を担う（未処理の予約申請は受付箱のカードが受け持つ）。
+ * 対応が要る受注 1 件のカード。完了・取消をその場で担い、編集は専用の頁へ送る（未処理の予約申請は受付箱のカードが受け持つ）。
  *
  * <p>取消はモーダルを開かず、カードがその場で理由入力に変わる（二段）。一覧の中で完結させるのが この画面の主張なので、確認だけを外へ出さない。
  */
-export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: OrderQueueCardProps) {
+export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCardProps) {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancelForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
@@ -143,11 +145,9 @@ export function OrderQueueCard({ order, onProcessed, onEdit, onComplete }: Order
               完了
             </Button>
             <Button
-              type="button"
+              render={<Link href={storePath(storeId, `/orders/${order.id}/edit`)} />}
               variant="ghost"
               size="sm"
-              disabled={processing}
-              onClick={() => onEdit(order)}
             >
               <SquarePenIcon aria-hidden="true" />
               編集

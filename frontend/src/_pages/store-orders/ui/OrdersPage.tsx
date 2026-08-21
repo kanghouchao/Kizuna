@@ -21,7 +21,6 @@ import { OrderApplicationConfirmModal } from './OrderApplicationConfirmModal';
 import { OrderArchiveSection } from './OrderArchiveSection';
 import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderCompletionModal } from './OrderCompletionModal';
-import { OrderEditModal } from './OrderEditModal';
 import { OrderQueueCard } from './OrderQueueCard';
 import {
   Button,
@@ -78,7 +77,6 @@ export default function OrderListPage() {
   const [sortKey, setSortKey] = useState<OrderSortKey>('BUSINESS_DATE');
   const [descending, setDescending] = useState(false);
 
-  const [editing, setEditing] = useState<Order | null>(null);
   const [confirming, setConfirming] = useState<OrderApplicationRow | null>(null);
   const [completing, setCompleting] = useState<Order | null>(null);
   const [correcting, setCorrecting] = useState<Order | null>(null);
@@ -141,10 +139,6 @@ export default function OrderListPage() {
     queue.setRows(prev => prev.filter(row => row.id !== id));
     setArchived(prev => ({ ...prev, [movedTo]: prev[movedTo] + 1 }));
   };
-
-  /** 一覧の行を新しい内容へ差し替える（確定・編集のように群の中に留まる処理）。 */
-  const replaceRow = (updated: Order) =>
-    queue.setRows(prev => prev.map(row => (row.id === updated.id ? updated : row)));
 
   return (
     <div className="space-y-6">
@@ -289,7 +283,6 @@ export default function OrderListPage() {
                 key={order.id}
                 order={order}
                 onProcessed={id => removeFromQueue(id, 'CANCELLED')}
-                onEdit={setEditing}
                 onComplete={setCompleting}
               />
             ))}
@@ -325,7 +318,6 @@ export default function OrderListPage() {
         />
       </div>
 
-      <OrderEditModal order={editing} onClose={() => setEditing(null)} onSaved={replaceRow} />
       {/* 確定は申請内容を予填した受注の作成操作。申請原文はモーダルの外（受付箱の行）に残り続ける */}
       <OrderApplicationConfirmModal
         application={confirming}
