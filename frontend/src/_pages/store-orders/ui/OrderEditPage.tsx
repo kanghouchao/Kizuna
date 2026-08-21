@@ -130,7 +130,7 @@ function pickEdited(
 }
 
 /**
- * 受注 1 件の編集ページ。欄が 17 あり、モーダルの高さに収まらないので専用の頁を持つ。
+ * 受注 1 件の編集ページ。欄が 17 あり、頁の縦スクロールだけで端から端まで辿れる高さが要る。
  *
  * <p>開くたびにサーバから 1 件を読み直す。一覧の行を種にすると、他の操作者が直した後の画面で 陳腐化した値をそのまま送り返してしまう。
  *
@@ -172,9 +172,9 @@ export default function OrderEditPage() {
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
   // レンダー中に読むのは、react-hook-form が formState の購読をこの読み取りで決めるため
   const { dirtyFields } = formState;
-  // 播き終えた受注。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
+  // 播き終えたか。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
   // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
-  const [seededId, setSeededId] = useState<string | null>(null);
+  const [hasSeeded, setHasSeeded] = useState(false);
 
   // 取得できたら播く。取得の到着はレンダーより後なので、values ではなく効果で入れる
   // （初期値として渡すと、開いた最初のフレームが空欄のまま描かれる）。
@@ -202,11 +202,11 @@ export default function OrderEditPage() {
       contact_name: current.contact_name ?? '',
       contact_phone_number: current.contact_phone_number ?? '',
     });
-    setSeededId(current.id ?? null);
+    setHasSeeded(true);
   }, [current, reset]);
 
-  // 取得は最初のレンダーより後に着く。播き直すまでフォームを出さない（空欄のまま保存できてしまう）
-  const seeded = current !== null && seededId === orderId;
+  // 取得は最初のレンダーより後に着く。播き終えるまでフォームを出さない（空欄のまま保存できてしまう）
+  const seeded = current !== null && hasSeeded;
   const linked = current?.customer_id != null;
 
   const submit = async (values: OrderEditFormValues) => {
@@ -602,6 +602,7 @@ export default function OrderEditPage() {
               <Button
                 type="button"
                 variant="outline"
+                disabled={formState.isSubmitting}
                 onClick={() => router.push(storePath(storeId, '/orders'))}
               >
                 キャンセル

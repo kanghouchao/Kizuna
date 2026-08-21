@@ -9,9 +9,7 @@ jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   // 表示ラベル等の定数は本物を使う（API だけを差し替える）
   orderApi: {
-    get: jest.fn(),
     create: jest.fn(),
-    update: jest.fn(),
     cancel: jest.fn(),
     listReceptionists: jest.fn(),
     listCastCandidates: jest.fn(),
@@ -338,7 +336,7 @@ describe('一覧からの編集', () => {
     stubQueue(confirmedOrder());
     render(<OrderListPage />);
 
-    // 17 欄はモーダルの高さに収まらない。顧客側と同じく専用の頁へ出す
+    // 17 欄の編集面は顧客側と同じく専用の頁が持つ。一覧が担うのはそこへの導線だけ
     expect(await screen.findByRole('link', { name: '編集' })).toHaveAttribute(
       'href',
       '/store/1/orders/o1/edit'
