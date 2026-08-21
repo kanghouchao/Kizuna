@@ -265,13 +265,17 @@ export default function OrderEditPage() {
   const label = current === null ? null : customerLabel(current);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-foreground text-2xl font-bold">受注の編集</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {customerHeadingText(current)}
-          {current?.business_date ? ` ・ ${current.business_date}` : ''}
-        </p>
+        {/* 取れていない間は名乗らせない。「お客様名なし」は顧客の着いていない受注を指す文言で、
+            まだ読めていない受注や存在しない受注に出すと、失敗の姿と区別が付かなくなる */}
+        {current !== null && (
+          <p className="text-muted-foreground mt-1 text-sm">
+            {customerHeadingText(current)}
+            {current.business_date ? ` ・ ${current.business_date}` : ''}
+          </p>
+        )}
       </div>
 
       {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
