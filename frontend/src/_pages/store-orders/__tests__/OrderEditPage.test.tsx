@@ -121,6 +121,8 @@ describe('受注の編集ページ', () => {
 
     const region = await screen.findByRole('alert');
     expect(within(region).getByText('この受注は見つかりませんでした。')).toBeInTheDocument();
+    // 「お客様名なし」は顧客の着いていない受注を指す文言。取れていない受注に出すと失敗と紛れる
+    expect(screen.queryByText('お客様名なし')).not.toBeInTheDocument();
     // 何度押しても取れないものを押させない
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute(
