@@ -63,7 +63,7 @@ export const orderApi = {
     const response = await apiClient.get('/store/orders', { params });
     return fromSpringPage(response.data);
   },
-  /** 受注 1 件。編集モーダルは開くたびにここから読み直す（一覧の行を種にすると陳腐化した値で上書きする）。 */
+  /** 受注 1 件。編集ページは開くたびにここから読み直す（一覧の行を種にすると陳腐化した値で上書きする）。 */
   get: async (id: string | undefined): Promise<Order> => {
     const response = await apiClient.get(`/store/orders/${requireId(id, '受注')}`);
     return response.data;

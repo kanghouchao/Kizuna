@@ -87,6 +87,19 @@ describe('受注の編集ページ', () => {
     expect(mockPush).toHaveBeenCalledWith('/store/1/orders');
   });
 
+  it('保存の最中は出口を塞ぐこと', async () => {
+    // 送信中に離脱すると、要求はサーバへ届いたまま結果を誰も受け取らない（成否の通知も出ない）
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+    mockedOrderApi.update.mockReturnValue(new Promise<Order>(() => {}));
+    render(<OrderEditPage />);
+    await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled());
+  });
+
   it('文字列の欄は空にした結果も送ること（空文字が「空にする」の表し方）', async () => {
     mockedOrderApi.get.mockResolvedValue(confirmedOrder({ remarks: '消したい備考' }));
     mockedOrderApi.update.mockResolvedValue(confirmedOrder());
