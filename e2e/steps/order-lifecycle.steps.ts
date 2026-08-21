@@ -64,12 +64,14 @@ Then('登録した受注が「対応が要る」群に確定として現れる',
   await expect(ownCard(page).getByText('確定', { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
-When('受注の編集モーダルを開き人数を {string} に直して保存する', async ({ page }, pax: string) => {
-  await ownCard(page).getByRole('button', { name: '編集', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+When('受注の編集ページを開き人数を {string} に直して保存する', async ({ page }, pax: string) => {
+  await ownCard(page).getByRole('link', { name: '編集', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/${createdOrderId}/edit$`), {
+    timeout: 15000,
+  });
   // 開くたびに 1 件を読み直すので、播かれるまで待ってから書き換える
-  await expect(dialog.getByLabel('人数', { exact: true })).toHaveValue('2', { timeout: 15000 });
-  await dialog.getByLabel('人数', { exact: true }).fill(pax);
+  await expect(page.getByLabel('人数', { exact: true })).toHaveValue('2', { timeout: 15000 });
+  await page.getByLabel('人数', { exact: true }).fill(pax);
   await Promise.all([
     page.waitForResponse(
       resp =>
@@ -77,8 +79,10 @@ When('受注の編集モーダルを開き人数を {string} に直して保存�
         resp.request().method() === 'PUT',
       { timeout: 15000 }
     ),
-    dialog.getByRole('button', { name: '保存', exact: true }).click(),
+    page.getByRole('button', { name: '保存', exact: true }).click(),
   ]);
+  // 保存の出口は一覧。戻り着くまで待たないと、次の段がまだ編集ページを相手にする
+  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`), { timeout: 15000 });
 });
 
 Then('カードの内容が人数 {string} に変わる', async ({ page }, pax: string) => {

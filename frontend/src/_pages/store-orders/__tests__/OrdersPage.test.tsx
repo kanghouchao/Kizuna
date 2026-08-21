@@ -333,118 +333,15 @@ describe('カード内の取消（二段）', () => {
   });
 });
 
-describe('一覧内の編集モーダル', () => {
-  it('確定済みの編集は 1 件を読み直し、指名と受付担当を毎回運んで保存すること', async () => {
+describe('一覧からの編集', () => {
+  it('編集は一覧の中で開かず、受注 1 件の編集ページへ送ること', async () => {
     stubQueue(confirmedOrder());
-    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
-    mockedOrderApi.update.mockResolvedValue(confirmedOrder({ pax: 5 }));
     render(<OrderListPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-
-    // 一覧の行を種にすると、他の操作者が直した後の画面で陳腐化した値を送り返す
-    await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledWith('o1'));
-    const dialog = await screen.findByRole('dialog');
-    await waitFor(() => expect(within(dialog).getByLabelText('人数')).toHaveValue(2));
-
-    fireEvent.change(within(dialog).getByLabelText('人数'), { target: { value: '5' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
-
-    await waitFor(() => expect(mockedOrderApi.update).toHaveBeenCalled());
-    // 触った欄と、省略が「外す」と区別できない 2 項目だけ。全項目を毎回運ぶと、この画面を開いている
-    // 間に別の操作者が直した受注へ、触ってもいない項目を開いた時点の値で押し戻してしまう
-    const [, body] = mockedOrderApi.update.mock.calls[0];
-    expect(Object.keys(body).sort()).toEqual(['cast_id', 'pax', 'receptionist_id']);
-    expect(body).toEqual({ pax: 5, receptionist_id: 3, cast_id: 'cast-1' });
-  });
-
-  it('文字列の欄は空にした結果も送ること（空文字が「空にする」の表し方）', async () => {
-    stubQueue(confirmedOrder({ remarks: '消したい備考' }));
-    mockedOrderApi.get.mockResolvedValue(confirmedOrder({ remarks: '消したい備考' }));
-    mockedOrderApi.update.mockResolvedValue(confirmedOrder());
-    render(<OrderListPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-    const dialog = await screen.findByRole('dialog');
-    await waitFor(() => expect(within(dialog).getByLabelText('備考')).toHaveValue('消したい備考'));
-
-    fireEvent.change(within(dialog).getByLabelText('備考'), { target: { value: '' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
-
-    // 項目ごと落とすと、消したはずの備考が残る（サーバは送られない項目を「変更しない」と読む）
-    await waitFor(() =>
-      expect(mockedOrderApi.update).toHaveBeenCalledWith(
-        'o1',
-        expect.objectContaining({ remarks: '' })
-      )
-    );
-  });
-
-  it('同じ受注を開き直したとき、取り直しの前に前回の内容を出さないこと', async () => {
-    stubQueue(confirmedOrder());
-    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
-    render(<OrderListPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-    const first = await screen.findByRole('dialog');
-    await waitFor(() => expect(within(first).getByLabelText('人数')).toHaveValue(2));
-    fireEvent.click(within(first).getByRole('button', { name: 'キャンセル' }));
-
-    // 2 度目は取得を宙吊りにする。取得の口は取りに行かない間も持っている値を残すので、播種済みの
-    // 印を消さないと、取り直しの完了を待たずに陳腐化した内容のフォームが出て保存できてしまう
-    mockedOrderApi.get.mockReturnValue(new Promise<Order>(() => {}));
-    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-
-    const reopened = await screen.findByRole('dialog');
-    await waitFor(() => expect(within(reopened).getByText('読み込み中...')).toBeInTheDocument());
-    expect(within(reopened).queryByLabelText('人数')).not.toBeInTheDocument();
-  });
-
-  it('顧客の着いた受注では連絡先を編集させず、顧客詳細への導線を出すこと', async () => {
-    stubQueue(confirmedOrder());
-    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
-    render(<OrderListPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-    const dialog = await screen.findByRole('dialog');
-
-    // 受注 1 件を直したつもりの変更が同じ顧客の他の受注へ波及しないため、台帳の項目は読み取り
-    await waitFor(() =>
-      expect(within(dialog).getByRole('link', { name: /顧客詳細を開く/ })).toHaveAttribute(
-        'href',
-        '/store/1/customers/c1'
-      )
-    );
-    expect(within(dialog).queryByLabelText('電話番号')).not.toBeInTheDocument();
-  });
-
-  it('顧客の着いていない受注では連絡先を訂正でき、その 2 項目を送ること', async () => {
-    const unlinked = confirmedOrder({
-      customer_id: undefined,
-      customer_name: undefined,
-      contact_name: '誤記の名前',
-    });
-    stubQueue(unlinked);
-    mockedOrderApi.get.mockResolvedValue(unlinked);
-    mockedOrderApi.update.mockResolvedValue(unlinked);
-    render(<OrderListPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-    const dialog = await screen.findByRole('dialog');
-    await waitFor(() =>
-      expect(within(dialog).getByLabelText('お客様名')).toHaveValue('誤記の名前')
-    );
-
-    fireEvent.change(within(dialog).getByLabelText('お客様名'), {
-      target: { value: '正しい名前' },
-    });
-    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
-
-    await waitFor(() =>
-      expect(mockedOrderApi.update).toHaveBeenCalledWith(
-        'o1',
-        expect.objectContaining({ contact_name: '正しい名前' })
-      )
+    // 17 欄はモーダルの高さに収まらない。顧客側と同じく専用の頁へ出す
+    expect(await screen.findByRole('link', { name: '編集' })).toHaveAttribute(
+      'href',
+      '/store/1/orders/o1/edit'
     );
   });
 });
