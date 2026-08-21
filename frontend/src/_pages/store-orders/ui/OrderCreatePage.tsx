@@ -62,7 +62,7 @@ export default function CreateOrderPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">新規オーダー登録</h1>
         <p className="text-sm text-muted-foreground mt-1">新しい注文情報を入力してください。</p>

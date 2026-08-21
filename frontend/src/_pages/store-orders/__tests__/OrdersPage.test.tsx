@@ -4,6 +4,8 @@ import CreateOrderPage from '../ui/OrderCreatePage';
 import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
 
+const mockPush = jest.fn();
+
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
   ...jest.requireActual('@/entities/order'),
@@ -26,7 +28,7 @@ jest.mock('@/entities/order', () => ({
 }));
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => ({ storeId: '1' }),
 }));
 
@@ -336,11 +338,11 @@ describe('一覧からの編集', () => {
     stubQueue(confirmedOrder());
     render(<OrderListPage />);
 
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+
     // 17 欄の編集面は顧客側と同じく専用の頁が持つ。一覧が担うのはそこへの導線だけ
-    expect(await screen.findByRole('link', { name: '編集' })).toHaveAttribute(
-      'href',
-      '/store/1/orders/o1/edit'
-    );
+    expect(mockPush).toHaveBeenCalledWith('/store/1/orders/o1/edit');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

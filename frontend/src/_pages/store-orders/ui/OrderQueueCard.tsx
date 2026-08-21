@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon, SquarePenIcon, XIcon } from 'lucide-react';
@@ -71,6 +70,7 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
 export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCardProps) {
   const params = useParams();
   const storeId = params.storeId as string;
+  const router = useRouter();
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const cancelForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
@@ -145,9 +145,11 @@ export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCar
               完了
             </Button>
             <Button
-              render={<Link href={storePath(storeId, `/orders/${order.id}/edit`)} />}
+              type="button"
               variant="ghost"
               size="sm"
+              disabled={processing}
+              onClick={() => router.push(storePath(storeId, `/orders/${order.id}/edit`))}
             >
               <SquarePenIcon aria-hidden="true" />
               編集
