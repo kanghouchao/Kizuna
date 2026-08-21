@@ -42,7 +42,7 @@ export function Header() {
         <h2 className="text-lg font-medium text-foreground">管理パネル</h2>
       </div>
 
-      <div className="flex items-center space-x-6">
+      <div className="flex items-center gap-6">
         <Button variant="ghost" size="icon" className="text-muted-foreground">
           <BellIcon className="size-6" />
         </Button>
@@ -75,7 +75,7 @@ export function Header() {
           </DropdownMenu>
         )}
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center gap-4">
           <div className="text-right hidden sm:block">
             {meFailure !== null ? (
               <RegionError
