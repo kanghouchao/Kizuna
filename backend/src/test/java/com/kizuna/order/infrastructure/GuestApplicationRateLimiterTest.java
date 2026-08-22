@@ -16,7 +16,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
 
 /** ゲスト予約申請の流量制限の単体テスト。 */
 @ExtendWith(MockitoExtension.class)
@@ -26,12 +25,10 @@ class GuestApplicationRateLimiterTest {
 
   @InjectMocks private GuestApplicationRateLimiter limiter;
 
-  @SuppressWarnings("unchecked")
-  @Captor
-  private ArgumentCaptor<List<String>> keysCaptor;
+  @Captor private ArgumentCaptor<List<String>> keysCaptor;
 
   private void stubCount(Long count) {
-    when(redisTemplate.execute(any(RedisScript.class), anyList(), any())).thenReturn(count);
+    when(redisTemplate.execute(any(), anyList(), any())).thenReturn(count);
   }
 
   @Test
@@ -52,7 +49,7 @@ class GuestApplicationRateLimiterTest {
     limiter.tryConsume(1L, "203.0.113.7");
 
     // 増分と期限付けを別の往復に分けない。分けると、その間の失効で期限なしの鍵が生まれる
-    verify(redisTemplate).execute(any(RedisScript.class), anyList(), any());
+    verify(redisTemplate).execute(any(), anyList(), any());
   }
 
   @Test
@@ -70,7 +67,7 @@ class GuestApplicationRateLimiterTest {
 
     limiter.tryConsume(7L, "203.0.113.7");
 
-    verify(redisTemplate).execute(any(RedisScript.class), keysCaptor.capture(), any());
+    verify(redisTemplate).execute(any(), keysCaptor.capture(), any());
     assertThat(keysCaptor.getValue()).hasSize(1);
     assertThat(keysCaptor.getValue().get(0)).contains("7").contains("203.0.113.7");
   }
