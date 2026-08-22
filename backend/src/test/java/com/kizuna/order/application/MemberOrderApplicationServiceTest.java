@@ -13,7 +13,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.domain.Cast;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.order.api.dto.MemberOrderApplicationCreateRequest;
@@ -108,18 +107,6 @@ class MemberOrderApplicationServiceTest {
     request.setCastId(castId);
     request.setDeclaredName(DECLARED_NAME);
     return request;
-  }
-
-  /**
-   * 述語が「成立する」と答えたときに返るキャスト。
-   *
-   * <p>成立の条件そのもの（店舗一致・在籍中）を固定するのは {@link NominatableCastLookupTest} で、ここは空か否かの翻訳だけを見る。
-   */
-  private static Cast nominatable(String castId) {
-    Cast cast = Cast.builder().name("さくら").status("ACTIVE").build();
-    cast.setId(castId);
-    cast.setStoreId(STORE_ID);
-    return cast;
   }
 
   private void stubSavedView() {
