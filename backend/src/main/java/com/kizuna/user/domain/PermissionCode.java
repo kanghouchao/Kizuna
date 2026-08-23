@@ -54,6 +54,13 @@ public enum PermissionCode {
   CUSTOMER_MERGE(Console.STORE, SystemRole.STORE_MANAGER),
 
   /**
+   * 完了した受注の内容訂正（明細行・実績時刻・コーススナップショット）。凍結済みの記録を動かす管理動作のため店長限定。
+   *
+   * <p>日常権限の {@code ORDER_MANAGE} で守らない。受注を扱う全員が持つ権限で仕切ると「権限のある利用者のみが訂正できる」が空文になる。
+   */
+  ORDER_CORRECT(Console.STORE, SystemRole.STORE_MANAGER),
+
+  /**
    * 会員ポイントの手動調整と、誤帰属の訂正（帰属記録の無効化と、その台帳訂正）。準金銭的な確定系操作のため店長限定。
    *
    * <p>無効化までこの権限に含めるのは、不可逆なその操作だけを店員に許すと、二段目の台帳訂正を実行できない者が訂正を 始められ、やり残しが人を跨いで残るためである（ADR 0012）。

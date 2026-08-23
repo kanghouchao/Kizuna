@@ -19,11 +19,13 @@ import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
+import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
+import com.kizuna.order.application.OrderCorrectionService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderSortKey;
@@ -66,11 +68,18 @@ class OrderControllerTest {
   private static final String COMPLETION_BODY =
       "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}";
 
+  /** 完了後訂正の要求本文。門が直せる三組の全量を毎回送る（省略は「値なし」）。 */
+  private static final String CORRECTION_BODY =
+      "{\"reason\":\"金額の誤記\",\"actual_arrival_time\":\"20:15:00\",\"actual_end_time\":\"22:40:00\","
+          + "\"course_name\":\"120 分コース\",\"course_minutes\":120,\"extension_minutes\":30,"
+          + "\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"指名料\",\"amount\":15000}]}";
+
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private OrderService orderService;
   @MockitoBean private OrderAttributionService orderAttributionService;
   @MockitoBean private OrderAttributionCorrectionService orderAttributionCorrectionService;
+  @MockitoBean private OrderCorrectionService orderCorrectionService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
@@ -521,6 +530,77 @@ class OrderControllerTest {
                 "/store/orders/o1/attribution/invalidation",
                 "{\"attribution_id\": 1, \"reason\": \"" + "あ".repeat(500) + "\"}"))
         .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("完了後訂正は ORDER_CORRECT を持てば到達でき、新たな痕を生むので 201 で返ること")
+  @WithMockUser(authorities = "PERM_ORDER_CORRECT")
+  void correctionIsReachableWithOrderCorrect() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderCorrectionService.correct(any(), any(), any()))
+        .thenReturn(new OrderCorrectionResponse(12000, 15000, 120, 150, 30));
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.previous_total_fee").value(12000))
+        .andExpect(jsonPath("$.grant_difference").value(30));
+  }
+
+  @Test
+  @DisplayName("受注管理だけの店員は完了後訂正に届かないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void correctionIsRejectedWithOrderManageAlone() throws Exception {
+    // 日常権限で門を守ると「権限のある利用者のみが訂正できる」が空文になる
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderCorrectionService);
+  }
+
+  @Test
+  @DisplayName("凍結字段を載せた訂正は契約で撥ねられ、サービスへ届かないこと")
+  @WithMockUser(authorities = "PERM_ORDER_CORRECT")
+  void correctionCarryingAFrozenFieldIsRejected() throws Exception {
+    // 凍結は要求の型に項目が無いことで成立する（未知の項目は撥ねられる設定）。指名は給与計算へ波及するため特に動かさない
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    for (String frozen : List.of("\"pax\":3", "\"cast_id\":\"c1\"", "\"remarks\":\"覚書\"")) {
+      mockMvc
+          .perform(
+              storePost(
+                  "/store/orders/o1/corrections",
+                  "{\"reason\":\"金額の誤記\",\"fee_lines\":[]," + frozen + "}"))
+          .andExpect(status().isBadRequest());
+    }
+    verifyNoInteractions(orderCorrectionService);
+
+    // 正向対照: 凍結字段を外した同じ本文は通る（400 が「内訳が空だから」でない証明）
+    when(orderCorrectionService.correct(any(), any(), any()))
+        .thenReturn(new OrderCorrectionResponse(12000, 0, 120, 0, -120));
+    mockMvc
+        .perform(
+            storePost("/store/orders/o1/corrections", "{\"reason\":\"金額の誤記\",\"fee_lines\":[]}"))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  @DisplayName("理由の無い訂正と内訳を伴わない訂正は 400 で撥ねられること")
+  @WithMockUser(authorities = "PERM_ORDER_CORRECT")
+  void correctionWithoutAReasonOrFeeLinesIsRejected() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    // 理由は凍結済みの記録を動かす根拠そのもの。空白だけの理由も「書いていない」と同じに扱う
+    mockMvc
+        .perform(storePost("/store/orders/o1/corrections", "{\"reason\":\"  \",\"fee_lines\":[]}"))
+        .andExpect(status().isBadRequest());
+    // 内訳の省略を「内訳なし」として通すと、合計 0 の訂正が事故として成立する
+    mockMvc
+        .perform(storePost("/store/orders/o1/corrections", "{\"reason\":\"金額の誤記\"}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderCorrectionService);
   }
 
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。

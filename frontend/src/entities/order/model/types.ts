@@ -115,6 +115,9 @@ export interface Order {
   course_name?: string;
   course_minutes?: number;
   extension_minutes?: number;
+  /** 実際の到着・終了時刻。完了後の訂正の門だけがこれを直せる。 */
+  actual_arrival_time?: string;
+  actual_end_time?: string;
   /** 受注金額の内訳。減項は正値で返る。 */
   fee_lines?: OrderFeeLine[];
   carrier?: string;
@@ -308,6 +311,41 @@ export interface OrderUpdateRequest {
 /** 確定済みの受注の取消（POST /store/orders/{id}/cancellation）。理由は必須（500 文字以内）。 */
 export interface OrderCancellationRequest {
   reason: string;
+}
+
+/**
+ * 完了した受注の訂正（POST /store/orders/{id}/corrections）。ORDER_CORRECT 保持者だけが通れる。
+ *
+ * 門が直せる三組（実績時刻・コーススナップショット・明細行）の**全量**を毎回送る — 省略は
+ * 「変更しない」ではなく「値なし」で、送らなかった項目は空になる。凍結字段（予定時刻・人数・指名・
+ * 受付担当・備考・伝言）はこの型に存在せず、混ぜて送ると 400 になる。
+ *
+ * ポイント利用の行は含められない（門内でも編集不可）。既にある行はこの経路で消えない。
+ */
+export interface OrderCorrectionRequest {
+  reason: string;
+  actual_arrival_time?: string;
+  actual_end_time?: string;
+  course_name?: string;
+  course_minutes?: number;
+  extension_minutes?: number;
+  fee_lines: OrderFeeLineInput[];
+}
+
+/**
+ * 完了後訂正の結果。門はポイントを一切動かさないので、動かなかったことと差額が返る。
+ *
+ * grant_difference が 0 でなければ手当てが要る — 差額は会員ポイントの手動調整（誤帰属なら帰属の訂正）で行う。
+ * Java 側が wrapper 型のため理屈上は可空だが、実際は 5 項目とも常に値が入る。
+ */
+export interface OrderCorrectionResult {
+  previous_total_fee?: number;
+  total_fee?: number;
+  /** 完了時に実際に付与したポイント。訂正では動かない時点事実。 */
+  granted_points?: number;
+  /** 訂正後の内容で完了していれば付与されたであろうポイント。 */
+  recomputed_grant_points?: number;
+  grant_difference?: number;
 }
 
 export interface OrderReceptionist {

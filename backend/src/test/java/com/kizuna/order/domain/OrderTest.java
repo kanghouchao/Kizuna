@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -385,5 +386,88 @@ class OrderTest {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.transitionTo(OrderStatus.CONFIRMED);
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+  }
+
+  @Test
+  @DisplayName("完了後の訂正は明細・実績時刻・コース快照を直し、合計を取り直すこと")
+  void correct_rewritesTheCorrectableSetAndRederivesTheTotal() {
+    Order order = Order.builder().status(OrderStatus.CONFIRMED).courseName("60 分コース").build();
+    order.replaceStoreFeeLines(
+        List.of(
+            draft(OrderFeeLineKind.BASE_COURSE, null, 14000),
+            draft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+    order.completeWith(500, 120);
+
+    order.correct(
+        new OrderCorrectionCommand(
+            LocalTime.of(20, 15),
+            LocalTime.of(22, 40),
+            "120 分コース",
+            120,
+            30,
+            List.of(
+                draft(OrderFeeLineKind.BASE_COURSE, null, 22000),
+                draft(OrderFeeLineKind.OPTION, "オプション B", 3000))));
+
+    assertThat(order.getStatus()).as("訂正は状態を戻さないこと").isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getActualArrivalTime()).isEqualTo(LocalTime.of(20, 15));
+    assertThat(order.getActualEndTime()).isEqualTo(LocalTime.of(22, 40));
+    assertThat(order.getCourseName()).isEqualTo("120 分コース");
+    assertThat(order.getCourseMinutes()).isEqualTo(120);
+    assertThat(order.getExtensionMinutes()).isEqualTo(30);
+    // 金額行と対で直せるので、行の名称も新しいコース名を名乗る（半修状態を作らない）
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getKind, OrderFeeLine::getName, OrderFeeLine::getAmount)
+        .containsExactly(
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, "ポイント利用", -500),
+            tuple(OrderFeeLineKind.BASE_COURSE, "120 分コース", 22000),
+            tuple(OrderFeeLineKind.OPTION, "オプション B", 3000));
+    assertThat(order.getTotalFee()).isEqualTo(24500);
+    assertThat(order.getAutoGrantPoints()).as("門はポイントを一切動かさないこと").isEqualTo(120);
+  }
+
+  @Test
+  @DisplayName("完了後の訂正はポイント利用の行を残し、要求に混ぜられても撥ねること")
+  void correct_cannotTouchSystemOwnedLines() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", 10000)));
+    order.completeWith(500, 0);
+
+    assertThatThrownBy(
+            () ->
+                order.correct(
+                    command(List.of(draft(OrderFeeLineKind.POINT_REDEMPTION, "ポイント利用", -300)))))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+
+    order.correct(command(List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", 8000))));
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
+        .containsExactly(
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -500),
+            tuple(OrderFeeLineKind.SURCHARGE, 8000));
+    assertThat(order.getTotalFee()).isEqualTo(7500);
+  }
+
+  @Test
+  @DisplayName("完了していない受注は訂正できないこと")
+  void correct_rejectsNonCompletedOrders() {
+    Order confirmed = orderWithStatus(OrderStatus.CONFIRMED);
+    confirmed.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.OPTION, "オプション", 2000)));
+
+    assertThatThrownBy(() -> confirmed.correct(command(List.of())))
+        .isInstanceOf(InvalidOrderCorrectionException.class);
+    assertThat(confirmed.getTotalFee()).as("撥ねた訂正は内訳を動かさないこと").isEqualTo(2000);
+
+    // 誤取消の救済は同内容で受注を起こし直すこと（取消理由と実行者の保護を訂正口で迂回させない）
+    Order cancelled = orderWithStatus(OrderStatus.CONFIRMED);
+    cancelled.cancelWith("誤登録", 1L, OffsetDateTime.now());
+
+    assertThatThrownBy(() -> cancelled.correct(command(List.of())))
+        .isInstanceOf(InvalidOrderCorrectionException.class);
+    assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+  }
+
+  private OrderCorrectionCommand command(List<OrderFeeLineDraft> feeLines) {
+    return new OrderCorrectionCommand(null, null, null, null, null, feeLines);
   }
 }

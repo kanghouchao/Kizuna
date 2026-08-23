@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
@@ -14,7 +14,7 @@ import {
   orderApi,
   orderApplicationApi,
 } from '@/entities/order';
-import { storePath, useCursorList } from '@/shared/lib';
+import { hasPermission, readTokenClaims, storePath, useCursorList } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
 import { OrderApplicationCard } from './OrderApplicationCard';
 import { OrderApplicationConfirmModal } from './OrderApplicationConfirmModal';
@@ -70,6 +70,13 @@ function toCriteria(draft: SearchDraft, sortKey: OrderSortKey, desc: boolean): O
 export default function OrderListPage() {
   const params = useParams();
   const storeId = params.storeId as string;
+
+  // 完了後訂正は ORDER_CORRECT（店長）限定。導線の表示制御だけで、強制はサーバ側 @PreAuthorize。
+  // token claim を効果で読むのは、claim が描画前に読めない環境で出し分けが揺れないようにするため。
+  const [canCorrect, setCanCorrect] = useState(false);
+  useEffect(() => {
+    setCanCorrect(hasPermission(readTokenClaims(), 'ORDER_CORRECT'));
+  }, []);
 
   // 入力中の値と「適用済み」の条件を分ける。取得は適用済みだけを読む（DESIGN.md）
   const [draft, setDraft] = useState<SearchDraft>(EMPTY_DRAFT);
@@ -305,16 +312,20 @@ export default function OrderListPage() {
         <OrderArchiveSection
           title="完了"
           status="COMPLETED"
+          storeId={storeId}
           criteria={criteria}
           reloadToken={archived.COMPLETED}
           onCorrectAttribution={setCorrecting}
+          canCorrect={canCorrect}
         />
         <OrderArchiveSection
           title="取消"
           status="CANCELLED"
+          storeId={storeId}
           criteria={criteria}
           reloadToken={archived.CANCELLED}
           onCorrectAttribution={setCorrecting}
+          canCorrect={canCorrect}
         />
       </div>
 

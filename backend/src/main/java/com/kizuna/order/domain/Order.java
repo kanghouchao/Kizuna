@@ -332,6 +332,19 @@ public class Order extends StoreScopedEntity {
     return courseName;
   }
 
+  /**
+   * 自動付与の基準になる金額 — ポイント利用を除いた明細の総和。
+   *
+   * <p>{@link #totalFee} はポイント利用の減算も含む「控除後の請求額」なので、そのまま基準にすると同じ会計が ポイントを使うほど付与も減る。基準はこちらであり、規則の出所を
+   * 1 つに保つため完了も訂正後の再計算も この 1 本を読む（ADR 0018）。
+   */
+  public int grantBasisAmount() {
+    return feeLines.stream()
+        .filter(line -> !line.getKind().isSystemOwned())
+        .mapToInt(OrderFeeLine::getAmount)
+        .sum();
+  }
+
   /** 合計を明細から取り直す。行を動かす経路はすべてここを通り、和と合計が食い違う状態を集約の外から作れないようにする。 */
   private void recalculateTotalFee() {
     this.totalFee = feeLines.stream().mapToInt(OrderFeeLine::getAmount).sum();
@@ -364,8 +377,32 @@ public class Order extends StoreScopedEntity {
   }
 
   /**
+   * 完了した受注の内容を訂正する。状態は動かさない — 完了自体の取り消し（COMPLETED → CONFIRMED の回退）は開けない。
+   *
+   * <p>定義域は COMPLETED のみ。CANCELLED を含めると、取消 ADR 0013 が二度目の取消を撥ねて守った初回理由・実行者の
+   * 保護を訂正口が迂回させる（誤取消の救済は同内容で受注を起こし直すこと）。
+   *
+   * <p>ポイントは一切動かさない。完了時の自動付与は「完了時点の合計に基づく時点事実」であり、訂正で合計が変わっても 追随しない（帰属 ADR 0009
+   * と同族）。差額の手当は台帳側の手動調整が担う。
+   *
+   * <p>コース名は明細より先に当てる。基本コース料金の行名称はコース名の写しから採るため、順序が逆だと同じ要求で 送られた新しいコース名が行に載らない（{@link #apply}
+   * と同じ理由）。
+   */
+  public void correct(OrderCorrectionCommand command) {
+    if (status != OrderStatus.COMPLETED) {
+      throw new InvalidOrderCorrectionException("完了した受注だけが訂正できます");
+    }
+    this.actualArrivalTime = command.actualArrivalTime();
+    this.actualEndTime = command.actualEndTime();
+    this.courseName = command.courseName();
+    this.courseMinutes = command.courseMinutes();
+    this.extensionMinutes = command.extensionMinutes();
+    replaceStoreFeeLines(command.feeLines());
+  }
+
+  /**
    * 確定済みの注文を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみ — 未処理の予約申請は申請側の謝絶が受け持ち、
-   * 誤って完了した受注の救済経路はまだ存在しない（ADR 0013）。
+   * 完了した受注は状態を戻さず内容だけを訂正する（{@link #correct}。ADR 0019）。
    *
    * <p>二度目の取消は同一状態への静默冪等（{@link #transitionTo}）に委ねず明示的に撥ねる。通せば初回の理由と実行者が黙って上書きされ、理由を必須にした意味が消える。
    */
