@@ -6,15 +6,16 @@ import { notify } from '@/shared/notify';
 import { CastResponse, castApi } from '@/entities/cast';
 import { AttendanceResponse, ShiftResponse, attendanceApi, shiftApi } from '@/entities/shift';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
-import { RegionError, Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
+import { ConfirmDialog, RegionError, Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
 import { attendanceByShift, castsWithAttendance } from '../lib/attendance';
 import { monthRange, toDateStr } from '../lib/datetime';
+import { shiftLabel } from '../lib/labels';
 import { AttendanceBoard } from './AttendanceBoard';
 import { AttendanceCancelDialog } from './AttendanceCancelDialog';
 import { AttendanceFormModal, AttendanceFormTarget } from './AttendanceFormModal';
 import { ShiftCalendar } from './ShiftCalendar';
+import { ShiftDayList } from './ShiftDayList';
 import { ShiftFormModal } from './ShiftFormModal';
-import { ShiftPublicationPanel } from './ShiftPublicationPanel';
 import { ShiftRequestInbox } from './ShiftRequestInbox';
 import { ShiftTimeline } from './ShiftTimeline';
 
@@ -36,6 +37,7 @@ export default function ShiftsPage() {
   const [publishing, setPublishing] = useState(false);
   const [attendanceTarget, setAttendanceTarget] = useState<AttendanceFormTarget | null>(null);
   const [cancelling, setCancelling] = useState<AttendanceResponse | null>(null);
+  const [deleting, setDeleting] = useState<ShiftResponse | null>(null);
 
   // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）。101 人以上でも氏名を解決できるよう
   // 全ページ取得する。途中まで読めた分は失敗として捨てられる — 欠けた名簿は「そのキャストは
@@ -113,8 +115,10 @@ export default function ShiftsPage() {
     [absencesData, selectedDate]
   );
 
-  // シフトの編集面が塞ぐ相手。読めていない間は空集合＝塞がないので、後端の 4xx が最後の砦になる
+  // シフトの編集面と日別一覧の削除口が塞ぐ相手。取得に失敗した間は空集合＝塞がないので、
+  // 後端の 4xx が最後の砦になる（読み込み中の窓は一覧側が伏せて受ける）
   const attendedShifts = useMemo(() => attendanceByShift(attendances), [attendances]);
+  const attendedShiftIds = useMemo(() => new Set(attendedShifts.keys()), [attendedShifts]);
   // 同じ営業日に実績を持つキャストは二本目を記録できない（ADR 0014 の一意性）
   const walkInCastOptions = useMemo(() => {
     const attended = castsWithAttendance(attendances);
@@ -162,6 +166,17 @@ export default function ShiftsPage() {
       }
     } finally {
       setPublishing(false);
+    }
+  };
+
+  /** 確認を経た削除。行が消えるので公開切替のような局所差し替えは効かず、取り直しで映す。 */
+  const deleteShift = async (shift: ShiftResponse) => {
+    try {
+      await shiftApi.delete(shift.id);
+      notify.success('シフトを削除しました');
+      void reloadShifts();
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, 'シフトの削除に失敗しました'));
     }
   };
 
@@ -266,13 +281,16 @@ export default function ShiftsPage() {
           {/* 取得失敗はタイムラインが名乗る。同じ取得を映すパネルにまで二重に名乗らせず、
               読めていない間は 0 件と読める姿も出さない。空の日もタイムラインが名乗る側 */}
           {shiftsFailure === null && !loading && dayShifts.length > 0 && (
-            <ShiftPublicationPanel
+            <ShiftDayList
               shifts={dayShifts}
               casts={casts}
               publishing={publishing}
+              attendedShiftIds={attendedShiftIds}
+              attendanceLoading={attendancesLoading}
               onChangePublication={(targets, published) =>
                 void changePublication(targets, published)
               }
+              onDelete={setDeleting}
             />
           )}
         </TabsContent>
@@ -332,6 +350,15 @@ export default function ShiftsPage() {
         onClose={() => setCancelling(null)}
         attendance={cancelling}
         onCancelled={reloadAttendanceViews}
+      />
+
+      {/* 一覧の行から呼ばれるので、どの行を消すのかは確認の側でも名乗る */}
+      <ConfirmDialog
+        open={deleting !== null}
+        title="このシフトを削除しますか？"
+        description={deleting === null ? undefined : shiftLabel(deleting, casts)}
+        onConfirm={() => deleting !== null && void deleteShift(deleting)}
+        onClose={() => setDeleting(null)}
       />
     </div>
   );
