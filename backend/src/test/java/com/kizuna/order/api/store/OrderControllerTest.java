@@ -70,7 +70,8 @@ class OrderControllerTest {
 
   /** 完了後訂正の要求本文。門が直せる三組の全量を毎回送る（省略は「値なし」）。 */
   private static final String CORRECTION_BODY =
-      "{\"reason\":\"金額の誤記\",\"actual_arrival_time\":\"20:15:00\",\"actual_end_time\":\"22:40:00\","
+      "{\"expected_version\":3,\"reason\":\"金額の誤記\","
+          + "\"actual_arrival_time\":\"20:15:00\",\"actual_end_time\":\"22:40:00\","
           + "\"course_name\":\"120 分コース\",\"course_minutes\":120,\"extension_minutes\":30,"
           + "\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"指名料\",\"amount\":15000}]}";
 
@@ -572,7 +573,7 @@ class OrderControllerTest {
           .perform(
               storePost(
                   "/store/orders/o1/corrections",
-                  "{\"reason\":\"金額の誤記\",\"fee_lines\":[]," + frozen + "}"))
+                  "{\"expected_version\":3,\"reason\":\"金額の誤記\",\"fee_lines\":[]," + frozen + "}"))
           .andExpect(status().isBadRequest());
     }
     verifyNoInteractions(orderCorrectionService);
@@ -582,7 +583,9 @@ class OrderControllerTest {
         .thenReturn(new OrderCorrectionResponse(12000, 0, 120, 0, -120));
     mockMvc
         .perform(
-            storePost("/store/orders/o1/corrections", "{\"reason\":\"金額の誤記\",\"fee_lines\":[]}"))
+            storePost(
+                "/store/orders/o1/corrections",
+                "{\"expected_version\":3,\"reason\":\"金額の誤記\",\"fee_lines\":[]}"))
         .andExpect(status().isCreated());
   }
 
@@ -594,11 +597,21 @@ class OrderControllerTest {
 
     // 理由は凍結済みの記録を動かす根拠そのもの。空白だけの理由も「書いていない」と同じに扱う
     mockMvc
-        .perform(storePost("/store/orders/o1/corrections", "{\"reason\":\"  \",\"fee_lines\":[]}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/corrections",
+                "{\"expected_version\":3,\"reason\":\"  \",\"fee_lines\":[]}"))
         .andExpect(status().isBadRequest());
     // 内訳の省略を「内訳なし」として通すと、合計 0 の訂正が事故として成立する
     mockMvc
-        .perform(storePost("/store/orders/o1/corrections", "{\"reason\":\"金額の誤記\"}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/corrections", "{\"expected_version\":3,\"reason\":\"金額の誤記\"}"))
+        .andExpect(status().isBadRequest());
+    // 版を載せない要求も撥ねる。全量置換の口は「画面が見ていた版」が無いと食い違いを検出できない
+    mockMvc
+        .perform(
+            storePost("/store/orders/o1/corrections", "{\"reason\":\"金額の誤記\",\"fee_lines\":[]}"))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderCorrectionService);
   }

@@ -156,6 +156,8 @@ export interface Order {
   cancelled_reason?: string;
   cancelled_by_name?: string;
   cancelled_at?: string;
+  /** 楽観ロック用バージョン。全量置換の口（完了後訂正）へそのまま返す。 */
+  version?: number;
 }
 
 /**
@@ -323,6 +325,13 @@ export interface OrderCancellationRequest {
  * ポイント利用の行は含められない（門内でも編集不可）。既にある行はこの経路で消えない。
  */
 export interface OrderCorrectionRequest {
+  /**
+   * 画面が読み込んだ時点の受注のバージョン（詳細の読み口が返す version）。
+   *
+   * 開いたまま別の操作者が訂正を済ませていると、送らなかった項目まで開いた時点の値で押し戻すため、
+   * サーバが現物の版と突き合わせて、ずれていれば 409 で差し戻す。
+   */
+  expected_version?: number;
   reason: string;
   actual_arrival_time?: string;
   actual_end_time?: string;

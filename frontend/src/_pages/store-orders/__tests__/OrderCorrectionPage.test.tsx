@@ -34,6 +34,7 @@ function completedOrder(overrides: Partial<Order> = {}): Order {
     customer_id: 'c1',
     customer_name: '山田太郎',
     status: 'COMPLETED',
+    version: 7,
     course_name: '60 分コース',
     course_minutes: 60,
     actual_arrival_time: '19:35:00',
@@ -76,6 +77,8 @@ describe('完了後訂正のページ', () => {
     await waitFor(() => expect(mockedOrderApi.correct).toHaveBeenCalled());
     // 部分更新ではないので全量を毎回運ぶ。延長分数は空欄のまま＝「値なし」として送らない
     expect(mockedOrderApi.correct).toHaveBeenCalledWith('o1', {
+      // 開いた時点の版をそのまま返す。読み直さずに送ると、間に挟まった別の訂正を黙って巻き戻す
+      expected_version: 7,
       reason: 'コースの取り違え',
       actual_arrival_time: '19:35:00',
       actual_end_time: '22:40:00',
@@ -106,6 +109,8 @@ describe('完了後訂正のページ', () => {
     // 差額を黙って出すだけだと「反映漏れ」に見える。動かない理由と行き先を同じ面に置く
     expect(await screen.findByText(/差 \+60pt/)).toBeInTheDocument();
     expect(screen.getByText(/自動で動きません/)).toBeInTheDocument();
+    // 宛先は帰属記録が持つ会員。伏せると顧客に今紐づく別人を調整しうる
+    expect(screen.getByText(/会員コード 123456789012/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /ポイントを調整/ })).toHaveAttribute(
       'href',
       '/store/1/customers/c1/edit'
@@ -131,6 +136,8 @@ describe('完了後訂正のページ', () => {
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
 
     expect(await screen.findByText(/動くポイントはありません/)).toBeInTheDocument();
+    // 未申領の伝票は完了時点の会計で凍結した額を後から付与する。「動かない」と言い切らない
+    expect(screen.getByText(/完了時点の会計に基づく額です/)).toBeInTheDocument();
     expect(screen.queryByText(/差 \+180pt/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /ポイントを調整/ })).not.toBeInTheDocument();
     // 訂正そのものは成立しているので、金額の変化は名乗る
@@ -156,6 +163,28 @@ describe('完了後訂正のページ', () => {
 
     expect(await screen.findByText(/差 \+60pt/)).toBeInTheDocument();
     expect(screen.getByText(/自動で動きません/)).toBeInTheDocument();
+  });
+
+  it('会計金額が変わっていなければ付与差額を出さないこと', async () => {
+    // 金額が同じなら付与の基準も同じ。それでも差が出るのは完了後に付与設定が変わった場合で、
+    // 本訂正の帰結ではない差を手当ての要ありとして見せない
+    mockedOrderApi.get.mockResolvedValue(completedOrder());
+    mockedOrderApi.correct.mockResolvedValue({
+      previous_total_fee: 11900,
+      total_fee: 11900,
+      granted_points: 120,
+      recomputed_grant_points: 240,
+      grant_difference: 120,
+    });
+    render(<OrderCorrectionPage />);
+    await waitFor(() => expect(screen.getByLabelText('実際の到着')).toHaveValue('19:35'));
+
+    fireEvent.change(screen.getByLabelText('理由'), { target: { value: '実績時刻の誤記' } });
+    fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+
+    expect(await screen.findByText(/会計金額が変わっていないため/)).toBeInTheDocument();
+    expect(screen.queryByText(/差 \+120pt/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /ポイントを調整/ })).not.toBeInTheDocument();
   });
 
   it('理由の無い訂正は送らないこと', async () => {

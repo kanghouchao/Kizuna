@@ -199,6 +199,75 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("伝票申領で事後帰属した受注では、申領で付いた付与が差額の基準になること")
+  void grantsBookedByAReceiptClaimAreTheBaseline() {
+    // 申領は完了時点の会計（auto_grant_points）を書き換えない。受注の列を基準にすると、この受注の
+    // 差額が付与の全額ぶん膨らみ、過大な手当てを招く
+    String orderId = confirmedOrder("申領");
+    String receiptToken = completeAndTakeReceiptToken(orderId);
+    RegisteredMember member = registerAndLogin("claim");
+    assertThat(claim(member, receiptToken).getStatusCode())
+        .as("前提: 申領が成立すること")
+        .isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<JsonNode> corrected =
+        correct(
+            managerHeaders(STORE_A),
+            orderId,
+            """
+            {"reason":"申領後の金額訂正",
+             "fee_lines":[{"kind":"SURCHARGE","name":"会計","amount":18000}]}
+            """);
+
+    assertThat(corrected.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    // 完了は 12000 円 → 申領の付与予定額 120pt。受注の auto_grant_points は 0 のまま据え置かれている
+    assertThat(orderJson(managerHeaders(STORE_A), orderId).path("auto_grant_points").asInt())
+        .as("前提: 申領は受注の会計を書き換えないこと")
+        .isZero();
+    assertThat(corrected.getBody().path("granted_points").asInt()).isEqualTo(120);
+    assertThat(corrected.getBody().path("recomputed_grant_points").asInt()).isEqualTo(180);
+    assertThat(corrected.getBody().path("grant_difference").asInt()).isEqualTo(60);
+  }
+
+  @Test
+  @DisplayName("画面が見ていた版と食い違う訂正は 409 で差し戻され、本体も痕も動かないこと")
+  void staleCorrectionsAreRefused() {
+    // 全量置換なので、開いたまま別の操作者が訂正を済ませていると、送らなかった項目まで開いた時点の
+    // 値で押し戻す。楽観ロックは要求ごとに現物を読み直すため、版の照合が無いと検出できない
+    String orderId = completedOrder("陳腐化");
+    long opened = currentVersion(managerHeaders(STORE_A), orderId);
+
+    assertThat(
+            correct(
+                    managerHeaders(STORE_A),
+                    orderId,
+                    """
+                    {"reason":"先に済んだ訂正",
+                     "fee_lines":[{"kind":"SURCHARGE","name":"指名料","amount":9000}]}
+                    """)
+                .getStatusCode())
+        .as("前提: 先の訂正が成立すること")
+        .isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<JsonNode> stale =
+        correctAt(
+            managerHeaders(STORE_A),
+            orderId,
+            opened,
+            """
+            {"reason":"開いたままの画面からの訂正","fee_lines":[]}
+            """);
+
+    assertThat(stale.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(orderJson(managerHeaders(STORE_A), orderId).path("total_fee").asInt())
+        .as("撥ねた訂正は先の訂正を巻き戻さないこと")
+        .isEqualTo(9000);
+    assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAsc(orderId))
+        .as("撥ねた訂正は痕を残さないこと")
+        .hasSize(1);
+  }
+
+  @Test
   @DisplayName("取消済みの受注と、状態を戻そうとする要求が撥ねられること")
   void cancelledOrdersAndStateRollbackAreRefused() {
     // 誤取消の救済は同内容で受注を起こし直すこと。取消理由と実行者の保護を訂正口で迂回させない
@@ -245,12 +314,24 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
+  /** 現物の版を載せて訂正する。画面が読み直してから送る通常の経路にあたる。 */
   private ResponseEntity<JsonNode> correct(HttpHeaders headers, String orderId, String body) {
+    return correctAt(headers, orderId, currentVersion(headers, orderId), body);
+  }
+
+  /** 版を明示して訂正する。陳腐化した要求の拒否を見るテストだけが直に使う。 */
+  private ResponseEntity<JsonNode> correctAt(
+      HttpHeaders headers, String orderId, long version, String body) {
     return rest.exchange(
         "/store/orders/" + orderId + "/corrections",
         HttpMethod.POST,
-        new HttpEntity<>(body, headers),
+        new HttpEntity<>(
+            body.replaceFirst("\\{", "{\"expected_version\":" + version + ","), headers),
         JsonNode.class);
+  }
+
+  private long currentVersion(HttpHeaders headers, String orderId) {
+    return orderJson(headers, orderId).path("version").asLong();
   }
 
   private JsonNode orderJson(HttpHeaders headers, String orderId) {
@@ -296,6 +377,65 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(completed.getStatusCode()).as("前提: 完了が成功すること").isEqualTo(HttpStatus.OK);
     return orderId;
+  }
+
+  /** 会計 12000 円で完了させ、非会員完了の応答にだけ現れる伝票トークンの生値を返す。 */
+  private String completeAndTakeReceiptToken(String orderId) {
+    ResponseEntity<JsonNode> completed =
+        rest.exchange(
+            "/store/orders/" + orderId + "/completion",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+                    + COMPLETED_FEE
+                    + "}]}",
+                storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(completed.getStatusCode()).as("前提: 完了が成功すること").isEqualTo(HttpStatus.OK);
+    String raw = completed.getBody().path("receipt_token").asString();
+    assertThat(raw).as("前提: 非会員完了は伝票トークンを発行すること").isNotBlank();
+    return raw;
+  }
+
+  private record RegisteredMember(String memberCode, String token) {}
+
+  /** 申領する会員。登録してそのまま平台ログインまで済ませる。 */
+  private RegisteredMember registerAndLogin(String prefix) {
+    HttpHeaders anonymous = new HttpHeaders();
+    anonymous.setContentType(MediaType.APPLICATION_JSON);
+    String email = prefix + "-correction-it-" + nonce + "-" + System.nanoTime() + "@kizuna.test";
+    ResponseEntity<JsonNode> registration =
+        rest.postForEntity(
+            "/platform/members",
+            new HttpEntity<>(
+                "{\"email\": \""
+                    + email
+                    + "\", \"password\": \"password1234\", \"display_name\": \"訂正検証会員\"}",
+                anonymous),
+            JsonNode.class);
+    assertThat(registration.getStatusCode()).as("前提: 会員登録が成功すること").isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<JsonNode> login =
+        rest.postForEntity(
+            "/platform/login",
+            new HttpEntity<>(
+                "{\"email\": \"" + email + "\", \"password\": \"password1234\"}", anonymous),
+            JsonNode.class);
+    assertThat(login.getStatusCode()).as("前提: 会員のログインが成功すること").isEqualTo(HttpStatus.OK);
+    return new RegisteredMember(
+        registration.getBody().path("member_code").asString(),
+        login.getBody().path("token").asString());
+  }
+
+  /** 伝票の申領。トークンは本体で送る（パスや問い合わせ文字列はアクセスログに残る）。 */
+  private ResponseEntity<JsonNode> claim(RegisteredMember as, String rawToken) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(as.token());
+    return rest.postForEntity(
+        "/platform/me/receipts",
+        new HttpEntity<>("{\"token\": \"" + rawToken + "\"}", headers),
+        JsonNode.class);
   }
 
   private String confirmedOrder(String label) {

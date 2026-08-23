@@ -54,7 +54,7 @@ public interface OrderRepository
              o.locationAddress as locationAddress, o.locationBuilding as locationBuilding,
              o.cancelledReason as cancelledReason, cu.displayName as cancelledByName,
              o.cancelledAt as cancelledAt,
-             o.createdAt as createdAt
+             o.createdAt as createdAt, o.version as version
       from com.kizuna.order.domain.Order o
         left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
         left join com.kizuna.cast.domain.Cast k on k.id = o.castId
