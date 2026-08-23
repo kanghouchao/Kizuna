@@ -603,9 +603,9 @@ public class OrderService {
     order.apply(
         OrderPatch.ofAccounting(
             request.getCourseName(), orderMapper.toFeeLineDrafts(request.getFeeLines())));
-    // 付与の基準と利用の上限は、ポイント利用の行が入る前の総和で決める。利用の行を入れた後の合計は
+    // 付与の基準と利用の上限は、ポイント利用の行を除いた総和で決める。利用の行を入れた後の合計は
     // ポイント控除後の請求額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
-    int chargeAmount = order.getTotalFee();
+    int chargeAmount = order.grantBasisAmount();
 
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
     if (order.getCustomerId() != null) {

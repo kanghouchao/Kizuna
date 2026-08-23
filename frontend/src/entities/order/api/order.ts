@@ -30,6 +30,8 @@ import {
   OrderCompletionPreview,
   OrderCompletionRequest,
   OrderCompletionResult,
+  OrderCorrectionRequest,
+  OrderCorrectionResult,
   OrderCreateRequest,
   OrderQueryParams,
   OrderReceiptTokenIssue,
@@ -93,6 +95,24 @@ export const orderApi = {
    */
   cancel: async (id: string | undefined, data: OrderCancellationRequest): Promise<void> => {
     await apiClient.post(`/store/orders/${requireId(id, '受注')}/cancellation`, data);
+  },
+  /**
+   * 完了した受注の内容を理由付きで訂正する（ORDER_CORRECT 限定）。状態は動かない。
+   *
+   * 直せるのは明細行・実績時刻・コーススナップショットの三組だけで、全量を毎回送る
+   * （送らなかった項目は空になる）。対象は完了済みのみ — 確定済み・取消済みは 400 で撥ねられる。
+   *
+   * 門はポイントを動かさない。応答が返す付与差額の手当は会員ポイントの手動調整が担う。
+   */
+  correct: async (
+    id: string | undefined,
+    data: OrderCorrectionRequest
+  ): Promise<OrderCorrectionResult> => {
+    const response = await apiClient.post(
+      `/store/orders/${requireId(id, '受注')}/corrections`,
+      data
+    );
+    return response.data;
   },
   /**
    * 作業キュー（対応が要る受注）。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。

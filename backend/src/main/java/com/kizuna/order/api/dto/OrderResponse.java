@@ -35,6 +35,11 @@ public class OrderResponse {
   private Integer courseMinutes;
   private Integer extensionMinutes;
 
+  /** 実際の到着・終了時刻。完了後の訂正の門だけがこれを直せる。 */
+  private LocalTime actualArrivalTime;
+
+  private LocalTime actualEndTime;
+
   /** 受注金額の内訳。減項は正値で返る（符号は種別が表す）。 */
   private List<OrderFeeLineResponse> feeLines;
 

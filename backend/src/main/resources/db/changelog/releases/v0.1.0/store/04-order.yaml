@@ -385,6 +385,135 @@ databaseChangeLog:
               - column:
                   name: order_id
   - changeSet:
+      id: store-v0100-004-order-correction-schema
+      author: kanghouchao
+      # 完了後訂正の痕。1 回の訂正＝1 行で、訂正前の姿を保持する（当日実績の訂正履歴 t_attendance_corrections の拡張）。
+      # 標量の前値は列で、行に同一性の無い明細の前値は行集合全体の jsonb 写しで持つ。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_order_corrections
+            remarks: 完了後訂正の履歴（訂正前の姿・訂正者・時刻・理由）
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_corrections
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                  remarks: 訂正された受注
+              - column:
+                  # 凍結済みの記録を動かす特権操作なので必須。取消理由と同じく分類軸ではない（enum 化しない）。
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+                  remarks: 訂正の理由
+              - column:
+                  name: actual_arrival_time
+                  type: TIME
+                  remarks: 訂正前の実際の到着時間
+              - column:
+                  name: actual_end_time
+                  type: TIME
+                  remarks: 訂正前の実際の終了時間
+              - column:
+                  name: course_name
+                  type: VARCHAR(255)
+                  remarks: 訂正前のコース名の写し
+              - column:
+                  name: course_minutes
+                  type: INTEGER
+                  remarks: 訂正前のコース分数
+              - column:
+                  name: extension_minutes
+                  type: INTEGER
+                  remarks: 訂正前の延長分数
+              - column:
+                  name: total_fee
+                  type: INTEGER
+                  remarks: 訂正前の合計。明細の前値から導出できるが、差額の集計が行を展開せずに読めるよう列でも持つ
+              - column:
+                  # 門が触れない行（ポイント利用）も含む全行。履歴行だけで訂正前の姿が読める形にしておかないと、
+                  # 現在の行を突き合わせなければ意味が決まらない記録になる。
+                  name: fee_lines
+                  type: jsonb
+                  constraints:
+                    nullable: false
+                  remarks: 訂正前の明細の全行（帯符号の金額のまま）
+              - column:
+                  name: corrected_by
+                  type: BIGINT
+                  remarks: 訂正の実行者。利用者削除後も行を残すため SET NULL
+              - column:
+                  name: corrected_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 訂正の時刻
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 痕は受注の従属記録であり、受注が消える唯一の経路（店舗削除の連鎖）で一緒に消える。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_corrections_store
+            baseTableName: t_order_corrections
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_corrections_order
+            baseTableName: t_order_corrections
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 実行者が消えても痕は残る（取消・帰属無効化と同じ紀律）。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_corrections_corrected_by
+            baseTableName: t_order_corrections
+            baseColumnNames: corrected_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        # 鎖は受注 1 件ぶんをまとめて古い順に辿る。
+        - createIndex:
+            indexName: idx_t_order_corrections_order
+            tableName: t_order_corrections
+            columns:
+              - column:
+                  name: order_id
+  - changeSet:
       id: store-v0100-004-order-application-schema
       author: kanghouchao
       # 予約申請は受注と別の付随記録（ADR 0017）。店舗の確定で CONFIRMED の受注を生成し order_id を回写する。

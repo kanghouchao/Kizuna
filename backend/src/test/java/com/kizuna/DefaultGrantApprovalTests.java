@@ -6,6 +6,7 @@ import static com.kizuna.user.domain.PermissionCode.CAST_INVITE;
 import static com.kizuna.user.domain.PermissionCode.CAST_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MERGE;
+import static com.kizuna.user.domain.PermissionCode.ORDER_CORRECT;
 import static com.kizuna.user.domain.PermissionCode.ORDER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.ORDER_SET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.PLATFORM_ASSET_MANAGE;
@@ -58,6 +59,7 @@ class DefaultGrantApprovalTests {
           Map.entry(ORDER_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CUSTOMER_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CUSTOMER_MERGE, Set.of(STORE_MANAGER)),
+          Map.entry(ORDER_CORRECT, Set.of(STORE_MANAGER)),
           Map.entry(SHIFT_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CAST_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CAST_INVITE, Set.of(STORE_MANAGER)),

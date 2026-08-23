@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
 import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
+import { TokenClaims, readTokenClaims } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 
 const mockPush = jest.fn();
@@ -27,6 +28,12 @@ jest.mock('@/entities/order', () => ({
   },
 }));
 
+// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
+}));
+
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => ({ storeId: '1' }),
@@ -38,6 +45,7 @@ jest.mock('@/shared/notify', () => ({
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 const mockedApplicationApi = orderApplicationApi as jest.Mocked<typeof orderApplicationApi>;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
 /** 確定済みの受注 1 件。fixture は手書きで、Order 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<Order> = {}): Order {
@@ -83,12 +91,31 @@ function stubInbox(...rows: OrderApplicationRow[]) {
   mockedApplicationApi.list.mockResolvedValue({ rows, nextCursor: null });
 }
 
+/** アーカイブの片群だけに行を置く。もう一方は空のまま（群ごとに別の読みが走るため）。 */
+function stubArchive(status: Order['status'], ...rows: Order[]) {
+  mockedOrderApi.listArchive.mockImplementation(async params =>
+    params.statuses[0] === status
+      ? { rows, page: 0, pageCount: 1, total: rows.length }
+      : EMPTY_ARCHIVE
+  );
+}
+
+/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim。UI の出し分けは権限ベース。 */
+function claimsWith(permissions: string[]): TokenClaims {
+  return {
+    authorities: permissions.map(permission => `PERM_${permission}`),
+    userType: 'STAFF',
+    storeBridge: true,
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockedOrderApi.listWorkQueue.mockResolvedValue({ rows: [], nextCursor: null });
   mockedOrderApi.listArchive.mockResolvedValue(EMPTY_ARCHIVE);
   mockedApplicationApi.list.mockResolvedValue({ rows: [], nextCursor: null });
   mockedOrderApi.listReceptionists.mockResolvedValue([]);
+  mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE']));
 });
 
 describe('作業キューの描画', () => {
@@ -398,6 +425,39 @@ describe('アーカイブ', () => {
     await waitFor(() => expect(mockedOrderApi.listArchive).toHaveBeenCalledTimes(3));
     const [lastCall] = mockedOrderApi.listArchive.mock.calls.slice(-1);
     expect(lastCall[0].statuses).toEqual(['CANCELLED']);
+  });
+
+  it('完了後訂正の導線は ORDER_CORRECT を持つ人にだけ出ること', async () => {
+    // 押せない導線を描くと、訂正の内容を入力し終えてから 403 を受け取ることになる
+    stubArchive('COMPLETED', confirmedOrder({ id: 'x3', status: 'COMPLETED', total_fee: 28000 }));
+    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE']));
+    const withoutPermission = render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
+    expect(await screen.findByText(/請求 ¥28,000/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /訂正/ })).not.toBeInTheDocument();
+
+    withoutPermission.unmount();
+    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'ORDER_CORRECT']));
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
+    expect(await screen.findByRole('link', { name: /訂正/ })).toHaveAttribute(
+      'href',
+      '/store/1/orders/x3/correction'
+    );
+  });
+
+  it('取消済みの行には訂正の導線を出さないこと', async () => {
+    // 誤取消の救済は同内容で受注を起こし直すこと。門そのものが取消を受け付けない
+    stubArchive('CANCELLED', confirmedOrder({ id: 'x4', status: 'CANCELLED' }));
+    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'ORDER_CORRECT']));
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /取消 \d+ 件/ }));
+
+    expect(await screen.findByText(/山田太郎/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /訂正/ })).not.toBeInTheDocument();
   });
 
   it('完了の行は会計金額と付与ポイントを名乗ること', async () => {

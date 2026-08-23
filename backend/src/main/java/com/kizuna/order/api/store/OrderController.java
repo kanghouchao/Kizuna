@@ -10,6 +10,8 @@ import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
+import com.kizuna.order.api.dto.OrderCorrectionRequest;
+import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
@@ -19,6 +21,7 @@ import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
+import com.kizuna.order.application.OrderCorrectionService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderSortKey;
@@ -58,6 +61,7 @@ public class OrderController {
   private final OrderService orderService;
   private final OrderAttributionService orderAttributionService;
   private final OrderAttributionCorrectionService orderAttributionCorrectionService;
+  private final OrderCorrectionService orderCorrectionService;
 
   /** 顧客詳細の注文履歴。ある顧客に着いた受注を新しい順に辿る（状態は問わない）。 */
   @GetMapping
@@ -272,8 +276,8 @@ public class OrderController {
   /**
    * 確定済みの受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は終端状態として凍結される（ADR 0013）。
    *
-   * <p>対象は確定済みの受注のみ。未処理の予約申請は申請側の謝絶が、誤って完了した受注の救済は（まだ存在しない）別の経路が受け持つ。 二度目の取消は撥ねられる（逐次なら集約の守衛で
-   * 400、同時なら楽観ロックで 409）。
+   * <p>対象は確定済みの受注のみ。未処理の予約申請は申請側の謝絶が、完了した受注の内容訂正は完了後訂正の門（ADR 0019）が受け持つ — 状態を戻す経路はどこにも無い。
+   * 二度目の取消は撥ねられる（逐次なら集約の守衛で 400、同時なら楽観ロックで 409）。
    */
   @PostMapping("/{id}/cancellation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
@@ -283,6 +287,25 @@ public class OrderController {
       Principal principal) {
     orderService.cancel(id, request, principal.getName());
     return ResponseEntity.noContent().build();
+  }
+
+  /**
+   * 完了した受注の内容を理由付きで訂正する（ADR 0019）。状態は動かさない — COMPLETED → CONFIRMED の回退は開けない。
+   *
+   * <p>直せるのは明細行・実績時刻・コーススナップショットの三組だけで、それ以外は ADR 0013 の凍結のまま。凍結字段は 要求の型に存在せず、送れば未知の項目として撥ねられる。対象は
+   * COMPLETED のみで、CANCELLED は門の外（誤取消の 救済は同内容で受注を起こし直すこと）。
+   *
+   * <p>権限が {@code ORDER_CORRECT} なのは、日常権限の {@code ORDER_MANAGE} で守ると「権限のある利用者のみが訂正できる」が
+   * 空文になるためである。門はポイントを一切動かさず、応答が返す付与差額の手当は手動調整・誤帰属の訂正が担う。
+   */
+  @PostMapping("/{id}/corrections")
+  @PreAuthorize("hasAuthority('PERM_ORDER_CORRECT')")
+  public ResponseEntity<OrderCorrectionResponse> correct(
+      @PathVariable String id,
+      @Valid @RequestBody OrderCorrectionRequest request,
+      Principal principal) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(orderCorrectionService.correct(id, request, principal.getName()));
   }
 
   /**

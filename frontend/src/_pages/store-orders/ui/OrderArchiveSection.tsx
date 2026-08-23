@@ -1,9 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UserRoundCogIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  PencilLineIcon,
+  UserRoundCogIcon,
+} from 'lucide-react';
 import { Order, OrderListCriteria, OrderStatus, orderApi } from '@/entities/order';
-import { useListPage } from '@/shared/lib';
+import { storePath, useListPage } from '@/shared/lib';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import { Button, RegionError } from '@/shared/ui';
 
@@ -13,6 +20,8 @@ const PAGE_SIZE = 10;
 interface OrderArchiveSectionProps {
   title: string;
   status: OrderStatus;
+  /** 訂正ページの組み立てに要る。店舗の経路は shared/lib の storePath だけが組む。 */
+  storeId: string;
   criteria: OrderListCriteria;
   /**
    * この群へ受注が移ってくるたびに増える値。変わったら取り直す。
@@ -23,6 +32,8 @@ interface OrderArchiveSectionProps {
   reloadToken: number;
   /** 帰属の訂正モーダルを開く（完了した受注にだけ起こる）。 */
   onCorrectAttribution: (order: Order) => void;
+  /** 完了後訂正の導線を出すか。ORDER_CORRECT の保持で決まる（強制はサーバ側）。 */
+  canCorrect: boolean;
 }
 
 /** 時刻は応答のオフセット付き文字列をそのまま切らず、閲覧者の時間帯へ直して出す（切ると +09:00 が落ちる）。 */
@@ -56,10 +67,14 @@ function OutcomeLine({ order }: { order: Order }) {
 
 function ArchiveRow({
   order,
+  storeId,
   onCorrectAttribution,
+  canCorrect,
 }: {
   order: Order;
+  storeId: string;
   onCorrectAttribution: (order: Order) => void;
+  canCorrect: boolean;
 }) {
   const label = customerLabel(order);
   return (
@@ -80,19 +95,32 @@ function ArchiveRow({
         </div>
         <OutcomeLine order={order} />
       </div>
-      {/* 誤帰属の訂正は完了した受注にしか起こらない（帰属が生まれるのは完了と事後申領の瞬間だけ）。
+      {/* どちらの操作も完了した受注にしか起こらない — 帰属が生まれるのは完了と事後申領の瞬間だけで、
+          完了後訂正の門も取消済みを受け付けない（誤取消の救済は同内容で起こし直すこと）。
           現に帰属しているかは一覧の読み口が持たないので、開いた先で名乗る */}
       {order.status === 'COMPLETED' && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="shrink-0"
-          onClick={() => onCorrectAttribution(order)}
-        >
-          <UserRoundCogIcon aria-hidden="true" />
-          会員帰属
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* 訂正は ORDER_CORRECT（店長）限定。押せない導線を描くと、内容を入力し終えてから 403 を受け取る */}
+          {canCorrect && (
+            <Button
+              variant="ghost"
+              size="sm"
+              render={<Link href={storePath(storeId, `/orders/${order.id}/correction`)} />}
+            >
+              <PencilLineIcon aria-hidden="true" />
+              訂正
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onCorrectAttribution(order)}
+          >
+            <UserRoundCogIcon aria-hidden="true" />
+            会員帰属
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -108,9 +136,11 @@ function ArchiveRow({
 export function OrderArchiveSection({
   title,
   status,
+  storeId,
   criteria,
   reloadToken,
   onCorrectAttribution,
+  canCorrect,
 }: OrderArchiveSectionProps) {
   const [open, setOpen] = useState(false);
   const list = useListPage<Order, OrderListCriteria>(
@@ -177,7 +207,9 @@ export function OrderArchiveSection({
               <ArchiveRow
                 key={order.id}
                 order={order}
+                storeId={storeId}
                 onCorrectAttribution={onCorrectAttribution}
+                canCorrect={canCorrect}
               />
             ))
           )}

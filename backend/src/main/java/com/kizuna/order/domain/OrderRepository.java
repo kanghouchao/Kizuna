@@ -37,6 +37,7 @@ public interface OrderRepository
              o.pax as pax,
              o.courseName as courseName,
              o.courseMinutes as courseMinutes, o.extensionMinutes as extensionMinutes,
+             o.actualArrivalTime as actualArrivalTime, o.actualEndTime as actualEndTime,
              o.carrier as carrier,
              o.mediaName as mediaName, o.totalFee as totalFee,
              (select cast(coalesce(sum(-fl.amount), 0) as Integer)

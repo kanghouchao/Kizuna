@@ -41,6 +41,12 @@ public interface OrderView {
 
   Integer getExtensionMinutes();
 
+  /** 実際の到着時刻。完了後の訂正の門だけがこれを直せる。 */
+  LocalTime getActualArrivalTime();
+
+  /** 実際の終了時刻。同上。 */
+  LocalTime getActualEndTime();
+
   String getCarrier();
 
   String getMediaName();

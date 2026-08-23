@@ -25,6 +25,7 @@ export type PlatformPermission =
   | 'STORE_VIEW'
   | 'ORDER_SET_MANAGE'
   | 'ORDER_MANAGE'
+  | 'ORDER_CORRECT'
   | 'CUSTOMER_MANAGE'
   | 'POINT_ADJUST'
   | 'SHIFT_MANAGE'
