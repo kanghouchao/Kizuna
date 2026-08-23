@@ -71,4 +71,7 @@ public class OrderResponse {
   private String cancelledByName;
 
   private OffsetDateTime cancelledAt;
+
+  /** 楽観ロック用バージョン。全量置換の口（完了後訂正）へそのまま返して「画面が見ていた版」を名乗る。 */
+  private Long version;
 }
