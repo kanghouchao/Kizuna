@@ -245,8 +245,6 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
-  // ==================== 呼出 ====================
-
   private ResponseEntity<JsonNode> correct(HttpHeaders headers, String orderId, String body) {
     return rest.exchange(
         "/store/orders/" + orderId + "/corrections",
@@ -260,8 +258,6 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             "/store/orders/" + orderId, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class)
         .getBody();
   }
-
-  // ==================== 固定具 ====================
 
   /** 会計 12000 円で完了した、顧客も会員も着かない受注（付与は起こらない）。 */
   private String completedOrder(String label) {

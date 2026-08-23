@@ -17,6 +17,9 @@ import {
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerHeadingText, customerLabel } from '../lib/customerLabel';
+// 日付・時刻・数値の空欄は「送らない」。この契約は null を「変更しない」と読むため空への書き換えを
+// 表現する形が無く、空にしたつもりの欄は元の値が残る（空文字を送ると型の変換に失敗して 400）。
+import { optionalDate, optionalNumber, optionalTime, toTimeInput } from '../lib/formValues';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import {
@@ -84,27 +87,6 @@ const EMPTY_VALUES: OrderEditFormValues = {
   contact_name: '',
   contact_phone_number: '',
 };
-
-/** 時刻は秒まで返るが、入力欄（type=time）は分までしか扱わない。 */
-function toTimeInput(value: string | undefined): string {
-  return value ? value.slice(0, 5) : '';
-}
-
-/**
- * 日付・時刻・数値の空欄は「送らない」。契約は null を「変更しない」と読むため空への書き換えを表現する形が
- * 無く、空文字を送ると型の変換に失敗して 400 になる。空にしたつもりの欄は元の値が残る。
- */
-function optionalNumber(value: string): number | undefined {
-  return value.trim() === '' ? undefined : Number(value);
-}
-
-function optionalTime(value: string): string | undefined {
-  return value === '' ? undefined : `${value}:00`;
-}
-
-function optionalDate(value: string): string | undefined {
-  return value === '' ? undefined : value;
-}
 
 /** 播いた内訳から変わったか。行の集合には「触ったか」の真偽が付かないので、値そのものを突き合わせる。 */
 function feeLinesChanged(current: OrderFeeLineInput[], seeded: OrderFeeLineInput[]): boolean {
