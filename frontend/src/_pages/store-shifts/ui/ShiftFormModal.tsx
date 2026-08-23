@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
@@ -11,7 +11,6 @@ import { hhmm } from '../lib/datetime';
 import { ShiftDialogShell } from './ShiftDialogShell';
 import {
   Button,
-  ConfirmDialog,
   Form,
   FormControl,
   FormDescription,
@@ -50,7 +49,7 @@ interface ShiftFormModalProps {
   hasAttendance: boolean;
   /** 新規作成時の初期日付 'yyyy-MM-dd'。 */
   defaultDate: string;
-  /** 保存・削除の成功後に呼ばれる（一覧の再取得用）。 */
+  /** 保存の成功後に呼ばれる（一覧の再取得用）。 */
   onSaved: () => void;
 }
 
@@ -85,7 +84,6 @@ export function ShiftFormModal({
     control,
     formState: { isSubmitting },
   } = form;
-  const [confirmOpen, setConfirmOpen] = useState(false);
   // 実績が付くのは既存のシフトだけ。新規作成の面は何も塞がない
   const locked = editing !== null && hasAttendance;
 
@@ -145,18 +143,6 @@ export function ShiftFormModal({
     }
   };
 
-  const handleDelete = async () => {
-    if (!editing) return;
-    try {
-      await shiftApi.delete(editing.id);
-      notify.success('シフトを削除しました');
-      onSaved();
-      onClose();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'シフトの削除に失敗しました'));
-    }
-  };
-
   return (
     <ShiftDialogShell
       open={open}
@@ -167,18 +153,12 @@ export function ShiftFormModal({
         {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。執行は各 rules が担う */}
         <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-          {/* 塞いだ欄の手前で理由を述べる。無効化した控件は焦点を取れず、欄に紐づけた説明は
-                読み上げに届かない — 押せない口の理由は本文の側に置く。逃げ道は操作ごとに違い、
-                削除だけは実績を取り消しても戻らない（RESTRICT — ADR 0014）ので別々に書く */}
+          {/* 塞いだ欄の手前で理由を述べる。無効化したコントロールは焦点を取れず、欄に紐づけた説明は
+                読み上げに届かない — 押せない口の理由は本文の側に置く */}
           {locked && (
             <div className="rounded-md bg-muted px-3 py-2 text-xs text-foreground">
-              <p>当日実績が記録されているため、このシフトは一部の操作を受け付けません。</p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                <li>勤務日とキャストの変更 — 当日実績タブで実績を取り消してから行います。</li>
-                <li>
-                  削除 — 実績を取り消しても行えません。ステータスを未確定に戻して無効にします。
-                </li>
-              </ul>
+              勤務日とキャストの変更 —
+              当日実績が記録されているため行えません。当日実績タブで実績を取り消してから行います。
             </div>
           )}
           <FormField
@@ -306,38 +286,16 @@ export function ShiftFormModal({
               )}
             />
           )}
-          <div className="flex items-center justify-between border-t pt-4">
-            <div>
-              {/* 未取消の実績が付いている間は削除の口を出さない。取消済みしか無くなった行は
-                    画面からは見分けられず口が戻るが、そこは後端が同じ文言で拒む */}
-              {editing && !locked && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setConfirmOpen(true)}
-                  className="text-destructive-strong"
-                >
-                  削除
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" onClick={onClose}>
-                キャンセル
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '保存中...' : '保存する'}
-              </Button>
-            </div>
+          <div className="flex justify-end gap-3 border-t pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              キャンセル
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? '保存中...' : '保存する'}
+            </Button>
           </div>
         </form>
       </Form>
-      <ConfirmDialog
-        open={confirmOpen}
-        title="このシフトを削除しますか？"
-        onConfirm={() => void handleDelete()}
-        onClose={() => setConfirmOpen(false)}
-      />
     </ShiftDialogShell>
   );
 }

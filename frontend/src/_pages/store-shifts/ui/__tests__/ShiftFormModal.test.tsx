@@ -310,22 +310,14 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
     expect(selectAt(CAST_SELECT)).toHaveFocus();
   });
 
-  it('削除は確認を経て呼ばれ、取り消すと呼ばれないこと', async () => {
-    const { onSaved } = renderModal({ editing: EDITING });
+  it('編集の面に削除の口が無いこと', async () => {
+    // 削除は日別一覧の行が受ける。ここに口があると、確認がモーダルの上へ重なって出る
+    renderModal({ editing: EDITING });
 
-    fireEvent.click(screen.getByRole('button', { name: '削除' }));
-    const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('このシフトを削除しますか？');
-
-    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(selectedLabel(CAST_SELECT)).toBe('キャストB'));
+    expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(mockedDelete).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: '削除' }));
-    fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
-
-    await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('shift-1'));
-    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
   });
 });
 
@@ -345,7 +337,7 @@ describe('未取消の実績が付いたシフトの編集面', () => {
     expect(selectAt(CAST_SELECT)).toBeDisabled();
     expect(screen.getByLabelText('日付')).toBeDisabled();
     expect(
-      screen.getByText(/勤務日とキャストの変更 — 当日実績タブで実績を取り消してから/)
+      screen.getByText(/勤務日とキャストの変更 — 当日実績が記録されているため行えません/)
     ).toBeInTheDocument();
   });
 
@@ -366,17 +358,6 @@ describe('未取消の実績が付いたシフトの編集面', () => {
       end_time: '02:00:00',
       status: 'CONFIRMED',
     });
-  });
-
-  it('削除の口を出さず、中性化の手順を示すこと', async () => {
-    // 削除は取消済みの実績が相手でも拒まれる（RESTRICT）。逃げ道は取消 → 未確定への差し戻し
-    renderModal({ editing: EDITING, hasAttendance: true });
-
-    await waitFor(() => expect(selectedLabel(CAST_SELECT)).toBe('キャストB'));
-    expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/削除 — 実績を取り消しても行えません。ステータスを未確定に戻して/)
-    ).toBeInTheDocument();
   });
 
   it('新規作成の面は実績の有無に関わらず塞がれないこと', async () => {

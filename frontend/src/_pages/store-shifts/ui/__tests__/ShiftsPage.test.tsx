@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ShiftsPage from '../ShiftsPage';
 import { castApi } from '@/entities/cast';
 import { attendanceApi, shiftApi } from '@/entities/shift';
@@ -37,6 +37,7 @@ jest.mock('@/shared/notify', () => ({
 const mockedCastList = castApi.list as jest.Mock;
 const mockedShiftList = shiftApi.list as jest.Mock;
 const mockedShiftCreate = shiftApi.create as jest.Mock;
+const mockedShiftDelete = shiftApi.delete as jest.Mock;
 const mockedChangePublication = shiftApi.changePublication as jest.Mock;
 const mockedAttendanceList = attendanceApi.list as jest.Mock;
 const mockedAbsenceList = attendanceApi.listAbsences as jest.Mock;
@@ -400,6 +401,165 @@ describe('シフトの公開可否', () => {
     fireEvent.click(await screen.findByRole('switch', { name: 'さくら 18:00–23:00 を公開する' }));
 
     await waitFor(() => expect(mockedChangePublication).toHaveBeenCalledWith('s1', false));
+  });
+});
+
+describe('日別一覧からのシフト削除', () => {
+  const TODAY = toDateStr(new Date());
+  const SAKURA = { id: 'c1', name: 'さくら' };
+  const AOI = { id: 'c2', name: 'あおい' };
+
+  /** さくらの確定シフト 18:00–23:00。 */
+  const confirmed = {
+    id: 's1',
+    cast_id: 'c1',
+    work_date: TODAY,
+    start_time: '18:00:00',
+    end_time: '23:00:00',
+    status: 'CONFIRMED',
+    published: true,
+  };
+  /** あおいの仮シフト 20:00–21:00。 */
+  const tentative = {
+    ...confirmed,
+    id: 's2',
+    cast_id: 'c2',
+    start_time: '20:00:00',
+    end_time: '21:00:00',
+    status: 'TENTATIVE',
+    published: false,
+  };
+  /** s1 に紐づくさくらの未取消の実績。 */
+  const attendance = {
+    id: 'a1',
+    cast_id: 'c1',
+    shift_id: 's1',
+    business_date: TODAY,
+    actual_start_at: `${TODAY}T18:05:00`,
+    actual_end_at: `${TODAY}T23:10:00`,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedAttendanceList.mockResolvedValue([]);
+    mockedAbsenceList.mockResolvedValue([]);
+    mockedCastList.mockResolvedValue(castPage([SAKURA, AOI]));
+    mockedShiftDelete.mockResolvedValue(undefined);
+  });
+
+  const openTimeline = async () => {
+    render(<ShiftsPage />);
+    fireEvent.click(screen.getByRole('tab', { name: 'タイムライン' }));
+    expect(await screen.findByText(`${TODAY} の出勤`)).toBeInTheDocument();
+  };
+
+  it('行から編集モーダルを開かずに削除でき、確認は 1 枚で受けること', async () => {
+    mockedShiftList.mockResolvedValue([confirmed]);
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくら 18:00–23:00 を削除' }));
+
+    // 編集モーダルを経由しない。モーダルの上に確認が重なる姿にもしない
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('このシフトを削除しますか？');
+    // どの行を消すのかは一覧から呼び出す以上、確認の側でも名乗る
+    expect(dialog).toHaveTextContent('さくら 18:00–23:00');
+
+    const callsBeforeDelete = mockedShiftList.mock.calls.length;
+    fireEvent.click(within(dialog).getByRole('button', { name: '削除する' }));
+
+    await waitFor(() => expect(mockedShiftDelete).toHaveBeenCalledWith('s1'));
+    await waitFor(() =>
+      expect(mockedShiftList.mock.calls.length).toBeGreaterThan(callsBeforeDelete)
+    );
+  });
+
+  it('確認を取り消すと削除されないこと', async () => {
+    mockedShiftList.mockResolvedValue([confirmed]);
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくら 18:00–23:00 を削除' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'キャンセル' })
+    );
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(mockedShiftDelete).not.toHaveBeenCalled();
+  });
+
+  it('仮シフトの行にも削除の口があること', async () => {
+    // 中性化（未確定へ戻す）で生まれた行と誤登録はどちらも仮シフト。ここが唯一の削除口なので、
+    // 出さなければ未確定のシフトは画面から消せない
+    mockedShiftList.mockResolvedValue([tentative]);
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'あおい 20:00–21:00 を削除' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: '削除する' })
+    );
+
+    await waitFor(() => expect(mockedShiftDelete).toHaveBeenCalledWith('s2'));
+  });
+
+  it('未取消の実績が付いた行には削除の口を出さず、理由と代わりの手順を示すこと', async () => {
+    mockedShiftList.mockResolvedValue([confirmed]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    await openTimeline();
+
+    expect(await screen.findByText('実績があるため削除できません')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'さくら 18:00–23:00 を削除' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/実績を取り消しても削除できません。ステータスを未確定に戻して/)
+    ).toBeInTheDocument();
+  });
+
+  it('未確定へ戻した実績付きのシフトにも削除の口を出さないこと', async () => {
+    // 中性化の手順が産む姿がまさにこれ（仮シフト + 未取消の実績）。確定行にだけ門を置くと、
+    // 手順どおり操作した行に必ず失敗する口が出る
+    mockedShiftList.mockResolvedValue([{ ...tentative, id: 's1', cast_id: 'c1' }]);
+    mockedAttendanceList.mockResolvedValue([attendance]);
+    await openTimeline();
+
+    expect(await screen.findByText('実績があるため削除できません')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /を削除$/ })).not.toBeInTheDocument();
+  });
+
+  it('実績がまだ読めていない間は削除の口も理由も出さないこと', async () => {
+    // 未知は「実績なし」ではない。この窓で口を出すと実績付きの行が一瞬だけ消せる姿になり、
+    // かといって理由を名乗れば、読めていないものを「実績がある」と偽ることになる
+    mockedShiftList.mockResolvedValue([confirmed]);
+    let release: (rows: unknown[]) => void = () => {};
+    mockedAttendanceList.mockImplementation(() => new Promise(resolve => (release = resolve)));
+    await openTimeline();
+
+    expect(await screen.findByText('さくら 18:00–23:00')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'さくら 18:00–23:00 を削除' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('実績があるため削除できません')).not.toBeInTheDocument();
+
+    // 未解決のまま残すと、後続のテストへ永久に解決しない promise が漏れる
+    await act(async () => release([]));
+
+    expect(
+      await screen.findByRole('button', { name: 'さくら 18:00–23:00 を削除' })
+    ).toBeInTheDocument();
+  });
+
+  it('削除に失敗したら理由を名乗ること', async () => {
+    mockedShiftList.mockResolvedValue([confirmed]);
+    mockedShiftDelete.mockRejectedValue(new Error('boom'));
+    await openTimeline();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくら 18:00–23:00 を削除' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: '削除する' })
+    );
+
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('シフトの削除に失敗しました'));
   });
 });
 
