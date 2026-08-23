@@ -17,6 +17,8 @@ import { ExternalLinkIcon } from 'lucide-react';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
+// 空欄は「値なし」として送る。この契約は全量送信なので、省略と空欄が同じ意味になる。
+import { optionalNumber, optionalTime, toTimeInput } from '../lib/formValues';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import {
   Button,
@@ -50,20 +52,6 @@ const EMPTY_VALUES: OrderCorrectionFormValues = {
   fee_lines: [],
   reason: '',
 };
-
-/** 時刻は秒まで返るが、入力欄（type=time）は分までしか扱わない。 */
-function toTimeInput(value: string | undefined): string {
-  return value ? value.slice(0, 5) : '';
-}
-
-/** 空欄は「値なし」として送る。この契約は全量送信なので、省略と空欄が同じ意味になる。 */
-function optionalTime(value: string): string | undefined {
-  return value === '' ? undefined : `${value}:00`;
-}
-
-function optionalNumber(value: string): number | undefined {
-  return value.trim() === '' ? undefined : Number(value);
-}
 
 /**
  * 訂正の結果。門はポイントを動かさないので、動かなかったことと差額を示して手当ての行き先へ送る。
