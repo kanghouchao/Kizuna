@@ -11,6 +11,7 @@ jest.mock('@/entities/order', () => ({
   orderApi: {
     get: jest.fn(),
     correct: jest.fn(),
+    attribution: jest.fn(),
   },
 }));
 
@@ -46,8 +47,12 @@ function completedOrder(overrides: Partial<Order> = {}): Order {
   };
 }
 
+/** 完了時に会員へ帰属した受注の現況。差額の手当ての宛先はこの記録が持つ会員。 */
+const ATTRIBUTED = { id: 1, attributed: true, member_code: '123456789012' };
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedOrderApi.attribution.mockResolvedValue(ATTRIBUTED);
 });
 
 describe('完了後訂正のページ', () => {
@@ -105,6 +110,52 @@ describe('完了後訂正のページ', () => {
       'href',
       '/store/1/customers/c1/edit'
     );
+  });
+
+  it('会員に帰属していない受注では差額も手当ての導線も出さないこと', async () => {
+    // 帰属していない受注の付与 0pt は「少なく付いた付与」ではなく「付与が存在しない」。差額を出すと
+    // 宛先の無い手動調整へ誘う
+    mockedOrderApi.get.mockResolvedValue(completedOrder({ auto_grant_points: 0 }));
+    mockedOrderApi.attribution.mockResolvedValue({ attributed: false });
+    mockedOrderApi.correct.mockResolvedValue({
+      previous_total_fee: 11900,
+      total_fee: 17900,
+      granted_points: 0,
+      recomputed_grant_points: 180,
+      grant_difference: 180,
+    });
+    render(<OrderCorrectionPage />);
+    await waitFor(() => expect(screen.getByLabelText('実際の到着')).toHaveValue('19:35'));
+
+    fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
+    fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+
+    expect(await screen.findByText(/動くポイントはありません/)).toBeInTheDocument();
+    expect(screen.queryByText(/差 \+180pt/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /ポイントを調整/ })).not.toBeInTheDocument();
+    // 訂正そのものは成立しているので、金額の変化は名乗る
+    expect(screen.getByText(/¥11,900 → ¥17,900/)).toBeInTheDocument();
+  });
+
+  it('帰属の現況を読めなければ手当ての案内を出す側へ倒すこと', async () => {
+    // 「動くポイントはありません」と誤って言い切ると、実際に残った誤付与に気づく機会が消える
+    mockedOrderApi.get.mockResolvedValue(completedOrder());
+    mockedOrderApi.attribution.mockRejectedValue(new Error('boom'));
+    mockedOrderApi.correct.mockResolvedValue({
+      previous_total_fee: 11900,
+      total_fee: 17900,
+      granted_points: 120,
+      recomputed_grant_points: 180,
+      grant_difference: 60,
+    });
+    render(<OrderCorrectionPage />);
+    await waitFor(() => expect(screen.getByLabelText('実際の到着')).toHaveValue('19:35'));
+
+    fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
+    fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+
+    expect(await screen.findByText(/差 \+60pt/)).toBeInTheDocument();
+    expect(screen.getByText(/自動で動きません/)).toBeInTheDocument();
   });
 
   it('理由の無い訂正は送らないこと', async () => {

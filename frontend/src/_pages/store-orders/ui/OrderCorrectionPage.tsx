@@ -53,21 +53,31 @@ const EMPTY_VALUES: OrderCorrectionFormValues = {
   reason: '',
 };
 
+/** 訂正の結果と、その受注が会員へ帰属しているか。 */
+interface CorrectionOutcomeState {
+  result: OrderCorrectionResult;
+  attributed: boolean;
+}
+
 /**
  * 訂正の結果。門はポイントを動かさないので、動かなかったことと差額を示して手当ての行き先へ送る。
  *
- * <p>差額を画面で計算しない。付与規則の正本はサーバ側にあり、こちらで計算すると設定変更のたびに
- * 提示と実際の手当て額が食い違う。
+ * 差額を出すのは会員へ帰属した受注だけである。帰属していない受注の付与 0pt は「少なく付いた付与」
+ * ではなく「付与が存在しない」であり、差額を出すと宛先の無い手動調整へ誘う。
+ *
+ * 差額そのものを画面で計算しない。付与規則の正本はサーバ側にあり、こちらで計算すると設定変更の
+ * たびに提示と実際の手当て額が食い違う。
  */
 function CorrectionOutcome({
-  result,
+  outcome,
   customerId,
   storeId,
 }: {
-  result: OrderCorrectionResult;
+  outcome: CorrectionOutcomeState;
   customerId: string | undefined;
   storeId: string;
 }) {
+  const { result, attributed } = outcome;
   const difference = result.grant_difference ?? 0;
   return (
     <div className="bg-card space-y-3 rounded-xl border p-4">
@@ -76,7 +86,11 @@ function CorrectionOutcome({
         請求 ¥{(result.previous_total_fee ?? 0).toLocaleString()} → ¥
         {(result.total_fee ?? 0).toLocaleString()}
       </p>
-      {difference === 0 ? (
+      {!attributed ? (
+        <p className="text-muted-foreground text-sm">
+          この受注は会員に帰属していないため、訂正で動くポイントはありません。
+        </p>
+      ) : difference === 0 ? (
         <p className="text-muted-foreground text-sm">
           付与ポイントに差はありません（完了時の付与 {result.granted_points ?? 0}pt）。
         </p>
@@ -139,7 +153,7 @@ export default function OrderCorrectionPage() {
   const form = useForm<OrderCorrectionFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, watch, formState } = form;
   const [hasSeeded, setHasSeeded] = useState(false);
-  const [result, setResult] = useState<OrderCorrectionResult | null>(null);
+  const [outcome, setOutcome] = useState<CorrectionOutcomeState | null>(null);
 
   // 取得の到着はレンダーより後なので、初期値ではなく効果で播く（開いた最初のフレームが空欄になる）。
   useEffect(() => {
@@ -161,6 +175,21 @@ export default function OrderCorrectionPage() {
   const seeded = current !== null && hasSeeded;
   const completed = current?.status === 'COMPLETED';
 
+  /**
+   * この受注が現に会員へ帰属しているか。手当ての宛先は帰属記録であって、顧客に今紐づく会員ではない。
+   *
+   * 読めなかったときは帰属している側へ倒す。訂正そのものは成立しているので、ここで失敗を名乗るより、
+   * 手当ての案内を出しておく方が安全である — 「動くポイントはありません」と誤って言い切ると、
+   * 実際に残った誤付与に気づく機会がどこにも無くなる。
+   */
+  const isAttributed = async (): Promise<boolean> => {
+    try {
+      return (await orderApi.attribution(orderId)).attributed;
+    } catch {
+      return true;
+    }
+  };
+
   const submit = async (values: OrderCorrectionFormValues) => {
     try {
       const corrected = await orderApi.correct(orderId, {
@@ -175,7 +204,7 @@ export default function OrderCorrectionPage() {
       notify.success('受注を訂正しました');
       // 結果は差し替えではなく併記で残す。付与差額はこの応答にしか現れず、一覧へ戻すと手当ての
       // 必要に気づく機会が消える。
-      setResult(corrected);
+      setOutcome({ result: corrected, attributed: await isAttributed() });
       await reload();
     } catch (error) {
       notify.error(getApiErrorMessage(error, '受注の訂正に失敗しました'));
@@ -205,8 +234,8 @@ export default function OrderCorrectionPage() {
         />
       )}
 
-      {result !== null && (
-        <CorrectionOutcome result={result} customerId={current?.customer_id} storeId={storeId} />
+      {outcome !== null && (
+        <CorrectionOutcome outcome={outcome} customerId={current?.customer_id} storeId={storeId} />
       )}
 
       {/* 完了していない受注はサーバが撥ねる。欄を出してから 400 を返すより、開いた時点で理由を名乗る */}
