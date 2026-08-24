@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -65,6 +65,11 @@ interface OrderCompletionModalProps {
   onClose: () => void;
   /** 完了の成功後に呼ばれる（受注の状態と会計欄が変わるため、一覧の取り直しに使う）。 */
   onCompleted: () => void;
+  /**
+   * 別の操作者が先に完了・取消していたと分かったときに呼ばれる。完了の成功ではないので
+   * onCompleted とは別の口 — 行を作業キューから該当のアーカイブへ送り出すために使う。
+   */
+  onSuperseded: (status: 'COMPLETED' | 'CANCELLED') => void;
 }
 
 /**
@@ -78,7 +83,12 @@ interface OrderCompletionModalProps {
  * 手元の規則は入力をその場で直せるようにするためのもので、単位・残高・会員資格の
  * 最終的な権威はサーバ側にある。
  */
-export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompletionModalProps) {
+export function OrderCompletionModal({
+  order,
+  onClose,
+  onCompleted,
+  onSuperseded,
+}: OrderCompletionModalProps) {
   const form = useForm<OrderCompletionFormValues>({
     defaultValues: { course_name: '', fee_lines: [EMPTY_FEE_LINE], use_points: NaN },
   });
@@ -106,9 +116,21 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   // そのまま完了すると既存の内訳を丸ごと上書きして失う。
   const {
     data: detail,
+    setData: setDetail,
     failure: detailFailure,
     reload: reloadDetail,
   } = useResource<Order>(order === null ? null : () => orderApi.get(order.id), [orderId]);
+  // 播種の効果から呼ぶ親の口。依存へ載せると親の再レンダーごとに効果が走り直すので、
+  // ref 越しに最新を読む（useResource の fetcherRef と同じ作法）。
+  const onSupersededRef = useRef(onSuperseded);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onSupersededRef.current = onSuperseded;
+    onCloseRef.current = onClose;
+  });
+  // 終端の名乗りを受注 1 件につき一度に抑える印。効果は同じ詳細のまま再実行されうるので、
+  // これが無いと通知と送り出しが重複する。
+  const supersededIdRef = useRef<string | null>(null);
   // 播き終えた受注。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
   // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
   const seededOrder = detail !== null && detail.id === orderId;
@@ -146,6 +168,7 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   useEffect(() => {
     setSeededId(null);
     setIssued(null);
+    supersededIdRef.current = null;
   }, [orderId]);
 
   // 取得できたら播く。取得の到着はレンダーより後なので、初期値ではなく効果で入れる。
@@ -156,6 +179,18 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   // 取り直し中は前と同じ値のまま効果が走らず、印を消した状態が続くのでフォームは出ない。
   useEffect(() => {
     if (detail === null) return;
+    // 終端の詳細は播種元にならない。播くと一致する版で再送できてしまい、今度は終端拒否の
+    // 400 が行き止まりになる。完了はもう成立しないので、どの経路の取得で着いた姿でも
+    // ここで一度だけ名乗って閉じ、行を作業キューからアーカイブへ送り出す。
+    if (detail.status === 'COMPLETED' || detail.status === 'CANCELLED') {
+      if (supersededIdRef.current !== (detail.id ?? null)) {
+        supersededIdRef.current = detail.id ?? null;
+        notify.error('この受注は別の操作者により完了または取消済みです');
+        onSupersededRef.current(detail.status);
+        onCloseRef.current();
+      }
+      return;
+    }
     const existing = storeEditableFeeLines(detail.fee_lines);
     reset({
       course_name: detail.course_name ?? '',
@@ -196,13 +231,25 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
         onClose();
       }
     } catch (error) {
+      if (isConflict(error)) {
+        // 版の食い違い。まだ完了できる姿かは取り直した現物の状態で分かれる — CONFIRMED なら
+        // 競合の文言を出して最新の内訳と版で播き直し（打ちかけの入力は破棄される）、終端なら
+        // 播種の効果が名乗って閉じる。文言はどちらの枝でも一度だけ出す
+        try {
+          const fresh = await orderApi.get(order.id);
+          if (fresh.status !== 'COMPLETED' && fresh.status !== 'CANCELLED') {
+            notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
+          }
+          setDetail(fresh);
+        } catch {
+          // 取り直せなくても行き止まりにしない。文言を出し、取得フックの取り直しに任せる
+          notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
+          await reloadDetail();
+        }
+        return;
+      }
       // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
-      if (isConflict(error)) {
-        // 版の食い違い。取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる。
-        // 取り直せば播種の効果が最新の内訳と版でフォームを組み直す（打ちかけの入力は破棄される）
-        await reloadDetail();
-      }
     }
   };
 

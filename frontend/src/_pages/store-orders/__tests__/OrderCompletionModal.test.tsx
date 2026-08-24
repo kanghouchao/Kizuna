@@ -37,9 +37,14 @@ const confirmedOrder: Order = {
   version: 3,
 };
 
-const renderModal = (onCompleted = jest.fn(), onClose = jest.fn()) =>
+const renderModal = (onCompleted = jest.fn(), onClose = jest.fn(), onSuperseded = jest.fn()) =>
   render(
-    <OrderCompletionModal order={confirmedOrder} onClose={onClose} onCompleted={onCompleted} />
+    <OrderCompletionModal
+      order={confirmedOrder}
+      onClose={onClose}
+      onCompleted={onCompleted}
+      onSuperseded={onSuperseded}
+    />
   );
 
 /** 会計の内訳を 1 行だけ入れて完了する（各テストの本題は入力側なので、送信までを 1 つにまとめる）。 */
@@ -77,7 +82,14 @@ describe('OrderCompletionModal', () => {
     });
     const queueRow: Order = { id: 'o1', status: 'CONFIRMED', customer_name: '山田太郎' };
 
-    render(<OrderCompletionModal order={queueRow} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    render(
+      <OrderCompletionModal
+        order={queueRow}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
 
     expect(await screen.findByLabelText('コース名')).toHaveValue('90 分コース');
     expect(screen.getByLabelText('明細2の名称')).toHaveValue('指名');
@@ -124,9 +136,21 @@ describe('OrderCompletionModal', () => {
     const { rerender } = renderModal();
     expect(await screen.findByDisplayValue('古い明細')).toBeInTheDocument();
 
-    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
     rerender(
-      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+      <OrderCompletionModal
+        order={null}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
+    rerender(
+      <OrderCompletionModal
+        order={confirmedOrder}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
     );
 
     expect(await screen.findByDisplayValue('新しい明細')).toBeInTheDocument();
@@ -152,7 +176,14 @@ describe('OrderCompletionModal', () => {
 
   it('閉じている間は事前計算を取りに行かない', () => {
     // 一覧に常時 mount されているので、開くまで取りに行くと 1 件も完了しない画面が毎回読む
-    render(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    render(
+      <OrderCompletionModal
+        order={null}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
 
     expect(mockedPreview).not.toHaveBeenCalled();
   });
@@ -164,7 +195,14 @@ describe('OrderCompletionModal', () => {
       customer_name: undefined,
       contact_name: '重複照合の来客',
     };
-    render(<OrderCompletionModal order={unlinked} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    render(
+      <OrderCompletionModal
+        order={unlinked}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
 
     expect(await screen.findByText(/重複照合の来客（顧客未設定）/)).toBeInTheDocument();
   });
@@ -192,14 +230,31 @@ describe('OrderCompletionModal', () => {
     // 次の受注の利用ポイントを受け付けてしまう
     const otherOrder: Order = { ...confirmedOrder, id: 'o2', customer_name: '鈴木花子' };
     const { rerender } = render(
-      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+      <OrderCompletionModal
+        order={confirmedOrder}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
     );
     await screen.findByLabelText('利用ポイント');
 
-    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    rerender(
+      <OrderCompletionModal
+        order={null}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
     mockedPreview.mockReturnValue(new Promise(() => {}));
     rerender(
-      <OrderCompletionModal order={otherOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+      <OrderCompletionModal
+        order={otherOrder}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
     );
 
     expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
@@ -211,16 +266,33 @@ describe('OrderCompletionModal', () => {
   it('同じ受注を開き直したら、前回確定した会計金額で見込みを取り直さない', async () => {
     // 欄は空に戻るので、確定値だけ残ると空欄のまま前回の金額の付与予定が出る
     const { rerender } = render(
-      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+      <OrderCompletionModal
+        order={confirmedOrder}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
     );
     const input = await screen.findByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
     await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 8000));
 
-    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
     rerender(
-      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+      <OrderCompletionModal
+        order={null}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
+    rerender(
+      <OrderCompletionModal
+        order={confirmedOrder}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
     );
 
     await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 0));
@@ -423,6 +495,44 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);
   });
 
+  it('取り直した受注が終端なら、名乗って閉じ、行をアーカイブへ送り出す', async () => {
+    // 終端の受注を播き直すと、一致する版で再送できて今度は 400 の行き止まりに変わる。
+    // 完了はもう成立しないので、フォームへは戻さず一覧の行だけを送り出す
+    mockedGet
+      .mockResolvedValueOnce({
+        ...confirmedOrder,
+        fee_lines: [{ kind: 'OPTION', name: '古い明細', amount: 1000, system_owned: false }],
+      })
+      .mockResolvedValueOnce({ ...confirmedOrder, status: 'COMPLETED', version: 4 });
+    mockedComplete.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          error: 'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください',
+        },
+      },
+    });
+    const onCompleted = jest.fn();
+    const onClose = jest.fn();
+    const onSuperseded = jest.fn();
+    renderModal(onCompleted, onClose, onSuperseded);
+
+    expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith('この受注は別の操作者により完了または取消済みです')
+    );
+    // 文言は終端の名乗り 1 回だけ。競合の文言まで重ねると、従うべき指示が 2 つ同時に出る
+    expect(notify.error).toHaveBeenCalledTimes(1);
+    expect(onSuperseded).toHaveBeenCalledWith('COMPLETED');
+    expect(onClose).toHaveBeenCalled();
+    // 完了の成功ではない。成功の口で送り出すと「オーダーを完了しました」が嘘になる
+    expect(onCompleted).not.toHaveBeenCalled();
+    // 播き直しは起きない＝再送しても同じ版を名指すことは無い（送信そのものが 1 回で止まる）
+    expect(mockedComplete).toHaveBeenCalledTimes(1);
+  });
+
   it('完了に失敗したら、対処方法を含むサーバの文言をそのまま出す', async () => {
     // 残高不足・単位違反は行動できる文言で返ってくる。汎用文言に潰さない
     mockedComplete.mockRejectedValue({
@@ -554,13 +664,32 @@ describe('OrderCompletionModal', () => {
     mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
     const { rerender } = render(
-      <OrderCompletionModal order={confirmedOrder} onClose={jest.fn()} onCompleted={jest.fn()} />
+      <OrderCompletionModal
+        order={confirmedOrder}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
     );
     await completeWith('8000');
     await screen.findByLabelText('伝票QR');
 
-    rerender(<OrderCompletionModal order={null} onClose={jest.fn()} onCompleted={jest.fn()} />);
-    rerender(<OrderCompletionModal order={reopened} onClose={jest.fn()} onCompleted={jest.fn()} />);
+    rerender(
+      <OrderCompletionModal
+        order={null}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
+    rerender(
+      <OrderCompletionModal
+        order={reopened}
+        onClose={jest.fn()}
+        onCompleted={jest.fn()}
+        onSuperseded={jest.fn()}
+      />
+    );
   };
 
   it('送信中はキャンセルも完了もどちらも押せない', async () => {
