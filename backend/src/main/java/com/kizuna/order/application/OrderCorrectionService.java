@@ -106,22 +106,37 @@ public class OrderCorrectionService {
    * のまま据え置かれる（申領は完了時点の会計を書き換えない）。列を基準にすると その受注の差額が付与の全額ぶん膨らみ、過大な手当てを招く。付与の所在は台帳であり、そこから引く。
    *
    * <p>会員を帰属記録から採るのは、手当ての宛先が帰属記録だからである（ADR 0012）— 顧客に今紐づく会員ではない。
+   *
+   * <p>既に差し引かれた誤付与は基準から外す。台帳の付与合計は加算行だけを数えるので、同じ会員がこの受注へ二度 帰属した履歴があると、差し引き済みの 1 本ぶんまで手元にあることにしてしまう。
    */
   private int grantedPoints(Order order) {
-    long granted =
-        orderAttributionRepository
-            .findFirstByOrderIdOrderByIdDesc(order.getId())
+    List<OrderAttribution> attributions =
+        orderAttributionRepository.findByOrderIdOrderByIdDesc(order.getId());
+    Long memberId =
+        attributions.stream()
             .filter(attribution -> attribution.getStatus() == OrderAttributionStatus.ACTIVE)
             .map(OrderAttribution::getMemberId)
-            .map(
-                memberId ->
-                    pointLedgerService
-                        .grantedPointsByOrder(memberId, List.of(order.getId()))
-                        .getOrDefault(order.getId(), 0L))
-            .orElse(0L);
+            .findFirst()
+            .orElse(null);
+    if (memberId == null) {
+      return 0;
+    }
+    long granted =
+        pointLedgerService
+            .grantedPointsByOrder(memberId, List.of(order.getId()))
+            .getOrDefault(order.getId(), 0L);
+    // 差し引き済みの分は既に相手の手元に無い。同じ会員がこの受注へ二度帰属した場合（無効化 → 誤付与の
+    // 差し引き → 再発行 → 同じ本人の申領）、付与行は 2 本並ぶが実効の付与は 1 本ぶんである。付与合計だけを
+    // 基準にすると実効より多く見積もり、手当てを過小に、ときには逆向きに勧める。
+    long corrected =
+        pointLedgerService.correctedPointsFor(
+            attributions.stream()
+                .filter(attribution -> memberId.equals(attribution.getMemberId()))
+                .map(OrderAttribution::getId)
+                .toList());
     // 台帳の合計は long だが、1 受注ぶんの付与は付与規則が int の範囲に閉じている（previewGrant が
     // 上限超過を撥ねる）。超えたなら実装欠陥なので黙って丸めず失敗させる。
-    return Math.toIntExact(granted);
+    return Math.toIntExact(granted - corrected);
   }
 
   /**
