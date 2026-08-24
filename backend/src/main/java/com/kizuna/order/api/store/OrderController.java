@@ -296,7 +296,7 @@ public class OrderController {
    * COMPLETED のみで、CANCELLED は門の外（誤取消の 救済は同内容で受注を起こし直すこと）。
    *
    * <p>権限が {@code ORDER_CORRECT} なのは、日常権限の {@code ORDER_MANAGE} で守ると「権限のある利用者のみが訂正できる」が
-   * 空文になるためである。門はポイントを一切動かさず、応答が返す付与差額の手当は手動調整・誤帰属の訂正が担う。
+   * 空文になるためである。門はポイントを一切動かさず、応答が名乗るのは会計金額の前後だけである（ADR 0019）。
    */
   @PostMapping("/{id}/corrections")
   @PreAuthorize("hasAuthority('PERM_ORDER_CORRECT')")

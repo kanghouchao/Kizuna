@@ -14,7 +14,7 @@ import {
   toFeeLineInputs,
 } from '@/entities/order';
 import { ExternalLinkIcon } from 'lucide-react';
-import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
+import { getApiErrorMessage, isConflict, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
 // 空欄は「値なし」として送る。この契約は全量送信なので、省略と空欄が同じ意味になる。
@@ -100,8 +100,7 @@ function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
  * <p>送るのは<b>三組の全量</b>で、部分更新ではない。空にした欄はそのまま空になる — 実終了時刻や
  * 延長分数を空へ戻す訂正が要るため、「送らない＝変更しない」の形では表せない。
  *
- * <p>門はポイントを動かさない。訂正で合計が変われば付与との差が生まれるので、送信後にその差額と
- * 手当ての行き先を示す。
+ * <p>門はポイントを動かさない。送信後に名乗るのは会計金額の前後と、付与が動かないことまでである（ADR 0019）。
  */
 export default function OrderCorrectionPage() {
   const params = useParams();
@@ -175,11 +174,19 @@ export default function OrderCorrectionPage() {
         fee_lines: toFeeLineInputs(values.fee_lines),
       });
       notify.success('受注を訂正しました');
-      // 結果は差し替えではなく併記で残す。付与差額はこの応答にしか現れず、一覧へ戻すと手当ての
-      // 必要に気づく機会が消える。
+      // 結果は差し替えではなく併記で残す。一覧へ戻すと、何がどう変わったかを確かめる面が消える。
       setOutcome({ result: corrected, memberCode: await attributedMemberCode() });
       await reload();
     } catch (error) {
+      if (isConflict(error)) {
+        // 版の食い違い。取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる。
+        // 取り直せば播種の効果が最新の値と版でフォームを組み直す（入力は破棄され、頁は開いたまま）。
+        notify.warning(
+          '他の操作者がこの受注を訂正しました。最新の内容を確認してからやり直してください'
+        );
+        await reload();
+        return;
+      }
       notify.error(getApiErrorMessage(error, '受注の訂正に失敗しました'));
     }
   };

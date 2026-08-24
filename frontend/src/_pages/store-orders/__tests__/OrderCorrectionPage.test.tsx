@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
 import { Order, orderApi } from '@/entities/order';
+import { AxiosError } from 'axios';
 
 const mockPush = jest.fn();
 
@@ -149,6 +150,33 @@ describe('完了後訂正のページ', () => {
     // 読めなければ帰属している側へ倒す（「動くポイントはありません」と誤って言い切らない）
     expect(await screen.findByText(/この訂正では動きません/)).toBeInTheDocument();
     expect(screen.getByText(/会員コード 不明/)).toBeInTheDocument();
+  });
+
+  it('版の食い違いでは取り直して最新の内容でフォームを組み直すこと', async () => {
+    // 取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（死に筋）
+    mockedOrderApi.get
+      .mockResolvedValueOnce(completedOrder())
+      .mockResolvedValue(completedOrder({ version: 9, course_name: '90 分コース' }));
+    mockedOrderApi.correct.mockRejectedValue(
+      new AxiosError('conflict', undefined, undefined, undefined, {
+        status: 409,
+        data: {},
+        statusText: 'Conflict',
+        headers: {},
+        config: { headers: undefined as never },
+      })
+    );
+    render(<OrderCorrectionPage />);
+    await waitFor(() => expect(screen.getByLabelText('コース名')).toHaveValue('60 分コース'));
+
+    fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
+    fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+
+    await waitFor(() => expect(notify.warning).toHaveBeenCalled());
+    // 取り直した値で播き直る。入力は破棄され、頁は開いたまま
+    await waitFor(() => expect(screen.getByLabelText('コース名')).toHaveValue('90 分コース'));
+    expect(screen.getByRole('button', { name: '訂正する' })).toBeInTheDocument();
+    expect(notify.error).not.toHaveBeenCalled();
   });
 
   it('理由の無い訂正は送らないこと', async () => {
