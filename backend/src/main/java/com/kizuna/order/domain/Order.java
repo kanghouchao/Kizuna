@@ -93,7 +93,7 @@ public class Order extends StoreScopedEntity {
    *
    * <p>列として持つのは一覧・集計が行を畳まずに読めるようにするためで、正本は行の側にある。
    */
-  @Column(name = "total_fee")
+  @Column(name = "total_fee", nullable = false)
   @Builder.Default
   private Integer totalFee = 0;
 

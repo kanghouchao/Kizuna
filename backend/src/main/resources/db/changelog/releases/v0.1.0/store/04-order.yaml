@@ -75,9 +75,12 @@ databaseChangeLog:
               - column:
                   # 明細（t_order_fee_lines）の帯符号金額の単純総和。手入力の口は無く、
                   # 集約の行為メソッドが行を動かすたびに書き直す導出列。
+                  # NOT NULL は下の CHECK を効かせるため — NULL は述語を unknown にして行を通してしまう。
                   name: total_fee
                   type: INTEGER
                   defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
                   remarks: 会計金額（明細の総和からの導出）
               - column:
                   name: auto_grant_points

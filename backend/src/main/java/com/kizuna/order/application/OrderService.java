@@ -595,13 +595,16 @@ public class OrderService {
 
     // 検証は台帳を触るより先に済ませる。撥ねる要求が仕訳を積んだ後だと、拒否の健全さがトランザクションの
     // 巻き戻しだけに掛かる（同一トランザクション内の後続の読みには積んだ仕訳が見えてしまう）。
-    if (order.getStatus() != OrderStatus.CONFIRMED) {
-      throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
-    }
-    // 版の照合は何も触る前に行う。完了は終端化なので、開いたまま別の操作者が内容を直していると
-    // 会計の場が見ていない姿のまま凍り、救済は訂正の門しか残らない。
+    //
+    // 版の照合は状態の検査より先。別の操作者が終端化させた受注へ陳腐化した版で届く要求は「状態の誤り」
+    // ではなく競合であり、409 で返さないと画面が取り直しの契機を得られず再送が永久に同じ 400 を踏む。
+    // 終端の受注へ現物と一致する版が届くことは無い（完了・取消が版を上げる）ので、順序を入れ替えても
+    // 状態の検査が守る範囲は変わらない。
     if (!Objects.equals(order.getVersion(), request.getExpectedVersion())) {
       throw new ConflictException("この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
+    }
+    if (order.getStatus() != OrderStatus.CONFIRMED) {
+      throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
     }
 
     // 会計の場で確定した内訳を先に当てる。合計は行の総和として集約が導出するので、以降の判定はすべて

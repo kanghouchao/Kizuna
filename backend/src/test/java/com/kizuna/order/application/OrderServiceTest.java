@@ -2412,13 +2412,35 @@ class OrderServiceTest {
 
   @Test
   void completeRejectsAnOrderThatIsNotConfirmed() {
-    // 検証は台帳を触るより先。撥ねる要求が仕訳を積んだ後だと、拒否の健全さが巻き戻しだけに掛かる
-    Order cancelled = Order.builder().status(OrderStatus.CANCELLED).customerId("cust-1").build();
+    // 検証は台帳を触るより先。撥ねる要求が仕訳を積んだ後だと、拒否の健全さが巻き戻しだけに掛かる。
+    // 版は現物と揃える — ずれていれば競合として先に落ちるので、状態の検査そのものを見られない
+    Order cancelled =
+        atCurrentVersion(
+            Order.builder().status(OrderStatus.CANCELLED).customerId("cust-1").build());
     when(orderRepository.findById("o1")).thenReturn(Optional.of(cancelled));
 
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
     assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void completeAnswersAStaleVersionWithConflictEvenWhenTheOrderIsAlreadyTerminal() {
+    // 別の操作者が終端化させた受注へ陳腐化した版で届く要求は競合であって状態の誤りではない。
+    // 400 で返すと画面が取り直しの契機を得られず、再送が永久に同じ 400 を踏む（行き止まり）
+    Order completed =
+        atCurrentVersion(
+            Order.builder().status(OrderStatus.COMPLETED).customerId("cust-1").build());
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(completed));
+
+    assertThatThrownBy(
+            () ->
+                service.complete(
+                    "o1", completionAt(CURRENT_VERSION - 1, 12000, null), "staff@kizuna.test"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
     verifyNoInteractions(pointLedgerService);
     verify(orderRepository, never()).save(any(Order.class));
   }
