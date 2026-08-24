@@ -335,8 +335,8 @@ public class Order extends StoreScopedEntity {
   /**
    * 自動付与の基準になる金額 — ポイント利用を除いた明細の総和。
    *
-   * <p>{@link #totalFee} はポイント利用の減算も含む「控除後の請求額」なので、そのまま基準にすると同じ会計が ポイントを使うほど付与も減る。基準はこちらであり、規則の出所を
-   * 1 つに保つため完了も訂正後の再計算も この 1 本を読む（ADR 0018）。
+   * <p>{@link #totalFee} はポイント利用の減算も含む「控除後の請求額」なので、そのまま基準にすると同じ会計が ポイントを使うほど付与も減る。付与の基準はこちらである（ADR
+   * 0018）。
    */
   public int grantBasisAmount() {
     return feeLines.stream()

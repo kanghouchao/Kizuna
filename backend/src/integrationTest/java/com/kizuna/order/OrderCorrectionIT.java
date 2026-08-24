@@ -110,7 +110,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .isEqualTo(pointEntries);
 
     List<OrderCorrection> chain =
-        orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAsc(orderId);
+        orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAscIdAsc(orderId);
     assertThat(chain).as("撥ねられた訂正は痕を残さないこと（快照は先に起こすが巻き戻る）").hasSize(2);
 
     OrderCorrection before1 = chain.get(0);
@@ -156,7 +156,8 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(orderJson(managerHeaders(STORE_A), orderId).path("total_fee").asInt())
         .isEqualTo(COMPLETED_FEE);
-    assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAsc(orderId)).isEmpty();
+    assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAscIdAsc(orderId))
+        .isEmpty();
   }
 
   @Test
@@ -228,7 +229,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(orderJson(managerHeaders(STORE_A), orderId).path("total_fee").asInt())
         .as("撥ねた訂正は先の訂正を巻き戻さないこと")
         .isEqualTo(9000);
-    assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAsc(orderId))
+    assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAscIdAsc(orderId))
         .as("撥ねた訂正は痕を残さないこと")
         .hasSize(1);
   }
