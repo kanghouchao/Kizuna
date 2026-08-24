@@ -230,6 +230,40 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("差し引き済みの誤付与は差額の基準から外れること")
+  void alreadyCorrectedGrantsAreExcludedFromTheBaseline() {
+    // 同じ会員がこの受注へ二度帰属する（無効化 → 誤付与の差し引き → 再発行 → 同じ本人の申領）と、
+    // 付与行は 2 本並ぶが差し引き済みの 1 本は既に手元に無い。加算行だけを数えると実効より多く見積もる
+    String orderId = confirmedOrder("差引済");
+    RegisteredMember member = registerAndLogin("recount");
+    assertThat(claim(member, completeAndTakeReceiptToken(orderId)).getStatusCode())
+        .as("前提: 一度目の申領が成立すること")
+        .isEqualTo(HttpStatus.CREATED);
+
+    long firstAttributionId = attributionId(orderId);
+    invalidateAttribution(orderId, firstAttributionId);
+    correctAttributionPoints(orderId, firstAttributionId, 120);
+    assertThat(claim(member, reissueReceiptToken(orderId)).getStatusCode())
+        .as("前提: 再発行した伝票を同じ本人が申領し直せること")
+        .isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<JsonNode> corrected =
+        correct(
+            managerHeaders(STORE_A),
+            orderId,
+            """
+            {"reason":"二度目の帰属の後の金額訂正",
+             "fee_lines":[{"kind":"SURCHARGE","name":"会計","amount":18000}]}
+            """);
+
+    assertThat(corrected.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    // 台帳の加算行は 120 が 2 本、うち 1 本は差し引き済み。実効の付与は 120
+    assertThat(corrected.getBody().path("granted_points").asInt()).isEqualTo(120);
+    assertThat(corrected.getBody().path("recomputed_grant_points").asInt()).isEqualTo(180);
+    assertThat(corrected.getBody().path("grant_difference").asInt()).isEqualTo(60);
+  }
+
+  @Test
   @DisplayName("画面が見ていた版と食い違う訂正は 409 で差し戻され、本体も痕も動かないこと")
   void staleCorrectionsAreRefused() {
     // 全量置換なので、開いたまま別の操作者が訂正を済ませていると、送らなかった項目まで開いた時点の
@@ -436,6 +470,64 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         "/platform/me/receipts",
         new HttpEntity<>("{\"token\": \"" + rawToken + "\"}", headers),
         JsonNode.class);
+  }
+
+  /** 受注の直近の帰属記録の ID。無効化はこの値で「画面が見ていた記録」を名指す。 */
+  private long attributionId(String orderId) {
+    ResponseEntity<JsonNode> attribution =
+        rest.exchange(
+            "/store/orders/" + orderId + "/attribution",
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(attribution.getStatusCode()).as("前提: 帰属の現況を読めること").isEqualTo(HttpStatus.OK);
+    return attribution.getBody().path("id").asLong();
+  }
+
+  private void invalidateAttribution(String orderId, long attributionId) {
+    ResponseEntity<JsonNode> invalidated =
+        rest.exchange(
+            "/store/orders/" + orderId + "/attribution/invalidation",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                "{\"attribution_id\":" + attributionId + ",\"reason\":\"取り違え\"}",
+                managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(invalidated.getStatusCode()).as("前提: 帰属の無効化が成立すること").isEqualTo(HttpStatus.OK);
+  }
+
+  private void correctAttributionPoints(String orderId, long attributionId, int points) {
+    ResponseEntity<JsonNode> response =
+        rest.exchange(
+            "/store/orders/" + orderId + "/attribution/correction",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                "{\"attribution_id\":"
+                    + attributionId
+                    + ",\"points\":"
+                    + points
+                    + ",\"reason\":\"誤付与の差し引き\",\"idempotency_key\":\"corr-"
+                    + nonce
+                    + "-"
+                    + attributionId
+                    + "\"}",
+                managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).as("前提: 誤付与の差し引きが成立すること").isEqualTo(HttpStatus.OK);
+  }
+
+  /** 無効化された受注へ伝票を再発行し、生値を返す。 */
+  private String reissueReceiptToken(String orderId) {
+    ResponseEntity<JsonNode> reissued =
+        rest.exchange(
+            "/store/orders/" + orderId + "/receipt-token",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(reissued.getStatusCode()).as("前提: 伝票の再発行が成立すること").isEqualTo(HttpStatus.CREATED);
+    String raw = reissued.getBody().path("receipt_token").asString();
+    assertThat(raw).as("前提: 再発行は生値を返すこと").isNotBlank();
+    return raw;
   }
 
   private String confirmedOrder(String label) {
