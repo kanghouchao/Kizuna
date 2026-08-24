@@ -293,16 +293,19 @@ public class Order extends StoreScopedEntity {
    * <p>基本コース料金の行名称は受注のコース名の写しから採る。行の側にも名前を名乗らせると、同じ受注が二つのコース名を主張する。
    */
   public void replaceStoreFeeLines(List<OrderFeeLineDraft> drafts) {
-    swapStoreFeeLines(drafts);
-    // 行は負を取れるが総和は取れない。差し替えの経路はここだけを通るので、負の合計を持つ受注は
-    // 集約の外から作れない。訂正の門は同じ不変量を固有の文言で守るため、この検査を通さない。
-    if (totalFee < 0) {
+    // 判定は列へ畳む前の long で行う。int の総和は 32 ビットで巻き戻り、負の合計が正に化けて
+    // この検査を素通りする。訂正の門は同じ不変量を固有の文言で守るため、この検査を通さない。
+    if (swapStoreFeeLines(drafts) < 0) {
       throw new InvalidOrderFeeLineException("内訳の総和が負になっています。割引・調整の金額を見直してください");
     }
   }
 
-  /** 差し替えそのもの。総和の検査を伴わないのは訂正の門だけで、門は自分の文言で同じ不変量を守る。 */
-  private void swapStoreFeeLines(List<OrderFeeLineDraft> drafts) {
+  /**
+   * 差し替えそのもの。総和の検査を伴わないのは訂正の門だけで、門は自分の文言で同じ不変量を守る。
+   *
+   * @return 差し替え後の総和（列へ畳む前の値）
+   */
+  private long swapStoreFeeLines(List<OrderFeeLineDraft> drafts) {
     List<OrderFeeLine> replaced = new ArrayList<>();
     for (OrderFeeLineDraft draft : drafts) {
       if (draft.kind() != null && draft.kind().isSystemOwned()) {
@@ -312,7 +315,7 @@ public class Order extends StoreScopedEntity {
     }
     feeLines.removeIf(line -> !line.getKind().isSystemOwned());
     feeLines.addAll(replaced);
-    recalculateTotalFee();
+    return recalculateTotalFee();
   }
 
   /**
@@ -355,9 +358,24 @@ public class Order extends StoreScopedEntity {
         .sum();
   }
 
-  /** 合計を明細から取り直す。行を動かす経路はすべてここを通り、和と合計が食い違う状態を集約の外から作れないようにする。 */
-  private void recalculateTotalFee() {
-    this.totalFee = feeLines.stream().mapToInt(OrderFeeLine::getAmount).sum();
+  /**
+   * 合計を明細から取り直す。行を動かす経路はすべてここを通り、和と合計が食い違う状態を集約の外から作れないようにする。
+   *
+   * <p>積むのは long。int で畳むと 32 ビットの巻き戻りが起き、上限を超えた総和も列に収まらない負の総和も
+   * 別の値に化けて呼出側の不変量を素通りする。列へ写すのは範囲に収まると決まった後だけで、 収まらない負は long
+   * のまま返して呼出側の文言で撥ねさせる（拒否の巻き戻しはトランザクションが担う）。
+   *
+   * @return 取り直した総和（列へ畳む前の値）
+   */
+  private long recalculateTotalFee() {
+    long sum = feeLines.stream().mapToLong(OrderFeeLine::getAmount).sum();
+    if (sum > Integer.MAX_VALUE) {
+      throw new InvalidOrderFeeLineException("内訳の総和が扱える上限を超えています。金額を見直してください");
+    }
+    if (sum >= Integer.MIN_VALUE) {
+      this.totalFee = (int) sum;
+    }
+    return sum;
   }
 
   /**
@@ -407,11 +425,10 @@ public class Order extends StoreScopedEntity {
     this.courseName = command.courseName();
     this.courseMinutes = command.courseMinutes();
     this.extensionMinutes = command.extensionMinutes();
-    swapStoreFeeLines(command.feeLines());
     // 総和が 0 以上という不変量は他の経路と同じだが、門は利用の行を動かせないため、下回った差を
     // 吸収する先が無いことまで伝える固有の文言を持つ（一般の差し替えは割引・調整を直せばよい）。
     // 撥ねた訂正の巻き戻しはトランザクションが担う（この時点で明細は既に差し替わっている）。
-    if (totalFee < 0) {
+    if (swapStoreFeeLines(command.feeLines()) < 0) {
       throw new InvalidOrderFeeLineException("訂正後の請求額が利用ポイントを下回ります。ポイント利用の訂正はポイント機構で行ってください");
     }
   }

@@ -13,7 +13,7 @@ import {
   systemOwnedFeeLines,
   toFeeLineInputs,
 } from '@/entities/order';
-import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
+import { getApiErrorMessage, integerRule, isConflict, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
@@ -169,7 +169,8 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   }, [detail, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
-    if (!order || detail === null) return;
+    // 版は完了の必須項目。詳細が無い／版を運んでいない姿では送る先が決まらないので、送らない
+    if (!order || detail === null || detail.version === undefined) return;
     // 欄が消えても react-hook-form は値を保つ。非会員の受注へ持ち越した利用を送らないよう、
     // 送信可否は入力ではなく今の見込みで決める。
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;
@@ -197,6 +198,11 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
     } catch (error) {
       // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
+      if (isConflict(error)) {
+        // 版の食い違い。取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる。
+        // 取り直せば播種の効果が最新の内訳と版でフォームを組み直す（打ちかけの入力は破棄される）
+        await reloadDetail();
+      }
     }
   };
 

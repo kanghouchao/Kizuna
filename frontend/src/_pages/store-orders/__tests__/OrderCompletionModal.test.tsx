@@ -33,6 +33,8 @@ const confirmedOrder: Order = {
   status: 'CONFIRMED',
   business_date: '2026-08-10',
   customer_name: '山田太郎',
+  // 完了は版を必須で運ぶ。詳細の読み口は必ず返すので、播種元の雛形も持つ
+  version: 3,
 };
 
 const renderModal = (onCompleted = jest.fn(), onClose = jest.fn()) =>
@@ -333,6 +335,7 @@ describe('OrderCompletionModal', () => {
 
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     expect(mockedComplete.mock.calls[0][1]).toEqual({
+      expected_version: 3,
       course_name: '',
       fee_lines: [{ kind: 'OPTION', name: '会計', amount: 8000 }],
       use_points: 200,
@@ -376,9 +379,22 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[0][1].expected_version).toBe(7);
   });
 
-  it('版の食い違いはサーバの文言をそのまま出す', async () => {
-    // 409 も他の失敗と同じ経路で見せる。汎用文言に潰すと、読み直しが要ることが伝わらない
-    mockedComplete.mockRejectedValue({
+  it('版の食い違いはサーバの文言を出したうえで、取り直した内容と版で播き直す', async () => {
+    // 取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（行き止まり）
+    mockedGet
+      .mockResolvedValueOnce({
+        ...confirmedOrder,
+        version: 3,
+        fee_lines: [{ kind: 'OPTION', name: '古い明細', amount: 1000, system_owned: false }],
+      })
+      .mockResolvedValueOnce({
+        ...confirmedOrder,
+        version: 4,
+        fee_lines: [
+          { kind: 'OPTION', name: '他の操作者が直した明細', amount: 5000, system_owned: false },
+        ],
+      });
+    mockedComplete.mockRejectedValueOnce({
       response: {
         status: 409,
         data: {
@@ -389,7 +405,8 @@ describe('OrderCompletionModal', () => {
     const onCompleted = jest.fn();
     renderModal(onCompleted);
 
-    await completeWith('8000');
+    expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
 
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith(
@@ -397,6 +414,13 @@ describe('OrderCompletionModal', () => {
       )
     );
     expect(onCompleted).not.toHaveBeenCalled();
+    // 取り直した内容でフォームが組み直され、再送は新しい版を名指す
+    await waitFor(() =>
+      expect(screen.getByLabelText('明細1の名称')).toHaveValue('他の操作者が直した明細')
+    );
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
+    expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);
   });
 
   it('完了に失敗したら、対処方法を含むサーバの文言をそのまま出す', async () => {

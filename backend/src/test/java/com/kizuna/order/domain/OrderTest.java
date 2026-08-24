@@ -167,6 +167,37 @@ class OrderTest {
   }
 
   @Test
+  @DisplayName("32 ビットで巻き戻る総和が不変量を素通りしないこと")
+  void replaceStoreFeeLines_doesNotLetTheTotalWrapAround() {
+    // int で畳むと -4_000_000_000 が正値に化け、「総和は 0 以上」の検査を素通りする
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+
+    assertThatThrownBy(
+            () ->
+                order.replaceStoreFeeLines(
+                    List.of(
+                        draft(OrderFeeLineKind.DISCOUNT, "割引 A", -2_000_000_000),
+                        draft(OrderFeeLineKind.DISCOUNT, "割引 B", -2_000_000_000))))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("内訳の総和が負になっています。割引・調整の金額を見直してください");
+
+    // 上限側も同じ巻き戻りを起こす。こちらは列に収まらないので固有の文言で撥ねる
+    assertThatThrownBy(
+            () ->
+                order.replaceStoreFeeLines(
+                    List.of(
+                        draft(OrderFeeLineKind.SURCHARGE, "指名料 A", 2_000_000_000),
+                        draft(OrderFeeLineKind.SURCHARGE, "指名料 B", 2_000_000_000))))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("内訳の総和が扱える上限を超えています。金額を見直してください");
+
+    // 境界: 列に収まる最大値は通る（「大きい額は何でも撥ねている」ではない証明）
+    order.replaceStoreFeeLines(
+        List.of(draft(OrderFeeLineKind.SURCHARGE, "指名料", Integer.MAX_VALUE)));
+    assertThat(order.getTotalFee()).isEqualTo(Integer.MAX_VALUE);
+  }
+
+  @Test
   @DisplayName("基本コース料金の行名称はコース名の写しから採り、コース名が無ければ撥ねること")
   void baseCourseLine_takesItsNameFromTheCourseSnapshot() {
     Order withoutCourseName = orderWithStatus(OrderStatus.CONFIRMED);
