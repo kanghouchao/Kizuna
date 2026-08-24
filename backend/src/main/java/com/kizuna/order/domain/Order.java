@@ -293,8 +293,7 @@ public class Order extends StoreScopedEntity {
    * <p>基本コース料金の行名称は受注のコース名の写しから採る。行の側にも名前を名乗らせると、同じ受注が二つのコース名を主張する。
    */
   public void replaceStoreFeeLines(List<OrderFeeLineDraft> drafts) {
-    // 判定は列へ畳む前の long で行う。int の総和は 32 ビットで巻き戻り、負の合計が正に化けて
-    // この検査を素通りする。訂正の門は同じ不変量を固有の文言で守るため、この検査を通さない。
+    // 列へ畳む前の long で判定する（畳みを long にする理由は recalculateTotalFee）
     if (swapStoreFeeLines(drafts) < 0) {
       throw new InvalidOrderFeeLineException("内訳の総和が負になっています。割引・調整の金額を見直してください");
     }
