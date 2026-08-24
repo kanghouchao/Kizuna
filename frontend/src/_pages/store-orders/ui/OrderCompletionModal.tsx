@@ -169,12 +169,15 @@ export function OrderCompletionModal({ order, onClose, onCompleted }: OrderCompl
   }, [detail, reset]);
 
   const submit = async (values: OrderCompletionFormValues) => {
-    if (!order) return;
+    if (!order || detail === null) return;
     // 欄が消えても react-hook-form は値を保つ。非会員の受注へ持ち越した利用を送らないよう、
     // 送信可否は入力ではなく今の見込みで決める。
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;
     try {
       const completed = await orderApi.complete(order.id, {
+        // 版は内訳を播いた詳細そのものから採る。別の取得元から採ると、送る内訳と名指す版が
+        // 別の瞬間の姿になり、照合が通ったのに古い内訳で凍らせる完了が成立する
+        expected_version: detail.version,
         // 空欄はそのまま空文字で送る。undefined はキーごと落ちてサーバが「変更しない」と読むため、
         // 消したい意図が黙って捨てられる（他の文字列項目と同じ作法）。
         course_name: values.course_name.trim(),

@@ -66,7 +66,7 @@ class OrderControllerTest {
 
   /** 完了の要求本文。会計金額は受け取らず、会計の場で確定した内訳を送る。 */
   private static final String COMPLETION_BODY =
-      "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}";
+      "{\"expected_version\":3,\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}";
 
   /** 完了後訂正の要求本文。門が直せる三組の全量を毎回送る（省略は「値なし」）。 */
   private static final String CORRECTION_BODY =
@@ -201,7 +201,26 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/store/orders/o1/completion", "{\"fee_lines\":[null]}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/completion", "{\"expected_version\":3,\"fee_lines\":[null]}"))
+        .andExpect(status().isBadRequest());
+
+    verify(orderService, never()).complete(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("版を載せない完了要求は契約で撥ねられ、サービスへ届かないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionWithoutTheExpectedVersionIsRejected() throws Exception {
+    // 完了は終端化で、書いた後の救済は訂正の門しか無い。版が無いと食い違いを検出できない
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            storePost(
+                "/store/orders/o1/completion",
+                "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}"))
         .andExpect(status().isBadRequest());
 
     verify(orderService, never()).complete(any(), any(), any());
@@ -327,7 +346,9 @@ class OrderControllerTest {
 
     // 未指定を 0 として黙って通すと、付与なしの完了が事故として成立する
     mockMvc
-        .perform(storePost("/store/orders/o1/completion", "{\"use_points\": 100}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/completion", "{\"expected_version\":3,\"use_points\": 100}"))
         .andExpect(status().isBadRequest());
   }
 

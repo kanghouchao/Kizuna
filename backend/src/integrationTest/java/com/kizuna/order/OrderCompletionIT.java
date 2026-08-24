@@ -274,7 +274,9 @@ class OrderCompletionIT extends CrossStoreTestSupport {
   private ResponseEntity<JsonNode> complete(
       long storeId, String bearerToken, String orderId, int totalFee, Integer usePoints) {
     String body =
-        "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+        "{\"expected_version\":"
+            + orderVersion(headersFor(storeId, bearerToken), orderId)
+            + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
             + totalFee
             + "}]"
             + (usePoints == null ? "" : ", \"use_points\": " + usePoints)

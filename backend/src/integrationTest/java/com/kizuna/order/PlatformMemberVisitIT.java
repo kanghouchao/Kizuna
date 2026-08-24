@@ -371,7 +371,9 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
         "/store/orders/" + orderId + "/completion",
         HttpMethod.POST,
         new HttpEntity<>(
-            "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+            "{\"expected_version\":"
+                + orderVersion(storeHeaders(STORE_A), orderId)
+                + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
                 + totalFee
                 + "}]}",
             storeHeaders(STORE_A)),

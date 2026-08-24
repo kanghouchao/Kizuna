@@ -293,6 +293,16 @@ public class Order extends StoreScopedEntity {
    * <p>基本コース料金の行名称は受注のコース名の写しから採る。行の側にも名前を名乗らせると、同じ受注が二つのコース名を主張する。
    */
   public void replaceStoreFeeLines(List<OrderFeeLineDraft> drafts) {
+    swapStoreFeeLines(drafts);
+    // 行は負を取れるが総和は取れない。差し替えの経路はここだけを通るので、負の合計を持つ受注は
+    // 集約の外から作れない。訂正の門は同じ不変量を固有の文言で守るため、この検査を通さない。
+    if (totalFee < 0) {
+      throw new InvalidOrderFeeLineException("内訳の総和が負になっています。割引・調整の金額を見直してください");
+    }
+  }
+
+  /** 差し替えそのもの。総和の検査を伴わないのは訂正の門だけで、門は自分の文言で同じ不変量を守る。 */
+  private void swapStoreFeeLines(List<OrderFeeLineDraft> drafts) {
     List<OrderFeeLine> replaced = new ArrayList<>();
     for (OrderFeeLineDraft draft : drafts) {
       if (draft.kind() != null && draft.kind().isSystemOwned()) {
@@ -397,9 +407,9 @@ public class Order extends StoreScopedEntity {
     this.courseName = command.courseName();
     this.courseMinutes = command.courseMinutes();
     this.extensionMinutes = command.extensionMinutes();
-    replaceStoreFeeLines(command.feeLines());
-    // 訂正後の請求が利用ポイントを下回ると合計が負になる。完了は usePoints <= chargeAmount で同じ
-    // 不変条件を守っており、門は利用の行を動かせない以上、下回った差を吸収する先が無い。
+    swapStoreFeeLines(command.feeLines());
+    // 総和が 0 以上という不変量は他の経路と同じだが、門は利用の行を動かせないため、下回った差を
+    // 吸収する先が無いことまで伝える固有の文言を持つ（一般の差し替えは割引・調整を直せばよい）。
     // 撥ねた訂正の巻き戻しはトランザクションが担う（この時点で明細は既に差し替わっている）。
     if (totalFee < 0) {
       throw new InvalidOrderFeeLineException("訂正後の請求額が利用ポイントを下回ります。ポイント利用の訂正はポイント機構で行ってください");

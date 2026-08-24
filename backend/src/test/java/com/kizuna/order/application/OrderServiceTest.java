@@ -43,6 +43,7 @@ import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
+import com.kizuna.order.domain.InvalidOrderFeeLineException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -69,6 +70,7 @@ import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -106,6 +108,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -1955,11 +1958,24 @@ class OrderServiceTest {
   private static final long MEMBER_ID = 100L;
   private static final long ACTOR_ID = 7L;
 
+  /** 完了の対象になる受注が現に持つ版。要求はこれと同じ値を載せて初めて通る。 */
+  private static final long CURRENT_VERSION = 4L;
+
   /** 完了の対象になる確定済みの受注（顧客つき）。 */
   private static Order confirmedOrderWithCustomer() {
     Order order =
         Order.builder().status(OrderStatus.CONFIRMED).customerId("cust-1").castId("cast-1").build();
     order.setStoreId(STORE_ID);
+    return atCurrentVersion(order);
+  }
+
+  /**
+   * 受注に現物らしい版を持たせる。版は JPA が管理し設定子を持たないので反射で写す。
+   *
+   * <p>null のままにすると完了の門の照合が null 同士の一致で素通りし、門が居ないことに気付けない。
+   */
+  private static Order atCurrentVersion(Order order) {
+    ReflectionTestUtils.setField(order, "version", CURRENT_VERSION);
     return order;
   }
 
@@ -1990,13 +2006,24 @@ class OrderServiceTest {
     when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
   }
 
-  /** 会計の内訳。合計が {@code totalFee} になる加算 1 行だけを持つ（内訳の形そのものは集約の試験が受け持つ）。 */
+  /**
+   * 会計の内訳。合計が {@code totalFee} になる加算 1 行だけを持つ（内訳の形そのものは集約の試験が受け持つ）。
+   *
+   * <p>版は対象の受注が現に持つ値を載せる。ここを省くと null 同士の一致で照合が素通りし、版の門が居ないことに気付けない。
+   */
   private static OrderCompletionRequest completion(Integer totalFee, Integer usePoints) {
+    return completionAt(CURRENT_VERSION, totalFee, usePoints);
+  }
+
+  /** 版を明示した完了要求。陳腐化した要求の拒否を見るテストだけが直に使う。 */
+  private static OrderCompletionRequest completionAt(
+      Long expectedVersion, Integer totalFee, Integer usePoints) {
     OrderFeeLineRequest line = new OrderFeeLineRequest();
     line.setKind(OrderFeeLineKind.SURCHARGE);
     line.setName("会計");
     line.setAmount(totalFee);
     OrderCompletionRequest request = new OrderCompletionRequest();
+    request.setExpectedVersion(expectedVersion);
     request.setFeeLines(List.of(line));
     request.setUsePoints(usePoints);
     return request;
@@ -2098,8 +2125,68 @@ class OrderServiceTest {
   }
 
   @Test
+  void completeRejectsAnExpectedVersionThatNoLongerMatches() {
+    // 完了は終端化で、書いた後の救済は訂正の門しか無い。開いたまま別の操作者が直していると、
+    // 会計の場が見ていない姿のまま凍る
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+
+    assertThatThrownBy(
+            () ->
+                service.complete(
+                    "o1", completionAt(CURRENT_VERSION - 1, 12000, null), "staff@kizuna.test"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(order.getFeeLines()).as("撥ねた要求は内訳を当てないこと").isEmpty();
+    verifyNoInteractions(pointLedgerService);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void completeAcceptsTheExpectedVersionTheOrderCurrentlyCarries() {
+    // 上の拒否が「版の食い違い」由来であることの正向対照（版だけを現物へ揃えた同じ要求）
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubWriteBackResponse();
+
+    service.complete("o1", completionAt(CURRENT_VERSION, 12000, null), "staff@kizuna.test");
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getTotalFee()).isEqualTo(12000);
+  }
+
+  @Test
+  void completeRejectsANegativeBreakdownBeforeThePointCap() {
+    // 負の総和はこれまで利用ポイントの上限判定が偶然拒んでいた（利用は常に 0 以上なので負との比較が
+    // 常に真になる）。不変量が先に、正しい文言で撥ねる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+
+    // 入力の金額は正値で送る（引くことは種別が表す）。総和は 12000 - 13000 で負になる
+    OrderFeeLineRequest discount = new OrderFeeLineRequest();
+    discount.setKind(OrderFeeLineKind.DISCOUNT);
+    discount.setName("割引");
+    discount.setAmount(13000);
+    OrderCompletionRequest request = completion(12000, 100);
+    request.setFeeLines(List.of(request.getFeeLines().get(0), discount));
+
+    assertThatThrownBy(() -> service.complete("o1", request, "staff@kizuna.test"))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("内訳の総和が負になっています。割引・調整の金額を見直してください")
+        .hasMessageNotContaining("利用ポイントは会計金額を超えられません");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    // 会員の解決より手前で落ちる（上限判定も非会員判定もこの要求には届かない）
+    verifyNoInteractions(pointLedgerService, customerMemberLinkRepository);
+    verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
   void completeOfANonMemberOrderGrantsNothing() {
-    Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
+    Order order =
+        atCurrentVersion(Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build());
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubReceiptTokenIssuance();
@@ -2179,6 +2266,7 @@ class OrderServiceTest {
             .requesterMemberId(MEMBER_ID)
             .requesterMemberCode("123456789012")
             .build();
+    atCurrentVersion(order);
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubReceiptTokenIssuance();
@@ -2242,7 +2330,8 @@ class OrderServiceTest {
   @Test
   void completeFreezesThePlannedPointsAtTheCompletionTimeRule() {
     // 申領時点の設定を読むと、同じ会計が申領の早い遅いで別のポイントになる
-    Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
+    Order order =
+        atCurrentVersion(Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build());
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     when(pointLedgerService.previewGrant(12000)).thenReturn(120);
@@ -2257,7 +2346,8 @@ class OrderServiceTest {
   @Test
   void completeOfAZeroFeeOrderStillIssuesAReceiptToken() {
     // 付与が 0 でも来店の事実は取り戻せなければならない（申領の効果は来店の可視化に閉じる）
-    Order order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build();
+    Order order =
+        atCurrentVersion(Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build());
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     when(pointLedgerService.previewGrant(0)).thenReturn(0);
