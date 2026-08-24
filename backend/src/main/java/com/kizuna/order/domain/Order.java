@@ -398,6 +398,12 @@ public class Order extends StoreScopedEntity {
     this.courseMinutes = command.courseMinutes();
     this.extensionMinutes = command.extensionMinutes();
     replaceStoreFeeLines(command.feeLines());
+    // 訂正後の請求が利用ポイントを下回ると合計が負になる。完了は usePoints <= chargeAmount で同じ
+    // 不変条件を守っており、門は利用の行を動かせない以上、下回った差を吸収する先が無い。
+    // 撥ねた訂正の巻き戻しはトランザクションが担う（この時点で明細は既に差し替わっている）。
+    if (totalFee < 0) {
+      throw new InvalidOrderFeeLineException("訂正後の請求額が利用ポイントを下回ります。ポイント利用の訂正はポイント機構で行ってください");
+    }
   }
 
   /**

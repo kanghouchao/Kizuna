@@ -60,32 +60,15 @@ interface CorrectionOutcomeState {
 }
 
 /**
- * 訂正の結果。門はポイントを動かさないので、動かなかったことと差額を示して手当ての行き先へ送る。
+ * 訂正の結果。動いたのは会計金額だけであることを示し、付与が動かないことを名乗る。
  *
- * 差額を出すのは会計金額が変わった帰属済みの受注だけである。帰属していない受注の付与 0pt は
- * 「少なく付いた付与」ではなく「付与が存在しない」で、宛先の無い手動調整へ誘う。金額が変わっていない
- * 訂正で差が出るのは完了後に付与設定が変わった場合だけで、それは本訂正の帰結ではない。
- *
- * 手当ての宛先は<b>帰属記録が持つ会員</b>であって、顧客に今紐づく会員ではない（ADR 0012）。両者は
- * 関連の解除・張り替え・伝票の申領で食い違うので、会員コードを名指してから顧客詳細へ送る。
- *
- * 差額そのものを画面で計算しない。付与規則の正本はサーバ側にあり、こちらで計算すると設定変更の
- * たびに提示と実際の手当て額が食い違う。
+ * 付与の差額も手当ての導線も出さない。手当ては別機構（手動調整）が担い、その調整は受注にも帰属記録にも
+ * 結び付かないため、門は「前回の助言が実行されたか」を知れない — 可執行の額として出すと、二度目の訂正が
+ * 一度目の手当てを勘定に入れないまま次の額を勧める。名乗るのは「どの会員の台帳を見ればよいか」までとし、
+ * 要否と額の判断は台帳側の画面に委ねる。
  */
-function CorrectionOutcome({
-  outcome,
-  customerId,
-  storeId,
-}: {
-  outcome: CorrectionOutcomeState;
-  customerId: string | undefined;
-  storeId: string;
-}) {
+function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
   const { result, memberCode } = outcome;
-  const difference = result.grant_difference ?? 0;
-  // 金額が変わっていなければ付与の基準も変わっていない。それでも差が出るのは完了後に付与設定が
-  // 変わった場合で、本訂正の帰結ではない差を手当ての要ありとして見せない
-  const feeChanged = result.previous_total_fee !== result.total_fee;
   return (
     <div className="bg-card space-y-3 rounded-xl border p-4">
       <h2 className="text-foreground text-sm font-medium">訂正しました</h2>
@@ -98,39 +81,11 @@ function CorrectionOutcome({
           この受注は会員に帰属していないため、訂正で動くポイントはありません。伝票の申領が後から
           起きた場合、付与されるのは完了時点の会計に基づく額です。
         </p>
-      ) : !feeChanged || difference === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          会計金額が変わっていないため、付与への影響はありません（この受注の付与{' '}
-          {result.granted_points ?? 0}pt）。
-        </p>
       ) : (
-        <div className="space-y-2">
-          <p className="text-foreground text-sm">
-            この受注の付与 {result.granted_points ?? 0}pt に対し、訂正後の内容なら{' '}
-            {result.recomputed_grant_points ?? 0}pt（差 {difference > 0 ? '+' : ''}
-            {difference}pt）。
-          </p>
-          {/* 自動追随させない理由と、手当ての宛先の会員をここで名乗る。黙って差額だけ出すと
-              「反映漏れ」に見え、宛先を伏せると顧客に今紐づく別人を調整しうる */}
-          <p className="text-muted-foreground text-sm">
-            付与は完了時点の合計に基づく事実なので、訂正では自動で動きません。差額の手当ては、この受注が
-            帰属した会員（会員コード {memberCode}）へのポイント手動調整で行ってください。
-          </p>
-          {/* 顧客詳細の調整口が届くのは顧客に今紐づく会員なので、上の会員コードと一致するかを
-              開いた先で確かめること。台帳に着いていない受注ではその導線自体が無い */}
-          {customerId !== undefined && (
-            <Button
-              variant="outline"
-              size="sm"
-              render={
-                <Link href={storePath(storeId, `/customers/${customerId}/edit`)} target="_blank" />
-              }
-            >
-              顧客詳細でポイントを調整する
-              <ExternalLinkIcon aria-hidden="true" />
-            </Button>
-          )}
-        </div>
+        <p className="text-muted-foreground text-sm">
+          付与は完了時点の合計に基づく事実なので、この訂正では動きません。この受注は会員コード{' '}
+          {memberCode} へ帰属しています。手当ての要否は会員ポイントの台帳で確かめてください。
+        </p>
       )}
     </div>
   );
@@ -252,9 +207,7 @@ export default function OrderCorrectionPage() {
         />
       )}
 
-      {outcome !== null && (
-        <CorrectionOutcome outcome={outcome} customerId={current?.customer_id} storeId={storeId} />
-      )}
+      {outcome !== null && <CorrectionOutcome outcome={outcome} />}
 
       {/* 完了していない受注はサーバが撥ねる。欄を出してから 400 を返すより、開いた時点で理由を名乗る */}
       {seeded && !completed && (
