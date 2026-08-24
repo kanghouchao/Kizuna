@@ -539,13 +539,13 @@ class OrderControllerTest {
   void correctionIsReachableWithOrderCorrect() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderCorrectionService.correct(any(), any(), any()))
-        .thenReturn(new OrderCorrectionResponse(12000, 15000, 120, 150, 30));
+        .thenReturn(new OrderCorrectionResponse(12000, 15000));
 
     mockMvc
         .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.previous_total_fee").value(12000))
-        .andExpect(jsonPath("$.grant_difference").value(30));
+        .andExpect(jsonPath("$.total_fee").value(15000));
   }
 
   @Test
@@ -580,7 +580,7 @@ class OrderControllerTest {
 
     // 正向対照: 凍結字段を外した同じ本文は通る（400 が「内訳が空だから」でない証明）
     when(orderCorrectionService.correct(any(), any(), any()))
-        .thenReturn(new OrderCorrectionResponse(12000, 0, 120, 0, -120));
+        .thenReturn(new OrderCorrectionResponse(12000, 0));
     mockMvc
         .perform(
             storePost(

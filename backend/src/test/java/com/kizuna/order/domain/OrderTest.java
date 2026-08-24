@@ -467,6 +467,25 @@ class OrderTest {
     assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
   }
 
+  @Test
+  @DisplayName("利用ポイントを下回る訂正は撥ねられること")
+  void correct_cannotPushTheChargeBelowTheRetainedRedemption() {
+    // 完了は usePoints <= chargeAmount で同じ不変条件を守る。門は利用の行を動かせないので、
+    // 下回った差を吸収する先が無く、通すと負の請求額が恒久的に残る
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "会計", 1000)));
+    order.completeWith(800, 0);
+    assertThat(order.getTotalFee()).as("前提: 控除後の請求額が 200 であること").isEqualTo(200);
+
+    assertThatThrownBy(
+            () -> order.correct(command(List.of(draft(OrderFeeLineKind.SURCHARGE, "会計", 500)))))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+
+    // 同額までは通る（全額のポイント払いは完了でも通る形）
+    order.correct(command(List.of(draft(OrderFeeLineKind.SURCHARGE, "会計", 800))));
+    assertThat(order.getTotalFee()).isZero();
+  }
+
   private OrderCorrectionCommand command(List<OrderFeeLineDraft> feeLines) {
     return new OrderCorrectionCommand(null, null, null, null, null, feeLines);
   }

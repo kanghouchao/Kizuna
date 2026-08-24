@@ -342,19 +342,14 @@ export interface OrderCorrectionRequest {
 }
 
 /**
- * 完了後訂正の結果。門はポイントを一切動かさないので、動かなかったことと差額が返る。
+ * 完了後訂正の結果。門はポイントを動かさないので、動いたのは会計金額だけであることを前後の額で示す。
  *
- * grant_difference が 0 でなければ手当てが要る — 差額は会員ポイントの手動調整（誤帰属なら帰属の訂正）で行う。
- * Java 側が wrapper 型のため理屈上は可空だが、実際は 5 項目とも常に値が入る。
+ * 付与の差額は返らない。手当ては別機構（手動調整）が担い、その調整は受注にも帰属記録にも結び付かないため、
+ * 門は「前回の助言が実行されたか」を知れない。要否と額の判断は台帳側の画面に委ねる。
  */
 export interface OrderCorrectionResult {
   previous_total_fee?: number;
   total_fee?: number;
-  /** 完了時に実際に付与したポイント。訂正では動かない時点事実。 */
-  granted_points?: number;
-  /** 訂正後の内容で完了していれば付与されたであろうポイント。 */
-  recomputed_grant_points?: number;
-  grant_difference?: number;
 }
 
 export interface OrderReceptionist {
