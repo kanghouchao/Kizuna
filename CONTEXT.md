@@ -33,11 +33,12 @@ _Avoid_: Token の裸使用（token は担体、session は概念）
 PlatformUser の授権を表す店舗集合（ALL_STORES または SPECIFIC_STORES の店舗 ID 集合）。読みは Hibernate の第二 filter（`storeSetFilter`）が機構的に濾過する fail-closed 設計（解決不能なら例外）。書きは明示的単一 storeId を受け取り、その storeId が授権集合に含まれるか検証したうえで既存の単店機構（StoreContext + storeFilter）へ委譲する。
 _Avoid_: 読み・書きを同一機構と混同すること（読みは集合フィルタ、書きは単一 storeId 検証で別経路）
 
-スタッフ管理（`/platform/staff`、HQ_ADMIN 限定）で PlatformUser のロール×店舗集合を付与・変更できる（#325）。対象は HQ_ADMIN/STORE_MANAGER/STORE_STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う。停止（enabled=false）だけが唯一の例外で即時失効する。ロール・店舗集合の変更は従来どおり次回ログイン反映。
+スタッフ管理の行使面は三面に分かれる（#762）— **管理者管理**（平台コンソール。HQ 側ロール保持者のアカウントのみを扱う）、**店長設定**（店舗管理内の一節。店長の任命・解任。一店 0..n 人）、**店舗スタッフ管理**（店舗コンソール。店舗側ロールのみのアカウントを扱い、HQ と店長が同一画面を使う）。対象は HQ_ADMIN/STORE_MANAGER/STORE_STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う。停止（enabled=false）だけが唯一の例外で即時失効する。ロール・店舗集合の変更は従来どおり次回ログイン反映。
 
 **Role（ロール）/ Permission（権限）**:
 授権モデルは伝統的な RBAC。**Permission** は機能権限の目録行で、コード定義（`PermissionCode` enum）を `t_permissions` へ播種したものが正本であり書き込み API を持たない。**Role** は権限の束（`t_roles` + `t_role_permissions`）で、平台既定ロール（`is_system=true`、播種の 3 件）は改廃を拒否し、利用者は `/platform/roles` から自作ロールを自由に追加・改廃できる。**ロールは店舗を持たない** — 担当店舗集合は PlatformUser 側（StoreScope）に付く。SecurityContext 上の authority は所持権限を `PERM_` 接頭辞で発行したもので、ロール名は authority に現れない（Spring Security の `ROLE_CAST` / `ROLE_MEMBER` は本人種別の標識であり別物）。
-_Avoid_: 能力束・Capability（旧称）、ロールへの店舗の紐付け
+権限の運用は三層（#762 / ADR 0020）— ロール定義と HQ 側授与（管理者の管理・店長の任命）は **Owner 層**（ROLE_MANAGE）、店舗スタッフのアカウント管理と店舗側ロールの付与は店長へ委譲できる**委譲層**（STAFF_MANAGE）、委譲には**防提権の守衛**（店舗側ロール限定・店舗部分集合・アカウント級境界）が付く。**店舗側ロール**とは構成権限がすべて Console.STORE / SHARED のロールを言い、1 つでも PLATFORM 権限を含めば HQ 側ロール。**店長は店長を作れない** — 委譲権限（STAFF_MANAGE）を含むロールは STORE_MANAGER を含めて委譲付与の対象外（再委譲の禁止。判定は役職名でなく権限構成）で、任命・解任は Owner 層専属。Owner は「人」（アカウント属性）ではなく「有効な ROLE_MANAGE 実効保持者を 0 にしない」守衛で表す。
+_Avoid_: 能力束・Capability（旧称）、ロールへの店舗の紐付け、店長による店長任命、Owner のアカウント属性化（is_owner）
 
 **店舗コンテキスト（Store Context）**:
 フロントエンドの「現在店舗・授権店舗・店舗切替・店舗リンク生成・ログイン後着地の授権店舗解決」を一手に担う seam（`entities/user` の StoreContextProvider / useStoreContext）。provider は platform / store 両コンソールの layout に搭載され、`me()` + `stores()` は provider で 1 回のみ取得する。店舗パス組立の知識は `shared/lib/store-route`（storePath / storeEntryPath / resolveStoreHref / replaceStoreIdInPath）へ集約し、各所での裸テンプレート字面を禁じる。店舗コンソールへの着地は入口ルート `/store/entry`（`_pages/store-entry`）一箇所に集約する。入口は UI を持たず、授権店舗（前回選択 cookie を優先、無ければ先頭）とメニュー由来の遷移先を解決して差し替え遷移する。着地先をメニューから引くのは、権限を絞ったロールでも必ず自分が到達できる画面に着かせるためで、固定の着地先は権限次第で拒否される。
