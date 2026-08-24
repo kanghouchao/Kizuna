@@ -359,6 +359,46 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[0][1].use_points).toBeUndefined();
   });
 
+  it('内訳を播いた詳細そのものの版を完了と一緒に送る', async () => {
+    // 送る内訳と名指す版は同じ瞬間の姿でなければならない。別々に採ると、照合が通ったのに
+    // 古い内訳で凍らせる完了が成立する
+    mockedGet.mockResolvedValue({
+      ...confirmedOrder,
+      version: 7,
+      fee_lines: [{ kind: 'OPTION', name: '指名', amount: 12000, system_owned: false }],
+    });
+    renderModal();
+
+    await screen.findByLabelText('明細1の名称');
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
+    expect(mockedComplete.mock.calls[0][1].expected_version).toBe(7);
+  });
+
+  it('版の食い違いはサーバの文言をそのまま出す', async () => {
+    // 409 も他の失敗と同じ経路で見せる。汎用文言に潰すと、読み直しが要ることが伝わらない
+    mockedComplete.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          error: 'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください',
+        },
+      },
+    });
+    const onCompleted = jest.fn();
+    renderModal(onCompleted);
+
+    await completeWith('8000');
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください'
+      )
+    );
+    expect(onCompleted).not.toHaveBeenCalled();
+  });
+
   it('完了に失敗したら、対処方法を含むサーバの文言をそのまま出す', async () => {
     // 残高不足・単位違反は行動できる文言で返ってくる。汎用文言に潰さない
     mockedComplete.mockRejectedValue({

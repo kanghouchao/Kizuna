@@ -133,9 +133,37 @@ class OrderTest {
         .isInstanceOf(InvalidOrderFeeLineException.class);
     assertThat(order.getFeeLines()).as("撥ねた差し替えは内訳を動かさないこと").isEmpty();
 
-    // 手動調整だけが符号を縛られない（合計を機械和から外す唯一の口）
-    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.MANUAL_ADJUST, "調整", -1200)));
-    assertThat(order.getTotalFee()).isEqualTo(-1200);
+    // 手動調整だけが符号を縛られない（合計を機械和から外す唯一の口）。総和は 0 以上でなければ
+    // ならないので、減算の行は加算の行と組でしか置けない
+    order.replaceStoreFeeLines(
+        List.of(
+            draft(OrderFeeLineKind.SURCHARGE, "指名料", 5000),
+            draft(OrderFeeLineKind.MANUAL_ADJUST, "調整", -1200)));
+    assertThat(order.getTotalFee()).isEqualTo(3800);
+  }
+
+  @Test
+  @DisplayName("総和が負になる差し替えは撥ねられること")
+  void replaceStoreFeeLines_rejectsANegativeTotal() {
+    // 行は負を取れるが総和は取れない。過剰割引・返戻は受注金額の内側に表現を持たない
+    // （撥ねた差し替えの巻き戻しはトランザクションが担うので、手元の姿は既に差し替わっている）
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+
+    assertThatThrownBy(
+            () ->
+                order.replaceStoreFeeLines(
+                    List.of(
+                        draft(OrderFeeLineKind.SURCHARGE, "指名料", 3000),
+                        draft(OrderFeeLineKind.DISCOUNT, "割引", -3001))))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("内訳の総和が負になっています。割引・調整の金額を見直してください");
+
+    // 境界: 総和 0 の差し替えは通る（全額割引の会計は正当）
+    order.replaceStoreFeeLines(
+        List.of(
+            draft(OrderFeeLineKind.SURCHARGE, "指名料", 3000),
+            draft(OrderFeeLineKind.DISCOUNT, "割引", -3000)));
+    assertThat(order.getTotalFee()).isZero();
   }
 
   @Test

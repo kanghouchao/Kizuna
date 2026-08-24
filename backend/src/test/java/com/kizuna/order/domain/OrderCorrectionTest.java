@@ -73,6 +73,27 @@ class OrderCorrectionTest {
   }
 
   @Test
+  @DisplayName("合計が負になる訂正は門の固有の文言で撥ねられること")
+  void correct_rejectsATotalBelowTheRedeemedPoints() {
+    // 総和 0 以上は全経路共通の不変量だが、門は利用の行を動かせないため差を吸収する先が無い。
+    // 一般の差し替えの文言（割引・調整を見直せ）では、門の中で何をすべきかが伝わらない
+    Order order = completedOrder();
+
+    assertThatThrownBy(
+            () ->
+                order.correct(
+                    new OrderCorrectionCommand(
+                        null,
+                        null,
+                        "60 分コース",
+                        60,
+                        null,
+                        List.of(new OrderFeeLineDraft(OrderFeeLineKind.BASE_COURSE, null, 499)))))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("訂正後の請求額が利用ポイントを下回ります。ポイント利用の訂正はポイント機構で行ってください");
+  }
+
+  @Test
   @DisplayName("理由と実行者を欠く快照は撥ねられること")
   void snapshotOf_requiresAReasonAndAnActor() {
     Order before = completedOrder();

@@ -331,7 +331,9 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
 
   private String complete(String orderId, Integer usePoints) {
     String body =
-        "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+        "{\"expected_version\":"
+            + orderVersion(storeHeaders(STORE_A), orderId)
+            + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
             + COMPLETED_FEE
             + "}]"
             + (usePoints == null ? "" : ", \"use_points\": " + usePoints)

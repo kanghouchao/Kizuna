@@ -9,6 +9,7 @@ import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRe
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -57,6 +58,19 @@ public abstract class CrossStoreTestSupport {
       managerToken = login("tanaka.hanako@kizuna.test");
     }
     return headersFor(storeId, managerToken);
+  }
+
+  /**
+   * 受注が現に持つ版。完了・訂正の要求はこれを載せて初めて通る（版が食い違えば 409）。
+   *
+   * <p>作成直後の版を定数で書かず読み直すのは、間に更新を挟むテストでも同じ助手で済ませるため。
+   */
+  protected long orderVersion(HttpHeaders headers, String orderId) {
+    return rest.exchange(
+            "/store/orders/" + orderId, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class)
+        .getBody()
+        .path("version")
+        .asLong();
   }
 
   /** 種子ユーザーとして平台ログインする。実行者の身分そのものが主題のテストが使う（HQ 管理者など）。 */

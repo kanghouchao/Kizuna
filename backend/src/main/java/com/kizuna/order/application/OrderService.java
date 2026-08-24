@@ -44,6 +44,7 @@ import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -596,6 +597,11 @@ public class OrderService {
     // 巻き戻しだけに掛かる（同一トランザクション内の後続の読みには積んだ仕訳が見えてしまう）。
     if (order.getStatus() != OrderStatus.CONFIRMED) {
       throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
+    }
+    // 版の照合は何も触る前に行う。完了は終端化なので、開いたまま別の操作者が内容を直していると
+    // 会計の場が見ていない姿のまま凍り、救済は訂正の門しか残らない。
+    if (!Objects.equals(order.getVersion(), request.getExpectedVersion())) {
+      throw new ConflictException("この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
     }
 
     // 会計の場で確定した内訳を先に当てる。合計は行の総和として集約が導出するので、以降の判定はすべて

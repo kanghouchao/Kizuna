@@ -135,6 +135,27 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("総和が負になる差し替えが 400 で撥ねられ、DB も負の合計を受け付けないこと")
+  void aNegativeTotalIsRefusedByTheAggregateAndByTheDatabase() {
+    String orderId = createOrder("\"fee_lines\": []");
+
+    ResponseEntity<JsonNode> negativeTotal =
+        update(
+            orderId,
+            "\"fee_lines\": [{\"kind\": \"SURCHARGE\", \"name\": \"指名料\", \"amount\": 1000},"
+                + " {\"kind\": \"DISCOUNT\", \"name\": \"割引\", \"amount\": 2000}]");
+    assertThat(negativeTotal.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(negativeTotal.getBody().path("error").asString()).contains("内訳の総和が負になっています");
+    assertThat(storedLineCount(orderId)).as("撥ねた差し替えは行を残さないこと").isZero();
+
+    // 二重の守り: 集約を迂回した書き込みも DB が塞ぐ。0 が通ることが「何でも撥ねている」ではない証明
+    assertThatThrownBy(() -> setTotalFee(orderId, -1))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    setTotalFee(orderId, 0);
+    assertThat(storedTotalFee(orderId)).isZero();
+  }
+
+  @Test
   @DisplayName("完了が会計の場で送られた内訳を当て、合計を取り直すこと")
   void completionAppliesTheBreakdownSentAtCheckout() {
     // ポイント利用の行が台帳の減算仕訳と対で書かれることは OrderCompletionIT が固定する（残高が要る）
@@ -191,7 +212,9 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> complete(String orderId, Integer usePoints) {
     String body =
-        "{\"fee_lines\": [{\"kind\": \"SURCHARGE\", \"name\": \"会計\", \"amount\": 12000}]"
+        "{\"expected_version\": "
+            + orderVersion(storeHeaders(STORE_A), orderId)
+            + ", \"fee_lines\": [{\"kind\": \"SURCHARGE\", \"name\": \"会計\", \"amount\": 12000}]"
             + (usePoints == null ? "" : ", \"use_points\": " + usePoints)
             + "}";
     return rest.postForEntity(
@@ -231,6 +254,10 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
         kind,
         name,
         amount);
+  }
+
+  private void setTotalFee(String orderId, int totalFee) {
+    jdbcTemplate.update("update t_orders set total_fee = ? where id = ?", totalFee, orderId);
   }
 
   private int storedTotalFee(String orderId) {

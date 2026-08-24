@@ -575,7 +575,9 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
             new HttpEntity<>(
-                "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":3000}]}",
+                "{\"expected_version\":"
+                    + orderVersion(storeHeaders(STORE_A), orderId)
+                    + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":3000}]}",
                 storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(completed.getStatusCode()).as("前提: 受注を完了できること").isEqualTo(HttpStatus.OK);

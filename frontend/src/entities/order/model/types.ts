@@ -498,6 +498,13 @@ export interface OrderApplicationDeclineRequest {
  * ポイント利用は任意だが、送るなら 1 以上（Java 側が @Min(1)）。利用しない完了では項目ごと省略する — 0 は撥ねられる。
  */
 export interface OrderCompletionRequest {
+  /**
+   * 画面が読み込んだ時点の受注のバージョン（詳細の読み口が返す version）。
+   *
+   * 完了は終端化で、書いた後の救済は訂正の門しか無い。開いたまま別の操作者が内容を直していれば、
+   * サーバが現物の版と突き合わせて 409 で差し戻す。
+   */
+  expected_version?: number;
   /** 適用されたコース名の写し。会計の場が快照の最後の更新機会になる。 */
   course_name?: string;
   fee_lines: OrderFeeLineInput[];

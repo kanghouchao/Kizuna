@@ -245,6 +245,12 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: SET NULL
+        # 行は負を取れるが総和は取れない。集約が差し替えのたびに同じ判定をするので、ここへ届く違反は
+        # 集約を迂回した書き込みだけであり、業務例外へは写像しない（実装欠陥として大きく失敗する）。
+        - sql:
+            sql: >-
+              ALTER TABLE t_orders
+              ADD CONSTRAINT ck_t_orders_total_fee_non_negative CHECK (total_fee >= 0)
         - createIndex:
             indexName: idx_t_orders_date
             tableName: t_orders

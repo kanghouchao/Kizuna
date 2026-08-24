@@ -602,7 +602,9 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
         "/store/orders/" + orderId + "/completion",
         HttpMethod.POST,
         new HttpEntity<>(
-            "{\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}",
+            "{\"expected_version\":"
+                + orderVersion(storeHeaders(STORE_A), orderId)
+                + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}",
             storeHeaders(STORE_A)),
         JsonNode.class);
   }
