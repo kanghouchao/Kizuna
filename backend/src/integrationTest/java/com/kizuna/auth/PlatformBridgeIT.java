@@ -321,6 +321,23 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("HQ は store_bridge=true で店舗コンソール入口を得つつ、着地は平台コンソールのままであること")
+  void hqHoldsStoreBridgeWhileLandingOnPlatformConsole() {
+    ResponseEntity<JsonNode> me =
+        rest.exchange(
+            "/platform/me",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(platformToken(HQ_EMAIL))),
+            JsonNode.class);
+
+    assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // HQ 束の STAFF_MANAGE は Console.STORE なので店舗文脈を確立できる（ADR 0020）。
+    assertThat(me.getBody().path("store_bridge").asBoolean()).isTrue();
+    // 着地は PLATFORM 権限が優先されるため従来どおり平台コンソール。
+    assertThat(me.getBody().path("console").asString()).isEqualTo("platform");
+  }
+
+  @Test
   @DisplayName("HQ の統合メニュー GET /platform/menus/me は中央項目のみを返し、店舗項目は一切現れないこと（強断言）")
   void hqSeesOnlyPlatformMenusViaUnifiedEndpoint() {
     ResponseEntity<String> res =
@@ -331,7 +348,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    // HQ管理者束は中央 5 能力 + SHARED 2 のみで STORE_MENU_VIEW を持たないため、店舗グループは fail-closed で剔除される。
+    // HQ管理者束は STORE_MENU_VIEW を持たないため、店舗グループは fail-closed で剔除される。
     assertThat(res.getBody()).as("中央操作項目が可視であること").contains("店舗一覧", "スタッフ管理", "ロール管理", "システム設定");
     assertThat(res.getBody())
         .as("店舗コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")

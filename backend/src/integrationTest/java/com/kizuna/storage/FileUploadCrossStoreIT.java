@@ -23,13 +23,12 @@ import tools.jackson.databind.JsonNode;
  * 平台トークンによる {@code POST /files} のプラットフォーム保存判定を本物の PostgreSQL/Redis/MinIO で固定する統合テスト。
  *
  * <p>{@code /files/**} も含め全リクエストが単一 issuer（PlatformAuth）の decoder 検証を通るため、平台トークンで
- * 認証が通る。プラットフォーム領域（platform prefix）への保存は HQ 管理者（role claim = HQ_ADMIN）のみに限定し、それ以外のロール・ 店舗詐称ヘッダは
+ * 認証が通る。プラットフォーム共有領域（platform prefix）への保存は {@code PLATFORM_ASSET_MANAGE} の保持者のみに限定し、 非保持者は
  * fail-closed で 403 拒否する。
  *
- * <p>HQ トークンに {@code X-Role:store} + {@code X-Store-ID} を付けても、{@code StoreIdInterceptor} の
- * STORE_BRIDGE_ROLES が HQ_ADMIN を含まないため店舗文脈は確立できず 403 で拒否される（負向）。詐称ヘッダ無しの HQ アップロードは platform 領域へ
- * 200 で保存される（正向対照）。HQ 以外の平台トークン（店舗スタッフ）は詐称ヘッダ無しでも プラットフォーム保存を拒否される（follow-up:
- * 低権限身分のプラットフォーム共有領域書き込み封鎖）。
+ * <p>保存先は店舗文脈の有無が決める。HQ トークンに {@code X-Role:store} + {@code X-Store-ID} を付けると店舗文脈が
+ * 確立するため、保存先はその店舗配下になりプラットフォーム共有領域へは入らない（負向）。ヘッダ無しの HQ アップロードは platform 領域へ 201 で保存される（正向対照）。HQ
+ * 以外の平台トークン（店舗スタッフ）はヘッダ無しでも プラットフォーム保存を拒否される。
  *
  * <p>プラットフォームログイン前提を廃し、ベースラインの平台シード（seed/04-platform-admin.yaml と seed/05-demo.yaml）でログインする。
  */
@@ -77,17 +76,21 @@ class FileUploadCrossStoreIT {
   }
 
   @Test
-  @DisplayName("HQ トークン + X-Role:store + X-Store-ID の POST /files は 403 で拒否されること（過橋の店舗ロール制限）")
-  void hqTokenWithSpoofedStoreHeaderIsForbidden() {
+  @DisplayName("HQ トークン + X-Role:store + X-Store-ID の POST /files は店舗配下へ保存されプラットフォーム領域には入らないこと")
+  void hqTokenWithStoreHeaderUploadsUnderThatStore() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin(HQ_EMAIL));
     headers.set("X-Role", "store");
     headers.set("X-Store-ID", "1");
 
-    ResponseEntity<String> res =
-        rest.exchange("/files", HttpMethod.POST, uploadRequest(headers), String.class);
+    ResponseEntity<JsonNode> res =
+        rest.exchange("/files", HttpMethod.POST, uploadRequest(headers), JsonNode.class);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(res.getBody().path("url").asString())
+        .as("店舗文脈が保存先を決め、プラットフォーム共有領域へは入らないこと")
+        .contains("/1/")
+        .doesNotContain("/platform/");
   }
 
   @Test
@@ -103,7 +106,7 @@ class FileUploadCrossStoreIT {
   }
 
   @Test
-  @DisplayName("HQ トークン（詐称ヘッダ無し）の POST /files は platform 領域へ 201 で保存されること")
+  @DisplayName("HQ トークン（店舗ヘッダ無し）の POST /files は platform 領域へ 201 で保存されること")
   void hqTokenWithoutSpoofUploadsToPlatform() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(platformLogin(HQ_EMAIL));

@@ -115,7 +115,7 @@ describe('店舗コンソール入口', () => {
   });
 
   it('店舗コンソール資格が無い利用者はログアウトさせず平台へ返す', async () => {
-    // HQ 管理者は store_bridge=false かつ授権店舗が空なのが正常。
+    // PLATFORM 権限と跨店参照だけのロールは store_bridge=false かつ授権店舗が空なのが正常。
     // ここでセッションを捨てると正当な利用者を追い出すログアウト事故になる。
     mockedUseStoreContext.mockReturnValue(storeContext({ stores: [], storeBridge: false }));
 

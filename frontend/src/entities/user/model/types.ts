@@ -18,6 +18,7 @@ export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
 // ワイヤ上は接頭辞なしの素の enum 名で、PERM_ 形式は JWT の authorities 内部だけに存在する。
 export type PlatformPermission =
   | 'STORE_MANAGE'
+  | 'ROLE_MANAGE'
   | 'STAFF_MANAGE'
   | 'SYSTEM_CONFIG_MANAGE'
   | 'PLATFORM_MENU_VIEW'

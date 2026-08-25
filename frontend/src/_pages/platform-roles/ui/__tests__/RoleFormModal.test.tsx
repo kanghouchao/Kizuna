@@ -42,7 +42,7 @@ describe('ロール編集モーダル', () => {
     mockedRoleApi.permissions.mockResolvedValue([
       { code: 'ORDER_MANAGE', console: 'STORE' },
       { code: 'CUSTOMER_MANAGE', console: 'STORE' },
-      { code: 'STAFF_MANAGE', console: 'PLATFORM' },
+      { code: 'ROLE_MANAGE', console: 'PLATFORM' },
     ]);
     mockedRoleApi.get.mockResolvedValue(role());
     mockedRoleApi.update.mockResolvedValue({} as never);
@@ -229,7 +229,7 @@ describe('ロール編集モーダル', () => {
     expect(submitButton).toBeEnabled();
     // handleSubmit は登録済みの ref を焦点にする。組の先頭まで ref が届いていないと、
     // 他の症状を出さずに焦点移動だけが失われる
-    expect(document.activeElement).toBe(screen.getByLabelText('STAFF_MANAGE'));
+    expect(document.activeElement).toBe(screen.getByLabelText('ROLE_MANAGE'));
   });
 
   it('ロール名が空なら欄の傍に文言を出し保存 API を呼ばない', async () => {

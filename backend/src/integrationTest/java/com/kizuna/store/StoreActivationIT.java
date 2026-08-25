@@ -30,8 +30,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * 準備中の店舗が店舗コンソールへの着地で稼働中へ移ることを本物の PostgreSQL で検証する統合テスト。
  *
- * <p>引き金は「店舗文脈を正当に確立できた店舗側利用者の 1 リクエスト」で、HQ の下見は引き金にならない。HQ 側は そもそも storeBridge
- * を持たないため店舗文脈の確立自体が拒まれる — 状態が動かないことに加えて、拒まれる事実まで固定する。
+ * <p>引き金は「店舗文脈を正当に確立できた店舗側利用者の 1 リクエスト」で、HQ の下見は引き金にならない。HQ も storeBridge を
+ * 持つため店舗文脈自体は確立できるが、{@link com.kizuna.store.infrastructure.StoreActivationInterceptor}
+ * がプラットフォーム権限の保持者を引き金から除くため状態は動かない。
  *
  * <p>使い捨て tmpfs DB のためシード store 1 は用いず、判定ごとに新しい店舗を直挿する（一方向の遷移なので 店舗を使い回すと 2 件目以降が空振りで緑になる）。
  */
@@ -117,7 +118,7 @@ class StoreActivationIT {
   }
 
   @Test
-  @DisplayName("HQ 管理者は店舗文脈を名乗れず、店舗は準備中のままであること")
+  @DisplayName("HQ 管理者の下見では店舗は準備中のままであること")
   void platformAdminAccessDoesNotActivateStore() {
     Store store = freshStore("HQ下見検証店舗");
     long storeId = store.getId();
@@ -126,8 +127,8 @@ class StoreActivationIT {
 
     ResponseEntity<String> res = storeConsoleRequest(login("admin@kizuna.test", PASSWORD), storeId);
 
-    // HQ は STORE コンソール権限を持たないため storeBridge が false で、店舗文脈の確立が拒まれる。
-    assertThat(res.getStatusCode()).as("HQ の店舗文脈は拒まれること").isEqualTo(HttpStatus.FORBIDDEN);
+    // HQ は受注の権限を持たないため端点自体は 403。遷移が起きないのはその手前の除外判定による。
+    assertThat(res.getStatusCode()).as("HQ は受注端点へ到達できないこと").isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(statusOf(storeId)).as("HQ の下見では準備中のままであること").isEqualTo("PREPARING");
   }
 }
