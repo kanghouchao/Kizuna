@@ -63,6 +63,11 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String HQ_CANARY_NAME = "店舗スタッフ管理IT_HQ側機密";
 
+  /** 店舗B だけを担当する平スタッフ。店舗A の店長からは一覧にも詳細にも出てはならない。 */
+  private static final String OTHER_STORE_EMAIL = "store-staff-it-other-store@kizuna.test";
+
+  private static final String OTHER_STORE_NAME = "店舗スタッフ管理IT_他店機密";
+
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private RoleRepository roleRepository;
   @Autowired private PermissionRepository permissionRepository;
@@ -79,6 +84,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
     ensureUser(CROSS_EMAIL, "店舗スタッフ管理IT跨店", roleIdsOf(CLERK_ROLE), Set.of(STORE_A, STORE_B));
     ensureUser(PEER_EMAIL, "店舗スタッフ管理IT同僚店長", roleIdsOf(MANAGER_ROLE), Set.of(STORE_A));
     ensureUser(HQ_CANARY_EMAIL, HQ_CANARY_NAME, roleIdsOf(HQ_SIDE_ROLE), Set.of(STORE_A));
+    ensureUser(OTHER_STORE_EMAIL, OTHER_STORE_NAME, roleIdsOf(CLERK_ROLE), Set.of(STORE_B));
   }
 
   @Test
@@ -128,6 +134,52 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(res.getBody()).doesNotContain(HQ_CANARY_NAME);
+  }
+
+  @Test
+  @DisplayName("他店だけを担当するスタッフは一覧にも詳細にも出ないこと（id 直指しでも一覧と同じ可視性）")
+  void managerCannotReachStaffOfAnotherStore() {
+    long targetId = platformUserRepository.findByEmail(OTHER_STORE_EMAIL).orElseThrow().getId();
+
+    ResponseEntity<String> list =
+        rest.exchange(
+            "/store/staff-members?size=100",
+            HttpMethod.GET,
+            new HttpEntity<>(headersFor(MANAGER_EMAIL, STORE_A)),
+            String.class);
+    assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(list.getBody()).doesNotContain(OTHER_STORE_EMAIL, OTHER_STORE_NAME);
+
+    ResponseEntity<String> detail =
+        rest.exchange(
+            "/store/staff-members/" + targetId,
+            HttpMethod.GET,
+            new HttpEntity<>(headersFor(MANAGER_EMAIL, STORE_A)),
+            String.class);
+    assertThat(detail.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(detail.getBody()).doesNotContain(OTHER_STORE_EMAIL, OTHER_STORE_NAME);
+  }
+
+  @Test
+  @DisplayName("列長を超える表示名は 400 で撥ねること（整合性違反まで届かせない）")
+  void overlongDisplayNameIsRejectedAsClientError() {
+    String body =
+        String.format(
+            "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"%s\",\"role_ids\":%s,"
+                + "\"store_scope_type\":\"SPECIFIC_STORES\",\"store_ids\":[%d]}",
+            "store-staff-it-longname@kizuna.test",
+            PASSWORD,
+            "あ".repeat(151),
+            rolesJson(CLERK_ROLE),
+            STORE_A);
+
+    ResponseEntity<String> res =
+        rest.postForEntity(
+            "/store/staff-members",
+            new HttpEntity<>(body, headersFor(MANAGER_EMAIL, STORE_A)),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   @Test
