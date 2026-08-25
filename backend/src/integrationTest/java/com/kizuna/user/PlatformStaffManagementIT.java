@@ -421,6 +421,28 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("列長を超える表示名は 400 で撥ねること（整合性違反まで届かせない）")
+  void overlongDisplayNameIsRejectedAsClientError() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    String email = "staff-it-longname@kizuna.test";
+    String body =
+        String.format(
+            "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"%s\",\"role_ids\":%s,"
+                + "\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[]}",
+            email, PASSWORD, "あ".repeat(151), rolesJson(HQ_SIDE_ROLE));
+
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/platform/staff", new HttpEntity<>(body, bearerJson(hq)), JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("details").has("display_name"))
+        .as("列長超過は display_name 由来の検証エラーとして返ること")
+        .isTrue();
+    assertThat(platformUserRepository.findByEmail(email)).isEmpty();
+  }
+
+  @Test
   @DisplayName("検証エラーの details のキーが、要求で送ったのと同じ綴り（snake_case）で返ること")
   void validationDetailKeysMatchRequestSpelling() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
