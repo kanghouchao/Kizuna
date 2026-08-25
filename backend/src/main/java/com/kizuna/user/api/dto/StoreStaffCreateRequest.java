@@ -27,6 +27,9 @@ public class StoreStaffCreateRequest {
   private String password;
 
   @NotBlank(message = "display_name is required")
+  // t_users.display_name VARCHAR(150)。列長超過は制約名を持たない整合性違反として写像に載らず 500 に落ちるため、
+  // 上限は要求の側で止める。
+  @Size(max = 150)
   private String displayName;
 
   @NotEmpty(message = "role_ids is required")

@@ -160,7 +160,7 @@ export function StoreStaffCreateModal({
                 <FormItem className="gap-1">
                   <FormLabel>氏名</FormLabel>
                   <FormControl>
-                    <Input type="text" {...field} />
+                    <Input type="text" maxLength={150} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

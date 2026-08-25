@@ -189,6 +189,11 @@ class StoreStaffServiceTest {
     return req;
   }
 
+  /** 店舗文脈（X-Store-ID で確立済みの店）。一覧と同じ可視性の述語が詳細・編集にも掛かる。 */
+  private void givenContextStore() {
+    when(storeContext.getStoreId()).thenReturn(CONTEXT_STORE);
+  }
+
   private void givenListReturns(PlatformUser... users) {
     when(storeContext.getStoreId()).thenReturn(CONTEXT_STORE);
     when(repository.findAll(ArgumentMatchers.<Specification<PlatformUser>>any(), eq(PAGEABLE)))
@@ -358,6 +363,7 @@ class StoreStaffServiceTest {
                     Set.of(CONTEXT_STORE))));
     givenHqSideRoles();
     givenStaffManageRoles();
+    givenContextStore();
     givenManagerActor(CONTEXT_STORE);
 
     assertThatThrownBy(
@@ -383,6 +389,7 @@ class StoreStaffServiceTest {
                     Set.of(CONTEXT_STORE, OTHER_STORE))));
     givenHqSideRoles();
     givenStaffManageRoles();
+    givenContextStore();
     givenManagerActor(CONTEXT_STORE);
 
     assertThatThrownBy(
@@ -408,6 +415,25 @@ class StoreStaffServiceTest {
   }
 
   @Test
+  @DisplayName("取得: 店舗文脈の外にいる対象は 404 になること（一覧と同じ可視性の述語）")
+  void getHidesStaffOutsideTheContextStore() {
+    when(repository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                staff(
+                    7L,
+                    "elsewhere@kizuna.test",
+                    Set.of(CLERK_ROLE),
+                    StoreScopeType.SPECIFIC_STORES,
+                    Set.of(OTHER_STORE))));
+    givenHqSideRoles();
+    givenContextStore();
+    givenManagerActor(CONTEXT_STORE, OTHER_STORE);
+
+    assertThatThrownBy(() -> service.get(7L)).isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
   @DisplayName("編集: 陳腐化した版の提出は 409 になること")
   void updateRejectsStaleVersion() {
     PlatformUser target =
@@ -421,6 +447,7 @@ class StoreStaffServiceTest {
     when(repository.findById(1L)).thenReturn(Optional.of(target));
     givenHqSideRoles();
     givenStaffManageRoles();
+    givenContextStore();
     givenManagerActor(CONTEXT_STORE);
 
     assertThatThrownBy(
@@ -448,6 +475,7 @@ class StoreStaffServiceTest {
     givenHqSideRoles();
     givenStaffManageRoles();
     givenRoleNames();
+    givenContextStore();
     givenManagerActor(CONTEXT_STORE);
 
     StoreStaffUpdateRequest req =

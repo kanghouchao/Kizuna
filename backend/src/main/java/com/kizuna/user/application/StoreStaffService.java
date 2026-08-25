@@ -221,16 +221,19 @@ public class StoreStaffService {
   }
 
   /**
-   * 店舗スタッフ管理の対象行を取り出す。
+   * 店舗スタッフ管理の対象行を取り出す。可視性の述語は一覧と同一で、id を直に指しても一覧に出ない行へは届かない — 本人種別がスタッフ以外（CAST/MEMBER）の行、HQ 側ロールを 1
+   * つでも持つ行、店舗文脈の店を担当範囲に含まない行は、 存在しても「見つからない」に倒す。対象外と不在を呼出側から区別させないため、両者は同一の応答になる。
    *
-   * <p>本人種別がスタッフ以外（CAST/MEMBER）の行と、HQ 側ロールを 1 つでも持つ行は、存在しても本 API の対象外として「見つからない」に倒す（一覧と同じ絞り）。
-   * 対象外と不在を呼出側から区別できないようにするため、両者は同一の応答になる — HQ 側の利用者の在否をこの面から列挙させない。
+   * <p>店舗文脈で絞るのは可視性の軸であり、付与できる店舗集合の軸（G2）とは別物である。後者は行使者の担当店舗集合 <b>全体</b>で判定し、文脈の単店には縮めない —
+   * 対象の集合が行使者の別の担当店に跨るのは正常だからである。
    */
   private PlatformUser requireManagedStaff(Long id, Set<Long> hqRoleIds) {
+    Long contextStoreId = storeContext.getStoreId();
     return repository
         .findById(id)
         .filter(user -> user.getUserType() == UserType.STAFF)
         .filter(user -> !holdsAny(user.getRoleIds(), hqRoleIds))
+        .filter(user -> user.authorizes(contextStoreId))
         .orElseThrow(() -> new NotFoundException("スタッフが見つかりません: " + id));
   }
 
