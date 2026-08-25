@@ -48,9 +48,12 @@ public enum PermissionCode {
    * スタッフアカウントの閲覧・作成・授権変更・停止（PlatformStaffController）。
    *
    * <p>店長へ委譲する権限なので Console.STORE に置く。PLATFORM 権限は 1 つでも持てば着地先が平台コンソールへ 倒れるため、委譲先の登録動線ごと反転してしまう（ADR
-   * 0020）。既定授与を店長へ広げるのは防提権守衛と同じ 変更で行う — 先に配ると任意ロールを任意店舗集合へ付与できる無守衛の窓が開く。
+   * 0020）。
+   *
+   * <p>行使できるのは店舗スタッフ管理（{@code /store/staff-members}）だけで、そこには防提権の守衛が掛かる —
+   * 付与できるのは委譲権限を含まない店舗側ロールに限られ、店舗集合は行使者の担当範囲を越えられない。
    */
-  STAFF_MANAGE(Console.STORE, SystemRole.HQ_ADMIN),
+  STAFF_MANAGE(Console.STORE, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
@@ -100,8 +103,15 @@ public enum PermissionCode {
   /** 店舗公開プロフィールの閲覧・更新・公開（StoreProfileController）。 */
   STORE_PROFILE_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
-  /** 店舗コンソールメニューの標識権限。 */
-  STORE_MENU_VIEW(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF);
+  /**
+   * 店舗コンソールメニューの標識権限。
+   *
+   * <p>HQ_ADMIN にも与える。メニューの見出し節は節自身の permission でも濾されるため、これが無いと HQ は店舗スタッフ管理の行に辿り着けず、
+   * 着地先をメニューから導く店舗コンソール入口も行き止まりになる。標識権限は {@code hasStoreConsole} の判定から除外されているので、
+   * 与えても店舗文脈の確立資格・着地先の導出は動かない。
+   */
+  STORE_MENU_VIEW(
+      Console.STORE, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF);
 
   /** 権限が属するコンソール。ログイン後の着地先導出と店舗文脈ブリッジ（storeBridge claim）の判定に用いる。 */
   public enum Console {

@@ -168,6 +168,42 @@ export interface PlatformStaffUpdateRequest {
   version: number;
 }
 
+// 店舗スタッフ（店舗側ロールのみを持つアカウント）の応答。
+// editable は防提権守衛 G3 のサーバ側判定で、行使者ごとに変わる。
+// 表示可否（一覧に出るか）とは別の軸で、false の行は見えるが編集・停止できない。
+export interface StoreStaffResponse {
+  id?: number;
+  email?: string;
+  display_name?: string;
+  // enabled / version / editable は Java 側が primitive のため、キーは必ず応答に含まれる。
+  enabled: boolean;
+  roles?: RoleRef[];
+  store_scope_type?: PlatformStoreScopeType;
+  store_ids?: number[];
+  version: number;
+  editable: boolean;
+}
+
+// 店舗スタッフ新規作成リクエスト
+export interface StoreStaffCreateRequest {
+  email: string;
+  password: string;
+  display_name: string;
+  role_ids: number[];
+  store_scope_type: PlatformStoreScopeType;
+  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
+  store_ids?: number[];
+}
+
+// 店舗スタッフ授権編集リクエスト（enabled: 未指定=現状維持、false=停止、true=再開）
+export interface StoreStaffUpdateRequest {
+  role_ids: number[];
+  store_scope_type: PlatformStoreScopeType;
+  store_ids?: number[];
+  enabled?: boolean;
+  version: number;
+}
+
 // LINE ログインの公開設定。enabled=false のとき入口自体を描画しない。
 export interface LineConfigResponse {
   // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。

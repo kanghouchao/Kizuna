@@ -52,7 +52,7 @@ class DefaultGrantApprovalTests {
       Map.ofEntries(
           Map.entry(STORE_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(ROLE_MANAGE, Set.of(HQ_ADMIN)),
-          Map.entry(STAFF_MANAGE, Set.of(HQ_ADMIN)),
+          Map.entry(STAFF_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
           Map.entry(SYSTEM_CONFIG_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_MENU_VIEW, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_ASSET_MANAGE, Set.of(HQ_ADMIN)),
@@ -69,7 +69,7 @@ class DefaultGrantApprovalTests {
           Map.entry(CAST_FIELD_DEF_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CAST_FIELD_DEF_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(STORE_PROFILE_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
-          Map.entry(STORE_MENU_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)));
+          Map.entry(STORE_MENU_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)));
 
   @Test
   @DisplayName("コード側宣言の既定授与が承認台帳と完全に一致すること")
