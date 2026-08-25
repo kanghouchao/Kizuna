@@ -734,8 +734,7 @@ class PlatformStaffServiceTest {
     when(roleRepository.findAllById(Set.of(ROLE_MANAGE_ROLE)))
         .thenReturn(List.of(role(ROLE_MANAGE_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIdsForUpdate(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L));
+    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
     PlatformStaffUpdateRequest req =
         updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
     req.setEnabled(false);
@@ -758,8 +757,7 @@ class PlatformStaffServiceTest {
     givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIdsForUpdate(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L));
+    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
 
     assertThatThrownBy(
             () ->
@@ -781,7 +779,7 @@ class PlatformStaffServiceTest {
     givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIdsForUpdate(Set.of(ROLE_MANAGE_ROLE)))
+    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE)))
         .thenReturn(List.of(3L, 99L));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
@@ -808,6 +806,36 @@ class PlatformStaffServiceTest {
         updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
         ACTOR);
 
-    verify(repository, never()).findEnabledRoleHolderIdsForUpdate(any());
+    verify(repository, never()).lockEnabledRoleHolderIds(any());
+  }
+
+  @Test
+  void update_countsHoldersAfterLockingNotTheLockResult() {
+    // 押さえる問い合わせの結果は待つ前のスナップショットのままで、待っている間に確定した降格を見ない
+    // （PlatformStaffManagementIT が実 PostgreSQL で実測）。数えるのは押さえた後に取り直した側でなければ、
+    // 最後の 2 人の相互降級で母集団が 0 になる。
+    PlatformUser existing =
+        staff(
+            3L,
+            "last-admin@kizuna.test",
+            Set.of(ROLE_MANAGE_ROLE),
+            StoreScopeType.ALL_STORES,
+            Set.of());
+    givenHqSideRoles();
+    givenRoleManageRoles();
+    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    // 押さえた側はまだ相手を保持者だと思っている。取り直した側だけが降格を見ている。
+    when(repository.lockEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE)))
+        .thenReturn(List.of(3L, 99L));
+    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
+
+    assertThatThrownBy(
+            () ->
+                service.update(
+                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+        .isInstanceOf(LastRoleManageHolderException.class);
+
+    verify(repository, never()).saveAndFlush(any());
   }
 }
