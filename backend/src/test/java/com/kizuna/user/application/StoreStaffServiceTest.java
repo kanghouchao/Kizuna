@@ -72,6 +72,9 @@ class StoreStaffServiceTest {
 
   private static final Pageable PAGEABLE = PageRequest.of(0, 20);
 
+  /** 作成要求へ載せる素の値。符号化して保存する経路を通すためだけの固定値で、意味は持たない。 */
+  private static final String RAW_CREDENTIAL = "rawpass";
+
   @Mock private PlatformUserRepository repository;
   @Mock private RoleRepository roleRepository;
   @Mock private PasswordEncoder encoder;
@@ -168,7 +171,7 @@ class StoreStaffServiceTest {
       Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
     StoreStaffCreateRequest req = new StoreStaffCreateRequest();
     req.setEmail("new@kizuna.test");
-    req.setPassword("rawpass");
+    req.setPassword(RAW_CREDENTIAL);
     req.setDisplayName("表示名");
     req.setRoleIds(roleIds);
     req.setStoreScopeType(scopeType);
@@ -296,7 +299,7 @@ class StoreStaffServiceTest {
     givenHqSideRoles();
     givenRoleNames();
     givenHqActor();
-    when(encoder.encode("rawpass")).thenReturn("hashed");
+    when(encoder.encode(RAW_CREDENTIAL)).thenReturn("hashed");
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(repository.saveAndFlush(userCaptor.capture()))
         .thenAnswer(StoreStaffServiceTest::persisted);
