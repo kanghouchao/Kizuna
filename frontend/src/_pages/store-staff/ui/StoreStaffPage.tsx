@@ -34,7 +34,7 @@ interface StoreStaffCriteria {
  * 店舗スタッフ管理ページ。店長と HQ が同じ面を使う。
  *
  * 一覧は現在の店舗を担当範囲に含む「店舗側ロールのみ」のアカウントで、HQ 側ロール保持者はサーバが
- * 在否ごと外している。行ごとの編集可否も応答の editable が唯一の根拠で、前端は境界を再判定しない。
+ * 在否ごと外している。行ごとの編集可否は応答の editable をそのまま使う。
  */
 export default function StoreStaffPage() {
   const [searchTerm, setSearchTerm] = useState('');

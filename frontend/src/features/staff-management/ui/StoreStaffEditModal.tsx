@@ -51,8 +51,8 @@ function toFormValues(staff: StoreStaffResponse): StoreStaffEditFormValues {
 }
 
 /**
- * 店舗スタッフの授権編集モーダル（ロール・担当店舗・停止/再開）。開けるのは応答の editable が真の行だけで、
- * 判定そのものはサーバが持つ（前端は結果を使うだけ）。
+ * 店舗スタッフの授権編集モーダル（ロール・担当店舗・停止/再開）。
+ * 開いたときだけ mount される前提で、可授ロールの取得は mount 時 = 開いた時点に遅延される。
  */
 export function StoreStaffEditModal({
   staff,
