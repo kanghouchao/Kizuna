@@ -12,6 +12,7 @@ import static com.kizuna.user.domain.PermissionCode.ORDER_SET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.PLATFORM_ASSET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.PLATFORM_MENU_VIEW;
 import static com.kizuna.user.domain.PermissionCode.POINT_ADJUST;
+import static com.kizuna.user.domain.PermissionCode.ROLE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SHIFT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_MANAGE;
@@ -50,6 +51,7 @@ class DefaultGrantApprovalTests {
   private static final Map<PermissionCode, Set<SystemRole>> APPROVED_DEFAULT_GRANTS =
       Map.ofEntries(
           Map.entry(STORE_MANAGE, Set.of(HQ_ADMIN)),
+          Map.entry(ROLE_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(STAFF_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(SYSTEM_CONFIG_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_MENU_VIEW, Set.of(HQ_ADMIN)),

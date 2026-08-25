@@ -54,7 +54,7 @@ databaseChangeLog:
               - column: { name: label, value: ロール管理 }
               - column: { name: path, value: /platform/roles }
               - column: { name: icon, value: KeyRoundIcon }
-              - column: { name: permission, value: STAFF_MANAGE }
+              - column: { name: permission, value: ROLE_MANAGE }
               - column: { name: sort_order, valueNumeric: 4 }
         - insert:
             tableName: t_menus

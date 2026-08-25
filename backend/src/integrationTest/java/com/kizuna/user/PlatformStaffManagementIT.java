@@ -5,8 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.domain.Permission;
+import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
@@ -14,6 +18,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,7 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
 /**
- * スタッフ・ロール管理（RBAC）の HTTP 境界統合テスト。STAFF_MANAGE 権限限定の授権書き込み（付与・変更・停止）とロール
+ * スタッフ・ロール管理（RBAC）の HTTP 境界統合テスト。STAFF_MANAGE 権限限定の授権書き込み（付与・変更・停止）と ROLE_MANAGE 権限限定のロール
  * CRUD、付与した店舗集合が本人の次回ログインのデータ範囲に反映されること、 授権外店舗の実データが応答生ボディに一切現れないこと（強断言）を本物の PostgreSQL で固定する。ヘルパは
  * {@link com.kizuna.order.PlatformOrderScopeIT} の {@code ensurePlatformUser}/{@code platformToken}
  * 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
@@ -48,6 +53,13 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   private static final String STORE_B_NAME = "スタッフ管理IT_店舗B機密";
 
   private static final String NON_HQ_EMAIL = "staff-it-nonhq@kizuna.test";
+
+  /** 委譲層だけを持つ利用者（STAFF_MANAGE のみ）。ロール定義の門が ROLE_MANAGE であることの検証に使う。 */
+  private static final String STAFF_MANAGE_ONLY_EMAIL = "staff-it-staffmanage-only@kizuna.test";
+
+  /** 種子に無いロール（DB データとして追加）。 */
+  private static final String STAFF_MANAGE_ONLY_ROLE = "スタッフ管理IT_委譲層のみ";
+
   private static final String CAST_CANARY_EMAIL = "staff-it-cast-canary@kizuna.test";
 
   private static final String CASE1_EMAIL = "staff-it-created@kizuna.test";
@@ -58,6 +70,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RoleRepository roleRepository;
+  @Autowired private PermissionRepository permissionRepository;
 
   private long storeAId;
   private long storeBId;
@@ -70,6 +83,29 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         NON_HQ_EMAIL, UserType.STAFF, roleIdsOf("店長"), StoreScopeType.ALL_STORES, Set.of());
     ensurePlatformUser(
         CAST_CANARY_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
+
+    Role staffManageOnly =
+        roleRepository
+            .findByName(STAFF_MANAGE_ONLY_ROLE)
+            .orElseGet(
+                () ->
+                    roleRepository.save(
+                        Role.builder()
+                            .name(STAFF_MANAGE_ONLY_ROLE)
+                            .permissionIds(permissionIdsOf(PermissionCode.STAFF_MANAGE))
+                            .build()));
+    ensurePlatformUser(
+        STAFF_MANAGE_ONLY_EMAIL,
+        UserType.STAFF,
+        Set.of(staffManageOnly.getId()),
+        StoreScopeType.ALL_STORES,
+        Set.of());
+  }
+
+  private Set<Long> permissionIdsOf(PermissionCode code) {
+    return permissionRepository.findByCodeIn(Set.of(code.name())).stream()
+        .map(Permission::getId)
+        .collect(Collectors.toSet());
   }
 
   private long ensureStore(String domain, String name) {
@@ -861,8 +897,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("ロール一覧は STAFF_MANAGE 保持者に既定 3 ロールを返し、非保持者には 403")
-  void roleListingRequiresStaffManage() {
+  @DisplayName("ロール一覧は ROLE_MANAGE 保持者に既定 3 ロールを返し、非保持者には 403")
+  void roleListingRequiresRoleManage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
     ResponseEntity<JsonNode> roles =
@@ -883,8 +919,27 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("権限目録は STAFF_MANAGE 保持者に 19 件の code+console を返すこと")
-  void permissionCatalogIsExposedToStaffManage() {
+  @DisplayName("STAFF_MANAGE のみ保持の利用者はロール定義（roles・permissions）へ 403(AC1)")
+  void staffManageAloneCannotReachRoleDefinition() {
+    String delegated = platformToken(STAFF_MANAGE_ONLY_EMAIL, PASSWORD);
+
+    ResponseEntity<String> roles =
+        rest.exchange(
+            "/platform/roles", HttpMethod.GET, new HttpEntity<>(bearer(delegated)), String.class);
+    assertThat(roles.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+    ResponseEntity<String> permissions =
+        rest.exchange(
+            "/platform/permissions",
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(delegated)),
+            String.class);
+    assertThat(permissions.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("権限目録は ROLE_MANAGE 保持者に 20 件の code+console を返すこと")
+  void permissionCatalogIsExposedToRoleManage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
     ResponseEntity<JsonNode> res =
@@ -892,7 +947,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/permissions", HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody()).hasSize(19);
+    assertThat(res.getBody()).hasSize(20);
     assertThat(res.getBody().toString()).contains("ORDER_MANAGE").contains("PLATFORM");
   }
 

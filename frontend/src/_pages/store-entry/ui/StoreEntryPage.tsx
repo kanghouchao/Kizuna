@@ -69,7 +69,7 @@ export default function StoreEntryPage() {
     // メニュー取得や遷移をもう一度走らせない。
     resolved.current = true;
 
-    // 店舗コンソール資格が無い利用者（PLATFORM 権限のみの HQ 管理者など）は、
+    // 店舗コンソール資格が無い利用者（PLATFORM 権限と跨店参照のみのロール）は、
     // 授権店舗が空なのが正常。ここでセッションを捨てるとログアウト事故になるため平台側へ返す。
     if (!storeBridge) {
       router.replace('/platform/dashboard');

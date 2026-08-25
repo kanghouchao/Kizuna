@@ -21,8 +21,12 @@ public enum PermissionCode {
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
-  /** 社内アカウント・権限の閲覧・付与・変更・停止とロールの管理（PlatformStaffController / RoleController）。 */
-  STAFF_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
+  /**
+   * ロール定義の閲覧・登録・更新・削除と権限目録の参照（RoleController / PermissionController）。
+   *
+   * <p>ロールを定義できる者は権限の組合せを自由に作れるため、店舗側へ委譲する {@link #STAFF_MANAGE} から 切り離してプラットフォーム側に留める（ADR 0020）。
+   */
+  ROLE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
   /** 共通設定の閲覧・更新（PlatformConfigController）。 */
   SYSTEM_CONFIG_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
@@ -39,6 +43,14 @@ public enum PermissionCode {
   /** 授権店舗集合を跨ぐ受注の閲覧と、明示単一店舗指定での登録（PlatformOrderController）。 */
   ORDER_SET_MANAGE(
       Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+
+  /**
+   * スタッフアカウントの閲覧・作成・授権変更・停止（PlatformStaffController）。
+   *
+   * <p>店長へ委譲する権限なので Console.STORE に置く。PLATFORM 権限は 1 つでも持てば着地先が平台コンソールへ 倒れるため、委譲先の登録動線ごと反転してしまう（ADR
+   * 0020）。既定授与を店長へ広げるのは防提権守衛と同じ 変更で行う — 先に配ると任意ロールを任意店舗集合へ付与できる無守衛の窓が開く。
+   */
+  STAFF_MANAGE(Console.STORE, SystemRole.HQ_ADMIN),
 
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),

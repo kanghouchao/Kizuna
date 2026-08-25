@@ -32,7 +32,7 @@ import tools.jackson.databind.JsonNode;
  * 店舗存在性検証（{@link com.kizuna.store.infrastructure.StoreExistenceInterceptor}）の受け入れ IT。
  *
  * <p>陳旧化した JWT 授権集合や公開サイトの不正ヘッダで実在しない storeId が文脈に載った場合、500 や空 200 でなく 400 を返すことを固定する。 授権側は種子 HQ
- * admin に storeBridge が無いため、ALL_STORES + STORE コンソール権限（CAST_MANAGE）を持つロールを現場作成して用いる（{@link
+ * admin が店舗業務の権限を持たないため、ALL_STORES + STORE コンソール権限（CAST_MANAGE）を持つロールを 現場作成して用いる（{@link
  * com.kizuna.user.AuthorizationScenesIT} と同型）。
  */
 class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
@@ -40,7 +40,7 @@ class StoreExistenceInterceptorIT extends CrossStoreTestSupport {
   private static final String PASSWORD = "pass";
   private static final String ALL_STORES_EMAIL = "store-existence-it-allstores@kizuna.test";
 
-  /** 種子に無いロール（DB データとして追加）。CAST_MANAGE は STORE コンソール権限なので storeBridge を導出させる。 */
+  /** 種子に無いロール（DB データとして追加）。CAST_MANAGE は店舗業務の権限なので店舗端点へ到達できる。 */
   private static final String ALL_STORES_ROLE = "店舗存在性IT_全店舗キャスト管理";
 
   /** 実在しない storeId（自動採番の実 id 群と衝突しない大きな値）。 */
