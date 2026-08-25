@@ -8,6 +8,8 @@
 * `c.k.u.domain.PermissionRepository`
 * `c.k.u.domain.PlatformUserRepository`
 * `c.k.u.domain.RoleRepository`
+|Bean references
+|* `c.k.s.storescope.StoreContext` (in Shared)
 |Aggregate roots
 |* `c.k.u.domain.Permission`
 * `c.k.u.domain.PlatformUser`
