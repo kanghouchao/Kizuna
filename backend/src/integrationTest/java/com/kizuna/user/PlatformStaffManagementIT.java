@@ -17,6 +17,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -24,6 +25,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +77,11 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   /** 種子に無い HQ 側ロール。ROLE_MANAGE は含めず、不減零の母集団を膨らませない。 */
   private static final String HQ_SIDE_ROLE = "スタッフ管理IT_HQ側";
+
+  /** ROLE_MANAGE を含む IT 専用ロールと、その保持者（不減零の母集団を種子に触らず動かすため）。 */
+  private static final String ROLE_MANAGE_ROLE = "スタッフ管理IT_管理権限";
+
+  private static final String RACE_EMAIL = "staff-it-race@kizuna.test";
 
   /** 委譲層だけを持つ利用者（STAFF_MANAGE のみ）。ロール定義の門が ROLE_MANAGE であることの検証に使う。 */
   private static final String STAFF_MANAGE_ONLY_EMAIL = "staff-it-staffmanage-only@kizuna.test";
@@ -1239,7 +1248,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         .execute(
             status -> {
               List<Long> holders =
-                  platformUserRepository.findEnabledRoleHolderIdsForUpdate(roleManageRoleIds);
+                  platformUserRepository.lockEnabledRoleHolderIds(roleManageRoleIds);
               assertThat(holders).as("前提: 有効な ROLE_MANAGE 実効保持者が居ること").isNotEmpty();
 
               assertThatThrownBy(() -> lockNoWait(holders.get(0)))
@@ -1265,6 +1274,120 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
       } finally {
         connection.rollback();
       }
+    }
+  }
+
+  /**
+   * 待たされた {@code FOR UPDATE} が返す集合は、待つ前のスナップショットのままかどうかの実測。
+   *
+   * <p>PostgreSQL は READ COMMITTED で、押さえた行が更新されていれば WHERE を取り直す。しかし「ROLE_MANAGE を持つか」は t_user_roles
+   * 側の述語で、取り直しは他の表を元のスナップショットで読む。降格が確定していても保持者に見え続けるなら、 押さえた結果をそのまま数えてはいけない（数え直しが要る）。
+   */
+  @Test
+  @DisplayName("待たされた FOR UPDATE の結果は待つ間に確定した降格を見ず、数え直しは見ること")
+  void lockedLookupIsStaleSoTheCountMustBeTakenAgain() throws Exception {
+    long roleManageRoleId = itRoleManageRoleId();
+    long demotedId = ensureRoleManageHolder(RACE_EMAIL, roleManageRoleId);
+    Set<Long> roleManageRoleIds =
+        roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
+    assertThat(roleManageRoleIds).contains(roleManageRoleId);
+
+    CountDownLatch locksHeld = new CountDownLatch(1);
+    AtomicReference<List<Long>> locked = new AtomicReference<>();
+    AtomicReference<List<Long>> recounted = new AtomicReference<>();
+
+    Thread waiter =
+        new Thread(
+            () ->
+                new TransactionTemplate(transactionManager)
+                    .execute(
+                        status -> {
+                          awaitQuietly(locksHeld);
+                          locked.set(
+                              platformUserRepository.lockEnabledRoleHolderIds(roleManageRoleIds));
+                          recounted.set(
+                              platformUserRepository.findEnabledRoleHolderIds(roleManageRoleIds));
+                          status.setRollbackOnly();
+                          return null;
+                        }));
+    waiter.start();
+
+    new TransactionTemplate(transactionManager)
+        .execute(
+            status -> {
+              platformUserRepository.lockEnabledRoleHolderIds(roleManageRoleIds);
+              locksHeld.countDown();
+              awaitLockWait();
+              PlatformUser demoted = platformUserRepository.findById(demotedId).orElseThrow();
+              demoted.reassignGrants(Set.of(hqSideRoleId()), StoreScopeType.ALL_STORES, Set.of());
+              platformUserRepository.saveAndFlush(demoted);
+              return null;
+            });
+
+    waiter.join(TimeUnit.SECONDS.toMillis(30));
+    assertThat(locked.get()).as("前提: 待たされた側もいずれ結果を返すこと").isNotNull();
+    assertThat(locked.get()).as("押さえる問い合わせ自身は待つ前のスナップショットのままで、確定した降格を見ないこと").contains(demotedId);
+    assertThat(recounted.get()).as("押さえた後の数え直しは確定した降格を見ること（守衛はこちらを数える）").doesNotContain(demotedId);
+  }
+
+  /** ROLE_MANAGE を含む IT 専用ロール。種子の HQ管理者に触らずに母集団を足すために使う。 */
+  private long itRoleManageRoleId() {
+    return roleRepository
+        .findByName(ROLE_MANAGE_ROLE)
+        .orElseGet(
+            () ->
+                roleRepository.save(
+                    Role.builder()
+                        .name(ROLE_MANAGE_ROLE)
+                        .permissionIds(permissionIdsOf(PermissionCode.ROLE_MANAGE))
+                        .build()))
+        .getId();
+  }
+
+  /** 指定ロールだけを持つ有効な保持者を用意する（前回実行で降格済みでも組み直す）。 */
+  private long ensureRoleManageHolder(String email, long roleId) {
+    ensurePlatformUser(email, UserType.STAFF, Set.of(roleId), StoreScopeType.ALL_STORES, Set.of());
+    PlatformUser holder = platformUserRepository.findByEmail(email).orElseThrow();
+    holder.reassignGrants(Set.of(roleId), StoreScopeType.ALL_STORES, Set.of());
+    return platformUserRepository.saveAndFlush(holder).getId();
+  }
+
+  private static void awaitQuietly(CountDownLatch latch) {
+    try {
+      assertThat(latch.await(30, TimeUnit.SECONDS)).as("前提: 相手がロックを握るまで待てること").isTrue();
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(ex);
+    }
+  }
+
+  /** 相手が本当に行ロック待ちへ入るまで待つ（待ちに入る前に確定すると、この実測は競合を踏まない）。 */
+  private void awaitLockWait() {
+    for (int attempt = 0; attempt < 300; attempt++) {
+      if (countLockWaiters() > 0) {
+        return;
+      }
+      try {
+        TimeUnit.MILLISECONDS.sleep(100);
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError(ex);
+      }
+    }
+    throw new AssertionError("前提: 相手が行ロック待ちへ入ること");
+  }
+
+  private int countLockWaiters() {
+    try (Connection connection = dataSource.getConnection();
+        PreparedStatement statement =
+            connection.prepareStatement(
+                "select count(*) from pg_stat_activity"
+                    + " where wait_event_type = 'Lock' and datname = current_database()");
+        ResultSet resultSet = statement.executeQuery()) {
+      resultSet.next();
+      return resultSet.getInt(1);
+    } catch (SQLException ex) {
+      throw new AssertionError(ex);
     }
   }
 }

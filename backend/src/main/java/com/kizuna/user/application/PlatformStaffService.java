@@ -219,8 +219,9 @@ public class PlatformStaffService {
    * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止・剥奪を拒む。判定を役職名（HQ_ADMIN）でなく 実効権限で行うのは、管理が
    * ROLE_MANAGE を含む自作ロールへ移った配備でも正しく数えるためである。
    *
-   * <p>検査は母集団の直列化を伴う（{@link PlatformUserRepository#findEnabledRoleHolderIdsForUpdate}）。母集団を減らさない
-   * 操作は押さえない — 対象が今そこに居ないなら、この操作で母集団は減らない。
+   * <p>検査は母集団の直列化を伴う。押さえてから数え直すのは、押さえる問い合わせ自身の結果が待つ前のスナップショットのままで、 待っている間に確定した降格を見ないため（{@link
+   * PlatformUserRepository#lockEnabledRoleHolderIds}）。母集団を減らさない 操作は押さえない —
+   * 対象が今そこに居ないなら、この操作で母集団は減らない。
    */
   private void requireRoleManageHolderRemains(PlatformUser user, PlatformStaffUpdateRequest req) {
     Set<Long> roleManageRoleIds =
@@ -235,7 +236,8 @@ public class PlatformStaffService {
     if (!wasHolder || staysHolder) {
       return;
     }
-    List<Long> holders = repository.findEnabledRoleHolderIdsForUpdate(roleManageRoleIds);
+    repository.lockEnabledRoleHolderIds(roleManageRoleIds);
+    List<Long> holders = repository.findEnabledRoleHolderIds(roleManageRoleIds);
     if (holders.size() == 1 && holders.contains(user.getId())) {
       throw new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません");
     }

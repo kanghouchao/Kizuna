@@ -48,7 +48,12 @@ public interface PlatformUserRepository
   Optional<PlatformUser> findByEmailForUpdate(@Param("email") String email);
 
   /**
-   * 指定ロールのいずれかを保持する有効な利用者の id を、行を押さえたまま（{@code SELECT ... FOR UPDATE}）id 昇順で返す。
+   * 指定ロールのいずれかを保持する有効な利用者の行を、id 昇順で押さえる（{@code SELECT ... FOR UPDATE}）。
+   *
+   * <p><b>返る集合を数えてはいけない</b>。READ COMMITTED では待たされている間に確定した変更のうち、取り直されるのは押さえた行自身の 列だけで、保持判定が読む
+   * t_user_roles は元のスナップショットのまま — 降格済みの相手が保持者に見え続ける（実測: {@code
+   * PlatformStaffManagementIT#lockedLookupIsStaleSoTheCountMustBeTakenAgain}）。数えるのは {@link
+   * #findEnabledRoleHolderIds} で押さえた後に取り直す。
    *
    * <p>母集団の全行を押さえるのは、計数だけでは最後の 2 人が同時に相互降級したとき双方が検査を通り 0 になるため（ADR 0020）。id
    * 昇順は獲得順序を揃えて待ちを環にしない。実体でなく id を返すのは、実体で受けるとロックの獲得が版の照合を伴い、 書きもしない他人の行の版が進んだだけで授権の更新が 409 に落ちるため。
@@ -59,7 +64,14 @@ public interface PlatformUserRepository
           + " and exists (select 1 from PlatformUser h join h.roleIds rid"
           + " where h.id = u.id and rid in :roleIds)"
           + " order by u.id")
-  List<Long> findEnabledRoleHolderIdsForUpdate(@Param("roleIds") Collection<Long> roleIds);
+  List<Long> lockEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);
+
+  /** 同じ母集団を押さえずに読む。{@link #lockEnabledRoleHolderIds} の後に呼ぶと、新しいスナップショットで実際の顔ぶれが返る。 */
+  @Query(
+      "select u.id from PlatformUser u where u.enabled = true"
+          + " and exists (select 1 from PlatformUser h join h.roleIds rid"
+          + " where h.id = u.id and rid in :roleIds)")
+  List<Long> findEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);
 
   /** 指定ロールを授与されたユーザーが 1 人でも存在するか（ロール削除の事前検証）。 */
   @Query(
