@@ -1,6 +1,7 @@
 package com.kizuna.user.domain;
 
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -45,6 +46,20 @@ public interface PlatformUserRepository
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select u from PlatformUser u where u.email = :email")
   Optional<PlatformUser> findByEmailForUpdate(@Param("email") String email);
+
+  /**
+   * 指定ロールのいずれかを保持する有効な利用者の id を、行を押さえたまま（{@code SELECT ... FOR UPDATE}）id 昇順で返す。
+   *
+   * <p>母集団の全行を押さえるのは、計数だけでは最後の 2 人が同時に相互降級したとき双方が検査を通り 0 になるため（ADR 0020）。id
+   * 昇順は獲得順序を揃えて待ちを環にしない。実体でなく id を返すのは、実体で受けるとロックの獲得が版の照合を伴い、 書きもしない他人の行の版が進んだだけで授権の更新が 409 に落ちるため。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select u.id from PlatformUser u where u.enabled = true"
+          + " and exists (select 1 from PlatformUser h join h.roleIds rid"
+          + " where h.id = u.id and rid in :roleIds)"
+          + " order by u.id")
+  List<Long> findEnabledRoleHolderIdsForUpdate(@Param("roleIds") Collection<Long> roleIds);
 
   /** 指定ロールを授与されたユーザーが 1 人でも存在するか（ロール削除の事前検証）。 */
   @Query(

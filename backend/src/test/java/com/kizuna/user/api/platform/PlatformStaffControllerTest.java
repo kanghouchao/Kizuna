@@ -50,7 +50,7 @@ class PlatformStaffControllerTest {
 
   @Test
   @DisplayName("GET /platform/staff?sort=displayName でも id が副キーとして補われること")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  @WithMockUser(authorities = "PERM_ROLE_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<PlatformStaffResponse> empty = new PageImpl<>(List.of());
@@ -63,7 +63,7 @@ class PlatformStaffControllerTest {
 
   @Test
   @DisplayName("GET /platform/staff?storeId= が店舗絞り込みとしてサービスへ渡ること")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  @WithMockUser(authorities = "PERM_ROLE_MANAGE")
   void listPassesStoreIdFilterToService() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
     Page<PlatformStaffResponse> empty = new PageImpl<>(List.of());
@@ -76,7 +76,7 @@ class PlatformStaffControllerTest {
 
   @Test
   @DisplayName("storeId 未指定なら絞り込みなし（null）でサービスへ渡ること")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  @WithMockUser(authorities = "PERM_ROLE_MANAGE")
   void listPassesNullStoreIdWhenParamAbsent() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
     Page<PlatformStaffResponse> empty = new PageImpl<>(List.of());
@@ -85,5 +85,12 @@ class PlatformStaffControllerTest {
     mockMvc.perform(get("/platform/staff")).andExpect(status().isOk());
 
     assertThat(storeIdCaptor.getValue()).isNull();
+  }
+
+  @Test
+  @DisplayName("STAFF_MANAGE のみ保持では GET /platform/staff が 403（管理者管理は ROLE_MANAGE 門）")
+  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  void staffManageAloneCannotReachAdministratorManagement() throws Exception {
+    mockMvc.perform(get("/platform/staff")).andExpect(status().isForbidden());
   }
 }

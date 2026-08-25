@@ -73,7 +73,7 @@ async function pickStore(optionName: string) {
   fireEvent.click(option);
 }
 
-describe('スタッフ一覧ページ', () => {
+describe('管理者管理ページ', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
@@ -97,7 +97,7 @@ describe('スタッフ一覧ページ', () => {
   });
 
   // 編集の導線は行内のボタンのみ（行クリックは廃止。マウス専用の導線を残さない）
-  it('行内の編集ボタンで対象スタッフの編集モーダルが開くこと', async () => {
+  it('行内の編集ボタンで対象管理者の編集モーダルが開くこと', async () => {
     render(<StaffPage />);
     await screen.findByText('山田太郎');
 
@@ -114,11 +114,11 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.queryByText('編集モーダル:鈴木花子')).not.toBeInTheDocument();
   });
 
-  it('スタッフを追加ボタンで作成モーダルが開くこと', async () => {
+  it('管理者を追加ボタンで作成モーダルが開くこと', async () => {
     render(<StaffPage />);
     await screen.findByText('山田太郎');
 
-    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '管理者を追加' }));
 
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
   });
@@ -131,7 +131,7 @@ describe('スタッフ一覧ページ', () => {
     await screen.findByText('山田太郎');
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '管理者を追加' }));
 
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
   });
@@ -145,7 +145,7 @@ describe('スタッフ一覧ページ', () => {
     await screen.findByText('山田太郎');
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '管理者を追加' }));
 
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
     expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
@@ -163,7 +163,7 @@ describe('スタッフ一覧ページ', () => {
 
     render(<StaffPage />);
     await screen.findByText('山田太郎');
-    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '管理者を追加' }));
     expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1);
 
     rejectFirst(new Error('network'));
@@ -211,7 +211,7 @@ describe('スタッフ一覧ページ', () => {
     render(<StaffPage />);
     await screen.findByText('山田太郎');
 
-    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
+    fireEvent.change(screen.getByLabelText('管理者を検索'), { target: { value: '山田' } });
     fireEvent.click(screen.getByRole('button', { name: '検索' }));
 
     await waitFor(() =>
@@ -279,7 +279,7 @@ describe('スタッフ一覧ページ', () => {
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
     await pickStore('店舗A');
 
-    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
+    fireEvent.change(screen.getByLabelText('管理者を検索'), { target: { value: '山田' } });
     fireEvent.click(screen.getByRole('button', { name: '検索' }));
     await waitFor(() =>
       expect(mockedStaffApi.list).toHaveBeenLastCalledWith({
@@ -300,10 +300,10 @@ describe('スタッフ一覧ページ', () => {
         storeId: 9,
       })
     );
-    expect(screen.getByLabelText('スタッフを検索')).toHaveValue('');
+    expect(screen.getByLabelText('管理者を検索')).toHaveValue('');
   });
 
-  // 絞り込みで 0 件のときに「登録されていません」と言うと、他店舗に居るスタッフの存在を否定してしまう
+  // 絞り込みで 0 件のときに「登録されていません」と言うと、他店舗に居る管理者の存在を否定してしまう
   it('店舗で絞り込んで 0 件のときは「該当なし」の文言を出すこと', async () => {
     mockedAuthApi.stores.mockResolvedValue([{ id: 9, name: '店舗A' }]);
 
@@ -314,7 +314,7 @@ describe('スタッフ一覧ページ', () => {
     mockedStaffApi.list.mockResolvedValue(paginated([]));
     await pickStore('店舗A');
 
-    expect(await screen.findByText('該当するスタッフが見つかりません')).toBeInTheDocument();
+    expect(await screen.findByText('該当する管理者が見つかりません')).toBeInTheDocument();
   });
 
   // 選択中の店舗が取り直した目録から消える（他管理者の削除）と、トリガー表示が空白のまま
@@ -330,7 +330,7 @@ describe('スタッフ一覧ページ', () => {
     await screen.findByText('山田太郎');
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
     await pickStore('店舗A');
-    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '山田' } });
+    fireEvent.change(screen.getByLabelText('管理者を検索'), { target: { value: '山田' } });
     fireEvent.click(screen.getByRole('button', { name: '検索' }));
     await waitFor(() =>
       expect(mockedStaffApi.list).toHaveBeenLastCalledWith(
@@ -340,9 +340,9 @@ describe('スタッフ一覧ページ', () => {
 
     // 未提出の下書きへ書き換えた状態で、モーダルを開くと目録を取り直す既存挙動を使い、
     // 店舗A が消えた目録を届ける
-    fireEvent.change(screen.getByLabelText('スタッフを検索'), { target: { value: '下書き' } });
+    fireEvent.change(screen.getByLabelText('管理者を検索'), { target: { value: '下書き' } });
     mockedAuthApi.stores.mockResolvedValue([{ id: 10, name: '店舗B' }]);
-    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '管理者を追加' }));
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
 
     await waitFor(() =>
@@ -356,7 +356,7 @@ describe('スタッフ一覧ページ', () => {
     expect(screen.getByRole('combobox', { name: '店舗で絞り込む' })).toHaveTextContent(
       'すべての店舗'
     );
-    expect(screen.getByLabelText('スタッフを検索')).toHaveValue('下書き');
+    expect(screen.getByLabelText('管理者を検索')).toHaveValue('下書き');
   });
 
   // 取得失敗は目録を空にする。「消えた」と同じに扱うと、1 回の通信エラーが利用者の
@@ -375,7 +375,7 @@ describe('スタッフ一覧ページ', () => {
 
     // モーダルを開くと目録を取り直す既存挙動を使い、その取り直しを落とす
     mockedAuthApi.stores.mockRejectedValue(new Error('network'));
-    fireEvent.click(screen.getByRole('button', { name: 'スタッフを追加' }));
+    fireEvent.click(screen.getByRole('button', { name: '管理者を追加' }));
     await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
     await screen.findByText('作成モーダル表示中');
 
@@ -417,7 +417,7 @@ describe('スタッフ一覧ページ', () => {
   });
 });
 
-describe('スタッフ一覧ページ固有の要素', () => {
+describe('管理者管理ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.stores.mockResolvedValue([]);
@@ -426,11 +426,13 @@ describe('スタッフ一覧ページ固有の要素', () => {
 
   it('見出し（h1）・副題を備え、主アクションが button ロールのままであること', async () => {
     render(<StaffPage />);
-    await screen.findByText('スタッフが登録されていません');
+    await screen.findByText('管理者が登録されていません');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'スタッフ管理' })).toBeInTheDocument();
-    expect(screen.getByText('ロール・担当店舗の付与と編集ができます。')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '管理者管理' })).toBeInTheDocument();
+    expect(
+      screen.getByText('プラットフォーム権限を持つアカウントのロール・担当店舗を管理します。')
+    ).toBeInTheDocument();
     // e2e（staff-management）は button ロールで取得するため、リンク化してはならない
-    expect(screen.getByRole('button', { name: 'スタッフを追加' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '管理者を追加' })).toBeInTheDocument();
   });
 });
