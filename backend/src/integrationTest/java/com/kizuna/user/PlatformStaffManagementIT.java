@@ -1,6 +1,7 @@
 package com.kizuna.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.Store;
@@ -14,11 +15,17 @@ import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,13 +37,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
- * スタッフ・ロール管理（RBAC）の HTTP 境界統合テスト。STAFF_MANAGE 権限限定の授権書き込み（付与・変更・停止）と ROLE_MANAGE 権限限定のロール
- * CRUD、付与した店舗集合が本人の次回ログインのデータ範囲に反映されること、 授権外店舗の実データが応答生ボディに一切現れないこと（強断言）を本物の PostgreSQL で固定する。ヘルパは
- * {@link com.kizuna.order.PlatformOrderScopeIT} の {@code ensurePlatformUser}/{@code platformToken}
- * 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
+ * 管理者管理・ロール管理（RBAC）の HTTP 境界統合テスト。ROLE_MANAGE 権限限定の授権書き込み（付与・変更・停止）とロール CRUD、扱う対象が HQ
+ * 側ロール保持者に限られること、付与した店舗集合が本人の次回ログインのデータ範囲に反映されること、 授権外店舗の実データが応答生ボディに一切現れないこと（強断言）を本物の PostgreSQL
+ * で固定する。ヘルパは {@link com.kizuna.order.PlatformOrderScopeIT} の {@code ensurePlatformUser}/{@code
+ * platformToken} 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
+ *
+ * <p>不減零（ADR 0020 の守衛 G5）の拒否側はここでは固定できない — 母集団は DB 全体の ROLE_MANAGE 実効保持者で、種子の HQ
+ * 管理者を含む他の行を止めないと「最後の 1 人」を作れず、それは後続 IT を連鎖破綻させる。拒否の判定は {@code PlatformStaffServiceTest}
+ * が持ち、ここは母集団が残る側（降格が通ること）で照会そのものが実 DB で成立することを固定する。
  */
 class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
@@ -52,7 +65,14 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   private static final String STORE_B_DOMAIN = "staff-it-store-b.kizuna.test";
   private static final String STORE_B_NAME = "スタッフ管理IT_店舗B機密";
 
+  /** 店舗側ロールのみの利用者。管理者管理の門でも対象絞りでも弾かれる側のカナリア。 */
   private static final String NON_HQ_EMAIL = "staff-it-nonhq@kizuna.test";
+
+  /** HQ 側ロール（PLATFORM 権限を含む）だけを持つ利用者。管理者管理に現れる側の代表。 */
+  private static final String HQ_SIDE_EMAIL = "staff-it-hqside@kizuna.test";
+
+  /** 種子に無い HQ 側ロール。ROLE_MANAGE は含めず、不減零の母集団を膨らませない。 */
+  private static final String HQ_SIDE_ROLE = "スタッフ管理IT_HQ側";
 
   /** 委譲層だけを持つ利用者（STAFF_MANAGE のみ）。ロール定義の門が ROLE_MANAGE であることの検証に使う。 */
   private static final String STAFF_MANAGE_ONLY_EMAIL = "staff-it-staffmanage-only@kizuna.test";
@@ -71,6 +91,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RoleRepository roleRepository;
   @Autowired private PermissionRepository permissionRepository;
+  @Autowired private PlatformTransactionManager transactionManager;
+  @Autowired private DataSource dataSource;
 
   private long storeAId;
   private long storeBId;
@@ -83,6 +105,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         NON_HQ_EMAIL, UserType.STAFF, roleIdsOf("店長"), StoreScopeType.ALL_STORES, Set.of());
     ensurePlatformUser(
         CAST_CANARY_EMAIL, UserType.CAST, Set.of(), StoreScopeType.ALL_STORES, Set.of());
+    ensurePlatformUser(
+        HQ_SIDE_EMAIL, UserType.STAFF, Set.of(hqSideRoleId()), StoreScopeType.ALL_STORES, Set.of());
 
     Role staffManageOnly =
         roleRepository
@@ -102,10 +126,29 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         Set.of());
   }
 
-  private Set<Long> permissionIdsOf(PermissionCode code) {
-    return permissionRepository.findByCodeIn(Set.of(code.name())).stream()
+  private Set<Long> permissionIdsOf(PermissionCode... codes) {
+    Set<String> names = Arrays.stream(codes).map(PermissionCode::name).collect(Collectors.toSet());
+    return permissionRepository.findByCodeIn(names).stream()
         .map(Permission::getId)
         .collect(Collectors.toSet());
+  }
+
+  /**
+   * HQ 側ロールの id。STORE_MANAGE（PLATFORM）でロールを HQ 側にし、STORE_VIEW（SHARED）で {@code /platform/stores/me}
+   * まで到達させる。ROLE_MANAGE は含めないので、この束の保持者を止めても不減零には触れない。
+   */
+  private long hqSideRoleId() {
+    return roleRepository
+        .findByName(HQ_SIDE_ROLE)
+        .orElseGet(
+            () ->
+                roleRepository.save(
+                    Role.builder()
+                        .name(HQ_SIDE_ROLE)
+                        .permissionIds(
+                            permissionIdsOf(PermissionCode.STORE_MANAGE, PermissionCode.STORE_VIEW))
+                        .build()))
+        .getId();
   }
 
   private long ensureStore(String domain, String name) {
@@ -212,7 +255,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(CASE1_EMAIL, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                createBody(
+                    CASE1_EMAIL, rolesJson(HQ_SIDE_ROLE), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -232,7 +276,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("STAFF_MANAGE 能力の無い利用者では GET/POST /platform/staff が 403(AC4)")
+  @DisplayName("ROLE_MANAGE 権限の無い利用者では GET/POST /platform/staff が 403(AC4)")
   void nonHqCannotManageStaff() {
     String mgr = platformToken(NON_HQ_EMAIL, PASSWORD);
 
@@ -261,7 +305,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(CASE3_EMAIL, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                createBody(
+                    CASE3_EMAIL, rolesJson(HQ_SIDE_ROLE), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -284,7 +329,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                updateBody(rolesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", version),
+                updateBody(
+                    rolesJson(HQ_SIDE_ROLE), "SPECIFIC_STORES", "[" + storeBId + "]", version),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -305,7 +351,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   @DisplayName("同一メールの二重作成は 2 回目が 400")
   void duplicateEmailRejected() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
-    String body = createBody(DUP_EMAIL, rolesJson("店舗スタッフ"), "ALL_STORES", "[]");
+    String body = createBody(DUP_EMAIL, rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]");
 
     ResponseEntity<JsonNode> first =
         rest.postForEntity(
@@ -332,7 +378,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+                createBody(email, rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -355,7 +401,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+                createBody(email, rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -375,7 +421,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "{\"email\":\"staff-it-wire-name@kizuna.test\",\"password\":\"%s\","
                 + "\"display_name\":\"\",\"role_ids\":%s,"
                 + "\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[]}",
-            PASSWORD, rolesJson("店舗スタッフ"));
+            PASSWORD, rolesJson(HQ_SIDE_ROLE));
 
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
@@ -413,7 +459,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(
                     "staff-it-empty-specific@kizuna.test",
-                    rolesJson("店長"),
+                    rolesJson(HQ_SIDE_ROLE),
                     "SPECIFIC_STORES",
                     "[]"),
                 bearerJson(hq)),
@@ -428,7 +474,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(
                     "staff-it-nonempty-all@kizuna.test",
-                    rolesJson("店長"),
+                    rolesJson(HQ_SIDE_ROLE),
                     "ALL_STORES",
                     "[" + storeAId + "]"),
                 bearerJson(hq)),
@@ -451,7 +497,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 createBody(
                     "staff-it-unknown-store@kizuna.test",
-                    rolesJson("店長"),
+                    rolesJson(HQ_SIDE_ROLE),
                     "SPECIFIC_STORES",
                     "[999999]"),
                 bearerJson(hq)),
@@ -460,12 +506,12 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     assertThat(res.getBody().path("error").asString()).isEqualTo("指定された店舗が存在しません");
   }
 
-  // 検索語は STAFF 限定と AND で重なる。両者の email に共通する接頭辞で引くことで、
-  // 「検索で拾える範囲にいてもなお CAST は現れない」ことまで断言する。size はページ境界に
-  // 隠れて偽陰性にならないよう、IT が作る件数より十分大きく取る。
+  // 検索語は対象絞りと AND で重なる。3 者に共通する接頭辞で引くことで、「検索で拾える範囲にいてもなお
+  // CAST も店舗側ロールのみの利用者も現れない」ことまで断言する。size はページ境界に隠れて偽陰性に
+  // ならないよう、IT が作る件数より十分大きく取る。
   @Test
-  @DisplayName("スタッフ一覧に CAST が現れず、STAFF は現れること(強断言)")
-  void staffListExcludesCastAndMember() {
+  @DisplayName("管理者一覧に CAST も店舗側ロールのみの利用者も現れず、HQ 側ロール保持者は現れること(強断言・AC1)")
+  void administratorListShowsOnlyHqSideRoleHolders() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
     ResponseEntity<String> res =
@@ -476,26 +522,27 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             String.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody())
-        .as("STAFF は現れ、CAST は一覧の生ボディに一切現れないこと")
-        .contains(NON_HQ_EMAIL)
-        .doesNotContain(CAST_CANARY_EMAIL);
+        .as("HQ 側ロール保持者は現れ、CAST と店舗側ロールのみの利用者は一覧の生ボディに一切現れないこと")
+        .contains(HQ_SIDE_EMAIL)
+        .doesNotContain(CAST_CANARY_EMAIL)
+        .doesNotContain(NON_HQ_EMAIL);
   }
 
   @Test
-  @DisplayName("スタッフ一覧は search で表示名・メールを横断して絞り込み、Spring Page 形で返すこと")
+  @DisplayName("管理者一覧は search で表示名・メールを横断して絞り込み、Spring Page 形で返すこと")
   void staffListFiltersBySearchAndReturnsPage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
     ResponseEntity<JsonNode> res =
         rest.exchange(
-            "/platform/staff?search=" + NON_HQ_EMAIL,
+            "/platform/staff?search=" + HQ_SIDE_EMAIL,
             HttpMethod.GET,
             new HttpEntity<>(bearer(hq)),
             JsonNode.class);
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody().path("total_elements").asLong()).isEqualTo(1);
     assertThat(res.getBody().path("content").get(0).path("email").asString())
-        .isEqualTo(NON_HQ_EMAIL);
+        .isEqualTo(HQ_SIDE_EMAIL);
 
     // 該当なしは空ページ（404 でも 500 でもない）
     ResponseEntity<JsonNode> none =
@@ -602,7 +649,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
                 .displayName(displayName)
                 .enabled(true)
                 .userType(UserType.STAFF)
-                .roleIds(roleIdsOf("店長"))
+                .roleIds(Set.of(hqSideRoleId()))
                 .storeScopeType(scopeType)
                 .storeIds(storeIds)
                 .build())
@@ -610,13 +657,14 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   // 一覧の現在ページに居ない対象でも最新の版を取り直せる経路（競合後の再試行に要る）。
-  // 一覧・作成と同じく CAST/MEMBER は不可視のため 404。
+  // 一覧・作成と同じく CAST/MEMBER と店舗側ロールのみの利用者は不可視のため 404（在否も漏らさない）。
   @Test
-  @DisplayName("GET /platform/staff/{id} は STAFF を返し、CAST は 404 になること")
-  void getStaffByIdReturnsStaffAndHidesCast() {
+  @DisplayName("GET /platform/staff/{id} は HQ 側ロール保持者を返し、CAST も店舗側ロールのみの利用者も 404 になること(AC1)")
+  void getStaffByIdReturnsAdministratorAndHidesOthers() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
-    long staffId = platformUserRepository.findByEmail(NON_HQ_EMAIL).orElseThrow().getId();
+    long staffId = platformUserRepository.findByEmail(HQ_SIDE_EMAIL).orElseThrow().getId();
     long castId = platformUserRepository.findByEmail(CAST_CANARY_EMAIL).orElseThrow().getId();
+    long storeSideId = platformUserRepository.findByEmail(NON_HQ_EMAIL).orElseThrow().getId();
 
     ResponseEntity<JsonNode> found =
         rest.exchange(
@@ -625,7 +673,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(bearer(hq)),
             JsonNode.class);
     assertThat(found.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(found.getBody().path("email").asString()).isEqualTo(NON_HQ_EMAIL);
+    assertThat(found.getBody().path("email").asString()).isEqualTo(HQ_SIDE_EMAIL);
     assertThat(found.getBody().path("version").isNumber()).isTrue();
 
     ResponseEntity<String> cast =
@@ -636,6 +684,16 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             String.class);
     assertThat(cast.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
+    ResponseEntity<String> storeSide =
+        rest.exchange(
+            "/platform/staff/" + storeSideId,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(hq)),
+            String.class);
+    assertThat(storeSide.getStatusCode())
+        .as("店舗側ロールのみの利用者は詳細でも見つからないこと")
+        .isEqualTo(HttpStatus.NOT_FOUND);
+
     ResponseEntity<String> forbidden =
         rest.exchange(
             "/platform/staff/" + staffId,
@@ -645,16 +703,21 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
-  // "staff-it-n_nhq" は _ をワイルドカードとして扱うと staff-it-nonhq に一致してしまう。
-  // 検索語は字面として照合されるべきなので 0 件が正。
+  // "staff-it-h_side" は _ をワイルドカードとして扱うと staff-it-hqside に一致してしまう。
+  // 検索語は字面として照合されるべきなので 0 件が正。対象は一覧に現れる側（HQ 側ロール保持者）で取る —
+  // 対象絞りで元から消える行を使うと、エスケープが壊れても 0 件のままで赤くならない。
   @Test
   @DisplayName("検索語中の LIKE メタ文字は字面として扱われ、ワイルドカードにならないこと")
   void staffSearchTreatsLikeMetacharactersAsLiterals() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
+    assertThat(staffIds(hq, "?search=staff-it-hqside&size=100"))
+        .as("前提: 字面どおりの検索語では対象が 1 件見つかること")
+        .isNotEmpty();
+
     ResponseEntity<JsonNode> underscore =
         rest.exchange(
-            "/platform/staff?search=staff-it-n_nhq",
+            "/platform/staff?search=staff-it-h_side",
             HttpMethod.GET,
             new HttpEntity<>(bearer(hq)),
             JsonNode.class);
@@ -663,7 +726,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> percent =
         rest.exchange(
-            "/platform/staff?search=staff-it-%25nonhq",
+            "/platform/staff?search=staff-it-%25hqside",
             HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
     assertThat(percent.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(percent.getBody().path("total_elements").asLong()).isZero();
@@ -711,7 +774,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+                createBody(email, rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long staffId = created.getBody().path("id").asLong();
@@ -724,7 +787,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>(
                 "{\"role_ids\":"
-                    + rolesJson("店舗スタッフ")
+                    + rolesJson(HQ_SIDE_ROLE)
                     + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
                     + "\"version\":"
                     + version
@@ -785,7 +848,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, rolesJson("店長"), "SPECIFIC_STORES", "[" + storeAId + "]"),
+                createBody(email, rolesJson(HQ_SIDE_ROLE), "SPECIFIC_STORES", "[" + storeAId + "]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -799,7 +862,10 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>(
                 updateBody(
-                    rolesJson("店長"), "SPECIFIC_STORES", "[" + storeBId + "]", initialVersion),
+                    rolesJson(HQ_SIDE_ROLE),
+                    "SPECIFIC_STORES",
+                    "[" + storeBId + "]",
+                    initialVersion),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -814,7 +880,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>(
                 "{\"role_ids\":"
-                    + rolesJson("店長")
+                    + rolesJson(HQ_SIDE_ROLE)
                     + ",\"store_scope_type\":\"SPECIFIC_STORES\",\"store_ids\":["
                     + storeAId
                     + "],\"enabled\":false,\"version\":"
@@ -843,7 +909,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/staff",
             new HttpEntity<>(
-                createBody(email, rolesJson("店舗スタッフ"), "ALL_STORES", "[]"), bearerJson(hq)),
+                createBody(email, rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]"), bearerJson(hq)),
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long staffId = created.getBody().path("id").asLong();
@@ -856,7 +922,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>(
                 "{\"role_ids\":"
-                    + rolesJson("店舗スタッフ")
+                    + rolesJson(HQ_SIDE_ROLE)
                     + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
                     + "\"version\":"
                     + preStopVersion
@@ -873,7 +939,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             HttpMethod.PUT,
             new HttpEntity<>(
                 "{\"role_ids\":"
-                    + rolesJson("店舗スタッフ")
+                    + rolesJson(HQ_SIDE_ROLE)
                     + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":true,"
                     + "\"version\":"
                     + preStopVersion
@@ -995,7 +1061,10 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/staff",
             new HttpEntity<>(
                 createBody(
-                    "staff-it-customrole@kizuna.test", "[" + roleId + "]", "ALL_STORES", "[]"),
+                    "staff-it-customrole@kizuna.test",
+                    "[" + roleId + "," + hqSideRoleId() + "]",
+                    "ALL_STORES",
+                    "[]"),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(staff.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -1044,5 +1113,158 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(bearer(hq)),
             String.class);
     assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+  }
+
+  @Test
+  @DisplayName("STAFF_MANAGE のみ保持の利用者は管理者管理（一覧・詳細・作成・更新）へ 403(AC3)")
+  void staffManageAloneCannotReachAdministratorManagement() {
+    String delegated = platformToken(STAFF_MANAGE_ONLY_EMAIL, PASSWORD);
+    long targetId = platformUserRepository.findByEmail(HQ_SIDE_EMAIL).orElseThrow().getId();
+
+    assertThat(
+            rest.exchange(
+                    "/platform/staff",
+                    HttpMethod.GET,
+                    new HttpEntity<>(bearer(delegated)),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(
+            rest.exchange(
+                    "/platform/staff/" + targetId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(bearer(delegated)),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(
+            rest.postForEntity(
+                    "/platform/staff",
+                    new HttpEntity<>(
+                        createBody(
+                            "staff-it-delegated@kizuna.test",
+                            rolesJson(HQ_SIDE_ROLE),
+                            "ALL_STORES",
+                            "[]"),
+                        bearerJson(delegated)),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(
+            rest.exchange(
+                    "/platform/staff/" + targetId,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(
+                        updateBody(rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]", 0L),
+                        bearerJson(delegated)),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("店舗側ロールのみの作成・降格は 400 で拒否されること（管理者管理が扱えるのは HQ 側ロール保持者だけ）")
+  void storeSideOnlyGrantIsRejected() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody("staff-it-storeonly@kizuna.test", rolesJson("店長"), "ALL_STORES", "[]"),
+                bearerJson(hq)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(created.getBody().path("error").asString())
+        .isEqualTo("管理者にはプラットフォーム権限を含むロールを 1 つ以上付与してください");
+    assertThat(platformUserRepository.findByEmail("staff-it-storeonly@kizuna.test")).isEmpty();
+
+    long targetId = platformUserRepository.findByEmail(HQ_SIDE_EMAIL).orElseThrow().getId();
+    long version = platformUserRepository.findById(targetId).orElseThrow().getVersion();
+    ResponseEntity<String> demoted =
+        rest.exchange(
+            "/platform/staff/" + targetId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody(rolesJson("店長"), "ALL_STORES", "[]", version), bearerJson(hq)),
+            String.class);
+    assertThat(demoted.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findById(targetId).orElseThrow().getRoleIds())
+        .as("拒否された降格で授権が変わらないこと")
+        .containsExactly(hqSideRoleId());
+  }
+
+  // 不減零（G5）は母集団が残る側だけをここで固定する（拒否側は PlatformStaffServiceTest — 冒頭の javadoc 参照）。
+  // 実 DB を通すことに意味があるのは、母集団を押さえる問い合わせ（FOR UPDATE 付きスカラー投影）が
+  // 本物の PostgreSQL で成立し、版の照合を巻き込まないことが、この経路でしか確かめられないからである。
+  @Test
+  @DisplayName("ROLE_MANAGE 保持者の降格は、他に有効な保持者が残っていれば 200 で通ること")
+  void demotingRoleManageHolderIsAllowedWhileOthersRemain() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    String email = "staff-it-demote@kizuna.test";
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, rolesJson("HQ管理者"), "ALL_STORES", "[]"), bearerJson(hq)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    long staffId = created.getBody().path("id").asLong();
+    long version = created.getBody().path("version").asLong();
+
+    ResponseEntity<JsonNode> demoted =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody(rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]", version), bearerJson(hq)),
+            JsonNode.class);
+
+    assertThat(demoted.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(platformUserRepository.findById(staffId).orElseThrow().getRoleIds())
+        .containsExactly(hqSideRoleId());
+  }
+
+  // 直列化は「押さえていること」そのものが不変量で、押さえられていなくても計数は同じ答えを返す — FOR UPDATE が
+  // 静かに落ちても他のどのテストも赤くならない。押さえた行が別接続から取れないことで、実際に押さえていると確かめる。
+  @Test
+  @DisplayName("母集団の照会は数えた行を実際に押さえること（スカラー投影でも FOR UPDATE が効くこと）")
+  void holderLookupLocksTheRowsItCounts() {
+    Set<Long> roleManageRoleIds =
+        roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
+    assertThat(roleManageRoleIds).as("前提: ROLE_MANAGE を含むロールが存在すること").isNotEmpty();
+
+    new TransactionTemplate(transactionManager)
+        .execute(
+            status -> {
+              List<Long> holders =
+                  platformUserRepository.findEnabledRoleHolderIdsForUpdate(roleManageRoleIds);
+              assertThat(holders).as("前提: 有効な ROLE_MANAGE 実効保持者が居ること").isNotEmpty();
+
+              assertThatThrownBy(() -> lockNoWait(holders.get(0)))
+                  .as("押さえた行は別接続の FOR UPDATE NOWAIT では取れないこと")
+                  .isInstanceOf(SQLException.class)
+                  .extracting(ex -> ((SQLException) ex).getSQLState())
+                  .as("待てば取れる状態（55P03 = lock_not_available）であること")
+                  .isEqualTo("55P03");
+
+              status.setRollbackOnly();
+              return null;
+            });
+  }
+
+  /** 別接続で行ロックを待たずに取りに行く。既に押さえられていれば SQLState 55P03 で失敗する。 */
+  private void lockNoWait(long userId) throws SQLException {
+    try (Connection connection = dataSource.getConnection()) {
+      connection.setAutoCommit(false);
+      try (PreparedStatement statement =
+          connection.prepareStatement("select id from t_users where id = ? for update nowait")) {
+        statement.setLong(1, userId);
+        statement.executeQuery();
+      } finally {
+        connection.rollback();
+      }
+    }
   }
 }

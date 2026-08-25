@@ -34,7 +34,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>スタイルは {@link com.kizuna.auth.PlatformBridgeIT} に倣い、対象ユーザーは repository 直挿の専用テストユーザーのみを使う
  * （種子ユーザー、特に {@code CrossStoreTestSupport} が全面依存する yamada.jiro@kizuna.test を停止すると後続 IT が連鎖破綻するため）。
- * 実行主体は種子の HQ 管理者 admin@kizuna.test（PERM_STAFF_MANAGE 保持）を使う。
+ * 実行主体は種子の HQ 管理者 admin@kizuna.test（PERM_ROLE_MANAGE 保持）を使う。対象も HQ 側ロール保持者にする — 管理者管理が扱えるのはそれだけである。
  *
  * <p>{@code CrossStoreTestSupport} は継承しない。本 IT は店舗文脈（X-Store-ID）を一切使わず、同基底の {@code @BeforeEach}
  * による種子ユーザーログインも不要なため（上記のとおり種子ユーザーには触れない方針）。
@@ -45,7 +45,7 @@ class PlatformStaffRevocationIT {
 
   private static final String TEST_PASSWORD = "pass";
 
-  /** 種子の HQ 管理者（PERM_STAFF_MANAGE 保持、停止操作の実行主体）。 */
+  /** 種子の HQ 管理者（PERM_ROLE_MANAGE 保持、停止操作の実行主体）。 */
   private static final String ADMIN_EMAIL = "admin@kizuna.test";
 
   private static final String STOP_EMAIL = "revocation-stop@kizuna.test";
@@ -173,7 +173,7 @@ class PlatformStaffRevocationIT {
         "/platform/staff/" + targetId,
         HttpMethod.PUT,
         new HttpEntity<>(
-            updateBody(rolesJson("店舗スタッフ"), "ALL_STORES", "[]", enabled, version),
+            updateBody(rolesJson("HQ管理者"), "ALL_STORES", "[]", enabled, version),
             bearerJson(actorToken)),
         JsonNode.class);
   }
@@ -181,7 +181,7 @@ class PlatformStaffRevocationIT {
   @Test
   @DisplayName("停止したユーザーの停止前に取得した JWT は GET /platform/me が 401 になること(ユーザー単位ブラックリスト即時反映)")
   void stoppingUserRevokesPreviouslyIssuedToken() {
-    PlatformUser target = ensureEnabledTestUser(STOP_EMAIL, "店舗スタッフ");
+    PlatformUser target = ensureEnabledTestUser(STOP_EMAIL, "HQ管理者");
     String targetToken = platformToken(STOP_EMAIL, TEST_PASSWORD);
     // 正向対照: 停止前は me が読めること(後段の拒否が停止起因である証明)。
     assertThat(meWith(targetToken).getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -202,7 +202,7 @@ class PlatformStaffRevocationIT {
   @Test
   @DisplayName("再開すると、停止中に拒否されていた同一の旧 JWT が再び 200 になること")
   void resumingUserRevivesPreviouslyIssuedToken() {
-    PlatformUser target = ensureEnabledTestUser(RESUME_EMAIL, "店舗スタッフ");
+    PlatformUser target = ensureEnabledTestUser(RESUME_EMAIL, "HQ管理者");
     String targetToken = platformToken(RESUME_EMAIL, TEST_PASSWORD);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
@@ -225,7 +225,7 @@ class PlatformStaffRevocationIT {
   @DisplayName(
       "enabled=false と存在しない store_id を同時送信した更新が 400 でロールバックされ、" + "失効も反映されないこと(AFTER_COMMIT 相の証明)")
   void rollbackOnInvalidStoreDoesNotBlacklistUser() {
-    PlatformUser target = ensureEnabledTestUser(ROLLBACK_EMAIL, "店長");
+    PlatformUser target = ensureEnabledTestUser(ROLLBACK_EMAIL, "HQ管理者");
     String targetToken = platformToken(ROLLBACK_EMAIL, TEST_PASSWORD);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
@@ -235,7 +235,7 @@ class PlatformStaffRevocationIT {
             HttpMethod.PUT,
             new HttpEntity<>(
                 updateBody(
-                    rolesJson("店長"), "SPECIFIC_STORES", "[999999]", false, target.getVersion()),
+                    rolesJson("HQ管理者"), "SPECIFIC_STORES", "[999999]", false, target.getVersion()),
                 bearerJson(admin)),
             JsonNode.class);
 
@@ -275,7 +275,7 @@ class PlatformStaffRevocationIT {
   @Test
   @DisplayName("既に停止済みのユーザーへ enabled=false を再送すると 200 になり、ユーザー単位ブラックリストが再書込されること(冪等)")
   void reSendingStopOnAlreadyStoppedUserRewritesBlacklistKey() {
-    PlatformUser target = ensureEnabledTestUser(IDEMPOTENT_EMAIL, "店舗スタッフ");
+    PlatformUser target = ensureEnabledTestUser(IDEMPOTENT_EMAIL, "HQ管理者");
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
     String key = USER_BLACKLIST_KEY_PREFIX + IDEMPOTENT_EMAIL;
 
@@ -299,7 +299,7 @@ class PlatformStaffRevocationIT {
   @Test
   @DisplayName("内容が同一の更新でも version が増えること（陳腐な更新がコミットできない前提の実証）")
   void noOpUpdateStillBumpsVersion() {
-    PlatformUser target = ensureEnabledTestUser(NOOP_EMAIL, "店舗スタッフ");
+    PlatformUser target = ensureEnabledTestUser(NOOP_EMAIL, "HQ管理者");
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
     // 1 回目: enabled も束も店舗集合も現状と同一の payload を送る（実質 no-op）。
@@ -322,7 +322,7 @@ class PlatformStaffRevocationIT {
   @Test
   @DisplayName("停止時に書き込まれるユーザー単位ブラックリストの TTL が JWT 有効期間(app.jwt.expiration)と一致すること")
   void blacklistKeyTtlMatchesJwtExpiration() {
-    PlatformUser target = ensureEnabledTestUser(TTL_EMAIL, "店舗スタッフ");
+    PlatformUser target = ensureEnabledTestUser(TTL_EMAIL, "HQ管理者");
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
     ResponseEntity<JsonNode> stop = putEnabled(admin, target.getId(), false, target.getVersion());

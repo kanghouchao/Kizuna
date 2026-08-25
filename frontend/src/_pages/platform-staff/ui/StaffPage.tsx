@@ -41,7 +41,7 @@ interface StaffCriteria {
   storeId?: number;
 }
 
-/** スタッフ一覧ページ。一覧内モーダルで新規作成・編集を行う。 */
+/** 管理者管理ページ。HQ 側ロール保持者の一覧と、一覧内モーダルでの新規作成・編集を行う。 */
 export default function StaffPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [storeFilter, setStoreFilter] = useState(ALL_STORES);
@@ -143,12 +143,12 @@ export default function StaffPage() {
   return (
     <>
       <ListPage
-        title="スタッフ管理"
-        description="ロール・担当店舗の付与と編集ができます。"
+        title="管理者管理"
+        description="プラットフォーム権限を持つアカウントのロール・担当店舗を管理します。"
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <PlusIcon />
-            スタッフを追加
+            管理者を追加
           </Button>
         }
         search={{
@@ -157,7 +157,7 @@ export default function StaffPage() {
             <>
               <div className="w-full md:max-w-xs">
                 <label htmlFor="search" className="sr-only">
-                  スタッフを検索
+                  管理者を検索
                 </label>
                 <Input
                   type="text"
@@ -221,12 +221,12 @@ export default function StaffPage() {
         }}
         state={list}
         emptyMessage={
-          // 店舗の絞り込み中も「登録なし」ではなく「該当なし」（他店舗にはスタッフが居る可能性がある）
+          // 店舗の絞り込み中も「登録なし」ではなく「該当なし」（他店舗には管理者が居る可能性がある）
           searchTerm || storeId !== undefined
-            ? '該当するスタッフが見つかりません'
-            : 'スタッフが登録されていません'
+            ? '該当する管理者が見つかりません'
+            : '管理者が登録されていません'
         }
-        errorMessage="スタッフ一覧の取得に失敗しました"
+        errorMessage="管理者一覧の取得に失敗しました"
         onRetry={list.reload}
       >
         <Table>

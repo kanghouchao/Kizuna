@@ -41,10 +41,10 @@ databaseChangeLog:
             columns:
               - column: { name: id, value: platform-staff }
               - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: スタッフ管理 }
+              - column: { name: label, value: 管理者管理 }
               - column: { name: path, value: /platform/staff }
               - column: { name: icon, value: UsersIcon }
-              - column: { name: permission, value: STAFF_MANAGE }
+              - column: { name: permission, value: ROLE_MANAGE }
               - column: { name: sort_order, valueNumeric: 3 }
         - insert:
             tableName: t_menus

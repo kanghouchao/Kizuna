@@ -22,7 +22,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 平台スタッフ（ロール×店舗集合）管理 API。全操作 STAFF_MANAGE 権限限定。 */
+/**
+ * 管理者管理 API（HQ 側ロール保持者のロール×店舗集合）。全操作 ROLE_MANAGE 権限限定。
+ *
+ * <p>店舗側ロールのみの利用者は本 API の対象外で、店舗スタッフ管理（STAFF_MANAGE 門）が扱う（ADR 0020）。
+ */
 @RestController
 @RequestMapping("/platform/staff")
 @RequiredArgsConstructor
@@ -31,7 +35,7 @@ public class PlatformStaffController {
   private final PlatformStaffService platformStaffService;
 
   @GetMapping
-  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<Page<PlatformStaffResponse>> list(
       @RequestParam(required = false) String search,
       @RequestParam(required = false) Long storeId,
@@ -40,20 +44,20 @@ public class PlatformStaffController {
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> get(@PathVariable Long id) {
     return ResponseEntity.ok(platformStaffService.get(id));
   }
 
   @PostMapping
-  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> create(
       @Valid @RequestBody PlatformStaffCreateRequest req) {
     return ResponseEntity.status(HttpStatus.CREATED).body(platformStaffService.create(req));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> update(
       @PathVariable Long id,
       @Valid @RequestBody PlatformStaffUpdateRequest req,

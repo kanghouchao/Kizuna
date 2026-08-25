@@ -55,7 +55,7 @@ interface StaffCreateFormValues {
 }
 
 /**
- * スタッフの新規作成モーダル（メール・初期パスワード・氏名・ロール・担当店舗）。
+ * 管理者の新規作成モーダル（メール・初期パスワード・氏名・ロール・担当店舗）。
  * 開いたときだけ mount される前提。ロール目録の取得は mount 時 = 開いた時点に遅延される。
  */
 export function StaffCreateModal({
@@ -95,11 +95,11 @@ export function StaffCreateModal({
   const submit = async (values: StaffCreateFormValues) => {
     try {
       await platformStaffApi.create(values);
-      notify.success('スタッフを追加しました');
+      notify.success('管理者を追加しました');
       onCreated();
       onClose();
     } catch (error) {
-      notify.error(getApiErrorMessage(error, 'スタッフの追加に失敗しました'));
+      notify.error(getApiErrorMessage(error, '管理者の追加に失敗しました'));
     }
   };
 
@@ -118,7 +118,7 @@ export function StaffCreateModal({
         className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
       >
         <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
-          スタッフを追加
+          管理者を追加
         </DialogTitle>
         <Form {...form}>
           {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、

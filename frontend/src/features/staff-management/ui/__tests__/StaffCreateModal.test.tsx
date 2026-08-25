@@ -44,7 +44,7 @@ const fillBasics = () => {
   fireEvent.change(screen.getByLabelText('氏名'), { target: { value: '佐藤次郎' } });
 };
 
-describe('スタッフ新規作成モーダル', () => {
+describe('管理者新規作成モーダル', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRoleApi.list.mockResolvedValue([
@@ -156,7 +156,7 @@ describe('スタッフ新規作成モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
-    expect(mockedNotify.success).toHaveBeenCalledWith('スタッフを追加しました');
+    expect(mockedNotify.success).toHaveBeenCalledWith('管理者を追加しました');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
