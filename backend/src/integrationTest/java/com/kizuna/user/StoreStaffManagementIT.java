@@ -447,6 +447,25 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("可授ロールは着地資格の軸では濾さず、単独では付与できないロールも返ること")
+  void grantableRolesAreNotFilteredByStoreConsoleReach() {
+    // 付与の可否は権限の並集に対する条件なので、単独では着地できないロールも実動権限を持つロールと
+    // 併せれば正当な構成になる。ロール単位で濾すとその組合せごと選べなくなり、見出し節の通行に要る
+    // 標識権限を配れない。読み口が絞るのは行使者の権限による軸（委譲権限・HQ 側ロール）だけである。
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/store/staff-members/grantable-roles",
+            HttpMethod.GET,
+            new HttpEntity<>(headersFor(MANAGER_EMAIL, STORE_A)),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(res.getBody())
+        .as("標識権限だけのロールも SHARED だけのロールも目録には現れること")
+        .contains(MENU_ONLY_ROLE, SHARED_ONLY_ROLE);
+  }
+
+  @Test
   @DisplayName("STAFF_MANAGE を持たない店舗スタッフには全経路が 403 になること")
   void storeStaffWithoutDelegationIsForbidden() {
     ResponseEntity<String> list =
