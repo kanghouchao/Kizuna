@@ -60,9 +60,6 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
-  /** 新規作成の要求が通る合言葉。要求側の最小 8 文字を満たす必要があり、種子の合言葉は使えない。 */
-  private static final String NEW_ACCOUNT_PASSWORD = "pass1234";
-
   /** ALL_STORES の HQ 管理者シード（seed/04-platform-admin.yaml）。 */
   private static final String SEED_EMAIL = "admin@kizuna.test";
 

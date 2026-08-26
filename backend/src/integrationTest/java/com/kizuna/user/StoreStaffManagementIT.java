@@ -38,9 +38,6 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
-  /** 新規作成の要求が通る合言葉。要求側の最小 8 文字を満たす必要があり、種子の合言葉は使えない。 */
-  private static final String NEW_ACCOUNT_PASSWORD = "pass1234";
-
   /** 店長役（委譲層のみ・店舗A担当）。この面の主たる行使者。 */
   private static final String MANAGER_EMAIL = "store-staff-it-manager@kizuna.test";
 
