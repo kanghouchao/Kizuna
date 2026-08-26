@@ -252,6 +252,28 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("存在しない storeId での作成は FK 違反を 400 へ変換して拒否すること")
+  void unknownStoreIdRejected() {
+    // ALL_STORES の行使者は担当範囲の検査を素通りするため、店舗 id の在否は保存時の FK でしか止まらない
+    // — 店長からは踏めないが、この面の日常的な行使者である HQ からは決定的に踏める経路である。
+    // 制約名の抽出が壊れれば兜底へ溢れて 500 になり、別の制約へ誤帰属すれば文言が変わる。
+    ResponseEntity<JsonNode> res =
+        rest.postForEntity(
+            "/store/staff-members",
+            new HttpEntity<>(
+                createBody(
+                    "store-staff-it-unknown-store@kizuna.test",
+                    rolesJson(CLERK_ROLE),
+                    "SPECIFIC_STORES",
+                    "[999999]"),
+                headersFor("admin@kizuna.test", STORE_A)),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("指定された店舗が存在しません");
+  }
+
+  @Test
   @DisplayName("HQ 側ロールの付与は行使者を問わず 400 になること（母集団の維持）")
   void hqSideRoleGrantIsRefusedEvenForHq() {
     ResponseEntity<String> res =
