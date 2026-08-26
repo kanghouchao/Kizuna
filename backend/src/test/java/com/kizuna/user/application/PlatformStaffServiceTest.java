@@ -37,6 +37,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -777,7 +778,6 @@ class PlatformStaffServiceTest {
         staff(
             3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
-    givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(ROLE_MANAGE_ROLE)))
         .thenReturn(List.of(role(ROLE_MANAGE_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
@@ -788,6 +788,7 @@ class PlatformStaffServiceTest {
         updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
         ACTOR);
 
+    verify(permissionRepository, never()).lockIdByCode(any());
     verify(repository, never()).lockEnabledRoleHolderIds(any());
   }
 
@@ -850,8 +851,8 @@ class PlatformStaffServiceTest {
 
   @Test
   void update_reevaluatesTheRoleSetAfterTakingTheGuardMutex() {
-    // ロール定義の編集が並行して ROLE_MANAGE を外していれば、押さえる前に読んだ集合はもう母集団を表さない。
-    // 取り直さないと、このロールの保持者を実効保持者として数え続けて双方の検査が通ってしまう。
+    // ロール定義の編集が並行して ROLE_MANAGE を外していれば、押さえた後に読む集合が母集団の正である。
+    // 対象がその集合に居ないなら、この更新は母集団を減らさない — 押さえたうえで通す（対照）。
     PlatformUser existing =
         staff(
             3L,
@@ -861,7 +862,7 @@ class PlatformStaffServiceTest {
             Set.of());
     givenHqSideRoles();
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(ROLE_MANAGE_ROLE), Set.of(HQ_ROLE));
+        .thenReturn(Set.of(HQ_ROLE));
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
     lenient()
@@ -872,5 +873,37 @@ class PlatformStaffServiceTest {
     service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
     assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
+    verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
+  }
+
+  @Test
+  void update_stopThatBecomesReducingWhileAwaitingTheMutex_isRejected() {
+    // 発火判定を押さえる前のロール集合で行うと、この停止は母集団と無関係に見えて直列化点を素通りする。
+    // 待っている間に並行するロール編集が対象の保持ロールへ ROLE_MANAGE を足しうるので、停止・除去は
+    // 押さえたうえで取り直した集合により判定しなければ、最後の保持者の降格と重なって母集団が 0 になる。
+    PlatformUser existing =
+        staff(3L, "holder@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    givenHqSideRoles();
+    AtomicBoolean mutexTaken = new AtomicBoolean(false);
+    when(permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name()))
+        .thenAnswer(
+            invocation -> {
+              mutexTaken.set(true);
+              return Optional.of(42L);
+            });
+    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
+        .thenAnswer(invocation -> mutexTaken.get() ? Set.of(HQ_ROLE) : Set.of());
+    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(repository.findEnabledRoleHolderIds(Set.of(HQ_ROLE))).thenReturn(List.of(3L));
+
+    PlatformStaffUpdateRequest req =
+        updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    req.setEnabled(false);
+
+    assertThatThrownBy(() -> service.update(3L, req, ACTOR))
+        .isInstanceOf(LastRoleManageHolderException.class);
+
+    verify(repository, never()).saveAndFlush(any());
   }
 }

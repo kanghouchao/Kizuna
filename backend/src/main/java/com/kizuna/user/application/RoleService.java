@@ -100,6 +100,8 @@ public class RoleService {
    * 押さえた後に母集団を取り直して判定し直す。平台既定ロールは改廃自体を {@link Role#replacePermissions} が拒むため、押さえずに抜ける。
    */
   private void requireRoleManageHolderRemains(Role role, Set<String> newPermissionCodes) {
+    // ROLE_MANAGE を残す・現に持たない編集を押さえずに通せるのは、並行して同じロールへ ROLE_MANAGE を
+    // 足す編集が同一ロール行の @Version を進め、本編集の保存が楽観ロック違反で落ちるためである。
     if (Boolean.TRUE.equals(role.getSystemRole())
         || newPermissionCodes.contains(ROLE_MANAGE)
         || !suppliesRoleManage(role)) {
