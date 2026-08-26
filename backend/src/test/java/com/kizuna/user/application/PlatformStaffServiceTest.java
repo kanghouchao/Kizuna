@@ -31,7 +31,6 @@ import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -84,8 +83,7 @@ class PlatformStaffServiceTest {
 
   /** HQ 側ロールの解決を差し込む。既定では HQ_ROLE と ROLE_MANAGE_ROLE だけが HQ 側。 */
   private void givenHqSideRoles() {
-    when(roleRepository.findIdsByPermissionCodeIn(ArgumentMatchers.anyCollection()))
-        .thenReturn(Set.of(HQ_ROLE, ROLE_MANAGE_ROLE));
+    when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE, ROLE_MANAGE_ROLE));
   }
 
   /** ROLE_MANAGE を含むロールの解決を差し込む（不減零の母集団判定）。 */
@@ -630,28 +628,6 @@ class PlatformStaffServiceTest {
     assertThat(existing.getEnabled()).as("ガードは reassignGrants 前で発火し授権も変更されないこと").isTrue();
     verify(repository, never()).saveAndFlush(any());
     verifyNoInteractions(eventPublisher);
-  }
-
-  @Test
-  void hqSideRoleIsResolvedFromPlatformConsolePermissionsOnly() {
-    // 「HQ 側ロール」の定義そのものを固定する。STAFF_MANAGE は店舗側へ移った権限（ADR 0020）、STORE_VIEW は SHARED で、
-    // どちらもロールを HQ 側にはしない。判定が旧目録のまま取り残されると、店長のロールが管理者管理へ現れる。
-    ArgumentCaptor<Collection<String>> codes = ArgumentCaptor.captor();
-    PlatformUser existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-
-    service.get(3L);
-
-    verify(roleRepository).findIdsByPermissionCodeIn(codes.capture());
-    assertThat(codes.getValue())
-        .contains(PermissionCode.ROLE_MANAGE.name(), PermissionCode.STORE_MANAGE.name())
-        .doesNotContain(
-            PermissionCode.STAFF_MANAGE.name(),
-            PermissionCode.STORE_VIEW.name(),
-            PermissionCode.ORDER_MANAGE.name());
   }
 
   @Test

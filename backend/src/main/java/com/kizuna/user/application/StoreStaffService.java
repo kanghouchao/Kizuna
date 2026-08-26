@@ -25,7 +25,6 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -67,13 +66,6 @@ public class StoreStaffService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
-  /** HQ 側ロールの判定に使う権限コード（Console.PLATFORM の全権限）。目録は静的なので毎回引き直さない。 */
-  private static final Set<String> PLATFORM_PERMISSION_CODES =
-      Arrays.stream(PermissionCode.values())
-          .filter(code -> code.getConsole() == PermissionCode.Console.PLATFORM)
-          .map(PermissionCode::name)
-          .collect(Collectors.toUnmodifiableSet());
-
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
@@ -82,7 +74,7 @@ public class StoreStaffService {
 
   @Transactional(readOnly = true)
   public Page<StoreStaffResponse> list(String search, Pageable pageable) {
-    Set<Long> hqRoleIds = hqRoleIds();
+    Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
     Page<PlatformUser> staff =
         repository.findAll(staffSpec(search, storeContext.getStoreId(), hqRoleIds), pageable);
     Map<Long, String> roleNames =
@@ -136,7 +128,7 @@ public class StoreStaffService {
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
   public StoreStaffResponse get(Long id) {
-    PlatformUser user = requireManagedStaff(id, hqRoleIds());
+    PlatformUser user = requireManagedStaff(id, roleRepository.findHqRoleIds());
     return toResponse(user, roleNamesOf(user.getRoleIds()), delegationRoleIds(), actorScope());
   }
 
@@ -144,7 +136,7 @@ public class StoreStaffService {
   public StoreStaffResponse create(StoreStaffCreateRequest req) {
     Set<Long> delegationRoleIds = delegationRoleIds();
     StoreScope scope = actorScope();
-    requireGrantableRoles(req.getRoleIds(), hqRoleIds(), delegationRoleIds);
+    requireGrantableRoles(req.getRoleIds(), roleRepository.findHqRoleIds(), delegationRoleIds);
     requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), scope);
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
     if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
@@ -166,7 +158,7 @@ public class StoreStaffService {
 
   @Transactional
   public StoreStaffResponse update(Long id, StoreStaffUpdateRequest req) {
-    Set<Long> hqRoleIds = hqRoleIds();
+    Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
     PlatformUser user = requireManagedStaff(id, hqRoleIds);
     Set<Long> delegationRoleIds = delegationRoleIds();
     StoreScope scope = actorScope();
@@ -204,7 +196,7 @@ public class StoreStaffService {
   /** 行使者が付与できるロールの目録。防提権述語（店舗側ロールであること・委譲権限を含まないこと）をサーバ側の単源に置き、 前端に判定を複製させないための読み口である。 */
   @Transactional(readOnly = true)
   public List<RoleSummaryResponse> grantableRoles() {
-    Set<Long> excluded = new HashSet<>(hqRoleIds());
+    Set<Long> excluded = new HashSet<>(roleRepository.findHqRoleIds());
     excluded.addAll(delegationRoleIds());
     return roleRepository.findAllSummaries().stream()
         .filter(summary -> !excluded.contains(summary.getId()))
@@ -233,11 +225,6 @@ public class StoreStaffService {
         .filter(user -> !holdsAny(user.getRoleIds(), hqRoleIds))
         .filter(user -> user.authorizes(contextStoreId))
         .orElseThrow(() -> new NotFoundException("スタッフが見つかりません: " + id));
-  }
-
-  /** HQ 側ロール（Console.PLATFORM の権限を 1 つ以上含むロール）の id 集合。 */
-  private Set<Long> hqRoleIds() {
-    return roleRepository.findIdsByPermissionCodeIn(PLATFORM_PERMISSION_CODES);
   }
 
   /**
