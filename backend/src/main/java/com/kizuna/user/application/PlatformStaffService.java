@@ -203,11 +203,8 @@ public class PlatformStaffService {
    * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止・剥奪を拒む。判定を役職名（HQ_ADMIN）でなく 実効権限で行うのは、管理が
    * ROLE_MANAGE を含む自作ロールへ移った配備でも正しく数えるためである。
    *
-   * <p>母集団を減らす更新だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}）を押さえ、押さえた後に ROLE_MANAGE
-   * を含むロール集合を取り直して判定し直す — 押さえる前に読んだ集合のままだと、並行するロール定義の編集が そのロールから ROLE_MANAGE
-   * を外し終えていても保持者として数え続け、双方の検査が通る。
-   *
-   * <p>そのうえで母集団の行も押さえて数え直す。押さえる問い合わせ自身の結果は待つ前のスナップショットのままで、待っている間に 確定した降格を見ない（{@link
+   * <p>母集団を減らす更新だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}、取り直しの理由もそちら）を押さえ、 押さえた後に
+   * ROLE_MANAGE を含むロール集合を取り直して判定し直す。そのうえで母集団の行も押さえて数え直す（{@link
    * PlatformUserRepository#lockEnabledRoleHolderIds}）。目録行の直列化点があれば行ロックは冗長だが、 母集団の行を押さえている事実自体が
    * {@code PlatformStaffManagementIT} の実測の対象なので残している。
    */
