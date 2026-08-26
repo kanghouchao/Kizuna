@@ -4,5 +4,6 @@ export { StaffCreateModal } from './ui/StaffCreateModal';
 export { StaffEditModal } from './ui/StaffEditModal';
 export { StoreStaffCreateModal } from './ui/StoreStaffCreateModal';
 export { StoreStaffEditModal } from './ui/StoreStaffEditModal';
+export { StoreManagerAppointModal } from './ui/StoreManagerAppointModal';
 export { roleSetLabel } from './lib/roleSetLabel';
 export { storeSetLabel } from './lib/storeSetLabel';
