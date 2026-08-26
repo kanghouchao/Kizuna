@@ -1,7 +1,7 @@
 package com.kizuna.auth.api.dto;
 
+import com.kizuna.shared.validation.Password;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -9,7 +9,5 @@ public class PasswordChangeRequest {
 
   @NotBlank private String currentPassword;
 
-  @NotBlank
-  @Size(min = 8, max = 100)
-  private String newPassword;
+  @NotBlank @Password private String newPassword;
 }

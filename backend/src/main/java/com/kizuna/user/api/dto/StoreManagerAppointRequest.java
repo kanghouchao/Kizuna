@@ -1,5 +1,6 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.shared.validation.Password;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -24,7 +25,7 @@ public class StoreManagerAppointRequest {
   @Size(max = 127)
   private String email;
 
-  private String password;
+  @Password private String password;
 
   // t_users.display_name VARCHAR(150)。列長超過は制約名を持たない整合性違反として写像に載らず 500 に落ちるため、
   // 上限は要求の側で止める。

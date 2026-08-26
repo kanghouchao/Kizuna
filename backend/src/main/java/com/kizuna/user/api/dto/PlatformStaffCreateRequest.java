@@ -1,5 +1,6 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.shared.validation.Password;
 import com.kizuna.user.domain.StoreScopeType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -27,6 +28,7 @@ public class PlatformStaffCreateRequest {
   private String email;
 
   @NotBlank(message = "password is required")
+  @Password
   private String password;
 
   @NotBlank(message = "display_name is required")
