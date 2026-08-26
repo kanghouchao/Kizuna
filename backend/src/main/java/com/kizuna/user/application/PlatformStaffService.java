@@ -203,17 +203,21 @@ public class PlatformStaffService {
    * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止・剥奪を拒む。判定を役職名（HQ_ADMIN）でなく 実効権限で行うのは、管理が
    * ROLE_MANAGE を含む自作ロールへ移った配備でも正しく数えるためである。
    *
-   * <p>母集団を減らす更新だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}、取り直しの理由もそちら）を押さえ、 押さえた後に
+   * <p>母集団を減らしうる更新だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}、取り直しの理由もそちら）を押さえ、 押さえた後に
    * ROLE_MANAGE を含むロール集合を取り直して判定し直す。そのうえで母集団の行も押さえて数え直す（{@link
    * PlatformUserRepository#lockEnabledRoleHolderIds}）。目録行の直列化点があれば行ロックは冗長だが、 母集団の行を押さえている事実自体が
    * {@code PlatformStaffManagementIT} の実測の対象なので残している。
    */
   private void requireRoleManageHolderRemains(PlatformUser user, PlatformStaffUpdateRequest req) {
-    if (!reducesRoleManageHolders(user, req, roleManageRoleIds())) {
+    // 発火判定に ROLE_MANAGE を含むロール集合を使ってはならない。集合は並行するロール編集の「追加」で
+    // 増えうる（追加側は母集団を減らさないので直列化点を押さえない）ため、押さえる前の集合で「減らさない」
+    // とは言えない。停止も除去も含まない更新だけが、要求の形だけを根拠に素通りできる。
+    if (!mightReduceRoleManageHolders(user, req)) {
       return;
     }
     permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-    Set<Long> roleManageRoleIds = roleManageRoleIds();
+    Set<Long> roleManageRoleIds =
+        roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
     if (!reducesRoleManageHolders(user, req, roleManageRoleIds)) {
       return;
     }
@@ -224,8 +228,12 @@ public class PlatformStaffService {
     }
   }
 
-  private Set<Long> roleManageRoleIds() {
-    return roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
+  /** 停止か、現保持ロールのいずれかの除去を含むか。どちらも含まない更新はどの母集団も減らせない。 */
+  private static boolean mightReduceRoleManageHolders(
+      PlatformUser user, PlatformStaffUpdateRequest req) {
+    return user.getEnabled()
+        && (Boolean.FALSE.equals(req.getEnabled())
+            || !req.getRoleIds().containsAll(user.getRoleIds()));
   }
 
   /** 対象が今そこに居て、更新後に居なくなるか。居ないなら、この更新で母集団は減らない。 */
