@@ -67,6 +67,12 @@ class StoreStaffServiceTest {
   /** 委譲権限を含まない店舗側ロール。店長が付与できる唯一の種類。 */
   private static final long CLERK_ROLE = 12L;
 
+  /**
+   * 店舗コンソールの実動権限を 1 つも含まない自作ロール。標識権限だけの形と SHARED だけの形の双方を代表する — その 2 形の区別は権限目録側の述語（{@code
+   * PermissionCodeTest}）と統合テストが持ち、ここが固定するのは守衛の配線である。
+   */
+  private static final long NO_CONSOLE_ROLE = 13L;
+
   private static final long CONTEXT_STORE = 1L;
   private static final long OTHER_STORE = 2L;
 
@@ -128,6 +134,11 @@ class StoreStaffServiceTest {
   private void givenStaffManageRoles() {
     when(roleRepository.findIdsByPermissionCode(PermissionCode.STAFF_MANAGE.name()))
         .thenReturn(Set.of(MANAGER_ROLE));
+  }
+
+  /** 店舗コンソールへ入れるロールの解決を差し込む。NO_CONSOLE_ROLE だけがこの集合の外にある。 */
+  private void givenStoreConsoleRoles() {
+    when(roleRepository.findStoreConsoleRoleIds()).thenReturn(Set.of(MANAGER_ROLE, CLERK_ROLE));
   }
 
   private Role role(long id, String name) {
@@ -303,6 +314,7 @@ class StoreStaffServiceTest {
     givenHqSideRoles();
     givenRoleNames();
     givenHqActor();
+    givenStoreConsoleRoles();
     when(encoder.encode(RAW_CREDENTIAL)).thenReturn("hashed");
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(repository.saveAndFlush(userCaptor.capture()))
@@ -318,11 +330,83 @@ class StoreStaffServiceTest {
   }
 
   @Test
+  @DisplayName("作成: 店舗コンソールへ入れないロール構成は拒否されること")
+  void createRejectsRoleSetThatCannotReachStoreConsole() {
+    givenHqSideRoles();
+    givenStaffManageRoles();
+    givenStoreConsoleRoles();
+    givenManagerActor(CONTEXT_STORE);
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    createRequest(
+                        Set.of(NO_CONSOLE_ROLE),
+                        StoreScopeType.SPECIFIC_STORES,
+                        Set.of(CONTEXT_STORE))))
+        .isInstanceOf(InvalidRoleGrantException.class);
+    verify(repository, never()).saveAndFlush(ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("作成: 標識権限だけのロールも実動権限を含むロールと併せれば付与できること（判定は権限の並集）")
+  void createAcceptsRoleWithoutConsoleWhenCombinedWithOneThatHasIt() {
+    givenHqSideRoles();
+    givenStaffManageRoles();
+    givenStoreConsoleRoles();
+    givenRoleNames();
+    givenManagerActor(CONTEXT_STORE);
+    when(encoder.encode(RAW_CREDENTIAL)).thenReturn("hashed");
+    when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
+    when(repository.saveAndFlush(userCaptor.capture()))
+        .thenAnswer(StoreStaffServiceTest::persisted);
+
+    service.create(
+        createRequest(
+            Set.of(NO_CONSOLE_ROLE, CLERK_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(CONTEXT_STORE)));
+
+    assertThat(userCaptor.getValue().getRoleIds())
+        .containsExactlyInAnyOrder(NO_CONSOLE_ROLE, CLERK_ROLE);
+  }
+
+  @Test
+  @DisplayName("編集: 店舗コンソールへ入れないロール構成への変更は拒否されること（判定は更新後の集合）")
+  void updateRejectsRoleSetThatCannotReachStoreConsole() {
+    PlatformUser target =
+        staff(
+            1L,
+            "clerk@kizuna.test",
+            Set.of(CLERK_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(CONTEXT_STORE));
+    when(repository.findById(1L)).thenReturn(Optional.of(target));
+    givenHqSideRoles();
+    givenStaffManageRoles();
+    givenStoreConsoleRoles();
+    givenContextStore();
+    givenManagerActor(CONTEXT_STORE);
+
+    assertThatThrownBy(
+            () ->
+                service.update(
+                    1L,
+                    updateRequest(
+                        Set.of(NO_CONSOLE_ROLE),
+                        StoreScopeType.SPECIFIC_STORES,
+                        Set.of(CONTEXT_STORE))))
+        .isInstanceOf(InvalidRoleGrantException.class);
+    assertThat(target.getRoleIds()).as("拒否された編集が部分適用されていないこと").containsExactly(CLERK_ROLE);
+  }
+
+  @Test
   @DisplayName("作成: 担当外店舗を含む店舗集合の指定が拒否されること（G2）")
   void createRejectsStoresOutsideActorScope() {
     givenHqSideRoles();
     givenStaffManageRoles();
     givenManagerActor(CONTEXT_STORE);
+    givenStoreConsoleRoles();
 
     assertThatThrownBy(
             () ->
@@ -340,6 +424,7 @@ class StoreStaffServiceTest {
     givenHqSideRoles();
     givenStaffManageRoles();
     givenManagerActor(CONTEXT_STORE);
+    givenStoreConsoleRoles();
 
     assertThatThrownBy(
             () ->
@@ -476,6 +561,7 @@ class StoreStaffServiceTest {
     givenRoleNames();
     givenContextStore();
     givenManagerActor(CONTEXT_STORE);
+    givenStoreConsoleRoles();
 
     StoreStaffUpdateRequest req =
         updateRequest(Set.of(CLERK_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(CONTEXT_STORE));

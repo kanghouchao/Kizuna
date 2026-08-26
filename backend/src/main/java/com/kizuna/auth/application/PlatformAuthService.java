@@ -158,14 +158,9 @@ public class PlatformAuthService {
     };
   }
 
+  /** 入場資格の述語は {@link PermissionCode#grantsStoreConsole()} が単源（付与時の検証と共有する）。 */
   private static boolean hasStoreConsole(Set<PermissionCode> permissions) {
-    // 標識権限はコンソール入場・店舗文脈確立の資格にしない。STORE_MENU_VIEW 単独では
-    // storeBridge も店舗コンソール着地も許さず、実運用の STORE 権限（STORE_MENU_VIEW 以外）を要求する。
-    return permissions.stream()
-        .anyMatch(
-            permission ->
-                permission.getConsole() == PermissionCode.Console.STORE
-                    && permission != PermissionCode.STORE_MENU_VIEW);
+    return permissions.stream().anyMatch(PermissionCode::grantsStoreConsole);
   }
 
   /** ログイン後の着地先。PLATFORM 権限保持者は platform 優先（兼務者のコンソール切替導線は別票）。 */

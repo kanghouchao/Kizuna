@@ -139,14 +139,36 @@ public enum PermissionCode {
     return Authorities.permission(name());
   }
 
+  /**
+   * 店舗コンソールの入場資格になる権限か。標識権限 {@link #STORE_MENU_VIEW} は除く — 見出し節を通すためだけの権限で、これしか持たない者に
+   * 着地先も店舗文脈の確立資格も無い。着地の判定（{@code PlatformAuthService}）と付与時の検証は必ずこの述語を共有すること。
+   * 食い違うと、作成はできるのに何処へも着地しないアカウントが生まれる。
+   */
+  public boolean grantsStoreConsole() {
+    return console == Console.STORE && this != STORE_MENU_VIEW;
+  }
+
   private static final Set<String> PLATFORM_CODES =
       Arrays.stream(values())
           .filter(code -> code.console == Console.PLATFORM)
           .map(Enum::name)
           .collect(Collectors.toUnmodifiableSet());
 
+  private static final Set<String> STORE_CONSOLE_CODES =
+      Arrays.stream(values())
+          .filter(PermissionCode::grantsStoreConsole)
+          .map(Enum::name)
+          .collect(Collectors.toUnmodifiableSet());
+
   /** Console.PLATFORM に属する権限コード名の集合。HQ 側ロール判定の目録（{@link RoleRepository#findHqRoleIds}）。 */
   public static Set<String> platformCodes() {
     return PLATFORM_CODES;
+  }
+
+  /**
+   * {@link #grantsStoreConsole()} を満たす権限コード名の集合（{@link RoleRepository#findStoreConsoleRoleIds}）。
+   */
+  public static Set<String> storeConsoleCodes() {
+    return STORE_CONSOLE_CODES;
   }
 }

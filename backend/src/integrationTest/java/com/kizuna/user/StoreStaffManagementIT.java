@@ -52,6 +52,12 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   /** HQ 側ロール（Console.PLATFORM の権限を含む）。この面には在否すら出てはならない。 */
   private static final String HQ_SIDE_ROLE = "店舗スタッフ管理IT_HQ側";
 
+  /** メニューの標識権限しか持たない自作ロール。単独では店舗コンソールへ着地できない。 */
+  private static final String MENU_ONLY_ROLE = "店舗スタッフ管理IT_標識のみ";
+
+  /** SHARED の跨店参照権限しか持たない自作ロール。これも単独では店舗コンソールへ着地できない。 */
+  private static final String SHARED_ONLY_ROLE = "店舗スタッフ管理IT_跨店参照のみ";
+
   /** 店舗A のみ担当の平スタッフ。店長から編集できる側の代表。 */
   private static final String CLERK_EMAIL = "store-staff-it-clerk@kizuna.test";
 
@@ -81,6 +87,8 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
     ensureRole(MANAGER_ROLE, PermissionCode.STAFF_MANAGE, PermissionCode.STORE_MENU_VIEW);
     ensureRole(CLERK_ROLE, PermissionCode.ORDER_MANAGE, PermissionCode.STORE_MENU_VIEW);
     ensureRole(HQ_SIDE_ROLE, PermissionCode.STORE_MANAGE, PermissionCode.STORE_VIEW);
+    ensureRole(MENU_ONLY_ROLE, PermissionCode.STORE_MENU_VIEW);
+    ensureRole(SHARED_ONLY_ROLE, PermissionCode.STORE_VIEW);
 
     ensureUser(MANAGER_EMAIL, "店舗スタッフ管理IT店長", roleIdsOf(MANAGER_ROLE), Set.of(STORE_A));
     ensureUser(CLERK_EMAIL, "店舗スタッフ管理IT平スタッフ", roleIdsOf(CLERK_ROLE), Set.of(STORE_A));
@@ -297,6 +305,85 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("店舗コンソールへ入れないロール構成での作成は行使者を問わず 400 になること")
+  void roleSetWithoutStoreConsoleReachIsRefused() {
+    // 着地先の判定（hasStoreConsole）と同じ述語で撥ねる。素通しすると、作成は 201 で成功するのに本人が
+    // ログイン後どこへも着地できないアカウントができる。標識権限だけの形と SHARED だけの形の 2 通りがある。
+    ResponseEntity<String> markerOnly =
+        rest.postForEntity(
+            "/store/staff-members",
+            new HttpEntity<>(
+                createBody(
+                    "store-staff-it-menu-only@kizuna.test",
+                    rolesJson(MENU_ONLY_ROLE),
+                    "SPECIFIC_STORES",
+                    "[" + STORE_A + "]"),
+                headersFor(MANAGER_EMAIL, STORE_A)),
+            String.class);
+    assertThat(markerOnly.getStatusCode()).as("標識権限だけのロール").isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<String> sharedOnly =
+        rest.postForEntity(
+            "/store/staff-members",
+            new HttpEntity<>(
+                createBody(
+                    "store-staff-it-shared-only@kizuna.test",
+                    rolesJson(SHARED_ONLY_ROLE),
+                    "SPECIFIC_STORES",
+                    "[" + STORE_A + "]"),
+                headersFor("admin@kizuna.test", STORE_A)),
+            String.class);
+    assertThat(sharedOnly.getStatusCode())
+        .as("SHARED だけのロールは ROLE_MANAGE 保持者にも撥ねること")
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  @DisplayName("着地できないロールも実動権限を含むロールと併せれば作成でき、本人がログインできること（判定は権限の並集）")
+  void roleSetReachingStoreConsoleThroughAnotherRoleIsAccepted() {
+    String email = "store-staff-it-menu-plus-clerk@kizuna.test";
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/store/staff-members",
+            new HttpEntity<>(
+                createBody(
+                    email,
+                    rolesJson(MENU_ONLY_ROLE, CLERK_ROLE),
+                    "SPECIFIC_STORES",
+                    "[" + STORE_A + "]"),
+                headersFor(MANAGER_EMAIL, STORE_A)),
+            JsonNode.class);
+
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(loginWithPassword(email, NEW_ACCOUNT_PASSWORD)).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("既存スタッフを着地できないロール構成へ変更する編集は 400 になること")
+  void updateIntoRoleSetWithoutStoreConsoleReachIsRefused() {
+    PlatformUser target = platformUserRepository.findByEmail(CLERK_EMAIL).orElseThrow();
+
+    ResponseEntity<String> res =
+        rest.exchange(
+            "/store/staff-members/" + target.getId(),
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody(
+                    rolesJson(MENU_ONLY_ROLE),
+                    "SPECIFIC_STORES",
+                    "[" + STORE_A + "]",
+                    target.getVersion()),
+                headersFor(MANAGER_EMAIL, STORE_A)),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findByEmail(CLERK_EMAIL).orElseThrow().getRoleIds())
+        .as("拒否された編集が部分適用されていないこと")
+        .isEqualTo(target.getRoleIds());
+  }
+
+  @Test
   @DisplayName("委譲権限を実効保持する同僚の編集は店長には 400 になること（G3）")
   void managerCannotEditDelegationHoldingPeer() {
     PlatformUser peer = platformUserRepository.findByEmail(PEER_EMAIL).orElseThrow();
@@ -415,8 +502,10 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
         roleIdsJson, scopeType, storeIds, version);
   }
 
-  private String rolesJson(String roleName) {
-    return "[" + roleRepository.findByName(roleName).orElseThrow().getId() + "]";
+  private String rolesJson(String... roleNames) {
+    return Arrays.stream(roleNames)
+        .map(name -> String.valueOf(roleRepository.findByName(name).orElseThrow().getId()))
+        .collect(Collectors.joining(",", "[", "]"));
   }
 
   private Set<Long> roleIdsOf(String roleName) {

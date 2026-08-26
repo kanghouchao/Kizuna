@@ -34,4 +34,25 @@ class RoleRepositoryTest {
             PermissionCode.STORE_VIEW.name(),
             PermissionCode.ORDER_MANAGE.name());
   }
+
+  @Test
+  @DisplayName("店舗コンソールへ入れるロールは標識権限だけ・SHARED だけの権限からは解決されない")
+  void storeConsoleRoleIsResolvedFromOperationalStorePermissionsOnly() {
+    // 授与の検証はこの目録で行い、着地の判定（PlatformAuthService）と述語を共有する。
+    // 目録が緩むと、付与はできるのにログイン後どこへも着地できないアカウントが作れてしまう。
+    RoleRepository repository = mock(RoleRepository.class);
+    when(repository.findStoreConsoleRoleIds()).thenCallRealMethod();
+    when(repository.findIdsByPermissionCodeIn(anyCollection())).thenReturn(Set.of(8L));
+
+    assertThat(repository.findStoreConsoleRoleIds()).containsExactly(8L);
+
+    ArgumentCaptor<Collection<String>> codes = ArgumentCaptor.captor();
+    verify(repository).findIdsByPermissionCodeIn(codes.capture());
+    assertThat(codes.getValue())
+        .contains(PermissionCode.ORDER_MANAGE.name(), PermissionCode.STAFF_MANAGE.name())
+        .doesNotContain(
+            PermissionCode.STORE_MENU_VIEW.name(),
+            PermissionCode.STORE_VIEW.name(),
+            PermissionCode.ROLE_MANAGE.name());
+  }
 }
