@@ -85,10 +85,7 @@ public class StoreManagerService {
     return repository
         .findAll(managerSpec(storeId, requireStoreManagerRole().getId()), BY_DISPLAY_NAME)
         .stream()
-        .map(
-            user ->
-                new StoreManagerResponse(
-                    user.getId(), user.getEmail(), user.getDisplayName(), user.getEnabled()))
+        .map(StoreManagerService::toResponse)
         .toList();
   }
 

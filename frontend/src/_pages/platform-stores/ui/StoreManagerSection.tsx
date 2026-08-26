@@ -30,6 +30,8 @@ export function StoreManagerSection({ storeId }: StoreManagerSectionProps) {
   } = useManagedList<StoreManagerResponse>(() => storeManagerApi.list(storeId));
 
   const dismissal = useDeleteAction<StoreManagerResponse>({
+    // id が任意型なのは非 null 方針で欠落しうるキーをそう写しているだけで、一覧の行には必ず載る。
+    // 既定値は型を満たすためだけのもので、届けば 404 になり他人の行を消しには行かない。
     remove: manager => storeManagerApi.dismiss(storeId, manager.id ?? 0),
     successMessage: '店長を解任しました',
     // 解任できない理由（最後の担当店舗・全店舗担当）は誘導先込みでサーバだけが持つ
