@@ -41,8 +41,8 @@ class PasswordValidatorTest {
   }
 
   @Test
-  void hundredCharsWithinByteLimit_isValid() {
-    // 上限は文字数ではなくバイト数。ASCII なら 72 文字までは通る。
+  void asciiBoundaryIsCountedInBytes() {
+    // 上限は文字数ではなくバイト数。ASCII は 1 文字 1 バイトなので 72 文字までが通る。
     assertThat(validator.isValid("a".repeat(72), null)).isTrue();
     assertThat(validator.isValid("a".repeat(73), null)).isFalse();
   }

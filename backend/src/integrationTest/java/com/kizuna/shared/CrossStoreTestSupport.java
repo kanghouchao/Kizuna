@@ -73,6 +73,9 @@ public abstract class CrossStoreTestSupport {
         .asLong();
   }
 
+  /** 新規作成の要求が通る合言葉。要求側の最小 8 文字を満たす必要があり、種子の合言葉は使えない。 */
+  protected static final String NEW_ACCOUNT_PASSWORD = "pass1234";
+
   /** 種子ユーザーとして平台ログインする。実行者の身分そのものが主題のテストが使う（HQ 管理者など）。 */
   protected String login(String email) {
     return loginWithPassword(email, "pass");
