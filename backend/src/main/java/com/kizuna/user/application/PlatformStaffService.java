@@ -11,6 +11,7 @@ import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.PlatformUserResumed;
@@ -53,6 +54,7 @@ public class PlatformStaffService {
 
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
+  private final PermissionRepository permissionRepository;
   private final PasswordEncoder passwordEncoder;
   private final ApplicationEventPublisher eventPublisher;
 
@@ -201,21 +203,21 @@ public class PlatformStaffService {
    * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止・剥奪を拒む。判定を役職名（HQ_ADMIN）でなく 実効権限で行うのは、管理が
    * ROLE_MANAGE を含む自作ロールへ移った配備でも正しく数えるためである。
    *
-   * <p>検査は母集団の直列化を伴う。押さえてから数え直すのは、押さえる問い合わせ自身の結果が待つ前のスナップショットのままで、 待っている間に確定した降格を見ないため（{@link
-   * PlatformUserRepository#lockEnabledRoleHolderIds}）。母集団を減らさない 操作は押さえない —
-   * 対象が今そこに居ないなら、この操作で母集団は減らない。
+   * <p>母集団を減らす更新だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}）を押さえ、押さえた後に ROLE_MANAGE
+   * を含むロール集合を取り直して判定し直す — 押さえる前に読んだ集合のままだと、並行するロール定義の編集が そのロールから ROLE_MANAGE
+   * を外し終えていても保持者として数え続け、双方の検査が通る。
+   *
+   * <p>そのうえで母集団の行も押さえて数え直す。押さえる問い合わせ自身の結果は待つ前のスナップショットのままで、待っている間に 確定した降格を見ない（{@link
+   * PlatformUserRepository#lockEnabledRoleHolderIds}）。目録行の直列化点があれば行ロックは冗長だが、 母集団の行を押さえている事実自体が
+   * {@code PlatformStaffManagementIT} の実測の対象なので残している。
    */
   private void requireRoleManageHolderRemains(PlatformUser user, PlatformStaffUpdateRequest req) {
-    Set<Long> roleManageRoleIds =
-        roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
-    if (roleManageRoleIds.isEmpty()) {
+    if (!reducesRoleManageHolders(user, req, roleManageRoleIds())) {
       return;
     }
-    boolean wasHolder = user.getEnabled() && holdsAny(user.getRoleIds(), roleManageRoleIds);
-    // enabled は null で現状維持。ここへ来る対象は有効なので、明示的な false だけが停止になる。
-    boolean staysHolder =
-        !Boolean.FALSE.equals(req.getEnabled()) && holdsAny(req.getRoleIds(), roleManageRoleIds);
-    if (!wasHolder || staysHolder) {
+    permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name());
+    Set<Long> roleManageRoleIds = roleManageRoleIds();
+    if (!reducesRoleManageHolders(user, req, roleManageRoleIds)) {
       return;
     }
     repository.lockEnabledRoleHolderIds(roleManageRoleIds);
@@ -223,6 +225,23 @@ public class PlatformStaffService {
     if (holders.size() == 1 && holders.contains(user.getId())) {
       throw new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません");
     }
+  }
+
+  private Set<Long> roleManageRoleIds() {
+    return roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
+  }
+
+  /** 対象が今そこに居て、更新後に居なくなるか。居ないなら、この更新で母集団は減らない。 */
+  private static boolean reducesRoleManageHolders(
+      PlatformUser user, PlatformStaffUpdateRequest req, Set<Long> roleManageRoleIds) {
+    if (roleManageRoleIds.isEmpty()) {
+      return false;
+    }
+    boolean wasHolder = user.getEnabled() && holdsAny(user.getRoleIds(), roleManageRoleIds);
+    // enabled は null で現状維持。ここへ来る対象は有効なので、明示的な false だけが停止になる。
+    boolean staysHolder =
+        !Boolean.FALSE.equals(req.getEnabled()) && holdsAny(req.getRoleIds(), roleManageRoleIds);
+    return wasHolder && !staysHolder;
   }
 
   private static boolean holdsAny(Set<Long> roleIds, Set<Long> targetRoleIds) {
