@@ -58,6 +58,23 @@ class PermissionCodeTest {
   }
 
   @Test
+  @DisplayName("店舗コンソールの入場資格は STORE の権限から標識権限を除いたもの")
+  void storeConsoleCodesExcludeTheMenuMarkerAndSharedPermissions() {
+    // 着地の判定と付与時の検証が共有する述語の定義そのもの。標識権限だけ、あるいは SHARED だけのロールを
+    // 資格ありに数えると、作成はできるのにログイン後どこへも着地できないアカウントが通ってしまう。
+    assertThat(PermissionCode.STORE_MENU_VIEW.grantsStoreConsole()).isFalse();
+    assertThat(PermissionCode.STORE_VIEW.grantsStoreConsole()).isFalse();
+    assertThat(PermissionCode.ORDER_MANAGE.grantsStoreConsole()).isTrue();
+    assertThat(PermissionCode.storeConsoleCodes())
+        .contains(PermissionCode.ORDER_MANAGE.name(), PermissionCode.STAFF_MANAGE.name())
+        .doesNotContain(
+            PermissionCode.STORE_MENU_VIEW.name(),
+            PermissionCode.STORE_VIEW.name(),
+            PermissionCode.ORDER_SET_MANAGE.name(),
+            PermissionCode.ROLE_MANAGE.name());
+  }
+
+  @Test
   @DisplayName("権限目録は 20 個で全てコンソール分類を持つ")
   void catalogIsComplete() {
     assertThat(PermissionCode.values()).hasSize(20);

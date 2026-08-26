@@ -56,6 +56,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>防提権守衛（ADR 0020）: G1 付与できるのは店舗側ロールかつ委譲権限（STAFF_MANAGE）を含まないもの、G2 対象の店舗集合 ⊆ 行使者の担当店舗集合、G3
  * 編集・停止できるのは委譲権限の非実効保持者かつ現在の店舗集合が行使者の集合に収まる者。いずれも ROLE_MANAGE 保持者には課さない。
  *
+ * <p>付与には否定形の守衛に加えて肯定側の条件も課す（{@link #requireStoreConsoleReach}）— 権限並集が店舗コンソールの入場資格を
+ * 含むこと。着地の判定と述語を共有させ、作成できるのに何処へも着地できないアカウントを作らせない。こちらは行使者を問わず課す。
+ *
  * <p>不減零（G5）はここでは検査しない。ROLE_MANAGE は Console.PLATFORM の権限なので、それを含むロールは定義上 HQ 側ロールであり、
  * 母集団からも付与可能集合からも外れている — この面を通って ROLE_MANAGE 実効保持者が減ることは構造的に起こらない。
  */
@@ -137,6 +140,7 @@ public class StoreStaffService {
     Set<Long> delegationRoleIds = delegationRoleIds();
     StoreScope scope = actorScope();
     requireGrantableRoles(req.getRoleIds(), roleRepository.findHqRoleIds(), delegationRoleIds);
+    requireStoreConsoleReach(req.getRoleIds(), roleRepository.findStoreConsoleRoleIds());
     requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), scope);
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
     if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
@@ -171,6 +175,9 @@ public class StoreStaffService {
       throw new StaleStaffUpdateException("他の担当者が更新しました。最新の内容を確認してください");
     }
     requireGrantableRoles(req.getRoleIds(), hqRoleIds, delegationRoleIds);
+    // 判定は更新後の最終集合に対して行う（着地できない構成のまま更新を続けることは許さないが、
+    // 既に着地できない構成のアカウントを正しいロールへ付け替えて直すことはできる）。
+    requireStoreConsoleReach(req.getRoleIds(), roleRepository.findStoreConsoleRoleIds());
     requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), scope);
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
     user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
@@ -235,6 +242,18 @@ public class StoreStaffService {
     return actorHasRoleManage()
         ? Set.of()
         : roleRepository.findIdsByPermissionCode(PermissionCode.STAFF_MANAGE.name());
+  }
+
+  /**
+   * 付与するロールの権限並集が、店舗コンソールの入場資格（{@link PermissionCode#grantsStoreConsole()}）を 1 つ以上含むこと。
+   * 着地の判定と述語を共有するのが要点で、緩めると作成は成功するのに本人はログイン後どこへも着地できない。行使者を問わず課す。
+   *
+   * <p>条件は並集に対するもので、ロール単位ではない — 標識権限だけのロールも実動権限を持つロールと併せれば正当な構成になる。 付与可能ロールの読み口をこの軸で濾さないのはそのためである。
+   */
+  private static void requireStoreConsoleReach(Set<Long> roleIds, Set<Long> storeConsoleRoleIds) {
+    if (!holdsAny(roleIds, storeConsoleRoleIds)) {
+      throw new InvalidRoleGrantException("店舗コンソールを利用できる権限を含むロールを 1 つ以上選んでください");
+    }
   }
 
   /**

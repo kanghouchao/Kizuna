@@ -47,4 +47,12 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
   default Set<Long> findHqRoleIds() {
     return findIdsByPermissionCodeIn(PermissionCode.platformCodes());
   }
+
+  /**
+   * 店舗コンソールの入場資格になる権限（{@link PermissionCode#grantsStoreConsole()}）を 1 つ以上含むロールの id 集合。
+   * ロール集合の権限並集が資格を含むことと、集合中のどれかがこの集合に属することは同値なので、授権側はこの共通部分の有無で判定できる。
+   */
+  default Set<Long> findStoreConsoleRoleIds() {
+    return findIdsByPermissionCodeIn(PermissionCode.storeConsoleCodes());
+  }
 }
