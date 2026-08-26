@@ -38,6 +38,9 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
+  /** 新規作成の要求が通る合言葉。要求側の最小 8 文字を満たす必要があり、種子の合言葉は使えない。 */
+  private static final String NEW_ACCOUNT_PASSWORD = "pass1234";
+
   /** 店長役（委譲層のみ・店舗A担当）。この面の主たる行使者。 */
   private static final String MANAGER_EMAIL = "store-staff-it-manager@kizuna.test";
 
@@ -168,7 +171,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
             "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"%s\",\"role_ids\":%s,"
                 + "\"store_scope_type\":\"SPECIFIC_STORES\",\"store_ids\":[%d]}",
             "store-staff-it-longname@kizuna.test",
-            PASSWORD,
+            NEW_ACCOUNT_PASSWORD,
             "あ".repeat(151),
             rolesJson(CLERK_ROLE),
             STORE_A);
@@ -198,7 +201,9 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(created.getBody().path("id").asLong()).isPositive();
     assertThat(created.getBody().path("editable").asBoolean()).isTrue();
-    assertThat(login(email)).as("作成された本人が平台ログインできること").isNotBlank();
+    assertThat(loginWithPassword(email, NEW_ACCOUNT_PASSWORD))
+        .as("作成された本人が平台ログインできること")
+        .isNotBlank();
   }
 
   @Test
@@ -400,7 +405,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
     return String.format(
         "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"IT表示名\",\"role_ids\":%s,"
             + "\"store_scope_type\":\"%s\",\"store_ids\":%s}",
-        email, PASSWORD, roleIdsJson, scopeType, storeIds);
+        email, NEW_ACCOUNT_PASSWORD, roleIdsJson, scopeType, storeIds);
   }
 
   private static String updateBody(

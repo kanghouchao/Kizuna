@@ -60,6 +60,9 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
+  /** 新規作成の要求が通る合言葉。要求側の最小 8 文字を満たす必要があり、種子の合言葉は使えない。 */
+  private static final String NEW_ACCOUNT_PASSWORD = "pass1234";
+
   /** ALL_STORES の HQ 管理者シード（seed/04-platform-admin.yaml）。 */
   private static final String SEED_EMAIL = "admin@kizuna.test";
 
@@ -220,7 +223,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     return String.format(
         "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"IT表示名\",\"role_ids\":%s,"
             + "\"store_scope_type\":\"%s\",\"store_ids\":%s}",
-        email, PASSWORD, roleIdsJson, scopeType, storeIds);
+        email, NEW_ACCOUNT_PASSWORD, roleIdsJson, scopeType, storeIds);
   }
 
   private static String updateBody(
@@ -281,7 +284,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.exchange(
             "/platform/stores/me",
             HttpMethod.GET,
-            new HttpEntity<>(bearer(platformToken(CASE1_EMAIL, PASSWORD))),
+            new HttpEntity<>(bearer(platformToken(CASE1_EMAIL, NEW_ACCOUNT_PASSWORD))),
             String.class);
     assertThat(stores.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(stores.getBody())
@@ -332,7 +335,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.exchange(
             "/platform/stores/me",
             HttpMethod.GET,
-            new HttpEntity<>(bearer(platformToken(CASE3_EMAIL, PASSWORD))),
+            new HttpEntity<>(bearer(platformToken(CASE3_EMAIL, NEW_ACCOUNT_PASSWORD))),
             String.class);
     assertThat(before.getBody())
         .as("変更前は A のみ")
@@ -354,7 +357,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.exchange(
             "/platform/stores/me",
             HttpMethod.GET,
-            new HttpEntity<>(bearer(platformToken(CASE3_EMAIL, PASSWORD))),
+            new HttpEntity<>(bearer(platformToken(CASE3_EMAIL, NEW_ACCOUNT_PASSWORD))),
             String.class);
     assertThat(after.getBody())
         .as("再ログイン後は B のみ、A の実データは生ボディに一切現れないこと")
@@ -435,7 +438,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         String.format(
             "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"%s\",\"role_ids\":%s,"
                 + "\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[]}",
-            email, PASSWORD, "あ".repeat(151), rolesJson(HQ_SIDE_ROLE));
+            email, NEW_ACCOUNT_PASSWORD, "あ".repeat(151), rolesJson(HQ_SIDE_ROLE));
 
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
@@ -458,7 +461,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "{\"email\":\"staff-it-wire-name@kizuna.test\",\"password\":\"%s\","
                 + "\"display_name\":\"\",\"role_ids\":%s,"
                 + "\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[]}",
-            PASSWORD, rolesJson(HQ_SIDE_ROLE));
+            NEW_ACCOUNT_PASSWORD, rolesJson(HQ_SIDE_ROLE));
 
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
@@ -785,7 +788,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
-    String token = platformToken(email, PASSWORD);
+    String token = platformToken(email, NEW_ACCOUNT_PASSWORD);
 
     ResponseEntity<String> platform =
         rest.exchange(
@@ -839,7 +842,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/login",
             new HttpEntity<>(
-                String.format("{\"email\": \"%s\", \"password\": \"%s\"}", email, PASSWORD),
+                String.format(
+                    "{\"email\": \"%s\", \"password\": \"%s\"}", email, NEW_ACCOUNT_PASSWORD),
                 jsonHeaders()),
             JsonNode.class);
     assertThat(login.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -993,7 +997,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/platform/login",
             new HttpEntity<>(
-                String.format("{\"email\": \"%s\", \"password\": \"%s\"}", email, PASSWORD),
+                String.format(
+                    "{\"email\": \"%s\", \"password\": \"%s\"}", email, NEW_ACCOUNT_PASSWORD),
                 jsonHeaders()),
             JsonNode.class);
     assertThat(login.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
