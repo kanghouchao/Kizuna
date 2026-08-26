@@ -1,5 +1,6 @@
 package com.kizuna.member.api.dto;
 
+import com.kizuna.shared.validation.Password;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -16,7 +17,7 @@ public class MemberRegistrationRequest {
   private String email;
 
   @NotBlank(message = "password is required")
-  @Size(min = 8, max = 100)
+  @Password
   private String password;
 
   @NotBlank(message = "display_name is required")
