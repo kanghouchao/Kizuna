@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +16,7 @@ import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
+import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -44,6 +48,12 @@ class RoleServiceTest {
 
   private static final long ORDER_MANAGE_ID = 1L;
   private static final long CUSTOMER_MANAGE_ID = 2L;
+  private static final long ROLE_MANAGE_ID = 3L;
+
+  /** 不減零（G5）の対象になる自作ロールと、母集団を分け合うもう 1 つのロール。 */
+  private static final long GUARDED_ROLE = 7L;
+
+  private static final long OTHER_ROLE_MANAGE_ROLE = 8L;
 
   @Mock private RoleRepository roleRepository;
   @Mock private PermissionRepository permissionRepository;
@@ -248,6 +258,83 @@ class RoleServiceTest {
         .isInstanceOf(SystemRoleImmutableException.class);
 
     verify(roleRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void update_removingRoleManageFromTheLastSupplyingRole_isRejectedWithoutSaving() {
+    // このロールしか ROLE_MANAGE を供給していないので、外した瞬間に保持者が全員まとめて非保持者になる。
+    Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
+    when(permissionRepository.findByCodeIn(Set.of("STORE_MANAGE")))
+        .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
+    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
+        .thenReturn(Set.of(GUARDED_ROLE));
+    when(platformUserRepository.findEnabledRoleHolderIds(Set.of(GUARDED_ROLE)))
+        .thenReturn(List.of(3L));
+
+    assertThatThrownBy(
+            () -> service.update(GUARDED_ROLE, updateRequest("IT管理", Set.of("STORE_MANAGE"), 0L)))
+        .isInstanceOf(LastRoleManageHolderException.class);
+
+    assertThat(existing.getPermissionIds()).containsExactly(ROLE_MANAGE_ID);
+    verify(roleRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void update_removingRoleManageWhileAnotherRoleKeepsHolders_isAllowed() {
+    // 守衛が「ROLE_MANAGE を外すこと」自体を塞いでいないことの対照。母集団が残るなら通す。
+    Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
+    when(permissionRepository.findByCodeIn(Set.of("STORE_MANAGE")))
+        .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
+    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
+        .thenReturn(Set.of(GUARDED_ROLE, OTHER_ROLE_MANAGE_ROLE));
+    when(platformUserRepository.findEnabledRoleHolderIds(Set.of(OTHER_ROLE_MANAGE_ROLE)))
+        .thenReturn(List.of(3L));
+    when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
+
+    service.update(GUARDED_ROLE, updateRequest("IT管理", Set.of("STORE_MANAGE"), 0L));
+
+    assertThat(existing.getPermissionIds()).containsExactly(ORDER_MANAGE_ID);
+    verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
+  }
+
+  @Test
+  void update_thatKeepsRoleManage_doesNotSerialize() {
+    // 母集団を減らさない編集（改名・権限の追加）まで共有の直列化点を押さえると、無関係なロール編集同士が待ち合う。
+    Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
+    when(permissionRepository.findByCodeIn(Set.of("ROLE_MANAGE")))
+        .thenReturn(List.of(permission(ROLE_MANAGE_ID, PermissionCode.ROLE_MANAGE)));
+    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
+
+    service.update(GUARDED_ROLE, updateRequest("IT管理（改名）", Set.of("ROLE_MANAGE"), 0L));
+
+    assertThat(existing.getName()).isEqualTo("IT管理（改名）");
+    verify(permissionRepository, never()).lockIdByCode(any());
+  }
+
+  @Test
+  void update_reevaluatesTheRoleSetAfterTakingTheGuardMutex() {
+    // 押さえる前に読んだ集合で数えると、ロール編集と授権変更が双方とも検査を通って母集団が 0 になる。
+    // 待っている間に別経路がこのロールから ROLE_MANAGE を外していれば、この編集はもう母集団を減らさない。
+    Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
+    when(permissionRepository.findByCodeIn(Set.of("STORE_MANAGE")))
+        .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
+    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
+        .thenReturn(Set.of(GUARDED_ROLE), Set.of());
+    lenient()
+        .when(platformUserRepository.findEnabledRoleHolderIds(Set.of(GUARDED_ROLE)))
+        .thenReturn(List.of(3L));
+    when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
+
+    service.update(GUARDED_ROLE, updateRequest("IT管理", Set.of("STORE_MANAGE"), 0L));
+
+    InOrder inOrder = inOrder(roleRepository, permissionRepository);
+    inOrder.verify(roleRepository).findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
+    inOrder.verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
+    inOrder.verify(roleRepository).findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
   }
 
   @Test

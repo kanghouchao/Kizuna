@@ -51,9 +51,10 @@ import tools.jackson.databind.JsonNode;
  * で固定する。ヘルパは {@link com.kizuna.order.PlatformOrderScopeIT} の {@code ensurePlatformUser}/{@code
  * platformToken} 様式を踏襲し、強断言様式は {@link com.kizuna.menu.MenuCrossStoreIT} に由来する。
  *
- * <p>不減零（ADR 0020 の守衛 G5）の拒否側はここでは固定できない — 母集団は DB 全体の ROLE_MANAGE 実効保持者で、種子の HQ
+ * <p>不減零（ADR 0020 の守衛 G5）のうち、授権側（停止・降格）の拒否はここでは固定できない — 母集団は DB 全体の ROLE_MANAGE 実効保持者で、種子の HQ
  * 管理者を含む他の行を止めないと「最後の 1 人」を作れず、それは後続 IT を連鎖破綻させる。拒否の判定は {@code PlatformStaffServiceTest}
- * が持ち、ここは母集団が残る側（降格が通ること）で照会そのものが実 DB で成立することを固定する。
+ * が持ち、ここは母集団が残る側（降格が通ること）で照会そのものが実 DB で成立することを固定する。ロール定義側の拒否は 母集団の供給元を 1
+ * ロールへ縮められるので、他の保持者を一時停止して撃ち、必ず戻す。
  */
 class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
@@ -82,6 +83,11 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   private static final String ROLE_MANAGE_ROLE = "スタッフ管理IT_管理権限";
 
   private static final String RACE_EMAIL = "staff-it-race@kizuna.test";
+
+  /** ロール定義の編集経路で不減零を撃つための自作ロールと、その唯一の保持者。 */
+  private static final String ROLE_EDIT_ROLE = "スタッフ管理IT_編集対象管理権限";
+
+  private static final String ROLE_EDIT_HOLDER_EMAIL = "staff-it-roleedit@kizuna.test";
 
   /** 委譲層だけを持つ利用者（STAFF_MANAGE のみ）。ロール定義の門が ROLE_MANAGE であることの検証に使う。 */
   private static final String STAFF_MANAGE_ONLY_EMAIL = "staff-it-staffmanage-only@kizuna.test";
@@ -1297,6 +1303,140 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         connection.rollback();
       }
     }
+  }
+
+  // 守衛の共有直列化点も「押さえていること」そのものが不変量で、押さえられていなくても計数は同じ答えを返す。
+  // 服務側が目録行を押さえてから母集団を取り直す順は単体テストが固定し、ここは目録行が本当に押さえられることを見る。
+  @Test
+  @DisplayName("守衛の直列化点は権限目録の行を実際に押さえること")
+  void guardMutexLocksThePermissionCatalogRow() {
+    new TransactionTemplate(transactionManager)
+        .execute(
+            status -> {
+              assertThat(permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name()))
+                  .as("前提: ROLE_MANAGE の目録行が播種されていること")
+                  .isPresent();
+
+              assertThatThrownBy(() -> lockPermissionNoWait(PermissionCode.ROLE_MANAGE.name()))
+                  .as("押さえた目録行は別接続の FOR UPDATE NOWAIT では取れないこと")
+                  .isInstanceOf(SQLException.class)
+                  .extracting(ex -> ((SQLException) ex).getSQLState())
+                  .as("待てば取れる状態（55P03 = lock_not_available）であること")
+                  .isEqualTo("55P03");
+
+              status.setRollbackOnly();
+              return null;
+            });
+  }
+
+  private void lockPermissionNoWait(String code) throws SQLException {
+    try (Connection connection = dataSource.getConnection()) {
+      connection.setAutoCommit(false);
+      try (PreparedStatement statement =
+          connection.prepareStatement(
+              "select id from t_permissions where code = ? for update nowait")) {
+        statement.setString(1, code);
+        statement.executeQuery();
+      } finally {
+        connection.rollback();
+      }
+    }
+  }
+
+  @Test
+  @DisplayName("ROLE_MANAGE を含む自作ロールからの権限除去は、他に有効な保持者が居れば 200 で通ること(AC2)")
+  void removingRoleManageFromACustomRoleIsAllowedWhileOtherHoldersRemain() {
+    long roleId = ensureCustomRoleManageRole(ROLE_EDIT_ROLE);
+    ensureRoleManageHolder(ROLE_EDIT_HOLDER_EMAIL, roleId);
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+
+    ResponseEntity<JsonNode> res = replacePermissions(hq, roleId, "[\"STORE_MANAGE\"]");
+
+    assertThat(res.getStatusCode()).as("種子の HQ管理者が母集団に残っている").isEqualTo(HttpStatus.OK);
+    assertThat(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
+        .doesNotContain(roleId);
+  }
+
+  /**
+   * 母集団が「この 1 つのロールだけ」に縮んだ状態を作って拒否側を撃つ。他の保持者は資料庫から直接停止する（サービス経由だと 失効イベントで他の IT
+   * のトークンまで巻き込むため）。行使者自身は編集対象のロールで認証するので、停止の対象から外す。
+   */
+  @Test
+  @DisplayName("最後の母集団を供給するロールから ROLE_MANAGE を外す編集は 400 で拒否されること(AC1)")
+  void removingRoleManageFromTheLastSupplyingRoleIsRejected() {
+    long roleId = ensureCustomRoleManageRole(ROLE_EDIT_ROLE);
+    long holderId = ensureRoleManageHolder(ROLE_EDIT_HOLDER_EMAIL, roleId);
+    String actor = platformToken(ROLE_EDIT_HOLDER_EMAIL, PASSWORD);
+    List<Long> suspended = suspendOtherRoleManageHolders(holderId);
+
+    try {
+      ResponseEntity<JsonNode> res = replacePermissions(actor, roleId, "[\"STORE_MANAGE\"]");
+
+      assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+      assertThat(res.getBody().path("error").asString()).contains("管理権限");
+      assertThat(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
+          .as("拒否された編集で権限構成が変わらないこと")
+          .contains(roleId);
+    } finally {
+      resume(suspended);
+    }
+  }
+
+  private ResponseEntity<JsonNode> replacePermissions(
+      String token, long roleId, String permissionsJson) {
+    long version = roleRepository.findById(roleId).orElseThrow().getVersion();
+    return rest.exchange(
+        "/platform/roles/" + roleId,
+        HttpMethod.PUT,
+        new HttpEntity<>(
+            String.format(
+                "{\"name\":\"%s\",\"permissions\":%s,\"version\":%d}",
+                ROLE_EDIT_ROLE, permissionsJson, version),
+            bearerJson(token)),
+        JsonNode.class);
+  }
+
+  /** ROLE_MANAGE を含む自作ロール。既定ロールは改廃自体が拒否されるため、この穴は自作ロールでしか踏めない。 */
+  private long ensureCustomRoleManageRole(String name) {
+    Role role =
+        roleRepository
+            .findByName(name)
+            .orElseGet(
+                () ->
+                    roleRepository.save(
+                        Role.builder()
+                            .name(name)
+                            .permissionIds(permissionIdsOf(PermissionCode.ROLE_MANAGE))
+                            .build()));
+    role.replacePermissions(permissionIdsOf(PermissionCode.ROLE_MANAGE));
+    return roleRepository.saveAndFlush(role).getId();
+  }
+
+  /** 指定した id 以外の有効な ROLE_MANAGE 実効保持者を資料庫から直接停止し、戻した相手を返す。 */
+  private List<Long> suspendOtherRoleManageHolders(long keepEnabledId) {
+    List<Long> others =
+        platformUserRepository
+            .findEnabledRoleHolderIds(
+                roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
+            .stream()
+            .filter(id -> id.longValue() != keepEnabledId)
+            .toList();
+    others.forEach(
+        id -> {
+          PlatformUser user = platformUserRepository.findById(id).orElseThrow();
+          user.stop();
+          platformUserRepository.saveAndFlush(user);
+        });
+    return others;
+  }
+
+  private void resume(List<Long> userIds) {
+    userIds.forEach(
+        id -> {
+          PlatformUser user = platformUserRepository.findById(id).orElseThrow();
+          user.resume();
+          platformUserRepository.saveAndFlush(user);
+        });
   }
 
   /**
