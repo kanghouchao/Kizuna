@@ -124,17 +124,12 @@ public class RoleService {
 
   /**
    * 保存時の名称一意制約違反（並行作成レース）を事前チェックと同じ 400 へ変換する。それ以外の整合性違反は実装欠陥であり（権限は事前検証済み）、 握りつぶさず全域ハンドラの分類に委ねる。
-   *
-   * <p>権限集合の @ElementCollection 行はトランザクション commit 時に flush されるため、{@code save} だけでは違反がこの try を突き抜けて
-   * 500 になる。{@code saveAndFlush} で違反をここで顕在化させる。
    */
   private Role save(Role role) {
-    try {
-      return roleRepository.saveAndFlush(role);
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(
-          ex, Map.of(DbConstraint.UQ_T_ROLES_NAME, () -> new ServiceException("このロール名は既に使われています")));
-    }
+    return IntegrityMappedSaves.save(
+        roleRepository,
+        role,
+        Map.of(DbConstraint.UQ_T_ROLES_NAME, () -> new ServiceException("このロール名は既に使われています")));
   }
 
   private Map<Long, String> codesById(Set<Long> permissionIds) {
