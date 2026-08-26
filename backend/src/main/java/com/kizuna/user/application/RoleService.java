@@ -96,9 +96,8 @@ public class RoleService {
    * 不減零（ADR 0020 の守衛 G5）。ROLE_MANAGE を含むロールからそれを外す編集は、そのロールしか持たない保持者を一撃で全員 非保持者にする。有効な ROLE_MANAGE
    * 実効保持者が 0 になるならその編集を拒む。
    *
-   * <p>母集団を減らす編集だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}）を押さえ、押さえた後に母集団を取り直して 判定し直す —
-   * 押さえる前に読んだ集合で数えると、ロール定義の編集と授権の変更が双方とも検査を通って 0 になる。 平台既定ロールは改廃自体を {@link Role#replacePermissions}
-   * が拒むため、押さえずに抜ける。
+   * <p>母集団を減らす編集だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}、取り直しの理由もそちら）を押さえ、
+   * 押さえた後に母集団を取り直して判定し直す。平台既定ロールは改廃自体を {@link Role#replacePermissions} が拒むため、押さえずに抜ける。
    */
   private void requireRoleManageHolderRemains(Role role, Set<String> newPermissionCodes) {
     if (Boolean.TRUE.equals(role.getSystemRole())
