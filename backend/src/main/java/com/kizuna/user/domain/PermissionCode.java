@@ -1,6 +1,8 @@
 package com.kizuna.user.domain;
 
+import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.Getter;
 
 /**
@@ -135,5 +137,16 @@ public enum PermissionCode {
   /** SecurityContext 上の authority 表現（例: PERM_ORDER_MANAGE）を返す。 */
   public String authority() {
     return Authorities.permission(name());
+  }
+
+  private static final Set<String> PLATFORM_CODES =
+      Arrays.stream(values())
+          .filter(code -> code.console == Console.PLATFORM)
+          .map(Enum::name)
+          .collect(Collectors.toUnmodifiableSet());
+
+  /** Console.PLATFORM に属する権限コード名の集合。HQ 側ロール判定の目録（{@link RoleRepository#findHqRoleIds}）。 */
+  public static Set<String> platformCodes() {
+    return PLATFORM_CODES;
   }
 }

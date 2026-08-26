@@ -25,8 +25,7 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
   List<RoleSummary> findAllSummaries();
 
   /**
-   * 指定した権限コードのいずれかを含むロールの id 集合。呼び出し側はユーザーのロール集合とこの集合の共通部分の有無で権限保持を判定する。 複数コードを渡す形は「HQ
-   * 側ロール」（Console.PLATFORM の権限を 1 つ以上含むロール）の解決に使う。
+   * 指定した権限コードのいずれかを含むロールの id 集合。呼び出し側はユーザーのロール集合とこの集合の共通部分の有無で権限保持を判定する。
    *
    * <p>ロールは権限を ID 集合（{@code @ElementCollection}）で持つため、コードから id への解決を副問い合わせで挟む。
    */
@@ -39,5 +38,13 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
   /** 単一コード版。 */
   default Set<Long> findIdsByPermissionCode(String code) {
     return findIdsByPermissionCodeIn(Set.of(code));
+  }
+
+  /**
+   * HQ 側ロール（構成権限に Console.PLATFORM の権限を 1 つ以上含むロール）の id 集合。管理面が共有する境界述語の単源で、判定を
+   * 役職名（HQ_ADMIN）でなく権限構成で行うのは、管理が自作ロールへ移った配備でも同じ境界が成り立つようにするためである（ADR 0020）。
+   */
+  default Set<Long> findHqRoleIds() {
+    return findIdsByPermissionCodeIn(PermissionCode.platformCodes());
   }
 }

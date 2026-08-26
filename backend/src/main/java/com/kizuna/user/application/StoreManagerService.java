@@ -9,7 +9,6 @@ import com.kizuna.user.api.dto.StoreManagerCandidateResponse;
 import com.kizuna.user.api.dto.StoreManagerResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
-import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
@@ -19,13 +18,11 @@ import com.kizuna.user.domain.SystemRole;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -55,13 +52,6 @@ public class StoreManagerService {
 
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
-
-  /** HQ 側ロールの判定に使う権限コード（Console.PLATFORM の全権限）。目録は静的なので毎回引き直さない。 */
-  private static final Set<String> PLATFORM_PERMISSION_CODES =
-      Arrays.stream(PermissionCode.values())
-          .filter(code -> code.getConsole() == PermissionCode.Console.PLATFORM)
-          .map(PermissionCode::name)
-          .collect(Collectors.toUnmodifiableSet());
 
   /** 一覧・候補の並び。offset ページングの境界を確定させるため、表示名には一意な副キーを添える。 */
   private static final Sort BY_DISPLAY_NAME = Sort.by("displayName", "id");
@@ -99,7 +89,8 @@ public class StoreManagerService {
     requireStore(storeId);
     return repository
         .findAll(
-            candidateSpec(storeId, requireStoreManagerRole().getId(), hqRoleIds(), search),
+            candidateSpec(
+                storeId, requireStoreManagerRole().getId(), roleRepository.findHqRoleIds(), search),
             pageable)
         .map(
             user ->
@@ -139,7 +130,7 @@ public class StoreManagerService {
     if (user.getRoleIds().contains(managerRoleId) && user.authorizes(storeId)) {
       throw new ServiceException("このアカウントは既にこの店舗の店長です");
     }
-    if (!isCandidate(user, hqRoleIds())) {
+    if (!isCandidate(user, roleRepository.findHqRoleIds())) {
       throw new ServiceException("このアカウントは店長に任命できません");
     }
     Set<Long> roleIds = new HashSet<>(user.getRoleIds());
@@ -257,11 +248,6 @@ public class StoreManagerService {
         && Boolean.TRUE.equals(user.getEnabled())
         && user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
         && user.getRoleIds().stream().noneMatch(hqRoleIds::contains);
-  }
-
-  /** HQ 側ロール（Console.PLATFORM の権限を 1 つ以上含むロール）の id 集合。 */
-  private Set<Long> hqRoleIds() {
-    return roleRepository.findIdsByPermissionCodeIn(PLATFORM_PERMISSION_CODES);
   }
 
   /** 店長ロール。既定ロールは名称が自然キーで、播種の正本は {@link SystemRole} 側にある。 */

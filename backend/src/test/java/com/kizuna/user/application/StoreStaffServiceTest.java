@@ -121,8 +121,7 @@ class StoreStaffServiceTest {
 
   /** HQ 側ロールの解決を差し込む。既定では HQ_ROLE だけが HQ 側。 */
   private void givenHqSideRoles() {
-    when(roleRepository.findIdsByPermissionCodeIn(ArgumentMatchers.anyCollection()))
-        .thenReturn(Set.of(HQ_ROLE));
+    when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
   }
 
   /** 委譲権限を含むロールの解決を差し込む。 */

@@ -23,7 +23,6 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -43,10 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 管理者（HQ 側ロール保持者）の授権管理ユースケース。対象は本人種別 STAFF のうち HQ 側ロールを 1 つ以上持つ者に限る — CAST/MEMBER
- * は専用フローが、店舗側ロールのみの利用者は店舗スタッフ管理が扱う（ADR 0020）。
- *
- * <p>HQ 側ロールとは構成権限に Console.PLATFORM の権限を 1 つ以上含むロールを言う。判定を役職名（HQ_ADMIN）でなく権限構成で行うのは、
- * 管理が自作ロールへ移った配備でも同じ境界が成り立つようにするためである。
+ * は専用フローが、店舗側ロールのみの利用者は店舗スタッフ管理が扱う（ADR 0020）。HQ 側ロールの定義は {@link RoleRepository#findHqRoleIds} が単源。
  */
 @Service
 @RequiredArgsConstructor
@@ -54,13 +50,6 @@ public class PlatformStaffService {
 
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
-
-  /** HQ 側ロールの判定に使う権限コード（Console.PLATFORM の全権限）。目録は静的なので毎回引き直さない。 */
-  private static final Set<String> PLATFORM_PERMISSION_CODES =
-      Arrays.stream(PermissionCode.values())
-          .filter(code -> code.getConsole() == PermissionCode.Console.PLATFORM)
-          .map(PermissionCode::name)
-          .collect(Collectors.toUnmodifiableSet());
 
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
@@ -70,7 +59,7 @@ public class PlatformStaffService {
   @Transactional(readOnly = true)
   public Page<PlatformStaffResponse> list(String search, Long storeId, Pageable pageable) {
     Page<PlatformUser> staff =
-        repository.findAll(staffSpec(search, storeId, hqRoleIds()), pageable);
+        repository.findAll(staffSpec(search, storeId, roleRepository.findHqRoleIds()), pageable);
     Set<Long> allRoleIds =
         staff.getContent().stream()
             .flatMap(user -> user.getRoleIds().stream())
@@ -121,7 +110,7 @@ public class PlatformStaffService {
   @Transactional
   public PlatformStaffResponse create(PlatformStaffCreateRequest req) {
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
-    requireHqRole(req.getRoleIds(), hqRoleIds());
+    requireHqRole(req.getRoleIds(), roleRepository.findHqRoleIds());
     if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
     }
@@ -142,14 +131,14 @@ public class PlatformStaffService {
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
   public PlatformStaffResponse get(Long id) {
-    PlatformUser user = requireManagedStaff(id, hqRoleIds());
+    PlatformUser user = requireManagedStaff(id, roleRepository.findHqRoleIds());
     return toResponse(user, roleNamesOf(user.getRoleIds()));
   }
 
   @Transactional
   public PlatformStaffResponse update(Long id, PlatformStaffUpdateRequest req, String actorEmail) {
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
-    Set<Long> hqRoleIds = hqRoleIds();
+    Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
     requireHqRole(req.getRoleIds(), hqRoleIds);
     PlatformUser user = requireManagedStaff(id, hqRoleIds);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
@@ -196,11 +185,6 @@ public class PlatformStaffService {
         .filter(user -> user.getUserType() == UserType.STAFF)
         .filter(user -> holdsAny(user.getRoleIds(), hqRoleIds))
         .orElseThrow(() -> new NotFoundException("管理者が見つかりません: " + id));
-  }
-
-  /** HQ 側ロール（Console.PLATFORM の権限を 1 つ以上含むロール）の id 集合。 */
-  private Set<Long> hqRoleIds() {
-    return roleRepository.findIdsByPermissionCodeIn(PLATFORM_PERMISSION_CODES);
   }
 
   /**
