@@ -1,7 +1,6 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -36,7 +35,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -340,24 +338,18 @@ public class StoreStaffService {
   /**
    * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK
    * 違反（requireRoles 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。
-   *
-   * <p>店舗集合等の @ElementCollection 行はトランザクション commit 時に flush されるため、{@code save} だけでは FK 違反がこの try
-   * を突き抜けて 500 になる。{@code saveAndFlush} で違反をここで顕在化させ 400 へ変換する。
    */
   private PlatformUser save(PlatformUser user) {
-    try {
-      return repository.saveAndFlush(user);
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(
-          ex,
-          Map.of(
-              DbConstraint.UQ_T_USERS_EMAIL,
-              () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています"),
-              DbConstraint.FK_T_USER_STORES_STORE,
-              () -> new InvalidStoreScopeException("指定された店舗が存在しません"),
-              DbConstraint.FK_T_USER_ROLES_ROLE,
-              () -> new ServiceException("指定されたロールが存在しません")));
-    }
+    return IntegrityMappedSaves.save(
+        repository,
+        user,
+        Map.of(
+            DbConstraint.UQ_T_USERS_EMAIL,
+            () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています"),
+            DbConstraint.FK_T_USER_STORES_STORE,
+            () -> new InvalidStoreScopeException("指定された店舗が存在しません"),
+            DbConstraint.FK_T_USER_ROLES_ROLE,
+            () -> new ServiceException("指定されたロールが存在しません")));
   }
 
   private static StoreStaffResponse toResponse(
