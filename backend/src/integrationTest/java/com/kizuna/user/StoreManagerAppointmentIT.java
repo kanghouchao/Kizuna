@@ -47,6 +47,9 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
 
+  /** 新規作成の要求が通る合言葉。要求側の最小 8 文字を満たす必要があり、種子の合言葉は使えない。 */
+  private static final String NEW_ACCOUNT_PASSWORD = "pass1234";
+
   /** ROLE_MANAGE を持つ種子の HQ 管理者。この面の唯一の行使者。 */
   private static final String HQ_EMAIL = "admin@kizuna.test";
 
@@ -221,7 +224,7 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 String.format(
                     "{\"email\":\"%s\",\"password\":\"%s\",\"display_name\":\"初代店長\"}",
-                    email, PASSWORD),
+                    email, NEW_ACCOUNT_PASSWORD),
                 hqHeaders()),
             JsonNode.class);
 
@@ -232,7 +235,7 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
         rest.exchange(
             "/platform/me",
             HttpMethod.GET,
-            new HttpEntity<>(bearerJson(login(email))),
+            new HttpEntity<>(bearerJson(loginWithPassword(email, NEW_ACCOUNT_PASSWORD))),
             JsonNode.class);
 
     assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);

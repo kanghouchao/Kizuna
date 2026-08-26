@@ -75,12 +75,18 @@ public abstract class CrossStoreTestSupport {
 
   /** 種子ユーザーとして平台ログインする。実行者の身分そのものが主題のテストが使う（HQ 管理者など）。 */
   protected String login(String email) {
+    return loginWithPassword(email, "pass");
+  }
+
+  /** テスト内で作成したアカウントとして平台ログインする。種子の合言葉を使えない場合に使う。 */
+  protected String loginWithPassword(String email, String password) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/platform/login",
-            new HttpEntity<>("{\"email\": \"" + email + "\", \"password\": \"pass\"}", headers),
+            new HttpEntity<>(
+                "{\"email\": \"" + email + "\", \"password\": \"" + password + "\"}", headers),
             JsonNode.class);
     assertThat(res.getStatusCode()).as("前提: %s でのログインが成功すること", email).isEqualTo(HttpStatus.OK);
     String issued = res.getBody().path("token").asString();
