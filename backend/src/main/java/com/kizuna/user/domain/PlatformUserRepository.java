@@ -48,6 +48,16 @@ public interface PlatformUserRepository
   Optional<PlatformUser> findByEmailForUpdate(@Param("email") String email);
 
   /**
+   * id でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR UPDATE）を掛ける。
+   *
+   * <p>店長の任命・解任はロール集合と授権店舗集合の read-modify-write だが、要求は版を運ばない（画面に編集フォームが無い）。
+   * 版の照合で撥ねると利用者に再試行の手立てが無いため、直列化して待たせる。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select u from PlatformUser u where u.id = :id")
+  Optional<PlatformUser> findByIdForUpdate(@Param("id") Long id);
+
+  /**
    * 指定ロールのいずれかを保持する有効な利用者の行を、id 昇順で押さえる（{@code SELECT ... FOR UPDATE}）。
    *
    * <p><b>返る集合を数えてはいけない</b>。READ COMMITTED では待たされている間に確定した変更のうち、取り直されるのは押さえた行自身の 列だけで、保持判定が読む

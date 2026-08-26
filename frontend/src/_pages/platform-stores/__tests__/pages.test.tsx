@@ -28,6 +28,22 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
+// 店長設定の節そのものの挙動は StoreManagerSection のテストが持つ。ここで見たいのは
+// 節を描くかどうかの門だけなので、印だけ置いて中身は差し替える。
+jest.mock('../ui/StoreManagerSection', () => ({
+  StoreManagerSection: ({ storeId }: { storeId: string }) => <div>店長設定の節:{storeId}</div>,
+}));
+
+/** authorities claim だけを載せた token cookie を置く（署名は検証されない — 表示制御の入力）。 */
+const givenTokenWith = (authorities: string[]) => {
+  const payload = Buffer.from(JSON.stringify({ authorities, userType: 'STAFF' }))
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  document.cookie = `token=header.${payload}.signature`;
+};
+
 const mockedApi = platformStoreApi as jest.Mocked<typeof platformStoreApi>;
 
 const store = (override: Partial<Store>): Store => ({
@@ -441,5 +457,40 @@ describe('店舗一覧ページ固有の要素', () => {
       })
     );
     expect(screen.getByLabelText('店舗を検索')).toHaveValue('');
+  });
+});
+
+// 頁本体は STORE_MANAGE 門のまま、店長設定の節だけが ROLE_MANAGE 門（ADR 0020）。
+// 強制はサーバ側の @PreAuthorize で、ここが担うのは導線を出さないことだけ。
+describe('店舗編集ページの店長設定の門', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    mockedApi.getById.mockResolvedValue(store({ id: '1' }));
+  });
+
+  it('ROLE_MANAGE を持てば店長設定の節を描くこと', async () => {
+    givenTokenWith(['PERM_STORE_MANAGE', 'PERM_ROLE_MANAGE']);
+
+    render(<StoreEditPage />);
+
+    expect(await screen.findByText('店長設定の節:1')).toBeInTheDocument();
+  });
+
+  it('ROLE_MANAGE を持たなければ店長設定の節を描かないこと', async () => {
+    givenTokenWith(['PERM_STORE_MANAGE']);
+
+    render(<StoreEditPage />);
+
+    await screen.findByLabelText(/店舗名/);
+    expect(screen.queryByText('店長設定の節:1')).not.toBeInTheDocument();
+  });
+
+  // token が無い・壊れているときは資格なし扱い（fail-closed）。
+  it('token が無ければ店長設定の節を描かないこと', async () => {
+    render(<StoreEditPage />);
+
+    await screen.findByLabelText(/店舗名/);
+    expect(screen.queryByText('店長設定の節:1')).not.toBeInTheDocument();
   });
 });

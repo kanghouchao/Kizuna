@@ -3,6 +3,7 @@ export { platformAuthApi } from './api/platform';
 export { platformLineApi } from './api/line';
 export { platformStaffApi, platformRoleApi } from './api/platform-staff';
 export { storeStaffApi } from './api/store-staff';
+export { storeManagerApi } from './api/store-manager';
 export { resolvePlatformDestination } from './model/platformRouting';
 export type { PlatformDestination } from './model/platformRouting';
 export { StoreContextProvider, useStoreContext } from './model/StoreContext';

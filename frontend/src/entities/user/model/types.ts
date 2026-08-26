@@ -230,3 +230,25 @@ export interface LineRegisterRequest {
   display_name: string;
   email: string;
 }
+
+// 店長設定（店舗管理ページの節）の一覧 1 件。
+// この面が扱うのは「この店舗の店長か否か」だけなので、ロール・担当店舗集合は返らない。
+export interface StoreManagerResponse {
+  id?: number;
+  email?: string;
+  display_name?: string;
+  // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
+  enabled: boolean;
+}
+
+// 任命できる既存アカウントの候補 1 件。母集団が有効なアカウントに限られるため状態は持たない。
+export interface StoreManagerCandidateResponse {
+  id?: number;
+  email?: string;
+  display_name?: string;
+}
+
+// 店長任命リクエスト。user_id を送れば既存アカウントの任命、
+// 残り 3 項目を送れば新規作成しての任命で、混在・欠落はいずれも 400。
+export type StoreManagerAppointRequest =
+  { user_id: number } | { email: string; password: string; display_name: string };

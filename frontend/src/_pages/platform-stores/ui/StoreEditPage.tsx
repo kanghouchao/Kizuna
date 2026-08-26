@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { getApiErrorMessage, hasPermission, readTokenClaims, useResource } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
+import { StoreManagerSection } from './StoreManagerSection';
 
 export default function EditStorePage() {
   const id = useParams<{ id: string }>()?.id;
@@ -30,6 +31,12 @@ export default function EditStorePage() {
       : { name: store?.name ?? '', email: store?.email ?? '' };
   const edit = (values: UpdateStoreRequest) => setDraft({ store, values });
   const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
+  // 店長設定は ROLE_MANAGE 門（頁本体は STORE_MANAGE 門のまま）。強制はサーバ側 @PreAuthorize で、
+  // ここは節を描くかどうかだけを決める。token 無し・壊れは描かない（fail-closed）。
+  const [canManageRoles, setCanManageRoles] = useState(false);
+  useEffect(() => {
+    setCanManageRoles(hasPermission(readTokenClaims(), 'ROLE_MANAGE'));
+  }, []);
   // id を持たない URL で開かれた＝指せる店舗が無い。取りに行けないので再試行も置けない
   const loadFailure = id ? failure : 'notFound';
 
@@ -148,6 +155,8 @@ export default function EditStorePage() {
           </form>
         </CardContent>
       </Card>
+
+      {canManageRoles && id && <StoreManagerSection storeId={id} />}
     </div>
   );
 }
