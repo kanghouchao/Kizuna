@@ -19,6 +19,13 @@ function managerSection(page: Page) {
   return page.getByRole('region', { name: '店長設定' });
 }
 
+async function dismissAppointed(page: Page) {
+  const row = managerSection(page).getByRole('listitem').filter({ hasText: appointedName });
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await row.getByRole('button', { name: '解任', exact: true }).click();
+  await page.getByRole('button', { name: '解任する', exact: true }).click();
+}
+
 async function openAppointDialog(page: Page) {
   await page.getByRole('button', { name: '店長を任命', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '店長を任命' });
@@ -68,16 +75,13 @@ When('任命した店長を既存アカウントから任命する', async ({ pa
 });
 
 When('任命した店長を解任する', async ({ page }) => {
-  const row = managerSection(page).getByRole('listitem').filter({ hasText: appointedName });
-  await row.getByRole('button', { name: '解任', exact: true }).click();
-  await page.getByRole('button', { name: '解任する', exact: true }).click();
+  await dismissAppointed(page);
 });
 
-When('店長 {string} を解任しようとする', async ({ page }, managerName: string) => {
-  const row = managerSection(page).getByRole('listitem').filter({ hasText: managerName });
-  await expect(row).toBeVisible({ timeout: 15000 });
-  await row.getByRole('button', { name: '解任', exact: true }).click();
-  await page.getByRole('button', { name: '解任する', exact: true }).click();
+// 拒否側も自分で作った店長で撃つ。種子の店長（田中花子）は 2 店舗を担当しているので最後の 1 店では
+// なく、しかも解任が通ってしまうと以降のシナリオが使う共有の生きた店舗を壊す（実測: 3 本が連鎖して赤）。
+When('任命した店長を解任しようとする', async ({ page }) => {
+  await dismissAppointed(page);
   // 確認ダイアログが畳まれるのを待ってから頁を読み直す。押した直後の一覧はまだ解任前のままで、
   // 「行が残っている」は解任が通った世界でも一瞬は真になる — 読み直して初めてサーバの状態を見る。
   await expect(page.getByRole('button', { name: '解任する', exact: true })).toBeHidden({
@@ -113,8 +117,8 @@ Then('店長一覧から任命した店長が消える', async ({ page }) => {
 });
 
 // 拒否は「読み直しても行が残る」ことで観測する。撥ねたのがサーバであることは統合テストが持つ（IT の 400 断言）。
-Then('店長一覧に {string} が残る', async ({ page }, managerName: string) => {
-  await expect(managerSection(page).getByText(managerName, { exact: true })).toBeVisible({
+Then('店長一覧に任命した店長が残る', async ({ page }) => {
+  await expect(managerSection(page).getByText(appointedName, { exact: true })).toBeVisible({
     timeout: 15000,
   });
 });
