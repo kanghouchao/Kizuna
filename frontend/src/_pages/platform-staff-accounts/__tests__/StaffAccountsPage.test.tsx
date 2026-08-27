@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
 import { StaffAccountSummaryResponse, platformStaffAccountApi } from '@/entities/user';
 import { notify } from '@/shared/notify';
@@ -259,6 +259,41 @@ describe('パスワード再設定', () => {
       expect(screen.queryByText('パスワードを再設定しますか？')).not.toBeInTheDocument()
     );
     expect(mockedApi.resetPassword).not.toHaveBeenCalled();
+  });
+
+  // 応答は一度きり表示の値を運ぶ。遅れて届いた古い応答が唯一有効な最新値を上書きすると、
+  // 有効な仮パスワードが誰にも見えないまま失われる。
+  it('遅れて届いた古い応答は最新の仮パスワードを上書きしないこと', async () => {
+    mockedApi.list.mockResolvedValue(
+      paginated([
+        account({ id: 1, display_name: '山田太郎', enabled: true }),
+        account({ id: 2, display_name: '佐藤次郎', enabled: true }),
+      ])
+    );
+    let resolveFirst: (value: { temporary_password: string }) => void = () => {};
+    mockedApi.resetPassword
+      .mockImplementationOnce(
+        () => new Promise(resolve => (resolveFirst = resolve)) // 1 件目は遅延させる
+      )
+      .mockResolvedValueOnce({ temporary_password: 'newer-temporary-password' });
+
+    render(<StaffAccountsPage />);
+    const buttons = await screen.findAllByRole('button', { name: 'パスワード再設定' });
+    fireEvent.click(buttons[0]);
+    fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
+    fireEvent.click(buttons[1]);
+    fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
+
+    expect(await screen.findByDisplayValue('newer-temporary-password')).toBeInTheDocument();
+
+    // act で古い応答の状態更新を確実に流し切ってから断言する（流す前の断言は世代守衛が無くても緑になる）。
+    await act(async () => {
+      resolveFirst({ temporary_password: 'stale-temporary-password' });
+    });
+
+    expect(screen.getByDisplayValue('newer-temporary-password')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('stale-temporary-password')).not.toBeInTheDocument();
+    expect(screen.getByText('佐藤次郎 の仮パスワード')).toBeInTheDocument();
   });
 
   // 対象外（HQ 側ロール保持者・自分自身）の判定はサーバだけが持つので、そのまま出す

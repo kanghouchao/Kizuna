@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { StaffAccountSummaryResponse, platformStaffAccountApi } from '@/entities/user';
 import { roleSetLabel } from '@/features/staff-management';
 import { getApiErrorMessage, useDeleteAction, useListPage } from '@/shared/lib';
@@ -51,17 +51,24 @@ export default function StaffAccountsPage() {
   const [resetTarget, setResetTarget] = useState<StaffAccountSummaryResponse | null>(null);
   const [issued, setIssued] = useState<{ displayName: string; password: string } | null>(null);
 
+  // 応答順は要求順と一致しない。応答は一度きり表示の仮パスワードを運ぶため、遅れて届いた
+  // 古い応答が最新の（唯一有効な）値を上書きしないよう世代で守り、最新要求以外は棄てる。
+  const resetRequestIdRef = useRef(0);
+
   // 一覧の型では HQ 側ロールを判別できないので行は出し分けない。対象外（HQ 側ロール保持者・
   // 自分自身）の拒否はサーバだけが判定でき、文言は応答からそのまま出す。
   const resetPassword = async (account: StaffAccountSummaryResponse) => {
     setResetTarget(null);
+    const requestId = ++resetRequestIdRef.current;
     try {
       const result = await platformStaffAccountApi.resetPassword(account.id ?? 0);
+      if (requestId !== resetRequestIdRef.current) return;
       setIssued({
         displayName: account.display_name ?? '',
         password: result.temporary_password,
       });
     } catch (error) {
+      if (requestId !== resetRequestIdRef.current) return;
       notify.error(getApiErrorMessage(error, 'パスワードの再設定に失敗しました'));
     }
   };
