@@ -283,7 +283,9 @@ describe('パスワード再設定', () => {
 
     fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
 
-    await waitFor(() => expect(screen.getByDisplayValue('test-temporary-password')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByDisplayValue('test-temporary-password')).toBeInTheDocument()
+    );
   });
 
   it('背景クリックでは仮パスワードの表示を閉じないこと', async () => {
@@ -293,7 +295,9 @@ describe('パスワード再設定', () => {
     expect(backdrop).not.toBeNull();
     fireEvent.click(backdrop as Element);
 
-    await waitFor(() => expect(screen.getByDisplayValue('test-temporary-password')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByDisplayValue('test-temporary-password')).toBeInTheDocument()
+    );
   });
 
   it('「閉じる」ボタンでだけ仮パスワードの表示を閉じること', async () => {
