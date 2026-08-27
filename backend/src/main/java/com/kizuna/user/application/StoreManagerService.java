@@ -40,11 +40,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>任命はロールの付与と担当店舗の追加、解任は担当店舗の除去である。ロール × 店舗集合は外積なので（ADR 0020）、任命は本人の担当店舗
  * <b>全体</b>を店長化し、解任は当該店舗の授権ごと落とす。
  *
- * <p>不変条件と衝突する解任（最後の 1 店・ALL_STORES）は自動降格せず 400 で撥ね、店舗スタッフ管理での明示操作へ誘導する。
+ * <p>不変条件と衝突する解任（最後の 1 店・ALL_STORES）は自動降格せず 400 で撥ね、降格へ誘導する。
  * 撥ねる側に倒すのは、ここで黙ってロールを剥がすと本人の他店での職位まで消えるためである。
  *
- * <p>不減零（ADR 0020 の守衛 G5）はこの面では検査しない。授与するのは STORE_MANAGER 一択で、既定ロールの権限構成はコード側が正本のまま API から
- * 改廃できない（{@link SystemRole}）ため、この面が ROLE_MANAGE を配ることも奪うこともない。解任も担当店舗集合しか触らない。
+ * <p>不減零（ADR 0020 の守衛 G5）はこの面では検査しない。この面が動かすロールは STORE_MANAGER と STORE_STAFF だけで、どちらも ROLE_MANAGE を
+ * 含まず、既定ロールの権限構成はコード側が正本のまま API から改廃できない（{@link SystemRole}）ためである。
  */
 @Service
 @RequiredArgsConstructor
@@ -55,6 +55,9 @@ public class StoreManagerService {
 
   /** 一覧・候補の並び。offset ページングの境界を確定させるため、表示名には一意な副キーを添える。 */
   private static final Sort BY_DISPLAY_NAME = Sort.by("displayName", "id");
+
+  /** 解任が撥ねられたときに残る出口。降格はこの面に、停止はアカウント管理にあり、どちらも実在する操作を指す。 */
+  private static final String DISMISSAL_ALTERNATIVES = "降格で店舗スタッフにするか、退職の場合はアカウント管理で停止してください";
 
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
@@ -166,29 +169,55 @@ public class StoreManagerService {
   /**
    * 店長を解任する。担当店舗集合から当該店舗を除去するだけで、ロールには触らない — 外積のため、ここでロールを剥がすと 本人が他店で持つ店長職まで一緒に消える。
    *
-   * <p>除去が不変条件と衝突する 2 例（唯一の担当店舗・ALL_STORES）は、代わりにロールを剥がす自動降格へ倒さず 400 で撥ねる。
+   * <p>除去が不変条件と衝突する 2 例（唯一の担当店舗・ALL_STORES）は 400 で撥ね、降格と停止という実在する出口へ誘導する。
    */
   @Transactional
   public void dismiss(Long storeId, Long userId) {
     requireStore(storeId);
-    Long managerRoleId = requireStoreManagerRole().getId();
-    PlatformUser user =
-        repository
-            .findByIdForUpdate(userId)
-            .filter(target -> target.getUserType() == UserType.STAFF)
-            .filter(target -> target.getRoleIds().contains(managerRoleId))
-            .filter(target -> target.authorizes(storeId))
-            .orElseThrow(() -> new NotFoundException("この店舗の店長が見つかりません: " + userId));
+    PlatformUser user = requireManagerOf(storeId, userId, requireStoreManagerRole().getId());
     if (user.getStoreScopeType() == StoreScopeType.ALL_STORES) {
-      throw new InvalidStoreScopeException("全店舗を担当しているため、この画面からは解任できません。店舗スタッフ管理で担当店舗を指定してください");
+      throw new InvalidStoreScopeException("全店舗を担当しているため解任できません。" + DISMISSAL_ALTERNATIVES);
     }
     if (user.getStoreIds().size() == 1) {
-      throw new InvalidStoreScopeException("最後の担当店舗のため解任できません。店舗スタッフ管理でロールの付け替えまたは停止を行ってください");
+      throw new InvalidStoreScopeException("最後の担当店舗のため解任できません。" + DISMISSAL_ALTERNATIVES);
     }
     Set<Long> storeIds = new HashSet<>(user.getStoreIds());
     storeIds.remove(storeId);
     user.reassignGrants(user.getRoleIds(), StoreScopeType.SPECIFIC_STORES, storeIds);
     save(user);
+  }
+
+  /**
+   * 店長を降格する。ロール集合の STORE_MANAGER を STORE_STAFF へ入れ替えるだけで、担当店舗集合には触らない —
+   * 本人は担当する<b>全店舗</b>で店舗スタッフになる。
+   *
+   * <p>担当が 2 店以上なら当該店舗だけを落とす解任で足りるので、この口は使わせず 400 で解任へ戻す。 通るのは解任の形が存在しない 2
+   * 例（唯一の担当店舗・ALL_STORES）だけである。
+   */
+  @Transactional
+  public void demote(Long storeId, Long userId) {
+    requireStore(storeId);
+    Long managerRoleId = requireStoreManagerRole().getId();
+    PlatformUser user = requireManagerOf(storeId, userId, managerRoleId);
+    if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
+        && user.getStoreIds().size() > 1) {
+      throw new InvalidStoreScopeException("複数の店舗を担当しているため降格できません。この店舗の店長から外すには解任してください");
+    }
+    Set<Long> roleIds = new HashSet<>(user.getRoleIds());
+    roleIds.remove(managerRoleId);
+    roleIds.add(requireStoreStaffRole().getId());
+    user.reassignGrants(roleIds, user.getStoreScopeType(), user.getStoreIds());
+    save(user);
+  }
+
+  /** 解任・降格が指す対象。両者で同一の述語・同一の例外にするのは、片方だけ緩むと「この店舗の店長か」を隠している 述語から他人のアカウントの在否が漏れるためである。 */
+  private PlatformUser requireManagerOf(Long storeId, Long userId, Long managerRoleId) {
+    return repository
+        .findByIdForUpdate(userId)
+        .filter(target -> target.getUserType() == UserType.STAFF)
+        .filter(target -> target.getRoleIds().contains(managerRoleId))
+        .filter(target -> target.authorizes(storeId))
+        .orElseThrow(() -> new NotFoundException("この店舗の店長が見つかりません: " + userId));
   }
 
   /** 店長の導出条件。任命記録を持たないので、ロールの保持と担当範囲の 2 条件がそのまま述語になる。 */
@@ -255,6 +284,13 @@ public class StoreManagerService {
     return roleRepository
         .findByName(SystemRole.STORE_MANAGER.getRoleName())
         .orElseThrow(() -> new ServiceException("店長ロールが存在しません"));
+  }
+
+  /** 降格の受け皿となる店舗スタッフロール。店長ロールと同じく名称が自然キー。 */
+  private Role requireStoreStaffRole() {
+    return roleRepository
+        .findByName(SystemRole.STORE_STAFF.getRoleName())
+        .orElseThrow(() -> new ServiceException("店舗スタッフロールが存在しません"));
   }
 
   /** 実在しない店舗宛の要求は空一覧でなく 404 に倒す（在否を応答の形で取り違えさせない）。 */
