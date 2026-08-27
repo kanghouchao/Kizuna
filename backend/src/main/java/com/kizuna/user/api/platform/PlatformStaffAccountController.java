@@ -1,5 +1,6 @@
 package com.kizuna.user.api.platform;
 
+import com.kizuna.user.api.dto.StaffAccountPasswordResetResponse;
 import com.kizuna.user.api.dto.StaffAccountResponse;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
 import com.kizuna.user.application.PlatformStaffAccountService;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * アカウント管理 API（本人種別 STAFF の全アカウントの閲覧と停止・再開）。全操作 STAFF_ACCOUNT_MANAGE 権限限定。
+ * アカウント管理 API（本人種別 STAFF の全アカウントの閲覧・停止・再開・パスワード再設定）。全操作 STAFF_ACCOUNT_MANAGE 権限限定。
  *
  * <p>授権を書く口はこの面に存在しない。ロールと店舗集合の変更は管理者管理（/platform/staff）と店舗スタッフ管理が引き続き担う。
  */
@@ -57,5 +58,13 @@ public class PlatformStaffAccountController {
   public ResponseEntity<Void> resume(@PathVariable Long id) {
     platformStaffAccountService.resume(id);
     return ResponseEntity.noContent().build();
+  }
+
+  /** 仮パスワードを発行して再設定する。生値を返すのはこの応答だけで、資源を作らないので 200 を返す。 */
+  @PostMapping("/{id}/password-reset")
+  @PreAuthorize("hasAuthority('PERM_STAFF_ACCOUNT_MANAGE')")
+  public ResponseEntity<StaffAccountPasswordResetResponse> resetPassword(@PathVariable Long id) {
+    return ResponseEntity.ok(
+        new StaffAccountPasswordResetResponse(platformStaffAccountService.resetPassword(id)));
   }
 }

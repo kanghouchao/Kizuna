@@ -13,10 +13,12 @@ import static org.mockito.Mockito.when;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
+import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserPasswordReset;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.PlatformUserResumed;
 import com.kizuna.user.domain.PlatformUserStopped;
@@ -42,6 +44,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
 class PlatformStaffAccountServiceTest {
@@ -52,6 +55,9 @@ class PlatformStaffAccountServiceTest {
   /** 店舗側ロール。この面では HQ 側と同じく対象になる。 */
   private static final long STORE_SIDE_ROLE = 11L;
 
+  /** HQ 側ロール。パスワード再設定の境界（G6）の母集団を作るのに使う。 */
+  private static final long HQ_ROLE = 13L;
+
   private static final Pageable PAGEABLE = PageRequest.of(0, 20);
 
   private static final String ACTOR = "actor@kizuna.test";
@@ -61,6 +67,8 @@ class PlatformStaffAccountServiceTest {
   @Mock private RoleRepository roleRepository;
 
   @Mock private PermissionRepository permissionRepository;
+
+  @Mock private PasswordEncoder passwordEncoder;
 
   @Mock private ApplicationEventPublisher eventPublisher;
 
@@ -241,6 +249,57 @@ class PlatformStaffAccountServiceTest {
 
     assertThatThrownBy(() -> service.resume(8L)).isInstanceOf(NotFoundException.class);
 
+    verify(repository, never()).saveAndFlush(any());
+    verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("HQ 側ロール保持者へのパスワード再設定は 400 で拒否され、何も書かれないこと（守衛 G6）")
+  void resetPassword_hqRoleHolder_isRejectedAndWritesNothing() {
+    // 実行主体も必ず HQ 側ロールを持つため、自己再設定もこの判定に吸収される。
+    PlatformUser existing = staff(3L, "hq@kizuna.test", Set.of(HQ_ROLE));
+    when(repository.findById(3L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
+
+    assertThatThrownBy(() -> service.resetPassword(3L))
+        .isInstanceOf(HqPasswordResetNotAllowedException.class)
+        .hasMessage("HQ 側ロール保持者のパスワードは再設定できません");
+
+    assertThat(existing.getPassword()).as("パスワードは書き換わらないこと").isEqualTo("hash");
+    verify(repository, never()).saveAndFlush(any());
+    verifyNoInteractions(passwordEncoder);
+    verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("店舗側ロールだけの対象は仮パスワードを符号化して保存し、失効イベントを発行すること")
+  void resetPassword_storeSideTarget_encodesAndPublishes() {
+    PlatformUser existing = staff(4L, "store-only@kizuna.test", Set.of(STORE_SIDE_ROLE));
+    when(repository.findById(4L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
+    when(passwordEncoder.encode(ArgumentMatchers.anyString())).thenReturn("encoded");
+
+    String temporaryPassword = service.resetPassword(4L);
+
+    // 返した生値そのものが符号化されて保存される（別の値を返す取り違えを排除する）。
+    assertThat(temporaryPassword).hasSize(16);
+    verify(passwordEncoder).encode(temporaryPassword);
+    assertThat(existing.getPassword()).isEqualTo("encoded");
+    verify(repository).saveAndFlush(existing);
+    verify(eventPublisher).publishEvent(new PlatformUserPasswordReset("store-only@kizuna.test"));
+    // 再設定は enabled もロールも動かさないので、不減零の直列化点は押さえない。
+    verifyNoInteractions(permissionRepository);
+  }
+
+  @Test
+  @DisplayName("CAST の id を直接指定した再設定は、ロールを引く前に 404 になること")
+  void resetPassword_targetIsNotStaff_throwsNotFoundBeforeRoleLookup() {
+    when(repository.findById(8L)).thenReturn(Optional.of(castUser(8L, "cast@kizuna.test")));
+
+    assertThatThrownBy(() -> service.resetPassword(8L)).isInstanceOf(NotFoundException.class);
+
+    verifyNoInteractions(roleRepository);
+    verifyNoInteractions(passwordEncoder);
     verify(repository, never()).saveAndFlush(any());
     verifyNoInteractions(eventPublisher);
   }

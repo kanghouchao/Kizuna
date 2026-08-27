@@ -4,10 +4,12 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.api.dto.StaffAccountResponse;
 import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
+import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserPasswordReset;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.PlatformUserResumed;
 import com.kizuna.user.domain.PlatformUserStopped;
@@ -17,7 +19,9 @@ import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -31,13 +35,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * アカウント管理ユースケース。対象は本人種別 STAFF の全アカウントで、ロール構成（HQ 側／店舗側）を問わない — CAST/MEMBER は権限モデルの外なので在否も出さない。
  *
- * <p>授権は一切書かない。停止・再開だけを扱い、ロールと店舗集合は表示にしか現れない。
+ * <p>授権は一切書かない。停止・再開とパスワード再設定だけを扱い、ロールと店舗集合は表示にしか現れない。
  *
  * <p><b>ロックの獲得順は 権限目録行（{@link PermissionRepository#lockIdByCode}）→ 利用者行</b>で、授権管理の PUT
  * 経路と同一。逆順の行使点が 1 つでも生まれると、二経路が互いの保持する行を待って環になる。
@@ -49,9 +54,13 @@ public class PlatformStaffAccountService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
+  /** 仮パスワードの生成源。予測可能な乱数だと発行直後の乗っ取りを許すため暗号論的乱数に限る。 */
+  private final SecureRandom random = new SecureRandom();
+
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
+  private final PasswordEncoder passwordEncoder;
   private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
@@ -138,6 +147,34 @@ public class PlatformStaffAccountService {
       repository.saveAndFlush(target);
     }
     eventPublisher.publishEvent(new PlatformUserStopped(target.getEmail()));
+  }
+
+  /**
+   * 仮パスワードを発行して再設定し、対象の既存セッションを失効させる。生値の戻り値はこの一度だけで、以後どこからも取り出せない。
+   *
+   * <p>直列化点（{@link PermissionRepository#lockIdByCode}）は押さえない。再設定は enabled もロール構成も動かさないので
+   * ROLE_MANAGE 保持者の母集団を減らしようがなく、「増やすだけの操作は押さえない」に当たる。行ロックも取らない —
+   * 状態機械の遷移が無く、並行書込みは楽観ロック（@Version）が担う。
+   */
+  @Transactional
+  public String resetPassword(Long id) {
+    PlatformUser target = requireStaffAccount(id);
+    // HQ 側ロール保持者は対象外（ADR 0021 の守衛 G6）。実行主体も必ず HQ 側ロールを持つため、自己再設定はこの判定に含まれる。
+    if (holdsAny(target.getRoleIds(), roleRepository.findHqRoleIds())) {
+      throw new HqPasswordResetNotAllowedException("HQ 側ロール保持者のパスワードは再設定できません");
+    }
+    String temporaryPassword = temporaryPassword();
+    target.changePassword(passwordEncoder.encode(temporaryPassword));
+    repository.saveAndFlush(target);
+    eventPublisher.publishEvent(new PlatformUserPasswordReset(target.getEmail()));
+    return temporaryPassword;
+  }
+
+  /** 仮パスワード（URL 安全 Base64 の 16 文字）。生値は符号化して保存した後、応答以外のどこにも残さない。 */
+  private String temporaryPassword() {
+    byte[] bytes = new byte[12];
+    random.nextBytes(bytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
   /** 再開する。既に有効でも 204 で受理し、解除イベントを発行する（停止と同じ理由の冪等化）。 */

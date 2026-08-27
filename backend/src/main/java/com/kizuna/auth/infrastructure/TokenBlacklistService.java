@@ -2,6 +2,8 @@ package com.kizuna.auth.infrastructure;
 
 import com.kizuna.shared.config.AppProperties;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -11,7 +13,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * JWT ブラックリストの読み書き（Redis）。TTL は token 単位（{@link #blacklist(String)}）は実際の exp まで、ユーザー単位（{@link
- * #blacklistUser(String)}）は JWT 有効期間ぶん。書き込みはセッション失効、判定は認証フィルタから使う。
+ * #blacklistUser(String)}）とパスワード再設定（{@link #markPasswordReset(String)}）は JWT
+ * 有効期間ぶん。書き込みはセッション失効、判定は認証フィルタから使う。
  */
 @Component
 public class TokenBlacklistService {
@@ -20,6 +23,9 @@ public class TokenBlacklistService {
 
   /** ユーザー単位ブラックリストの key 接頭辞。停止済みユーザーの全セッションを email 単位で一括失効させる。 */
   private static final String USER_KEY_PREFIX = "blacklist:users:";
+
+  /** パスワード再設定の key 接頭辞。停止用の鍵と分けてあり、再開（{@link #clearUser}）では決して消さない。 */
+  private static final String PASSWORD_RESET_KEY_PREFIX = "blacklist:password-reset:";
 
   private final RedisTemplate<String, Object> redisTemplate;
   private final AppProperties appProperties;
@@ -95,5 +101,28 @@ public class TokenBlacklistService {
   /** 指定 email がユーザー単位ブラックリストに登録済みかを返す。 */
   public boolean isUserBlacklisted(String email) {
     return Boolean.TRUE.equals(redisTemplate.hasKey(USER_KEY_PREFIX + email));
+  }
+
+  /**
+   * パスワード再設定の時刻を記録し、それ以前に発行された JWT を失効させる（再設定時に使う）。
+   *
+   * <p>停止用の鍵とは独立の鍵を使う。共用すると、無関係な再開操作 1 回（{@link #clearUser}）が再設定前のセッションまで蘇らせてしまう。
+   *
+   * <p>値は書込み時点（＝ commit 後）のエポック秒。TTL は {@link #blacklistUser} と同じ理由で JWT 有効期間ぶん取る —
+   * その時間が経てば再設定前のトークンはどれも自身の期限切れで無効になっている。
+   */
+  public void markPasswordReset(String email) {
+    redisTemplate
+        .opsForValue()
+        .set(
+            PASSWORD_RESET_KEY_PREFIX + email,
+            String.valueOf(Instant.now().getEpochSecond()),
+            Duration.ofMillis(appProperties.getJwtExpiration()));
+  }
+
+  /** 記録済みのパスワード再設定時刻（エポック秒）を返す。記録が無ければ空。 */
+  public Optional<Long> getPasswordResetAtSeconds(String email) {
+    Object value = redisTemplate.opsForValue().get(PASSWORD_RESET_KEY_PREFIX + email);
+    return value == null ? Optional.empty() : Optional.of(Long.parseLong(value.toString()));
   }
 }
