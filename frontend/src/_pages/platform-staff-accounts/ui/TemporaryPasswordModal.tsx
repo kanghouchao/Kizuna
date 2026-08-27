@@ -7,8 +7,10 @@ interface TemporaryPasswordModalProps {
   open: boolean;
   /** 発行された仮パスワードの生値。閉じると二度と取り出せない。 */
   temporaryPassword: string;
-  /** 対象アカウントの表示名（誰の仮パスワードかの取り違えを防ぐ）。 */
+  /** 対象アカウントの表示名。 */
   displayName: string;
+  /** 対象アカウントのメールアドレス。表示名は一意でないため、取り違え防止の同定は一意なこちらが担う。 */
+  email: string;
   onClose: () => void;
 }
 
@@ -20,6 +22,7 @@ export function TemporaryPasswordModal({
   open,
   temporaryPassword,
   displayName,
+  email,
   onClose,
 }: TemporaryPasswordModalProps) {
   const handleCopy = async () => {
@@ -49,7 +52,9 @@ export function TemporaryPasswordModal({
         </DialogTitle>
         <div className="space-y-4 px-6 py-5">
           <div className="grid gap-1">
-            <Label htmlFor="temporary-password">{displayName} の仮パスワード</Label>
+            <Label htmlFor="temporary-password">
+              {displayName}（{email}）の仮パスワード
+            </Label>
             <Input
               id="temporary-password"
               type="text"
