@@ -14,11 +14,8 @@ import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.PlatformUserResumed;
-import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
@@ -32,7 +29,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -56,7 +52,6 @@ public class PlatformStaffService {
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
   private final PasswordEncoder passwordEncoder;
-  private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
   public Page<PlatformStaffResponse> list(String search, Long storeId, Pageable pageable) {
@@ -137,8 +132,12 @@ public class PlatformStaffService {
     return toResponse(user, roleNamesOf(user.getRoleIds()));
   }
 
+  /**
+   * 授権（ロール×店舗集合）だけを更新する。停止・再開はアカウント管理（{@link PlatformStaffAccountService}）の領分で、この面は enabled
+   * を受け取らない。
+   */
   @Transactional
-  public PlatformStaffResponse update(Long id, PlatformStaffUpdateRequest req, String actorEmail) {
+  public PlatformStaffResponse update(Long id, PlatformStaffUpdateRequest req) {
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
     Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
     requireHqRole(req.getRoleIds(), hqRoleIds);
@@ -148,30 +147,8 @@ public class PlatformStaffService {
     if (!user.getVersion().equals(req.getVersion())) {
       throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
-    // 自分自身を停止すると自らのセッションも即時失効し、以後の操作ができなくなる（サポート経路がない自己ロックアウト）ため拒否する。
-    if (Boolean.FALSE.equals(req.getEnabled()) && user.getEmail().equals(actorEmail)) {
-      throw new SelfStopNotAllowedException("自分自身を停止することはできません");
-    }
     requireRoleManageHolderRemains(user, req);
     user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
-    // enabled の遷移（null=現状維持）。停止は行を残し、過去の実行主体の記録を保持する。
-    if (Boolean.FALSE.equals(req.getEnabled()) && user.getEnabled()) {
-      user.stop();
-    }
-    if (Boolean.TRUE.equals(req.getEnabled()) && !user.getEnabled()) {
-      user.resume();
-    }
-    // 失効の即時反映は「本リクエストが停止/再開を明示的に要求したか」で判定する（現在状態との差分ではない）。
-    // AFTER_COMMIT の Redis 書き込みが失敗して 500 になっても、最新 version を取り直して同じ停止要求を
-    // 再送すれば失効が書き直されるようにするための冪等化（差分語義だと再送時には既に enabled=false の
-    // ためイベントが発行されず、resume→stop 以外に復旧手段が無くなる）。version は楽観ロックで
-    // commit 済みの更新ぶん進んでいるため、再送には GET の取り直しが要る点に注意。
-    if (Boolean.FALSE.equals(req.getEnabled())) {
-      eventPublisher.publishEvent(new PlatformUserStopped(user.getEmail()));
-    }
-    if (Boolean.TRUE.equals(req.getEnabled())) {
-      eventPublisher.publishEvent(new PlatformUserResumed(user.getEmail()));
-    }
     return toResponse(save(user), roleNames);
   }
 
@@ -200,7 +177,7 @@ public class PlatformStaffService {
   }
 
   /**
-   * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止・剥奪を拒む。判定を役職名（HQ_ADMIN）でなく 実効権限で行うのは、管理が
+   * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になるロール剥奪を拒む。判定を役職名（HQ_ADMIN）でなく 実効権限で行うのは、管理が
    * ROLE_MANAGE を含む自作ロールへ移った配備でも正しく数えるためである。
    *
    * <p>母集団を減らしうる更新だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}、取り直しの理由もそちら）を押さえ、 押さえた後に
@@ -228,12 +205,10 @@ public class PlatformStaffService {
     }
   }
 
-  /** 停止か、現保持ロールのいずれかの除去を含むか。どちらも含まない更新はどの母集団も減らせない。 */
+  /** 現保持ロールのいずれかの除去を含むか。含まない更新はどの母集団も減らせない。 */
   private static boolean mightReduceRoleManageHolders(
       PlatformUser user, PlatformStaffUpdateRequest req) {
-    return user.getEnabled()
-        && (Boolean.FALSE.equals(req.getEnabled())
-            || !req.getRoleIds().containsAll(user.getRoleIds()));
+    return user.getEnabled() && !req.getRoleIds().containsAll(user.getRoleIds());
   }
 
   /** 対象が今そこに居て、更新後に居なくなるか。居ないなら、この更新で母集団は減らない。 */
@@ -243,9 +218,7 @@ public class PlatformStaffService {
       return false;
     }
     boolean wasHolder = user.getEnabled() && holdsAny(user.getRoleIds(), roleManageRoleIds);
-    // enabled は null で現状維持。ここへ来る対象は有効なので、明示的な false だけが停止になる。
-    boolean staysHolder =
-        !Boolean.FALSE.equals(req.getEnabled()) && holdsAny(req.getRoleIds(), roleManageRoleIds);
+    boolean staysHolder = holdsAny(req.getRoleIds(), roleManageRoleIds);
     return wasHolder && !staysHolder;
   }
 

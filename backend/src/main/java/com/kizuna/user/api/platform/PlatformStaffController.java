@@ -5,7 +5,6 @@ import com.kizuna.user.api.dto.PlatformStaffResponse;
 import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.application.PlatformStaffService;
 import jakarta.validation.Valid;
-import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 管理者管理 API（HQ 側ロール保持者のロール×店舗集合）。全操作 ROLE_MANAGE 権限限定。
  *
  * <p>店舗側ロールのみの利用者は本 API の対象外で、店舗スタッフ管理（STAFF_MANAGE 門）が扱う（ADR 0020）。
+ * 停止・再開はアカウント管理（STAFF_ACCOUNT_MANAGE 門）の領分で、この面には無い。
  */
 @RestController
 @RequestMapping("/platform/staff")
@@ -59,9 +59,7 @@ public class PlatformStaffController {
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<PlatformStaffResponse> update(
-      @PathVariable Long id,
-      @Valid @RequestBody PlatformStaffUpdateRequest req,
-      Principal principal) {
-    return ResponseEntity.ok(platformStaffService.update(id, req, principal.getName()));
+      @PathVariable Long id, @Valid @RequestBody PlatformStaffUpdateRequest req) {
+    return ResponseEntity.ok(platformStaffService.update(id, req));
   }
 }
