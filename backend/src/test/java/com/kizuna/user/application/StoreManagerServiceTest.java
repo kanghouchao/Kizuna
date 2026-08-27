@@ -54,6 +54,9 @@ class StoreManagerServiceTest {
   /** 委譲権限を含まない店舗側ロール。任命候補が店長ロール以外に持ちうるもの。 */
   private static final long CLERK_ROLE = 12L;
 
+  /** 店舗スタッフロール（STORE_STAFF）。降格の受け皿。 */
+  private static final long STAFF_ROLE = 14L;
+
   /** HQ 側ロール（Console.PLATFORM の権限を含む）。任命の母集団から外れる。 */
   private static final long HQ_ROLE = 13L;
 
@@ -81,6 +84,14 @@ class StoreManagerServiceTest {
             .build();
     role.setId(MANAGER_ROLE);
     when(roleRepository.findByName(SystemRole.STORE_MANAGER.getRoleName()))
+        .thenReturn(Optional.of(role));
+  }
+
+  private void givenStaffRole() {
+    Role role =
+        Role.builder().name(SystemRole.STORE_STAFF.getRoleName()).permissionIds(Set.of(2L)).build();
+    role.setId(STAFF_ROLE);
+    when(roleRepository.findByName(SystemRole.STORE_STAFF.getRoleName()))
         .thenReturn(Optional.of(role));
   }
 
@@ -367,7 +378,7 @@ class StoreManagerServiceTest {
   }
 
   @Test
-  @DisplayName("解任: 最後の担当店舗からの解任は自動降格へ倒さず撥ね、明示操作へ誘導すること")
+  @DisplayName("解任: 最後の担当店舗からの解任は自動降格へ倒さず撥ね、実在する出口へ誘導すること")
   void dismissingFromTheLastStoreIsRejectedWithGuidance() {
     givenStore();
     givenManagerRole();
@@ -381,12 +392,13 @@ class StoreManagerServiceTest {
 
     assertThatThrownBy(() -> service.dismiss(STORE, 5L))
         .isInstanceOf(InvalidStoreScopeException.class)
-        .hasMessageContaining("店舗スタッフ管理");
+        .hasMessageContaining("降格")
+        .hasMessageContaining("アカウント管理");
     verify(repository, never()).saveAndFlush(ArgumentMatchers.any());
   }
 
   @Test
-  @DisplayName("解任: 全店舗担当の店長は除去の形が無いため撥ね、明示操作へ誘導すること")
+  @DisplayName("解任: 全店舗担当の店長は除去の形が無いため撥ね、実在する出口へ誘導すること")
   void dismissingAllStoresManagerIsRejectedWithGuidance() {
     givenStore();
     givenManagerRole();
@@ -394,8 +406,93 @@ class StoreManagerServiceTest {
 
     assertThatThrownBy(() -> service.dismiss(STORE, 5L))
         .isInstanceOf(InvalidStoreScopeException.class)
-        .hasMessageContaining("店舗スタッフ管理");
+        .hasMessageContaining("降格")
+        .hasMessageContaining("アカウント管理");
     verify(repository, never()).saveAndFlush(ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("降格: 店長ロールが店舗スタッフロールへ入れ替わり、他ロールと担当店舗はそのまま残ること")
+  void demotingSwapsOnlyTheManagerRole() {
+    givenStore();
+    givenManagerRole();
+    givenStaffRole();
+    givenTarget(
+        staff(
+            5L,
+            Set.of(MANAGER_ROLE, CLERK_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(STORE),
+            true));
+    givenSaveEchoes();
+
+    service.demote(STORE, 5L);
+
+    verify(repository).saveAndFlush(userCaptor.capture());
+    PlatformUser demoted = userCaptor.getValue();
+    assertThat(demoted.getRoleIds())
+        .as("店長ロールだけを店舗スタッフロールへ入れ替え、他のロールは保持すること")
+        .containsExactlyInAnyOrder(STAFF_ROLE, CLERK_ROLE);
+    assertThat(demoted.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(demoted.getStoreIds()).as("担当店舗集合には触れないこと").containsExactly(STORE);
+  }
+
+  @Test
+  @DisplayName("降格: 全店舗担当の店長も担当範囲を保ったまま店舗スタッフになること")
+  void demotingAllStoresManagerKeepsTheScope() {
+    givenStore();
+    givenManagerRole();
+    givenStaffRole();
+    givenTarget(staff(5L, Set.of(MANAGER_ROLE), StoreScopeType.ALL_STORES, Set.of(), true));
+    givenSaveEchoes();
+
+    service.demote(STORE, 5L);
+
+    verify(repository).saveAndFlush(userCaptor.capture());
+    PlatformUser demoted = userCaptor.getValue();
+    assertThat(demoted.getRoleIds()).containsExactly(STAFF_ROLE);
+    assertThat(demoted.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(demoted.getStoreIds()).isEmpty();
+  }
+
+  // 降格は担当店舗を一切動かさないので、複数店を担当する店長を降ろすと無関係な店舗の職位まで落ちる。
+  @Test
+  @DisplayName("降格: 複数店舗を担当する店長は撥ね、解任へ誘導すること")
+  void demotingMultiStoreManagerIsRejected() {
+    givenStore();
+    givenManagerRole();
+    givenTarget(
+        staff(
+            5L,
+            Set.of(MANAGER_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(STORE, OTHER_STORE),
+            true));
+
+    assertThatThrownBy(() -> service.demote(STORE, 5L))
+        .isInstanceOf(InvalidStoreScopeException.class)
+        .hasMessageContaining("解任");
+    verify(repository, never()).saveAndFlush(ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("降格: この店舗の店長でない対象は解任と同一の 404 になること")
+  void demotingNonManagerIsNotFoundWithTheSameMessageAsDismissal() {
+    givenStore();
+    givenManagerRole();
+    givenTarget(staff(5L, Set.of(CLERK_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(STORE), true));
+
+    assertThatThrownBy(() -> service.demote(STORE, 5L))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessage("この店舗の店長が見つかりません: 5");
+  }
+
+  @Test
+  @DisplayName("降格: 実在しない店舗は 404 になること")
+  void demotingUnderUnknownStoreIsNotFound() {
+    when(storeExistenceCheck.exists(STORE)).thenReturn(false);
+
+    assertThatThrownBy(() -> service.demote(STORE, 5L)).isInstanceOf(NotFoundException.class);
   }
 
   @Test

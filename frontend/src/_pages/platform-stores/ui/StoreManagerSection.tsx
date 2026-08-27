@@ -15,8 +15,8 @@ interface StoreManagerSectionProps {
 }
 
 /**
- * 店長設定の節。店長は「STORE_MANAGER 保持かつこの店舗を担当」の導出で、任命・解任はその授権の
- * 書き換えとして起きる（ADR 0020）。
+ * 店長設定の節。店長は「STORE_MANAGER 保持かつこの店舗を担当」の導出で、任命・解任・降格はその授権の
+ * 書き換えとして起きる（ADR 0020）。解任は店舗集合を、降格はロールを落とす。
  *
  * 節そのものが ROLE_MANAGE 門なので、描くかどうかは呼び出し側が権限で決める。
  */
@@ -39,6 +39,15 @@ export function StoreManagerSection({ storeId }: StoreManagerSectionProps) {
     onDeleted: refetch,
   });
 
+  // 降格は解任と同じ確認・実行・トーストの流れなので同じ hook を使う。落とすのは行ではなくロール。
+  const demotion = useDeleteAction<StoreManagerResponse>({
+    remove: manager => storeManagerApi.demote(storeId, manager.id ?? 0),
+    successMessage: '店長を降格しました',
+    // 降格できない理由（複数店舗の担当）はサーバだけが持つ
+    errorMessage: '店長の降格に失敗しました',
+    onDeleted: refetch,
+  });
+
   // 停止中の店長は着任していても操作できない。未設の注意喚起は有効な行だけで判定する。
   const hasActiveManager = managers.some(manager => manager.enabled);
 
@@ -52,7 +61,7 @@ export function StoreManagerSection({ storeId }: StoreManagerSectionProps) {
               店長設定
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              この店舗の店長を任命・解任します。店長は担当店舗すべての店長になります。
+              この店舗の店長を任命・解任・降格します。店長は担当店舗すべての店長になります。
             </p>
           </div>
           <Button type="button" size="sm" onClick={() => setAppointOpen(true)}>
@@ -99,6 +108,14 @@ export function StoreManagerSection({ storeId }: StoreManagerSectionProps) {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        onClick={() => demotion.ask(manager)}
+                      >
+                        降格
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
                         className="text-destructive-strong"
                         onClick={() => dismissal.ask(manager)}
                       >
@@ -128,6 +145,16 @@ export function StoreManagerSection({ storeId }: StoreManagerSectionProps) {
         confirmLabel="解任する"
         onConfirm={() => void dismissal.confirm()}
         onClose={dismissal.cancel}
+      />
+
+      {/* 前端は本人の担当店舗を列挙できないので、波及範囲は一般形（担当するすべての店舗）で述べる */}
+      <ConfirmDialog
+        open={demotion.target !== null}
+        title="店長を降格しますか？"
+        description={`${demotion.target?.display_name ?? ''} を店長から降格します。担当するすべての店舗で店舗スタッフになります。`}
+        confirmLabel="降格する"
+        onConfirm={() => void demotion.confirm()}
+        onClose={demotion.cancel}
       />
     </Card>
   );

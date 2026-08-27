@@ -38,7 +38,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 店長設定の HTTP 境界統合テスト。店長が「STORE_MANAGER 保持 かつ 当該店舗を担当範囲に含む」の導出として本物の PostgreSQL 上で正しく絞られること、
- * 任命・解任が授権を実際に書き換えること、不変条件と衝突する解任が撥ねられることを固定する。
+ * 任命・解任・降格が授権を実際に書き換えること、不変条件と衝突する解任が撥ねられることを固定する。
  *
  * <p>語義の撃ち分け（母集団の各条件・要求本体の二択）は {@code StoreManagerServiceTest} が持つ。ここが担うのは、導出の述語が実 DB
  * で成立すること、新規作成した店長が実際に店舗コンソールへ着地すること、そして行を押さえていることの実測である。
@@ -271,7 +271,10 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(res.getBody().path("error").asString()).contains("店舗スタッフ管理");
+    assertThat(res.getBody().path("error").asString())
+        .as("誘導先が実在する出口（降格・アカウント管理での停止）であること")
+        .contains("降格")
+        .contains("アカウント管理");
     assertThat(platformUserRepository.findById(managerId).orElseThrow().getStoreIds())
         .as("撥ねた解任が部分適用されていないこと")
         .containsExactly(STORE_A);
@@ -288,7 +291,10 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(res.getBody().path("error").asString()).contains("店舗スタッフ管理");
+    assertThat(res.getBody().path("error").asString())
+        .as("誘導先が実在する出口（降格・アカウント管理での停止）であること")
+        .contains("降格")
+        .contains("アカウント管理");
   }
 
   @Test
@@ -302,6 +308,95 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("最後の 1 店の店長の降格でロールだけが入れ替わり、担当店舗は動かないこと（AC1・AC2）")
+  void demotingLastStoreManagerSwapsOnlyTheRole() {
+    ResponseEntity<String> res =
+        rest.exchange(
+            demotionPath(STORE_A, idOf(LAST_STORE_MANAGER_EMAIL)),
+            HttpMethod.POST,
+            new HttpEntity<>(hqHeaders()),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    PlatformUser demoted =
+        platformUserRepository.findByEmail(LAST_STORE_MANAGER_EMAIL).orElseThrow();
+    assertThat(demoted.getRoleIds())
+        .as("店長ロールが店舗スタッフロールへ入れ替わること")
+        .containsExactlyInAnyOrderElementsOf(roleIdsOf(SystemRole.STORE_STAFF.getRoleName()));
+    assertThat(demoted.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(demoted.getStoreIds()).as("担当店舗集合は動かないこと").containsExactly(STORE_A);
+
+    ResponseEntity<String> list =
+        rest.exchange(
+            managersPath(STORE_A), HttpMethod.GET, new HttpEntity<>(hqHeaders()), String.class);
+    assertThat(list.getBody()).as("降格した本人は店長一覧から消えること").doesNotContain(LAST_STORE_MANAGER_EMAIL);
+  }
+
+  @Test
+  @DisplayName("全店舗担当の店長も降格でき、担当範囲は全店舗のまま残ること（AC2）")
+  void demotingAllStoresManagerKeepsTheScope() {
+    ResponseEntity<String> res =
+        rest.exchange(
+            demotionPath(STORE_A, idOf(ALL_STORES_MANAGER_EMAIL)),
+            HttpMethod.POST,
+            new HttpEntity<>(hqHeaders()),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    PlatformUser demoted =
+        platformUserRepository.findByEmail(ALL_STORES_MANAGER_EMAIL).orElseThrow();
+    assertThat(demoted.getRoleIds())
+        .containsExactlyInAnyOrderElementsOf(roleIdsOf(SystemRole.STORE_STAFF.getRoleName()));
+    assertThat(demoted.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(demoted.getStoreIds()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("複数店舗を担当する店長の降格は 400 で撥ね、解任へ誘導すること（AC3）")
+  void demotingMultiStoreManagerIsRejectedWithGuidance() {
+    long managerId = idOf(TWO_STORE_MANAGER_EMAIL);
+
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            demotionPath(STORE_A, managerId),
+            HttpMethod.POST,
+            new HttpEntity<>(hqHeaders()),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).contains("解任");
+    assertThat(platformUserRepository.findById(managerId).orElseThrow().getRoleIds())
+        .as("撥ねた降格が部分適用されていないこと")
+        .containsExactlyInAnyOrderElementsOf(managerRoleIds());
+  }
+
+  @Test
+  @DisplayName("この店舗の店長でない対象の降格は解任と同じく 404 になること")
+  void demotingNonManagerIsNotFound() {
+    ResponseEntity<String> res =
+        rest.exchange(
+            demotionPath(STORE_A, idOf(CLERK_EMAIL)),
+            HttpMethod.POST,
+            new HttpEntity<>(hqHeaders()),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("降格も ROLE_MANAGE 非保持者には 403 になること（AC4）")
+  void demotionRequiresRoleManage() {
+    ResponseEntity<String> res =
+        rest.exchange(
+            demotionPath(STORE_A, idOf(LAST_STORE_MANAGER_EMAIL)),
+            HttpMethod.POST,
+            new HttpEntity<>(bearerJson(login("tanaka.hanako@kizuna.test"))),
+            String.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
@@ -365,6 +460,10 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
 
   private static String managersPath(long storeId) {
     return "/platform/stores/" + storeId + "/managers";
+  }
+
+  private static String demotionPath(long storeId, long userId) {
+    return managersPath(storeId) + "/" + userId + "/demotion";
   }
 
   private static String candidatesPath(long storeId) {

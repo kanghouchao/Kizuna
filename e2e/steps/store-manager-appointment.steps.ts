@@ -26,6 +26,13 @@ async function dismissAppointed(page: Page) {
   await page.getByRole('button', { name: '解任する', exact: true }).click();
 }
 
+async function demoteAppointed(page: Page) {
+  const row = managerSection(page).getByRole('listitem').filter({ hasText: appointedName });
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await row.getByRole('button', { name: '降格', exact: true }).click();
+  await page.getByRole('button', { name: '降格する', exact: true }).click();
+}
+
 async function openAppointDialog(page: Page) {
   await page.getByRole('button', { name: '店長を任命', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '店長を任命' });
@@ -76,6 +83,12 @@ When('任命した店長を既存アカウントから任命する', async ({ pa
 
 When('任命した店長を解任する', async ({ page }) => {
   await dismissAppointed(page);
+});
+
+// 降格は店長ロールだけを落とし担当店舗は残すので、本人はこの店舗の店舗スタッフとして生き続ける。
+// 「一覧から消える」＋「ログインし直すと店舗業務画面へ着く」の二点でその形を観測する。
+When('任命した店長を降格する', async ({ page }) => {
+  await demoteAppointed(page);
 });
 
 // 拒否側も自分で作った店長で撃つ。種子の店長（田中花子）は 2 店舗を担当しているので最後の 1 店では

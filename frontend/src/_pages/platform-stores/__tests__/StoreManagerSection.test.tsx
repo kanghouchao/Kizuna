@@ -4,7 +4,7 @@ import { notify } from '@/shared/notify';
 import { StoreManagerSection } from '../ui/StoreManagerSection';
 
 jest.mock('@/entities/user', () => ({
-  storeManagerApi: { list: jest.fn(), dismiss: jest.fn() },
+  storeManagerApi: { list: jest.fn(), dismiss: jest.fn(), demote: jest.fn() },
 }));
 
 // 任命モーダルは開くまで mount されないため、mock は mount = 表示として描画する
@@ -92,7 +92,7 @@ describe('店長設定の節', () => {
   it('解任の拒否はサーバの文言をそのまま通知すること', async () => {
     mockedApi.list.mockResolvedValue([manager()]);
     mockedApi.dismiss.mockRejectedValue({
-      response: { data: { error: '最後の担当店舗のため解任できません。店舗スタッフ管理で…' } },
+      response: { data: { error: '最後の担当店舗のため解任できません。降格で店舗スタッフに…' } },
     });
 
     render(<StoreManagerSection storeId="1" />);
@@ -101,7 +101,44 @@ describe('店長設定の節', () => {
 
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith(
-        '最後の担当店舗のため解任できません。店舗スタッフ管理で…'
+        '最後の担当店舗のため解任できません。降格で店舗スタッフに…'
+      )
+    );
+  });
+
+  it('降格は確認してから実行し、成功後に一覧を取り直すこと', async () => {
+    mockedApi.list.mockResolvedValue([manager()]);
+    mockedApi.demote.mockResolvedValue(undefined);
+
+    render(<StoreManagerSection storeId="1" />);
+    fireEvent.click(await screen.findByRole('button', { name: '降格' }));
+
+    expect(await screen.findByText('店長を降格しますか？')).toBeInTheDocument();
+    expect(mockedApi.demote).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '降格する' }));
+
+    await waitFor(() => expect(mockedApi.demote).toHaveBeenCalledWith('1', 1));
+    expect(notify.success).toHaveBeenCalledWith('店長を降格しました');
+    await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
+  });
+
+  // 降格できない理由（複数店舗の担当）もサーバだけが持つ。
+  it('降格の拒否はサーバの文言をそのまま通知すること', async () => {
+    mockedApi.list.mockResolvedValue([manager()]);
+    mockedApi.demote.mockRejectedValue({
+      response: {
+        data: { error: '複数の店舗を担当しているため降格できません。…解任してください' },
+      },
+    });
+
+    render(<StoreManagerSection storeId="1" />);
+    fireEvent.click(await screen.findByRole('button', { name: '降格' }));
+    fireEvent.click(await screen.findByRole('button', { name: '降格する' }));
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        '複数の店舗を担当しているため降格できません。…解任してください'
       )
     );
   });

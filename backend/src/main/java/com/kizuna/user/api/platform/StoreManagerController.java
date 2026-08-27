@@ -23,9 +23,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 店長設定 API（店舗管理ページの 1 節）。全操作 ROLE_MANAGE 権限限定で、任命・解任は Owner 層の操作である（ADR 0020）。
+ * 店長設定 API（店舗管理ページの 1 節）。全操作 ROLE_MANAGE 権限限定で、任命・解任・降格は Owner 層の操作である（ADR 0020）。
  *
- * <p>店長は独立した記録でなく「STORE_MANAGER 保持 かつ 当該店舗を担当範囲に含む」の導出なので、集合への追加＝任命、 集合からの除去＝解任として表す。
+ * <p>店長は独立した記録でなく「STORE_MANAGER 保持 かつ 当該店舗を担当範囲に含む」の導出なので、集合への追加＝任命、
+ * 集合からの除去＝解任として表す。降格はロールの側を入れ替える出口で、解任の形が存在しない店長にだけ開く。
  *
  * <p>クラス側の割当を店舗までに留めるのは、任命候補が店長の集合の部分資源ではなく兄弟の読み口だからである。
  */
@@ -64,6 +65,14 @@ public class StoreManagerController {
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<Void> dismiss(@PathVariable Long storeId, @PathVariable Long userId) {
     storeManagerService.dismiss(storeId, userId);
+    return ResponseEntity.noContent().build();
+  }
+
+  /** 降格。当該店舗の店長を外すのではなく、担当する全店舗で店舗スタッフへ落とす。 */
+  @PostMapping("/managers/{userId}/demotion")
+  @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
+  public ResponseEntity<Void> demote(@PathVariable Long storeId, @PathVariable Long userId) {
+    storeManagerService.demote(storeId, userId);
     return ResponseEntity.noContent().build();
   }
 }
