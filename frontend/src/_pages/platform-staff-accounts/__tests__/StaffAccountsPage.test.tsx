@@ -220,7 +220,7 @@ describe('アカウント管理ページ', () => {
 describe('パスワード再設定', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedApi.resetPassword.mockResolvedValue({ temporary_password: 'Ab3xYz9QmT2wKp7L' });
+    mockedApi.resetPassword.mockResolvedValue({ temporary_password: 'test-temporary-password' });
     mockedApi.list.mockResolvedValue(
       paginated([account({ id: 1, display_name: '山田太郎', enabled: true })])
     );
@@ -230,7 +230,7 @@ describe('パスワード再設定', () => {
     render(<StaffAccountsPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'パスワード再設定' }));
     fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
-    return screen.findByDisplayValue('Ab3xYz9QmT2wKp7L');
+    return screen.findByDisplayValue('test-temporary-password');
   };
 
   // 対象のセッションを即時に失効させるうえ、生値は一度しか出ないので確認を挟む
@@ -244,7 +244,7 @@ describe('パスワード再設定', () => {
     fireEvent.click(screen.getByRole('button', { name: '再設定する' }));
 
     await waitFor(() => expect(mockedApi.resetPassword).toHaveBeenCalledWith(1));
-    expect(await screen.findByDisplayValue('Ab3xYz9QmT2wKp7L')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('test-temporary-password')).toBeInTheDocument();
     expect(screen.getByText('山田太郎 の仮パスワード')).toBeInTheDocument();
   });
 
@@ -274,7 +274,7 @@ describe('パスワード再設定', () => {
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith('HQ 側ロール保持者のパスワードは再設定できません')
     );
-    expect(screen.queryByDisplayValue('Ab3xYz9QmT2wKp7L')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('test-temporary-password')).not.toBeInTheDocument();
   });
 
   // 生値はこの表示にしか無く、誤って閉じると再発行しかやり直す手段が無い
@@ -283,7 +283,7 @@ describe('パスワード再設定', () => {
 
     fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
 
-    await waitFor(() => expect(screen.getByDisplayValue('Ab3xYz9QmT2wKp7L')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue('test-temporary-password')).toBeInTheDocument());
   });
 
   it('背景クリックでは仮パスワードの表示を閉じないこと', async () => {
@@ -293,7 +293,7 @@ describe('パスワード再設定', () => {
     expect(backdrop).not.toBeNull();
     fireEvent.click(backdrop as Element);
 
-    await waitFor(() => expect(screen.getByDisplayValue('Ab3xYz9QmT2wKp7L')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue('test-temporary-password')).toBeInTheDocument());
   });
 
   it('「閉じる」ボタンでだけ仮パスワードの表示を閉じること', async () => {
@@ -302,7 +302,7 @@ describe('パスワード再設定', () => {
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     await waitFor(() =>
-      expect(screen.queryByDisplayValue('Ab3xYz9QmT2wKp7L')).not.toBeInTheDocument()
+      expect(screen.queryByDisplayValue('test-temporary-password')).not.toBeInTheDocument()
     );
   });
 });

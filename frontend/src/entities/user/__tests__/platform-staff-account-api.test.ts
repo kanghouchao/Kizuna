@@ -40,12 +40,12 @@ describe('platformStaffAccountApi', () => {
   // 仮パスワードの生値はこの応答にしか現れないので、本体をそのまま返す
   it('resetPassword は /platform/staff-accounts/{id}/password-reset を POST し応答本体を返す', async () => {
     (apiClient.post as jest.Mock).mockResolvedValueOnce({
-      data: { temporary_password: 'Ab3xYz9QmT2wKp7L' },
+      data: { temporary_password: 'test-temporary-password' },
     });
 
     const res = await platformStaffAccountApi.resetPassword(7);
 
-    expect(res).toEqual({ temporary_password: 'Ab3xYz9QmT2wKp7L' });
+    expect(res).toEqual({ temporary_password: 'test-temporary-password' });
     expect(apiClient.post).toHaveBeenCalledWith('/platform/staff-accounts/7/password-reset');
   });
 });
