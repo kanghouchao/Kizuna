@@ -21,6 +21,7 @@ import {
   SlidersHorizontalIcon,
   SmileIcon,
   StoreIcon,
+  UserCogIcon,
   UsersIcon,
   UsersRoundIcon,
 } from 'lucide-react';
@@ -53,6 +54,7 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   SlidersHorizontalIcon,
   SmileIcon,
   StoreIcon,
+  UserCogIcon,
   UsersIcon,
   UsersRoundIcon,
 };
