@@ -261,9 +261,9 @@ describe('パスワード再設定', () => {
     expect(mockedApi.resetPassword).not.toHaveBeenCalled();
   });
 
-  // 応答は一度きり表示の値を運ぶ。遅れて届いた古い応答が唯一有効な最新値を上書きすると、
-  // 有効な仮パスワードが誰にも見えないまま失われる。
-  it('遅れて届いた古い応答は最新の仮パスワードを上書きしないこと', async () => {
+  // 応答は一度きり表示の値を運び、表示枠は 1 つしかない。重ねて実行できると
+  // どちらか一方の有効な仮パスワードが誰にも見えないまま失われるため、進行中は入口を塞ぐ。
+  it('再設定の進行中は全行の再設定ボタンが無効になり、応答後に戻ること', async () => {
     mockedApi.list.mockResolvedValue(
       paginated([
         account({ id: 1, display_name: '山田太郎', enabled: true }),
@@ -271,29 +271,24 @@ describe('パスワード再設定', () => {
       ])
     );
     let resolveFirst: (value: { temporary_password: string }) => void = () => {};
-    mockedApi.resetPassword
-      .mockImplementationOnce(
-        () => new Promise(resolve => (resolveFirst = resolve)) // 1 件目は遅延させる
-      )
-      .mockResolvedValueOnce({ temporary_password: 'newer-temporary-password' });
+    mockedApi.resetPassword.mockImplementationOnce(
+      () => new Promise(resolve => (resolveFirst = resolve))
+    );
 
     render(<StaffAccountsPage />);
     const buttons = await screen.findAllByRole('button', { name: 'パスワード再設定' });
     fireEvent.click(buttons[0]);
     fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
-    fireEvent.click(buttons[1]);
-    fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
 
-    expect(await screen.findByDisplayValue('newer-temporary-password')).toBeInTheDocument();
+    await waitFor(() => expect(mockedApi.resetPassword).toHaveBeenCalledTimes(1));
+    buttons.forEach(button => expect(button).toBeDisabled());
 
-    // act で古い応答の状態更新を確実に流し切ってから断言する（流す前の断言は世代守衛が無くても緑になる）。
     await act(async () => {
-      resolveFirst({ temporary_password: 'stale-temporary-password' });
+      resolveFirst({ temporary_password: 'test-temporary-password' });
     });
 
-    expect(screen.getByDisplayValue('newer-temporary-password')).toBeInTheDocument();
-    expect(screen.queryByDisplayValue('stale-temporary-password')).not.toBeInTheDocument();
-    expect(screen.getByText('佐藤次郎 の仮パスワード')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('test-temporary-password')).toBeInTheDocument();
+    buttons.forEach(button => expect(button).toBeEnabled());
   });
 
   // 対象外（HQ 側ロール保持者・自分自身）の判定はサーバだけが持つので、そのまま出す
