@@ -51,14 +51,19 @@ export default function StaffAccountsPage() {
   const [resetTarget, setResetTarget] = useState<StaffAccountSummaryResponse | null>(null);
   const [issued, setIssued] = useState<{ displayName: string; password: string } | null>(null);
 
-  // 応答順は要求順と一致しない。応答は一度きり表示の仮パスワードを運ぶため、遅れて届いた
-  // 古い応答が最新の（唯一有効な）値を上書きしないよう世代で守り、最新要求以外は棄てる。
+  // 応答は一度きり表示の仮パスワードを運ぶため、重ねて実行できてしまうとどちらか一方の
+  // 有効な値が必ず失われる（表示枠は 1 つしかない）。進行中は全行の入口を塞いで直列化する。
+  const [resetting, setResetting] = useState(false);
+
+  // 直列化が入口で重なりを塞ぐため通常は届かないが、応答の取り違えは有効な値の恒久喪失に
+  // 直結するので、最新要求以外の応答を棄てる世代守衛も残す。
   const resetRequestIdRef = useRef(0);
 
   // 一覧の型では HQ 側ロールを判別できないので行は出し分けない。対象外（HQ 側ロール保持者・
   // 自分自身）の拒否はサーバだけが判定でき、文言は応答からそのまま出す。
   const resetPassword = async (account: StaffAccountSummaryResponse) => {
     setResetTarget(null);
+    setResetting(true);
     const requestId = ++resetRequestIdRef.current;
     try {
       const result = await platformStaffAccountApi.resetPassword(account.id ?? 0);
@@ -70,6 +75,8 @@ export default function StaffAccountsPage() {
     } catch (error) {
       if (requestId !== resetRequestIdRef.current) return;
       notify.error(getApiErrorMessage(error, 'パスワードの再設定に失敗しました'));
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -167,7 +174,12 @@ export default function StaffAccountsPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" onClick={() => setResetTarget(account)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={resetting}
+                    onClick={() => setResetTarget(account)}
+                  >
                     パスワード再設定
                   </Button>
                   {account.enabled ? (
