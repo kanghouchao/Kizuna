@@ -101,7 +101,7 @@ class StoreManagerAppointmentIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("一覧は STORE_MANAGE 保持者でなく ROLE_MANAGE 保持者だけに開くこと（AC4）")
   void listRequiresRoleManage() {
-    // 種子の店長は STAFF_MANAGE を持つが ROLE_MANAGE は持たない。
+    // 種子の店長は STORE_STAFF_MANAGE を持つが ROLE_MANAGE は持たない。
     ResponseEntity<String> res =
         rest.exchange(
             managersPath(STORE_A),

@@ -23,6 +23,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
@@ -49,11 +50,23 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   /** HQ 側ロール（Console.PLATFORM の権限を含む）。この面には在否すら出てはならない。 */
   private static final String HQ_SIDE_ROLE = "店舗スタッフ管理IT_HQ側";
 
+  /** ROLE_MANAGE と店舗権限を混ぜた自作ロール。統治層の権限を持っていても防提権守衛は外れない。 */
+  private static final String HYBRID_ROLE = "店舗スタッフ管理IT_混成";
+
   /** メニューの標識権限しか持たない自作ロール。単独では店舗コンソールへ着地できない。 */
   private static final String MENU_ONLY_ROLE = "店舗スタッフ管理IT_標識のみ";
 
   /** SHARED の跨店参照権限しか持たない自作ロール。これも単独では店舗コンソールへ着地できない。 */
   private static final String SHARED_ONLY_ROLE = "店舗スタッフ管理IT_跨店参照のみ";
+
+  /** 混成自作ロールの保持者（店舗A担当）。ROLE_MANAGE 免除の撤回を撃つ行使者。 */
+  private static final String HYBRID_EMAIL = "store-staff-it-hybrid@kizuna.test";
+
+  /** 全店舗担当の店長。担当範囲の検査を素通りするので、保存時の FK まで到達できる唯一の行使者。 */
+  private static final String ALL_STORES_MANAGER_EMAIL = "store-staff-it-all-stores@kizuna.test";
+
+  /** 種子の HQ 管理者。撤退後は店舗文脈を名乗れないので、この面の全端点で 403 になる。 */
+  private static final String HQ_ADMIN_EMAIL = "admin@kizuna.test";
 
   /** 店舗A のみ担当の平スタッフ。店長から編集できる側の代表。 */
   private static final String CLERK_EMAIL = "store-staff-it-clerk@kizuna.test";
@@ -81,13 +94,20 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
 
   @BeforeEach
   void prepareStoreStaffFixture() {
-    ensureRole(MANAGER_ROLE, PermissionCode.STAFF_MANAGE, PermissionCode.STORE_MENU_VIEW);
+    ensureRole(MANAGER_ROLE, PermissionCode.STORE_STAFF_MANAGE, PermissionCode.STORE_MENU_VIEW);
     ensureRole(CLERK_ROLE, PermissionCode.ORDER_MANAGE, PermissionCode.STORE_MENU_VIEW);
     ensureRole(HQ_SIDE_ROLE, PermissionCode.STORE_MANAGE, PermissionCode.STORE_VIEW);
+    ensureRole(
+        HYBRID_ROLE,
+        PermissionCode.ROLE_MANAGE,
+        PermissionCode.STORE_STAFF_MANAGE,
+        PermissionCode.ORDER_MANAGE);
     ensureRole(MENU_ONLY_ROLE, PermissionCode.STORE_MENU_VIEW);
     ensureRole(SHARED_ONLY_ROLE, PermissionCode.STORE_VIEW);
 
     ensureUser(MANAGER_EMAIL, "店舗スタッフ管理IT店長", roleIdsOf(MANAGER_ROLE), Set.of(STORE_A));
+    ensureUser(HYBRID_EMAIL, "店舗スタッフ管理IT混成", roleIdsOf(HYBRID_ROLE), Set.of(STORE_A));
+    ensureAllStoresUser(ALL_STORES_MANAGER_EMAIL, "店舗スタッフ管理IT全店舗店長", roleIdsOf(MANAGER_ROLE));
     ensureUser(CLERK_EMAIL, "店舗スタッフ管理IT平スタッフ", roleIdsOf(CLERK_ROLE), Set.of(STORE_A));
     ensureUser(CROSS_EMAIL, "店舗スタッフ管理IT跨店", roleIdsOf(CLERK_ROLE), Set.of(STORE_A, STORE_B));
     ensureUser(PEER_EMAIL, "店舗スタッフ管理IT同僚店長", roleIdsOf(MANAGER_ROLE), Set.of(STORE_A));
@@ -212,8 +232,8 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("委譲権限を含むロールの付与は店長には 400、HQ には通ること（AC2・G1）")
-  void delegationRoleGrantIsRefusedForManagerButAllowedForHq() {
+  @DisplayName("委譲権限を含むロールの付与は店長には 400 になること（AC2・G1）")
+  void delegationRoleGrantIsRefusedForManager() {
     ResponseEntity<String> refused =
         rest.postForEntity(
             "/store/staff-members",
@@ -226,21 +246,29 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
                 headersFor(MANAGER_EMAIL, STORE_A)),
             String.class);
     assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
 
-    ResponseEntity<String> allowed =
+  @Test
+  @DisplayName("委譲権限を含むロールの付与は混成自作ロールの行使者にも 400 になること（G1・免除なし）")
+  void delegationRoleGrantIsRefusedForHybridRoleActor() {
+    // ROLE_MANAGE と店舗権限を混ぜた自作ロールは、この面へ到達できるうえ統治層の権限も持つ。
+    // 守衛に免除を残すと、そのロールが防提権守衛を静黙に迂回する経路になる。
+    ResponseEntity<JsonNode> res =
         rest.postForEntity(
             "/store/staff-members",
             new HttpEntity<>(
                 createBody(
-                    "store-staff-it-hq-granted@kizuna.test",
+                    "store-staff-it-hybrid-escalation@kizuna.test",
                     rolesJson(MANAGER_ROLE),
                     "SPECIFIC_STORES",
                     "[" + STORE_A + "]"),
-                headersFor("admin@kizuna.test", STORE_A)),
-            String.class);
-    assertThat(allowed.getStatusCode())
-        .as("ROLE_MANAGE 保持者には守衛が課されないこと")
-        .isEqualTo(HttpStatus.CREATED);
+                headersFor(HYBRID_EMAIL, STORE_A)),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString())
+        .as("G1 の再委譲禁止で撥ねること（文言で守衛を特定する）")
+        .isEqualTo("スタッフ管理権限を含むロールを付与する権限がありません");
   }
 
   @Test
@@ -264,8 +292,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("存在しない storeId での作成は FK 違反を 400 へ変換して拒否すること")
   void unknownStoreIdRejected() {
-    // ALL_STORES の行使者は担当範囲の検査を素通りするため、店舗 id の在否は保存時の FK でしか止まらない
-    // — 店長からは踏めないが、この面の日常的な行使者である HQ からは決定的に踏める経路である。
+    // 全店舗担当の行使者は担当範囲の検査を素通りするため、店舗 id の在否は保存時の FK でしか止まらない。
     // 制約名の抽出が壊れれば兜底へ溢れて 500 になり、別の制約へ誤帰属すれば文言が変わる。
     ResponseEntity<JsonNode> res =
         rest.postForEntity(
@@ -276,7 +303,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
                     rolesJson(CLERK_ROLE),
                     "SPECIFIC_STORES",
                     "[999999]"),
-                headersFor("admin@kizuna.test", STORE_A)),
+                headersFor(ALL_STORES_MANAGER_EMAIL, STORE_A)),
             JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -284,8 +311,8 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("HQ 側ロールの付与は行使者を問わず 400 になること（母集団の維持）")
-  void hqSideRoleGrantIsRefusedEvenForHq() {
+  @DisplayName("HQ 側ロールの付与は ROLE_MANAGE を持つ行使者にも 400 になること（母集団の維持）")
+  void hqSideRoleGrantIsRefusedForHybridRoleActor() {
     ResponseEntity<String> res =
         rest.postForEntity(
             "/store/staff-members",
@@ -295,7 +322,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
                     rolesJson(HQ_SIDE_ROLE),
                     "SPECIFIC_STORES",
                     "[" + STORE_A + "]"),
-                headersFor("admin@kizuna.test", STORE_A)),
+                headersFor(HYBRID_EMAIL, STORE_A)),
             String.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -328,10 +355,10 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
                     rolesJson(SHARED_ONLY_ROLE),
                     "SPECIFIC_STORES",
                     "[" + STORE_A + "]"),
-                headersFor("admin@kizuna.test", STORE_A)),
+                headersFor(HYBRID_EMAIL, STORE_A)),
             String.class);
     assertThat(sharedOnly.getStatusCode())
-        .as("SHARED だけのロールは ROLE_MANAGE 保持者にも撥ねること")
+        .as("SHARED だけのロールは ROLE_MANAGE を持つ行使者にも撥ねること")
         .isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
@@ -401,30 +428,8 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("HQ は同一画面から任意店舗のスタッフを編集できること（AC5）")
-  void hqCanEditStoreStaffThroughTheSameSurface() {
-    PlatformUser target = platformUserRepository.findByEmail(CROSS_EMAIL).orElseThrow();
-
-    ResponseEntity<JsonNode> res =
-        rest.exchange(
-            "/store/staff-members/" + target.getId(),
-            HttpMethod.PUT,
-            new HttpEntity<>(
-                updateBody(
-                    rolesJson(CLERK_ROLE),
-                    "SPECIFIC_STORES",
-                    "[" + STORE_A + "," + STORE_B + "]",
-                    target.getVersion()),
-                headersFor("admin@kizuna.test", STORE_B)),
-            JsonNode.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody().path("editable").asBoolean()).isTrue();
-  }
-
-  @Test
-  @DisplayName("可授ロールは店長には委譲権限と HQ 側ロールを除いて返り、HQ には委譲権限を含む店舗側ロールも返ること")
-  void grantableRolesFollowTheActor() {
+  @DisplayName("可授ロールは行使者を問わず委譲権限と HQ 側ロールを除いて返ること（読み口も免除しない）")
+  void grantableRolesExcludeDelegationForEveryActor() {
     ResponseEntity<String> forManager =
         rest.exchange(
             "/store/staff-members/grantable-roles",
@@ -436,14 +441,17 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
         .contains(CLERK_ROLE)
         .doesNotContain(MANAGER_ROLE, HQ_SIDE_ROLE);
 
-    ResponseEntity<String> forHq =
+    ResponseEntity<String> forHybrid =
         rest.exchange(
             "/store/staff-members/grantable-roles",
             HttpMethod.GET,
-            new HttpEntity<>(headersFor("admin@kizuna.test", STORE_A)),
+            new HttpEntity<>(headersFor(HYBRID_EMAIL, STORE_A)),
             String.class);
-    assertThat(forHq.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(forHq.getBody()).contains(CLERK_ROLE, MANAGER_ROLE).doesNotContain(HQ_SIDE_ROLE);
+    assertThat(forHybrid.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(forHybrid.getBody())
+        .as("ROLE_MANAGE を持っていても委譲権限を含むロールは目録に載らないこと")
+        .contains(CLERK_ROLE)
+        .doesNotContain(MANAGER_ROLE, HQ_SIDE_ROLE);
   }
 
   @Test
@@ -466,7 +474,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("STAFF_MANAGE を持たない店舗スタッフには全経路が 403 になること")
+  @DisplayName("STORE_STAFF_MANAGE を持たない店舗スタッフには全経路が 403 になること")
   void storeStaffWithoutDelegationIsForbidden() {
     ResponseEntity<String> list =
         rest.exchange(
@@ -483,6 +491,50 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_A)),
             String.class);
     assertThat(roles.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("HQ 管理者にはこの面の全端点が 403 になること（AC3・店舗文脈を名乗れない）")
+  void hqAdminIsForbiddenOnEveryEndpoint() {
+    // 撤退後の HQ は店舗コンソール資格（storeBridge claim）を失うので、店舗ヘッダの僭称として
+    // 端点の権限判定より手前で弾かれる。全端点を数え上げるのは、面の一部だけが開いたままになる
+    // 取りこぼしを許さないためである。
+    long clerkId = platformUserRepository.findByEmail(CLERK_EMAIL).orElseThrow().getId();
+
+    assertThat(hqStatusOf("/store/staff-members", HttpMethod.GET, null))
+        .as("一覧")
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(hqStatusOf("/store/staff-members/grantable-roles", HttpMethod.GET, null))
+        .as("可授ロール")
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(hqStatusOf("/store/staff-members/" + clerkId, HttpMethod.GET, null))
+        .as("詳細")
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(
+            hqStatusOf(
+                "/store/staff-members",
+                HttpMethod.POST,
+                createBody(
+                    "store-staff-it-hq-blocked@kizuna.test",
+                    rolesJson(CLERK_ROLE),
+                    "SPECIFIC_STORES",
+                    "[" + STORE_A + "]")))
+        .as("作成")
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(
+            hqStatusOf(
+                "/store/staff-members/" + clerkId,
+                HttpMethod.PUT,
+                updateBody(rolesJson(CLERK_ROLE), "SPECIFIC_STORES", "[" + STORE_A + "]", 0L)))
+        .as("更新")
+        .isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  /** HQ 管理者のトークンと店舗文脈ヘッダで 1 回叩き、状態コードだけを返す。 */
+  private HttpStatusCode hqStatusOf(String path, HttpMethod method, String body) {
+    return rest.exchange(
+            path, method, new HttpEntity<>(body, headersFor(HQ_ADMIN_EMAIL, STORE_A)), String.class)
+        .getStatusCode();
   }
 
   private Boolean editableOf(JsonNode page, String email) {
@@ -544,6 +596,19 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
   }
 
   private void ensureUser(String email, String displayName, Set<Long> roleIds, Set<Long> storeIds) {
+    ensureUser(email, displayName, roleIds, StoreScopeType.SPECIFIC_STORES, storeIds);
+  }
+
+  private void ensureAllStoresUser(String email, String displayName, Set<Long> roleIds) {
+    ensureUser(email, displayName, roleIds, StoreScopeType.ALL_STORES, Set.of());
+  }
+
+  private void ensureUser(
+      String email,
+      String displayName,
+      Set<Long> roleIds,
+      StoreScopeType scopeType,
+      Set<Long> storeIds) {
     platformUserRepository
         .findByEmail(email)
         .orElseGet(
@@ -556,7 +621,7 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
                         .enabled(true)
                         .userType(UserType.STAFF)
                         .roleIds(roleIds)
-                        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                        .storeScopeType(scopeType)
                         .storeIds(storeIds)
                         .build()));
   }

@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 管理者管理 API（HQ 側ロール保持者のロール×店舗集合）。全操作 ROLE_MANAGE 権限限定。
  *
- * <p>店舗側ロールのみの利用者は本 API の対象外で、店舗スタッフ管理（STAFF_MANAGE 門）が扱う（ADR 0020）。
+ * <p>店舗側ロールのみの利用者は本 API の対象外で、店舗スタッフ管理（STORE_STAFF_MANAGE 門）が扱う（ADR 0020）。
  * 停止・再開はアカウント管理（STAFF_ACCOUNT_MANAGE 門）の領分で、この面には無い。
  */
 @RestController

@@ -102,7 +102,6 @@ class PlatformAuthServiceTest {
         Set.of(
             PermissionCode.STORE_MANAGE,
             PermissionCode.ROLE_MANAGE,
-            PermissionCode.STAFF_MANAGE,
             PermissionCode.SYSTEM_CONFIG_MANAGE,
             PermissionCode.PLATFORM_MENU_VIEW,
             PermissionCode.PLATFORM_ASSET_MANAGE,
@@ -144,13 +143,12 @@ class PlatformAuthServiceTest {
                 "PERM_PLATFORM_ASSET_MANAGE",
                 "PERM_PLATFORM_MENU_VIEW",
                 "PERM_ROLE_MANAGE",
-                "PERM_STAFF_MANAGE",
                 "PERM_STORE_MANAGE",
                 "PERM_STORE_VIEW",
                 "PERM_SYSTEM_CONFIG_MANAGE"));
     assertThat(claims.get("userType")).isEqualTo("STAFF");
-    // HQ 束は STAFF_MANAGE（Console.STORE）を含むため店舗文脈を確立できる（ADR 0020）。
-    assertThat(claims.get("storeBridge")).isEqualTo(true);
+    // HQ 束の STORE_VIEW は SHARED なので店舗文脈は確立できない（ADR 0021 の撤退）。
+    assertThat(claims.get("storeBridge")).isEqualTo(false);
     assertThat(claims).doesNotContainKey("role");
     assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of());
@@ -261,9 +259,10 @@ class PlatformAuthServiceTest {
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
     assertThat(res.get().console()).isEqualTo("platform");
-    assertThat(res.get().permissions()).contains("STORE_MANAGE", "ROLE_MANAGE", "STAFF_MANAGE");
-    // 着地は PLATFORM 権限が優先で platform のまま、店舗文脈は STAFF_MANAGE 由来で確立できる。
-    assertThat(res.get().storeBridge()).isTrue();
+    assertThat(res.get().permissions())
+        .contains("STORE_MANAGE", "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE");
+    // HQ は店舗の面から撤退しており、店舗文脈の確立資格になる STORE 権限を既定では持たない（ADR 0021）。
+    assertThat(res.get().storeBridge()).isFalse();
   }
 
   @Test

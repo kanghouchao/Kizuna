@@ -321,8 +321,8 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("HQ は store_bridge=true で店舗コンソール入口を得つつ、着地は平台コンソールのままであること")
-  void hqHoldsStoreBridgeWhileLandingOnPlatformConsole() {
+  @DisplayName("HQ は store_bridge=false で店舗コンソール入口を持たず、着地は平台コンソールであること")
+  void hqHasNoStoreBridgeAndLandsOnPlatformConsole() {
     ResponseEntity<JsonNode> me =
         rest.exchange(
             "/platform/me",
@@ -331,15 +331,14 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
             JsonNode.class);
 
     assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
-    // HQ 束の STAFF_MANAGE は Console.STORE なので店舗文脈を確立できる（ADR 0020）。
-    assertThat(me.getBody().path("store_bridge").asBoolean()).isTrue();
-    // 着地は PLATFORM 権限が優先されるため従来どおり平台コンソール。
+    // HQ 束に残る店舗関連の権限は SHARED（跨店参照）だけで、店舗文脈の確立資格にはならない（ADR 0021）。
+    assertThat(me.getBody().path("store_bridge").asBoolean()).isFalse();
     assertThat(me.getBody().path("console").asString()).isEqualTo("platform");
   }
 
   @Test
-  @DisplayName("HQ の統合メニュー GET /platform/menus/me は中央項目と店舗スタッフ管理だけを返すこと（強断言）")
-  void hqSeesPlatformMenusAndStoreStaffManagementOnly() {
+  @DisplayName("HQ の統合メニュー GET /platform/menus/me は中央項目だけを返すこと（強断言）")
+  void hqSeesPlatformMenusOnly() {
     ResponseEntity<String> res =
         rest.exchange(
             "/platform/menus/me",
@@ -351,12 +350,13 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     assertThat(res.getBody())
         .as("中央操作項目が可視であること")
         .contains("店舗一覧", "管理者管理", "アカウント管理", "ロール管理", "システム設定");
-    // HQ 束は STAFF_MANAGE（Console.STORE）を持つため、店舗スタッフ管理の 1 行だけが店舗側から残る。
-    // 見出しの HRM も一緒に残るのは、可視な子が 1 つあるからである（ADR 0020）。
-    assertThat(res.getBody()).as("店舗スタッフ管理へ辿り着けること").contains("HRM", "スタッフ管理");
+    // 標識権限 STORE_MENU_VIEW も撤回されたので、見出し節ごと店舗側が丸ごと落ちる。入口と行が
+    // 同時に消えることで「扉はあるが道が無い」状態を作らない（ADR 0021）。
     assertThat(res.getBody())
-        .as("それ以外の店舗コンソール項目は現れないこと（反対スコープの不在まで強断言）")
-        .doesNotContain("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報", "業務管理", "CRM");
+        .as("店舗コンソール項目が 1 つも現れないこと（反対スコープの不在まで強断言）")
+        // 「設定」は中央の「システム設定」に部分一致するため列挙しない（節は子ごと落ちる）。
+        .doesNotContain(
+            "スタッフ管理", "HRM", "予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報", "業務管理", "CRM");
   }
 
   @Test
@@ -394,7 +394,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     assertThat(res.getBody())
         .as("店舗操作項目が可視であること")
         .contains("予約・案件管理", "キャスト管理", "出勤管理", "顧客一覧", "店舗情報");
-    // 委譲層（STAFF_MANAGE）は店長へしか配らないので、平スタッフの束には店舗スタッフ管理が現れない。
+    // 委譲層（STORE_STAFF_MANAGE）は店長へしか配らないので、平スタッフの束には店舗スタッフ管理が現れない。
     assertThat(res.getBody()).as("委譲層の行が平スタッフには現れないこと").doesNotContain("スタッフ管理");
     assertThat(res.getBody())
         .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")

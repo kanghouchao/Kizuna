@@ -88,8 +88,8 @@ class PlatformStaffControllerTest {
   }
 
   @Test
-  @DisplayName("STAFF_MANAGE のみ保持では GET /platform/staff が 403（管理者管理は ROLE_MANAGE 門）")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  @DisplayName("STORE_STAFF_MANAGE のみ保持では GET /platform/staff が 403（管理者管理は ROLE_MANAGE 門）")
+  @WithMockUser(authorities = "PERM_STORE_STAFF_MANAGE")
   void staffManageAloneCannotReachAdministratorManagement() throws Exception {
     mockMvc.perform(get("/platform/staff")).andExpect(status().isForbidden());
   }
