@@ -89,11 +89,12 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
   private static final String ROLE_EDIT_HOLDER_EMAIL = "staff-it-roleedit@kizuna.test";
 
-  /** 委譲層だけを持つ利用者（STAFF_MANAGE のみ）。ロール定義の門が ROLE_MANAGE であることの検証に使う。 */
-  private static final String STAFF_MANAGE_ONLY_EMAIL = "staff-it-staffmanage-only@kizuna.test";
+  /** 委譲層だけを持つ利用者（STORE_STAFF_MANAGE のみ）。ロール定義の門が ROLE_MANAGE であることの検証に使う。 */
+  private static final String STORE_STAFF_MANAGE_ONLY_EMAIL =
+      "staff-it-staffmanage-only@kizuna.test";
 
   /** 種子に無いロール（DB データとして追加）。 */
-  private static final String STAFF_MANAGE_ONLY_ROLE = "スタッフ管理IT_委譲層のみ";
+  private static final String STORE_STAFF_MANAGE_ONLY_ROLE = "スタッフ管理IT_委譲層のみ";
 
   private static final String CAST_CANARY_EMAIL = "staff-it-cast-canary@kizuna.test";
 
@@ -125,16 +126,16 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
 
     Role staffManageOnly =
         roleRepository
-            .findByName(STAFF_MANAGE_ONLY_ROLE)
+            .findByName(STORE_STAFF_MANAGE_ONLY_ROLE)
             .orElseGet(
                 () ->
                     roleRepository.save(
                         Role.builder()
-                            .name(STAFF_MANAGE_ONLY_ROLE)
-                            .permissionIds(permissionIdsOf(PermissionCode.STAFF_MANAGE))
+                            .name(STORE_STAFF_MANAGE_ONLY_ROLE)
+                            .permissionIds(permissionIdsOf(PermissionCode.STORE_STAFF_MANAGE))
                             .build()));
     ensurePlatformUser(
-        STAFF_MANAGE_ONLY_EMAIL,
+        STORE_STAFF_MANAGE_ONLY_EMAIL,
         UserType.STAFF,
         Set.of(staffManageOnly.getId()),
         StoreScopeType.ALL_STORES,
@@ -1001,9 +1002,9 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("STAFF_MANAGE のみ保持の利用者はロール定義（roles・permissions）へ 403(AC1)")
+  @DisplayName("STORE_STAFF_MANAGE のみ保持の利用者はロール定義（roles・permissions）へ 403(AC1)")
   void staffManageAloneCannotReachRoleDefinition() {
-    String delegated = platformToken(STAFF_MANAGE_ONLY_EMAIL, PASSWORD);
+    String delegated = platformToken(STORE_STAFF_MANAGE_ONLY_EMAIL, PASSWORD);
 
     ResponseEntity<String> roles =
         rest.exchange(
@@ -1132,9 +1133,9 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("STAFF_MANAGE のみ保持の利用者は管理者管理（一覧・詳細・作成・更新）へ 403(AC3)")
+  @DisplayName("STORE_STAFF_MANAGE のみ保持の利用者は管理者管理（一覧・詳細・作成・更新）へ 403(AC3)")
   void staffManageAloneCannotReachAdministratorManagement() {
-    String delegated = platformToken(STAFF_MANAGE_ONLY_EMAIL, PASSWORD);
+    String delegated = platformToken(STORE_STAFF_MANAGE_ONLY_EMAIL, PASSWORD);
     long targetId = platformUserRepository.findByEmail(HQ_SIDE_EMAIL).orElseThrow().getId();
 
     assertThat(

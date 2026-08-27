@@ -43,7 +43,7 @@ class PermissionCodeTest {
   void storePermissions() {
     assertThat(byConsole(PermissionCode.Console.STORE))
         .containsExactlyInAnyOrder(
-            PermissionCode.STAFF_MANAGE,
+            PermissionCode.STORE_STAFF_MANAGE,
             PermissionCode.ORDER_MANAGE,
             PermissionCode.CUSTOMER_MANAGE,
             PermissionCode.CUSTOMER_MERGE,
@@ -67,7 +67,7 @@ class PermissionCodeTest {
     assertThat(PermissionCode.STORE_VIEW.grantsStoreConsole()).isFalse();
     assertThat(PermissionCode.ORDER_MANAGE.grantsStoreConsole()).isTrue();
     assertThat(PermissionCode.storeConsoleCodes())
-        .contains(PermissionCode.ORDER_MANAGE.name(), PermissionCode.STAFF_MANAGE.name())
+        .contains(PermissionCode.ORDER_MANAGE.name(), PermissionCode.STORE_STAFF_MANAGE.name())
         .doesNotContain(
             PermissionCode.STORE_MENU_VIEW.name(),
             PermissionCode.STORE_VIEW.name(),

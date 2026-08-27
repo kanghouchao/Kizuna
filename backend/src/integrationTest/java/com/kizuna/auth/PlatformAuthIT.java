@@ -199,7 +199,7 @@ class PlatformAuthIT {
     assertThat(body.path("display_name").asString()).isEqualTo(SEED_DISPLAY_NAME);
     assertThat(body.path("user_type").asString()).isEqualTo("STAFF");
     assertThat(body.path("console").asString()).isEqualTo("platform");
-    assertThat(body.path("permissions").toString()).contains("STAFF_MANAGE");
+    assertThat(body.path("permissions").toString()).contains("STAFF_ACCOUNT_MANAGE");
     assertThat(body.path("store_scope_type").asString()).isEqualTo("ALL_STORES");
     assertThat(body.path("store_ids")).isEmpty();
   }

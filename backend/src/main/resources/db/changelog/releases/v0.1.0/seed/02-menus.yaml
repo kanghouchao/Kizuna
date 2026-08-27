@@ -138,7 +138,7 @@ databaseChangeLog:
               - column: { name: label, value: スタッフ管理 }
               - column: { name: path, value: /store/staff }
               - column: { name: icon, value: BriefcaseIcon }
-              - column: { name: permission, value: STAFF_MANAGE }
+              - column: { name: permission, value: STORE_STAFF_MANAGE }
               - column: { name: sort_order, valueNumeric: 3 }
         - insert:
             tableName: t_menus

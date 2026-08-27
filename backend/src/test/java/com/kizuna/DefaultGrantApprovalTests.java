@@ -15,10 +15,10 @@ import static com.kizuna.user.domain.PermissionCode.POINT_ADJUST;
 import static com.kizuna.user.domain.PermissionCode.ROLE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SHIFT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STAFF_ACCOUNT_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_MENU_VIEW;
 import static com.kizuna.user.domain.PermissionCode.STORE_PROFILE_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.STORE_STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_VIEW;
 import static com.kizuna.user.domain.PermissionCode.SYSTEM_CONFIG_MANAGE;
 import static com.kizuna.user.domain.SystemRole.HQ_ADMIN;
@@ -54,7 +54,7 @@ class DefaultGrantApprovalTests {
           Map.entry(STORE_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(ROLE_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(STAFF_ACCOUNT_MANAGE, Set.of(HQ_ADMIN)),
-          Map.entry(STAFF_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
+          Map.entry(STORE_STAFF_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(SYSTEM_CONFIG_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_MENU_VIEW, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_ASSET_MANAGE, Set.of(HQ_ADMIN)),
@@ -71,7 +71,7 @@ class DefaultGrantApprovalTests {
           Map.entry(CAST_FIELD_DEF_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CAST_FIELD_DEF_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(STORE_PROFILE_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
-          Map.entry(STORE_MENU_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)));
+          Map.entry(STORE_MENU_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)));
 
   @Test
   @DisplayName("コード側宣言の既定授与が承認台帳と完全に一致すること")

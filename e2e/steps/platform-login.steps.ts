@@ -97,6 +97,12 @@ Then('店舗切替に {string} が表示される', async ({ page }, storeName: 
   await expect(menu.getByText(storeName, { exact: true })).toBeVisible();
 });
 
+Then('店舗切替が表示されない', async ({ page }) => {
+  // ヘッダの描画完了を待ってから欠如を断言する（未描画のまま 0 件になる空振りを避ける）。
+  await expect(page.getByRole('button', { name: 'アカウントメニュー' })).toBeVisible();
+  await expect(storeSwitchToggle(page)).toHaveCount(0);
+});
+
 Then('店舗切替に {string} が表示されない', async ({ page }, storeName: string) => {
   // 直前の「表示される」ステップで開いたメニューに対して、非授権店舗が項目に無いことを断言する。
   const menu = await openStoreSwitch(page);

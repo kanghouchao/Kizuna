@@ -61,7 +61,7 @@ class StoreStaffServiceTest {
   /** HQ 側ロール（Console.PLATFORM の権限を含む）。店舗スタッフ管理では対象にも付与先にもならない。 */
   private static final long HQ_ROLE = 10L;
 
-  /** 委譲権限 STAFF_MANAGE を含む店舗側ロール（店長相当）。再委譲の禁止（G1）と G3 の両方に効く。 */
+  /** 委譲権限 STORE_STAFF_MANAGE を含む店舗側ロール（店長相当）。再委譲の禁止（G1）と G3 の両方に効く。 */
   private static final long MANAGER_ROLE = 11L;
 
   /** 委譲権限を含まない店舗側ロール。店長が付与できる唯一の種類。 */
@@ -96,13 +96,13 @@ class StoreStaffServiceTest {
     SecurityContextHolder.clearContext();
   }
 
-  /** 店長（STAFF_MANAGE のみ・特定店舗担当）を行使者に据える。 */
+  /** 店長（STORE_STAFF_MANAGE のみ・特定店舗担当）を行使者に据える。 */
   private void givenManagerActor(Long... storeIds) {
     givenActor(false, "SPECIFIC_STORES", List.of(storeIds));
   }
 
-  /** HQ（ROLE_MANAGE 保持・全店舗担当）を行使者に据える。 */
-  private void givenHqActor() {
+  /** ROLE_MANAGE と委譲権限を併せ持つ混成自作ロールの行使者（全店舗担当）。統治層の権限を持っていても守衛は外れない。 */
+  private void givenHybridActor() {
     givenActor(true, "ALL_STORES", null);
   }
 
@@ -118,9 +118,9 @@ class StoreStaffServiceTest {
     List<SimpleGrantedAuthority> authorities =
         roleManage
             ? List.of(
-                new SimpleGrantedAuthority(PermissionCode.STAFF_MANAGE.authority()),
+                new SimpleGrantedAuthority(PermissionCode.STORE_STAFF_MANAGE.authority()),
                 new SimpleGrantedAuthority(PermissionCode.ROLE_MANAGE.authority()))
-            : List.of(new SimpleGrantedAuthority(PermissionCode.STAFF_MANAGE.authority()));
+            : List.of(new SimpleGrantedAuthority(PermissionCode.STORE_STAFF_MANAGE.authority()));
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(builder.build(), authorities));
   }
@@ -132,7 +132,7 @@ class StoreStaffServiceTest {
 
   /** 委譲権限を含むロールの解決を差し込む。 */
   private void givenStaffManageRoles() {
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.STAFF_MANAGE.name()))
+    when(roleRepository.findIdsByPermissionCode(PermissionCode.STORE_STAFF_MANAGE.name()))
         .thenReturn(Set.of(MANAGER_ROLE));
   }
 
@@ -259,8 +259,8 @@ class StoreStaffServiceTest {
   }
 
   @Test
-  @DisplayName("一覧: ROLE_MANAGE 保持者には全行が editable=true になること")
-  void listGivesRoleManageActorFullEditRights() {
+  @DisplayName("一覧: ROLE_MANAGE を持つ行使者にも G3 は課され、委譲権限の実効保持者は editable=false になること")
+  void listAppliesAccountBoundaryToHybridActor() {
     givenListReturns(
         staff(
             2L,
@@ -270,19 +270,20 @@ class StoreStaffServiceTest {
             Set.of(CONTEXT_STORE)),
         staff(4L, "all@kizuna.test", Set.of(CLERK_ROLE), StoreScopeType.ALL_STORES, Set.of()));
     givenHqSideRoles();
+    givenStaffManageRoles();
     givenRoleNames();
-    givenHqActor();
+    givenHybridActor();
 
     List<StoreStaffResponse> rows = service.list(null, PAGEABLE).getContent();
 
-    assertThat(rows).extracting(StoreStaffResponse::editable).containsExactly(true, true);
+    assertThat(rows).extracting(StoreStaffResponse::editable).containsExactly(false, true);
   }
 
   @Test
   @DisplayName("作成: HQ 側ロールの付与は行使者を問わず拒否されること（母集団の維持）")
   void createRejectsHqSideRoleEvenForRoleManageActor() {
     givenHqSideRoles();
-    givenHqActor();
+    givenHybridActor();
 
     assertThatThrownBy(
             () ->
@@ -309,24 +310,19 @@ class StoreStaffServiceTest {
   }
 
   @Test
-  @DisplayName("作成: 委譲権限を含むロールの付与は ROLE_MANAGE 保持者には通ること")
-  void createAllowsStaffManageRoleForRoleManageActor() {
+  @DisplayName("作成: 委譲権限を含むロールの付与は ROLE_MANAGE を持つ行使者にも拒否されること（G1・免除なし）")
+  void createRejectsStaffManageRoleForHybridActor() {
     givenHqSideRoles();
-    givenRoleNames();
-    givenHqActor();
-    givenStoreConsoleRoles();
-    when(encoder.encode(RAW_CREDENTIAL)).thenReturn("hashed");
-    when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
-    when(repository.saveAndFlush(userCaptor.capture()))
-        .thenAnswer(StoreStaffServiceTest::persisted);
+    givenStaffManageRoles();
+    givenHybridActor();
 
-    StoreStaffResponse res =
-        service.create(
-            createRequest(
-                Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(OTHER_STORE)));
-
-    assertThat(userCaptor.getValue().getRoleIds()).containsExactly(MANAGER_ROLE);
-    assertThat(res.editable()).as("ROLE_MANAGE 保持者には守衛が課されないこと").isTrue();
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    createRequest(
+                        Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(OTHER_STORE))))
+        .isInstanceOf(InvalidRoleGrantException.class);
+    verify(repository, never()).saveAndFlush(ArgumentMatchers.any());
   }
 
   @Test
@@ -493,7 +489,7 @@ class StoreStaffServiceTest {
             Optional.of(
                 staff(9L, "hq@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())));
     givenHqSideRoles();
-    givenHqActor();
+    givenHybridActor();
 
     assertThatThrownBy(() -> service.get(9L)).isInstanceOf(NotFoundException.class);
   }
@@ -591,8 +587,8 @@ class StoreStaffServiceTest {
   }
 
   @Test
-  @DisplayName("可授ロール: ROLE_MANAGE 保持者には委譲権限を含む店舗側ロールも現れること")
-  void grantableRolesKeepStaffManageForRoleManageActor() {
+  @DisplayName("可授ロール: ROLE_MANAGE を持つ行使者にも委譲権限を含むロールは現れないこと（読み口も免除しない）")
+  void grantableRolesHideStaffManageFromHybridActor() {
     when(roleRepository.findAllSummaries())
         .thenReturn(
             List.of(
@@ -600,11 +596,12 @@ class StoreStaffServiceTest {
                 summary(MANAGER_ROLE, "店長"),
                 summary(CLERK_ROLE, "店舗スタッフ")));
     givenHqSideRoles();
-    givenHqActor();
+    givenStaffManageRoles();
+    givenHybridActor();
 
     assertThat(service.grantableRoles())
         .extracting(RoleSummaryResponse::id)
-        .containsExactly(MANAGER_ROLE, CLERK_ROLE);
+        .containsExactly(CLERK_ROLE);
   }
 
   /** 永続化を模す（DB が採番する id と、flush で初期化される version 列を埋める）。 */

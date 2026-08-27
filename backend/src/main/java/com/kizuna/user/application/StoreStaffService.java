@@ -39,8 +39,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -50,14 +48,15 @@ import org.springframework.transaction.annotation.Transactional;
  * 店舗スタッフの授権管理ユースケース。対象は本人種別 STAFF のうち店舗側ロールしか持たない者に限る — HQ 側ロールを 1 つでも持つ者は管理者管理（ROLE_MANAGE
  * 門）が扱い、この面には在否すら出さない（ADR 0020）。
  *
- * <p>行使者の事実（ROLE_MANAGE の保持と担当店舗集合）は JWT から、対象の現況は DB から取る。PlatformUser は StoreScopedEntity ではないため
- * storeFilter / @StoreSetScoped（ADR 0002）の機構は乗らず、店舗境界は本クラスの明示検証が唯一の担保である。
+ * <p>行使者の担当店舗集合は JWT から、対象の現況は DB から取る。PlatformUser は StoreScopedEntity ではないため storeFilter
+ * / @StoreSetScoped（ADR 0002）の機構は乗らず、店舗境界は本クラスの明示検証が唯一の担保である。
  *
- * <p>防提権守衛（ADR 0020）: G1 付与できるのは店舗側ロールかつ委譲権限（STAFF_MANAGE）を含まないもの、G2 対象の店舗集合 ⊆ 行使者の担当店舗集合、G3
- * 編集・停止できるのは委譲権限の非実効保持者かつ現在の店舗集合が行使者の集合に収まる者。いずれも ROLE_MANAGE 保持者には課さない。
+ * <p>防提権守衛（ADR 0020）: G1 付与できるのは店舗側ロールかつ委譲権限（STORE_STAFF_MANAGE）を含まないもの、G2 対象の店舗集合 ⊆ 行使者の担当店舗集合、G3
+ * 編集・停止できるのは委譲権限の非実効保持者かつ現在の店舗集合が行使者の集合に収まる者。いずれもこの面の行使者全員へ一律に課す —
+ * 免除を設けると、統治層の権限を混ぜた自作ロールがそこから守衛を迂回する（ADR 0021）。
  *
  * <p>付与には否定形の守衛に加えて肯定側の条件も課す（{@link #requireStoreConsoleReach}）— 権限並集が店舗コンソールの入場資格を
- * 含むこと。着地の判定と述語を共有させ、作成できるのに何処へも着地できないアカウントを作らせない。こちらは行使者を問わず課す。
+ * 含むこと。着地の判定と述語を共有させ、作成できるのに何処へも着地できないアカウントを作らせない。
  *
  * <p>不減零（G5）はここでは検査しない。ROLE_MANAGE は Console.PLATFORM の権限なので、それを含むロールは定義上 HQ 側ロールであり、
  * 母集団からも付与可能集合からも外れている — この面を通って ROLE_MANAGE 実効保持者が減ることは構造的に起こらない。
@@ -234,14 +233,9 @@ public class StoreStaffService {
         .orElseThrow(() -> new NotFoundException("スタッフが見つかりません: " + id));
   }
 
-  /**
-   * 委譲権限（STAFF_MANAGE）を含むロールの id 集合。ROLE_MANAGE 保持者には守衛が課されないので、その場合は引かない （空集合は「委譲権限を含むロールが 1
-   * つも無い」と同じ効きになる）。
-   */
+  /** 委譲権限（STORE_STAFF_MANAGE）を含むロールの id 集合。G1 と G3 が共有する述語の単源である。 */
   private Set<Long> delegationRoleIds() {
-    return actorHasRoleManage()
-        ? Set.of()
-        : roleRepository.findIdsByPermissionCode(PermissionCode.STAFF_MANAGE.name());
+    return roleRepository.findIdsByPermissionCode(PermissionCode.STORE_STAFF_MANAGE.name());
   }
 
   /**
@@ -257,8 +251,8 @@ public class StoreStaffService {
   }
 
   /**
-   * G1: 付与できるのは店舗側ロールで、かつ委譲権限を含まないものに限る。HQ 側ロールの排除は ROLE_MANAGE 保持者にも課す —
-   * 素通しにすると付与した直後にこの面から消えるアカウントが作れてしまい、店舗側からは二度と辿り着けなくなる（管理者管理の領分）。
+   * G1: 付与できるのは店舗側ロールで、かつ委譲権限を含まないものに限る。HQ 側ロールを排除するのは、素通しにすると
+   * 付与した直後にこの面から消えるアカウントが作れてしまい、店舗側からは二度と辿り着けなくなるためである（管理者管理の領分）。
    */
   private static void requireGrantableRoles(
       Set<Long> roleIds, Set<Long> hqRoleIds, Set<Long> delegationRoleIds) {
@@ -310,17 +304,6 @@ public class StoreStaffService {
       throw new AccessDeniedException("授権店舗集合を解決できません");
     }
     return scope;
-  }
-
-  /** 行使者が Owner 層（ROLE_MANAGE）か。保持者には防提権守衛を課さない。 */
-  private static boolean actorHasRoleManage() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null) {
-      return false;
-    }
-    return authentication.getAuthorities().stream()
-        .map(GrantedAuthority::getAuthority)
-        .anyMatch(PermissionCode.ROLE_MANAGE.authority()::equals);
   }
 
   private static boolean holdsAny(Set<Long> roleIds, Set<Long> targetRoleIds) {

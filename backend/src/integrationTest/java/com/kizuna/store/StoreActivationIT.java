@@ -30,9 +30,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * 準備中の店舗が店舗コンソールへの着地で稼働中へ移ることを本物の PostgreSQL で検証する統合テスト。
  *
- * <p>引き金は「店舗文脈を正当に確立できた店舗側利用者の 1 リクエスト」で、HQ の下見は引き金にならない。HQ も storeBridge を
- * 持つため店舗文脈自体は確立できるが、{@link com.kizuna.store.infrastructure.StoreActivationInterceptor}
- * がプラットフォーム権限の保持者を引き金から除くため状態は動かない。
+ * <p>引き金は「店舗文脈を正当に確立できた店舗側利用者の 1 リクエスト」で、運営側の下見は引き金にならない。除外が効くのは 兼務（HQ 側ロールと店舗側ロールの併持）の下見で、{@link
+ * com.kizuna.store.infrastructure.StoreActivationInterceptor} がプラットフォーム権限の保持者を引き金から除く。 既定の HQ 管理者は
+ * storeBridge を持たないため、その手前の店舗文脈の確立で止まる（ADR 0021）。
  *
  * <p>使い捨て tmpfs DB のためシード store 1 は用いず、判定ごとに新しい店舗を直挿する（一方向の遷移なので 店舗を使い回すと 2 件目以降が空振りで緑になる）。
  */
@@ -62,6 +62,26 @@ class StoreActivationIT {
     String token = res.getBody().path("token").asString();
     assertThat(token).isNotBlank();
     return token;
+  }
+
+  /** 同じ店舗を担当する兼務者（HQ管理者＋店長）を直挿し、その email を返す。 */
+  private String createHybridStaff(long storeId) {
+    String email = "activation-it-hybrid-" + UUID.randomUUID() + "@kizuna.test";
+    platformUserRepository.save(
+        PlatformUser.builder()
+            .email(email)
+            .password(passwordEncoder.encode(PASSWORD))
+            .displayName("稼働遷移検証兼務者")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .roleIds(
+                Set.of(
+                    roleRepository.findByName("HQ管理者").orElseThrow().getId(),
+                    roleRepository.findByName("店長").orElseThrow().getId()))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(storeId))
+            .build());
+    return email;
   }
 
   /** 新規登録した店舗は準備中から始まる。 */
@@ -118,8 +138,25 @@ class StoreActivationIT {
   }
 
   @Test
-  @DisplayName("HQ 管理者の下見では店舗は準備中のままであること")
-  void platformAdminAccessDoesNotActivateStore() {
+  @DisplayName("兼務者の下見は店舗コンソールへ到達しても店舗を準備中のままにすること")
+  void hybridStaffPreviewDoesNotActivateStore() {
+    // 除外判定を実際に通す唯一の形。店長ロール由来で店舗文脈を確立し端点にも到達するが、
+    // プラットフォーム権限を 1 つでも持つ利用者は開店の引き金から外れる。
+    Store store = freshStore("兼務下見検証店舗");
+    long storeId = store.getId();
+    String email = createHybridStaff(storeId);
+
+    assertThat(statusOf(storeId)).as("着地前は準備中であること").isEqualTo("PREPARING");
+
+    ResponseEntity<String> res = storeConsoleRequest(login(email, PASSWORD), storeId);
+
+    assertThat(res.getStatusCode()).as("兼務者は店長ロールで受注端点へ到達できること").isEqualTo(HttpStatus.OK);
+    assertThat(statusOf(storeId)).as("運営側の下見では準備中のままであること").isEqualTo("PREPARING");
+  }
+
+  @Test
+  @DisplayName("HQ 管理者は店舗文脈を名乗れず、店舗は準備中のままであること")
+  void platformAdminCannotEstablishStoreContext() {
     Store store = freshStore("HQ下見検証店舗");
     long storeId = store.getId();
 
@@ -127,8 +164,8 @@ class StoreActivationIT {
 
     ResponseEntity<String> res = storeConsoleRequest(login("admin@kizuna.test", PASSWORD), storeId);
 
-    // HQ は受注の権限を持たないため端点自体は 403。遷移が起きないのはその手前の除外判定による。
-    assertThat(res.getStatusCode()).as("HQ は受注端点へ到達できないこと").isEqualTo(HttpStatus.FORBIDDEN);
+    // 撤退後の HQ は storeBridge を持たないので、除外判定より手前の店舗文脈の確立で 403 になる。
+    assertThat(res.getStatusCode()).as("HQ は店舗文脈を確立できないこと").isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(statusOf(storeId)).as("HQ の下見では準備中のままであること").isEqualTo("PREPARING");
   }
 }

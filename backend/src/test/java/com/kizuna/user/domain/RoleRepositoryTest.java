@@ -17,7 +17,7 @@ class RoleRepositoryTest {
   @Test
   @DisplayName("HQ 側ロールは Console.PLATFORM の権限だけから解決される")
   void hqSideRoleIsResolvedFromPlatformConsolePermissionsOnly() {
-    // 「HQ 側ロール」の定義そのものを固定する。STAFF_MANAGE は店舗側へ移った権限（ADR 0020）、STORE_VIEW は SHARED で、
+    // 「HQ 側ロール」の定義そのものを固定する。STORE_STAFF_MANAGE は店舗側へ移った権限（ADR 0020）、STORE_VIEW は SHARED で、
     // どちらもロールを HQ 側にはしない。目録が緩むと、店長のロールが管理者管理へ現れる。
     RoleRepository repository = mock(RoleRepository.class);
     when(repository.findHqRoleIds()).thenCallRealMethod();
@@ -30,7 +30,7 @@ class RoleRepositoryTest {
     assertThat(codes.getValue())
         .contains(PermissionCode.ROLE_MANAGE.name(), PermissionCode.STORE_MANAGE.name())
         .doesNotContain(
-            PermissionCode.STAFF_MANAGE.name(),
+            PermissionCode.STORE_STAFF_MANAGE.name(),
             PermissionCode.STORE_VIEW.name(),
             PermissionCode.ORDER_MANAGE.name());
   }
@@ -49,7 +49,7 @@ class RoleRepositoryTest {
     ArgumentCaptor<Collection<String>> codes = ArgumentCaptor.captor();
     verify(repository).findIdsByPermissionCodeIn(codes.capture());
     assertThat(codes.getValue())
-        .contains(PermissionCode.ORDER_MANAGE.name(), PermissionCode.STAFF_MANAGE.name())
+        .contains(PermissionCode.ORDER_MANAGE.name(), PermissionCode.STORE_STAFF_MANAGE.name())
         .doesNotContain(
             PermissionCode.STORE_MENU_VIEW.name(),
             PermissionCode.STORE_VIEW.name(),

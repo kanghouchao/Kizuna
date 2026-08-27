@@ -26,9 +26,11 @@ import tools.jackson.databind.JsonNode;
  * 認証が通る。プラットフォーム共有領域（platform prefix）への保存は {@code PLATFORM_ASSET_MANAGE} の保持者のみに限定し、 非保持者は
  * fail-closed で 403 拒否する。
  *
- * <p>保存先は店舗文脈の有無が決める。HQ トークンに {@code X-Role:store} + {@code X-Store-ID} を付けると店舗文脈が
- * 確立するため、保存先はその店舗配下になりプラットフォーム共有領域へは入らない（負向）。ヘッダ無しの HQ アップロードは platform 領域へ 201 で保存される（正向対照）。HQ
- * 以外の平台トークン（店舗スタッフ）はヘッダ無しでも プラットフォーム保存を拒否される。
+ * <p>保存先は役割ではなく店舗文脈の有無が決める。店舗文脈を確立した店舗スタッフの保存先はその店舗配下になり、プラットフォーム 共有領域へは入らない（負向）。ヘッダ無しの HQ アップロードは
+ * platform 領域へ 201 で保存される（正向対照）。HQ 以外の平台トークン（店舗スタッフ）はヘッダ無しでは プラットフォーム保存を拒否される。
+ *
+ * <p>HQ は店舗の面から撤退しており storeBridge を持たないため、{@code X-Role:store} + {@code X-Store-ID} を付けた HQ
+ * の要求は僭称として 403 になる（ADR 0021）。{@code isAuthenticated()} だけの端点でも店舗文脈の確立が塞がることを、この経路で固定する。
  *
  * <p>プラットフォームログイン前提を廃し、ベースラインの平台シード（seed/04-platform-admin.yaml と seed/05-demo.yaml）でログインする。
  */
@@ -76,10 +78,10 @@ class FileUploadCrossStoreIT {
   }
 
   @Test
-  @DisplayName("HQ トークン + X-Role:store + X-Store-ID の POST /files は店舗配下へ保存されプラットフォーム領域には入らないこと")
-  void hqTokenWithStoreHeaderUploadsUnderThatStore() {
+  @DisplayName("店舗スタッフ + X-Role:store + X-Store-ID の POST /files は店舗配下へ保存されプラットフォーム領域には入らないこと")
+  void storeContextDecidesTheStoragePrefix() {
     HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(platformLogin(HQ_EMAIL));
+    headers.setBearerAuth(platformLogin(STAFF_EMAIL));
     headers.set("X-Role", "store");
     headers.set("X-Store-ID", "1");
 
@@ -91,6 +93,22 @@ class FileUploadCrossStoreIT {
         .as("店舗文脈が保存先を決め、プラットフォーム共有領域へは入らないこと")
         .contains("/1/")
         .doesNotContain("/platform/");
+  }
+
+  @Test
+  @DisplayName("HQ トークン + X-Role:store + X-Store-ID の POST /files は僭称として 403 になること")
+  void hqTokenWithStoreHeaderIsForbidden() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(platformLogin(HQ_EMAIL));
+    headers.set("X-Role", "store");
+    headers.set("X-Store-ID", "1");
+
+    ResponseEntity<String> res =
+        rest.exchange("/files", HttpMethod.POST, uploadRequest(headers), String.class);
+
+    assertThat(res.getStatusCode())
+        .as("撤退後の HQ は storeBridge を持たず、店舗文脈を名乗れないこと")
+        .isEqualTo(HttpStatus.FORBIDDEN);
   }
 
   @Test
