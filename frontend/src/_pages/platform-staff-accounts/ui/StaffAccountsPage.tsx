@@ -49,7 +49,11 @@ export default function StaffAccountsPage() {
   // 再設定の確認対象と、発行された仮パスワードの表示。どちらもページに置く —
   // 行に持たせると成功後の一覧取り直しで行ごと unmount され、表示が消える。
   const [resetTarget, setResetTarget] = useState<StaffAccountSummaryResponse | null>(null);
-  const [issued, setIssued] = useState<{ displayName: string; password: string } | null>(null);
+  const [issued, setIssued] = useState<{
+    displayName: string;
+    email: string;
+    password: string;
+  } | null>(null);
 
   // 応答は一度きり表示の仮パスワードを運ぶため、重ねて実行できてしまうとどちらか一方の
   // 有効な値が必ず失われる（表示枠は 1 つしかない）。進行中は全行の入口を塞いで直列化する。
@@ -70,6 +74,7 @@ export default function StaffAccountsPage() {
       if (requestId !== resetRequestIdRef.current) return;
       setIssued({
         displayName: account.display_name ?? '',
+        email: account.email ?? '',
         password: result.temporary_password,
       });
     } catch (error) {
@@ -230,6 +235,7 @@ export default function StaffAccountsPage() {
         open={issued !== null}
         temporaryPassword={issued?.password ?? ''}
         displayName={issued?.displayName ?? ''}
+        email={issued?.email ?? ''}
         onClose={() => setIssued(null)}
       />
     </>

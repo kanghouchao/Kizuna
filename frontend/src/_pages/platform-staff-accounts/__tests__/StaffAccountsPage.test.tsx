@@ -245,7 +245,8 @@ describe('パスワード再設定', () => {
 
     await waitFor(() => expect(mockedApi.resetPassword).toHaveBeenCalledWith(1));
     expect(await screen.findByDisplayValue('test-temporary-password')).toBeInTheDocument();
-    expect(screen.getByText('山田太郎 の仮パスワード')).toBeInTheDocument();
+    // 表示名は一意でないため、取り違え防止の同定は一意な email が担う。
+    expect(screen.getByText('山田太郎（staff@example.com）の仮パスワード')).toBeInTheDocument();
   });
 
   it('確認をキャンセルすると再設定しないこと', async () => {
