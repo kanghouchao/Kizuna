@@ -30,6 +30,14 @@ public enum PermissionCode {
    */
   ROLE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
+  /**
+   * 全スタッフアカウントの閲覧と停止・再開（PlatformStaffAccountController）。HQ 側・店舗側のロール構成を問わず 本人種別 STAFF
+   * の全アカウントを対象にする。
+   *
+   * <p>面そのものが授権を一切動かさない（ロールも店舗集合も書けない）ので、権限の組合せを作れる {@link #ROLE_MANAGE} とは別の権限で仕切る。
+   */
+  STAFF_ACCOUNT_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
+
   /** 共通設定の閲覧・更新（PlatformConfigController）。 */
   SYSTEM_CONFIG_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 

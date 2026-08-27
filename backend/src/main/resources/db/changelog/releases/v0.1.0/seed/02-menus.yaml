@@ -2,7 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: seed-v0100-002-menus
       author: kanghouchao
-      # 統合メニューの正典 17 行（2 階層厳守・全ノード permission 非 null）。
+      # 統合メニューの正典 18 行（2 階層厳守・全ノード permission 非 null）。
       # 親→子の順で挿入し自己参照 FK（fk_t_menus_parent）を満たす。
       preConditions:
         - dbms:
@@ -56,6 +56,16 @@ databaseChangeLog:
               - column: { name: icon, value: KeyRoundIcon }
               - column: { name: permission, value: ROLE_MANAGE }
               - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-staff-accounts }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: アカウント管理 }
+              - column: { name: path, value: /platform/staff-accounts }
+              - column: { name: icon, value: UserCogIcon }
+              - column: { name: permission, value: STAFF_ACCOUNT_MANAGE }
+              - column: { name: sort_order, valueNumeric: 5 }
         - insert:
             tableName: t_menus
             columns:
