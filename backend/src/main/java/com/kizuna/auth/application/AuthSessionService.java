@@ -2,6 +2,7 @@ package com.kizuna.auth.application;
 
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserPasswordReset;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.PlatformUserResumed;
 import com.kizuna.user.domain.PlatformUserStopped;
@@ -102,6 +103,16 @@ public class AuthSessionService {
                     .findByEmail(email)
                     .map(PlatformUser::getEnabled)
                     .orElse(false)));
+  }
+
+  /**
+   * パスワード再設定イベントを受けて再設定時刻を記録する（commit 後）。commit 後に書く理由は {@link #onPlatformUserStopped} と同じ。
+   *
+   * <p>停止・再開と違い確定状態の読み直しは要らない。再設定には逆操作が無く、コールバックの実行順が入れ替わっても 記録された時刻が前後するだけで収束先は変わらない。
+   */
+  @EventListener
+  public void onPlatformUserPasswordReset(PlatformUserPasswordReset event) {
+    afterCommit(() -> tokenBlacklistService.markPasswordReset(event.email()));
   }
 
   /**
