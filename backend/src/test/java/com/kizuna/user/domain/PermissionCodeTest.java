@@ -19,12 +19,13 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("PLATFORM コンソールの権限はプラットフォーム管理系の 5 個")
+  @DisplayName("PLATFORM コンソールの権限はプラットフォーム管理系の 6 個")
   void platformPermissions() {
     assertThat(byConsole(PermissionCode.Console.PLATFORM))
         .containsExactlyInAnyOrder(
             PermissionCode.STORE_MANAGE,
             PermissionCode.ROLE_MANAGE,
+            PermissionCode.STAFF_ACCOUNT_MANAGE,
             PermissionCode.SYSTEM_CONFIG_MANAGE,
             PermissionCode.PLATFORM_MENU_VIEW,
             PermissionCode.PLATFORM_ASSET_MANAGE);
@@ -75,9 +76,9 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("権限目録は 20 個で全てコンソール分類を持つ")
+  @DisplayName("権限目録は 21 個で全てコンソール分類を持つ")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(20);
+    assertThat(PermissionCode.values()).hasSize(21);
     assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getConsole))
         .doesNotContainNull();
   }

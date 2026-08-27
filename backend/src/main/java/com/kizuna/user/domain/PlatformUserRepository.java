@@ -58,6 +58,17 @@ public interface PlatformUserRepository
   Optional<PlatformUser> findByIdForUpdate(@Param("id") Long id);
 
   /**
+   * 本人種別 STAFF の行に限り email を返す（アカウント面の対象絞りと自己停止判定の事前検査）。
+   *
+   * <p>実体でなく列を返す。実体を読み込んだうえで同じ行を {@link #findByIdForUpdate} で押さえるとロックの昇格が版の照合を伴い、
+   * 直列化点で待っている間に他者が停止を確定させただけで 409 に落ちる — 冪等であるべき停止がそこで壊れる。
+   */
+  @Query(
+      "select u.email from PlatformUser u where u.id = :id"
+          + " and u.userType = com.kizuna.user.domain.UserType.STAFF")
+  Optional<String> findStaffEmailById(@Param("id") Long id);
+
+  /**
    * 指定ロールのいずれかを保持する有効な利用者の行を、id 昇順で押さえる（{@code SELECT ... FOR UPDATE}）。
    *
    * <p><b>返る集合を数えてはいけない</b>。READ COMMITTED では待たされている間に確定した変更のうち、取り直されるのは押さえた行自身の 列だけで、保持判定が読む
