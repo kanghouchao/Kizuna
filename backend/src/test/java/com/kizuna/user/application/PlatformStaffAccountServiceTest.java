@@ -28,12 +28,14 @@ import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
@@ -297,14 +299,21 @@ class PlatformStaffAccountServiceTest {
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
     when(passwordEncoder.encode(ArgumentMatchers.anyString())).thenReturn("encoded");
 
+    long beforeSeconds = Instant.now().getEpochSecond();
     String temporaryPassword = service.resetPassword(4L, "admin@kizuna.test");
+    long afterSeconds = Instant.now().getEpochSecond();
 
     // 返した生値そのものが符号化されて保存される（別の値を返す取り違えを排除する）。
     assertThat(temporaryPassword).hasSize(16);
     verify(passwordEncoder).encode(temporaryPassword);
     assertThat(existing.getPassword()).isEqualTo("encoded");
     verify(repository).saveAndFlush(existing);
-    verify(eventPublisher).publishEvent(new PlatformUserPasswordReset("store-only@kizuna.test"));
+    ArgumentCaptor<PlatformUserPasswordReset> published =
+        ArgumentCaptor.forClass(PlatformUserPasswordReset.class);
+    verify(eventPublisher).publishEvent(published.capture());
+    assertThat(published.getValue().email()).isEqualTo("store-only@kizuna.test");
+    // 失効境界はイベント自身が運ぶ（callback 実行時刻だと遅延で境界が前へ這う）。
+    assertThat(published.getValue().resetAtSeconds()).isBetween(beforeSeconds, afterSeconds);
     // 再設定は enabled もロールも動かさないので、不減零の直列化点は押さえない。
     verifyNoInteractions(permissionRepository);
   }

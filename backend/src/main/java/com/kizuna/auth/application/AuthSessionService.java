@@ -112,7 +112,8 @@ public class AuthSessionService {
    */
   @EventListener
   public void onPlatformUserPasswordReset(PlatformUserPasswordReset event) {
-    afterCommit(() -> tokenBlacklistService.markPasswordReset(event.email()));
+    afterCommit(
+        () -> tokenBlacklistService.markPasswordReset(event.email(), event.resetAtSeconds()));
   }
 
   /**
