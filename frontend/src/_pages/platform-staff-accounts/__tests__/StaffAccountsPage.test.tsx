@@ -5,7 +5,12 @@ import { notify } from '@/shared/notify';
 import StaffAccountsPage from '../ui/StaffAccountsPage';
 
 jest.mock('@/entities/user', () => ({
-  platformStaffAccountApi: { list: jest.fn(), suspend: jest.fn(), resume: jest.fn() },
+  platformStaffAccountApi: {
+    list: jest.fn(),
+    suspend: jest.fn(),
+    resume: jest.fn(),
+    resetPassword: jest.fn(),
+  },
 }));
 
 jest.mock('@/features/staff-management', () => ({
@@ -209,6 +214,96 @@ describe('アカウント管理ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByText('山田太郎')).toBeInTheDocument();
+  });
+});
+
+describe('パスワード再設定', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedApi.resetPassword.mockResolvedValue({ temporary_password: 'Ab3xYz9QmT2wKp7L' });
+    mockedApi.list.mockResolvedValue(
+      paginated([account({ id: 1, display_name: '山田太郎', enabled: true })])
+    );
+  });
+
+  const openIssuedModal = async () => {
+    render(<StaffAccountsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'パスワード再設定' }));
+    fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
+    return screen.findByDisplayValue('Ab3xYz9QmT2wKp7L');
+  };
+
+  // 対象のセッションを即時に失効させるうえ、生値は一度しか出ないので確認を挟む
+  it('確認してから再設定し、発行された仮パスワードを表示すること', async () => {
+    render(<StaffAccountsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'パスワード再設定' }));
+
+    expect(await screen.findByText('パスワードを再設定しますか？')).toBeInTheDocument();
+    expect(mockedApi.resetPassword).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '再設定する' }));
+
+    await waitFor(() => expect(mockedApi.resetPassword).toHaveBeenCalledWith(1));
+    expect(await screen.findByDisplayValue('Ab3xYz9QmT2wKp7L')).toBeInTheDocument();
+    expect(screen.getByText('山田太郎 の仮パスワード')).toBeInTheDocument();
+  });
+
+  it('確認をキャンセルすると再設定しないこと', async () => {
+    render(<StaffAccountsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'パスワード再設定' }));
+    await screen.findByText('パスワードを再設定しますか？');
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('パスワードを再設定しますか？')).not.toBeInTheDocument()
+    );
+    expect(mockedApi.resetPassword).not.toHaveBeenCalled();
+  });
+
+  // 対象外（HQ 側ロール保持者・自分自身）の判定はサーバだけが持つので、そのまま出す
+  it('再設定の拒否はサーバの文言をそのまま通知すること', async () => {
+    mockedApi.resetPassword.mockRejectedValue({
+      response: { data: { error: 'HQ 側ロール保持者のパスワードは再設定できません' } },
+    });
+
+    render(<StaffAccountsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'パスワード再設定' }));
+    fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith('HQ 側ロール保持者のパスワードは再設定できません')
+    );
+    expect(screen.queryByDisplayValue('Ab3xYz9QmT2wKp7L')).not.toBeInTheDocument();
+  });
+
+  // 生値はこの表示にしか無く、誤って閉じると再発行しかやり直す手段が無い
+  it('ESC では仮パスワードの表示を閉じないこと', async () => {
+    await openIssuedModal();
+
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+
+    await waitFor(() => expect(screen.getByDisplayValue('Ab3xYz9QmT2wKp7L')).toBeInTheDocument());
+  });
+
+  it('背景クリックでは仮パスワードの表示を閉じないこと', async () => {
+    await openIssuedModal();
+
+    const backdrop = document.querySelector('[data-slot="dialog-overlay"]');
+    expect(backdrop).not.toBeNull();
+    fireEvent.click(backdrop as Element);
+
+    await waitFor(() => expect(screen.getByDisplayValue('Ab3xYz9QmT2wKp7L')).toBeInTheDocument());
+  });
+
+  it('「閉じる」ボタンでだけ仮パスワードの表示を閉じること', async () => {
+    await openIssuedModal();
+
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+
+    await waitFor(() =>
+      expect(screen.queryByDisplayValue('Ab3xYz9QmT2wKp7L')).not.toBeInTheDocument()
+    );
   });
 });
 

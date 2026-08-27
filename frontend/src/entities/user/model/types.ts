@@ -171,6 +171,11 @@ export interface PlatformStaffUpdateRequest {
 
 // アカウント面の一覧 1 件。停止・再開はどちらも冪等で版を往復しないため version を持たず、
 // ロールは表示専用（この面からは授権を動かせない）。
+// パスワード再設定の応答。仮パスワードの生値はこの応答にしか現れず、以後どこからも取り出せない。
+export interface StaffAccountPasswordResetResponse {
+  temporary_password: string;
+}
+
 export interface StaffAccountSummaryResponse {
   id?: number;
   email?: string;
