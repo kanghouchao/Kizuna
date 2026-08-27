@@ -16,4 +16,13 @@ export default defineConfig([
       'fsd/insignificant-slice': 'off',
     },
   },
+  {
+    files: ['./src/_pages/**'],
+    rules: {
+      // _pages の slice 数は画面数そのもの（1 画面 = 1 slice、接頭辞で作用域を切る D6 の設計）で、
+      // 閾値超過はまとめ方の誤りではなく画面が増えた事実を映しているだけ。
+      // グループ化は Next のルート殻との対応を壊すため取らない。他層では有効なまま残す。
+      'fsd/excessive-slicing': 'off',
+    },
+  },
 ]);
