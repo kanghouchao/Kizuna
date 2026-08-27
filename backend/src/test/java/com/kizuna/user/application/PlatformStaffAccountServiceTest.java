@@ -24,6 +24,7 @@ import com.kizuna.user.domain.PlatformUserResumed;
 import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
@@ -256,18 +257,35 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("HQ 側ロール保持者へのパスワード再設定は 400 で拒否され、何も書かれないこと（守衛 G6）")
   void resetPassword_hqRoleHolder_isRejectedAndWritesNothing() {
-    // 実行主体も必ず HQ 側ロールを持つため、自己再設定もこの判定に吸収される。
     PlatformUser existing = staff(3L, "hq@kizuna.test", Set.of(HQ_ROLE));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
 
-    assertThatThrownBy(() -> service.resetPassword(3L))
+    assertThatThrownBy(() -> service.resetPassword(3L, "admin@kizuna.test"))
         .isInstanceOf(HqPasswordResetNotAllowedException.class)
         .hasMessage("HQ 側ロール保持者のパスワードは再設定できません");
 
     assertThat(existing.getPassword()).as("パスワードは書き換わらないこと").isEqualTo("hash");
     verify(repository, never()).saveAndFlush(any());
     verifyNoInteractions(passwordEncoder);
+    verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("店舗側の実行主体でも自分自身への再設定は G6 に依らず 400 で拒否されること")
+  void resetPassword_selfTarget_isRejectedWithoutRoleLookup() {
+    // JWT の権限は発行時の写しなので、降格済みの残存セッションでは実行主体が店舗側になり G6 を通る。
+    // 自己拒否がロール判定に依存しない（roleRepository を引く前に落ちる）ことまで固定する。
+    PlatformUser existing = staff(5L, "self@kizuna.test", Set.of(STORE_SIDE_ROLE));
+    when(repository.findById(5L)).thenReturn(Optional.of(existing));
+
+    assertThatThrownBy(() -> service.resetPassword(5L, "self@kizuna.test"))
+        .isInstanceOf(SelfPasswordResetNotAllowedException.class)
+        .hasMessage("自分自身のパスワードは再設定できません");
+
+    verifyNoInteractions(roleRepository);
+    verifyNoInteractions(passwordEncoder);
+    verify(repository, never()).saveAndFlush(any());
     verifyNoInteractions(eventPublisher);
   }
 
@@ -279,7 +297,7 @@ class PlatformStaffAccountServiceTest {
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
     when(passwordEncoder.encode(ArgumentMatchers.anyString())).thenReturn("encoded");
 
-    String temporaryPassword = service.resetPassword(4L);
+    String temporaryPassword = service.resetPassword(4L, "admin@kizuna.test");
 
     // 返した生値そのものが符号化されて保存される（別の値を返す取り違えを排除する）。
     assertThat(temporaryPassword).hasSize(16);
@@ -296,7 +314,8 @@ class PlatformStaffAccountServiceTest {
   void resetPassword_targetIsNotStaff_throwsNotFoundBeforeRoleLookup() {
     when(repository.findById(8L)).thenReturn(Optional.of(castUser(8L, "cast@kizuna.test")));
 
-    assertThatThrownBy(() -> service.resetPassword(8L)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.resetPassword(8L, "admin@kizuna.test"))
+        .isInstanceOf(NotFoundException.class);
 
     verifyNoInteractions(roleRepository);
     verifyNoInteractions(passwordEncoder);

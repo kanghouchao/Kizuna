@@ -15,6 +15,7 @@ import com.kizuna.user.domain.PlatformUserResumed;
 import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
@@ -157,9 +158,14 @@ public class PlatformStaffAccountService {
    * 状態機械の遷移が無く、並行書込みは楽観ロック（@Version）が担う。
    */
   @Transactional
-  public String resetPassword(Long id) {
+  public String resetPassword(Long id, String actorEmail) {
     PlatformUser target = requireStaffAccount(id);
-    // HQ 側ロール保持者は対象外（ADR 0021 の守衛 G6）。実行主体も必ず HQ 側ロールを持つため、自己再設定はこの判定に含まれる。
+    // 自己再設定は G6 に委ねず名指しで拒む。JWT の権限は発行時の写しでロール降格後も失効まで残るため、
+    // 降格済みの残存セッションからは自分が店舗側に見え、G6 を素通りして口座を恒久奪取できてしまう。
+    if (target.getEmail().equals(actorEmail)) {
+      throw new SelfPasswordResetNotAllowedException("自分自身のパスワードは再設定できません");
+    }
+    // HQ 側ロール保持者は対象外（ADR 0021 の守衛 G6）。
     if (holdsAny(target.getRoleIds(), roleRepository.findHqRoleIds())) {
       throw new HqPasswordResetNotAllowedException("HQ 側ロール保持者のパスワードは再設定できません");
     }
