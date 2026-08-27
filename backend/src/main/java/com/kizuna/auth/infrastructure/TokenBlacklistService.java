@@ -2,7 +2,6 @@ package com.kizuna.auth.infrastructure;
 
 import com.kizuna.shared.config.AppProperties;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -119,17 +118,17 @@ public class TokenBlacklistService {
    *
    * <p>停止用の鍵とは独立の鍵を使う。共用すると、無関係な再開操作 1 回（{@link #clearUser}）が再設定前のセッションまで蘇らせてしまう。
    *
-   * <p>値は書込み時点（＝ commit 後）のエポック秒。TTL は {@link #blacklistUser} と同じ理由で JWT 有効期間ぶん取る —
-   * その時間が経てば再設定前のトークンはどれも自身の期限切れで無効になっている。
+   * <p>値は再設定イベント自身が運ぶエポック秒（commit 前に捕獲）。callback の実行時刻で刻むと、遅延した古い callback
+   * が新しい再設定より後の時刻を書き、最新パスワードで得た正当トークンを誤失効させる。捕獲〜commit 間に旧パスワードで ログインされる窓は、既記載の同一秒生存窓に包含される。TTL は
+   * {@link #blacklistUser} と同じ理由で JWT 有効期間ぶん。
    *
-   * <p>書込みは Lua で単調化する。再設定が重なると commit 順と callback 実行順は一致せず、素の SET
-   * では遅れた古い時刻が新しい境界を巻き戻し、両境界の間に発行されたトークンが復活し得る。
+   * <p>書込みは Lua で単調化する。素の SET では遅れた古い callback が新しい境界を巻き戻し、両境界の間に発行されたトークンが復活し得る。
    */
-  public void markPasswordReset(String email) {
+  public void markPasswordReset(String email, long resetAtSeconds) {
     redisTemplate.execute(
         MONOTONIC_MARK,
         List.of(PASSWORD_RESET_KEY_PREFIX + email),
-        String.valueOf(Instant.now().getEpochSecond()),
+        String.valueOf(resetAtSeconds),
         String.valueOf(appProperties.getJwtExpiration()));
   }
 

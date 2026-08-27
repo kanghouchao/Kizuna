@@ -21,6 +21,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -172,7 +173,8 @@ public class PlatformStaffAccountService {
     String temporaryPassword = temporaryPassword();
     target.changePassword(passwordEncoder.encode(temporaryPassword));
     repository.saveAndFlush(target);
-    eventPublisher.publishEvent(new PlatformUserPasswordReset(target.getEmail()));
+    eventPublisher.publishEvent(
+        new PlatformUserPasswordReset(target.getEmail(), Instant.now().getEpochSecond()));
     return temporaryPassword;
   }
 

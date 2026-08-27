@@ -320,12 +320,13 @@ class PlatformStaffPasswordResetIT {
   @Test
   @DisplayName("再設定の記録は単調で、遅れて届いた古い時刻が新しい境界を巻き戻さないこと")
   void passwordResetMarkerIsMonotonic() {
-    // 再設定が重なると commit 順と書込み順は一致しない。素の SET なら本テストは現在時刻へ巻き戻って赤になる。
+    // 再設定が重なると commit 順と callback 実行順は一致しない。素の SET なら本テストは古い境界へ巻き戻って赤になる。
     String key = PASSWORD_RESET_KEY_PREFIX + MONOTONIC_EMAIL;
-    String newerBoundary = String.valueOf(Instant.now().getEpochSecond() + 600);
+    long newerSeconds = Instant.now().getEpochSecond();
+    String newerBoundary = String.valueOf(newerSeconds);
     redisTemplate.opsForValue().set(key, newerBoundary, Duration.ofMinutes(5));
 
-    tokenBlacklistService.markPasswordReset(MONOTONIC_EMAIL);
+    tokenBlacklistService.markPasswordReset(MONOTONIC_EMAIL, newerSeconds - 30);
 
     assertThat(redisTemplate.opsForValue().get(key)).as("より新しい境界が残ること").isEqualTo(newerBoundary);
   }
