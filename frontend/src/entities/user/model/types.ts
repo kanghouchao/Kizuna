@@ -19,6 +19,7 @@ export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
 export type PlatformPermission =
   | 'STORE_MANAGE'
   | 'ROLE_MANAGE'
+  | 'STAFF_ACCOUNT_MANAGE'
   | 'STAFF_MANAGE'
   | 'SYSTEM_CONFIG_MANAGE'
   | 'PLATFORM_MENU_VIEW'
@@ -157,15 +158,26 @@ export interface PlatformStaffCreateRequest {
   store_ids?: number[];
 }
 
-// スタッフ授権編集リクエスト（enabled: 未指定=現状維持、false=停止、true=再開）
+// スタッフ授権編集リクエスト。停止・再開はアカウント管理の専用端点が担うのでここには無い
+// （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
 export interface PlatformStaffUpdateRequest {
   role_ids: number[];
   store_scope_type: PlatformStoreScopeType;
   // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
   store_ids?: number[];
-  enabled?: boolean;
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;
+}
+
+// アカウント面の一覧 1 件。停止・再開はどちらも冪等で版を往復しないため version を持たず、
+// ロールは表示専用（この面からは授権を動かせない）。
+export interface StaffAccountSummaryResponse {
+  id?: number;
+  email?: string;
+  display_name?: string;
+  // enabled は Java 側が primitive のため、キーは必ず応答に含まれる。
+  enabled: boolean;
+  roles?: RoleRef[];
 }
 
 // 店舗スタッフ（店舗側ロールのみを持つアカウント）の応答。

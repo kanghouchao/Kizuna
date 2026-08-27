@@ -25,11 +25,8 @@ import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.PlatformUserResumed;
-import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
@@ -37,7 +34,6 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -85,8 +81,6 @@ class PlatformStaffServiceTest {
   @InjectMocks private PlatformStaffService service;
 
   @Captor private ArgumentCaptor<PlatformUser> userCaptor;
-
-  private static final String ACTOR = "actor@kizuna.test";
 
   /** HQ 側ロールの解決を差し込む。既定では HQ_ROLE と ROLE_MANAGE_ROLE だけが HQ 側。 */
   private void givenHqSideRoles() {
@@ -395,8 +389,7 @@ class PlatformStaffServiceTest {
         service.update(
             3L,
             updateRequest(
-                Set.of(HQ_ROLE, MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
-            ACTOR);
+                Set.of(HQ_ROLE, MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
 
     assertThat(existing.getRoleIds()).containsExactlyInAnyOrder(HQ_ROLE, MANAGER_ROLE);
     assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
@@ -423,7 +416,7 @@ class PlatformStaffServiceTest {
         updateRequest(Set.of(HQ_ROLE, MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
     req.setVersion(4L);
 
-    assertThatThrownBy(() -> service.update(3L, req, ACTOR))
+    assertThatThrownBy(() -> service.update(3L, req))
         .isInstanceOf(StaleStaffUpdateException.class)
         .isInstanceOf(ConflictException.class)
         .hasMessage("他の管理者が更新しました。最新の内容を確認してください");
@@ -442,9 +435,7 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    404L,
-                    updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()),
-                    ACTOR))
+                    404L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
         .isInstanceOf(NotFoundException.class);
     verify(repository, never()).save(any());
   }
@@ -459,7 +450,7 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    8L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    8L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
         .isInstanceOf(NotFoundException.class);
     verify(repository, never()).save(any());
   }
@@ -471,7 +462,7 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    3L, updateRequest(Set.of(999L), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    3L, updateRequest(Set.of(999L), StoreScopeType.ALL_STORES, Set.of())))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("ロール");
 
@@ -499,8 +490,7 @@ class PlatformStaffServiceTest {
             () ->
                 service.update(
                     7L,
-                    updateRequest(Set.of(HQ_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(999L)),
-                    ACTOR))
+                    updateRequest(Set.of(HQ_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(999L))))
         .isInstanceOf(InvalidStoreScopeException.class);
   }
 
@@ -523,118 +513,8 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    9L,
-                    updateRequest(Set.of(HQ_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
-                    ACTOR))
+                    9L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L))))
         .isInstanceOf(DuplicateStaffEmailException.class);
-  }
-
-  @Test
-  void update_disabling_stopsUser() {
-    PlatformUser existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    req.setEnabled(false);
-
-    PlatformStaffResponse res = service.update(3L, req, ACTOR);
-
-    assertThat(existing.getEnabled()).isFalse();
-    assertThat(res.enabled()).isFalse();
-  }
-
-  @Test
-  void update_reEnabling_resumesUser() {
-    PlatformUser existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    existing.stop();
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    req.setEnabled(true);
-
-    service.update(3L, req, ACTOR);
-
-    assertThat(existing.getEnabled()).isTrue();
-  }
-
-  @Test
-  void update_disabling_publishesPlatformUserStoppedEvent() {
-    // 既に停止済みの対象へ enabled=false を再送しても発行する（結果語義の冪等性 — Redis 書込み失敗後の再送復旧のため）。
-    PlatformUser existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    existing.stop();
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    req.setEnabled(false);
-
-    service.update(3L, req, ACTOR);
-
-    verify(eventPublisher).publishEvent(new PlatformUserStopped("target@kizuna.test"));
-  }
-
-  @Test
-  void update_enabling_publishesPlatformUserResumedEvent() {
-    // 既に enabled=true の対象へ enabled=true を再送しても発行する（結果語義の冪等性）。
-    PlatformUser existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    req.setEnabled(true);
-
-    service.update(3L, req, ACTOR);
-
-    verify(eventPublisher).publishEvent(new PlatformUserResumed("target@kizuna.test"));
-  }
-
-  @Test
-  void update_enabledNull_publishesNoEvents() {
-    PlatformUser existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
-
-    service.update(
-        3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
-
-    verifyNoInteractions(eventPublisher);
-  }
-
-  @Test
-  void update_selfStop_throwsSelfStopNotAllowedExceptionWithoutSavingOrPublishing() {
-    // 実行主体（JWT subject = actorEmail）が対象自身のメールと一致する場合、自己停止として拒否する。
-    PlatformUser existing = staff(3L, ACTOR, Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    req.setEnabled(false);
-
-    assertThatThrownBy(() -> service.update(3L, req, ACTOR))
-        .isInstanceOf(SelfStopNotAllowedException.class)
-        .hasMessage("自分自身を停止することはできません");
-
-    assertThat(existing.getEnabled()).as("ガードは reassignGrants 前で発火し授権も変更されないこと").isTrue();
-    verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
   }
 
   @Test
@@ -671,8 +551,8 @@ class PlatformStaffServiceTest {
             () ->
                 service.update(
                     3L,
-                    updateRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
-                    ACTOR))
+                    updateRequest(
+                        Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L))))
         .isInstanceOf(InvalidRoleGrantException.class);
 
     assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
@@ -697,14 +577,15 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    4L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    4L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
         .isInstanceOf(NotFoundException.class);
 
     verify(repository, never()).saveAndFlush(any());
   }
 
   @Test
-  void update_stoppingLastRoleManageHolder_isRejectedWithoutSavingOrPublishing() {
+  void update_demotionOfLastRoleManageHolder_isRejected() {
+    // 降格そのものは許すが、母集団が 0 になるならこの守衛が先に立つ。
     PlatformUser existing =
         staff(
             3L,
@@ -714,30 +595,6 @@ class PlatformStaffServiceTest {
             Set.of());
     givenHqSideRoles();
     givenRoleManageRoles();
-    when(roleRepository.findAllById(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(role(ROLE_MANAGE_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    req.setEnabled(false);
-
-    assertThatThrownBy(() -> service.update(3L, req, ACTOR))
-        .isInstanceOf(LastRoleManageHolderException.class)
-        .hasMessage("最後の管理権限保持者を停止・降格することはできません");
-
-    assertThat(existing.getEnabled()).isTrue();
-    verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
-  }
-
-  @Test
-  void update_selfDemotionOfLastRoleManageHolder_isRejected() {
-    // 自己降級そのものは許す（G4）が、母集団が 0 になるならこちらの守衛が先に立つ。
-    PlatformUser existing =
-        staff(3L, ACTOR, Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
     when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
@@ -745,7 +602,7 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
         .isInstanceOf(LastRoleManageHolderException.class);
 
     assertThat(existing.getRoleIds()).containsExactly(ROLE_MANAGE_ROLE);
@@ -766,7 +623,7 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(3L, 99L));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
+    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
 
     assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
   }
@@ -784,9 +641,7 @@ class PlatformStaffServiceTest {
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
     service.update(
-        3L,
-        updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
-        ACTOR);
+        3L, updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
 
     verify(permissionRepository, never()).lockIdByCode(any());
     verify(repository, never()).lockEnabledRoleHolderIds(any());
@@ -816,7 +671,7 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
         .isInstanceOf(LastRoleManageHolderException.class);
 
     verify(repository, never()).saveAndFlush(any());
@@ -841,7 +696,7 @@ class PlatformStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
         .isInstanceOf(LastRoleManageHolderException.class);
 
     InOrder inOrder = inOrder(permissionRepository, repository);
@@ -870,40 +725,9 @@ class PlatformStaffServiceTest {
         .thenReturn(List.of(3L));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
+    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
 
     assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
     verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-  }
-
-  @Test
-  void update_stopThatBecomesReducingWhileAwaitingTheMutex_isRejected() {
-    // 発火判定を押さえる前のロール集合で行うと、この停止は母集団と無関係に見えて直列化点を素通りする。
-    // 待っている間に並行するロール編集が対象の保持ロールへ ROLE_MANAGE を足しうるので、停止・除去は
-    // 押さえたうえで取り直した集合により判定しなければ、最後の保持者の降格と重なって母集団が 0 になる。
-    PlatformUser existing =
-        staff(3L, "holder@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    AtomicBoolean mutexTaken = new AtomicBoolean(false);
-    when(permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenAnswer(
-            invocation -> {
-              mutexTaken.set(true);
-              return Optional.of(42L);
-            });
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenAnswer(invocation -> mutexTaken.get() ? Set.of(HQ_ROLE) : Set.of());
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIds(Set.of(HQ_ROLE))).thenReturn(List.of(3L));
-
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    req.setEnabled(false);
-
-    assertThatThrownBy(() -> service.update(3L, req, ACTOR))
-        .isInstanceOf(LastRoleManageHolderException.class);
-
-    verify(repository, never()).saveAndFlush(any());
   }
 }

@@ -62,7 +62,6 @@ describe('platformStaffApi', () => {
       role_ids: [1, 2],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
-      enabled: false,
       version: 7,
     });
     expect(res).toEqual({ ok: true, url: '/platform/staff/1' });

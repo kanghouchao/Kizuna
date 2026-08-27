@@ -76,20 +76,18 @@ describe('スタッフ授権編集モーダル', () => {
       role_ids: [3],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
-      enabled: true,
       version: 7,
     });
   });
 
-  it('状態を停止へ切り替えると enabled=false で送信する', async () => {
+  // 停止・再開はアカウント管理の面だけが持つ。ここに欄が戻ると、サーバが未知のキーを
+  // 400 で弾くため授権の更新そのものが通らなくなる。
+  it('状態を切り替える欄を持たない', async () => {
     renderModal();
     await screen.findByRole('dialog');
 
-    fireEvent.click(screen.getByLabelText('停止'));
-    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-
-    await waitFor(() => expect(mockedStaffApi.update).toHaveBeenCalledTimes(1));
-    expect(mockedStaffApi.update.mock.calls[0][1]).toMatchObject({ enabled: false });
+    expect(screen.queryByLabelText('停止')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('有効')).not.toBeInTheDocument();
   });
 
   it('ロールの選択を全て外すと、その組の傍に文言を出し更新 API を呼ばない', async () => {

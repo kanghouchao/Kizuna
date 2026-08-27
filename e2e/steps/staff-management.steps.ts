@@ -129,8 +129,7 @@ When('{string} の編集モーダルを開く', async ({ page }, _label: string)
 
 When('店舗集合を {string} に変更する', async ({ page }, scopeLabel: string) => {
   const dialog = page.getByRole('dialog', { name: `${createdAdminName} の権限を編集` });
-  // モーダルには担当店舗（store-scope-type）と状態（staff-enabled）の 2 つのラジオ群がある。
-  // input の name 属性で担当店舗側に限定し、ラベル文言の衝突に依存しない。
+  // input の name 属性で担当店舗（store-scope-type）のラジオ群に限定し、ラベル文言の衝突に依存しない。
   await dialog
     .locator('label:has(input[name="store-scope-type"])', { hasText: scopeLabel })
     .click();

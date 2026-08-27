@@ -32,9 +32,12 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 停止済みスタッフの既発行 JWT を Redis ユーザー単位ブラックリストで即時失効させることを本物の PostgreSQL + Redis で固定する統合テスト。
  *
+ * <p>停止・再開の口はアカウント管理（{@code POST /platform/staff-accounts/{id}/suspension} と {@code
+ * .../resumption}）で、実行主体は種子の HQ 管理者 admin@kizuna.test（既定授与で STAFF_ACCOUNT_MANAGE を持つ）。対象は店舗側ロールだけの
+ * 専用テストユーザーにする — この面が扱うのはロール構成を問わない全 STAFF であり、不減零の母集団にも触れない。
+ *
  * <p>スタイルは {@link com.kizuna.auth.PlatformBridgeIT} に倣い、対象ユーザーは repository 直挿の専用テストユーザーのみを使う
  * （種子ユーザー、特に {@code CrossStoreTestSupport} が全面依存する yamada.jiro@kizuna.test を停止すると後続 IT が連鎖破綻するため）。
- * 実行主体は種子の HQ 管理者 admin@kizuna.test（PERM_ROLE_MANAGE 保持）を使う。対象も HQ 側ロール保持者にする — 管理者管理が扱えるのはそれだけである。
  *
  * <p>{@code CrossStoreTestSupport} は継承しない。本 IT は店舗文脈（X-Store-ID）を一切使わず、同基底の {@code @BeforeEach}
  * による種子ユーザーログインも不要なため（上記のとおり種子ユーザーには触れない方針）。
@@ -45,15 +48,20 @@ class PlatformStaffRevocationIT {
 
   private static final String TEST_PASSWORD = "pass";
 
-  /** 種子の HQ 管理者（PERM_ROLE_MANAGE 保持、停止操作の実行主体）。 */
+  /** 種子の HQ 管理者（PERM_STAFF_ACCOUNT_MANAGE 保持、停止操作の実行主体）。 */
   private static final String ADMIN_EMAIL = "admin@kizuna.test";
 
   private static final String STOP_EMAIL = "revocation-stop@kizuna.test";
   private static final String RESUME_EMAIL = "revocation-resume@kizuna.test";
-  private static final String ROLLBACK_EMAIL = "revocation-rollback@kizuna.test";
   private static final String IDEMPOTENT_EMAIL = "revocation-idempotent@kizuna.test";
   private static final String TTL_EMAIL = "revocation-ttl@kizuna.test";
   private static final String NOOP_EMAIL = "revocation-noop@kizuna.test";
+
+  /** 停止・再開の対象に使う店舗側ロール。ROLE_MANAGE を含まないので不減零の母集団を動かさない。 */
+  private static final String TARGET_ROLE = "店長";
+
+  /** 授権管理の PUT を撃つ対象に使う HQ 側ロール（管理者管理が扱えるのは HQ 側ロール保持者だけ）。 */
+  private static final String HQ_ROLE = "HQ管理者";
 
   private static final String USER_BLACKLIST_KEY_PREFIX = "blacklist:users:";
 
@@ -71,14 +79,7 @@ class PlatformStaffRevocationIT {
   @AfterEach
   void cleanupRedis() {
     for (String email :
-        List.of(
-            ADMIN_EMAIL,
-            STOP_EMAIL,
-            RESUME_EMAIL,
-            ROLLBACK_EMAIL,
-            IDEMPOTENT_EMAIL,
-            TTL_EMAIL,
-            NOOP_EMAIL)) {
+        List.of(ADMIN_EMAIL, STOP_EMAIL, RESUME_EMAIL, IDEMPOTENT_EMAIL, TTL_EMAIL, NOOP_EMAIL)) {
       redisTemplate.delete(USER_BLACKLIST_KEY_PREFIX + email);
     }
   }
@@ -118,11 +119,10 @@ class PlatformStaffRevocationIT {
   }
 
   private static String updateBody(
-      String roleIdsJson, String scopeType, String storeIds, boolean enabled, long version) {
+      String roleIdsJson, String scopeType, String storeIds, long version) {
     return String.format(
-        "{\"role_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s,\"enabled\":%b,"
-            + "\"version\":%d}",
-        roleIdsJson, scopeType, storeIds, enabled, version);
+        "{\"role_ids\":%s,\"store_scope_type\":\"%s\",\"store_ids\":%s,\"version\":%d}",
+        roleIdsJson, scopeType, storeIds, version);
   }
 
   private String platformToken(String email, String password) {
@@ -167,28 +167,32 @@ class PlatformStaffRevocationIT {
     return new ObjectMapper().readTree(body).path("error").asString();
   }
 
-  private ResponseEntity<JsonNode> putEnabled(
-      String actorToken, long targetId, boolean enabled, long version) {
+  private ResponseEntity<String> suspend(String actorToken, long targetId) {
     return rest.exchange(
-        "/platform/staff/" + targetId,
-        HttpMethod.PUT,
-        new HttpEntity<>(
-            updateBody(rolesJson("HQ管理者"), "ALL_STORES", "[]", enabled, version),
-            bearerJson(actorToken)),
-        JsonNode.class);
+        "/platform/staff-accounts/" + targetId + "/suspension",
+        HttpMethod.POST,
+        new HttpEntity<>(bearer(actorToken)),
+        String.class);
+  }
+
+  private ResponseEntity<String> resume(String actorToken, long targetId) {
+    return rest.exchange(
+        "/platform/staff-accounts/" + targetId + "/resumption",
+        HttpMethod.POST,
+        new HttpEntity<>(bearer(actorToken)),
+        String.class);
   }
 
   @Test
   @DisplayName("停止したユーザーの停止前に取得した JWT は GET /platform/me が 401 になること(ユーザー単位ブラックリスト即時反映)")
   void stoppingUserRevokesPreviouslyIssuedToken() {
-    PlatformUser target = ensureEnabledTestUser(STOP_EMAIL, "HQ管理者");
+    PlatformUser target = ensureEnabledTestUser(STOP_EMAIL, TARGET_ROLE);
     String targetToken = platformToken(STOP_EMAIL, TEST_PASSWORD);
     // 正向対照: 停止前は me が読めること(後段の拒否が停止起因である証明)。
     assertThat(meWith(targetToken).getStatusCode()).isEqualTo(HttpStatus.OK);
 
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
-    ResponseEntity<JsonNode> stop = putEnabled(admin, target.getId(), false, target.getVersion());
-    assertThat(stop.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(suspend(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     // ブラックリスト済みトークンは decoder の TokenBlacklistValidator が拒否し、resource-server の
     // AuthenticationEntryPoint が 401 で応答する(PlatformBridgeIT のログアウト検証と同じ規約)。
@@ -202,108 +206,74 @@ class PlatformStaffRevocationIT {
   @Test
   @DisplayName("再開すると、停止中に拒否されていた同一の旧 JWT が再び 200 になること")
   void resumingUserRevivesPreviouslyIssuedToken() {
-    PlatformUser target = ensureEnabledTestUser(RESUME_EMAIL, "HQ管理者");
+    PlatformUser target = ensureEnabledTestUser(RESUME_EMAIL, TARGET_ROLE);
     String targetToken = platformToken(RESUME_EMAIL, TEST_PASSWORD);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
-    ResponseEntity<JsonNode> stop = putEnabled(admin, target.getId(), false, target.getVersion());
-    assertThat(stop.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(suspend(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(meWith(targetToken).getStatusCode())
         .as("前提: 停止直後は拒否されること")
         .isEqualTo(HttpStatus.UNAUTHORIZED);
 
-    long stoppedVersion = stop.getBody().path("version").asLong();
-    ResponseEntity<JsonNode> resume = putEnabled(admin, target.getId(), true, stoppedVersion);
-    assertThat(resume.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(resume(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     assertThat(meWith(targetToken).getStatusCode())
         .as("再開後は停止前に発行された同一トークンが即時に復活すること")
         .isEqualTo(HttpStatus.OK);
   }
 
+  /**
+   * 拒否された停止が失効を書かないことを固定する。
+   *
+   * <p>旧 PUT 面には「停止と不正な店舗集合を同時送信して stop の後で失敗させる」経路があり、AFTER_COMMIT 相そのものを撃てた。停止専用端点には stop
+   * の後で失敗しうる入力が無いため、命題は「守衛に撥ねられた停止は何も書かない」へ弱める。
+   */
   @Test
-  @DisplayName(
-      "enabled=false と存在しない store_id を同時送信した更新が 400 でロールバックされ、" + "失効も反映されないこと(AFTER_COMMIT 相の証明)")
-  void rollbackOnInvalidStoreDoesNotBlacklistUser() {
-    PlatformUser target = ensureEnabledTestUser(ROLLBACK_EMAIL, "HQ管理者");
-    String targetToken = platformToken(ROLLBACK_EMAIL, TEST_PASSWORD);
-    String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
-
-    ResponseEntity<JsonNode> res =
-        rest.exchange(
-            "/platform/staff/" + target.getId(),
-            HttpMethod.PUT,
-            new HttpEntity<>(
-                updateBody(
-                    rolesJson("HQ管理者"), "SPECIFIC_STORES", "[999999]", false, target.getVersion()),
-                bearerJson(admin)),
-            JsonNode.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-
-    PlatformUser reloaded = platformUserRepository.findById(target.getId()).orElseThrow();
-    assertThat(reloaded.getEnabled()).as("ロールバックにより DB 上は enabled=true のまま").isTrue();
-    assertThat(redisTemplate.hasKey(USER_BLACKLIST_KEY_PREFIX + ROLLBACK_EMAIL))
-        .as("commit が失敗したためユーザー単位ブラックリストは書かれないこと(AFTER_COMMIT)")
-        .isNotEqualTo(true);
-    assertThat(meWith(targetToken).getStatusCode())
-        .as("ロールバックされたため旧トークンは引き続き有効なこと")
-        .isEqualTo(HttpStatus.OK);
-  }
-
-  @Test
-  @DisplayName("管理者が自分自身を enabled=false にしようとすると 400 で拒否され、自分のトークンは有効なままであること")
-  void selfStopIsRejectedAndAdminTokenStaysValid() {
+  @DisplayName("自己停止が 400 で拒否されると、ブラックリストは書かれず実行主体のトークンも有効なままであること")
+  void rejectedSuspensionDoesNotBlacklistUser() {
     String adminToken = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
     PlatformUser admin = platformUserRepository.findByEmail(ADMIN_EMAIL).orElseThrow();
 
-    ResponseEntity<JsonNode> res =
-        rest.exchange(
-            "/platform/staff/" + admin.getId(),
-            HttpMethod.PUT,
-            new HttpEntity<>(
-                updateBody(rolesJson("HQ管理者"), "ALL_STORES", "[]", false, admin.getVersion()),
-                bearerJson(adminToken)),
-            JsonNode.class);
+    assertThat(suspend(adminToken, admin.getId()).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    PlatformUser reloaded = platformUserRepository.findById(admin.getId()).orElseThrow();
+    assertThat(reloaded.getEnabled()).as("拒否されたため DB 上は enabled=true のまま").isTrue();
+    assertThat(redisTemplate.hasKey(USER_BLACKLIST_KEY_PREFIX + ADMIN_EMAIL))
+        .as("停止が成立していないためユーザー単位ブラックリストは書かれないこと")
+        .isNotEqualTo(true);
     assertThat(meWith(adminToken).getStatusCode())
         .as("自己停止が拒否されたため管理者自身のトークンは引き続き有効なこと")
         .isEqualTo(HttpStatus.OK);
   }
 
   @Test
-  @DisplayName("既に停止済みのユーザーへ enabled=false を再送すると 200 になり、ユーザー単位ブラックリストが再書込されること(冪等)")
+  @DisplayName("既に停止済みのユーザーへ停止を再送すると 204 になり、ユーザー単位ブラックリストが再書込されること(冪等)")
   void reSendingStopOnAlreadyStoppedUserRewritesBlacklistKey() {
-    PlatformUser target = ensureEnabledTestUser(IDEMPOTENT_EMAIL, "HQ管理者");
+    PlatformUser target = ensureEnabledTestUser(IDEMPOTENT_EMAIL, TARGET_ROLE);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
     String key = USER_BLACKLIST_KEY_PREFIX + IDEMPOTENT_EMAIL;
 
-    ResponseEntity<JsonNode> firstStop =
-        putEnabled(admin, target.getId(), false, target.getVersion());
-    assertThat(firstStop.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(suspend(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(redisTemplate.hasKey(key)).as("前提: 1 回目の停止でキーが書かれること").isEqualTo(true);
 
     redisTemplate.delete(key);
     assertThat(redisTemplate.hasKey(key)).as("前提: 手動削除でキーが消えていること").isNotEqualTo(true);
 
-    long stoppedVersion = firstStop.getBody().path("version").asLong();
-    ResponseEntity<JsonNode> secondStop = putEnabled(admin, target.getId(), false, stoppedVersion);
-
-    assertThat(secondStop.getStatusCode())
-        .as("既に停止済みの対象への再送も 200 で受理されること(結果語義の冪等性)")
-        .isEqualTo(HttpStatus.OK);
+    assertThat(suspend(admin, target.getId()).getStatusCode())
+        .as("既に停止済みの対象への再送も 204 で受理されること(結果語義の冪等性)")
+        .isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(redisTemplate.hasKey(key)).as("再送によりユーザー単位ブラックリストが再書込されること").isEqualTo(true);
   }
 
   @Test
-  @DisplayName("内容が同一の更新でも version が増えること（陳腐な更新がコミットできない前提の実証）")
+  @DisplayName("内容が同一の授権更新でも version が増えること（陳腐な更新がコミットできない前提の実証）")
   void noOpUpdateStillBumpsVersion() {
-    PlatformUser target = ensureEnabledTestUser(NOOP_EMAIL, "HQ管理者");
+    PlatformUser target = ensureEnabledTestUser(NOOP_EMAIL, HQ_ROLE);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
-    // 1 回目: enabled も束も店舗集合も現状と同一の payload を送る（実質 no-op）。
-    ResponseEntity<JsonNode> first = putEnabled(admin, target.getId(), true, target.getVersion());
+    // 1 回目: 束も店舗集合も現状と同一の payload を送る（実質 no-op）。
+    ResponseEntity<JsonNode> first = putGrants(admin, target.getId(), target.getVersion());
     assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
     long afterFirst = first.getBody().path("version").asLong();
 
@@ -313,20 +283,27 @@ class PlatformStaffRevocationIT {
     assertThat(afterFirst).as("内容同一でも version は増える").isEqualTo(target.getVersion() + 1);
 
     // 進んだ version により、古い version を持つ要求は 409 で弾かれる。
-    ResponseEntity<JsonNode> stale = putEnabled(admin, target.getId(), true, target.getVersion());
-    assertThat(stale.getStatusCode())
+    assertThat(putGrants(admin, target.getId(), target.getVersion()).getStatusCode())
         .as("陳腐な version の要求は 409 で弾かれること")
         .isEqualTo(HttpStatus.CONFLICT);
+  }
+
+  private ResponseEntity<JsonNode> putGrants(String actorToken, long targetId, long version) {
+    return rest.exchange(
+        "/platform/staff/" + targetId,
+        HttpMethod.PUT,
+        new HttpEntity<>(
+            updateBody(rolesJson(HQ_ROLE), "ALL_STORES", "[]", version), bearerJson(actorToken)),
+        JsonNode.class);
   }
 
   @Test
   @DisplayName("停止時に書き込まれるユーザー単位ブラックリストの TTL が JWT 有効期間(app.jwt.expiration)と一致すること")
   void blacklistKeyTtlMatchesJwtExpiration() {
-    PlatformUser target = ensureEnabledTestUser(TTL_EMAIL, "HQ管理者");
+    PlatformUser target = ensureEnabledTestUser(TTL_EMAIL, TARGET_ROLE);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
-    ResponseEntity<JsonNode> stop = putEnabled(admin, target.getId(), false, target.getVersion());
-    assertThat(stop.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(suspend(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     Long ttlMillis =
         redisTemplate.getExpire(USER_BLACKLIST_KEY_PREFIX + TTL_EMAIL, TimeUnit.MILLISECONDS);

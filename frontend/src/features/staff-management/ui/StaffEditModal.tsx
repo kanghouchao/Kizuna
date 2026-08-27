@@ -12,7 +12,7 @@ import {
   platformStaffApi,
 } from '@/entities/user';
 import { getApiErrorMessage, isConflict, useManagedList } from '@/shared/lib';
-import { Button, Dialog, DialogContent, DialogTitle, Form, FormField, Label } from '@/shared/ui';
+import { Button, Dialog, DialogContent, DialogTitle, Form, FormField } from '@/shared/ui';
 import { roleSetLabel } from '../lib/roleSetLabel';
 import { storeSetLabel } from '../lib/storeSetLabel';
 import { RolePicker } from './RolePicker';
@@ -38,7 +38,6 @@ interface StaffEditFormValues {
   role_ids: number[];
   store_scope_type: PlatformStoreScopeType;
   store_ids: number[];
-  enabled: boolean;
 }
 
 /** 対象スタッフからフォームの初期値を作る。prop が差し替わるたびにこれで組み直す。 */
@@ -49,12 +48,12 @@ function toFormValues(staff: PlatformStaffResponse): StaffEditFormValues {
     // 既定を全店舗にすると、保存操作がそのまま作用域の拡大になる。
     store_scope_type: staff.store_scope_type ?? 'SPECIFIC_STORES',
     store_ids: staff.store_ids ?? [],
-    enabled: staff.enabled,
   };
 }
 
 /**
- * スタッフの授権編集モーダル（ロール・店舗集合・停止/再開。「この設定の結果」要約付き）。
+ * スタッフの授権編集モーダル（ロール・店舗集合。「この設定の結果」要約付き）。
+ * 停止・再開はアカウント管理の面が担うので、ここには状態を動かす欄が無い。
  * 開いたときだけ mount される前提。ロール目録の取得は mount 時 = 開いた時点に遅延される。
  */
 export function StaffEditModal({
@@ -77,7 +76,6 @@ export function StaffEditModal({
   const roleIds = useWatch({ control, name: 'role_ids' });
   const storeScopeType = useWatch({ control, name: 'store_scope_type' });
   const storeIds = useWatch({ control, name: 'store_ids' });
-  const enabled = useWatch({ control, name: 'enabled' });
   const {
     items: roles,
     isLoading: rolesLoading,
@@ -169,32 +167,6 @@ export function StaffEditModal({
                 setValue('store_ids', next.storeIds);
               }}
             />
-            <div>
-              <span className="mb-1 block text-sm font-medium text-foreground">状態</span>
-              <div className="flex items-center gap-4">
-                <Label className="font-normal">
-                  <input
-                    type="radio"
-                    name="staff-enabled"
-                    checked={enabled}
-                    onChange={() => setValue('enabled', true)}
-                  />
-                  有効
-                </Label>
-                <Label className="font-normal">
-                  <input
-                    type="radio"
-                    name="staff-enabled"
-                    checked={!enabled}
-                    onChange={() => setValue('enabled', false)}
-                  />
-                  停止
-                </Label>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                停止してもアカウントは削除されず、過去の操作記録は保持されます。
-              </p>
-            </div>
             <div>
               <p className="mb-1 text-sm font-medium text-foreground">この設定の結果</p>
               <p className="rounded-md bg-primary/10 p-3 text-sm text-primary-strong">{summary}</p>
