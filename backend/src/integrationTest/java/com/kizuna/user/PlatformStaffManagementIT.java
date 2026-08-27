@@ -802,7 +802,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("停止(enabled=false)後はログイン不可だが一覧には残ること(停止後の記録保全)")
+  @DisplayName("停止後はログイン不可だが一覧には残ること(停止後の記録保全)")
   void stoppedStaffCannotLoginButRecordsRemain() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stopped@kizuna.test";
@@ -815,24 +815,16 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             JsonNode.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     long staffId = created.getBody().path("id").asLong();
-    long version = created.getBody().path("version").asLong();
 
-    // 停止（enabled=false）。授権内容は同値のまま。
-    ResponseEntity<JsonNode> stopped =
+    // 停止はアカウント管理面の専用端点で行う（授権面の PUT は enabled を受けない）。
+    ResponseEntity<Void> stopped =
         rest.exchange(
-            "/platform/staff/" + staffId,
-            HttpMethod.PUT,
-            new HttpEntity<>(
-                "{\"role_ids\":"
-                    + rolesJson(HQ_SIDE_ROLE)
-                    + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
-                    + "\"version\":"
-                    + version
-                    + "}",
-                bearerJson(hq)),
-            JsonNode.class);
-    assertThat(stopped.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(stopped.getBody().path("enabled").asBoolean()).isFalse();
+            "/platform/staff-accounts/" + staffId + "/suspension",
+            HttpMethod.POST,
+            new HttpEntity<>(bearer(hq)),
+            Void.class);
+    assertThat(stopped.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(findStaffByEmail(hq, email).path("enabled").asBoolean()).isFalse();
 
     // 停止後はログイン不可（DisabledException → 401）。
     ResponseEntity<JsonNode> login =
@@ -877,7 +869,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("同一 version の二連 PUT は 2 発目が 409 になり、授権・enabled が巻き戻らないこと(AC1)")
+  @DisplayName("同一 version の二連 PUT は 2 発目が 409 になり、授権が巻き戻らないこと(AC1)")
   void staleUpdateWithSameVersionIsRejectedWithoutRollback() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stale@kizuna.test";
@@ -911,26 +903,23 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         .as("更新成功の応答は増加した version を返すこと")
         .isGreaterThan(initialVersion);
 
-    // 2 発目: 同じ（陳腐化した）version で店舗集合を A へ戻し停止も試みる上書きは 409。
+    // 2 発目: 同じ（陳腐化した）version で店舗集合を A へ戻す上書きは 409。
     ResponseEntity<JsonNode> second =
         rest.exchange(
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                "{\"role_ids\":"
-                    + rolesJson(HQ_SIDE_ROLE)
-                    + ",\"store_scope_type\":\"SPECIFIC_STORES\",\"store_ids\":["
-                    + storeAId
-                    + "],\"enabled\":false,\"version\":"
-                    + initialVersion
-                    + "}",
+                updateBody(
+                    rolesJson(HQ_SIDE_ROLE),
+                    "SPECIFIC_STORES",
+                    "[" + storeAId + "]",
+                    initialVersion),
                 bearerJson(hq)),
             JsonNode.class);
     assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
 
-    // 授権・enabled は 1 発目の内容のまま巻き戻らない。
+    // 授権は 1 発目の内容のまま巻き戻らない。
     JsonNode target = findStaffByEmail(hq, email);
-    assertThat(target.path("enabled").asBoolean()).as("陳腐更新で停止へ巻き戻らないこと").isTrue();
     assertThat(target.path("store_ids")).hasSize(1);
     assertThat(target.path("store_ids").get(0).asLong())
         .as("店舗集合は 1 発目の B のまま残ること")
@@ -938,8 +927,8 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("陳腐 version による停止解除は 409 で拒否され、停止済みアカウントが静黙復活しないこと(AC2)")
-  void staleResumeIsRejectedAndUserStaysStopped() {
+  @DisplayName("停止は version を進め、停止前に読んだ陳腐 version の授権更新は 409 で拒否されること(AC2)")
+  void staleGrantUpdateAfterSuspensionIsRejected() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
     String email = "staff-it-stale-resume@kizuna.test";
 
@@ -953,42 +942,30 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
     long staffId = created.getBody().path("id").asLong();
     long preStopVersion = created.getBody().path("version").asLong();
 
-    // 現行 version で停止する（成功）。
-    ResponseEntity<JsonNode> stopped =
+    // アカウント管理面の端点で停止する（授権面の PUT は enabled を運べない）。
+    ResponseEntity<Void> stopped =
         rest.exchange(
-            "/platform/staff/" + staffId,
-            HttpMethod.PUT,
-            new HttpEntity<>(
-                "{\"role_ids\":"
-                    + rolesJson(HQ_SIDE_ROLE)
-                    + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":false,"
-                    + "\"version\":"
-                    + preStopVersion
-                    + "}",
-                bearerJson(hq)),
-            JsonNode.class);
-    assertThat(stopped.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(stopped.getBody().path("enabled").asBoolean()).isFalse();
+            "/platform/staff-accounts/" + staffId + "/suspension",
+            HttpMethod.POST,
+            new HttpEntity<>(bearer(hq)),
+            Void.class);
+    assertThat(stopped.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
-    // 停止前の陳腐 version による再開（enabled=true）の試みは 409。
-    ResponseEntity<JsonNode> resumeAttempt =
+    // 停止が version を進めるため、停止前に読んだ陳腐 version の授権更新は 409 になる。
+    // 停止を知らずに開いた編集フォームが、取り直しなしに授権へ作用することはない。
+    ResponseEntity<JsonNode> staleGrantUpdate =
         rest.exchange(
             "/platform/staff/" + staffId,
             HttpMethod.PUT,
             new HttpEntity<>(
-                "{\"role_ids\":"
-                    + rolesJson(HQ_SIDE_ROLE)
-                    + ",\"store_scope_type\":\"ALL_STORES\",\"store_ids\":[],\"enabled\":true,"
-                    + "\"version\":"
-                    + preStopVersion
-                    + "}",
+                updateBody(rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]", preStopVersion),
                 bearerJson(hq)),
             JsonNode.class);
-    assertThat(resumeAttempt.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(staleGrantUpdate.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
 
     // 停止のまま: 一覧でも enabled=false、ログインも不可。
     assertThat(findStaffByEmail(hq, email).path("enabled").asBoolean())
-        .as("陳腐 version の停止解除で停止済みアカウントが復活しないこと")
+        .as("陳腐 version の授権更新で停止済みアカウントが動かないこと")
         .isFalse();
     ResponseEntity<JsonNode> login =
         rest.postForEntity(

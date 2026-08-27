@@ -152,8 +152,8 @@ public class PlatformStaffAccountService {
   }
 
   /**
-   * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止を拒む。判定を役職名（HQ_ADMIN）でなく実効権限で行うのは、 管理が
-   * ROLE_MANAGE を含む自作ロールへ移った配備でも正しく数えるためである。
+   * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止を拒む。役職名でなく実効権限で数える理由は、ロール剥奪経路（{@link
+   * PlatformStaffService} の同名検査）に単源化してある。
    *
    * <p>母集団の行も押さえてから数え直す。押さえた問い合わせの結果を数えてはならない（待っている間に確定した降格を見ない — {@link
    * PlatformUserRepository#lockEnabledRoleHolderIds}）。
