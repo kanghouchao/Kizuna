@@ -2,12 +2,15 @@ package com.kizuna.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +55,7 @@ class PlatformStaffPasswordResetIT {
   private static final String RESUME_EMAIL = "pwreset-resume@kizuna.test";
   private static final String SECRET_EMAIL = "pwreset-secret@kizuna.test";
   private static final String TTL_EMAIL = "pwreset-ttl@kizuna.test";
+  private static final String MONOTONIC_EMAIL = "pwreset-monotonic@kizuna.test";
 
   /** 再設定の対象に使う店舗側ロール。HQ 側の権限を含まないので守衛 G6 に掛からない。 */
   private static final String TARGET_ROLE = "店長";
@@ -68,12 +72,20 @@ class PlatformStaffPasswordResetIT {
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RedisTemplate<String, Object> redisTemplate;
   @Autowired private AppProperties appProperties;
+  @Autowired private TokenBlacklistService tokenBlacklistService;
 
   /** 各テストで書かれ得る 2 系統の key を後始末する（テスト間の Redis 状態汚染を防ぐ）。 */
   @AfterEach
   void cleanupRedis() {
     for (String email :
-        List.of(ADMIN_EMAIL, RESET_EMAIL, REVOKE_EMAIL, RESUME_EMAIL, SECRET_EMAIL, TTL_EMAIL)) {
+        List.of(
+            ADMIN_EMAIL,
+            RESET_EMAIL,
+            REVOKE_EMAIL,
+            RESUME_EMAIL,
+            SECRET_EMAIL,
+            TTL_EMAIL,
+            MONOTONIC_EMAIL)) {
       redisTemplate.delete(USER_BLACKLIST_KEY_PREFIX + email);
       redisTemplate.delete(PASSWORD_RESET_KEY_PREFIX + email);
     }
@@ -254,7 +266,7 @@ class PlatformStaffPasswordResetIT {
     String adminToken = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
     PlatformUser admin = platformUserRepository.findByEmail(ADMIN_EMAIL).orElseThrow();
 
-    // 実行主体は必ず HQ 側ロールを持つため、自己再設定は G6 に吸収されて拒否される。
+    // 自己再設定は G6 に委ねず名指しで拒む（JWT の権限は写しで、降格後の残存セッションが G6 を素通りするため）。
     assertThat(resetPassword(adminToken, admin.getId()).getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
 
@@ -303,5 +315,18 @@ class PlatformStaffPasswordResetIT {
     assertThat(ttlMillis).isNotNull();
     assertThat(ttlMillis).isLessThanOrEqualTo(expiration);
     assertThat(ttlMillis).isGreaterThan(expiration - 60_000);
+  }
+
+  @Test
+  @DisplayName("再設定の記録は単調で、遅れて届いた古い時刻が新しい境界を巻き戻さないこと")
+  void passwordResetMarkerIsMonotonic() {
+    // 再設定が重なると commit 順と書込み順は一致しない。素の SET なら本テストは現在時刻へ巻き戻って赤になる。
+    String key = PASSWORD_RESET_KEY_PREFIX + MONOTONIC_EMAIL;
+    String newerBoundary = String.valueOf(Instant.now().getEpochSecond() + 600);
+    redisTemplate.opsForValue().set(key, newerBoundary, Duration.ofMinutes(5));
+
+    tokenBlacklistService.markPasswordReset(MONOTONIC_EMAIL);
+
+    assertThat(redisTemplate.opsForValue().get(key)).as("より新しい境界が残ること").isEqualTo(newerBoundary);
   }
 }

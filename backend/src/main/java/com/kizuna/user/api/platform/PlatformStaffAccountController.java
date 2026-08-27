@@ -63,8 +63,10 @@ public class PlatformStaffAccountController {
   /** 仮パスワードを発行して再設定する。生値を返すのはこの応答だけで、資源を作らないので 200 を返す。 */
   @PostMapping("/{id}/password-reset")
   @PreAuthorize("hasAuthority('PERM_STAFF_ACCOUNT_MANAGE')")
-  public ResponseEntity<StaffAccountPasswordResetResponse> resetPassword(@PathVariable Long id) {
+  public ResponseEntity<StaffAccountPasswordResetResponse> resetPassword(
+      @PathVariable Long id, Principal principal) {
     return ResponseEntity.ok(
-        new StaffAccountPasswordResetResponse(platformStaffAccountService.resetPassword(id)));
+        new StaffAccountPasswordResetResponse(
+            platformStaffAccountService.resetPassword(id, principal.getName())));
   }
 }

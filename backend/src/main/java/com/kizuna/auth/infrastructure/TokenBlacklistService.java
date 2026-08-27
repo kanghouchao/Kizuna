@@ -3,8 +3,10 @@ package com.kizuna.auth.infrastructure;
 import com.kizuna.shared.config.AppProperties;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
@@ -26,6 +28,15 @@ public class TokenBlacklistService {
 
   /** パスワード再設定の key 接頭辞。停止用の鍵と分けてあり、再開（{@link #clearUser}）では決して消さない。 */
   private static final String PASSWORD_RESET_KEY_PREFIX = "blacklist:password-reset:";
+
+  /** 既存値以上のときだけ書く（単調書込み）。巻き戻さないことは Redis 側の原子性で保証する。 */
+  private static final RedisScript<Long> MONOTONIC_MARK =
+      RedisScript.of(
+          "local cur = redis.call('GET', KEYS[1]) "
+              + "if cur and tonumber(cur) >= tonumber(ARGV[1]) then return 0 end "
+              + "redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2]) "
+              + "return 1",
+          Long.class);
 
   private final RedisTemplate<String, Object> redisTemplate;
   private final AppProperties appProperties;
@@ -110,14 +121,16 @@ public class TokenBlacklistService {
    *
    * <p>値は書込み時点（＝ commit 後）のエポック秒。TTL は {@link #blacklistUser} と同じ理由で JWT 有効期間ぶん取る —
    * その時間が経てば再設定前のトークンはどれも自身の期限切れで無効になっている。
+   *
+   * <p>書込みは Lua で単調化する。再設定が重なると commit 順と callback 実行順は一致せず、素の SET
+   * では遅れた古い時刻が新しい境界を巻き戻し、両境界の間に発行されたトークンが復活し得る。
    */
   public void markPasswordReset(String email) {
-    redisTemplate
-        .opsForValue()
-        .set(
-            PASSWORD_RESET_KEY_PREFIX + email,
-            String.valueOf(Instant.now().getEpochSecond()),
-            Duration.ofMillis(appProperties.getJwtExpiration()));
+    redisTemplate.execute(
+        MONOTONIC_MARK,
+        List.of(PASSWORD_RESET_KEY_PREFIX + email),
+        String.valueOf(Instant.now().getEpochSecond()),
+        String.valueOf(appProperties.getJwtExpiration()));
   }
 
   /** 記録済みのパスワード再設定時刻（エポック秒）を返す。記録が無ければ空。 */
