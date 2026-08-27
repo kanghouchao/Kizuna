@@ -36,4 +36,16 @@ describe('platformStaffAccountApi', () => {
 
     expect(apiClient.post).toHaveBeenCalledWith('/platform/staff-accounts/7/resumption');
   });
+
+  // 仮パスワードの生値はこの応答にしか現れないので、本体をそのまま返す
+  it('resetPassword は /platform/staff-accounts/{id}/password-reset を POST し応答本体を返す', async () => {
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({
+      data: { temporary_password: 'Ab3xYz9QmT2wKp7L' },
+    });
+
+    const res = await platformStaffAccountApi.resetPassword(7);
+
+    expect(res).toEqual({ temporary_password: 'Ab3xYz9QmT2wKp7L' });
+    expect(apiClient.post).toHaveBeenCalledWith('/platform/staff-accounts/7/password-reset');
+  });
 });

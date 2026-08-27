@@ -1,5 +1,5 @@
 import { apiClient, PageResult, fromSpringPage, toSpringPageParams } from '@/shared/api';
-import { StaffAccountSummaryResponse } from '../model/types';
+import { StaffAccountPasswordResetResponse, StaffAccountSummaryResponse } from '../model/types';
 
 /**
  * アカウント管理 API（本人種別 STAFF の全アカウントの閲覧と停止・再開）。
@@ -26,5 +26,10 @@ export const platformStaffAccountApi = {
   },
   resume: async (id: number): Promise<void> => {
     await apiClient.post(`/platform/staff-accounts/${id}/resumption`);
+  },
+  /** 仮パスワードを発行して再設定する。生値は戻り値にしか現れず、対象のセッションは即時に失効する。 */
+  resetPassword: async (id: number): Promise<StaffAccountPasswordResetResponse> => {
+    const response = await apiClient.post(`/platform/staff-accounts/${id}/password-reset`);
+    return response.data;
   },
 };
