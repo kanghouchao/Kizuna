@@ -48,7 +48,9 @@ import tools.jackson.databind.ObjectMapper;
 class CredentialVersionIT {
 
   private static final String TEST_PASSWORD = "pass";
-  private static final String NEW_PASSWORD = "new-pass-123";
+
+  /** 変更後パスワードのダミー値。実物と同形の字面はシークレット走査が誤検知するため、明示的な placeholder にする。 */
+  private static final String NEW_PASSWORD = "dummy-placeholder-password";
 
   private static final String CHANGE_EMAIL = "credver-change@kizuna.test";
   private static final String CLAIMLESS_EMAIL = "credver-claimless@kizuna.test";
