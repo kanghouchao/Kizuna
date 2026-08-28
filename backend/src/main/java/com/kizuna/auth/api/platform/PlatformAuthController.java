@@ -63,15 +63,13 @@ public class PlatformAuthController {
     return ResponseEntity.ok(authService.updateMe(principal.getName(), req.getDisplayName()));
   }
 
-  /** パスワード変更。成功時は現在のトークンを失効させるため、クライアントは再ログインが必要。 */
+  /** パスワード変更。版の増分により全端末のセッションが失効するため、クライアントは再ログインが必要。 */
   @PutMapping("/me/password")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<Void> changePassword(
-      Principal principal,
-      @RequestHeader(name = "Authorization", required = false) String authHeader,
-      @Valid @RequestBody PasswordChangeRequest request) {
+      Principal principal, @Valid @RequestBody PasswordChangeRequest request) {
     authService.changePassword(
-        principal.getName(), request.getCurrentPassword(), request.getNewPassword(), authHeader);
+        principal.getName(), request.getCurrentPassword(), request.getNewPassword());
     return ResponseEntity.noContent().build();
   }
 }

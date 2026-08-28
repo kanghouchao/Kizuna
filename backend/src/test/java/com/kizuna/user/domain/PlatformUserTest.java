@@ -217,6 +217,29 @@ class PlatformUserTest {
   }
 
   @Test
+  @DisplayName("stop は資格情報の版を増やし、resume は増やさない（再開で停止前セッションは復活しない — ADR 0022）")
+  void stopBumpsCredentialVersionAndResumeDoesNot() {
+    PlatformUser user = staffBuilder().build();
+    assertThat(user.getCredentialVersion()).isEqualTo(0L);
+
+    user.stop();
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+
+    user.resume();
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("changePassword は資格情報の版を増やす（全端末の既存セッションを失効させる — ADR 0022）")
+  void changePasswordBumpsCredentialVersion() {
+    PlatformUser user = staffBuilder().build();
+
+    user.changePassword("new-encoded-hash");
+
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+  }
+
+  @Test
   @DisplayName("updateDisplayName は表示名を更新する")
   void updateDisplayNameUpdatesDisplayName() {
     PlatformUser user = staffBuilder().build();

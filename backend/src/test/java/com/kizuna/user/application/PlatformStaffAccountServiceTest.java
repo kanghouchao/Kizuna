@@ -18,24 +18,20 @@ import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserPasswordReset;
+import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.PlatformUserResumed;
-import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
@@ -171,7 +167,9 @@ class PlatformStaffAccountServiceTest {
 
     assertThat(existing.getEnabled()).isFalse();
     verify(repository).saveAndFlush(existing);
-    verify(eventPublisher).publishEvent(new PlatformUserStopped("admin@kizuna.test"));
+    // stop() が版を 0→1 へ増やし、増えた確定値をイベントが運ぶ。
+    verify(eventPublisher)
+        .publishEvent(new PlatformUserCredentialsChanged("admin@kizuna.test", 1L));
   }
 
   @Test
@@ -205,7 +203,7 @@ class PlatformStaffAccountServiceTest {
   }
 
   @Test
-  @DisplayName("既に停止済みの対象への停止は不減零も stop も通さず、失効イベントだけを再発行すること（冪等）")
+  @DisplayName("既に停止済みの対象への停止は不減零も stop も通さず、現在の版を運ぶイベントだけを再発行すること（冪等）")
   void suspend_alreadyDisabled_republishesTheRevocationOnly() {
     PlatformUser existing = staff(3L, "stopped@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     existing.stop();
@@ -216,12 +214,14 @@ class PlatformStaffAccountServiceTest {
 
     verify(repository, never()).lockEnabledRoleHolderIds(any());
     verify(repository, never()).saveAndFlush(any());
-    verify(eventPublisher).publishEvent(new PlatformUserStopped("stopped@kizuna.test"));
+    // 版は増えない（stop() は走らない）が、キャッシュ反映の再送復旧のため現在値のイベントは発行される。
+    verify(eventPublisher)
+        .publishEvent(new PlatformUserCredentialsChanged("stopped@kizuna.test", 1L));
   }
 
   @Test
-  @DisplayName("停止済みの再開は enabled を戻し、解除イベントを発行すること")
-  void resume_disabledTarget_resumesAndPublishes() {
+  @DisplayName("停止済みの再開は enabled を戻し、失効機構には何も発行しないこと（旧セッションは復活しない）")
+  void resume_disabledTarget_resumesWithoutPublishing() {
     PlatformUser existing = staff(3L, "stopped@kizuna.test", Set.of(STORE_SIDE_ROLE));
     existing.stop();
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
@@ -230,19 +230,19 @@ class PlatformStaffAccountServiceTest {
 
     assertThat(existing.getEnabled()).isTrue();
     verify(repository).saveAndFlush(existing);
-    verify(eventPublisher).publishEvent(new PlatformUserResumed("stopped@kizuna.test"));
+    verifyNoInteractions(eventPublisher);
   }
 
   @Test
-  @DisplayName("既に有効な対象への再開も解除イベントを発行すること（冪等）")
-  void resume_alreadyEnabled_republishesTheReleaseOnly() {
+  @DisplayName("既に有効な対象への再開は 204 相当の no-op で、何も発行しないこと（冪等）")
+  void resume_alreadyEnabled_isANoOp() {
     PlatformUser existing = staff(3L, "enabled@kizuna.test", Set.of(STORE_SIDE_ROLE));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
 
     service.resume(3L);
 
     verify(repository, never()).saveAndFlush(any());
-    verify(eventPublisher).publishEvent(new PlatformUserResumed("enabled@kizuna.test"));
+    verifyNoInteractions(eventPublisher);
   }
 
   @Test
@@ -299,21 +299,16 @@ class PlatformStaffAccountServiceTest {
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
     when(passwordEncoder.encode(ArgumentMatchers.anyString())).thenReturn("encoded");
 
-    long beforeSeconds = Instant.now().getEpochSecond();
     String temporaryPassword = service.resetPassword(4L, "admin@kizuna.test");
-    long afterSeconds = Instant.now().getEpochSecond();
 
     // 返した生値そのものが符号化されて保存される（別の値を返す取り違えを排除する）。
     assertThat(temporaryPassword).hasSize(16);
     verify(passwordEncoder).encode(temporaryPassword);
     assertThat(existing.getPassword()).isEqualTo("encoded");
     verify(repository).saveAndFlush(existing);
-    ArgumentCaptor<PlatformUserPasswordReset> published =
-        ArgumentCaptor.forClass(PlatformUserPasswordReset.class);
-    verify(eventPublisher).publishEvent(published.capture());
-    assertThat(published.getValue().email()).isEqualTo("store-only@kizuna.test");
-    // 失効境界はイベント自身が運ぶ（callback 実行時刻だと遅延で境界が前へ這う）。
-    assertThat(published.getValue().resetAtSeconds()).isBetween(beforeSeconds, afterSeconds);
+    // changePassword() が版を 0→1 へ増やし、増えた確定値をイベントが運ぶ（全セッション失効の発火）。
+    verify(eventPublisher)
+        .publishEvent(new PlatformUserCredentialsChanged("store-only@kizuna.test", 1L));
     // 再設定は enabled もロールも動かさないので、不減零の直列化点は押さえない。
     verifyNoInteractions(permissionRepository);
   }

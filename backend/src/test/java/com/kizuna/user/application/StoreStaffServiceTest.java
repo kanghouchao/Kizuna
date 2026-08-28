@@ -17,8 +17,8 @@ import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
@@ -565,7 +565,9 @@ class StoreStaffServiceTest {
     service.update(1L, req);
 
     assertThat(target.getEnabled()).isFalse();
-    verify(eventPublisher).publishEvent(new PlatformUserStopped("clerk@kizuna.test"));
+    // stop() が版を 0→1 へ増やし、増えた確定値をイベントが運ぶ。
+    verify(eventPublisher)
+        .publishEvent(new PlatformUserCredentialsChanged("clerk@kizuna.test", 1L));
   }
 
   @Test

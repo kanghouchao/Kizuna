@@ -21,10 +21,9 @@ class TokenBlacklistValidatorTest {
   }
 
   @Test
-  @DisplayName("トークン・ユーザーいずれもブラックリスト未登録なら成功")
-  void succeedsWhenNeitherBlacklisted() {
+  @DisplayName("ブラックリスト未登録なら成功")
+  void succeedsWhenNotBlacklisted() {
     when(tokenBlacklistService.isBlacklisted("token-a")).thenReturn(false);
-    when(tokenBlacklistService.isUserBlacklisted("user@example.com")).thenReturn(false);
 
     OAuth2TokenValidatorResult result = validator.validate(jwt("token-a", "user@example.com"));
 
@@ -37,17 +36,6 @@ class TokenBlacklistValidatorTest {
     when(tokenBlacklistService.isBlacklisted("token-b")).thenReturn(true);
 
     OAuth2TokenValidatorResult result = validator.validate(jwt("token-b", "user@example.com"));
-
-    assertThat(result.hasErrors()).isTrue();
-  }
-
-  @Test
-  @DisplayName("ユーザー単位ブラックリスト登録済みなら失敗")
-  void failsWhenUserBlacklisted() {
-    when(tokenBlacklistService.isBlacklisted("token-c")).thenReturn(false);
-    when(tokenBlacklistService.isUserBlacklisted("stopped@example.com")).thenReturn(true);
-
-    OAuth2TokenValidatorResult result = validator.validate(jwt("token-c", "stopped@example.com"));
 
     assertThat(result.hasErrors()).isTrue();
   }

@@ -2,6 +2,7 @@ package com.kizuna.auth.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -34,6 +35,7 @@ class JwtDecoderConfigTest {
 
   private AppProperties appProperties;
   private TokenBlacklistService tokenBlacklistService;
+  private CredentialVersionService credentialVersionService;
   private JwtDecoder decoder;
 
   @BeforeEach
@@ -46,29 +48,39 @@ class JwtDecoderConfigTest {
 
     tokenBlacklistService = mock(TokenBlacklistService.class);
     lenient().when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(false);
-    lenient().when(tokenBlacklistService.isUserBlacklisted(anyString())).thenReturn(false);
+    credentialVersionService = mock(CredentialVersionService.class);
+    lenient().when(credentialVersionService.isCurrent(anyString(), anyLong())).thenReturn(true);
 
     decoder =
         new JwtDecoderConfig()
-            .jwtDecoder(appProperties, new TokenBlacklistValidator(tokenBlacklistService));
+            .jwtDecoder(
+                appProperties,
+                new TokenBlacklistValidator(tokenBlacklistService),
+                new CredentialVersionValidator(credentialVersionService));
   }
 
   private String issueToken(String issuer, long expirationMillis) {
+    return issueToken(issuer, expirationMillis, true);
+  }
+
+  private String issueToken(String issuer, long expirationMillis, boolean withCredentialVersion) {
     JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
     Instant now = Instant.now();
     // 期限切れケース（expirationMillis 負値）でも exp が iat より後になるよう、iat を固定で過去へ置く
     // （Jwt は構築時に expiresAt.isAfter(issuedAt) を要求するため）。
     Instant issuedAt = now.minusSeconds(10);
-    JwtClaimsSet claimsSet =
+    JwtClaimsSet.Builder claims =
         JwtClaimsSet.builder()
             .issuer(issuer)
             .subject("user@kizuna.test")
             .issuedAt(issuedAt)
             .expiresAt(now.plusMillis(expirationMillis))
-            .claim("authorities", List.of("PERM_TEST"))
-            .build();
+            .claim("authorities", List.of("PERM_TEST"));
+    if (withCredentialVersion) {
+      claims.claim(CredentialVersionService.CLAIM, 0L);
+    }
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-    return encoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
+    return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
   }
 
   @Test
@@ -107,10 +119,19 @@ class JwtDecoderConfigTest {
   }
 
   @Test
-  @DisplayName("ユーザー単位ブラックリスト登録済みの token は拒否されること")
-  void rejectsUserBlacklistedToken() {
-    when(tokenBlacklistService.isUserBlacklisted("user@kizuna.test")).thenReturn(true);
+  @DisplayName("資格情報の版が現在と不一致の token は拒否されること")
+  void rejectsStaleCredentialVersionToken() {
+    when(credentialVersionService.isCurrent("user@kizuna.test", 0L)).thenReturn(false);
     String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L);
+
+    assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+  }
+
+  @Test
+  @DisplayName("資格情報の版 claim を欠く token は、他の検証を全て通っても拒否されること（移行期なし）")
+  void rejectsTokenWithoutCredentialVersionClaim() {
+    // isCurrent は無条件 true に stub 済み — それでも拒否されるなら claim 欠落そのものが拒否理由である。
+    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L, false);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
   }

@@ -1,31 +1,23 @@
 package com.kizuna.auth.application;
 
+import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserPasswordReset;
-import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.PlatformUserResumed;
-import com.kizuna.user.domain.PlatformUserStopped;
+import com.kizuna.user.domain.PlatformUserCredentialsChanged;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 認証セッション（発行済み JWT が表す認証状態）の失効。 ログアウトとパスワード変更が共用する唯一の失効経路 — 資格情報を変えるユースケースは必ずここを通すこと（controller
- * で個別に組み立てない）。
- *
- * <p>スタッフ停止・再開によるユーザー単位の一括失効もここへ集約する（#403）。イベント経由にしている理由は {@link PlatformUserStopped}
- * を参照（モジュール環の回避）。
+ * 認証セッション（発行済み JWT が表す認証状態）の失効。ログアウト（トークン単位）と、資格情報の版の変更 （パスワード変更・再設定・停止 — アカウント単位、ADR
+ * 0022）が共用する唯一の失効経路。資格情報を変える ユースケースは必ず {@link PlatformUserCredentialsChanged}
+ * を発行してここを通すこと（controller で個別に組み立てない）。
  *
  * <p>backend/CLAUDE.md の既定はモジュール間イベントを {@code @ApplicationModuleListener}（= 非同期 + イベント発行レジストリ）で
- * 受けることだが、本用途だけは同期の {@code @EventListener} + 手書きの commit 後同期を用いる（#403 裁定）。停止は解雇・懲戒等の
- * 即時性が要る安全制御であり、(1) 非同期だと管理者が 200 を受け取った時点でまだ失効が書かれていない窓が残る、(2) 失効の書き込みが失敗しても 操作者に伝わらない、の 2
- * 点が許容できないため。
+ * 受けることだが、本用途だけは同期の {@code @EventListener} + 手書きの commit 後同期を用いる。停止・再設定は 即時性が要る安全制御であり、(1)
+ * 非同期だと管理者が 200 を受け取った時点でまだ失効が書かれていない窓が残る、(2) 失効の書き込みが失敗しても 操作者に伝わらない、の 2 点が許容できないため。
  *
  * <p>(2) のために {@code @TransactionalEventListener(AFTER_COMMIT)} は使えない。同注釈の AFTER_COMMIT は {@code
  * TransactionSynchronization.afterCommit()} ではなく {@code afterCompletion(STATUS_COMMITTED)} から
@@ -35,85 +27,24 @@ import org.springframework.transaction.support.TransactionTemplate;
  * invokeAfterCommit}）だけが例外を伝播させる（PR #435 codex 指摘）。
  */
 @Service
+@RequiredArgsConstructor
 public class AuthSessionService {
 
   private final TokenBlacklistService tokenBlacklistService;
-  private final PlatformUserRepository platformUserRepository;
-
-  /** 確定済みの行を読むための独立トランザクション（{@link #isEnabledNow} の説明を参照）。 */
-  private final TransactionTemplate freshContext;
-
-  public AuthSessionService(
-      TokenBlacklistService tokenBlacklistService,
-      PlatformUserRepository platformUserRepository,
-      PlatformTransactionManager transactionManager) {
-    this.tokenBlacklistService = tokenBlacklistService;
-    this.platformUserRepository = platformUserRepository;
-    this.freshContext = new TransactionTemplate(transactionManager);
-    this.freshContext.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    this.freshContext.setReadOnly(true);
-  }
+  private final CredentialVersionService credentialVersionService;
 
   /**
-   * スタッフ停止イベントを受けてユーザー単位ブラックリストへ登録する（commit 後）。
+   * 資格情報の版の変更イベントを受けて、確定済みの版を版キャッシュへ反映する（commit 後）。
    *
-   * <p>commit 後に書く理由: commit 前に Redis へ書いてしまうと「Redis 書き込みは成功したが commit は失敗した」場合に ブラックリストの残渣が残り、実際には
-   * enabled=true のまま（＝罪のない）ユーザーが最長 JWT 有効期間ぶん（既定 1 時間） ログイン不能になる（再ログインで得た新しい token も email
-   * 単位の鍵で同様に弾かれてしまう）。commit 後なら最悪でも 「停止は成功したが失効の反映が ≤1 時間遅れる」だけで済み、最新 version を取り直して同じ停止要求を再送すれば
-   * 復旧できる（発行条件が結果語義であるため — {@code PlatformStaffService.update} 参照）。
+   * <p>commit 後に書く理由: commit 前に書いてしまうと「Redis 書き込みは成功したが commit は失敗した」場合に 増えていない版がキャッシュへ残り、実際には
+   * 旧版のままの（＝罪のない）ユーザーの正当なトークンが最長 TTL ぶん拒否される。 commit 後なら最悪でも「変更は成功したが反映が遅れる」だけで済み、同じ要求の再送で書き直せる。
+   *
+   * <p>イベントが運ぶ確定値をそのまま単調書込みするため、並行する変更の callback 実行順が commit 順と 逆転しても最大の版へ収束する。再開は失効機構に何も書かないので、
+   * 逆向きの書き込みと競合することも無く、確定状態の読み直しは要らない。
    */
   @EventListener
-  public void onPlatformUserStopped(PlatformUserStopped event) {
-    afterCommit(
-        () -> {
-          if (!isEnabledNow(event.email())) {
-            tokenBlacklistService.blacklistUser(event.email());
-          }
-        });
-  }
-
-  /** スタッフ再開イベントを受けてユーザー単位ブラックリストを解除する（commit 後）。理由は {@link #onPlatformUserStopped} と同じ。 */
-  @EventListener
-  public void onPlatformUserResumed(PlatformUserResumed event) {
-    afterCommit(
-        () -> {
-          if (isEnabledNow(event.email())) {
-            tokenBlacklistService.clearUser(event.email());
-          }
-        });
-  }
-
-  /**
-   * 確定済みの enabled を読み直す（イベントのスナップショットには従わない）。
-   *
-   * <p>塞いでいるのは停止と再開が並行したときの<b>コールバック実行順の逆転</b>である。停止 → 再開の順にコミットしても、 先行する停止の commit
-   * 後処理が後続の再開のコミットより後ろへずれ込むと、確定状態は enabled=true なのに停止側が 鍵を書いてしまい、有効なユーザーが TTL
-   * 満了まで締め出される。逆順なら停止済みユーザーが解封される（安全上より重い）。 各コールバックが確定状態を読み直せば、どちらの順で走っても最終状態へ収束する。
-   *
-   * <p>独立トランザクション（{@code REQUIRES_NEW}）が必須である点に注意。commit 後処理の時点では commit 済みトランザクションの EntityManager
-   * がまだスレッドに束縛されており、そのまま問い合わせると Hibernate は永続化コンテキストで管理中の （＝この要求が読んだ時点の）インスタンスを返し、行の最新値を捨ててしまう。
-   *
-   * <p>ユーザー不在は「停止相当」（false）として扱う — 判断がつかない場合は失効側へ倒す。
-   */
-  private boolean isEnabledNow(String email) {
-    return Boolean.TRUE.equals(
-        freshContext.execute(
-            status ->
-                platformUserRepository
-                    .findByEmail(email)
-                    .map(PlatformUser::getEnabled)
-                    .orElse(false)));
-  }
-
-  /**
-   * パスワード再設定イベントを受けて再設定時刻を記録する（commit 後）。commit 後に書く理由は {@link #onPlatformUserStopped} と同じ。
-   *
-   * <p>停止・再開と違い確定状態の読み直しは要らない。再設定には逆操作が無く、コールバックの実行順が入れ替わっても 記録された時刻が前後するだけで収束先は変わらない。
-   */
-  @EventListener
-  public void onPlatformUserPasswordReset(PlatformUserPasswordReset event) {
-    afterCommit(
-        () -> tokenBlacklistService.markPasswordReset(event.email(), event.resetAtSeconds()));
+  public void onCredentialsChanged(PlatformUserCredentialsChanged event) {
+    afterCommit(() -> credentialVersionService.reflect(event.email(), event.credentialVersion()));
   }
 
   /**

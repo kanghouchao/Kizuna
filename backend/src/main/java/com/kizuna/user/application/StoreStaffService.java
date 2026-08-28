@@ -14,9 +14,8 @@ import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.PlatformUserResumed;
-import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
@@ -187,14 +186,12 @@ public class StoreStaffService {
     if (Boolean.TRUE.equals(req.getEnabled()) && !user.getEnabled()) {
       user.resume();
     }
-    // 失効の即時反映は「本リクエストが停止/再開を明示的に要求したか」で判定する（現在状態との差分ではない）。
-    // 差分語義だと、AFTER_COMMIT の Redis 書き込みが失敗して 500 になった後の再送でイベントが
-    // 発行されず、resume→stop 以外に復旧手段が無くなる。
+    // 失効の即時反映は「本リクエストが停止を明示的に要求したか」で判定する（現在状態との差分ではない）。
+    // 差分語義だと、commit 後のキャッシュ反映が失敗して 500 になった後の再送でイベントが発行されず、
+    // 復旧手段が無くなる。再開は失効機構に何もしない — 版は戻らず、停止前のセッションは復活しない（ADR 0022）。
     if (Boolean.FALSE.equals(req.getEnabled())) {
-      eventPublisher.publishEvent(new PlatformUserStopped(user.getEmail()));
-    }
-    if (Boolean.TRUE.equals(req.getEnabled())) {
-      eventPublisher.publishEvent(new PlatformUserResumed(user.getEmail()));
+      eventPublisher.publishEvent(
+          new PlatformUserCredentialsChanged(user.getEmail(), user.getCredentialVersion()));
     }
     return toResponse(save(user), roleNames, delegationRoleIds, scope);
   }
