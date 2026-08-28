@@ -26,8 +26,8 @@ _Avoid_: PlatformAccount、「テナントユーザー」系の呼称
 統一ログイン（`/platform/login`）はロールに応じて自動ルーティングする（HQ_ADMIN → Central、STORE_MANAGER/STORE_STAFF → Store）。店舗コンソールは平台トークン + `X-Store-ID` を集合作用域（授権店舗集合）で fail-closed 検証したうえで旧業務 API に過橋する（#324）。この過橋機構は撤去せず恒久的に運用する（旧 CentralUser/StoreUser の二本立て認証自体は #326 で撤去済み）。過橋資格（店舗コンソール権限の保持）はログイン時に JWT の `storeBridge` claim として確立され、`GET /platform/me` の `store_bridge` にも同源で露出される（フロントエンドに権限→コンソールの対応表を複製させない — #428）。
 
 **AuthSession（認証セッション）**:
-発行済みの 1 枚の JWT が表す認証状態。失効には 2 つの粒度がある。**セッション単位失効**（ログアウト・パスワード変更 = token ブラックリスト）は当該 1 枚のトークンのみを失効させる。**アカウント単位失効**（スタッフ停止 = user ブラックリスト）は当該ユーザーが保有する全セッションを一括して即時失効させ、再開すれば即時に解除される。
-_Avoid_: Token の裸使用（token は担体、session は概念）
+発行済みの 1 枚の JWT が表す認証状態。トークンは発行時点の**資格情報の版**（credential version — 利用者ごとの単調増分。パスワード再設定・自助変更・停止で増える）を運び、現在の版と一致しないトークンは失効している（ADR 0022）。失効には 2 つの粒度がある。**セッション単位失効**（ログアウト）は当該 1 枚のトークンのみを失効させる。**アカウント単位失効**（版の増分）は当該ユーザーの全セッションを一括して即時失効させ、復活は無い — 再開後も再ログインを要する。
+_Avoid_: Token の裸使用（token は担体、session は概念）、時刻境界（iat 比較）で失効を判定すること
 
 **集合作用域（StoreScope / storeSetFilter / @StoreSetScoped）**:
 PlatformUser の授権を表す店舗集合（ALL_STORES または SPECIFIC_STORES の店舗 ID 集合）。読みは Hibernate の第二 filter（`storeSetFilter`）が機構的に濾過する fail-closed 設計（解決不能なら例外）。書きは明示的単一 storeId を受け取り、その storeId が授権集合に含まれるか検証したうえで既存の単店機構（StoreContext + storeFilter）へ委譲する。
