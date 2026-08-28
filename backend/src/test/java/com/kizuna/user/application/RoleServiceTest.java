@@ -323,7 +323,8 @@ class RoleServiceTest {
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
     when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(GUARDED_ROLE), Set.of());
+        .thenReturn(Set.of(GUARDED_ROLE))
+        .thenReturn(Set.of());
     lenient()
         .when(platformUserRepository.findEnabledRoleHolderIds(Set.of(GUARDED_ROLE)))
         .thenReturn(List.of(3L));
