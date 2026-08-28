@@ -23,12 +23,15 @@ function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
+// duration-200 / fill-mode は Popup（200ms）と退出アニメーションを揃える必須指定。
+// アンマウントは最長アニメーションの終了まで遅延するため、既定値（150ms・fill-mode:none）
+// では背景だけ先に再生を終えて素の不透明度へ戻り、閉じるたびに全面が一瞬明滅する。
 function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-black/50 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0',
+        'fixed inset-0 z-50 bg-black/50 duration-200 data-closed:animate-out data-closed:fade-out-0 data-closed:fill-mode-forwards data-open:animate-in data-open:fade-in-0',
         className
       )}
       {...props}
