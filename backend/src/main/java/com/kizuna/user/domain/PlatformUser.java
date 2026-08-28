@@ -45,6 +45,13 @@ public class PlatformUser extends BaseEntity {
   @Column(nullable = false)
   private String password;
 
+  /**
+   * 資格情報の版（ADR 0022）。パスワード変更・再設定・停止で単調に増え、発行済みトークンの claim との 相等比較でセッションを即時失効させる。楽観ロックの version
+   * とは別物（あちらは無関係な更新でも増える）。
+   */
+  @Column(name = "credential_version", nullable = false)
+  private Long credentialVersion = 0L;
+
   @Column(name = "display_name", nullable = false, length = 150)
   private String displayName;
 
@@ -126,9 +133,10 @@ public class PlatformUser extends BaseEntity {
     this.storeIds = new HashSet<>(stores);
   }
 
-  /** 停止する（enabled=false）。行は削除せず、過去の実行主体の記録を保持する。 */
+  /** 停止する（enabled=false）。行は削除せず、過去の実行主体の記録を保持する。版も増やし、発行済みセッションを即時失効させる。 */
   public void stop() {
     this.enabled = false;
+    this.credentialVersion++;
   }
 
   /** 再開する（enabled=true）。 */
@@ -153,9 +161,10 @@ public class PlatformUser extends BaseEntity {
     this.lineUserId = lineUserId;
   }
 
-  /** エンコード済みパスワードで置き換える（呼び出し側で符号化済みであること）。 */
+  /** エンコード済みパスワードで置き換える（呼び出し側で符号化済みであること）。版も増やし、全端末の既存セッションを失効させる。 */
   public void changePassword(String encodedPassword) {
     this.password = encodedPassword;
+    this.credentialVersion++;
   }
 
   private static void validateRoleGrant(UserType userType, Set<Long> roles) {

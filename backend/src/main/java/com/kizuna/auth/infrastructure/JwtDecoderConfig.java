@@ -21,7 +21,9 @@ public class JwtDecoderConfig {
 
   @Bean
   public JwtDecoder jwtDecoder(
-      AppProperties appProperties, TokenBlacklistValidator tokenBlacklistValidator) {
+      AppProperties appProperties,
+      TokenBlacklistValidator tokenBlacklistValidator,
+      CredentialVersionValidator credentialVersionValidator) {
     SecretKey secretKey = HmacSecretKeyFactory.create(appProperties);
     NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(secretKey).macAlgorithm(MacAlgorithm.HS256).build();
@@ -32,7 +34,9 @@ public class JwtDecoderConfig {
             new JwtTimestampValidator(Duration.ZERO),
             // 発行は PlatformAuth の 1 箇所のみ。/files 等ドメイン外パスも含め全リクエスト単一 issuer で揃える。
             new JwtIssuerValidator(PlatformJwtIssuer.ISSUER_PLATFORM),
-            tokenBlacklistValidator));
+            tokenBlacklistValidator,
+            // 版の照合は miss 時に DB へ届く最も重い検証のため、連鎖の最後に置く。
+            credentialVersionValidator));
     return decoder;
   }
 }

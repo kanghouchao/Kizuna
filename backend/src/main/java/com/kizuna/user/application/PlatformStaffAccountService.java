@@ -9,10 +9,8 @@ import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserPasswordReset;
+import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.PlatformUserResumed;
-import com.kizuna.user.domain.PlatformUserStopped;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
@@ -21,7 +19,6 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.security.SecureRandom;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -148,7 +145,10 @@ public class PlatformStaffAccountService {
       target.stop();
       repository.saveAndFlush(target);
     }
-    eventPublisher.publishEvent(new PlatformUserStopped(target.getEmail()));
+    // 停止済みへの再送では版は増えないが、現在値を運ぶイベントは毎回発行する — commit 後の
+    // キャッシュ反映が失敗した場合に、同じ要求の再送で反映を書き直せるようにするため。
+    eventPublisher.publishEvent(
+        new PlatformUserCredentialsChanged(target.getEmail(), target.getCredentialVersion()));
   }
 
   /**
@@ -174,7 +174,7 @@ public class PlatformStaffAccountService {
     target.changePassword(passwordEncoder.encode(temporaryPassword));
     repository.saveAndFlush(target);
     eventPublisher.publishEvent(
-        new PlatformUserPasswordReset(target.getEmail(), Instant.now().getEpochSecond()));
+        new PlatformUserCredentialsChanged(target.getEmail(), target.getCredentialVersion()));
     return temporaryPassword;
   }
 
@@ -185,7 +185,7 @@ public class PlatformStaffAccountService {
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
-  /** 再開する。既に有効でも 204 で受理し、解除イベントを発行する（停止と同じ理由の冪等化）。 */
+  /** 再開する。既に有効でも 204 で受理する（冪等）。失効機構には何もしない — 停止で増えた版は戻らないため、 停止前のセッションは復活せず再ログインを要する（ADR 0022）。 */
   @Transactional
   public void resume(Long id) {
     PlatformUser target = requireStaffAccount(id);
@@ -193,7 +193,6 @@ public class PlatformStaffAccountService {
       target.resume();
       repository.saveAndFlush(target);
     }
-    eventPublisher.publishEvent(new PlatformUserResumed(target.getEmail()));
   }
 
   /**

@@ -18,6 +18,7 @@ import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -35,6 +36,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -51,7 +53,7 @@ class PlatformAuthServiceTest {
   @Mock private PermissionRepository permissionRepository;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private PlatformJwtIssuer jwtIssuer;
-  @Mock private AuthSessionService authSessionService;
+  @Mock private ApplicationEventPublisher eventPublisher;
   @Mock private AuthenticationManager authenticationManager;
   @Mock private Authentication authentication;
 
@@ -152,6 +154,8 @@ class PlatformAuthServiceTest {
     assertThat(claims).doesNotContainKey("role");
     assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
     assertThat(claims.get("storeIds")).isEqualTo(List.of());
+    // 発行時点の資格情報の版が claim に載る（ADR 0022 — 検証側が相等比較する前提値）。
+    assertThat(claims.get("credentialVersion")).isEqualTo(0L);
   }
 
   @Test
@@ -378,27 +382,26 @@ class PlatformAuthServiceTest {
     when(passwordEncoder.matches("wrong", "stored-hash")).thenReturn(false);
 
     assertThatThrownBy(
-            () ->
-                authService.changePassword(
-                    "admin@kizuna.test", "wrong", "new-password-123", "Bearer tok"))
+            () -> authService.changePassword("admin@kizuna.test", "wrong", "new-password-123"))
         .isInstanceOf(ServiceException.class);
 
     verify(userRepository, never()).save(any());
-    verify(authSessionService, never()).invalidate(any());
+    verify(eventPublisher, never()).publishEvent(any());
   }
 
   @Test
-  void changePassword_success_encodesSavesAndInvalidatesSession() {
+  void changePassword_success_encodesSavesAndPublishesBumpedCredentialVersion() {
     PlatformUser user = hqAdmin();
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("current-pass", "stored-hash")).thenReturn(true);
     when(passwordEncoder.encode("new-password-123")).thenReturn("new-encoded-hash");
 
-    authService.changePassword(
-        "admin@kizuna.test", "current-pass", "new-password-123", "Bearer tok");
+    authService.changePassword("admin@kizuna.test", "current-pass", "new-password-123");
 
     assertThat(user.getPassword()).isEqualTo("new-encoded-hash");
     verify(userRepository).save(user);
-    verify(authSessionService).invalidate("Bearer tok");
+    // 版の増分がイベントで運ばれ、commit 後にキャッシュへ反映される（全端末失効の発火）。
+    verify(eventPublisher)
+        .publishEvent(new PlatformUserCredentialsChanged("admin@kizuna.test", 1L));
   }
 }

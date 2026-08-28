@@ -56,7 +56,7 @@ class PlatformAuthIT {
 
   private static final String INVALID_CREDENTIALS_MESSAGE = "メールアドレスまたはパスワードが正しくありません";
   private static final String DISABLED_ACCOUNT_MESSAGE = "アカウントが無効化されています";
-  private static final String STALE_SESSION_MESSAGE = "セッションが無効です。再度ログインしてください";
+  private static final String UNAUTHENTICATED_MESSAGE = "認証に失敗しました";
 
   @Autowired private TestRestTemplate rest;
   @Autowired private RoleRepository roleRepository;
@@ -247,9 +247,9 @@ class PlatformAuthIT {
 
   @Test
   @DisplayName(
-      "利用者行の消えた有効トークンの GET /platform/me は 401 + セッション無効文言を返すこと"
+      "利用者行の消えた有効トークンの GET /platform/me は 401 を返すこと"
           + "（404 でないこと = 無効なのはセッションで、前端の全域 401 経路が再ログインへ差し戻す）")
-  void meWithValidTokenForVanishedUserReturns401StaleSession() {
+  void meWithValidTokenForVanishedUserReturns401() {
     platformUserRepository
         .findByEmail(ORPHAN_EMAIL)
         .orElseGet(
@@ -272,8 +272,12 @@ class PlatformAuthIT {
 
     ResponseEntity<JsonNode> res = getPlatformMe(token);
 
+    // 主体不在は資格情報の版の照合（ADR 0022）が decode 段階で fail-closed に拒否する。本テストは
+    // 版キャッシュが冷えた状態（削除前に認証済み要求が無い）を構成しており、決定的にこちらの経路へ入る。
+    // キャッシュが温かい間は decode を通り controller の StaleSessionException（別文言）に落ちるが、
+    // どちらの経路でも 401 であり、前端の全域 401 経路（再ログインへの差し戻し）は変わらない。
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-    assertThat(res.getBody().path("error").asString()).isEqualTo(STALE_SESSION_MESSAGE);
+    assertThat(res.getBody().path("error").asString()).isEqualTo(UNAUTHENTICATED_MESSAGE);
   }
 
   /** 種子の既定束「店長」を名称で解決する（束はデータ — id を決め打ちしない）。 */

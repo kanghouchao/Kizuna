@@ -35,6 +35,15 @@ databaseChangeLog:
                     nullable: false
                   remarks: bcrypt ハッシュ
               - column:
+                  # 資格情報の版（ADR 0022）。パスワード変更・再設定・停止で単調増分し、
+                  # 発行済み JWT の claim と相等比較してセッションを即時失効させる。
+                  name: credential_version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 資格情報の版（単調増分。楽観ロックの version とは別）
+              - column:
                   name: display_name
                   type: VARCHAR(150)
                   constraints:

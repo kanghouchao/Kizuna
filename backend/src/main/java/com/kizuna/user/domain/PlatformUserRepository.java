@@ -94,6 +94,13 @@ public interface PlatformUserRepository
           + " where h.id = u.id and rid in :roleIds)")
   List<Long> findEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);
 
+  /**
+   * 資格情報の版だけをスカラー投影で返す（版キャッシュの miss 時の埋め戻し用）。実体を読まないのは、認証フィルタの 毎要求経路で
+   * ElementCollection（ロール・店舗集合）まで読み込む無駄を避けるため。
+   */
+  @Query("select u.credentialVersion from PlatformUser u where u.email = :email")
+  Optional<Long> findCredentialVersionByEmail(@Param("email") String email);
+
   /** 指定ロールを授与されたユーザーが 1 人でも存在するか（ロール削除の事前検証）。 */
   @Query(
       "select count(u) > 0 from com.kizuna.user.domain.PlatformUser u"

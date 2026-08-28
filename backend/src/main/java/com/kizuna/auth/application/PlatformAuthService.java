@@ -9,6 +9,7 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.UserType;
@@ -22,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -47,8 +49,8 @@ public class PlatformAuthService {
   private final PermissionRepository permissionRepository;
   private final PasswordEncoder passwordEncoder;
   private final PlatformJwtIssuer jwtIssuer;
-  private final AuthSessionService authSessionService;
   private final AuthenticationManager authenticationManager;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
   public Token login(String email, String password) {
@@ -80,6 +82,9 @@ public class PlatformAuthService {
     claims.put("storeBridge", hasStoreConsole(permissions));
     claims.put("storeScopeType", user.getStoreScopeType().name());
     claims.put("storeIds", new ArrayList<>(user.getStoreIds()));
+    // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止で
+    // 即時に不一致となる（ADR 0022）。
+    claims.put("credentialVersion", user.getCredentialVersion());
     return jwtIssuer.issue(user.getEmail(), claims);
   }
 
@@ -101,10 +106,9 @@ public class PlatformAuthService {
     return toMeResponse(user);
   }
 
-  /** パスワード変更。成功時は現在のセッションを失効させる（要再ログイン）。 */
+  /** パスワード変更。版の増分により当該トークンを含む全端末のセッションが失効する（要再ログイン、ADR 0022）。 */
   @Transactional
-  public void changePassword(
-      String email, String currentPassword, String newPassword, String currentToken) {
+  public void changePassword(String email, String currentPassword, String newPassword) {
     PlatformUser user =
         userRepository
             .findByEmail(email)
@@ -114,7 +118,8 @@ public class PlatformAuthService {
     }
     user.changePassword(passwordEncoder.encode(newPassword));
     userRepository.save(user);
-    authSessionService.invalidate(currentToken);
+    eventPublisher.publishEvent(
+        new PlatformUserCredentialsChanged(user.getEmail(), user.getCredentialVersion()));
   }
 
   private PlatformMeResponse toMeResponse(PlatformUser user) {

@@ -2,15 +2,12 @@ package com.kizuna.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -33,10 +30,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * HQ 管理者によるパスワード再設定（{@code POST /platform/staff-accounts/{id}/password-reset}）を本物の PostgreSQL +
- * Redis で固定する統合テスト。実行主体は種子の HQ 管理者 admin@kizuna.test。
- *
- * <p>専用鍵（{@code blacklist:password-reset:}）を停止用の鍵と分けてある理由そのものを {@link
- * #resumingAfterResetDoesNotReviveThePreResetToken} が固定する — 鍵を共用すると無関係な再開 1 回で再設定前のセッションが蘇る。
+ * Redis で固定する統合テスト。実行主体は種子の HQ 管理者 admin@kizuna.test。失効は資格情報の版の照合（ADR 0022）で
+ * 時刻の解釈を伴わないため、断言前に秒境界を跨ぐ sleep を置く必要は無い。
  *
  * <p>対象は repository 直挿の専用テストユーザーのみを使う（種子ユーザーの資格情報を書き換えると後続 IT が連鎖破綻するため）。{@link
  * PlatformStaffRevocationIT} と同じ理由で {@code CrossStoreTestSupport} は継承しない。
@@ -55,16 +50,11 @@ class PlatformStaffPasswordResetIT {
   private static final String RESUME_EMAIL = "pwreset-resume@kizuna.test";
   private static final String SECRET_EMAIL = "pwreset-secret@kizuna.test";
   private static final String TTL_EMAIL = "pwreset-ttl@kizuna.test";
-  private static final String MONOTONIC_EMAIL = "pwreset-monotonic@kizuna.test";
 
   /** 再設定の対象に使う店舗側ロール。HQ 側の権限を含まないので守衛 G6 に掛からない。 */
   private static final String TARGET_ROLE = "店長";
 
-  private static final String USER_BLACKLIST_KEY_PREFIX = "blacklist:users:";
-  private static final String PASSWORD_RESET_KEY_PREFIX = "blacklist:password-reset:";
-
-  /** 同一秒に発行された旧トークンは意図的に生き残るため、旧トークンと再設定の間に 1 秒以上空ける。 */
-  private static final long SECOND_BOUNDARY_MILLIS = 1_100L;
+  private static final String CREDENTIAL_VERSION_KEY_PREFIX = "credential-version:";
 
   @Autowired private TestRestTemplate rest;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -72,22 +62,13 @@ class PlatformStaffPasswordResetIT {
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RedisTemplate<String, Object> redisTemplate;
   @Autowired private AppProperties appProperties;
-  @Autowired private TokenBlacklistService tokenBlacklistService;
 
-  /** 各テストで書かれ得る 2 系統の key を後始末する（テスト間の Redis 状態汚染を防ぐ）。 */
+  /** 各テストで書かれ得る版キャッシュの key を後始末する（テスト間の Redis 状態汚染を防ぐ。次のアクセスは DB から埋め戻される）。 */
   @AfterEach
   void cleanupRedis() {
     for (String email :
-        List.of(
-            ADMIN_EMAIL,
-            RESET_EMAIL,
-            REVOKE_EMAIL,
-            RESUME_EMAIL,
-            SECRET_EMAIL,
-            TTL_EMAIL,
-            MONOTONIC_EMAIL)) {
-      redisTemplate.delete(USER_BLACKLIST_KEY_PREFIX + email);
-      redisTemplate.delete(PASSWORD_RESET_KEY_PREFIX + email);
+        List.of(ADMIN_EMAIL, RESET_EMAIL, REVOKE_EMAIL, RESUME_EMAIL, SECRET_EMAIL, TTL_EMAIL)) {
+      redisTemplate.delete(CREDENTIAL_VERSION_KEY_PREFIX + email);
     }
   }
 
@@ -196,7 +177,7 @@ class PlatformStaffPasswordResetIT {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     String temporary = temporaryPasswordOf(response);
 
-    // 再設定と同じ秒に発行される token も受理される（比較が厳密な iat < resetAt であることの実証）。
+    // 再設定と同じ秒に発行される token も受理される（判定が時刻でなく版の相等比較であることの実証）。
     String newToken = platformToken(RESET_EMAIL, temporary);
     assertThat(meWith(newToken).getStatusCode())
         .as("仮パスワードで得た新しいトークンは通ること")
@@ -204,31 +185,29 @@ class PlatformStaffPasswordResetIT {
   }
 
   @Test
-  @DisplayName("再設定前に発行された JWT は再設定直後に 401 になること")
-  void resetRevokesPreviouslyIssuedTokens() throws InterruptedException {
+  @DisplayName("再設定前に発行された JWT は再設定直後に 401 になること（同一秒でも sleep なしで即時）")
+  void resetRevokesPreviouslyIssuedTokens() {
     PlatformUser target = ensureResettableTestUser(REVOKE_EMAIL);
     String oldToken = platformToken(REVOKE_EMAIL, TEST_PASSWORD);
     assertThat(meWith(oldToken).getStatusCode()).as("前提: 再設定前は me が読めること").isEqualTo(HttpStatus.OK);
 
-    // 旧トークンの iat が再設定時刻と同じ秒に落ちると意図どおり生き残るため、秒境界を跨がせる。
-    Thread.sleep(SECOND_BOUNDARY_MILLIS);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
     assertThat(resetPassword(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.OK);
 
+    // 版照合は時刻を解釈しないため、同一秒に発行された旧トークンも sleep なしで即時に不一致になる。
     assertThat(meWith(oldToken).getStatusCode())
         .as("再設定前に発行された JWT は即時に拒否されること")
         .isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
-  /** 専用鍵の独立性を固定する。停止用の鍵を共用する実装だと、再開が {@code clearUser} で鍵を消してしまい 再設定前のトークンが蘇るため、この命題が赤になる。 */
+  /** 再開が失効機構に何もしないことを再設定と組み合わせて固定する。停止で増えた版も再設定で増えた版も、再開では戻らない。 */
   @Test
-  @DisplayName("再設定後に停止・再開しても、再設定前のトークンは 401 のままであること（専用鍵が再開で消えない）")
-  void resumingAfterResetDoesNotReviveThePreResetToken() throws InterruptedException {
+  @DisplayName("再設定後に停止・再開しても、再設定前のトークンは 401 のままであること（再開は版を戻さない）")
+  void resumingAfterResetDoesNotReviveThePreResetToken() {
     PlatformUser target = ensureResettableTestUser(RESUME_EMAIL);
     String oldToken = platformToken(RESUME_EMAIL, TEST_PASSWORD);
     assertThat(meWith(oldToken).getStatusCode()).as("前提: 再設定前は me が読めること").isEqualTo(HttpStatus.OK);
 
-    Thread.sleep(SECOND_BOUNDARY_MILLIS);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
     String temporary = temporaryPasswordOf(resetPassword(admin, target.getId()));
 
@@ -236,7 +215,7 @@ class PlatformStaffPasswordResetIT {
     assertThat(resume(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     assertThat(meWith(oldToken).getStatusCode())
-        .as("再開は停止の鍵しか解かない — 再設定前のトークンは失効したままであること")
+        .as("再開は版を戻さない — 再設定前のトークンは失効したままであること")
         .isEqualTo(HttpStatus.UNAUTHORIZED);
     // 対照: 再開後の対象自身は仮パスワードで正常にログインできる（失効が過剰に効いていない）。
     assertThat(meWith(platformToken(RESUME_EMAIL, temporary)).getStatusCode())
@@ -270,9 +249,9 @@ class PlatformStaffPasswordResetIT {
     assertThat(resetPassword(adminToken, admin.getId()).getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
 
-    assertThat(redisTemplate.hasKey(PASSWORD_RESET_KEY_PREFIX + ADMIN_EMAIL))
-        .as("拒否されたため再設定の記録は書かれないこと")
-        .isNotEqualTo(true);
+    assertThat(platformUserRepository.findCredentialVersionByEmail(ADMIN_EMAIL).orElseThrow())
+        .as("拒否されたため資格情報の版は増えないこと")
+        .isEqualTo(admin.getCredentialVersion());
     assertThat(meWith(adminToken).getStatusCode())
         .as("自己再設定が拒否されたため管理者自身のトークンは引き続き有効なこと")
         .isEqualTo(HttpStatus.OK);
@@ -301,33 +280,19 @@ class PlatformStaffPasswordResetIT {
   }
 
   @Test
-  @DisplayName("再設定で書き込まれる専用キーの TTL が JWT 有効期間(app.jwt.expiration)と一致すること")
-  void passwordResetKeyTtlMatchesJwtExpiration() {
+  @DisplayName("再設定で書き込まれる版キャッシュの TTL が JWT 有効期間(app.jwt.expiration)と一致すること")
+  void credentialVersionCacheTtlMatchesJwtExpiration() {
     PlatformUser target = ensureResettableTestUser(TTL_EMAIL);
     String admin = platformToken(ADMIN_EMAIL, TEST_PASSWORD);
 
     assertThat(resetPassword(admin, target.getId()).getStatusCode()).isEqualTo(HttpStatus.OK);
 
     Long ttlMillis =
-        redisTemplate.getExpire(PASSWORD_RESET_KEY_PREFIX + TTL_EMAIL, TimeUnit.MILLISECONDS);
-    // 下界も固定する: 上界だけだと TTL を 1 秒に誤設定しても緑のままで、AC「JWT 有効期間と一致」を守れない。
+        redisTemplate.getExpire(CREDENTIAL_VERSION_KEY_PREFIX + TTL_EMAIL, TimeUnit.MILLISECONDS);
+    // 下界も固定する: 上界だけだと TTL を 1 秒に誤設定しても緑のままで、AC「TTL = JWT 有効期間」を守れない。
     long expiration = appProperties.getJwtExpiration();
     assertThat(ttlMillis).isNotNull();
     assertThat(ttlMillis).isLessThanOrEqualTo(expiration);
     assertThat(ttlMillis).isGreaterThan(expiration - 60_000);
-  }
-
-  @Test
-  @DisplayName("再設定の記録は単調で、遅れて届いた古い時刻が新しい境界を巻き戻さないこと")
-  void passwordResetMarkerIsMonotonic() {
-    // 再設定が重なると commit 順と callback 実行順は一致しない。素の SET なら本テストは古い境界へ巻き戻って赤になる。
-    String key = PASSWORD_RESET_KEY_PREFIX + MONOTONIC_EMAIL;
-    long newerSeconds = Instant.now().getEpochSecond();
-    String newerBoundary = String.valueOf(newerSeconds);
-    redisTemplate.opsForValue().set(key, newerBoundary, Duration.ofMinutes(5));
-
-    tokenBlacklistService.markPasswordReset(MONOTONIC_EMAIL, newerSeconds - 30);
-
-    assertThat(redisTemplate.opsForValue().get(key)).as("より新しい境界が残ること").isEqualTo(newerBoundary);
   }
 }

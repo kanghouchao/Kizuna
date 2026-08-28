@@ -93,40 +93,4 @@ class TokenBlacklistServiceTest {
 
     verify(redisTemplate, never()).opsForValue();
   }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  void blacklistUser_writesUserKeyWithJwtExpirationTtl() {
-    ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
-    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-
-    service.blacklistUser("stopped@kizuna.test");
-
-    verify(valueOperations)
-        .set(
-            eq("blacklist:users:stopped@kizuna.test"),
-            eq("1"),
-            eq(Duration.ofMillis(JWT_EXPIRATION_MILLIS)));
-  }
-
-  @Test
-  void clearUser_deletesUserKey() {
-    service.clearUser("resumed@kizuna.test");
-
-    verify(redisTemplate).delete("blacklist:users:resumed@kizuna.test");
-  }
-
-  @Test
-  void isUserBlacklisted_true_whenKeyExists() {
-    when(redisTemplate.hasKey("blacklist:users:blocked@kizuna.test")).thenReturn(true);
-
-    assertThat(service.isUserBlacklisted("blocked@kizuna.test")).isTrue();
-  }
-
-  @Test
-  void isUserBlacklisted_false_whenKeyAbsent() {
-    when(redisTemplate.hasKey("blacklist:users:clean@kizuna.test")).thenReturn(false);
-
-    assertThat(service.isUserBlacklisted("clean@kizuna.test")).isFalse();
-  }
 }
