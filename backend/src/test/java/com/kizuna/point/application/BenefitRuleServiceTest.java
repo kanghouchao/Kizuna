@@ -3,6 +3,7 @@ package com.kizuna.point.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
@@ -18,6 +19,7 @@ import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +40,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 class BenefitRuleServiceTest {
 
   @Mock private BenefitRuleRepository benefitRuleRepository;
+
+  @Mock private StoreExistenceCheck storeExistenceCheck;
 
   @Spy private BenefitRuleMapperImpl benefitRuleMapper;
 
@@ -110,6 +114,24 @@ class BenefitRuleServiceTest {
     assertThat(response.type()).isEqualTo("REFERRAL");
     assertThat(response.referrerPoints()).isEqualTo(1000);
     assertThat(response.referredPoints()).isEqualTo(500);
+  }
+
+  @Test
+  @DisplayName("実在しない店舗を指した規則は保存前に撥ねられること")
+  void missingStoreIsRejectedBeforePersistence() {
+    BenefitRuleCreateRequest request = new BenefitRuleCreateRequest();
+    request.setName("消えた店舗の規則");
+    request.setType(BenefitRuleType.VISIT);
+    request.setStoreScopeType(StoreScopeType.SPECIFIC_STORES);
+    request.setStoreIds(Set.of(99L));
+    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
+    request.setPoints(100);
+    when(storeExistenceCheck.exists(99L)).thenReturn(false);
+
+    assertThatThrownBy(() -> benefitRuleService.create(request))
+        .isInstanceOf(InvalidBenefitRuleException.class)
+        .hasMessageContaining("店舗が見つかりません");
+    verifyNoInteractions(benefitRuleRepository);
   }
 
   @Test

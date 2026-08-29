@@ -31,6 +31,7 @@ import org.hibernate.annotations.BatchSize;
  *   <li>店舗集合は {@code SPECIFIC_STORES} なら非空、{@code ALL_STORES} なら空。
  *   <li>点数は種別が形を決める — 紹介は紹介者・被紹介者の二値、それ以外は一値で、いずれも 1 以上。
  *   <li>適用期間は開始 ≦ 終了。付与ポイント有効期間は 1 以上。
+ *   <li>紹介規則は毎回のみ。一回性は条件側（被紹介者の初回受注）にあり、紹介者は紹介した人数ぶん受益する。
  * </ol>
  *
  * <p>規則は停用で退場し、削除しない（付与仕訳が FK RESTRICT で指し返す）。停用は一方通行で、停用済みは再定義も受け付けない。
@@ -127,9 +128,7 @@ public class BenefitRule extends BaseEntity {
         definition.effectiveFrom(), definition.effectiveUntil(), definition.grantValidityDays());
     validatePoints(
         this.type, definition.points(), definition.referrerPoints(), definition.referredPoints());
-    if (definition.repeatPolicy() == null) {
-      throw new InvalidBenefitRuleException("重複可否は必須です");
-    }
+    validateRepeatPolicy(this.type, definition.repeatPolicy());
 
     this.name = definition.name().trim();
     this.storeScopeType = definition.storeScopeType();
@@ -162,6 +161,18 @@ public class BenefitRule extends BaseEntity {
     }
     if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
       throw new InvalidBenefitRuleException("全店舗の規則に個別店舗を指定できません");
+    }
+  }
+
+  private static void validateRepeatPolicy(
+      BenefitRuleType type, BenefitRuleRepeatPolicy repeatPolicy) {
+    if (repeatPolicy == null) {
+      throw new InvalidBenefitRuleException("重複可否は必須です");
+    }
+    // 紹介の一回性は条件側（被紹介者の初回有料受注）にあり、紹介者は紹介した人数ぶん受益する。
+    // 一人一回限りを許すと、記帳側が重複可否を見た瞬間に二人目以降の紹介が黙って無報酬になる。
+    if (type == BenefitRuleType.REFERRAL && repeatPolicy != BenefitRuleRepeatPolicy.EVERY_TIME) {
+      throw new InvalidBenefitRuleException("紹介規則は毎回のみを取れます");
     }
   }
 

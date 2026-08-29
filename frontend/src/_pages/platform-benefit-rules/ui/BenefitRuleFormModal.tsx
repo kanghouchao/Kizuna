@@ -14,7 +14,7 @@ import {
 } from '@/entities/benefit-rule';
 import { PlatformStore } from '@/entities/user';
 import { StoreSetPicker } from '@/features/staff-management';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { getApiErrorMessage, integerRule, isConflict, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -121,6 +121,7 @@ export function BenefitRuleFormModal({
   const type = useWatch({ control, name: 'type' });
   const storeScopeType = useWatch({ control, name: 'store_scope_type' });
   const storeIds = useWatch({ control, name: 'store_ids' });
+  const repeatPolicy = useWatch({ control, name: 'repeat_policy' });
 
   // 届いた詳細をフォームへ移し終えたか。移した相手を持つのは、取り直しで届く別の詳細も
   // 同じ経路で載せ直すため
@@ -153,6 +154,14 @@ export function BenefitRuleFormModal({
       setValue('store_ids', []);
     }
   }, [type, storeScopeType, setValue]);
+
+  // 紹介の一回性は条件側（被紹介者の初回受注）にあり、紹介者は紹介した人数ぶん受益する。
+  // 一人一回限りを選べる形で見せると、二人目以降が黙って無報酬になる規則を作らせてしまう
+  useEffect(() => {
+    if (type === 'REFERRAL' && repeatPolicy !== 'EVERY_TIME') {
+      setValue('repeat_policy', 'EVERY_TIME');
+    }
+  }, [type, repeatPolicy, setValue]);
 
   // 404 は何度押しても取れないので再試行を出さない（削除の口は無いが、消えた店舗を
   // 参照する古いリンク等で届きうる）。読めなかっただけの失敗とは提示の形を分ける。
@@ -190,7 +199,15 @@ export function BenefitRuleFormModal({
       onSaved();
       onClose();
     } catch (error) {
-      notify.error(getApiErrorMessage(error, '特典規則の保存に失敗しました'));
+      if (isConflict(error)) {
+        // 楽観ロック競合。詳細を取り直さないと古い version を抱えたままになり、再試行が同じ
+        // 409 を繰り返す。一覧側も内容が変わりうるので再取得する。
+        notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+        onSaved();
+        void reloadEditingRule();
+      } else {
+        notify.error(getApiErrorMessage(error, '特典規則の保存に失敗しました'));
+      }
     }
   };
 
@@ -338,7 +355,10 @@ export function BenefitRuleFormModal({
               <FormField
                 control={control}
                 name="grant_validity_days"
-                rules={{ min: { value: 1, message: '有効期間は 1 日以上で入力してください' } }}
+                rules={{
+                  min: { value: 1, message: '有効期間は 1 日以上で入力してください' },
+                  validate: { integer: integerRule('付与ポイントの有効期間') },
+                }}
                 render={({ field }) => (
                   <FormItem className="gap-1">
                     <FormLabel>付与ポイントの有効期間（日）</FormLabel>
@@ -360,6 +380,7 @@ export function BenefitRuleFormModal({
                       items={BENEFIT_RULE_REPEAT_POLICY_OPTIONS}
                       value={field.value}
                       onValueChange={v => field.onChange(v as BenefitRuleRepeatPolicy)}
+                      disabled={isReferral}
                       required
                     >
                       <FormControl>
@@ -375,6 +396,11 @@ export function BenefitRuleFormModal({
                         ))}
                       </SelectContent>
                     </Select>
+                    {isReferral && (
+                      <FormDescription className="text-xs">
+                        紹介規則は毎回のみです（紹介者は紹介した人数ぶん受益し、一回性は被紹介者の初回受注が担います）
+                      </FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -387,6 +413,7 @@ export function BenefitRuleFormModal({
                     rules={{
                       required: '紹介者点数を入力してください',
                       min: { value: 1, message: '紹介者点数は 1 以上で入力してください' },
+                      validate: { integer: integerRule('紹介者点数') },
                     }}
                     render={({ field }) => (
                       <FormItem className="gap-1">
@@ -404,6 +431,7 @@ export function BenefitRuleFormModal({
                     rules={{
                       required: '被紹介者点数を入力してください',
                       min: { value: 1, message: '被紹介者点数は 1 以上で入力してください' },
+                      validate: { integer: integerRule('被紹介者点数') },
                     }}
                     render={({ field }) => (
                       <FormItem className="gap-1">
@@ -423,6 +451,7 @@ export function BenefitRuleFormModal({
                   rules={{
                     required: '付与ポイントを入力してください',
                     min: { value: 1, message: '付与ポイントは 1 以上で入力してください' },
+                    validate: { integer: integerRule('付与ポイント') },
                   }}
                   render={({ field }) => (
                     <FormItem className="gap-1">

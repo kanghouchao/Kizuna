@@ -164,6 +164,12 @@ databaseChangeLog:
               ALTER TABLE t_benefit_rules
               ADD CONSTRAINT ck_t_benefit_rules_grant_validity CHECK (
                 grant_validity_days IS NULL OR grant_validity_days > 0)
+        # 紹介の一回性は条件側（被紹介者の初回受注）にあり、紹介者は紹介した人数ぶん受益する。
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_referral_every_time CHECK (
+                type <> 'REFERRAL' OR repeat_policy = 'EVERY_TIME')
         # 発火事象が店舗文脈を持たないログイン規則は全店舗のみを取る。
         - sql:
             sql: >-
