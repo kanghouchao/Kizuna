@@ -4,6 +4,8 @@ import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
 import { Button, Label, RegionError } from '@/shared/ui';
 
 interface StoreSetPickerProps {
+  /** 見出し。既定は授権の語彙で、店舗集合を別の意味で使う面（特典規則の発火範囲など）が言い換える。 */
+  label?: string;
   /** 店舗目録。取得は呼び出し元（一覧ページ）が 1 回だけ行い、ここでは取得しない。 */
   stores: PlatformStore[];
   isLoading: boolean;
@@ -18,6 +20,7 @@ interface StoreSetPickerProps {
 
 /** 「全店舗」ラジオ+個別店舗チェックボックスの2択で店舗集合を編集する共通部品。 */
 export function StoreSetPicker({
+  label = '担当店舗',
   stores,
   isLoading,
   failed,
@@ -35,7 +38,7 @@ export function StoreSetPicker({
 
   return (
     <div>
-      <span className="mb-1 block text-sm font-medium text-foreground">担当店舗</span>
+      <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
       <div className="space-y-2">
         <Label className="font-normal">
           <input

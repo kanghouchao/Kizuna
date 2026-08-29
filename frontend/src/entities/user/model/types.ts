@@ -24,6 +24,7 @@ export type PlatformPermission =
   | 'SYSTEM_CONFIG_MANAGE'
   | 'PLATFORM_MENU_VIEW'
   | 'PLATFORM_ASSET_MANAGE'
+  | 'BENEFIT_MANAGE'
   | 'STORE_VIEW'
   | 'ORDER_SET_MANAGE'
   | 'ORDER_MANAGE'
