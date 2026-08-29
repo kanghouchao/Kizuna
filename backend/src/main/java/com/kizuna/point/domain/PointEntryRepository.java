@@ -101,6 +101,22 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
           + " where r.orderId = e.orderId)")
   List<PointEntry> findRolledBackCreditsAmong(@Param("creditIds") Collection<Long> creditIds);
 
+  /**
+   * その会員がその規則で既に受益しているか。重複可否「一人一回限り」の判定。
+   *
+   * <p>取り消された付与も受益として数える。巻き戻しは「その受注の授受を打ち消した」記録であって「受益しなかったこと」に する操作ではなく、取消の有無で一回性が復活すると、
+   * 消費し切った付与（取消が積まれない）と部分消費とで結論が分かれる。誤って焼いた一回性の手当ては手動調整の領分。
+   */
+  boolean existsByBenefitRuleIdAndMemberId(Long benefitRuleId, Long memberId);
+
+  /**
+   * その発火事象（根拠受注）で、その会員がその規則の付与を既に受けているか。
+   *
+   * <p>同一の発火事象を二度記帳することは重複可否に依らず不正。帰属の無効化と再申領で同じ受注が二度契機になりうるため、 毎回付与の規則でもこの判定は要る。
+   */
+  boolean existsByBenefitRuleIdAndMemberIdAndOrderId(
+      Long benefitRuleId, Long memberId, String orderId);
+
   /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
 

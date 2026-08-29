@@ -27,7 +27,7 @@ import lombok.NoArgsConstructor;
  * <ol>
  *   <li>増減 0 の仕訳は作れない。取りうる向きは種別が決める（{@link PointEntryType}）。有効期限を持てるのは新しいロットになる加算だけ。
  *   <li>引き当ては減算と利用取消だけが持ち、その合計は増減の絶対値に一致する。これにより加算ロットの消費済み量が引き当ての合計だけで求まる。
- *   <li>付与と利用は受注 ID、取消と利用取消は元の仕訳 ID、手動調整は理由と冪等キーを必ず持つ。
+ *   <li>付与と利用は受注 ID、取消と利用取消は元の仕訳 ID、手動調整は理由と冪等キー、特典付与は産地の規則 ID を必ず持つ。
  * </ol>
  */
 @Entity
@@ -57,6 +57,10 @@ public class PointEntry extends BaseEntity {
 
   @Column(name = "order_id", updatable = false, length = 64)
   private String orderId;
+
+  /** 付与を産んだ特典規則。特典付与だけが設定し、この指し返しが規則の物理削除を封じる（FK RESTRICT）。 */
+  @Column(name = "benefit_rule_id", updatable = false)
+  private Long benefitRuleId;
 
   /** 打ち消す元の仕訳。取消（加算ロット）と利用取消（元の利用）だけが設定する。 */
   @Column(name = "original_entry_id", updatable = false)
@@ -100,6 +104,7 @@ public class PointEntry extends BaseEntity {
       LocalDate expiresOn,
       Long originatingStoreId,
       String orderId,
+      Long benefitRuleId,
       Long originalEntryId,
       Long actorUserId,
       String reason,
@@ -114,7 +119,7 @@ public class PointEntry extends BaseEntity {
     }
     validateSign(entryType, amount);
     validateExpiryAndAllocations(entryType, amount, expiresOn, allocations);
-    validateReferences(entryType, orderId, originalEntryId, reason, idempotencyKey);
+    validateReferences(entryType, orderId, benefitRuleId, originalEntryId, reason, idempotencyKey);
 
     this.entryType = entryType;
     this.memberId = memberId;
@@ -122,6 +127,7 @@ public class PointEntry extends BaseEntity {
     this.expiresOn = expiresOn;
     this.originatingStoreId = originatingStoreId;
     this.orderId = orderId;
+    this.benefitRuleId = benefitRuleId;
     this.originalEntryId = originalEntryId;
     this.actorUserId = actorUserId;
     this.reason = reason;
@@ -168,12 +174,18 @@ public class PointEntry extends BaseEntity {
   private static void validateReferences(
       PointEntryType entryType,
       String orderId,
+      Long benefitRuleId,
       Long originalEntryId,
       String reason,
       String idempotencyKey) {
     if ((entryType == PointEntryType.ORDER_GRANT || entryType == PointEntryType.USE)
         && (orderId == null || orderId.isBlank())) {
       throw new InvalidPointEntryException("受注 ID は必須です");
+    }
+    // 産地の規則を名乗らない特典付与は「なぜこの点数か」を辿れず、規則の物理削除も封じられない。
+    // 逆に規則を名乗る他種別は、取消方法（種別から導く）の定まらない行になる。
+    if ((entryType == PointEntryType.BENEFIT_GRANT) != (benefitRuleId != null)) {
+      throw new InvalidPointEntryException("特典規則を名乗れるのは特典付与だけで、特典付与は必ず名乗ります");
     }
     if ((entryType == PointEntryType.CANCEL || entryType == PointEntryType.USE_CANCEL)
         && originalEntryId == null) {
@@ -216,6 +228,44 @@ public class PointEntry extends BaseEntity {
         storeId,
         orderId,
         null,
+        null,
+        actorUserId,
+        null,
+        null,
+        null,
+        List.of());
+  }
+
+  /**
+   * 特典規則が産んだ付与。有効期限は規則の「付与ポイント有効期間」から呼出側が算出して渡す（無期限なら null）。
+   *
+   * <p>受注 ID を必須にするのは、投産済みの種別が受注を条件とするものだけだからである。受注を名乗らなければ、
+   * 受注から辿る巻き戻しがこの行を永久に見つけられない。ログイン条件の特典を投産するときは、この要求と {@code PointEntryTypeTest}
+   * の枚挙を同時に見直すこと（枚挙が先に赤くなる）。
+   */
+  public static PointEntry grantForBenefit(
+      Long memberId,
+      String orderId,
+      Long storeId,
+      int amount,
+      LocalDate expiresOn,
+      Long benefitRuleId,
+      Long actorUserId) {
+    if (amount <= 0) {
+      throw new InvalidPointEntryException("特典の付与ポイントは 1 以上で指定してください");
+    }
+    if (orderId == null || orderId.isBlank()) {
+      throw new InvalidPointEntryException("受注 ID は必須です");
+    }
+    return new PointEntry(
+        PointEntryType.BENEFIT_GRANT,
+        memberId,
+        amount,
+        expiresOn,
+        storeId,
+        orderId,
+        benefitRuleId,
+        null,
         actorUserId,
         null,
         null,
@@ -241,6 +291,7 @@ public class PointEntry extends BaseEntity {
         null,
         storeId,
         orderId,
+        null,
         null,
         actorUserId,
         null,
@@ -269,6 +320,7 @@ public class PointEntry extends BaseEntity {
         delta,
         expiresOn,
         storeId,
+        null,
         null,
         null,
         actorUserId,
@@ -306,6 +358,7 @@ public class PointEntry extends BaseEntity {
         storeId,
         null,
         null,
+        null,
         actorUserId,
         reason,
         idempotencyKey,
@@ -337,6 +390,7 @@ public class PointEntry extends BaseEntity {
         null,
         original.getOriginatingStoreId(),
         null,
+        null,
         original.getId(),
         actorUserId,
         reason,
@@ -365,6 +419,7 @@ public class PointEntry extends BaseEntity {
         -originalUse.getAmount(),
         null,
         originalUse.getOriginatingStoreId(),
+        null,
         null,
         originalUse.getId(),
         actorUserId,
@@ -397,6 +452,7 @@ public class PointEntry extends BaseEntity {
         null,
         null,
         null,
+        null,
         allocations);
   }
 
@@ -407,6 +463,7 @@ public class PointEntry extends BaseEntity {
         PointEntryType.WITHDRAWAL_CLEAR,
         memberId,
         -points,
+        null,
         null,
         null,
         null,

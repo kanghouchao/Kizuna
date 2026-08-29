@@ -1,7 +1,8 @@
 # v0.1.0 = 単一ベースライン（編集規約は db/CLAUDE.md）。
 # 構成は「platform（プラットフォーム全体で単一のデータ）」「store（店舗スコープのデータ）」
 # 「seed（初期データ）」の 3 層。include は FK の依存順で、受注に依存する platform 表
-# （帰属記録・伝票トークン・ポイント台帳）は store 層の後に置く。
+# （帰属記録・伝票トークン・ポイント台帳）は store 層の後に置く。ファイル名の番号は所有関係の
+# 並びであって依存順ではない — 特典規則は台帳の付与仕訳に指されるので、番号より前へ出る。
 databaseChangeLog:
   - include:
       file: platform/01-store.yaml
@@ -55,13 +56,13 @@ databaseChangeLog:
       file: platform/09-order-receipt-token.yaml
       relativeToChangelogFile: true
   - include:
+      file: platform/12-benefit-rule.yaml
+      relativeToChangelogFile: true
+  - include:
       file: platform/10-point-ledger.yaml
       relativeToChangelogFile: true
   - include:
       file: platform/11-member-rank-history.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: platform/12-benefit-rule.yaml
       relativeToChangelogFile: true
   - include:
       file: seed/01-roles.yaml

@@ -269,6 +269,45 @@ class PointEntryTest {
         .isInstanceOf(UnsupportedOperationException.class);
   }
 
+  @Test
+  @DisplayName("特典付与は産地の規則を名乗り、期限付きの加算ロットになること")
+  void aBenefitGrantNamesItsRuleAndCanCarryAnExpiry() {
+    LocalDate expiry = LocalDate.of(2026, 12, 31);
+
+    PointEntry entry = PointEntry.grantForBenefit(7L, "o1", 3L, 200, expiry, 5L, 9L);
+
+    assertThat(entry.getEntryType()).isEqualTo(PointEntryType.BENEFIT_GRANT);
+    assertThat(entry.getAmount()).isEqualTo(200);
+    assertThat(entry.getOrderId()).isEqualTo("o1");
+    assertThat(entry.getBenefitRuleId()).isEqualTo(5L);
+    assertThat(entry.getExpiresOn()).isEqualTo(expiry);
+    assertThat(entry.getAllocations()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("規則を名乗らない特典付与は記録できないこと")
+  void aBenefitGrantWithoutItsRuleIsRefused() {
+    assertThatThrownBy(() -> PointEntry.grantForBenefit(7L, "o1", 3L, 200, null, null, 9L))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("特典規則");
+  }
+
+  @Test
+  @DisplayName("受注 ID の無い特典付与は記録できないこと")
+  void aBenefitGrantWithoutAnOrderIsRefused() {
+    assertThatThrownBy(() -> PointEntry.grantForBenefit(7L, " ", 3L, 200, null, 5L, 9L))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("受注 ID");
+  }
+
+  @Test
+  @DisplayName("0 以下の特典付与は記録できないこと")
+  void aNonPositiveBenefitGrantIsRefused() {
+    assertThatThrownBy(() -> PointEntry.grantForBenefit(7L, "o1", 3L, 0, null, 5L, 9L))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("1 以上");
+  }
+
   private static PointEntry credit(long id, int amount) {
     PointEntry entry = PointEntry.grantForOrder(7L, "o1", 3L, amount, 9L);
     entry.setId(id);
