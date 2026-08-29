@@ -9,6 +9,8 @@ import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointLedger;
 import com.kizuna.point.domain.PointLot;
+import com.kizuna.point.domain.PointRollback;
+import com.kizuna.point.domain.PointRollbackRepository;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
@@ -21,7 +23,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +43,7 @@ public class PointLedgerService {
 
   private final PointEntryRepository pointEntryRepository;
   private final PointAllocationRepository pointAllocationRepository;
+  private final PointRollbackRepository pointRollbackRepository;
   private final SystemConfigService systemConfigService;
   private final AppProperties appProperties;
 
@@ -337,45 +342,118 @@ public class PointLedgerService {
   }
 
   /**
-   * 加算仕訳の取消。未消費分だけを打ち消す仕訳を積み、元の行は書き換えない。
+   * 加算仕訳 1 件の取消。未消費分だけを打ち消す仕訳を積み、元の行は書き換えない。
    *
    * <p>取消も引き当てを書く消費なので、未消費分を数える前に消費経路と同じ行ロックを取る。取らないと、並行する利用が
    * 同じ残りを引き当てた後に取消が古い未消費分を打ち消し、ロットの引き当て合計が加算量を超える。
    */
-  public void cancel(long entryId, Long actorUserId) {
+  public void cancel(long entryId, String reason, Long actorUserId) {
     PointEntry original =
         pointEntryRepository
             .findById(entryId)
             .orElseThrow(() -> new NotFoundException("ポイント仕訳が見つかりません"));
     pointEntryRepository.findCreditsForUpdate(original.getMemberId());
     int available = original.getAmount() - consumedBy(List.of(entryId)).getOrDefault(entryId, 0);
-    pointEntryRepository.save(PointEntry.cancel(original, available, actorUserId));
+    pointEntryRepository.save(PointEntry.cancel(original, available, reason, actorUserId));
+  }
+
+  /** その受注が既に巻き戻されているか。事後申領の入口が拒否を決める述語。 */
+  @Transactional(readOnly = true)
+  public boolean isRolledBack(String orderId) {
+    return pointRollbackRepository.existsByOrderId(orderId);
   }
 
   /**
-   * 受注を根拠とするすべての付与（別経路の付与が order_id を持つ場合を含む）を取消仕訳で無効化する。利用（USE）の再付与は 完了後訂正の意味論が定まってから —
-   * 取消できるのは残余のある付与のみ。
+   * 巻き戻しで動く量の下見。既に巻き戻された受注では、打ち消す対象も逆転する対象も残っていないので両方 0 になる。
    *
-   * <p>消費し切った付与と取消済みの付与は残余が 0 なので黙って飛ばす。付与の無い受注も同じく何もしない。
+   * <p>返すのは合計だけで仕訳の行は渡さない（追加型台帳の不変条件を外から触らせない）。
    */
-  public void cancelForOrder(String orderId, Long actorUserId) {
-    List<PointEntry> credits = pointEntryRepository.findCreditsByOrderId(orderId);
-    if (credits.isEmpty()) {
-      return;
+  @Transactional(readOnly = true)
+  public PointRollbackPreview previewRollbackForOrder(String orderId) {
+    return new PointRollbackPreview(
+        pointRollbackRepository.existsByOrderId(orderId),
+        cancellablePointsOf(pointEntryRepository.findCreditsByOrderId(orderId)),
+        pendingUsesOf(orderId).stream().mapToInt(use -> -use.getAmount()).sum());
+  }
+
+  /**
+   * 受注 1 件を根拠とするポイントの授受を打ち消す（巻き戻し）。
+   *
+   * <p>操作記録は<b>打ち消す対象の有無に関わらず</b>書く。伝票トークンの付与予定額は完了時点で固定され再発行でも 計算し直されないため、記録が無ければ 90
+   * 日窓内の申領が原額の付与を積み直せてしまう。台帳の仕訳は打ち消す対象があるときだけ積む。
+   *
+   * <p>順序は<b>利用の逆転 → 付与の取消</b>。本受注の利用が本受注の付与を消費していた場合、逆順だと付与の未消費分が 小さいまま数えられ、取り戻せる量が減る。
+   */
+  public PointRollbackResult rollbackForOrder(String orderId, String reason, Long actorUserId) {
+    if (pointRollbackRepository.existsByOrderId(orderId)) {
+      throw new ConflictException("この受注のポイントは既に巻き戻されています");
     }
-    // 単発の取消と同じく、未消費分を数える前に消費経路と同じ行ロックを取る。
-    credits.stream()
-        .map(PointEntry::getMemberId)
-        .distinct()
-        .forEach(pointEntryRepository::findCreditsForUpdate);
+    pointRollbackRepository.save(PointRollback.of(orderId, reason, actorUserId));
+
+    List<PointEntry> uses = pendingUsesOf(orderId);
+    List<PointEntry> credits = pointEntryRepository.findCreditsByOrderId(orderId);
+    lockCreditsOfMembersIn(uses, credits);
+
+    int restored = 0;
+    for (PointEntry use : uses) {
+      pointEntryRepository.save(PointEntry.reverseUse(use, reason, actorUserId));
+      restored += -use.getAmount();
+    }
+    // 逆転で戻った量を未消費分へ含めるため、取消の数え直しは逆転を書き終えた後に行う。
+    pointEntryRepository.flush();
+    int cancelled = 0;
     Map<Long, Integer> consumed = consumedBy(credits.stream().map(PointEntry::getId).toList());
     for (PointEntry credit : credits) {
       int available = credit.getAmount() - consumed.getOrDefault(credit.getId(), 0);
       if (available <= 0) {
         continue;
       }
-      pointEntryRepository.save(PointEntry.cancel(credit, available, actorUserId));
+      pointEntryRepository.save(PointEntry.cancel(credit, available, reason, actorUserId));
+      cancelled += available;
     }
+    return new PointRollbackResult(cancelled, restored);
+  }
+
+  /** 巻き戻しで動いた量。 */
+  public record PointRollbackResult(int cancelledPoints, int restoredPoints) {}
+
+  /** 巻き戻しで動く見込みの量と、既に巻き戻し済みかどうか。 */
+  public record PointRollbackPreview(
+      boolean alreadyRolledBack, int cancellablePoints, int reversibleUsedPoints) {}
+
+  /** その受注の利用のうち、まだ逆転されていないもの。 */
+  private List<PointEntry> pendingUsesOf(String orderId) {
+    List<PointEntry> uses = pointEntryRepository.findUsesByOrderId(orderId);
+    if (uses.isEmpty()) {
+      return List.of();
+    }
+    Set<Long> reversed =
+        Set.copyOf(
+            pointEntryRepository.findReversedUseIds(uses.stream().map(PointEntry::getId).toList()));
+    return uses.stream().filter(use -> !reversed.contains(use.getId())).toList();
+  }
+
+  /** 与えた加算ロットに残っている未消費分の合計。 */
+  private int cancellablePointsOf(List<PointEntry> credits) {
+    Map<Long, Integer> consumed = consumedBy(credits.stream().map(PointEntry::getId).toList());
+    return credits.stream()
+        .mapToInt(
+            credit -> Math.max(0, credit.getAmount() - consumed.getOrDefault(credit.getId(), 0)))
+        .sum();
+  }
+
+  /**
+   * 巻き戻しが触れる会員の加算ロットを、数える前にすべて押さえる。
+   *
+   * <p>押さえないと、並行する利用が同じ残りを引き当てた後に取消が古い未消費分を打ち消し、ロットの引き当て合計が 加算量を超える。会員 ID
+   * の昇順で取るのは、複数会員に跨る受注で待ちの向きを揃えるため。
+   */
+  private void lockCreditsOfMembersIn(List<PointEntry> uses, List<PointEntry> credits) {
+    Stream.concat(uses.stream(), credits.stream())
+        .map(PointEntry::getMemberId)
+        .distinct()
+        .sorted()
+        .forEach(pointEntryRepository::findCreditsForUpdate);
   }
 
   /** 消費のために加算ロットを行ロック付きで読み直した台帳。 */
@@ -409,6 +487,9 @@ public class PointLedgerService {
   }
 
   private Map<Long, Integer> consumedBy(List<Long> creditIds) {
+    if (creditIds.isEmpty()) {
+      return Map.of();
+    }
     return pointAllocationRepository.findConsumedBySourceEntryIds(creditIds).stream()
         .collect(
             Collectors.toMap(

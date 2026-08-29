@@ -13,18 +13,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.point.domain.InsufficientPointBalanceException;
-import com.kizuna.point.domain.InvalidPointEntryException;
 import com.kizuna.point.domain.PointAllocation;
 import com.kizuna.point.domain.PointAllocationRepository;
 import com.kizuna.point.domain.PointConsumption;
 import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
+import com.kizuna.point.domain.PointRollback;
+import com.kizuna.point.domain.PointRollbackRepository;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -53,12 +53,14 @@ class PointLedgerServiceTest {
 
   @Mock private PointEntryRepository pointEntryRepository;
   @Mock private PointAllocationRepository pointAllocationRepository;
+  @Mock private PointRollbackRepository pointRollbackRepository;
   @Mock private SystemConfigService systemConfigService;
   @Mock private AppProperties appProperties;
 
   @InjectMocks private PointLedgerService pointLedgerService;
 
   @Captor private ArgumentCaptor<PointEntry> savedEntry;
+  @Captor private ArgumentCaptor<PointRollback> savedRollback;
 
   @BeforeEach
   void stubBusinessTimezone() {
@@ -395,90 +397,38 @@ class PointLedgerServiceTest {
   }
 
   @Test
-  @DisplayName("存在しない仕訳の取消は見つからないこと")
-  void cancelRejectsUnknownEntry() {
-    when(pointEntryRepository.findById(11L)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> pointLedgerService.cancel(11L, ACTOR_ID))
-        .isInstanceOf(NotFoundException.class);
-  }
-
-  @Test
-  @DisplayName("取消は消費経路と同じ行ロックを取ってから未消費分だけを打ち消すこと")
-  void cancelDrainsRemainingOfCredit() {
-    when(pointEntryRepository.findById(11L)).thenReturn(Optional.of(credit(11L, 500, null)));
-    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
-        .thenReturn(List.of(consumption(11L, 200)));
-
-    pointLedgerService.cancel(11L, ACTOR_ID);
-
-    verify(pointEntryRepository).findCreditsForUpdate(MEMBER_ID);
-    verify(pointEntryRepository).save(savedEntry.capture());
-    PointEntry entry = savedEntry.getValue();
-    assertThat(entry.getEntryType()).isEqualTo(PointEntryType.CANCEL);
-    assertThat(entry.getAmount()).isEqualTo(-300);
-    assertThat(entry.getOriginalEntryId()).isEqualTo(11L);
-    assertThat(entry.getAllocations())
-        .extracting(PointAllocation::getSourceEntryId, PointAllocation::getAmount)
-        .containsExactly(tuple(11L, 300));
-  }
-
-  @Test
-  @DisplayName("消費し切った加算は取り消せないこと")
-  void cancelRejectsDrainedCredit() {
-    when(pointEntryRepository.findById(11L)).thenReturn(Optional.of(credit(11L, 500, null)));
-    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
-        .thenReturn(List.of(consumption(11L, 500)));
-
-    assertThatThrownBy(() -> pointLedgerService.cancel(11L, ACTOR_ID))
-        .isInstanceOf(InvalidPointEntryException.class)
-        .hasMessageContaining("既に消費済み");
-    verify(pointEntryRepository, never()).save(any());
-  }
-
-  @Test
-  @DisplayName("減算の仕訳は取り消せないこと")
-  void cancelRejectsDebitEntry() {
-    PointEntry debit =
-        PointEntry.useForOrder(
-            MEMBER_ID, "o1", STORE_ID, 300, List.of(PointAllocation.of(1L, 300)), ACTOR_ID);
-    debit.setId(12L);
-    when(pointEntryRepository.findById(12L)).thenReturn(Optional.of(debit));
-    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(12L)))
-        .thenReturn(List.of());
-
-    assertThatThrownBy(() -> pointLedgerService.cancel(12L, ACTOR_ID))
-        .isInstanceOf(InvalidPointEntryException.class)
-        .hasMessageContaining("加算の仕訳だけ");
-    verify(pointEntryRepository, never()).save(any());
-  }
-
-  @Test
-  @DisplayName("受注単位の取消は、その受注を根拠とするすべての付与を打ち消すこと")
-  void cancelForOrderCancelsEveryGrantOfTheOrder() {
+  @DisplayName("巻き戻しは、その受注を根拠とするすべての付与を理由付きで打ち消すこと")
+  void rollbackCancelsEveryGrantOfTheOrder() {
     when(pointEntryRepository.findCreditsByOrderId("o1"))
         .thenReturn(List.of(orderGrant(11L, "o1", 500), orderGrant(12L, "o1", 300)));
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L, 12L)))
         .thenReturn(List.of());
 
-    pointLedgerService.cancelForOrder("o1", ACTOR_ID);
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+        .isEqualTo(new PointLedgerService.PointRollbackResult(800, 0));
 
     verify(pointEntryRepository, times(2)).save(savedEntry.capture());
     assertThat(savedEntry.getAllValues())
-        .extracting(PointEntry::getEntryType, PointEntry::getAmount, PointEntry::getOriginalEntryId)
+        .extracting(
+            PointEntry::getEntryType,
+            PointEntry::getAmount,
+            PointEntry::getOriginalEntryId,
+            PointEntry::getReason)
         .containsExactly(
-            tuple(PointEntryType.CANCEL, -500, 11L), tuple(PointEntryType.CANCEL, -300, 12L));
+            tuple(PointEntryType.CANCEL, -500, 11L, "誤完了"),
+            tuple(PointEntryType.CANCEL, -300, 12L, "誤完了"));
   }
 
   @Test
   @DisplayName("消費し切った付与は飛ばし、残余のある付与だけを打ち消すこと")
-  void cancelForOrderSkipsDrainedGrants() {
+  void rollbackSkipsDrainedGrants() {
     when(pointEntryRepository.findCreditsByOrderId("o1"))
         .thenReturn(List.of(orderGrant(11L, "o1", 500), orderGrant(12L, "o1", 500)));
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L, 12L)))
         .thenReturn(List.of(consumption(11L, 500), consumption(12L, 200)));
 
-    pointLedgerService.cancelForOrder("o1", ACTOR_ID);
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID).cancelledPoints())
+        .isEqualTo(300);
 
     verify(pointEntryRepository).save(savedEntry.capture());
     PointEntry entry = savedEntry.getValue();
@@ -490,30 +440,121 @@ class PointLedgerServiceTest {
   }
 
   @Test
-  @DisplayName("付与の無い受注の取消は何もしないこと（存在しない受注 ID も同じ）")
-  void cancelForOrderIsNoOpWithoutGrants() {
-    when(pointEntryRepository.findCreditsByOrderId("unknown")).thenReturn(List.of());
+  @DisplayName("仕訳ゼロの受注でも操作記録は書かれること（事後申領を記録で拒むため）")
+  void rollbackRecordsEvenWithoutEntries() {
+    assertThat(pointLedgerService.rollbackForOrder("empty", "無帰属のまま清零", ACTOR_ID))
+        .isEqualTo(new PointLedgerService.PointRollbackResult(0, 0));
 
-    pointLedgerService.cancelForOrder("unknown", ACTOR_ID);
-
-    verify(pointEntryRepository, never()).findCreditsForUpdate(anyLong());
-    verify(pointAllocationRepository, never()).findConsumedBySourceEntryIds(any());
+    verify(pointRollbackRepository).save(savedRollback.capture());
+    assertThat(savedRollback.getValue().getOrderId()).isEqualTo("empty");
+    assertThat(savedRollback.getValue().getReason()).isEqualTo("無帰属のまま清零");
     verify(pointEntryRepository, never()).save(any());
   }
 
   @Test
-  @DisplayName("受注単位の取消も未消費分を数える前に消費経路と同じ行ロックを取ること")
-  void cancelForOrderLocksBeforeCountingConsumption() {
+  @DisplayName("同じ受注への二度目の巻き戻しは撥ねられ、台帳にも記録にも何も書かれないこと")
+  void rollbackRejectsSecondAttempt() {
+    when(pointRollbackRepository.existsByOrderId("o1")).thenReturn(true);
+
+    assertThatThrownBy(() -> pointLedgerService.rollbackForOrder("o1", "二度目", ACTOR_ID))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("既に巻き戻されています");
+    verify(pointRollbackRepository, never()).save(any());
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("利用は元のロットへ引き当てを逆転して返され、新しいロットを作らないこと")
+  void rollbackReversesUseIntoTheOriginalLots() {
+    when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
+
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID).restoredPoints())
+        .isEqualTo(300);
+
+    verify(pointEntryRepository).save(savedEntry.capture());
+    PointEntry entry = savedEntry.getValue();
+    assertThat(entry.getEntryType()).isEqualTo(PointEntryType.USE_CANCEL);
+    assertThat(entry.getAmount()).as("逆転は加算").isEqualTo(300);
+    assertThat(entry.getOriginalEntryId()).isEqualTo(21L);
+    assertThat(entry.getExpiresOn()).as("自身はロットにならないので期限を持たない").isNull();
+    assertThat(entry.getOrderId()).as("受注ごとの付与合計へ混ざらない").isNull();
+    assertThat(entry.getAllocations())
+        .as("元の利用が引いたロットへ同量を返す")
+        .extracting(PointAllocation::getSourceEntryId, PointAllocation::getAmount)
+        .containsExactly(tuple(1L, 300));
+  }
+
+  @Test
+  @DisplayName("既に逆転済みの利用は二度逆転されないこと")
+  void rollbackSkipsAlreadyReversedUses() {
+    when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
+    when(pointEntryRepository.findReversedUseIds(List.of(21L))).thenReturn(List.of(21L));
+
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID).restoredPoints())
+        .isZero();
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("利用の逆転は付与の取消より先に行われること（逆順だと取り戻せる量が減る）")
+  void rollbackReversesUsesBeforeCancellingGrants() {
+    when(pointEntryRepository.findUsesByOrderId("o1"))
+        .thenReturn(List.of(use(21L, "o1", 300, 11L)));
+    when(pointEntryRepository.findCreditsByOrderId("o1"))
+        .thenReturn(List.of(orderGrant(11L, "o1", 500)));
+    // 逆転を書き終えた後に数え直すので、消費は 300 返って 200 になる。
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
+        .thenReturn(List.of(consumption(11L, 200)));
+
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+        .isEqualTo(new PointLedgerService.PointRollbackResult(300, 300));
+
+    verify(pointEntryRepository, times(2)).save(savedEntry.capture());
+    assertThat(savedEntry.getAllValues())
+        .extracting(PointEntry::getEntryType)
+        .containsExactly(PointEntryType.USE_CANCEL, PointEntryType.CANCEL);
+  }
+
+  @Test
+  @DisplayName("巻き戻しも未消費分を数える前に消費経路と同じ行ロックを取ること")
+  void rollbackLocksBeforeCountingConsumption() {
     when(pointEntryRepository.findCreditsByOrderId("o1"))
         .thenReturn(List.of(orderGrant(11L, "o1", 500)));
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
         .thenReturn(List.of());
 
-    pointLedgerService.cancelForOrder("o1", ACTOR_ID);
+    pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID);
 
     InOrder inOrder = inOrder(pointEntryRepository, pointAllocationRepository);
     inOrder.verify(pointEntryRepository).findCreditsForUpdate(MEMBER_ID);
     inOrder.verify(pointAllocationRepository).findConsumedBySourceEntryIds(List.of(11L));
+  }
+
+  @Test
+  @DisplayName("下見は動く見込みの量だけを返し、台帳へ何も書かないこと")
+  void previewRollbackReportsWhatWouldMove() {
+    when(pointEntryRepository.findCreditsByOrderId("o1"))
+        .thenReturn(List.of(orderGrant(11L, "o1", 500)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
+        .thenReturn(List.of(consumption(11L, 200)));
+    when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
+
+    assertThat(pointLedgerService.previewRollbackForOrder("o1"))
+        .isEqualTo(new PointLedgerService.PointRollbackPreview(false, 300, 300));
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  private static PointEntry use(long id, String orderId, int points, long sourceEntryId) {
+    PointEntry entry =
+        PointEntry.useForOrder(
+            MEMBER_ID,
+            orderId,
+            STORE_ID,
+            points,
+            List.of(PointAllocation.of(sourceEntryId, points)),
+            ACTOR_ID);
+    entry.setId(id);
+    return entry;
   }
 
   private static PointEntry orderGrant(long id, String orderId, int amount) {

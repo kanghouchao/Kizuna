@@ -13,10 +13,15 @@ import org.springframework.data.repository.query.Param;
 
 public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
 
-  /** 会員の加算ロット（残高照会用、ロックなし）。エンティティ名は HQL の予約語衝突を避けるため FQCN で参照する。 */
-  @Query(
-      "select e from com.kizuna.point.domain.PointEntry e where e.memberId = :memberId"
-          + " and e.amount > 0")
+  // ロットの述語は「加算」ではなく「加算かつ新しいロットになる」。利用取消は正だが元のロットへ量を返す
+  // だけで自身はロットにならず、ロットとして数えると返した分が残高に二重に現れる。エンティティ名は HQL の
+  // 予約語衝突を避けるため FQCN で参照する。
+  String LOT_WHERE =
+      " where e.memberId = :memberId and e.amount > 0"
+          + " and e.entryType <> com.kizuna.point.domain.PointEntryType.USE_CANCEL";
+
+  /** 会員の加算ロット（残高照会用、ロックなし）。 */
+  @Query("select e from com.kizuna.point.domain.PointEntry e" + LOT_WHERE)
   List<PointEntry> findCredits(@Param("memberId") Long memberId);
 
   /**
@@ -26,9 +31,7 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
    * つの消費が同じ残りを二重に引き当てるのを防ぐ。読むだけの経路は {@link #findCredits} を使う。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query(
-      "select e from com.kizuna.point.domain.PointEntry e where e.memberId = :memberId"
-          + " and e.amount > 0")
+  @Query("select e from com.kizuna.point.domain.PointEntry e" + LOT_WHERE)
   List<PointEntry> findCreditsForUpdate(@Param("memberId") Long memberId);
 
   /** 受注を根拠とする加算ロット。受注からその付与を辿って取り消す経路の入口。 */
@@ -54,6 +57,19 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
           + " group by e.orderId")
   List<OrderGrantTotalView> sumGrantsByOrderIds(
       @Param("memberId") Long memberId, @Param("orderIds") Collection<String> orderIds);
+
+  /** 受注会計で積まれた利用。巻き戻しが逆転する対象で、加算側とは別に引く。 */
+  @Query(
+      "select e from com.kizuna.point.domain.PointEntry e where e.orderId = :orderId"
+          + " and e.entryType = com.kizuna.point.domain.PointEntryType.USE")
+  List<PointEntry> findUsesByOrderId(@Param("orderId") String orderId);
+
+  /** 与えた利用のうち、既に逆転済みのものの ID。逆転は 1 件につき高々 1 回なので有無だけで足りる。 */
+  @Query(
+      "select e.originalEntryId from com.kizuna.point.domain.PointEntry e"
+          + " where e.entryType = com.kizuna.point.domain.PointEntryType.USE_CANCEL"
+          + " and e.originalEntryId in :useIds")
+  List<Long> findReversedUseIds(@Param("useIds") Collection<Long> useIds);
 
   /**
    * 会員の受注付与の累計純額。会員ランクの昇格指標で、取消によって減りうる。

@@ -13,6 +13,9 @@ import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionRequest;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
+import com.kizuna.order.api.dto.OrderPointRollbackRequest;
+import com.kizuna.order.api.dto.OrderPointRollbackResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
@@ -22,10 +25,12 @@ import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderCorrectionService;
+import com.kizuna.order.application.OrderPointRollbackService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.web.CursorPage;
@@ -62,6 +67,7 @@ public class OrderController {
   private final OrderAttributionService orderAttributionService;
   private final OrderAttributionCorrectionService orderAttributionCorrectionService;
   private final OrderCorrectionService orderCorrectionService;
+  private final OrderPointRollbackService orderPointRollbackService;
 
   /** 顧客詳細の注文履歴。ある顧客に着いた受注を新しい順に辿る（状態は問わない）。 */
   @GetMapping
@@ -262,6 +268,37 @@ public class OrderController {
       }
       return ResponseEntity.ok(
           orderAttributionCorrectionService.replayCorrect(id, request, principal.getName()));
+    }
+  }
+
+  /** ポイント巻き戻しの下見（実行前に動く量を示す）。既に巻き戻し済みなら、その旨だけが真で量は 0 になる。 */
+  @GetMapping("/{id}/point-rollback-preview")
+  @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
+  public ResponseEntity<OrderPointRollbackPreviewResponse> pointRollbackPreview(
+      @PathVariable String id) {
+    return ResponseEntity.ok(orderPointRollbackService.preview(id));
+  }
+
+  /**
+   * 受注 1 件を根拠とするポイントの授受を理由付きで打ち消す（巻き戻し）。
+   *
+   * <p>二度目は 409。同じ受注への並行要求は受注行のロックで直列化されるためサービス側の判定が撥ねるが、 一意制約に敗れる形で届いた場合も同じ 409 へ落とす（500
+   * に化けさせない）。初回の理由・実行者は書き換わらない。
+   */
+  @PostMapping("/{id}/point-rollback")
+  @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
+  public ResponseEntity<OrderPointRollbackResponse> pointRollback(
+      @PathVariable String id,
+      @Valid @RequestBody OrderPointRollbackRequest request,
+      Principal principal) {
+    try {
+      return ResponseEntity.ok(
+          orderPointRollbackService.rollback(id, request, principal.getName()));
+    } catch (DataIntegrityViolationException ex) {
+      if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ROLLBACKS_ORDER)) {
+        throw ex;
+      }
+      throw new ConflictException("この受注のポイントは既に巻き戻されています");
     }
   }
 

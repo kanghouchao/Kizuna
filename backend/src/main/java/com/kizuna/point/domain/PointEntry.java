@@ -25,9 +25,9 @@ import lombok.NoArgsConstructor;
  * <p>不変条件（構築時に検証、違反は 400 系ドメイン例外 {@link InvalidPointEntryException}）:
  *
  * <ol>
- *   <li>増減 0 の仕訳は作れない。加算になりうるのは付与と手動調整だけで、残りの種別は必ず減算。有効期限を持てるのは加算だけ。
- *   <li>減算は必ず引き当てを伴い、引き当ての合計は減算量に一致する。これにより加算ロットの消費済み量が引き当ての合計だけで求まる。
- *   <li>付与と利用は受注 ID、取消は取消対象の仕訳 ID、手動調整は理由と冪等キーを必ず持つ。
+ *   <li>増減 0 の仕訳は作れない。取りうる向きは種別が決める（{@link PointEntryType}）。有効期限を持てるのは新しいロットになる加算だけ。
+ *   <li>引き当ては減算と利用取消だけが持ち、その合計は増減の絶対値に一致する。これにより加算ロットの消費済み量が引き当ての合計だけで求まる。
+ *   <li>付与と利用は受注 ID、取消と利用取消は元の仕訳 ID、手動調整は理由と冪等キーを必ず持つ。
  * </ol>
  */
 @Entity
@@ -58,13 +58,14 @@ public class PointEntry extends BaseEntity {
   @Column(name = "order_id", updatable = false, length = 64)
   private String orderId;
 
-  /** 取消対象の加算仕訳。CANCEL のみ設定される。 */
+  /** 打ち消す元の仕訳。取消（加算ロット）と利用取消（元の利用）だけが設定する。 */
   @Column(name = "original_entry_id", updatable = false)
   private Long originalEntryId;
 
   @Column(name = "actor_user_id", updatable = false)
   private Long actorUserId;
 
+  /** 人手の操作の理由。手動調整と、巻き戻しが積む取消・利用取消が持つ。 */
   @Column(name = "reason", updatable = false, length = 500)
   private String reason;
 
@@ -112,7 +113,7 @@ public class PointEntry extends BaseEntity {
       throw new InvalidPointEntryException("増減が 0 の仕訳は記録できません");
     }
     validateSign(entryType, amount);
-    validateExpiryAndAllocations(amount, expiresOn, allocations);
+    validateExpiryAndAllocations(entryType, amount, expiresOn, allocations);
     validateReferences(entryType, orderId, originalEntryId, reason, idempotencyKey);
 
     this.entryType = entryType;
@@ -130,30 +131,37 @@ public class PointEntry extends BaseEntity {
   }
 
   private static void validateSign(PointEntryType entryType, int amount) {
-    boolean creditable =
-        entryType == PointEntryType.ORDER_GRANT || entryType == PointEntryType.MANUAL_ADJUST;
-    if (amount > 0 && !creditable) {
+    if (amount > 0 && !entryType.creditable()) {
       throw new InvalidPointEntryException("この種別は加算の仕訳にできません");
     }
-    if (amount < 0 && entryType == PointEntryType.ORDER_GRANT) {
-      throw new InvalidPointEntryException("付与は加算の仕訳でなければなりません");
+    if (amount < 0 && !entryType.debitable()) {
+      throw new InvalidPointEntryException("この種別は減算の仕訳にできません");
     }
   }
 
+  /**
+   * 有効期限と引き当ての規律。
+   *
+   * <p>利用取消は加算だが新しいロットにはならないため、期限を持たず、引き当ては元のロットへ<b>返す</b>量として持つ。 消費済み量の集計はこの向きを符号で読み分ける（{@link
+   * PointAllocationRepository#findConsumedBySourceEntryIds}）。
+   */
   private static void validateExpiryAndAllocations(
-      int amount, LocalDate expiresOn, List<PointAllocation> allocations) {
-    if (amount > 0) {
+      PointEntryType entryType,
+      int amount,
+      LocalDate expiresOn,
+      List<PointAllocation> allocations) {
+    if (amount > 0 && entryType != PointEntryType.USE_CANCEL) {
       if (!allocations.isEmpty()) {
         throw new InvalidPointEntryException("加算の仕訳は引き当てを持ちません");
       }
       return;
     }
     if (expiresOn != null) {
-      throw new InvalidPointEntryException("減算の仕訳に有効期限は設定できません");
+      throw new InvalidPointEntryException("ロットにならない仕訳に有効期限は設定できません");
     }
     int allocated = allocations.stream().mapToInt(PointAllocation::getAmount).sum();
-    if (allocated != -amount) {
-      throw new InvalidPointEntryException("引き当ての合計が減算量と一致しません");
+    if (allocated != Math.abs(amount)) {
+      throw new InvalidPointEntryException("引き当ての合計が増減量と一致しません");
     }
   }
 
@@ -167,11 +175,22 @@ public class PointEntry extends BaseEntity {
         && (orderId == null || orderId.isBlank())) {
       throw new InvalidPointEntryException("受注 ID は必須です");
     }
-    if (entryType == PointEntryType.CANCEL && originalEntryId == null) {
+    if ((entryType == PointEntryType.CANCEL || entryType == PointEntryType.USE_CANCEL)
+        && originalEntryId == null) {
       throw new InvalidPointEntryException("取消対象の仕訳 ID は必須です");
+    }
+    // 利用取消は受注 ID を持たない。持たせると受注ごとの付与合計（来店の獲得点）へ混ざり、
+    // 受注を根拠とする加算を集める巻き戻しが自分自身を取消対象に拾う。
+    if (entryType == PointEntryType.USE_CANCEL && orderId != null) {
+      throw new InvalidPointEntryException("利用取消は受注 ID を持ちません");
     }
     if (entryType == PointEntryType.MANUAL_ADJUST && (reason == null || reason.isBlank())) {
       throw new InvalidPointEntryException("手動調整の理由は必須です");
+    }
+    // 取消・利用取消はどちらも人手の巻き戻しが積む。理由が無いと、残高が減った説明が台帳の外にしか無くなる。
+    if ((entryType == PointEntryType.CANCEL || entryType == PointEntryType.USE_CANCEL)
+        && (reason == null || reason.isBlank())) {
+      throw new InvalidPointEntryException("取消の理由は必須です");
     }
     if (entryType == PointEntryType.MANUAL_ADJUST
         && (idempotencyKey == null || idempotencyKey.isBlank())) {
@@ -182,7 +201,7 @@ public class PointEntry extends BaseEntity {
   /**
    * 受注完了に伴う付与。
    *
-   * <p>有効期限は付けない — 期限規則の値が未確定のため、列と検証だけ先に用意して運用開始まで無期限で積む。
+   * <p>有効期限は付けない。通常の付与は無期限であり、期限を持つのは特典と手動調整の産だけである。
    */
   public static PointEntry grantForOrder(
       Long memberId, String orderId, Long storeId, int amount, Long actorUserId) {
@@ -297,9 +316,11 @@ public class PointEntry extends BaseEntity {
   /**
    * 加算仕訳の取消。未消費分 {@code available} だけを打ち消し、元の行は書き換えない。
    *
-   * <p>{@code available} は台帳全体の引き当て合計からしか求まらないため呼出側が渡す。
+   * <p>{@code available} は台帳全体の引き当て合計からしか求まらないため呼出側が渡す。理由は打ち消しを起こした 操作のものを引き継ぐ —
+   * 台帳の行だけを見て「なぜ消えたか」が辿れないと、残高の差の説明が台帳の外にしか無くなる。
    */
-  public static PointEntry cancel(PointEntry original, int available, Long actorUserId) {
+  public static PointEntry cancel(
+      PointEntry original, int available, String reason, Long actorUserId) {
     if (original.getId() == null) {
       throw new InvalidPointEntryException("取消対象の仕訳 ID は必須です");
     }
@@ -318,10 +339,43 @@ public class PointEntry extends BaseEntity {
         null,
         original.getId(),
         actorUserId,
-        null,
+        reason,
         null,
         null,
         List.of(PointAllocation.of(original.getId(), available)));
+  }
+
+  /**
+   * 利用の逆転（巻き戻し）。元の利用が引き当てた量を、そのまま<b>元のロットへ返す</b>。
+   *
+   * <p>返すのは引き当ての鏡像なので、期限は元のロットのものが保たれる。返った残量が既に期限切れなら翌日の失効批が拾う — 期限を保つことの自然な帰結であり、意図した挙動である。
+   *
+   * <p>1 件の利用への逆転は高々 1 件。二度目は元の仕訳への参照の一意性が撥ねる。
+   */
+  public static PointEntry reverseUse(PointEntry originalUse, String reason, Long actorUserId) {
+    if (originalUse.getId() == null) {
+      throw new InvalidPointEntryException("取消対象の仕訳 ID は必須です");
+    }
+    if (originalUse.getEntryType() != PointEntryType.USE) {
+      throw new InvalidPointEntryException("逆転できるのは利用の仕訳だけです");
+    }
+    return new PointEntry(
+        PointEntryType.USE_CANCEL,
+        originalUse.getMemberId(),
+        -originalUse.getAmount(),
+        null,
+        originalUse.getOriginatingStoreId(),
+        null,
+        originalUse.getId(),
+        actorUserId,
+        reason,
+        null,
+        null,
+        originalUse.getAllocations().stream()
+            .map(
+                allocation ->
+                    PointAllocation.of(allocation.getSourceEntryId(), allocation.getAmount()))
+            .toList());
   }
 
   /**

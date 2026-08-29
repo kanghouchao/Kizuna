@@ -18,6 +18,11 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from '@/shared/ui';
 
@@ -27,9 +32,26 @@ const DELTA_REQUIRED = '増減ポイントを入力してください';
 /** 事由の上限。台帳側の @Size(max = 500) と同値。 */
 const REASON_MAX_LENGTH = 500;
 
+/**
+ * 事由の分類。業務で起きる調整はこの三つに収まる（#806 の業務確認）。
+ *
+ * 列は増やさず、選んだ分類を接頭辞として自由記述と連結して送る — 後から分類で拾えて、かつ
+ * 「なぜその額なのか」は自由記述にしか書けない。
+ */
+const REASON_CATEGORIES = ['補填', '訂正', '個別施策'] as const;
+
+type ReasonCategory = (typeof REASON_CATEGORIES)[number];
+
+const CATEGORY_SEPARATOR = ': ';
+
+/** 自由記述に許す長さ。どの分類を選んでも連結後が列に収まるよう、最長の接頭辞で引く。 */
+const DETAIL_MAX_LENGTH =
+  REASON_MAX_LENGTH - Math.max(...REASON_CATEGORIES.map(c => c.length)) - CATEGORY_SEPARATOR.length;
+
 interface PointAdjustmentFormValues {
   /** 空欄は NaN。「未入力」と 0 の指定を取り違えないため、valueAsNumber の写像をそのまま持つ。 */
   delta: number;
+  reason_category: ReasonCategory | '';
   reason: string;
   /** 'yyyy-MM-dd'。空欄は無期限。 */
   expires_on: string;
@@ -57,7 +79,7 @@ export function PointAdjustmentDialog({
   onAdjusted,
 }: PointAdjustmentDialogProps) {
   const form = useForm<PointAdjustmentFormValues>({
-    defaultValues: { delta: NaN, reason: '', expires_on: '' },
+    defaultValues: { delta: NaN, reason_category: '', reason: '', expires_on: '' },
   });
   const {
     control,
@@ -76,14 +98,14 @@ export function PointAdjustmentDialog({
   useEffect(() => {
     if (!open) return;
     idempotencyKeyRef.current = crypto.randomUUID();
-    reset({ delta: NaN, reason: '', expires_on: '' });
+    reset({ delta: NaN, reason_category: '', reason: '', expires_on: '' });
   }, [open, reset]);
 
   const submit = async (values: PointAdjustmentFormValues) => {
     try {
       const balance = await customerApi.adjustPoints(customerId, {
         delta: values.delta,
-        reason: values.reason,
+        reason: values.reason_category + CATEGORY_SEPARATOR + values.reason,
         // 欄が消えても react-hook-form は値を保つ。減算へ切り替えた後の持ち越しを送らないよう、
         // 送信可否は入力の有無ではなく今の増減で決める（undefined は JSON 化の段でキーごと消える）。
         expires_on: isGrant && values.expires_on ? values.expires_on : undefined,
@@ -151,22 +173,55 @@ export function PointAdjustmentDialog({
                 </FormItem>
               )}
             />
+            {/* 分類と自由記述は併存する。分類だけでは「なぜその額か」が残らず、自由記述だけでは
+                後から分類で拾えない */}
+            <FormField
+              control={control}
+              name="reason_category"
+              rules={{ required: '事由の分類を選択してください' }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>事由の分類</FormLabel>
+                  <Select
+                    items={REASON_CATEGORIES.map(c => ({ value: c, label: c }))}
+                    value={field.value}
+                    onValueChange={value => field.onChange(value)}
+                    required
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full" ref={field.ref}>
+                        <SelectValue placeholder="分類を選択" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {REASON_CATEGORIES.map(category => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={control}
               name="reason"
               rules={{
                 required: '事由を入力してください',
                 maxLength: {
-                  value: REASON_MAX_LENGTH,
-                  message: `事由は${REASON_MAX_LENGTH}文字以内で入力してください`,
+                  value: DETAIL_MAX_LENGTH,
+                  message: `事由は${DETAIL_MAX_LENGTH}文字以内で入力してください`,
                 },
               }}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>事由</FormLabel>
                   <FormControl>
-                    <Textarea rows={3} required maxLength={REASON_MAX_LENGTH} {...field} />
+                    <Textarea rows={3} required maxLength={DETAIL_MAX_LENGTH} {...field} />
                   </FormControl>
+                  <FormDescription>分類とあわせて台帳の仕訳に残ります。</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

@@ -176,7 +176,7 @@ class PointEntryTest {
   void cancelDrainsAvailableOfOriginal() {
     PointEntry original = credit(11L, 500);
 
-    PointEntry entry = PointEntry.cancel(original, 300, 9L);
+    PointEntry entry = PointEntry.cancel(original, 300, "巻き戻し", 9L);
 
     assertThat(entry.getEntryType()).isEqualTo(PointEntryType.CANCEL);
     assertThat(entry.getAmount()).isEqualTo(-300);
@@ -193,7 +193,7 @@ class PointEntryTest {
   void cancelRequiresPersistedOriginal() {
     PointEntry original = PointEntry.grantForOrder(7L, "o1", 3L, 500, 9L);
 
-    assertThatThrownBy(() -> PointEntry.cancel(original, 500, 9L))
+    assertThatThrownBy(() -> PointEntry.cancel(original, 500, "巻き戻し", 9L))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("取消対象の仕訳 ID");
   }
@@ -205,7 +205,7 @@ class PointEntryTest {
         PointEntry.useForOrder(7L, "o1", 3L, 300, List.of(PointAllocation.of(11L, 300)), 9L);
     debit.setId(12L);
 
-    assertThatThrownBy(() -> PointEntry.cancel(debit, 300, 9L))
+    assertThatThrownBy(() -> PointEntry.cancel(debit, 300, "巻き戻し", 9L))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("加算の仕訳だけ");
   }
@@ -215,7 +215,7 @@ class PointEntryTest {
   void cancelRejectsDrainedCredit() {
     PointEntry original = credit(11L, 500);
 
-    assertThatThrownBy(() -> PointEntry.cancel(original, 0, 9L))
+    assertThatThrownBy(() -> PointEntry.cancel(original, 0, "巻き戻し", 9L))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("既に消費済み");
   }

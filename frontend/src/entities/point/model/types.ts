@@ -4,7 +4,7 @@
 
 /** ポイント仕訳の種別。point/domain/PointEntryType.java に対応。 */
 export type PointEntryType =
-  'ORDER_GRANT' | 'USE' | 'MANUAL_ADJUST' | 'CANCEL' | 'EXPIRE' | 'WITHDRAWAL_CLEAR';
+  'ORDER_GRANT' | 'USE' | 'MANUAL_ADJUST' | 'CANCEL' | 'USE_CANCEL' | 'EXPIRE' | 'WITHDRAWAL_CLEAR';
 
 /** 種別の日本語表示。会員に見せる語なので、台帳の内部語ではなく持ち主から見た出来事の名で呼ぶ。 */
 export const POINT_ENTRY_TYPE_LABELS: Record<PointEntryType, string> = {
@@ -12,6 +12,7 @@ export const POINT_ENTRY_TYPE_LABELS: Record<PointEntryType, string> = {
   USE: '利用',
   MANUAL_ADJUST: '調整',
   CANCEL: '取消',
+  USE_CANCEL: '利用取消',
   EXPIRE: '失効',
   WITHDRAWAL_CLEAR: '退会消去',
 };

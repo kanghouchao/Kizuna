@@ -117,7 +117,7 @@ class MemberRankIT extends CrossStoreTestSupport {
 
     // 総額では 5,000pt に届くが、うち 4,000pt を取り消す
     completeLinkedOrder(customerId, "純額控除1", 400_000);
-    pointLedgerService.cancel(latestGrantIdOf(member), null);
+    pointLedgerService.cancel(latestGrantIdOf(member), "純額検証の取消", null);
     completeLinkedOrder(customerId, "純額控除2", 100_000);
 
     assertThat(grossGrantedPointsOf(member)).as("前提: 総額では閾値に届いていること").isEqualTo(5000);
@@ -133,7 +133,7 @@ class MemberRankIT extends CrossStoreTestSupport {
     completeLinkedOrder(customerId, "棘輪1", FEE_FOR_SILVER_POINTS);
     assertThat(rankOf(member)).as("前提: 純額で SILVER へ上がっていること").isEqualTo(MemberRank.SILVER);
 
-    pointLedgerService.cancel(latestGrantIdOf(member), null);
+    pointLedgerService.cancel(latestGrantIdOf(member), "純額検証の取消", null);
     // 次の判定を起こす。取消の後に指標を読み直しても、下位へは倒れない
     completeLinkedOrder(customerId, "棘輪2", TINY_FEE);
 

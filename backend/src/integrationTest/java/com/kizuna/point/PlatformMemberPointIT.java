@@ -113,7 +113,7 @@ class PlatformMemberPointIT extends CrossStoreTestSupport {
     // 同じ経路をその 2 種も通る。
     long creditId = seedCredit(CREDIT_PLAIN);
     PointEntry credit = pointEntryRepository.findById(creditId).orElseThrow();
-    pointEntryRepository.save(PointEntry.cancel(credit, CANCELLED, null));
+    pointEntryRepository.save(PointEntry.cancel(credit, CANCELLED, "検証の取消", null));
     pointEntryRepository.save(
         PointEntry.expire(memberId, EXPIRED, List.of(PointAllocation.of(creditId, EXPIRED))));
     pointEntryRepository.save(
