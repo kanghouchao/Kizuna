@@ -4,6 +4,8 @@ databaseChangeLog:
       author: kanghouchao
       # 会員（Member）。プラットフォーム層の会員身分で、店舗 CRM 台帳（Customer）とは別概念。
       # PlatformUser（user_type=MEMBER）と 1 対 1 で対応し、来店時に提示する一意の会員コードを持つ。
+      # ランクはプラットフォーム級の等級。更新条件（利用回数・付与の純額）が跨店舗の累計である以上、
+      # 店舗級には置けない。列の既定は集約の構築時の値と揃えるが、正本は集約側にある。
       preConditions:
         - dbms:
             type: postgresql
@@ -36,6 +38,13 @@ databaseChangeLog:
                     unique: true
                     uniqueConstraintName: uq_t_members_platform_user
                   remarks: 会員本人のプラットフォームユーザー（user_type=MEMBER、1 対 1）
+              - column:
+                  name: rank
+                  type: VARCHAR(20)
+                  defaultValue: BRONZE
+                  constraints:
+                    nullable: false
+                  remarks: 会員ランク（BRONZE/SILVER/GOLD。跨店舗の累計実績で昇格し降格は無い）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE

@@ -5,5 +5,6 @@
 |Spring components
 |_Services_
 
+* `c.k.s.application.BusinessDateService`
 * `c.k.s.application.SystemConfigService` (via `c.k.s.application.SystemConfigServiceImpl`)
 |===

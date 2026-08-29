@@ -30,7 +30,6 @@ export interface CustomerFormData {
   building_name: string;
   classification: string;
   has_pet: boolean;
-  rank: string;
   line_id: string;
   usage_areas: string;
   ng_type: string;
@@ -47,7 +46,6 @@ export function toCustomerRequest(data: CustomerFormData): CustomerCreateRequest
     building_name: data.building_name || undefined,
     classification: data.classification || undefined,
     has_pet: data.has_pet,
-    rank: data.rank || undefined,
     line_id: data.line_id || undefined,
     usage_areas: data.usage_areas || undefined,
     ng_type: data.ng_type || undefined,
@@ -76,7 +74,6 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
       building_name: '',
       classification: '',
       has_pet: false,
-      rank: 'SILVER',
       line_id: '',
       usage_areas: '',
       ng_type: '',
@@ -129,10 +126,6 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
               <div className="grid gap-2">
                 <Label htmlFor="line_id">LINE ID</Label>
                 <Input id="line_id" type="text" {...register('line_id')} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="rank">ランク</Label>
-                <Input id="rank" type="text" placeholder="SILVER" {...register('rank')} />
               </div>
             </div>
           </CardContent>

@@ -56,11 +56,6 @@ databaseChangeLog:
                   defaultValueBoolean: false
                   remarks: ペットの有無
               - column:
-                  name: rank
-                  type: VARCHAR(50)
-                  defaultValue: SILVER
-                  remarks: 会員ランク
-              - column:
                   name: line_id
                   type: VARCHAR(100)
                   remarks: LINE ID

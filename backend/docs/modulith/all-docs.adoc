@@ -29,10 +29,6 @@ include::module-menu.adoc[]
 plantuml::module-notification.puml[,,format=svg]
 include::module-notification.adoc[]
 
-== Point
-plantuml::module-point.puml[,,format=svg]
-include::module-point.adoc[]
-
 == Storage
 plantuml::module-storage.puml[,,format=svg]
 include::module-storage.adoc[]
@@ -40,6 +36,10 @@ include::module-storage.adoc[]
 == Auth
 plantuml::module-auth.puml[,,format=svg]
 include::module-auth.adoc[]
+
+== Point
+plantuml::module-point.puml[,,format=svg]
+include::module-point.adoc[]
 
 == Customer
 plantuml::module-customer.puml[,,format=svg]

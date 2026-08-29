@@ -11,11 +11,11 @@ _Repositories_
 
 * `c.k.s.domain.ShiftRepository`
 |Bean references
-|* `c.k.u.domain.PlatformUserRepository` (in User)
-* `c.k.c.domain.CastRepository` (in Cast)
-* `c.k.s.config.AppProperties` (in Shared)
-* `c.k.s.storescope.StoreExistenceCheck` (in Shared)
+|* `c.k.s.application.BusinessDateService` (in Settings)
 * `c.k.c.application.CastService` (in Cast)
+* `c.k.u.domain.PlatformUserRepository` (in User)
+* `c.k.c.domain.CastRepository` (in Cast)
+* `c.k.s.storescope.StoreExistenceCheck` (in Shared)
 |Aggregate roots
 |* `c.k.s.domain.Shift`
 |===

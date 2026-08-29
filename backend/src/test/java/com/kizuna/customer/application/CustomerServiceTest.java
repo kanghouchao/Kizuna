@@ -81,7 +81,7 @@ class CustomerServiceTest {
     when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
     Page<CustomerSummaryResponse> result =
-        customerService.list("test", "GOLD", "VIP", PageRequest.of(0, 10));
+        customerService.list("test", "VIP", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("Test");
   }
@@ -99,8 +99,7 @@ class CustomerServiceTest {
         .thenReturn(page);
     when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
-    Page<CustomerSummaryResponse> result =
-        customerService.list(null, null, null, PageRequest.of(0, 10));
+    Page<CustomerSummaryResponse> result = customerService.list(null, null, PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("All");
   }
@@ -169,7 +168,7 @@ class CustomerServiceTest {
     when(customerMapper.toPatch(req))
         .thenReturn(
             new CustomerPatch(
-                "Updated", null, null, null, null, null, null, null, null, null, null, null));
+                "Updated", null, null, null, null, null, null, null, null, null, null));
 
     CustomerResponse resp = new CustomerResponse();
     resp.setName("Updated");
@@ -213,7 +212,7 @@ class CustomerServiceTest {
         .thenReturn(List.of(activeLink("c1", "123456789012")));
 
     List<CustomerSummaryResponse> result =
-        customerService.list(null, null, null, PageRequest.of(0, 10)).getContent();
+        customerService.list(null, null, PageRequest.of(0, 10)).getContent();
 
     assertThat(result.get(0).getMemberLinked()).isTrue();
     assertThat(result.get(1).getMemberLinked()).isFalse();
@@ -564,6 +563,6 @@ class CustomerServiceTest {
   /** 写像の結果は同一性だけを見るので、識別のつく id 以外は空でよい。 */
   private static CustomerMergeComparisonResponse comparison(String id) {
     return new CustomerMergeComparisonResponse(
-        id, null, null, null, null, null, null, null, null, null, null, null, null, false, 0L);
+        id, null, null, null, null, null, null, null, null, null, null, null, false, 0L);
   }
 }

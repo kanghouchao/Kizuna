@@ -120,6 +120,24 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         intValue("point_usage_unit", 1));
   }
 
+  /**
+   * 会員ランクの閾値も都度読む。理由は {@link #pointSettings} と同じで、都度読みなら閾値の変更が次回の判定から効く。
+   *
+   * <p>既定値は 0 で、{@link MemberRankSettings.Threshold} 側がそれを「成立しえない条件」として扱う — 未設定を 「0
+   * 以上で達成」と読むと最初の付与で全員が最上位へ上がる。
+   */
+  @Override
+  @Transactional(readOnly = true)
+  public MemberRankSettings memberRankSettings() {
+    return new MemberRankSettings(
+        new MemberRankSettings.Threshold(
+            intValue("member_rank_silver_visit_count", 0),
+            intValue("member_rank_silver_granted_points", 0)),
+        new MemberRankSettings.Threshold(
+            intValue("member_rank_gold_visit_count", 0),
+            intValue("member_rank_gold_granted_points", 0)));
+  }
+
   /** 数値設定の読み取り。未設定・不正値は既定値へ倒す（更新時に NUMBER として int の範囲まで検証済みのため不正値は通常は到達しない）。 */
   private int intValue(String configKey, int fallback) {
     String raw = rawValue(configKey);

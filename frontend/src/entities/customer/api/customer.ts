@@ -23,9 +23,8 @@ import {
   CustomerUpdateRequest,
 } from '../model/types';
 
-// 一覧のクエリ: 共通ページネーション + rank / classification の絞り込み
+// 一覧のクエリ: 共通ページネーション + classification の絞り込み
 export type CustomerListParams = PaginationParams & {
-  rank?: string;
   classification?: string;
 };
 

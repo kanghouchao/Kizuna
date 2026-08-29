@@ -43,6 +43,7 @@ import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.point.application.PointLedgerService.GrantedPoints;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
@@ -84,9 +85,6 @@ public class OrderService {
   /** 指名が成立しないことを店舗スタッフへ返すときの文言。列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す。 */
   private static final String NOT_NOMINATABLE_MESSAGE = "指名できるキャストではありません。在籍中のキャストを選んでください";
 
-  /** 台帳行を起こすときの顧客ランク。DB 既定（{@code SILVER}）と同義で、{@code OrderMapper#toCustomer} と揃える。 */
-  private static final String DEFAULT_RANK = "SILVER";
-
   private final OrderRepository orderRepository;
   private final OrderApplicationRepository orderApplicationRepository;
   private final OrderSearchQuery orderSearchQuery;
@@ -99,6 +97,7 @@ public class OrderService {
   private final NominatableCastLookup nominatableCast;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PointLedgerService pointLedgerService;
+  private final MemberRankSync memberRankSync;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final StoreContext storeContext;
@@ -510,15 +509,13 @@ public class OrderService {
       return;
     }
     if (request.getNewCustomer() != null) {
-      // store_id は StoreScopeStampListener が @PrePersist で採番する。ランクは他の台帳行の作成経路と
-      // 同じ既定を明示する — 列を写像している以上、省略は DB 既定ではなく null になる。
+      // store_id は StoreScopeStampListener が @PrePersist で採番する。
       // 起こしたばかりの行は他の経路の書き換えに晒されていないため、解決を経ずにそのまま着ける。
       Customer customer =
           customerRepository.save(
               Customer.builder()
                   .name(request.getNewCustomer().getName())
                   .phoneNumber(request.getNewCustomer().getPhoneNumber())
-                  .rank(DEFAULT_RANK)
                   .build());
       order.linkCustomer(customer.getId());
       return;
@@ -551,14 +548,10 @@ public class OrderService {
       return customerReferenceResolver.resolveForWrite(established.get().getCustomerId());
     }
     Long actorId = resolveActorId(actorEmail);
-    // store_id は StoreScopeStampListener が @PrePersist で採番する。ランクは他の台帳行の作成経路
-    // （通常作成・電話番号からの作成）と同じ既定を明示する — 列を写像している以上、省略は DB 既定ではなく null になる。
+    // store_id は StoreScopeStampListener が @PrePersist で採番する。
     Customer customer =
         customerRepository.save(
-            Customer.builder()
-                .name(application.getRequesterDeclaredName())
-                .rank(DEFAULT_RANK)
-                .build());
+            Customer.builder().name(application.getRequesterDeclaredName()).build());
     customerMemberLinkRepository.saveAndFlush(
         CustomerMemberLink.builder()
             .customerId(customer.getId())
@@ -641,13 +634,16 @@ public class OrderService {
       if (usePoints > 0) {
         pointLedgerService.useForOrder(memberId, id, order.getStoreId(), usePoints, actorId);
       }
-      granted =
+      GrantedPoints grant =
           pointLedgerService.grantForOrder(memberId, id, order.getStoreId(), chargeAmount, actorId);
+      granted = grant.points();
       // 帰属は付与の有無と独立している。0 円完了は台帳へ行を書かないが、来店した事実は記録として残す。
       // 会員コードは解決に使った関連のスナップショットをそのまま写す — 会員コードは発行後に変わらないため、
       // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
       orderAttributionRepository.save(
           OrderAttribution.onCompletion(id, memberId, link.getMemberCode(), OffsetDateTime.now()));
+      // 今回の来店を回数へ含めるため、帰属を記録した後に見直す。
+      memberRankSync.afterGrant(memberId, grant.entryId());
     } else {
       receiptToken = issueReceiptToken(id, chargeAmount);
     }

@@ -19,7 +19,6 @@ public class CustomerSummaryResponse {
   private String name;
   private String phoneNumber;
   private String lineId;
-  private String rank;
   private String classification;
 
   /** 会員紐づけの有無。関連状態の投影であり、応答では必ず真偽値が入る（null にはならない）。 */

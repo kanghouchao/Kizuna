@@ -1,0 +1,97 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-011-member-rank-history-schema
+      author: kanghouchao
+      # 会員ランクが上がった事実の追加型の記録。根拠は契機となった付与仕訳そのものを指す — 受注 ID で
+      # 指すと、同じ受注に同じ会員の付与が二本並ぶ場合（帰属の無効化 → 再発行 → 本人が申領し直す）に
+      # どちらが契機だったか辿れない。降格は存在しないので、遷移は必ず上位方向である。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_member_rank_histories
+            remarks: 会員ランクの昇格履歴
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_member_rank_histories
+              - column:
+                  name: member_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 昇格した会員
+              - column:
+                  name: previous_rank
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 遷移前のランク
+              - column:
+                  name: new_rank
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 遷移後のランク
+              - column:
+                  name: triggering_entry_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 判定の契機となった付与仕訳（ORDER_GRANT）
+              - column:
+                  name: promoted_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 昇格が成立した日時
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 履歴は会員の属性の変遷であって独立した資産ではない。会員コードのスナップショットも持たないため、
+        # 会員が消えた後の行には指し先が無く、残しても読めない。台帳（t_point_entries）と同じ CASCADE で揃える。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_member_rank_histories_member
+            baseTableName: t_member_rank_histories
+            baseColumnNames: member_id
+            referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 根拠の仕訳は会員削除で道連れになるため、こちらも CASCADE で同じ statement の中で消える。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_member_rank_histories_entry
+            baseTableName: t_member_rank_histories
+            baseColumnNames: triggering_entry_id
+            referencedTableName: t_point_entries
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - createIndex:
+            indexName: idx_t_member_rank_histories_member
+            tableName: t_member_rank_histories
+            columns:
+              - column:
+                  name: member_id
+              - column:
+                  name: id

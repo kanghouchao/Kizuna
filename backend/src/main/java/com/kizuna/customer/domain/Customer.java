@@ -44,9 +44,6 @@ public class Customer extends StoreScopedEntity {
   @Column(name = "has_pet")
   private Boolean hasPet;
 
-  @Column(name = "rank")
-  private String rank;
-
   @Column(name = "line_id")
   private String lineId;
 
@@ -97,9 +94,6 @@ public class Customer extends StoreScopedEntity {
     }
     if (patch.classification() != null) {
       this.classification = patch.classification();
-    }
-    if (patch.rank() != null) {
-      this.rank = patch.rank();
     }
     if (patch.lineId() != null) {
       this.lineId = patch.lineId();

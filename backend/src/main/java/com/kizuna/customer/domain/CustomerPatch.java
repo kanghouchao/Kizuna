@@ -9,7 +9,6 @@ public record CustomerPatch(
     String buildingName,
     String classification,
     Boolean hasPet,
-    String rank,
     String lineId,
     String usageAreas,
     String ngType,

@@ -385,6 +385,37 @@ class SystemConfigServiceImplTest {
     assertThat(point.usageUnit()).isEqualTo(1);
   }
 
+  @Test
+  void memberRankSettings_buildsTypedSnapshotFromKeys() {
+    when(systemConfigRepository.findByConfigKey("member_rank_silver_visit_count"))
+        .thenReturn(Optional.of(config("member_rank_silver_visit_count", "5")));
+    when(systemConfigRepository.findByConfigKey("member_rank_silver_granted_points"))
+        .thenReturn(Optional.of(config("member_rank_silver_granted_points", "5000")));
+    when(systemConfigRepository.findByConfigKey("member_rank_gold_visit_count"))
+        .thenReturn(Optional.of(config("member_rank_gold_visit_count", "20")));
+    when(systemConfigRepository.findByConfigKey("member_rank_gold_granted_points"))
+        .thenReturn(Optional.of(config("member_rank_gold_granted_points", "20000")));
+
+    MemberRankSettings rank = systemConfigService.memberRankSettings();
+
+    assertThat(rank.silver().visitCount()).isEqualTo(5);
+    assertThat(rank.silver().grantedPoints()).isEqualTo(5000);
+    assertThat(rank.gold().visitCount()).isEqualTo(20);
+    assertThat(rank.gold().grantedPoints()).isEqualTo(20000);
+  }
+
+  @Test
+  void memberRankSettings_unsetThresholdsCanNeverBeReached() {
+    // 未設定を 0 へ倒したうえで「0 以上で達成」と読ませない。読ませると最初の付与で全員が最上位へ上がる
+    when(systemConfigRepository.findByConfigKey(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(Optional.empty());
+
+    MemberRankSettings rank = systemConfigService.memberRankSettings();
+
+    assertThat(rank.silver().isReachedBy(Long.MAX_VALUE, Long.MAX_VALUE)).isFalse();
+    assertThat(rank.gold().isReachedBy(Long.MAX_VALUE, Long.MAX_VALUE)).isFalse();
+  }
+
   private SystemConfig config(String key, String value) {
     return SystemConfig.builder().configKey(key).configValue(value).build();
   }

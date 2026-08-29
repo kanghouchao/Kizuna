@@ -108,8 +108,6 @@ public interface OrderMapper {
 
   /** 電話番号からの顧客スマートリンク用に、作成リクエストから顧客行を起こします。 */
   @Mapping(target = "name", source = "customerName")
-  // rank は DB デフォルト（'SILVER'）と同義。注文経由の顧客作成でも通常作成と揃える
-  @Mapping(target = "rank", constant = "SILVER")
   @Mapping(target = "lineId", ignore = true)
   @Mapping(target = "usageAreas", ignore = true)
   // 起こしたばかりの行は定義上まだ生きている。統合先参照は統合だけが立てる。

@@ -23,4 +23,7 @@ public interface SystemConfigService {
 
   /** ポイント制度の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
   PointSettings pointSettings();
+
+  /** 会員ランクの昇格閾値の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
+  MemberRankSettings memberRankSettings();
 }

@@ -39,16 +39,16 @@ import tools.jackson.databind.JsonNode;
 /**
  * 会員側の応答に店舗顧客台帳の内部項目が一切乗らないことを本物の PostgreSQL で検証する統合テスト。
  *
- * <p>紐づけは店舗が会員を自店舗の台帳に結び付ける操作であって、会員に台帳を開くものではない。ランク・区分・NG・連絡先などの内部評価は 店舗の内部情報であり、本人であっても
- * 会員側の経路からは到達できてはならない。
+ * <p>紐づけは店舗が会員を自店舗の台帳に結び付ける操作であって、会員に台帳を開くものではない。区分・NG・連絡先などの内部評価は 店舗の内部情報であり、本人であっても
+ * 会員側の経路からは到達できてはならない。会員ランクはここに含まれない — Member 自身の属性であって店舗の台帳が持つ評価ではない。
  *
  * <p>ポイント残高は会員自身のものなので、本人向けのポイント端点<b>だけ</b>が残高系の項目を返してよい。残りの会員側端点では 従来どおり禁止する（端点ごとの許可は {@link
  * MemberEndpoint#exposesBalance}）。手動調整の理由は店員が書く運用内部の文言なので、 ポイント端点でも禁止のままにする。
  *
  * <p>数値のカナリアは会員の台帳へ仕込む。顧客の保有ポイント列は廃止され、残高は台帳の合計としてのみ存在する。
  *
- * <p>断言は 2 段。生ボディに対しては、実データそのもの（カナリア文字列）と<b>引用符付きの項目名</b>（{@code "rank"} 等）の 非混入を見る — 応答には JWT
- * が含まれ、base64url の字母表に {@code "} は無いため、引用符付きなら token
+ * <p>断言は 2 段。生ボディに対しては、実データそのもの（カナリア文字列）と<b>引用符付きの項目名</b>（{@code "classification"} 等）の 非混入を見る —
+ * 応答には JWT が含まれ、base64url の字母表に {@code "} は無いため、引用符付きなら token
  * 由来の偶然一致で赤くならない。加えて項目を返す端点は項目名の白名単反復で、想定外の項目が増えたら落ちるようにする。
  */
 class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
@@ -56,9 +56,8 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private static final String PASSWORD = "password1234";
 
   /** 顧客台帳の内部項目に仕込む、他に一致しようがない実データ。 */
-  private static final String CANARY_RANK = "CANARY-RANK-ecb1f0d4-8a2c";
-
   private static final String CANARY_CLASSIFICATION = "CANARY-CLASSIFICATION-ecb1f0d4-8a2c";
+
   private static final String CANARY_NG_TYPE = "CANARY-NGTYPE-ecb1f0d4-8a2c";
   private static final String CANARY_NG_CONTENT = "CANARY-NGCONTENT-ecb1f0d4-8a2c";
   private static final String CANARY_PHONE = "CANARY-PHONE-ecb1f0d4-8a2c";
@@ -98,7 +97,6 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
 
   private static final List<String> CANARY_VALUES =
       List.of(
-          CANARY_RANK,
           CANARY_CLASSIFICATION,
           CANARY_NG_TYPE,
           CANARY_NG_CONTENT,
@@ -120,7 +118,6 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
           "\"fee_lines\"",
           "\"used_points\"",
           "\"auto_grant_points\"",
-          "\"rank\"",
           "\"classification\"",
           "\"ng_type\"",
           "\"ng_content\"",
@@ -219,7 +216,6 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             .buildingName(CANARY_ADDRESS)
             .classification(CANARY_CLASSIFICATION)
             .hasPet(true)
-            .rank(CANARY_RANK)
             .lineId(CANARY_LINE_ID)
             .usageAreas(CANARY_USAGE_AREAS)
             .ngType(CANARY_NG_TYPE)
@@ -296,7 +292,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_A)),
             String.class);
     assertThat(storeDetail.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(storeDetail.getBody()).contains(CANARY_RANK).contains(CANARY_NG_CONTENT);
+    assertThat(storeDetail.getBody()).contains(CANARY_CLASSIFICATION).contains(CANARY_NG_CONTENT);
 
     // 一覧の行も同じ台帳を投影する面なので、載る項目については同じく正向対照に置く
     ResponseEntity<String> storeList =
@@ -306,7 +302,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             new HttpEntity<>(storeHeaders(STORE_A)),
             String.class);
     assertThat(storeList.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(storeList.getBody()).contains(CANARY_RANK);
+    assertThat(storeList.getBody()).contains(CANARY_CLASSIFICATION);
 
     // 残高も同じく、店舗側の照会からは読める（数値のカナリアが台帳へ届いていることの証明でもある）
     ResponseEntity<String> storeBalance =

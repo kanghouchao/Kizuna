@@ -38,10 +38,9 @@ public class CustomerController {
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Page<CustomerSummaryResponse>> list(
       @RequestParam(required = false) String search,
-      @RequestParam(required = false) String rank,
       @RequestParam(required = false) String classification,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(customerService.list(search, rank, classification, pageable));
+    return ResponseEntity.ok(customerService.list(search, classification, pageable));
   }
 
   /**

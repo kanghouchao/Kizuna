@@ -33,6 +33,28 @@ class MemberTest {
   }
 
   @Test
+  @DisplayName("新規会員は最低位の BRONZE から始まる（builder が指定できる余地を持たない）")
+  void newMemberStartsAtBronze() {
+    Member member = Member.builder().memberCode("123456789012").platformUserId(7L).build();
+
+    assertThat(member.getRank()).isEqualTo(MemberRank.BRONZE);
+  }
+
+  @Test
+  @DisplayName("昇格は上位へのみ通り、同格・降格・null は不変条件違反で例外")
+  void promoteToRejectsAnythingButAnUpgrade() {
+    Member member = Member.builder().memberCode("123456789012").platformUserId(7L).build();
+    member.promoteTo(MemberRank.GOLD);
+
+    assertThat(member.getRank()).isEqualTo(MemberRank.GOLD);
+    assertThatThrownBy(() -> member.promoteTo(MemberRank.GOLD))
+        .isInstanceOf(InvalidMemberException.class);
+    assertThatThrownBy(() -> member.promoteTo(MemberRank.SILVER))
+        .isInstanceOf(InvalidMemberException.class);
+    assertThatThrownBy(() -> member.promoteTo(null)).isInstanceOf(InvalidMemberException.class);
+  }
+
+  @Test
   @DisplayName("会員コードは数字 12 桁で生成される（先頭 0 も許容する固定長）")
   void generatedCodeIsTwelveDigits() {
     Random random = new Random(42);

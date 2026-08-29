@@ -8,7 +8,6 @@ export interface CustomerResponse {
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  rank?: string;
   line_id?: string;
   usage_areas?: string;
   ng_type?: string;
@@ -34,7 +33,6 @@ export interface CustomerSummaryResponse {
   name?: string;
   phone_number?: string;
   line_id?: string;
-  rank?: string;
   classification?: string;
   /** 会員紐づけの有無。一覧の応答では常に真偽値が入る。 */
   member_linked?: boolean;
@@ -59,7 +57,6 @@ export interface CustomerMergeComparisonResponse {
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  rank?: string;
   line_id?: string;
   usage_areas?: string;
   ng_type?: string;
@@ -178,7 +175,6 @@ export interface CustomerCreateRequest {
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  rank?: string;
   line_id?: string;
   usage_areas?: string;
   ng_type?: string;
@@ -194,7 +190,6 @@ export interface CustomerUpdateRequest {
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  rank?: string;
   line_id?: string;
   usage_areas?: string;
   ng_type?: string;

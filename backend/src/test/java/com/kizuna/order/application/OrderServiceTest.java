@@ -127,6 +127,7 @@ class OrderServiceTest {
   @Mock NominatableCastLookup nominatableCast;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PointLedgerService pointLedgerService;
+  @Mock MemberRankSync memberRankSync;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock RoleRepository roleRepository;
   @Mock StoreContext storeContext;
@@ -196,6 +197,11 @@ class OrderServiceTest {
     // 明細の入力 → 下書きの翻訳（表示値から帯符号へ）は写像の既定実装をそのまま通す。ここを mock の
     // 既定値（null）に任せると、内訳が黙って空になったまま合計の検証が通ってしまう。
     lenient().when(orderMapper.toFeeLineDrafts(anyList())).thenAnswer(Answers.CALLS_REAL_METHODS);
+    // 付与の記帳は「何ポイント積んだか」と「どの仕訳を積んだか」を返す。既定値（null）に任せると
+    // 完了の続きが読めなくなるため、付与の無い形で緩く stub する。
+    lenient()
+        .when(pointLedgerService.grantForOrder(anyLong(), any(), any(), anyInt(), any()))
+        .thenReturn(new PointLedgerService.GrantedPoints(0, null));
   }
 
   private PlatformUser receptionist(
@@ -1460,7 +1466,6 @@ class OrderServiceTest {
     verify(customerRepository).save(customerCaptor.capture());
     assertThat(customerCaptor.getValue().getName()).isEqualTo("ゲスト花子");
     assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09000000000");
-    assertThat(customerCaptor.getValue().getRank()).as("台帳行のランクは既定を明示すること").isEqualTo("SILVER");
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("cust-new");
   }
@@ -1639,7 +1644,6 @@ class OrderServiceTest {
     Customer created = customerCaptor.getValue();
     assertThat(created.getName()).as("台帳行の氏名は本人が名乗った名前であること").isEqualTo("名乗り太郎");
     assertThat(created.getPhoneNumber()).as("申請は電話番号を運ばないこと").isNull();
-    assertThat(created.getRank()).as("他の台帳行の作成経路と同じ既定ランクを持つこと").isEqualTo("SILVER");
 
     verify(customerMemberLinkRepository).saveAndFlush(linkCaptor.capture());
     CustomerMemberLink link = linkCaptor.getValue();
@@ -1957,6 +1961,7 @@ class OrderServiceTest {
 
   private static final long MEMBER_ID = 100L;
   private static final long ACTOR_ID = 7L;
+  private static final long GRANT_ENTRY_ID = 55L;
 
   /** 完了の対象になる受注が現に持つ版。要求はこれと同じ値を載せて初めて通る。 */
   private static final long CURRENT_VERSION = 4L;
@@ -2045,7 +2050,7 @@ class OrderServiceTest {
     stubActiveLink(MEMBER_ID);
     stubActor();
     when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
-        .thenReturn(120);
+        .thenReturn(new PointLedgerService.GrantedPoints(120, GRANT_ENTRY_ID));
     stubWriteBackResponse();
 
     service.complete("o1", completion(12000, 300), "staff@kizuna.test");
@@ -2068,7 +2073,7 @@ class OrderServiceTest {
     stubActiveLink(MEMBER_ID);
     stubActor();
     when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
-        .thenReturn(120);
+        .thenReturn(new PointLedgerService.GrantedPoints(120, GRANT_ENTRY_ID));
     stubWriteBackResponse();
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");

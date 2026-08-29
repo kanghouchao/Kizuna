@@ -81,6 +81,16 @@ public class PointLedgerService {
   }
 
   /**
+   * 会員の受注付与の累計純額（取消仕訳の控除後）。会員ランクの昇格指標であり、取消で減りうる。
+   *
+   * <p>返すのは合計だけで、仕訳そのものは公開しない — 昇格の判定に要るのは指標の値だけで、行を渡すと追加型台帳の 不変条件が外から触れるようになる。
+   */
+  @Transactional(readOnly = true)
+  public long netGrantedPointsFor(long memberId) {
+    return pointEntryRepository.sumNetOrderGrants(memberId);
+  }
+
+  /**
    * 指定店舗に帰属する仕訳が存在するか。
    *
    * <p>返すのは有無だけで、仕訳そのものは公開しない — 店舗の削除可否を判定する側は「その店舗で起きた記録があるか」しか
@@ -113,27 +123,38 @@ public class PointLedgerService {
         .collect(Collectors.toMap(OrderGrantTotalView::getOrderId, OrderGrantTotalView::getTotal));
   }
 
-  /** 受注完了に伴う付与。会計金額から付与額を決めて記帳する。付与が 0 なら台帳へ何も書かない。戻り値は実際に付与したポイント数。 */
-  public int grantForOrder(
+  /** 受注完了に伴う付与。会計金額から付与額を決めて記帳する。付与が 0 なら台帳へ何も書かない。 */
+  public GrantedPoints grantForOrder(
       long memberId, String orderId, Long storeId, int totalFee, Long actorUserId) {
     int granted = previewGrant(totalFee);
-    grantPlannedForOrder(memberId, orderId, storeId, granted, actorUserId);
-    return granted;
+    return new GrantedPoints(
+        granted, grantPlannedForOrder(memberId, orderId, storeId, granted, actorUserId));
   }
+
+  /**
+   * 記帳した付与。
+   *
+   * @param points 実際に付与したポイント数
+   * @param entryId 記帳した仕訳。付与が 0 なら台帳へ行を書かないので null
+   */
+  public record GrantedPoints(int points, Long entryId) {}
 
   /**
    * 確定済みの付与額をそのまま記帳する（伝票トークンの申領）。付与が 0 なら台帳へ何も書かない。
    *
    * <p>額を呼出側から受け取るのは、その額が<b>完了時点</b>の付与規則で確定しているため。ここで会計金額から
    * 計算し直すと、申領の早い遅い（＝その間の付与設定の変更）で同じ会計が別のポイントになる。
+   *
+   * @return 記帳した仕訳の ID。付与が 0 なら台帳へ行を書かないので null
    */
-  public void grantPlannedForOrder(
+  public Long grantPlannedForOrder(
       long memberId, String orderId, Long storeId, int plannedPoints, Long actorUserId) {
     if (plannedPoints == 0) {
-      return;
+      return null;
     }
-    pointEntryRepository.save(
-        PointEntry.grantForOrder(memberId, orderId, storeId, plannedPoints, actorUserId));
+    return pointEntryRepository
+        .save(PointEntry.grantForOrder(memberId, orderId, storeId, plannedPoints, actorUserId))
+        .getId();
   }
 
   /** 受注会計でのポイント利用。期限の早いロットから引き当てる。 */
