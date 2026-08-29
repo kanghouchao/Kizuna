@@ -9,7 +9,8 @@
 * `c.k.p.application.MemberPointService`
 * `c.k.p.application.PointLedgerService`
 |Bean references
-|* `c.k.u.domain.PlatformUserRepository` (in User)
+|* `c.k.s.storescope.StoreExistenceCheck` (in Shared)
+* `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.m.application.MemberLookupService` (in Member)
 * `c.k.s.config.AppProperties` (in Shared)
 * `c.k.s.application.SystemConfigService` (in Settings)
