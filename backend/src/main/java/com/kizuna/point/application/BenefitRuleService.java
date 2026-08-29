@@ -7,6 +7,7 @@ import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
 import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleRepository;
+import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -48,6 +49,12 @@ public class BenefitRuleService {
   @Transactional
   public BenefitRuleResponse update(Long id, BenefitRuleUpdateRequest request) {
     BenefitRule rule = find(id);
+    // 全量置換なので、開いたまま別の管理者が編集を済ませていると送らなかった項目まで開いた時点の値で
+    // 押し戻す。陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に
+    // 見える）ため、応答で往復させた version を明示比対して 409 で拒否する。
+    if (!rule.getVersion().equals(request.getVersion())) {
+      throw new StaleBenefitRuleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
+    }
     rule.redefine(benefitRuleMapper.toDefinition(request));
     return benefitRuleMapper.toResponse(benefitRuleRepository.save(rule));
   }

@@ -16,6 +16,7 @@ import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
 import com.kizuna.point.domain.BenefitRuleRepository;
 import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
+import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
@@ -31,6 +32,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class BenefitRuleServiceTest {
@@ -55,6 +57,7 @@ class BenefitRuleServiceTest {
                 .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
                 .points(500)
                 .build());
+    ReflectionTestUtils.setField(visitRule, "version", 0L);
   }
 
   @Test
@@ -118,6 +121,7 @@ class BenefitRuleServiceTest {
     request.setRepeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER);
     request.setPoints(300);
     request.setGrantValidityDays(90);
+    request.setVersion(0L);
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
     when(benefitRuleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -127,6 +131,22 @@ class BenefitRuleServiceTest {
     assertThat(response.name()).isEqualTo("来店ボーナス（改）");
     assertThat(response.storeIds()).isEmpty();
     assertThat(response.grantValidityDays()).isEqualTo(90);
+  }
+
+  @Test
+  @DisplayName("陳腐化した編集フォームの提出は 409 で撥ねられること")
+  void staleUpdateIsRejected() {
+    BenefitRuleUpdateRequest request = new BenefitRuleUpdateRequest();
+    request.setName("来店ボーナス（改）");
+    request.setStoreScopeType(StoreScopeType.ALL_STORES);
+    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
+    request.setPoints(300);
+    request.setVersion(1L);
+    when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
+
+    assertThatThrownBy(() -> benefitRuleService.update(1L, request))
+        .isInstanceOf(StaleBenefitRuleUpdateException.class);
+    assertThat(visitRule.getName()).isEqualTo("来店ボーナス");
   }
 
   @Test

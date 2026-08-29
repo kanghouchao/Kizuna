@@ -5,6 +5,7 @@
 |Spring components
 |_Services_
 
+* `c.k.p.application.BenefitRuleService`
 * `c.k.p.application.MemberPointService`
 * `c.k.p.application.PointLedgerService`
 |Bean references
