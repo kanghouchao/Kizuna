@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -158,6 +159,10 @@ public class BenefitRule extends BaseEntity {
     }
     if (storeScopeType == StoreScopeType.SPECIFIC_STORES && stores.isEmpty()) {
       throw new InvalidBenefitRuleException("店舗集合の規則には少なくとも 1 つの店舗が必要です");
+    }
+    // Set.of(...) は contains(null) で NPE を投げるので、走査で確かめる。
+    if (stores.stream().anyMatch(Objects::isNull)) {
+      throw new InvalidBenefitRuleException("適用店舗に空の指定は混ぜられません");
     }
     if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
       throw new InvalidBenefitRuleException("全店舗の規則に個別店舗を指定できません");

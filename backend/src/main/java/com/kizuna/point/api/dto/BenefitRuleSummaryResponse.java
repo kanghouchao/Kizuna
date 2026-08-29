@@ -7,6 +7,7 @@ import java.time.LocalDate;
  *
  * @param storeCount 発火を拾う店舗の件数。全店舗の規則では 0
  * @param enabled 停用されていない規則が true。停用済みも一覧には並ぶ（削除しないため）
+ * @param version 楽観ロック用バージョン。停用の入口が一覧の行なので、要約も運ぶ
  */
 public record BenefitRuleSummaryResponse(
     Long id,
@@ -21,4 +22,5 @@ public record BenefitRuleSummaryResponse(
     Integer points,
     Integer referrerPoints,
     Integer referredPoints,
-    boolean enabled) {}
+    boolean enabled,
+    Long version) {}

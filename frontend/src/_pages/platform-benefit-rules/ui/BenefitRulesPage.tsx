@@ -8,7 +8,7 @@ import {
   benefitRuleTypeLabel,
 } from '@/entities/benefit-rule';
 import { PlatformStore, platformAuthApi } from '@/entities/user';
-import { getApiErrorMessage, useListPage, useManagedList } from '@/shared/lib';
+import { getApiErrorMessage, isConflict, useListPage, useManagedList } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -70,11 +70,18 @@ export default function BenefitRulesPage() {
   const deactivate = async (rule: BenefitRuleSummaryResponse) => {
     setDeactivating(null);
     try {
-      await benefitRuleApi.deactivate(rule.id ?? 0);
+      await benefitRuleApi.deactivate(rule.id ?? 0, rule.version ?? 0);
       notify.success('特典規則を停用しました');
       void list.reload();
     } catch (error) {
-      notify.error(getApiErrorMessage(error, '特典規則の停用に失敗しました'));
+      if (isConflict(error)) {
+        // 承認の画面を開いている間に別の管理者が内容を書き換えた。見ていない規則を消さずに
+        // 一覧を取り直し、最新の内容から選び直させる
+        notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+      } else {
+        notify.error(getApiErrorMessage(error, '特典規則の停用に失敗しました'));
+      }
+      void list.reload();
     }
   };
 

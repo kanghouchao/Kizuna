@@ -32,8 +32,8 @@ export const benefitRuleApi = {
     const response = await apiClient.put(`${BASE_URL}/${id}`, data);
     return response.data;
   },
-  /** 停用（退場）。再開の口は無い。 */
-  deactivate: async (id: number): Promise<void> => {
-    await apiClient.post(`${BASE_URL}/${id}/deactivation`);
+  /** 停用（退場）。再開の口が無いので、確認した行の version を運ぶ（不一致は 409）。 */
+  deactivate: async (id: number, version: number): Promise<void> => {
+    await apiClient.post(`${BASE_URL}/${id}/deactivation`, { version });
   },
 };

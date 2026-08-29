@@ -197,16 +197,38 @@ class PlatformBenefitRuleControllerTest {
   @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void deactivationReturnsNoContentAndRejectsSecondTime() throws Exception {
     mockMvc
-        .perform(post("/platform/benefit-rules/1/deactivation").with(csrf()))
+        .perform(
+            post("/platform/benefit-rules/1/deactivation")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":0}"))
         .andExpect(status().isNoContent());
 
     org.mockito.Mockito.doThrow(new InvalidBenefitRuleException("停用済みの規則です"))
         .when(benefitRuleService)
-        .deactivate(1L);
+        .deactivate(eq(1L), any());
 
     mockMvc
-        .perform(post("/platform/benefit-rules/1/deactivation").with(csrf()))
+        .perform(
+            post("/platform/benefit-rules/1/deactivation")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":0}"))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("version の無い停用要求は 400 になること（見ていない規則を消させない）")
+  void deactivationRequiresVersion() throws Exception {
+    mockMvc
+        .perform(
+            post("/platform/benefit-rules/1/deactivation")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest());
+
+    verify(benefitRuleService, never()).deactivate(any(), any());
   }
 
   @Test
@@ -247,7 +269,11 @@ class PlatformBenefitRuleControllerTest {
                     """))
         .andExpect(status().isForbidden());
     mockMvc
-        .perform(post("/platform/benefit-rules/1/deactivation").with(csrf()))
+        .perform(
+            post("/platform/benefit-rules/1/deactivation")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"version\":0}"))
         .andExpect(status().isForbidden());
   }
 
@@ -265,7 +291,8 @@ class PlatformBenefitRuleControllerTest {
         500,
         null,
         null,
-        enabled);
+        enabled,
+        0L);
   }
 
   private static BenefitRuleResponse response(Long id) {
