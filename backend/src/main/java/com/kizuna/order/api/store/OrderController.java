@@ -282,6 +282,8 @@ public class OrderController {
   /**
    * 受注 1 件を根拠とするポイントの授受を理由付きで打ち消す（巻き戻し）。
    *
+   * <p>新たな操作記録を生む動作なので 201（完了後訂正・伝票トークン発行と同じ扱い）。
+   *
    * <p>二度目は 409。同じ受注への並行要求は受注行のロックで直列化されるためサービス側の判定が撥ねるが、 一意制約に敗れる形で届いた場合も同じ 409 へ落とす（500
    * に化けさせない）。初回の理由・実行者は書き換わらない。
    */
@@ -292,8 +294,8 @@ public class OrderController {
       @Valid @RequestBody OrderPointRollbackRequest request,
       Principal principal) {
     try {
-      return ResponseEntity.ok(
-          orderPointRollbackService.rollback(id, request, principal.getName()));
+      return ResponseEntity.status(HttpStatus.CREATED)
+          .body(orderPointRollbackService.rollback(id, request, principal.getName()));
     } catch (DataIntegrityViolationException ex) {
       if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ROLLBACKS_ORDER)) {
         throw ex;

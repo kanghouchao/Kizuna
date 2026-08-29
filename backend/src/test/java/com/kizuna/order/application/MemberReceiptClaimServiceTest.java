@@ -152,6 +152,31 @@ class MemberReceiptClaimServiceTest {
   }
 
   @Test
+  @DisplayName("巻き戻し済みの受注の伝票も、同じ文言で撥ねられて何も書かれないこと")
+  void refusesTheReceiptOfARolledBackOrder() {
+    // 拒否の材料は操作記録であって台帳の仕訳ではない。付与予定額は完了時点で固定され再発行でも
+    // 計算し直されないため、記録で拦めなければ申領は原額の付与を積み直せる。
+    OrderReceiptToken token = issuedToken(OffsetDateTime.now());
+    // 受注は読まない。門はトークンの照合の直後で、発生店舗を解く前に閉じる。
+    Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
+        .thenReturn(Optional.of(token));
+    Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(true);
+
+    Throwable rolledBack = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+
+    Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
+        .thenReturn(Optional.empty());
+    Throwable missing = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+
+    assertThat(rolledBack).isInstanceOf(NotFoundException.class).hasMessage(missing.getMessage());
+    assertThat(token.getStatus()).as("撥ねた伝票は未申領のまま残ること").isEqualTo(OrderReceiptTokenStatus.ISSUED);
+    Mockito.verify(orderAttributionRepository, Mockito.never()).save(Mockito.any());
+    Mockito.verify(pointLedgerService, Mockito.never())
+        .grantPlannedForOrder(
+            Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyInt(), Mockito.any());
+  }
+
+  @Test
   @DisplayName("会員でない主体には申領させないこと")
   void refusesANonMemberPrincipal() {
     Mockito.when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID))

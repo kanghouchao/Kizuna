@@ -133,7 +133,10 @@ export default function OrderPointRollbackPage() {
           <h2 className="text-foreground text-sm font-medium">巻き戻しました</h2>
           <PointsSummary cancelled={result.cancelled_points} restored={result.restored_points} />
           <p className="text-muted-foreground text-sm">
-            戻した利用は元のロットへ期限そのまま返っています。この受注は以後、伝票の申領を受け付けません。
+            {result.restored_points > 0
+              ? '戻した利用は元のロットへ期限そのまま返っています。'
+              : '台帳に打ち消す対象はありませんでした。'}
+            この受注は以後、伝票の申領を受け付けません。
           </p>
         </div>
       )}

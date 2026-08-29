@@ -70,7 +70,7 @@ class PointRollbackIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> rolledBack = rollback(attributed.orderId(), "誤完了の全否定");
 
-    assertThat(rolledBack.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(rolledBack.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(rolledBack.getBody().path("cancelled_points").asInt()).isEqualTo(EXPECTED_GRANT);
     assertThat(rolledBack.getBody().path("restored_points").asInt()).isEqualTo(USED_POINTS);
 
@@ -98,7 +98,7 @@ class PointRollbackIT extends CrossStoreTestSupport {
     Attributed attributed = completedOrderUsingPoints();
     assertThat(rollback(attributed.orderId(), "初回の理由").getStatusCode())
         .as("前提: 初回が通ること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
 
     ResponseEntity<JsonNode> second = rollback(attributed.orderId(), "二度目の理由");
 
@@ -115,7 +115,7 @@ class PointRollbackIT extends CrossStoreTestSupport {
     // 会員へ帰属しない完了なので、この時点で台帳には 1 行も無い。拒否の材料は操作記録しかない。
     Issued issued = completedOrderWithToken();
     ResponseEntity<JsonNode> rolledBack = rollback(issued.orderId(), "誤完了の全否定");
-    assertThat(rolledBack.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(rolledBack.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(rolledBack.getBody().path("cancelled_points").asInt()).isZero();
     assertThat(ledgerRowsFor(issued.orderId())).as("前提: 台帳に仕訳が無いこと").isZero();
 
@@ -174,7 +174,8 @@ class PointRollbackIT extends CrossStoreTestSupport {
     assertThat(before.path("reversible_used_points").asInt()).isEqualTo(USED_POINTS);
     assertThat(before.path("member_code").asString()).isEqualTo(attributed.memberCode());
 
-    assertThat(rollback(attributed.orderId(), "誤完了の全否定").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(rollback(attributed.orderId(), "誤完了の全否定").getStatusCode())
+        .isEqualTo(HttpStatus.CREATED);
 
     JsonNode after = preview(attributed.orderId());
     assertThat(after.path("already_rolled_back").asBoolean()).isTrue();
