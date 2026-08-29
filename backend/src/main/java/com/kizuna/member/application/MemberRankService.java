@@ -31,6 +31,16 @@ public class MemberRankService {
   private final SystemConfigService systemConfigService;
 
   /**
+   * 昇格判定が取るのと同じ会員行のロックを先に取る。会員へ外部キーを張る書き込みより前に通すこと — 理由は {@link MemberRepository#lockIdForUpdate}
+   * に記す。
+   */
+  public void lockForPromotion(long memberId) {
+    memberRepository
+        .lockIdForUpdate(memberId)
+        .orElseThrow(() -> new NotFoundException("会員が見つかりません"));
+  }
+
+  /**
    * 帰属の成立と同期してランクを見直し、上位の条件を満たしていれば昇格させる。
    *
    * <p>条件は OR — 完了受注の回数か付与の純額のどちらか一方の達成で足りる（高頻度客と高額客の両方を拾う）。 純額は取消仕訳の控除後なので減りうるが、ランクは戻らない（棘輪） —

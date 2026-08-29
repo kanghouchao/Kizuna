@@ -86,6 +86,8 @@ public class MemberReceiptClaimService {
             .findById(token.getOrderId())
             .orElseThrow(() -> new NotFoundException(UNCLAIMABLE_MESSAGE));
 
+    // 会員行は帰属記録・台帳より先に押さえる（理由は MemberRankSync#beforeMemberWrites）。
+    memberRankSync.beforeMemberWrites(member.memberId());
     token.claim(now);
     orderReceiptTokenRepository.save(token);
     OrderAttribution attribution =

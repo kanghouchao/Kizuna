@@ -1,6 +1,7 @@
 package com.kizuna.member.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -16,6 +17,7 @@ import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.settings.application.MemberRankSettings;
 import com.kizuna.settings.application.MemberRankSettings.Threshold;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.exception.NotFoundException;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -179,6 +181,26 @@ class MemberRankServiceTest {
     inOrder.verify(memberRepository).findByIdForUpdate(MEMBER_ID);
     inOrder.verify(metrics).completedVisitCount(MEMBER_ID);
     inOrder.verify(metrics).netGrantedPoints(MEMBER_ID);
+  }
+
+  @Test
+  @DisplayName("先取りのロックは実体を読み込まずに行だけを押さえること（後段のロックが昇格にならない）")
+  void reservesTheMemberRowWithoutLoadingTheEntity() {
+    when(memberRepository.lockIdForUpdate(MEMBER_ID)).thenReturn(Optional.of(MEMBER_ID));
+
+    memberRankService.lockForPromotion(MEMBER_ID);
+
+    verify(memberRepository).lockIdForUpdate(MEMBER_ID);
+    verify(memberRepository, never()).findByIdForUpdate(MEMBER_ID);
+  }
+
+  @Test
+  @DisplayName("先取りのロックで会員が見つからなければ 404 になること")
+  void rejectsReservationOfAMissingMember() {
+    when(memberRepository.lockIdForUpdate(MEMBER_ID)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> memberRankService.lockForPromotion(MEMBER_ID))
+        .isInstanceOf(NotFoundException.class);
   }
 
   /** 指標の供給口。実装は order 側にあり、この層は受け取った値で判じるだけである。 */

@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -106,6 +107,22 @@ class MemberReceiptClaimServiceTest {
     assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
     // 実行者は申領した本人。台帳では実行者 null が「機構が起こした仕訳」の形であり、人手の操作と混ぜない
     Mockito.verify(pointLedgerService)
+        .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, PLANNED_POINTS, PLATFORM_USER_ID);
+  }
+
+  @Test
+  @DisplayName("会員行は帰属記録・台帳より先に押さえること（後から押さえると並行する申領同士が死錠する）")
+  void claimLocksTheMemberRowBeforeAnythingReferencesIt() {
+    givenToken(issuedToken(OffsetDateTime.now()));
+
+    service.claim(EMAIL, RAW_TOKEN);
+
+    InOrder inOrder =
+        Mockito.inOrder(memberRankSync, orderAttributionRepository, pointLedgerService);
+    inOrder.verify(memberRankSync).beforeMemberWrites(MEMBER_ID);
+    inOrder.verify(orderAttributionRepository).save(Mockito.any());
+    inOrder
+        .verify(pointLedgerService)
         .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, PLANNED_POINTS, PLATFORM_USER_ID);
   }
 
