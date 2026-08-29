@@ -643,7 +643,7 @@ export interface MemberVisit {
 // 伝票トークンの申領の結果（POST /platform/me/receipts）。
 // 来店の内容は来店履歴（MemberVisit）が返すもので、この応答には乗らない。
 export interface MemberReceiptClaim {
-  /** Java 側が primitive の int のため、キーは必ず応答に含まれる。0 円完了の伝票では 0。 */
+  /** Java 側が primitive の long のため、キーは必ず応答に含まれる。付与も特典も無い伝票では 0。 */
   granted_points: number;
 }
 

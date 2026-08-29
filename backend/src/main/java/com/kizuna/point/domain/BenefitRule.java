@@ -118,6 +118,39 @@ public class BenefitRule extends BaseEntity {
     this.enabled = false;
   }
 
+  /**
+   * この規則が、指定店舗で起きた指定日の事象を拾うか。停用済み・適用期間の外・適用店舗の外はいずれも拾わない。
+   *
+   * <p>日付は<b>発火事象そのものの日</b>（受注条件なら根拠受注の営業日）で判じる。伝票トークンの事後申領は最大 90 日
+   * 遅れるが、遅れているのは申領という行政手続きであって発火した事実ではない — 規則の適用期間が閉じた後も、窓内の受注に
+   * ついては付与が起こりうる。これは事後申領モデルの代価で、個別の打ち消しは巻き戻しが担う。
+   *
+   * <p>店舗の指定が無い事象は、店舗集合の規則では拾わない（fail-closed）。
+   */
+  public boolean firesFor(Long storeId, LocalDate occurredOn) {
+    if (!this.enabled) {
+      return false;
+    }
+    if (effectiveFrom != null && occurredOn.isBefore(effectiveFrom)) {
+      return false;
+    }
+    if (effectiveUntil != null && occurredOn.isAfter(effectiveUntil)) {
+      return false;
+    }
+    return storeScopeType == StoreScopeType.ALL_STORES
+        || (storeId != null && storeIds.contains(storeId));
+  }
+
+  /**
+   * 付与するポイントの有効期限。付与ポイント有効期間が無指定なら無期限（null）。
+   *
+   * <p>期限当日はまだ使える（台帳の判定）ので、最終有効日は付与日を<b>含めて</b>数える — 有効期間 1 日なら付与日限り。 {@code grantValidityDays}
+   * 日後を期限にすると、管理面が「有効期間（日）」として受けた日数より 1 日長く使えてしまう。
+   */
+  public LocalDate grantExpiryOn(LocalDate grantedOn) {
+    return grantValidityDays == null ? null : grantedOn.plusDays(grantValidityDays - 1L);
+  }
+
   private void assign(BenefitRuleDefinition definition) {
     if (definition == null) {
       throw new InvalidBenefitRuleException("規則の定義は必須です");

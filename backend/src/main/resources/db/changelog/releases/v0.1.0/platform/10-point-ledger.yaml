@@ -34,7 +34,7 @@ databaseChangeLog:
                   type: VARCHAR(30)
                   constraints:
                     nullable: false
-                  remarks: 仕訳種別（ORDER_GRANT/USE/MANUAL_ADJUST/CANCEL/USE_CANCEL/EXPIRE/WITHDRAWAL_CLEAR）
+                  remarks: 仕訳種別（ORDER_GRANT/BENEFIT_GRANT/USE/MANUAL_ADJUST/CANCEL/USE_CANCEL/EXPIRE/WITHDRAWAL_CLEAR）
               - column:
                   name: amount
                   type: INTEGER
@@ -53,6 +53,13 @@ databaseChangeLog:
                   name: order_id
                   type: VARCHAR(64)
                   remarks: 付与・利用の元になった受注（ORDER_GRANT・USE では必須）
+              - column:
+                  # 特典付与を産んだ規則。この指し返しが規則の物理削除を封じる（FK RESTRICT）。
+                  # 受注を条件とする特典は order_id も持ち、受注を根拠とする加算を集める巻き戻しへ
+                  # 種別を問わず拾われる。
+                  name: benefit_rule_id
+                  type: BIGINT
+                  remarks: 付与を産んだ特典規則（BENEFIT_GRANT のみ。他の種別は NULL）
               - column:
                   name: original_entry_id
                   type: BIGINT
@@ -197,6 +204,16 @@ databaseChangeLog:
             referencedTableName: t_order_attributions
             referencedColumnNames: id
             onDelete: SET NULL
+        # 規則は停用で退場し物理削除を持たない。付与仕訳がこの外部キーで指し返すことがその物理的な
+        # 裏づけで、削除の口が後から生えても DB が先に断る。業務例外への写像は持たないので
+        # RESTRICT でよい（写像先を持つ外部キーだけが NO ACTION を要する — DbConstraint 参照）。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_entries_benefit_rule
+            baseTableName: t_point_entries
+            baseColumnNames: benefit_rule_id
+            referencedTableName: t_benefit_rules
+            referencedColumnNames: id
+            onDelete: RESTRICT
         - addForeignKeyConstraint:
             constraintName: fk_t_point_usage_allocations_entry
             baseTableName: t_point_usage_allocations
@@ -232,6 +249,13 @@ databaseChangeLog:
               ALTER TABLE t_point_entries
               ADD CONSTRAINT ck_t_point_entries_use_cancel_original CHECK (
                 entry_type <> 'USE_CANCEL' OR original_entry_id IS NOT NULL)
+        # 特典付与は規則を名乗ってはじめて「なぜこの点数か」が辿れる。逆に規則を名乗る行が特典付与で
+        # なければ、取消方法（種別から導く）の分からない付与になる。双方向で縛る。
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_entries
+              ADD CONSTRAINT ck_t_point_entries_benefit_rule_shape CHECK (
+                (entry_type = 'BENEFIT_GRANT') = (benefit_rule_id IS NOT NULL))
         - sql:
             sql: >-
               ALTER TABLE t_point_usage_allocations
@@ -271,6 +295,14 @@ databaseChangeLog:
               CREATE UNIQUE INDEX uq_t_point_entries_use_cancel_original
               ON t_point_entries (original_entry_id)
               WHERE entry_type = 'USE_CANCEL'
+        # 1 つの発火事象（根拠受注）が 1 会員へ同じ規則で二度記帳されることは、重複可否に依らず不正。
+        # 帰属の無効化と再申領で同じ受注が二度契機になりうるので、生産側の判定だけに任せない。
+        # 先頭 2 列が「その会員がこの規則で既に受益したか」の判定（一人一回限り）の索引も兼ねる。
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_point_entries_benefit_firing
+              ON t_point_entries (benefit_rule_id, member_id, order_id)
+              WHERE benefit_rule_id IS NOT NULL AND order_id IS NOT NULL
         # 訂正の読み口も書き込みの上限判定もこの列で台帳を集計する。PostgreSQL は参照側の外部キー列に
         # 索引を作らないので、無いとグループ全体の追記型台帳を毎回走査することになる。
         # 値を持つのは訂正の仕訳だけなので部分索引にする。
