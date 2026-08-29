@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import {
+  BENEFIT_RULE_REPEAT_POLICY_OPTIONS,
+  BENEFIT_RULE_TYPE_OPTIONS,
   BenefitRuleCreateRequest,
   BenefitRuleResponse,
   BenefitRuleRepeatPolicy,
@@ -34,17 +36,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui';
-
-const TYPE_OPTIONS: { value: BenefitRuleType; label: string }[] = [
-  { value: 'VISIT', label: '来店' },
-  { value: 'REFERRAL', label: '紹介' },
-  { value: 'LOGIN', label: 'ログイン' },
-];
-
-const REPEAT_POLICY_OPTIONS: { value: BenefitRuleRepeatPolicy; label: string }[] = [
-  { value: 'EVERY_TIME', label: '毎回' },
-  { value: 'ONCE_PER_MEMBER', label: '一人一回限り' },
-];
 
 interface BenefitRuleFormValues {
   name: string;
@@ -97,9 +88,9 @@ function optionalText(raw: string): string | null {
 
 /**
  * 特典規則の新規作成・編集モーダル。開いたときだけ mount される前提で、編集フォームの中身
- * （店舗 ID の列挙）は mount 時に id で個別取得する。
+ * （店舗 ID の列挙と version）は mount 時に id で個別取得する。
  *
- * <p>種別は作成時にしか選べない。付与済みの仕訳が規則を指し返した後に種別を翻すと、記帳済みの
+ * 種別は作成時にしか選べない。付与済みの仕訳が規則を指し返した後に種別を翻すと、記帳済みの
  * 付与の取消方法が遡って変わるため、更新の要求型に type は存在しない。
  */
 export function BenefitRuleFormModal({
@@ -189,7 +180,8 @@ export function BenefitRuleFormModal({
     };
     try {
       if (editingId !== null) {
-        await benefitRuleApi.update(editingId, payload);
+        if (editingRule?.version === undefined) return;
+        await benefitRuleApi.update(editingId, { ...payload, version: editingRule.version });
         notify.success('特典規則を更新しました');
       } else {
         await benefitRuleApi.create({ ...payload, type: values.type });
@@ -264,7 +256,7 @@ export function BenefitRuleFormModal({
                   <FormItem className="gap-1">
                     <FormLabel>種別</FormLabel>
                     <Select
-                      items={TYPE_OPTIONS}
+                      items={BENEFIT_RULE_TYPE_OPTIONS}
                       value={field.value}
                       onValueChange={v => field.onChange(v as BenefitRuleType)}
                       disabled={editingId !== null}
@@ -276,7 +268,7 @@ export function BenefitRuleFormModal({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {TYPE_OPTIONS.map(o => (
+                        {BENEFIT_RULE_TYPE_OPTIONS.map(o => (
                           <SelectItem key={o.value} value={o.value}>
                             {o.label}
                           </SelectItem>
@@ -365,7 +357,7 @@ export function BenefitRuleFormModal({
                   <FormItem className="gap-1">
                     <FormLabel>重複可否</FormLabel>
                     <Select
-                      items={REPEAT_POLICY_OPTIONS}
+                      items={BENEFIT_RULE_REPEAT_POLICY_OPTIONS}
                       value={field.value}
                       onValueChange={v => field.onChange(v as BenefitRuleRepeatPolicy)}
                       required
@@ -376,7 +368,7 @@ export function BenefitRuleFormModal({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {REPEAT_POLICY_OPTIONS.map(o => (
+                        {BENEFIT_RULE_REPEAT_POLICY_OPTIONS.map(o => (
                           <SelectItem key={o.value} value={o.value}>
                             {o.label}
                           </SelectItem>

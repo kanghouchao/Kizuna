@@ -24,9 +24,6 @@ import org.hibernate.annotations.BatchSize;
  * <p>適用組織/店舗は<b>発火側</b>の絞り込み（どの店舗での事象が条件を満たすか）であって、付与されたポイントの利用範囲ではない — ポイントは常にプラットフォーム級である（ADR
  * 0006）。取消方法は種別から導くため列を持たない。
  *
- * <p>期間は二つの別概念からなる。{@code effectiveFrom} / {@code effectiveUntil} は規則の適用期間（発火の窓、null = 常設）で、{@code
- * grantValidityDays} は付与ポイントの有効期間（付与日から起算し、記帳時に期限日へ固定する。null = 無期限）。
- *
  * <p>不変条件（構築時と再定義時に検証、違反は 400 系ドメイン例外 {@link InvalidBenefitRuleException}）:
  *
  * <ol>
@@ -36,7 +33,7 @@ import org.hibernate.annotations.BatchSize;
  *   <li>適用期間は開始 ≦ 終了。付与ポイント有効期間は 1 以上。
  * </ol>
  *
- * <p>規則は停用で退場し、削除しない（付与仕訳が FK RESTRICT で指し返す）。停用は一方通行で、停用済みの規則は再定義も受け付けない。
+ * <p>規則は停用で退場し、削除しない（付与仕訳が FK RESTRICT で指し返す）。停用は一方通行で、停用済みは再定義も受け付けない。
  */
 @Entity
 @Table(name = "t_benefit_rules")

@@ -69,12 +69,13 @@ describe('benefitRuleApi', () => {
     });
   });
 
-  it('update は単一リソース URI へ PUT する', async () => {
+  it('update は単一リソース URI へ PUT し、取得した version を往復する', async () => {
     await benefitRuleApi.update(7, {
       name: '来店ボーナス',
       store_scope_type: 'ALL_STORES',
       repeat_policy: 'EVERY_TIME',
       points: 500,
+      version: 3,
     });
 
     expect(mockedPut).toHaveBeenCalledWith('/platform/benefit-rules/7', {
@@ -82,6 +83,7 @@ describe('benefitRuleApi', () => {
       store_scope_type: 'ALL_STORES',
       repeat_policy: 'EVERY_TIME',
       points: 500,
+      version: 3,
     });
   });
 
