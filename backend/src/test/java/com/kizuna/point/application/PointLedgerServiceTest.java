@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -513,6 +514,44 @@ class PointLedgerServiceTest {
     assertThat(savedEntry.getAllValues())
         .extracting(PointEntry::getEntryType)
         .containsExactly(PointEntryType.USE_CANCEL, PointEntryType.CANCEL);
+  }
+
+  @Test
+  @DisplayName("巻き戻し済みの受注へ量が戻るなら、その分も同じ取引で打ち消すこと")
+  void rollbackAlsoCancelsWhatItReturnsToAnAlreadyRolledBackOrder() {
+    // 相手の受注は二度目の巻き戻しを受け付けない。ここで打ち消さないと、無効にしたはずの付与が
+    // 返り分だけ使える残高として復活する。
+    PointEntry drainedGrant = orderGrant(11L, "rolled-back", 500);
+    when(pointEntryRepository.findUsesByOrderId("o1"))
+        .thenReturn(List.of(use(21L, "o1", 500, 11L)));
+    when(pointEntryRepository.findRolledBackCreditsAmong(Set.of(11L)))
+        .thenReturn(List.of(drainedGrant));
+    // 逆転を書き終えた後なので、消費は 500 返って 0 になっている
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
+        .thenReturn(List.of());
+
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+        .isEqualTo(new PointLedgerService.PointRollbackResult(500, 500));
+
+    verify(pointEntryRepository, times(2)).save(savedEntry.capture());
+    assertThat(savedEntry.getAllValues())
+        .extracting(PointEntry::getEntryType, PointEntry::getAmount, PointEntry::getOriginalEntryId)
+        .containsExactly(
+            tuple(PointEntryType.USE_CANCEL, 500, 21L), tuple(PointEntryType.CANCEL, -500, 11L));
+  }
+
+  @Test
+  @DisplayName("戻り先が巻き戻されていない受注の付与なら、その分は打ち消さないこと")
+  void rollbackLeavesReturnedPointsAloneWhenTheirOrderIsIntact() {
+    when(pointEntryRepository.findUsesByOrderId("o1"))
+        .thenReturn(List.of(use(21L, "o1", 500, 11L)));
+    when(pointEntryRepository.findRolledBackCreditsAmong(Set.of(11L))).thenReturn(List.of());
+
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+        .isEqualTo(new PointLedgerService.PointRollbackResult(0, 500));
+
+    verify(pointEntryRepository).save(savedEntry.capture());
+    assertThat(savedEntry.getValue().getEntryType()).isEqualTo(PointEntryType.USE_CANCEL);
   }
 
   @Test

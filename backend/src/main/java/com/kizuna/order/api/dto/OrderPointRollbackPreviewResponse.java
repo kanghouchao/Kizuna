@@ -6,12 +6,13 @@ package com.kizuna.order.api.dto;
  * <p>会員の残高も載せない。この受注の授受に限って示すのであって、店舗へ会員の資産を渡す口ではない（ADR 0006）。
  *
  * @param alreadyRolledBack 既に巻き戻し済みか。真なら二度目の要求は 409 になる
- * @param memberCode この受注が現に帰属している会員のコード。帰属していなければ null
+ * @param memberCode この受注が<b>現に帰属している</b>会員のコード。帰属していなければ null。打ち消す付与はこの会員のものとは限らない —
+ *     同じ受注が無効化と再申領で別の会員へ帰属し直していれば、前の会員の付与も対象になる
  * @param cancellablePoints 取消で無効化される付与の未消費残の合計
  * @param reversibleUsedPoints 逆転で元のロットへ返る利用の合計
  */
 public record OrderPointRollbackPreviewResponse(
     boolean alreadyRolledBack,
     String memberCode,
-    int cancellablePoints,
-    int reversibleUsedPoints) {}
+    long cancellablePoints,
+    long reversibleUsedPoints) {}

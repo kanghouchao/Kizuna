@@ -60,10 +60,11 @@ export default function OrderPointRollbackPage() {
   const orderId = params.id as string;
   const router = useRouter();
 
-  const { data: order, failure: orderFailure } = useResource<Order>(
-    () => orderApi.get(orderId),
-    [orderId]
-  );
+  const {
+    data: order,
+    failure: orderFailure,
+    reload: reloadOrder,
+  } = useResource<Order>(() => orderApi.get(orderId), [orderId]);
   const {
     data: preview,
     isLoading,
@@ -112,7 +113,12 @@ export default function OrderPointRollbackPage() {
 
       {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
       {(failure === 'error' || orderFailure === 'error') && (
-        <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
+        // どちらが落ちたかは画面の姿を変えないので、再試行は両方を取り直す。片方だけだと、
+        // 落ちたのがもう一方だったときに押しても何も直らない
+        <RegionError
+          message="受注を取得できませんでした。"
+          onRetry={() => void Promise.all([reloadOrder(), reload()])}
+        />
       )}
       {(failure === 'notFound' || orderFailure === 'notFound') && (
         <RegionError
@@ -151,7 +157,7 @@ export default function OrderPointRollbackPage() {
           <p className="text-muted-foreground text-sm">
             {preview.member_code === undefined
               ? 'この受注は会員に帰属していません。台帳に仕訳が無くても、巻き戻すと伝票の申領は受け付けなくなります。'
-              : `宛先は会員コード ${preview.member_code} の台帳です。`}
+              : `この受注は会員コード ${preview.member_code} へ帰属しています。過去に別の会員へ帰属していた分の付与も、まとめて取り消されます。`}
           </p>
           {done && (
             <p className="text-muted-foreground text-sm">

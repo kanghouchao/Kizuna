@@ -558,6 +558,19 @@ class OrderControllerTest {
   }
 
   @Test
+  @DisplayName("巻き戻し済みの受注へは伝票を再発行しないこと（使えない QR を店舗へ渡さない）")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void receiptTokenIsNotReissuedForARolledBackOrder() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderPointRollbackService.isRolledBack("o1")).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/receipt-token", ""))
+        .andExpect(status().isBadRequest());
+    verify(orderAttributionService, never()).reissueReceiptToken(any());
+  }
+
+  @Test
   @DisplayName("巻き戻しと下見は POINT_ADJUST が無ければ拒否されること")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void pointRollbackIsRejectedWithoutPointAdjust() throws Exception {
