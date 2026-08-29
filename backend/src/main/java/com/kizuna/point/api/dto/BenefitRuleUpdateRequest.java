@@ -41,4 +41,8 @@ public class BenefitRuleUpdateRequest {
   private Integer referrerPoints;
 
   private Integer referredPoints;
+
+  /** 楽観ロック用バージョン（応答の version をそのまま往復する。不一致は 409）。 */
+  @NotNull(message = "編集の対象バージョンは必須です")
+  private Long version;
 }

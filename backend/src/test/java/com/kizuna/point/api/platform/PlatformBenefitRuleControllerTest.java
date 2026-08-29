@@ -142,6 +142,24 @@ class PlatformBenefitRuleControllerTest {
                 .content(
                     """
                     {"name":"来店ボーナス","type":"LOGIN","store_scope_type":"ALL_STORES",
+                     "repeat_policy":"EVERY_TIME","points":500,"version":0}
+                    """))
+        .andExpect(status().isBadRequest());
+
+    verify(benefitRuleService, never()).update(any(), any());
+  }
+
+  @Test
+  @DisplayName("version の無い更新要求は 400 になること（全量置換の上書き事故を入口で塞ぐ）")
+  void updateRequiresVersion() throws Exception {
+    mockMvc
+        .perform(
+            put("/platform/benefit-rules/1")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"name":"来店ボーナス","store_scope_type":"ALL_STORES",
                      "repeat_policy":"EVERY_TIME","points":500}
                     """))
         .andExpect(status().isBadRequest());
@@ -163,7 +181,7 @@ class PlatformBenefitRuleControllerTest {
                 .content(
                     """
                     {"name":"来店ボーナス","store_scope_type":"ALL_STORES",
-                     "repeat_policy":"EVERY_TIME","points":500}
+                     "repeat_policy":"EVERY_TIME","points":500,"version":0}
                     """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(1));
@@ -225,7 +243,7 @@ class PlatformBenefitRuleControllerTest {
                 .content(
                     """
                     {"name":"来店ボーナス","store_scope_type":"ALL_STORES",
-                     "repeat_policy":"EVERY_TIME","points":500}
+                     "repeat_policy":"EVERY_TIME","points":500,"version":0}
                     """))
         .andExpect(status().isForbidden());
     mockMvc

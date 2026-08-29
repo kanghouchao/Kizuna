@@ -48,4 +48,7 @@ export interface BenefitRuleCreateRequest {
 }
 
 // 更新（種別以外の全量置換）。type を持たせると未知項目として 400 になる。
-export type BenefitRuleUpdateRequest = Omit<BenefitRuleCreateRequest, 'type'>;
+// version は取得した詳細のものをそのまま往復する（不一致は 409）。
+export type BenefitRuleUpdateRequest = Omit<BenefitRuleCreateRequest, 'type'> & {
+  version: number;
+};

@@ -349,7 +349,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody())
         .as("中央操作項目が可視であること")
-        .contains("店舗一覧", "管理者管理", "アカウント管理", "ロール管理", "システム設定");
+        .contains("店舗一覧", "管理者管理", "アカウント管理", "ロール管理", "特典規則", "システム設定");
     // 標識権限 STORE_MENU_VIEW も撤回されたので、見出し節ごと店舗側が丸ごと落ちる。入口と行が
     // 同時に消えることで「扉はあるが道が無い」状態を作らない（ADR 0021）。
     assertThat(res.getBody())
@@ -376,7 +376,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
         .contains("予約・案件管理", "キャスト管理", "出勤管理", "スタッフ管理", "顧客一覧", "店舗情報");
     assertThat(res.getBody())
         .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
-        .doesNotContain("店舗一覧", "管理者管理", "アカウント管理", "ロール管理", "システム設定", "ダッシュボード");
+        .doesNotContain("店舗一覧", "管理者管理", "アカウント管理", "ロール管理", "特典規則", "システム設定", "ダッシュボード");
   }
 
   @Test
@@ -398,7 +398,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     assertThat(res.getBody()).as("委譲層の行が平スタッフには現れないこと").doesNotContain("スタッフ管理");
     assertThat(res.getBody())
         .as("中央コンソール項目が一切現れないこと（反対スコープの不在まで強断言）")
-        .doesNotContain("店舗一覧", "管理者管理", "アカウント管理", "ロール管理", "システム設定");
+        .doesNotContain("店舗一覧", "管理者管理", "アカウント管理", "ロール管理", "特典規則", "システム設定");
     assertThat(res.getBody()).as("店舗側ダッシュボードは廃止済みで、中央側のそれも不可視であること").doesNotContain("ダッシュボード");
   }
 
