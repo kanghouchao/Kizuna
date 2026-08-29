@@ -2,6 +2,8 @@ package com.kizuna.member.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -48,7 +51,7 @@ class MemberRankServiceTest {
     Member member = stubMember();
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnGrant(MEMBER_ID, 5, 0, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(5, 0), ENTRY_ID);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.SILVER);
   }
@@ -59,7 +62,7 @@ class MemberRankServiceTest {
     Member member = stubMember();
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnGrant(MEMBER_ID, 1, 5000, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(1, 5000), ENTRY_ID);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.SILVER);
   }
@@ -70,7 +73,7 @@ class MemberRankServiceTest {
     Member member = stubMember();
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnGrant(MEMBER_ID, 4, 4999, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(4, 4999), ENTRY_ID);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.BRONZE);
     verify(memberRankHistoryRepository, never()).save(any());
@@ -82,7 +85,7 @@ class MemberRankServiceTest {
     Member member = stubMember();
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnGrant(MEMBER_ID, 20, 0, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(20, 0), ENTRY_ID);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.GOLD);
   }
@@ -94,7 +97,7 @@ class MemberRankServiceTest {
     member.promoteTo(MemberRank.GOLD);
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnGrant(MEMBER_ID, 0, 0, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(0, 0), ENTRY_ID);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.GOLD);
     verify(memberRankHistoryRepository, never()).save(any());
@@ -107,7 +110,7 @@ class MemberRankServiceTest {
     when(systemConfigService.memberRankSettings())
         .thenReturn(new MemberRankSettings(new Threshold(0, 0), new Threshold(0, 0)));
 
-    memberRankService.syncOnGrant(MEMBER_ID, 999, 999_999, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(999, 999_999), ENTRY_ID);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.BRONZE);
   }
@@ -120,10 +123,10 @@ class MemberRankServiceTest {
         .thenReturn(new MemberRankSettings(new Threshold(10, 0), new Threshold(0, 0)))
         .thenReturn(new MemberRankSettings(new Threshold(3, 0), new Threshold(0, 0)));
 
-    memberRankService.syncOnGrant(MEMBER_ID, 5, 0, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(5, 0), ENTRY_ID);
     assertThat(member.getRank()).isEqualTo(MemberRank.BRONZE);
 
-    memberRankService.syncOnGrant(MEMBER_ID, 5, 0, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(5, 0), ENTRY_ID);
     assertThat(member.getRank()).isEqualTo(MemberRank.SILVER);
   }
 
@@ -133,7 +136,7 @@ class MemberRankServiceTest {
     stubMember();
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnGrant(MEMBER_ID, 5, 0, ENTRY_ID);
+    memberRankService.syncOnGrant(MEMBER_ID, metrics(5, 0), ENTRY_ID);
 
     verify(memberRankHistoryRepository).save(savedHistory.capture());
     MemberRankHistory history = savedHistory.getValue();
@@ -142,6 +145,38 @@ class MemberRankServiceTest {
     assertThat(history.getNewRank()).isEqualTo(MemberRank.SILVER);
     assertThat(history.getTriggeringEntryId()).isEqualTo(ENTRY_ID);
     assertThat(history.getPromotedAt()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("指標は会員行のロックを取った後に読むこと（先に読むと並行する付与が同じ古い値を観測する）")
+  void readsTheMetricsOnlyAfterTakingTheMemberLock() {
+    stubMember();
+    when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
+    MemberRankMetrics metrics = mock(MemberRankMetrics.class);
+    when(metrics.completedVisitCount(MEMBER_ID)).thenReturn(0L);
+    when(metrics.netGrantedPoints(MEMBER_ID)).thenReturn(0L);
+
+    memberRankService.syncOnGrant(MEMBER_ID, metrics, ENTRY_ID);
+
+    InOrder inOrder = inOrder(memberRepository, metrics);
+    inOrder.verify(memberRepository).findByIdForUpdate(MEMBER_ID);
+    inOrder.verify(metrics).completedVisitCount(MEMBER_ID);
+    inOrder.verify(metrics).netGrantedPoints(MEMBER_ID);
+  }
+
+  /** 指標の供給口。実装は order 側にあり、この層は受け取った値で判じるだけである。 */
+  private static MemberRankMetrics metrics(long completedVisitCount, long netGrantedPoints) {
+    return new MemberRankMetrics() {
+      @Override
+      public long completedVisitCount(long memberId) {
+        return completedVisitCount;
+      }
+
+      @Override
+      public long netGrantedPoints(long memberId) {
+        return netGrantedPoints;
+      }
+    };
   }
 
   /** 判定は「読んで、上位なら書く」なので、会員行は書き込み用のロック付きで引かれる。 */

@@ -18,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>伝播は既定の REQUIRED。判定は付与の記帳と同じトランザクションで成立するか、記帳ごと巻き戻るかのどちらかであるべきで、 イベントによる非同期化はしていない。
  *
- * <p>判定の材料（跨店舗の来店回数・付与の純額）は order と point が持ち、この層は受け取るだけである — 材料を自分で引くと member → order の依存が生まれ、既にある
- * order → member と環になる。
+ * <p>判定の材料は order と point が持つため {@link MemberRankMetrics} 越しに読む — 自分で引くと member → order
+ * の依存が生まれ、既にある order → member と環になる。読む時点をこちら側が決める理由は同 interface に記す。
  */
 @Service
 @RequiredArgsConstructor
@@ -35,18 +35,18 @@ public class MemberRankService {
    *
    * <p>条件は OR — 完了受注の回数か付与の純額のどちらか一方の達成で足りる（高頻度客と高額客の両方を拾う）。 純額は取消仕訳の控除後なので減りうるが、ランクは戻らない（棘輪） —
    * 現在より上位でなければ何も書かない。
-   *
-   * @param completedVisitCount 会員へ帰属した完了受注の回数（跨店舗合計）
-   * @param netGrantedPoints 受注付与の累計純額（取消仕訳の控除後）
    */
-  public void syncOnGrant(
-      long memberId, long completedVisitCount, long netGrantedPoints, long triggeringEntryId) {
+  public void syncOnGrant(long memberId, MemberRankMetrics metrics, long triggeringEntryId) {
     Member member =
         memberRepository
             .findByIdForUpdate(memberId)
             .orElseThrow(() -> new NotFoundException("会員が見つかりません"));
     MemberRank current = member.getRank();
-    MemberRank reached = highestReached(completedVisitCount, netGrantedPoints);
+    // 指標はロックを取った後に読む。先に読むと、閾値を跨ぐ 2 件の付与が並行したとき双方が同じ古い値を
+    // 観測し、どちらも昇格させないまま来店が取り残される（ロックは commit まで持つので、待った側の
+    // 読み直しは先行の書き込みを必ず見る）。
+    MemberRank reached =
+        highestReached(metrics.completedVisitCount(memberId), metrics.netGrantedPoints(memberId));
     if (!reached.isAbove(current)) {
       return;
     }
