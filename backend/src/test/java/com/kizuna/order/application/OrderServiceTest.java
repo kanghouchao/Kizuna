@@ -2053,6 +2053,25 @@ class OrderServiceTest {
   }
 
   @Test
+  void completeLocksTheMemberRowBeforeAnythingReferencesIt() {
+    // 会員へ外部キーを張る書き込みが先に走ると、その FOR KEY SHARE を跨いで昇格判定が FOR UPDATE を
+    // 求める形になり、同じ会員への並行する完了同士が死錠する
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubWriteBackResponse();
+
+    service.complete("o1", completion(12000, 300), "staff@kizuna.test");
+
+    InOrder inOrder = inOrder(memberRankSync, pointLedgerService, orderAttributionRepository);
+    inOrder.verify(memberRankSync).beforeMemberWrites(MEMBER_ID);
+    inOrder.verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
+    inOrder.verify(pointLedgerService).grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID);
+    inOrder.verify(orderAttributionRepository).save(any(OrderAttribution.class));
+  }
+
+  @Test
   void completeUsesPointsBeforeGrantingThem() {
     // 順序が逆だと、その受注の付与で同じ受注の利用を賄えてしまう
     Order order = confirmedOrderWithCustomer();

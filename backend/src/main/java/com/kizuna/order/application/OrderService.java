@@ -630,6 +630,9 @@ public class OrderService {
     String receiptToken = null;
     if (memberId != null) {
       Long actorId = resolveActorId(actorEmail);
+      // 会員行は台帳の仕訳・帰属記録より先に押さえる。挿入の外部キー検査が会員行へ FOR KEY SHARE を
+      // 置くため、書いた後に昇格判定が FOR UPDATE を求めると並行する完了同士が死錠する。
+      memberRankSync.beforeMemberWrites(memberId);
       // 単位の制約と残高の充足は台帳側が判定する（利用の入口が増えても規則が分かれないため）。
       if (usePoints > 0) {
         pointLedgerService.useForOrder(memberId, id, order.getStoreId(), usePoints, actorId);

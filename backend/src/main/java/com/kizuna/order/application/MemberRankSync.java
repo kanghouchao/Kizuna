@@ -28,6 +28,14 @@ class MemberRankSync implements MemberRankMetrics {
   private final MemberRankService memberRankService;
 
   /**
+   * 会員へ外部キーを張る書き込み（台帳の仕訳・帰属記録）を始める前に、後段の判定が取る会員行のロックを先に取る。{@link #afterAttribution} と対で使う —
+   * 片方だけでは死錠を招く順序に戻る（理由は {@link com.kizuna.member.domain.MemberRepository#lockIdForUpdate}）。
+   */
+  void beforeMemberWrites(long memberId) {
+    memberRankService.lockForPromotion(memberId);
+  }
+
+  /**
    * 帰属を記録した直後にランクを見直す。今回の来店を回数へ含めるため、帰属記録の保存はこの呼出より前に済ませること。
    *
    * <p>付与の有無で判定を飛ばさない。回数条件は台帳を見ないので、会計 0 円や付与単位に満たない来店だけを重ねた会員も回数で上がる。

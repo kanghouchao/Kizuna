@@ -1,7 +1,9 @@
 package com.kizuna.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.member.application.MemberRankService;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRank;
 import com.kizuna.member.domain.MemberRankHistory;
@@ -16,6 +18,11 @@ import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +32,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.UncategorizedSQLException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -61,6 +72,9 @@ class MemberRankIT extends CrossStoreTestSupport {
   @Autowired private PointEntryRepository pointEntryRepository;
   @Autowired private PointLedgerService pointLedgerService;
   @Autowired private SystemConfigRepository systemConfigRepository;
+  @Autowired private MemberRankService memberRankService;
+  @Autowired private PlatformTransactionManager transactionManager;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   private final long nonce = System.nanoTime();
 
@@ -254,6 +268,64 @@ class MemberRankIT extends CrossStoreTestSupport {
     } finally {
       setConfigValue("member_rank_silver_visit_count", original);
     }
+  }
+
+  @Test
+  @DisplayName("先取りのロックが本当に会員行を押さえていること（投影の問い合わせでも FOR UPDATE が出ている）")
+  void theReservationActuallyHoldsTheMemberRow() throws Exception {
+    // 死錠を避ける仕掛けは「先に押さえる」ことなので、押さえられている事実を突いて確かめる。回数を
+    // 数えても、待たない取得（NOWAIT）が撥ねられることの代わりにはならない。
+    RegisteredMember member = registerAndLogin("reserve");
+
+    CountDownLatch held = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> holder = pool.submit(() -> holdReservation(member.id(), held, release));
+      assertThat(held.await(30, TimeUnit.SECONDS)).as("前提: 別取引が会員行を押さえること").isTrue();
+
+      // 撥ねられた事実は PostgreSQL の SQLSTATE で固定する。Spring の写像は経路（JDBC / JPA）で
+      // 変わるが、行ロックが取れなかったという命題そのものは 55P03 が名指す。
+      assertThatThrownBy(() -> lockMemberRowWithoutWaiting(member.id()))
+          .as("押さえられている間は待たない取得が撥ねられること")
+          .isInstanceOf(UncategorizedSQLException.class)
+          .extracting(
+              thrown -> ((UncategorizedSQLException) thrown).getSQLException().getSQLState())
+          .isEqualTo("55P03");
+
+      release.countDown();
+      holder.get(30, TimeUnit.SECONDS);
+      // 解放後は同じ取得が通る — 撥ねた理由がロックであって問い合わせの誤りでないことの対照
+      lockMemberRowWithoutWaiting(member.id());
+    } finally {
+      release.countDown();
+      pool.shutdownNow();
+    }
+  }
+
+  /** 別取引で先取りのロックを取り、合図があるまで保持する。 */
+  private void holdReservation(long memberId, CountDownLatch held, CountDownLatch release) {
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(
+            status -> {
+              memberRankService.lockForPromotion(memberId);
+              held.countDown();
+              try {
+                release.await(30, TimeUnit.SECONDS);
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+            });
+  }
+
+  private void lockMemberRowWithoutWaiting(long memberId) {
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(
+            status ->
+                jdbcTemplate.queryForObject(
+                    "select id from t_members where id = ? for update nowait",
+                    Long.class,
+                    memberId));
   }
 
   // ==================== 台帳・ランクの読み出し ====================

@@ -42,6 +42,16 @@ class MemberRankSyncTest {
   }
 
   @Test
+  @DisplayName("書き込みの前置きは会員行のロックだけを起こすこと")
+  void reservesTheMemberRowBeforeAnyWrite() {
+    memberRankSync.beforeMemberWrites(MEMBER_ID);
+
+    verify(memberRankService).lockForPromotion(MEMBER_ID);
+    verifyNoInteractions(orderAttributionRepository);
+    verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
   @DisplayName("来店回数は有効な帰属だけを数えること（無効化された帰属は入らない）")
   void countsOnlyActiveAttributions() {
     when(orderAttributionRepository.countByMemberIdAndStatus(
