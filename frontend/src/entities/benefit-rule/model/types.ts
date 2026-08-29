@@ -24,12 +24,13 @@ export interface BenefitRuleSummaryResponse {
   referrer_points?: number;
   referred_points?: number;
   enabled: boolean;
+  // 停用の入口は一覧の行なので、要約も楽観ロック用 version を運ぶ
+  version?: number;
 }
 
-// 詳細。編集フォームが要る店舗 ID の列挙と楽観ロック用 version を持つ。
+// 詳細。編集フォームが要る店舗 ID の列挙を持つ。
 export interface BenefitRuleResponse extends BenefitRuleSummaryResponse {
   store_ids?: number[];
-  version?: number;
 }
 
 // 新規作成。種別はここでしか送れない（更新の要求型には存在しない）。

@@ -1,6 +1,7 @@
 package com.kizuna.point.api.platform;
 
 import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
+import com.kizuna.point.api.dto.BenefitRuleDeactivationRequest;
 import com.kizuna.point.api.dto.BenefitRuleResponse;
 import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
 import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
@@ -55,11 +56,12 @@ public class PlatformBenefitRuleController {
     return ResponseEntity.ok(benefitRuleService.update(id, request));
   }
 
-  /** 停用（退場）。再開の口は無く、二度目は 400 で撥ねる。 */
+  /** 停用（退場）。再開の口は無く、二度目は 400 で撥ねる。確認した版と現物がずれていれば 409。 */
   @PostMapping("/{id}/deactivation")
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
-  public ResponseEntity<Void> deactivate(@PathVariable Long id) {
-    benefitRuleService.deactivate(id);
+  public ResponseEntity<Void> deactivate(
+      @PathVariable Long id, @Valid @RequestBody BenefitRuleDeactivationRequest request) {
+    benefitRuleService.deactivate(id, request);
     return ResponseEntity.noContent().build();
   }
 }

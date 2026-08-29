@@ -87,10 +87,12 @@ describe('benefitRuleApi', () => {
     });
   });
 
-  it('停用は名詞化した子リソースへの POST で、削除の口は持たない', async () => {
-    await benefitRuleApi.deactivate(7);
+  it('停用は名詞化した子リソースへの POST で確認した版を運び、削除の口は持たない', async () => {
+    await benefitRuleApi.deactivate(7, 3);
 
-    expect(mockedPost).toHaveBeenCalledWith('/platform/benefit-rules/7/deactivation');
+    expect(mockedPost).toHaveBeenCalledWith('/platform/benefit-rules/7/deactivation', {
+      version: 3,
+    });
     expect(benefitRuleApi).not.toHaveProperty('remove');
     expect(benefitRuleApi).not.toHaveProperty('delete');
   });

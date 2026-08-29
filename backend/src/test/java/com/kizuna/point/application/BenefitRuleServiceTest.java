@@ -3,10 +3,10 @@ package com.kizuna.point.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
+import com.kizuna.point.api.dto.BenefitRuleDeactivationRequest;
 import com.kizuna.point.api.dto.BenefitRuleMapperImpl;
 import com.kizuna.point.api.dto.BenefitRuleResponse;
 import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
@@ -19,7 +19,6 @@ import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Optional;
@@ -40,8 +39,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 class BenefitRuleServiceTest {
 
   @Mock private BenefitRuleRepository benefitRuleRepository;
-
-  @Mock private StoreExistenceCheck storeExistenceCheck;
 
   @Spy private BenefitRuleMapperImpl benefitRuleMapper;
 
@@ -107,31 +104,14 @@ class BenefitRuleServiceTest {
     request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
     request.setReferrerPoints(1000);
     request.setReferredPoints(500);
-    when(benefitRuleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(benefitRuleRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     BenefitRuleResponse response = benefitRuleService.create(request);
 
     assertThat(response.type()).isEqualTo("REFERRAL");
     assertThat(response.referrerPoints()).isEqualTo(1000);
     assertThat(response.referredPoints()).isEqualTo(500);
-  }
-
-  @Test
-  @DisplayName("実在しない店舗を指した規則は保存前に撥ねられること")
-  void missingStoreIsRejectedBeforePersistence() {
-    BenefitRuleCreateRequest request = new BenefitRuleCreateRequest();
-    request.setName("消えた店舗の規則");
-    request.setType(BenefitRuleType.VISIT);
-    request.setStoreScopeType(StoreScopeType.SPECIFIC_STORES);
-    request.setStoreIds(Set.of(99L));
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
-    request.setPoints(100);
-    when(storeExistenceCheck.exists(99L)).thenReturn(false);
-
-    assertThatThrownBy(() -> benefitRuleService.create(request))
-        .isInstanceOf(InvalidBenefitRuleException.class)
-        .hasMessageContaining("店舗が見つかりません");
-    verifyNoInteractions(benefitRuleRepository);
   }
 
   @Test
@@ -145,7 +125,8 @@ class BenefitRuleServiceTest {
     request.setGrantValidityDays(90);
     request.setVersion(0L);
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
-    when(benefitRuleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(benefitRuleRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     BenefitRuleResponse response = benefitRuleService.update(1L, request);
 
@@ -176,10 +157,26 @@ class BenefitRuleServiceTest {
   void deactivationIsOneWay() {
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    benefitRuleService.deactivate(1L);
+    benefitRuleService.deactivate(1L, deactivation(0L));
 
     assertThat(visitRule.getEnabled()).isFalse();
-    assertThatThrownBy(() -> benefitRuleService.deactivate(1L))
+    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, deactivation(0L)))
         .isInstanceOf(InvalidBenefitRuleException.class);
+  }
+
+  @Test
+  @DisplayName("停用も確認した版を照合し、ずれていれば規則を消さないこと")
+  void deactivationRefusesStaleVersion() {
+    when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
+
+    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, deactivation(1L)))
+        .isInstanceOf(StaleBenefitRuleUpdateException.class);
+    assertThat(visitRule.getEnabled()).isTrue();
+  }
+
+  private static BenefitRuleDeactivationRequest deactivation(Long version) {
+    BenefitRuleDeactivationRequest request = new BenefitRuleDeactivationRequest();
+    request.setVersion(version);
+    return request;
   }
 }

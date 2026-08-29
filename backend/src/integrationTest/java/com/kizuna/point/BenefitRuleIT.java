@@ -98,8 +98,10 @@ class BenefitRuleIT extends CrossStoreTestSupport {
     ResponseEntity<String> list = listRaw(hqToken);
     assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(list.getBody()).contains("特典規則IT_来店ボーナス");
-    // 一覧の型は店舗 ID の列挙を持たず、件数へ畳む
+    // 一覧の型は店舗 ID の列挙を持たず、件数へ畳む。停用の入口が一覧の行なので版は運ぶ
     assertThat(list.getBody()).contains("\"store_count\":1");
+    assertThat(list.getBody()).contains("\"version\":");
+    assertThat(list.getBody()).doesNotContain("\"store_ids\":");
   }
 
   @Test
@@ -162,12 +164,14 @@ class BenefitRuleIT extends CrossStoreTestSupport {
             {"name":"特典規則IT_停用対象","type":"VISIT","store_scope_type":"ALL_STORES",
              "repeat_policy":"EVERY_TIME","points":200}
             """);
-    assertThat(deactivate(id).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    long version = get("/platform/benefit-rules/" + id).getBody().path("version").asLong();
+    assertThat(deactivate(id, version).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
     JsonNode afterDeactivation = get("/platform/benefit-rules/" + id).getBody();
     assertThat(afterDeactivation.path("enabled").asBoolean()).isFalse();
 
-    assertThat(deactivate(id).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    long currentVersion = afterDeactivation.path("version").asLong();
+    assertThat(deactivate(id, currentVersion).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     // 版は停用が進めているので、退場後の状態そのものを撃つには取り直した版を載せる。版照合が先
     // （陳腐なフォームは 409）で、版が合ってはじめて退場済みの 400 に届く。
     assertThat(
@@ -177,7 +181,7 @@ class BenefitRuleIT extends CrossStoreTestSupport {
                     {"name":"特典規則IT_停用対象（改）","store_scope_type":"ALL_STORES",
                      "repeat_policy":"EVERY_TIME","points":300,"version":%d}
                     """
-                        .formatted(afterDeactivation.path("version").asLong()))
+                        .formatted(currentVersion))
                 .getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
   }
@@ -221,6 +225,64 @@ class BenefitRuleIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("編集の応答が返す版でそのまま続けて編集できること")
+  void updateResponseCarriesThePersistedVersion() {
+    long id =
+        createRule(
+            """
+            {"name":"特典規則IT_連続編集","type":"VISIT","store_scope_type":"ALL_STORES",
+             "repeat_policy":"EVERY_TIME","points":100}
+            """);
+    long version = get("/platform/benefit-rules/" + id).getBody().path("version").asLong();
+
+    ResponseEntity<JsonNode> first =
+        update(
+            id,
+            """
+            {"name":"特典規則IT_連続編集1","store_scope_type":"ALL_STORES",
+             "repeat_policy":"EVERY_TIME","points":200,"version":%d}
+            """
+                .formatted(version));
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 応答の版をそのまま次の編集へ渡す。取り直しを挟まない画面はこの経路で続ける。
+    ResponseEntity<JsonNode> second =
+        update(
+            id,
+            """
+            {"name":"特典規則IT_連続編集2","store_scope_type":"ALL_STORES",
+             "repeat_policy":"EVERY_TIME","points":300,"version":%d}
+            """
+                .formatted(first.getBody().path("version").asLong()));
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(second.getBody().path("name").asString()).isEqualTo("特典規則IT_連続編集2");
+  }
+
+  @Test
+  @DisplayName("停用も確認した版を照合し、ずれていれば規則を消さないこと")
+  void deactivationRefusesStaleVersion() {
+    long id =
+        createRule(
+            """
+            {"name":"特典規則IT_停用の版照合","type":"VISIT","store_scope_type":"ALL_STORES",
+             "repeat_policy":"EVERY_TIME","points":100}
+            """);
+    long reviewed = get("/platform/benefit-rules/" + id).getBody().path("version").asLong();
+
+    // 承認の画面を開いている間に別の管理者が内容を書き換えた
+    update(
+        id,
+        """
+        {"name":"特典規則IT_停用の版照合（改）","store_scope_type":"ALL_STORES",
+         "repeat_policy":"EVERY_TIME","points":200,"version":%d}
+        """
+            .formatted(reviewed));
+
+    assertThat(deactivate(id, reviewed).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(get("/platform/benefit-rules/" + id).getBody().path("enabled").asBoolean()).isTrue();
+  }
+
+  @Test
   @DisplayName("BENEFIT_MANAGE を持たない利用者には規則管理の全端点が 403 を返すこと")
   void nonHolderIsRefusedEverywhere() {
     long id =
@@ -256,7 +318,7 @@ class BenefitRuleIT extends CrossStoreTestSupport {
             rest.exchange(
                     "/platform/benefit-rules/" + id + "/deactivation",
                     HttpMethod.POST,
-                    new HttpEntity<>(bearer(nonHolderToken)),
+                    new HttpEntity<>("{\"version\":0}", bearerJson(nonHolderToken)),
                     JsonNode.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.FORBIDDEN);
@@ -401,11 +463,11 @@ class BenefitRuleIT extends CrossStoreTestSupport {
         JsonNode.class);
   }
 
-  private ResponseEntity<JsonNode> deactivate(long id) {
+  private ResponseEntity<JsonNode> deactivate(long id, long version) {
     return rest.exchange(
         "/platform/benefit-rules/" + id + "/deactivation",
         HttpMethod.POST,
-        new HttpEntity<>(bearer(hqToken)),
+        new HttpEntity<>("{\"version\":%d}".formatted(version), bearerJson(hqToken)),
         JsonNode.class);
   }
 

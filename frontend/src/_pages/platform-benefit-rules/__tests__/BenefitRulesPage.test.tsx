@@ -37,6 +37,7 @@ const rule = (override: Partial<BenefitRuleSummaryResponse>): BenefitRuleSummary
   repeat_policy: 'EVERY_TIME',
   points: 500,
   enabled: true,
+  version: 4,
   ...override,
 });
 
@@ -108,7 +109,8 @@ describe('特典規則一覧ページ', () => {
     expect(mockedApi.deactivate).not.toHaveBeenCalled();
 
     fireEvent.click(await screen.findByRole('button', { name: '停用する' }));
-    await waitFor(() => expect(mockedApi.deactivate).toHaveBeenCalledWith(1));
+    // 確認した行の版をそのまま運ぶ（見ていない規則を消させないため）
+    await waitFor(() => expect(mockedApi.deactivate).toHaveBeenCalledWith(1, 4));
     // 停用後は一覧を取り直す（停用済みバッジへ切り替わる）
     await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
   });

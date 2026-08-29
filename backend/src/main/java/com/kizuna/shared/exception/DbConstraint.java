@@ -48,6 +48,9 @@ public enum DbConstraint {
   /** t_customer_member_links → t_customers(id, alive) の複合 FK。関連が残る顧客の墓標化を拒む（削除は連鎖）。 */
   FK_T_CUSTOMER_MEMBER_LINKS_CUSTOMER_ALIVE("fk_t_customer_member_links_customer_alive"),
 
+  /** t_benefit_rule_stores → t_stores の FK。実在しない店舗を指した特典規則の保存を止める。 */
+  FK_T_BENEFIT_RULE_STORES_STORE("fk_t_benefit_rule_stores_store"),
+
   /** t_point_entries.idempotency_key の一意制約（ADR 0007）。 */
   UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key"),
 
