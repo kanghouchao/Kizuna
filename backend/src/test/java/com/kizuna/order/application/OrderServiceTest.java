@@ -1964,6 +1964,7 @@ class OrderServiceTest {
   private static final long MEMBER_ID = 100L;
   private static final long ACTOR_ID = 7L;
   private static final long GRANT_ENTRY_ID = 55L;
+  private static final long ATTRIBUTION_ID = 88L;
 
   /** 完了の対象になる受注が現に持つ版。要求はこれと同じ値を載せて初めて通る。 */
   private static final long CURRENT_VERSION = 4L;
@@ -2001,6 +2002,15 @@ class OrderServiceTest {
   private void stubLink(CustomerMemberLink link) {
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
+    // 帰属記録は保存で採番され、その ID が昇格判定の契機として渡る
+    lenient()
+        .when(orderAttributionRepository.save(any(OrderAttribution.class)))
+        .thenAnswer(
+            invocation -> {
+              OrderAttribution saved = invocation.getArgument(0);
+              saved.setId(ATTRIBUTION_ID);
+              return saved;
+            });
   }
 
   private void stubActiveLink(Long memberId) {
@@ -2042,6 +2052,25 @@ class OrderServiceTest {
         .filter(line -> line.getKind() == OrderFeeLineKind.POINT_REDEMPTION)
         .mapToInt(line -> -line.getAmount())
         .sum();
+  }
+
+  @Test
+  void completeLocksTheMemberRowBeforeAnythingReferencesIt() {
+    // 会員へ外部キーを張る書き込みが先に走ると、その FOR KEY SHARE を跨いで昇格判定が FOR UPDATE を
+    // 求める形になり、同じ会員への並行する完了同士が死錠する
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubWriteBackResponse();
+
+    service.complete("o1", completion(12000, 300), "staff@kizuna.test");
+
+    InOrder inOrder = inOrder(memberRankSync, pointLedgerService, orderAttributionRepository);
+    inOrder.verify(memberRankSync).beforeMemberWrites(MEMBER_ID);
+    inOrder.verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
+    inOrder.verify(pointLedgerService).grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID);
+    inOrder.verify(orderAttributionRepository).save(any(OrderAttribution.class));
   }
 
   @Test
@@ -2284,6 +2313,8 @@ class OrderServiceTest {
 
     assertThat(order.getAutoGrantPoints()).isZero();
     assertThat(savedAttribution().getOrderId()).isEqualTo("o1");
+    // 台帳に行が無くても来店は回数へ入るので、判定は付与の有無に依らず起こす
+    verify(memberRankSync).afterAttribution(MEMBER_ID, ATTRIBUTION_ID, null);
   }
 
   @Test
