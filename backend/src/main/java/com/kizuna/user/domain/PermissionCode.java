@@ -53,6 +53,9 @@ public enum PermissionCode {
    *
    * <p>{@link #SYSTEM_CONFIG_MANAGE} へ同居させない。ポイントを発行する規則と SMTP ホストは監査上同類ではなく、
    * 共通設定を触れる者が黙って会員へポイントを配れる規則を建てられる形になるためである。
+   *
+   * <p>店舗集合で絞る規則を編めるには {@link #STORE_VIEW} と全店舗の作用域を<b>前提とする</b> — 適用店舗の選択肢は授権店舗一覧から
+   * 引くので、これを欠く自作ロールでは選択肢が空になる（{@link #ORDER_CORRECT} と同じ、機構では強制しない付与時の約束）。
    */
   BENEFIT_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 

@@ -109,6 +109,23 @@ class BenefitRuleTest {
   }
 
   @Test
+  @DisplayName("紹介規則は一人一回限りを取れないこと")
+  void referralRuleCannotBeOncePerMember() {
+    assertThatThrownBy(
+            () ->
+                BenefitRule.define(
+                    BenefitRuleType.REFERRAL,
+                    definition()
+                        .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER)
+                        .points(null)
+                        .referrerPoints(1000)
+                        .referredPoints(500)
+                        .build()))
+        .isInstanceOf(InvalidBenefitRuleException.class)
+        .hasMessageContaining("紹介規則は毎回");
+  }
+
+  @Test
   @DisplayName("ログイン規則は全店舗しか取れないこと")
   void loginRuleMustBeAllStores() {
     assertThatThrownBy(

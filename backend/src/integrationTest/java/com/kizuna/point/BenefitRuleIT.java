@@ -272,6 +272,14 @@ class BenefitRuleIT extends CrossStoreTestSupport {
         .isInstanceOf(DataIntegrityViolationException.class)
         .hasMessageContaining("ck_t_benefit_rules_points_shape");
 
+    // 一人一回限りの紹介規則
+    assertThatThrownBy(
+            () ->
+                insertRuleRow(
+                    "特典規則IT_不正な紹介", "REFERRAL", "ALL_STORES", "ONCE_PER_MEMBER", null, 1000, 500))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("ck_t_benefit_rules_referral_every_time");
+
     // 店舗集合で絞ったログイン規則
     assertThatThrownBy(
             () ->
@@ -279,6 +287,43 @@ class BenefitRuleIT extends CrossStoreTestSupport {
                     "特典規則IT_不正なログイン", "LOGIN", "SPECIFIC_STORES", "EVERY_TIME", 100, null, null))
         .isInstanceOf(DataIntegrityViolationException.class)
         .hasMessageContaining("ck_t_benefit_rules_login_all_stores");
+  }
+
+  @Test
+  @DisplayName("実在しない店舗を指した作成は 400 になること（外部キー違反の 500 に化けない）")
+  void missingStoreReferenceIsRejectedWithBadRequest() {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/benefit-rules",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                """
+                {"name":"特典規則IT_消えた店舗","type":"VISIT","store_scope_type":"SPECIFIC_STORES",
+                 "store_ids":[999999999],"repeat_policy":"EVERY_TIME","points":100}
+                """,
+                bearerJson(hqToken)),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).contains("店舗が見つかりません");
+  }
+
+  @Test
+  @DisplayName("整数の項目へ届いた小数は切り捨てずに 400 になること")
+  void fractionalPointsAreRejected() {
+    ResponseEntity<JsonNode> res =
+        rest.exchange(
+            "/platform/benefit-rules",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                """
+                {"name":"特典規則IT_小数","type":"VISIT","store_scope_type":"ALL_STORES",
+                 "repeat_policy":"EVERY_TIME","points":1.5}
+                """,
+                bearerJson(hqToken)),
+            JsonNode.class);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   @Test

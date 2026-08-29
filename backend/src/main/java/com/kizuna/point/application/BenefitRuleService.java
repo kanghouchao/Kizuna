@@ -6,9 +6,13 @@ import com.kizuna.point.api.dto.BenefitRuleResponse;
 import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
 import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.domain.BenefitRule;
+import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepository;
+import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreExistenceCheck;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +31,7 @@ public class BenefitRuleService {
 
   private final BenefitRuleRepository benefitRuleRepository;
   private final BenefitRuleMapper benefitRuleMapper;
+  private final StoreExistenceCheck storeExistenceCheck;
 
   /** 停用済みも含めた全規則を新しい順に返す。停用が退場を表すので、一覧から消えるものは無い。 */
   public Page<BenefitRuleSummaryResponse> list(Pageable pageable) {
@@ -41,8 +46,9 @@ public class BenefitRuleService {
 
   @Transactional
   public BenefitRuleResponse create(BenefitRuleCreateRequest request) {
-    BenefitRule rule =
-        BenefitRule.define(request.getType(), benefitRuleMapper.toDefinition(request));
+    BenefitRuleDefinition definition = benefitRuleMapper.toDefinition(request);
+    requireExistingStores(definition);
+    BenefitRule rule = BenefitRule.define(request.getType(), definition);
     return benefitRuleMapper.toResponse(benefitRuleRepository.save(rule));
   }
 
@@ -55,13 +61,33 @@ public class BenefitRuleService {
     if (!rule.getVersion().equals(request.getVersion())) {
       throw new StaleBenefitRuleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
-    rule.redefine(benefitRuleMapper.toDefinition(request));
+    BenefitRuleDefinition definition = benefitRuleMapper.toDefinition(request);
+    requireExistingStores(definition);
+    rule.redefine(definition);
     return benefitRuleMapper.toResponse(benefitRuleRepository.save(rule));
   }
 
   @Transactional
   public void deactivate(Long id) {
     find(id).deactivate();
+  }
+
+  /**
+   * 指定された店舗が実在することを保存前に確かめる。
+   *
+   * <p>画面が選択肢を取ってから提出するまでに店舗が消えることがあり、集約は集合が非空であることしか見ない。 素通しすると外部キー違反が全域ハンドラの兜底へ落ち、直せる入力の誤りが 500
+   * で返る。
+   */
+  private void requireExistingStores(BenefitRuleDefinition definition) {
+    Set<Long> storeIds = definition.storeIds();
+    if (storeIds == null) {
+      return;
+    }
+    for (Long storeId : storeIds) {
+      if (storeId == null || !storeExistenceCheck.exists(storeId)) {
+        throw new InvalidBenefitRuleException("指定された店舗が見つかりません。選択し直してください");
+      }
+    }
   }
 
   private BenefitRule find(Long id) {
