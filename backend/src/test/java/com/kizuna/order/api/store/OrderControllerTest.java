@@ -588,14 +588,14 @@ class OrderControllerTest {
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderPointRollbackService);
 
-    // 正向対照: 上限ちょうどは通る（400 が端点の不在でない証明）
+    // 正向対照: 上限ちょうどは通る（400 が端点の不在でない証明）。新たな操作記録を生むので 201
     when(orderPointRollbackService.rollback(any(), any(), any()))
         .thenReturn(new OrderPointRollbackResponse(120, 300));
     mockMvc
         .perform(
             storePost(
                 "/store/orders/o1/point-rollback", "{\"reason\": \"" + "あ".repeat(500) + "\"}"))
-        .andExpect(status().isOk());
+        .andExpect(status().isCreated());
   }
 
   @Test
