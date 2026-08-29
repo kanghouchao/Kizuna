@@ -1,5 +1,6 @@
 package com.kizuna;
 
+import static com.kizuna.user.domain.PermissionCode.BENEFIT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CAST_FIELD_DEF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CAST_FIELD_DEF_VIEW;
 import static com.kizuna.user.domain.PermissionCode.CAST_INVITE;
@@ -58,6 +59,7 @@ class DefaultGrantApprovalTests {
           Map.entry(SYSTEM_CONFIG_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_MENU_VIEW, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_ASSET_MANAGE, Set.of(HQ_ADMIN)),
+          Map.entry(BENEFIT_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(STORE_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)),
           Map.entry(ORDER_SET_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)),
           Map.entry(ORDER_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
