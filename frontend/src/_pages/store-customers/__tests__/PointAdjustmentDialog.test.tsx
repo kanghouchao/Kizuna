@@ -18,9 +18,19 @@ const renderDialog = (onAdjusted = jest.fn(), onClose = jest.fn()) => {
   return { onAdjusted, onClose };
 };
 
-/** 増減と事由を入れて送信する（各テストの本題は個々の欄なので、送信までを 1 つにまとめる）。 */
-const submitWith = async (delta: string, reason = '棚卸しの補正') => {
+/** 分類の選択。キーボード／ポインタ経路のみを使う（jsdom にポインタ系 API が無い）。 */
+const pickCategory = async (category: string) => {
+  fireEvent.click(await screen.findByRole('combobox', { name: '事由の分類' }));
+  const option = await screen.findByRole('option', { name: category });
+  // Base UI の Item は pointerdown を経ていない mouse click を無視する
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
+};
+
+/** 増減・分類・事由を入れて送信する（各テストの本題は個々の欄なので、送信までを 1 つにまとめる）。 */
+const submitWith = async (delta: string, reason = '棚卸しの補正', category = '訂正') => {
   fireEvent.change(await screen.findByLabelText('増減ポイント'), { target: { value: delta } });
+  await pickCategory(category);
   fireEvent.change(screen.getByLabelText('事由'), { target: { value: reason } });
   fireEvent.click(screen.getByRole('button', { name: '調整する' }));
 };
@@ -35,6 +45,7 @@ describe('PointAdjustmentDialog', () => {
     // 空欄は NaN であって null でも空文字でもないため、required だけでは素通りする
     renderDialog();
 
+    await pickCategory('訂正');
     fireEvent.change(await screen.findByLabelText('事由'), { target: { value: '補正' } });
     fireEvent.click(screen.getByRole('button', { name: '調整する' }));
 
@@ -47,10 +58,31 @@ describe('PointAdjustmentDialog', () => {
     renderDialog();
 
     fireEvent.change(await screen.findByLabelText('増減ポイント'), { target: { value: '100' } });
+    await pickCategory('訂正');
     fireEvent.click(screen.getByRole('button', { name: '調整する' }));
 
     expect(await screen.findByText('事由を入力してください')).toBeInTheDocument();
     expect(mockedAdjust).not.toHaveBeenCalled();
+  });
+
+  it('分類を選ばなければ送信せず理由を出す（後から分類で拾えない仕訳を積ませない）', async () => {
+    renderDialog();
+
+    fireEvent.change(await screen.findByLabelText('増減ポイント'), { target: { value: '100' } });
+    fireEvent.change(screen.getByLabelText('事由'), { target: { value: '補正' } });
+    fireEvent.click(screen.getByRole('button', { name: '調整する' }));
+
+    expect(await screen.findByText('事由の分類を選択してください')).toBeInTheDocument();
+    expect(mockedAdjust).not.toHaveBeenCalled();
+  });
+
+  it('選んだ分類を接頭辞にして自由記述と連結して送る', async () => {
+    renderDialog();
+
+    await submitWith('100', 'ご迷惑のお詫び', '補填');
+
+    await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(1));
+    expect(mockedAdjust.mock.calls[0][1].reason).toBe('補填: ご迷惑のお詫び');
   });
 
   it('増減 0 は送信せず理由を出す', async () => {
@@ -80,6 +112,7 @@ describe('PointAdjustmentDialog', () => {
     fireEvent.change(await screen.findByLabelText('有効期限'), {
       target: { value: '2026-12-31' },
     });
+    await pickCategory('補填');
     fireEvent.change(screen.getByLabelText('事由'), { target: { value: 'キャンペーン付与' } });
     fireEvent.click(screen.getByRole('button', { name: '調整する' }));
 
@@ -87,7 +120,7 @@ describe('PointAdjustmentDialog', () => {
     expect(mockedAdjust.mock.calls[0][0]).toBe('c1');
     expect(mockedAdjust.mock.calls[0][1]).toEqual({
       delta: 100,
-      reason: 'キャンペーン付与',
+      reason: '補填: キャンペーン付与',
       expires_on: '2026-12-31',
       idempotency_key: expect.any(String),
     });
@@ -115,13 +148,14 @@ describe('PointAdjustmentDialog', () => {
     fireEvent.change(delta, { target: { value: '-100' } });
 
     await waitFor(() => expect(screen.queryByLabelText('有効期限')).not.toBeInTheDocument());
+    await pickCategory('訂正');
     fireEvent.change(screen.getByLabelText('事由'), { target: { value: '失効の補正' } });
     fireEvent.click(screen.getByRole('button', { name: '調整する' }));
 
     await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(1));
     expect(mockedAdjust.mock.calls[0][1]).toEqual({
       delta: -100,
-      reason: '失効の補正',
+      reason: '訂正: 失効の補正',
       idempotency_key: expect.any(String),
     });
   });

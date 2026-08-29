@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 申領が証明するのは「この伝票の来店は自分のものだ」という受注 1 件の事実だけで、その店舗と会員の 継続的な関係ではない（ADR 0008）。完了済み受注の会計（{@code
  * auto_grant_points} 等）も書き換えない。完了時に付与が 無かったことは当時の事実であり、この申領で得たポイントは台帳が持つ。
  *
- * <p>申領できないトークンは理由を区別せず<b>同形のエラー</b>で返す。不在・期限切れ・使用済みを撃ち分けると、応答の違いから
+ * <p>申領できないトークンは理由を区別せず<b>同形のエラー</b>で返す。不在・期限切れ・使用済み・巻き戻し済みを撃ち分けると、応答の違いから
  * 受注の存在と完了状態を辿れてしまう。並行申領の敗者も同じ形へ落ちる（{@link OrderReceiptTokenRepository#findByTokenDigest} の行ロック）。
  *
  * <p>会員は店舗を授権されないため店舗文脈（{@code @StoreScoped}）を確立できず storeFilter も働かない。トークンのダイジェスト一致が
@@ -37,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberReceiptClaimService {
 
-  /** 申領できないトークンへ返す唯一の文言。不在・期限切れ・使用済み・並行申領の敗者がすべてこの応答になる。 */
+  /** 申領できないトークンへ返す唯一の文言。不在・期限切れ・使用済み・巻き戻し済み・並行申領の敗者がすべてこの応答になる。 */
   private static final String UNCLAIMABLE_MESSAGE =
       "この伝票は申領できません。QR の有効期限（90 日）と、既に取り込み済みでないかをご確認ください";
 
@@ -71,6 +71,11 @@ public class MemberReceiptClaimService {
     // 「要求が届いた瞬間」ではない。
     OffsetDateTime now = OffsetDateTime.now();
     if (!token.isClaimableAt(now)) {
+      throw new NotFoundException(UNCLAIMABLE_MESSAGE);
+    }
+    // 巻き戻し済みの受注は申領できない。判じるのは操作記録であって台帳の仕訳の有無ではない — 付与予定額は
+    // 完了時点で固定され再発行でも計算し直されないため、仕訳ゼロの受注でも申領は原額を積み直せる。
+    if (pointLedgerService.isRolledBack(token.getOrderId())) {
       throw new NotFoundException(UNCLAIMABLE_MESSAGE);
     }
     // 発生店舗は台帳の仕訳が要る（残高の作用域ではなく帰属情報）。トークンは受注へ FK CASCADE で
