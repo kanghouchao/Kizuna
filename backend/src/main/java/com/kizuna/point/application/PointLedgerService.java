@@ -19,7 +19,9 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -370,10 +372,13 @@ public class PointLedgerService {
    */
   @Transactional(readOnly = true)
   public PointRollbackPreview previewRollbackForOrder(String orderId) {
+    List<PointEntry> uses = pendingUsesOf(orderId);
+    Map<Long, Integer> returning = returnedAmountsByLot(uses);
+    List<PointEntry> targets = cancellationTargets(orderId, returning.keySet());
     return new PointRollbackPreview(
         pointRollbackRepository.existsByOrderId(orderId),
-        cancellablePointsOf(pointEntryRepository.findCreditsByOrderId(orderId)),
-        pendingUsesOf(orderId).stream().mapToInt(use -> -use.getAmount()).sum());
+        cancellablePointsOf(targets, returning),
+        uses.stream().mapToLong(use -> -use.getAmount()).sum());
   }
 
   /**
@@ -391,20 +396,22 @@ public class PointLedgerService {
     pointRollbackRepository.save(PointRollback.of(orderId, reason, actorUserId));
 
     List<PointEntry> uses = pendingUsesOf(orderId);
-    List<PointEntry> credits = pointEntryRepository.findCreditsByOrderId(orderId);
-    lockCreditsOfMembersIn(uses, credits);
+    Map<Long, Integer> returning = returnedAmountsByLot(uses);
+    List<PointEntry> targets = cancellationTargets(orderId, returning.keySet());
+    lockCreditsOfMembersIn(uses, targets);
 
-    int restored = 0;
+    long restored = 0;
     for (PointEntry use : uses) {
       pointEntryRepository.save(PointEntry.reverseUse(use, reason, actorUserId));
       restored += -use.getAmount();
     }
-    // 逆転で戻った量を未消費分へ含めるため、取消の数え直しは逆転を書き終えた後に行う。
+    // 逆転で戻った量を未消費分へ含めるため、取消の数え直しは逆転を書き終えた後に行う
+    // （書き終えているので、戻る予定を足し戻す必要はもう無い）。
     pointEntryRepository.flush();
-    int cancelled = 0;
-    Map<Long, Integer> consumed = consumedBy(credits.stream().map(PointEntry::getId).toList());
-    for (PointEntry credit : credits) {
-      int available = credit.getAmount() - consumed.getOrDefault(credit.getId(), 0);
+    long cancelled = 0;
+    Map<Long, Integer> consumed = consumedBy(targets.stream().map(PointEntry::getId).toList());
+    for (PointEntry credit : targets) {
+      int available = availableOf(credit, consumed, Map.of());
       if (available <= 0) {
         continue;
       }
@@ -414,12 +421,12 @@ public class PointLedgerService {
     return new PointRollbackResult(cancelled, restored);
   }
 
-  /** 巻き戻しで動いた量。 */
-  public record PointRollbackResult(int cancelledPoints, int restoredPoints) {}
+  /** 巻き戻しで動いた量。1 受注に複数の付与が積まれた合計は int を超えうるため long で持つ。 */
+  public record PointRollbackResult(long cancelledPoints, long restoredPoints) {}
 
   /** 巻き戻しで動く見込みの量と、既に巻き戻し済みかどうか。 */
   public record PointRollbackPreview(
-      boolean alreadyRolledBack, int cancellablePoints, int reversibleUsedPoints) {}
+      boolean alreadyRolledBack, long cancellablePoints, long reversibleUsedPoints) {}
 
   /** その受注の利用のうち、まだ逆転されていないもの。 */
   private List<PointEntry> pendingUsesOf(String orderId) {
@@ -433,13 +440,45 @@ public class PointLedgerService {
     return uses.stream().filter(use -> !reversed.contains(use.getId())).toList();
   }
 
-  /** 与えた加算ロットに残っている未消費分の合計。 */
-  private int cancellablePointsOf(List<PointEntry> credits) {
+  /**
+   * 巻き戻しで取消の対象になる加算ロット。本受注の付与と、利用の逆転で量が戻る先のうち、その受注が既に
+   * 巻き戻されているものである。後者を含めないと、無効にしたはずの付与が返り分だけ使える残高として復活する。
+   */
+  private List<PointEntry> cancellationTargets(String orderId, Collection<Long> returnedLotIds) {
+    List<PointEntry> credits = pointEntryRepository.findCreditsByOrderId(orderId);
+    if (returnedLotIds.isEmpty()) {
+      return credits;
+    }
+    Set<Long> known = credits.stream().map(PointEntry::getId).collect(Collectors.toSet());
+    List<PointEntry> targets = new ArrayList<>(credits);
+    pointEntryRepository.findRolledBackCreditsAmong(returnedLotIds).stream()
+        .filter(lot -> !known.contains(lot.getId()))
+        .forEach(targets::add);
+    return targets;
+  }
+
+  /** 逆転でロットごとへ戻る量。まだ書いていない逆転の分を未消費分の見積りへ足し戻すために使う。 */
+  private static Map<Long, Integer> returnedAmountsByLot(List<PointEntry> uses) {
+    Map<Long, Integer> byLot = new LinkedHashMap<>();
+    for (PointEntry use : uses) {
+      for (PointAllocation allocation : use.getAllocations()) {
+        byLot.merge(allocation.getSourceEntryId(), allocation.getAmount(), Integer::sum);
+      }
+    }
+    return byLot;
+  }
+
+  /** 1 件の加算ロットに残っている未消費分。1 件の量は int に収まる（自身の加算量が上限）。 */
+  private static int availableOf(
+      PointEntry credit, Map<Long, Integer> consumed, Map<Long, Integer> returning) {
+    int used = consumed.getOrDefault(credit.getId(), 0) - returning.getOrDefault(credit.getId(), 0);
+    return Math.max(0, credit.getAmount() - used);
+  }
+
+  /** 与えた加算ロットに残っている未消費分の合計。ロットを跨いだ合計は int を超えうる。 */
+  private long cancellablePointsOf(List<PointEntry> credits, Map<Long, Integer> returning) {
     Map<Long, Integer> consumed = consumedBy(credits.stream().map(PointEntry::getId).toList());
-    return credits.stream()
-        .mapToInt(
-            credit -> Math.max(0, credit.getAmount() - consumed.getOrDefault(credit.getId(), 0)))
-        .sum();
+    return credits.stream().mapToLong(credit -> availableOf(credit, consumed, returning)).sum();
   }
 
   /**

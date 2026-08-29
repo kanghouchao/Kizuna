@@ -53,6 +53,11 @@ class PointRollbackIT extends CrossStoreTestSupport {
 
   private static final int USED_POINTS = 300;
 
+  /** 利用の単位（100 ポイント）ちょうどの付与になる会計金額と、その付与額。使い切りを作るのに要る。 */
+  private static final int UNIT_FEE = 10_000;
+
+  private static final int UNIT_GRANT = 100;
+
   @Autowired private PointEntryRepository pointEntryRepository;
   @Autowired private MemberRepository memberRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -127,6 +132,37 @@ class PointRollbackIT extends CrossStoreTestSupport {
         .as("不在・期限切れ・使用済みと同形の文言であること")
         .contains("この伝票は申領できません");
     assertThat(ledgerRowsFor(issued.orderId())).as("申領が付与を積み直さないこと").isZero();
+  }
+
+  @Test
+  @DisplayName("巻き戻し済みの受注の付与が、別の受注の巻き戻しで残高へ復活しないこと")
+  void rollbackNeverRevivesGrantsOfAnAlreadyRolledBackOrder() {
+    // 受注 A の付与を受注 B が使い切ると、A の巻き戻しは打ち消す対象を持たない（記録だけが残る）。
+    // その後 B を巻き戻すと A のロットへ量が戻るが、A は二度目を受け付けないため、ここで
+    // 打ち消さなければ無効にしたはずの付与が使える残高として復活する。
+    RegisteredMember member = registerAndLogin("revive");
+    String customerId = linkedCustomer(member.memberCode());
+    // 利用は 100 ポイント単位なので、使い切れるよう付与も 100 ちょうどになる会計にする。
+    String orderA = createOrder(createCast("復活検証A-" + nonce), customerId);
+    complete(orderA, UNIT_FEE, null);
+    assertThat(balanceOf(customerId)).as("前提: A の付与だけが残高にあること").isEqualTo(UNIT_GRANT);
+
+    String orderB = createOrder(createCast("復活検証B-" + nonce), customerId);
+    complete(orderB, UNIT_FEE, UNIT_GRANT);
+    assertThat(balanceOf(customerId)).as("前提: B が A の付与を使い切り、B の付与だけが残ること").isEqualTo(UNIT_GRANT);
+
+    assertThat(rollback(orderA, "A の全否定").getBody().path("cancelled_points").asInt())
+        .as("前提: A には打ち消す残余が無いこと")
+        .isZero();
+
+    ResponseEntity<JsonNode> rolledBackB = rollback(orderB, "B の全否定");
+
+    assertThat(rolledBackB.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(rolledBackB.getBody().path("restored_points").asInt()).isEqualTo(UNIT_GRANT);
+    assertThat(rolledBackB.getBody().path("cancelled_points").asInt())
+        .as("B 自身の付与に加えて、A へ戻した分も打ち消すこと")
+        .isEqualTo(UNIT_GRANT * 2);
+    assertThat(balanceOf(customerId)).as("無効の付与は残高へ戻らないこと").isZero();
   }
 
   @Test
@@ -278,6 +314,10 @@ class PointRollbackIT extends CrossStoreTestSupport {
   }
 
   private JsonNode complete(String orderId, Integer usePoints) {
+    return complete(orderId, TOTAL_FEE, usePoints);
+  }
+
+  private JsonNode complete(String orderId, int totalFee, Integer usePoints) {
     ResponseEntity<JsonNode> completed =
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
@@ -286,7 +326,7 @@ class PointRollbackIT extends CrossStoreTestSupport {
                 "{\"expected_version\":"
                     + orderVersion(managerHeaders(STORE_A), orderId)
                     + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
-                    + TOTAL_FEE
+                    + totalFee
                     + "}]"
                     + (usePoints == null ? "" : ",\"use_points\":" + usePoints)
                     + "}",

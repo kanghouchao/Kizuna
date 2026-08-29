@@ -88,6 +88,19 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
           + " and g.entryType = com.kizuna.point.domain.PointEntryType.ORDER_GRANT)))")
   long sumNetOrderGrants(@Param("memberId") Long memberId);
 
+  /**
+   * 与えた加算ロットのうち、その根拠の受注が既に巻き戻されているもの。
+   *
+   * <p>利用の逆転は消費量を元のロットへ返すため、返した先が巻き戻し済みの受注の付与だと、無効にしたはずの量が
+   * 使える残高として復活する。相手の受注は二度目の巻き戻しを受け付けないので、返した側が同じ取引で打ち消す。
+   */
+  @Query(
+      "select e from com.kizuna.point.domain.PointEntry e"
+          + " where e.id in :creditIds and e.orderId is not null"
+          + " and exists (select 1 from com.kizuna.point.domain.PointRollback r"
+          + " where r.orderId = e.orderId)")
+  List<PointEntry> findRolledBackCreditsAmong(@Param("creditIds") Collection<Long> creditIds);
+
   /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
 

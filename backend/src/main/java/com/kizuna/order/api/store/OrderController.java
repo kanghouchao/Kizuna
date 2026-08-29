@@ -33,6 +33,7 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -235,6 +236,12 @@ public class OrderController {
   @PostMapping("/{id}/receipt-token")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderReceiptTokenResponse> reissueReceiptToken(@PathVariable String id) {
+    // 巻き戻し済みの受注へは発行しない。発行しても申領は拒まれるので、店舗は成功したと告げられたうえで
+    // 使えない QR を客へ見せることになる。判定をここに置くのは、再発行のサービスが台帳へ依存を持たない
+    // こと自体が「無効化は台帳へ波及しない」（ADR 0009）の構造的な証跡だからである。
+    if (orderPointRollbackService.isRolledBack(id)) {
+      throw new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません");
+    }
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(orderAttributionService.reissueReceiptToken(id));
   }

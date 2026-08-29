@@ -40,6 +40,19 @@ public class OrderPointRollbackService {
   private final PointLedgerService pointLedgerService;
   private final PlatformUserRepository platformUserRepository;
 
+  /**
+   * その受注が既に巻き戻されているか。伝票の再発行の可否がこれで決まる。
+   *
+   * <p>先に現店舗の受注として引く。引かずに操作記録だけを見ると、他店舗の受注 ID に対して「巻き戻し済みか」が 応答の違いから読み取れてしまう（再発行そのものは 404
+   * に落ちるのに、こちらが先に 400 を返す）。
+   */
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public boolean isRolledBack(String orderId) {
+    requireScopedOrder(orderId);
+    return pointLedgerService.isRolledBack(orderId);
+  }
+
   /** 実行前の下見。画面はこれで「何がいくら動くか」を示し、済んでいる受注では実行の導線を出さない。 */
   @StoreScoped
   @Transactional(readOnly = true)
