@@ -47,6 +47,7 @@ class PointLedgerServiceTest {
   private static final long MEMBER_ID = 7L;
   private static final long STORE_ID = 3L;
   private static final long ACTOR_ID = 9L;
+  private static final long SAVED_ENTRY_ID = 41L;
   private static final LocalDate FAR_FUTURE = LocalDate.of(2099, 12, 31);
   private static final String TIMEZONE = "Asia/Tokyo";
 
@@ -63,6 +64,15 @@ class PointLedgerServiceTest {
   void stubBusinessTimezone() {
     lenient().when(appProperties.getTimezone()).thenReturn(TIMEZONE);
     lenient().when(pointEntryRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+    // 記帳は保存された行の ID を返す（付与はそれを昇格判定の根拠として渡す）。永続化層の採番を写す。
+    lenient()
+        .when(pointEntryRepository.save(any()))
+        .thenAnswer(
+            invocation -> {
+              PointEntry saved = invocation.getArgument(0);
+              saved.setId(SAVED_ENTRY_ID);
+              return saved;
+            });
   }
 
   @Test
@@ -108,7 +118,8 @@ class PointLedgerServiceTest {
   void grantForOrderWritesNothingWhenZero() {
     when(systemConfigService.pointSettings()).thenReturn(new PointSettings(100, 1, 100));
 
-    assertThat(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 99, ACTOR_ID)).isZero();
+    assertThat(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 99, ACTOR_ID).points())
+        .isZero();
     verify(pointEntryRepository, never()).save(any());
   }
 
@@ -118,7 +129,7 @@ class PointLedgerServiceTest {
     when(systemConfigService.pointSettings()).thenReturn(new PointSettings(100, 2, 100));
 
     assertThat(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12345, ACTOR_ID))
-        .isEqualTo(246);
+        .isEqualTo(new PointLedgerService.GrantedPoints(246, SAVED_ENTRY_ID));
 
     verify(pointEntryRepository).save(savedEntry.capture());
     PointEntry entry = savedEntry.getValue();
@@ -126,6 +137,14 @@ class PointLedgerServiceTest {
     assertThat(entry.getAmount()).isEqualTo(246);
     assertThat(entry.getOrderId()).isEqualTo("o1");
     assertThat(entry.getOriginatingStoreId()).isEqualTo(STORE_ID);
+  }
+
+  @Test
+  @DisplayName("付与の純額は台帳へそのまま問い合わせ、返った合計を丸めずに渡すこと")
+  void netGrantedPointsForDelegatesToTheLedger() {
+    when(pointEntryRepository.sumNetOrderGrants(MEMBER_ID)).thenReturn(4200L);
+
+    assertThat(pointLedgerService.netGrantedPointsFor(MEMBER_ID)).isEqualTo(4200L);
   }
 
   @Test

@@ -6,8 +6,10 @@
 |_Services_
 
 * `c.k.m.application.MemberLookupService`
+* `c.k.m.application.MemberRankService`
 * `c.k.m.application.MemberRegistrationService`
 * `c.k.m.application.MemberSelfService`
 |Bean references
-|* `c.k.u.domain.PlatformUserRepository` (in User)
+|* `c.k.s.application.SystemConfigService` (in Settings)
+* `c.k.u.domain.PlatformUserRepository` (in User)
 |===

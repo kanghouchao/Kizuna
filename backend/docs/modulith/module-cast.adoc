@@ -19,6 +19,7 @@ _Repositories_
 |Bean references
 |* `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.s.domain.StoreRepository` (in Store)
+* `c.k.s.storescope.StoreContext` (in Shared)
 |Aggregate roots
 |* `c.k.c.domain.Cast`
 * `c.k.c.domain.CastFieldDefinition`

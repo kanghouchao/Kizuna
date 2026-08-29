@@ -10,6 +10,7 @@
 _Others_
 
 * `c.k.s.config.CacheConfig`
+* `c.k.s.config.ClockConfig`
 * `c.k.s.config.RedisConfig`
 * `c.k.s.config.S3Config`
 * `c.k.s.exception.CommonExceptionHandler`
@@ -20,6 +21,7 @@ _Others_
 * `c.k.s.storescope.StoreIdInterceptor`
 * `c.k.s.storescope.StoreScopeExecutor`
 * `c.k.s.storescope.StoreSetFilterEnable`
+* `c.k.s.validation.PasswordValidator`
 * `c.k.s.web.RequestCorrelationFilter`
 * `c.k.s.web.RequestParameterTrimmingAdvice`
 * `c.k.s.web.WebBindingConfig`

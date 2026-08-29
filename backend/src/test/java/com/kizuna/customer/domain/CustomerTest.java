@@ -17,7 +17,6 @@ class CustomerTest {
             .buildingName("旧ビル")
             .classification("旧区分")
             .hasPet(false)
-            .rank("SILVER")
             .lineId("old_line")
             .usageAreas("旧エリア")
             .ngType("注意")
@@ -33,7 +32,6 @@ class CustomerTest {
             "新ビル",
             "新区分",
             true,
-            "GOLD",
             "new_line",
             "新エリア",
             "禁止",
@@ -46,7 +44,6 @@ class CustomerTest {
     assertThat(customer.getBuildingName()).isEqualTo("新ビル");
     assertThat(customer.getClassification()).isEqualTo("新区分");
     assertThat(customer.getHasPet()).isTrue();
-    assertThat(customer.getRank()).isEqualTo("GOLD");
     assertThat(customer.getLineId()).isEqualTo("new_line");
     assertThat(customer.getUsageAreas()).isEqualTo("新エリア");
     assertThat(customer.getNgType()).isEqualTo("禁止");
@@ -55,14 +52,12 @@ class CustomerTest {
 
   @Test
   void apply_nullFieldsKeepCurrentValues() {
-    Customer customer =
-        Customer.builder().name("名前").rank("GOLD").lineId("line").hasPet(true).build();
+    Customer customer = Customer.builder().name("名前").lineId("line").hasPet(true).build();
 
     customer.apply(
-        new CustomerPatch(null, null, null, null, null, null, null, null, null, null, null, null));
+        new CustomerPatch(null, null, null, null, null, null, null, null, null, null, null));
 
     assertThat(customer.getName()).isEqualTo("名前");
-    assertThat(customer.getRank()).isEqualTo("GOLD");
     assertThat(customer.getLineId()).isEqualTo("line");
     assertThat(customer.getHasPet()).isTrue();
   }

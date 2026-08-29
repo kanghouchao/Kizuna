@@ -58,6 +58,9 @@ databaseChangeLog:
       file: platform/10-point-ledger.yaml
       relativeToChangelogFile: true
   - include:
+      file: platform/11-member-rank-history.yaml
+      relativeToChangelogFile: true
+  - include:
       file: seed/01-roles.yaml
       relativeToChangelogFile: true
   - include:

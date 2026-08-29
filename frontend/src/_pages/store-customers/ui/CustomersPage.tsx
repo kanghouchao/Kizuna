@@ -37,7 +37,6 @@ const PAIR_SIZE = 2;
 /** 一覧の絞り込み条件（送信で確定した値） */
 interface CustomerCriteria {
   search: string;
-  rank: string;
   classification: string;
 }
 
@@ -46,7 +45,6 @@ export default function CustomersPage() {
   const params = useParams();
   const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
-  const [rank, setRank] = useState('');
   const [classification, setClassification] = useState('');
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
   // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
@@ -64,10 +62,9 @@ export default function CustomersPage() {
         // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
         sort: 'createdAt,id,desc',
         search: criteria.search || undefined,
-        rank: criteria.rank || undefined,
         classification: criteria.classification || undefined,
       }),
-    { search: '', rank: '', classification: '' }
+    { search: '', classification: '' }
   );
   const customers = list.rows;
 
@@ -119,7 +116,7 @@ export default function CustomersPage() {
           </>
         }
         search={{
-          onSearch: () => void list.search({ search, rank, classification }),
+          onSearch: () => void list.search({ search, classification }),
           content: (
             <>
               <div className="flex-1 relative">
@@ -134,13 +131,6 @@ export default function CustomersPage() {
                   placeholder="名前・電話番号・LINE ID で検索..."
                 />
               </div>
-              <Input
-                type="text"
-                value={rank}
-                onChange={e => setRank(e.target.value)}
-                className="w-full md:w-32"
-                placeholder="ランク"
-              />
               <Input
                 type="text"
                 value={classification}
@@ -166,7 +156,6 @@ export default function CustomersPage() {
               <TableHead>名前</TableHead>
               <TableHead>電話番号</TableHead>
               <TableHead>LINE ID</TableHead>
-              <TableHead>ランク</TableHead>
               <TableHead>区分</TableHead>
               <TableHead>会員</TableHead>
               <TableHead>NG</TableHead>
@@ -202,7 +191,6 @@ export default function CustomersPage() {
                   {customer.phone_number || '-'}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{customer.line_id || '-'}</TableCell>
-                <TableCell className="text-muted-foreground">{customer.rank || '-'}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {customer.classification || '-'}
                 </TableCell>

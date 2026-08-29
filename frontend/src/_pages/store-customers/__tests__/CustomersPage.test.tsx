@@ -49,7 +49,6 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
           name: '山田太郎',
           phone_number: '090-1111-2222',
           line_id: 'yamada',
-          rank: 'GOLD',
           classification: '常連',
           ng_type: '注意',
         },
@@ -80,8 +79,6 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
     expect(body).toHaveProperty('name', '田中花子');
     // 未操作チェックボックスは boolean false のまま（挙動維持の錨）
     expect(body).toHaveProperty('has_pet', false);
-    // defaultValues の rank はそのまま送信される
-    expect(body).toHaveProperty('rank', 'SILVER');
     // 空文字フィールドは toCustomerRequest で undefined に落ちる
     expect(body).toHaveProperty('phone_number', undefined);
     // camelCase キーが混入しないこと
@@ -162,7 +159,7 @@ describe('顧客一覧ページ固有の要素', () => {
     fireEvent.change(screen.getByPlaceholderText('名前・電話番号・LINE ID で検索...'), {
       target: { value: '山田' },
     });
-    fireEvent.change(screen.getByPlaceholderText('ランク'), { target: { value: 'GOLD' } });
+    fireEvent.change(screen.getByPlaceholderText('区分'), { target: { value: '常連' } });
     fireEvent.click(screen.getByRole('button', { name: '検索' }));
 
     await waitFor(() =>
@@ -171,8 +168,7 @@ describe('顧客一覧ページ固有の要素', () => {
         size: 20,
         sort: 'createdAt,id,desc',
         search: '山田',
-        rank: 'GOLD',
-        classification: undefined,
+        classification: '常連',
       })
     );
   });
@@ -219,7 +215,6 @@ describe('顧客一覧からの統合', () => {
       name: '山田太郎',
       phone_number: '090-1111-2222',
       address: '東京都渋谷区1-1',
-      rank: 'GOLD',
       member_linked: false,
       order_count: 3,
     },
@@ -228,7 +223,6 @@ describe('顧客一覧からの統合', () => {
       name: 'ヤマダタロウ',
       phone_number: '090-1111-2222',
       address: '東京都新宿区2-2',
-      rank: 'SILVER',
       member_linked: true,
       order_count: 0,
     },

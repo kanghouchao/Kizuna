@@ -117,7 +117,6 @@ export default function CustomerEditPage() {
           building_name: customer.building_name || '',
           classification: customer.classification || '',
           has_pet: customer.has_pet ?? false,
-          rank: customer.rank || '',
           line_id: customer.line_id || '',
           usage_areas: customer.usage_areas || '',
           ng_type: customer.ng_type || '',

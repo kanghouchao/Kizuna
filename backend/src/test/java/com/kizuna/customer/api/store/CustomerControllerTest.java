@@ -61,7 +61,7 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
-    when(customerService.list(any(), any(), any(), pageableCaptor.capture())).thenReturn(empty);
+    when(customerService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
         .perform(
@@ -78,7 +78,7 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
     Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
-    when(customerService.list(searchCaptor.capture(), any(), any(), any())).thenReturn(empty);
+    when(customerService.list(searchCaptor.capture(), any(), any())).thenReturn(empty);
 
     mockMvc
         .perform(
@@ -98,7 +98,7 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
     Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
-    when(customerService.list(searchCaptor.capture(), any(), any(), any())).thenReturn(empty);
+    when(customerService.list(searchCaptor.capture(), any(), any())).thenReturn(empty);
 
     mockMvc
         .perform(

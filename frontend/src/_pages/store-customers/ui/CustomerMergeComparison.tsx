@@ -11,7 +11,6 @@ const FIELDS: { label: string; value: (row: CustomerMergeComparisonResponse) => 
   { label: '住所', value: row => row.address || '-' },
   { label: '建物名', value: row => row.building_name || '-' },
   { label: '区分', value: row => row.classification || '-' },
-  { label: 'ランク', value: row => row.rank || '-' },
   { label: 'LINE ID', value: row => row.line_id || '-' },
   { label: '利用エリア', value: row => row.usage_areas || '-' },
   // 未設定は「なし」ではない。応答は non_null 直列化なので欄ごと欠けて届き、真偽値へ潰すと

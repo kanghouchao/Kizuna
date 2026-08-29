@@ -27,8 +27,6 @@ public interface CustomerMapper {
       Customer customer, boolean memberLinked, long orderCount);
 
   @Mapping(target = "landmark", ignore = true)
-  // rank は DB デフォルト（'SILVER'）と同義。エンティティに列をマッピングしたため明示的に補完する
-  @Mapping(target = "rank", source = "rank", defaultValue = "SILVER")
   // 起こしたばかりの行は定義上まだ生きている。統合先参照は統合だけが立てる。
   @Mapping(target = "mergedIntoId", ignore = true)
   Customer toEntity(CustomerCreateRequest request);

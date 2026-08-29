@@ -163,7 +163,6 @@ export default function CustomerDuplicatesPage() {
                       <TableRow>
                         <TableHead className="w-24">見比べる</TableHead>
                         <TableHead>名前</TableHead>
-                        <TableHead>ランク</TableHead>
                         <TableHead>区分</TableHead>
                         <TableHead>受注</TableHead>
                         <TableHead>会員</TableHead>
@@ -195,7 +194,6 @@ export default function CustomerDuplicatesPage() {
                             </div>
                           </TableCell>
                           <TableCell className="font-medium text-foreground">{row.name}</TableCell>
-                          <TableCell className="text-muted-foreground">{row.rank || '-'}</TableCell>
                           <TableCell className="text-muted-foreground">
                             {row.classification || '-'}
                           </TableCell>

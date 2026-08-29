@@ -60,6 +60,7 @@ class MemberReceiptClaimServiceTest {
   @Mock private PointLedgerService pointLedgerService;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private MemberLookupService memberLookupService;
+  @Mock private MemberRankSync memberRankSync;
 
   @InjectMocks private MemberReceiptClaimService service;
 

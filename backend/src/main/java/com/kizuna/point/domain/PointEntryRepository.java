@@ -55,6 +55,23 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
   List<OrderGrantTotalView> sumGrantsByOrderIds(
       @Param("memberId") Long memberId, @Param("orderIds") Collection<String> orderIds);
 
+  /**
+   * 会員の受注付与の累計純額。会員ランクの昇格指標で、取消によって減りうる。
+   *
+   * <p>控除するのは付与を打ち消す取消（CANCEL）だけを {@code originalEntryId} で辿って数える — 種別だけで数えると手動調整の取消まで引いてしまう。 合計が
+   * long なのは残高と同じ理由。
+   */
+  @Query(
+      "select coalesce(sum(e.amount), 0) from com.kizuna.point.domain.PointEntry e"
+          + " where e.memberId = :memberId"
+          + " and (e.entryType = com.kizuna.point.domain.PointEntryType.ORDER_GRANT"
+          + " or (e.entryType = com.kizuna.point.domain.PointEntryType.CANCEL"
+          + " and e.originalEntryId in ("
+          + " select g.id from com.kizuna.point.domain.PointEntry g"
+          + " where g.memberId = :memberId"
+          + " and g.entryType = com.kizuna.point.domain.PointEntryType.ORDER_GRANT)))")
+  long sumNetOrderGrants(@Param("memberId") Long memberId);
+
   /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
 

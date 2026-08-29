@@ -26,8 +26,8 @@ System_Boundary("Application_boundary", "Application", $tags="") {
 
 }
 
-Rel(Application.Application.User, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Member, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Application.Application.Member, Application.Application.Settings, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Member, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Settings, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Auth, Application.Application.User, "listens to", $techn="", $tags="", $link="")
@@ -35,6 +35,7 @@ Rel(Application.Application.Auth, Application.Application.User, "uses", $techn="
 Rel(Application.Application.Auth, Application.Application.Member, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Auth, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Auth, Application.Application.Settings, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.User, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

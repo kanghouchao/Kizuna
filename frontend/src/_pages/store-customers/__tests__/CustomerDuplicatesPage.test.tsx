@@ -42,7 +42,6 @@ const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
           name: '山田太郎',
           phone_number: '090-1111-2222',
           address: '東京都渋谷区1-1',
-          rank: 'GOLD',
           classification: '常連',
           ng_type: '注意',
           order_count: 3,
@@ -52,7 +51,7 @@ const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
           name: 'ヤマダタロウ',
           phone_number: '090-1111-2222',
           address: '東京都新宿区2-2',
-          rank: 'SILVER',
+          classification: '新規',
           member_linked: true,
         }),
       ],
@@ -179,8 +178,8 @@ describe('CustomerDuplicatesPage', () => {
     // 住所は一覧の型には無く、別人かどうかの判断はここで分かれる
     expect(within(comparison).getByText('東京都渋谷区1-1')).toBeInTheDocument();
     expect(within(comparison).getByText('東京都新宿区2-2')).toBeInTheDocument();
-    expect(within(comparison).getByText('GOLD')).toBeInTheDocument();
-    expect(within(comparison).getByText('SILVER')).toBeInTheDocument();
+    expect(within(comparison).getByText('常連')).toBeInTheDocument();
+    expect(within(comparison).getByText('新規')).toBeInTheDocument();
     expect(within(comparison).getByText('3 件')).toBeInTheDocument();
   });
 

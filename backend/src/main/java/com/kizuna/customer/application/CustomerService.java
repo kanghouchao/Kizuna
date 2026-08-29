@@ -80,8 +80,8 @@ public class CustomerService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<CustomerSummaryResponse> list(
-      String search, String rank, String classification, Pageable pageable) {
-    Specification<Customer> spec = searchSpec(search, rank, classification);
+      String search, String classification, Pageable pageable) {
+    Specification<Customer> spec = searchSpec(search, classification);
     Page<Customer> page = customerRepository.findAll(spec, pageable);
     // 会員紐づけは本ページ分だけを 1 回で引く（行ごとの追加問い合わせを作らない）。
     List<String> ids = page.getContent().stream().map(Customer::getId).toList();
@@ -256,11 +256,10 @@ public class CustomerService {
   }
 
   /**
-   * 検索語は 名前・電話番号・LINE ID を横断し、rank / classification は完全一致の絞り込み。 null の条件は述語を生成しない（JPQL の ":param is
-   * null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため Specification で組み立てる）。
+   * 検索語は 名前・電話番号・LINE ID を横断し、classification は完全一致の絞り込み。 null の条件は述語を生成しない（JPQL の ":param is null
+   * or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため Specification で組み立てる）。
    */
-  private static Specification<Customer> searchSpec(
-      String search, String rank, String classification) {
+  private static Specification<Customer> searchSpec(String search, String classification) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       // 墓標は台帳に並ばない。「統合済みも表示」の切替は設けない — 墓標の存在を知る必要があるのは
@@ -274,9 +273,6 @@ public class CustomerService {
                 cb.like(cb.lower(root.get("name")), pattern, escape),
                 cb.like(root.get("phoneNumber"), "%" + LIKE_ESCAPE.escape(search) + "%", escape),
                 cb.like(cb.lower(root.get("lineId")), pattern, escape)));
-      }
-      if (rank != null) {
-        predicates.add(cb.equal(root.get("rank"), rank));
       }
       if (classification != null) {
         predicates.add(cb.equal(root.get("classification"), classification));

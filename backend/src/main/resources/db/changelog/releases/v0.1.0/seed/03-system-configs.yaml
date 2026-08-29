@@ -96,6 +96,41 @@ databaseChangeLog:
               - column: { name: category, value: "POINT" }
               - column: { name: description, value: "ポイント利用の単位" }
               - column: { name: value_type, value: "NUMBER" }
+        # 会員ランクの昇格閾値。SILVER / GOLD それぞれ「利用回数」か「付与の累計純額」の
+        # どちらか一方の達成で上がる（OR）。占位値であり運営が随時調整する。
+        # 0 以下はその条件が成立しえないことを意味する（未設定を「常に達成」と読ませない）。
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "member_rank_silver_visit_count" }
+              - column: { name: config_value, value: "5" }
+              - column: { name: category, value: "POINT" }
+              - column: { name: description, value: "SILVER 昇格の利用回数" }
+              - column: { name: value_type, value: "NUMBER" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "member_rank_silver_granted_points" }
+              - column: { name: config_value, value: "5000" }
+              - column: { name: category, value: "POINT" }
+              - column: { name: description, value: "SILVER 昇格の累計付与ポイント" }
+              - column: { name: value_type, value: "NUMBER" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "member_rank_gold_visit_count" }
+              - column: { name: config_value, value: "20" }
+              - column: { name: category, value: "POINT" }
+              - column: { name: description, value: "GOLD 昇格の利用回数" }
+              - column: { name: value_type, value: "NUMBER" }
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "member_rank_gold_granted_points" }
+              - column: { name: config_value, value: "20000" }
+              - column: { name: category, value: "POINT" }
+              - column: { name: description, value: "GOLD 昇格の累計付与ポイント" }
+              - column: { name: value_type, value: "NUMBER" }
         # 営業日の日付変更時刻。初期値 00:00 は暦日と一致する（導入自体は挙動を変えない）。
         # 実値は運用で設定する — 25 時閉店の店の深夜勤務を前営業日へ帰属させたいなら 05:00 など。
         - insert:

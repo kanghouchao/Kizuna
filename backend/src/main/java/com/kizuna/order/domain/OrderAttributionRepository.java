@@ -17,6 +17,9 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
    */
   List<OrderAttribution> findByOrderIdOrderByIdDesc(String orderId);
 
+  /** 会員へ有効に帰属している完了受注の件数（跨店舗合計）。会員ランクの昇格指標の一方で、無効化された帰属は数えない。 */
+  long countByMemberIdAndStatus(Long memberId, OrderAttributionStatus status);
+
   /**
    * 受注の直近の帰属記録 1 件。有効な行があれば必ずこれになる（無効化は過去の行にしか起こらないため）。
    *

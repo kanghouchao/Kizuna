@@ -48,6 +48,7 @@ public class MemberReceiptClaimService {
   private final PointLedgerService pointLedgerService;
   private final PlatformUserRepository platformUserRepository;
   private final MemberLookupService memberLookupService;
+  private final MemberRankSync memberRankSync;
 
   /**
    * 伝票トークンを申領し、その来店を本人の記録として確定する。
@@ -86,12 +87,15 @@ public class MemberReceiptClaimService {
         OrderAttribution.onReceiptClaim(
             token.getOrderId(), member.memberId(), member.memberCode(), now));
     // 実行者は申領した本人。台帳では実行者 null が「機構が起こした仕訳」の形であり、人手の操作と混ぜない。
-    pointLedgerService.grantPlannedForOrder(
-        member.memberId(),
-        token.getOrderId(),
-        order.getStoreId(),
-        token.getPlannedPoints(),
-        platformUserId);
+    Long grantEntryId =
+        pointLedgerService.grantPlannedForOrder(
+            member.memberId(),
+            token.getOrderId(),
+            order.getStoreId(),
+            token.getPlannedPoints(),
+            platformUserId);
+    // 事後申領も帰属の成立と同時に付与を記帳するため、完了経路と同じくここで昇格を判定する。
+    memberRankSync.afterGrant(member.memberId(), grantEntryId);
     return new MemberReceiptClaimResponse(token.getPlannedPoints());
   }
 

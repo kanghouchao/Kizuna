@@ -59,7 +59,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
    * <p>基底のシードユーザーは店舗1 のみ授権なので、店舗2 の台帳は API では起こせない。
    */
   private String insertCustomerForStoreB() {
-    Customer customer = Customer.builder().name("店舗B顧客-" + nonce).rank("SILVER").build();
+    Customer customer = Customer.builder().name("店舗B顧客-" + nonce).build();
     customer.setStoreId(STORE_B);
     return customerRepository.save(customer).getId();
   }
