@@ -8,6 +8,7 @@ import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.point.domain.BenefitRuleRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,12 @@ class BenefitGrantIT extends CrossStoreTestSupport {
 
   private static final int VALIDITY_DAYS = 180;
 
+  /**
+   * 付与日の判定に使う業務のタイムゾーン（{@code app.timezone} の既定）。テスト JVM の既定は UTC なので、{@code LocalDate.now()}
+   * で期限を組むと日本時間の午前 9 時までの時間帯だけ 1 日ずれて赤くなる。
+   */
+  private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Tokyo");
+
   @Autowired private MemberRepository memberRepository;
   @Autowired private BenefitRuleRepository benefitRuleRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -68,7 +75,7 @@ class BenefitGrantIT extends CrossStoreTestSupport {
   /** 規則は店舗を跨いで効くため、置いたまま次のテストへ渡すと無関係な完了が特典を積む。 */
   @AfterEach
   void deactivateRulesLeftBehind() {
-    jdbcTemplate.update("update t_benefit_rules set enabled = false where enabled");
+    jdbcTemplate.update("UPDATE t_benefit_rules SET enabled = false WHERE enabled");
   }
 
   @Test
@@ -88,7 +95,7 @@ class BenefitGrantIT extends CrossStoreTestSupport {
     assertThat(benefit.originatingStoreId()).isEqualTo(STORE_A);
     assertThat(benefit.expiresOn())
         .as("期限は規則の付与ポイント有効期間から落ちること")
-        .isEqualTo(LocalDate.now().plusDays(VALIDITY_DAYS));
+        .isEqualTo(LocalDate.now(BUSINESS_ZONE).plusDays(VALIDITY_DAYS));
     assertThat(balanceOf(customerId))
         .as("受注付与とは別勘定で残高へ積み上がること")
         .isEqualTo(EXPECTED_ORDER_GRANT + BENEFIT_POINTS);
@@ -193,6 +200,29 @@ class BenefitGrantIT extends CrossStoreTestSupport {
 
     assertThat(benefitGrantsOf(member.id())).isEmpty();
     assertThat(balanceOf(customerId)).isEqualTo(EXPECTED_ORDER_GRANT);
+  }
+
+  @Test
+  @DisplayName("来店 1 件の獲得点に特典付与も含まれること（受注ごとの付与合計は種別を問わない）")
+  void theVisitHistoryCountsTheBenefitGrantToo() {
+    // 受注ごとの付与合計は種別で区別せず「受注 ID を持つ加算」を足す。特典付与がそこへ入ることは
+    // 来店履歴の獲得点だけでなく、同じ問い合わせを分子に使う誤帰属訂正の上限にも効く — 誤って
+    // 帰属した受注の特典も引き戻せるべきなので、上限が特典のぶん上がるのは意図した挙動である。
+    createRule(allStores("EVERY_TIME", null));
+    RegisteredMember member = registerAndLogin("visit-history");
+    complete(createOrder(LocalDate.now(), linkedCustomer(member.memberCode())), null);
+
+    ResponseEntity<JsonNode> visits =
+        rest.exchange(
+            "/platform/me/visits",
+            HttpMethod.GET,
+            new HttpEntity<>(bearerJson(member.token())),
+            JsonNode.class);
+
+    assertThat(visits.getStatusCode()).as("前提: 来店履歴が読めること").isEqualTo(HttpStatus.OK);
+    assertThat(visits.getBody().path("content").path(0).path("granted_points").asLong())
+        .as("受注付与と特典付与の合計になること")
+        .isEqualTo(EXPECTED_ORDER_GRANT + BENEFIT_POINTS);
   }
 
   @Test

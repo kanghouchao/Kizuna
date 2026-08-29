@@ -101,8 +101,7 @@ public class MemberReceiptClaimService {
             order.getStoreId(),
             token.getPlannedPoints(),
             platformUserId);
-    // 来店特典の窓は根拠受注の営業日で判じる（申領した日ではない）。申領は最大 90 日遅れるが、遅れているのは
-    // 申領という手続きであって発火した事実ではない。適用期間が閉じた後でも窓内の受注には付与が起こりうる。
+    // 窓の判定に申領日ではなく根拠受注の営業日を渡す理由は BenefitRule#firesFor に記す。
     benefitGrantService.grantVisitBenefits(
         member.memberId(),
         token.getOrderId(),

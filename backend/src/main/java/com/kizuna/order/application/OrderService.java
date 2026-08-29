@@ -644,8 +644,7 @@ public class OrderService {
       // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
       orderAttributionRepository.save(
           OrderAttribution.onCompletion(id, memberId, link.getMemberCode(), OffsetDateTime.now()));
-      // 来店特典は帰属が物化した後に評価する。適用期間の窓は営業日で判じる（この完了を行った日ではない）。
-      // 会計金額に依らないので付与が 0 円の完了でも起こりうる。
+      // 来店特典は帰属が物化した後に評価する。窓の判定に営業日を渡す理由は BenefitRule#firesFor に記す。
       benefitGrantService.grantVisitBenefits(
           memberId, id, order.getStoreId(), order.getBusinessDate(), actorId);
       // 今回の来店を回数へ含めるため、帰属を記録した後に見直す。
