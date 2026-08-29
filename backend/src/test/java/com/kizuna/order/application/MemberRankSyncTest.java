@@ -1,5 +1,7 @@
 package com.kizuna.order.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,16 +32,32 @@ class MemberRankSyncTest {
   @InjectMocks private MemberRankSync memberRankSync;
 
   @Test
-  @DisplayName("有効な帰属の件数と付与の純額を材料として判定へ渡すこと")
-  void passesTheCrossStoreMetricsToTheRankService() {
+  @DisplayName("判定へは値ではなく供給口を渡すこと（読む時点は会員行のロックの内側で決まる）")
+  void handsTheMetricsSupplierToTheRankServiceInsteadOfValues() {
+    memberRankSync.afterGrant(MEMBER_ID, ENTRY_ID);
+
+    verify(memberRankService).syncOnGrant(MEMBER_ID, memberRankSync, ENTRY_ID);
+    // 渡した時点では材料をまだ読んでいない
+    verifyNoInteractions(orderAttributionRepository);
+    verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
+  @DisplayName("来店回数は有効な帰属だけを数えること（無効化された帰属は入らない）")
+  void countsOnlyActiveAttributions() {
     when(orderAttributionRepository.countByMemberIdAndStatus(
             MEMBER_ID, OrderAttributionStatus.ACTIVE))
         .thenReturn(6L);
+
+    assertThat(memberRankSync.completedVisitCount(MEMBER_ID)).isEqualTo(6L);
+  }
+
+  @Test
+  @DisplayName("付与の指標は台帳の純額（取消仕訳の控除後）であること")
+  void readsTheNetGrantedPointsFromTheLedger() {
     when(pointLedgerService.netGrantedPointsFor(MEMBER_ID)).thenReturn(4200L);
 
-    memberRankSync.afterGrant(MEMBER_ID, ENTRY_ID);
-
-    verify(memberRankService).syncOnGrant(MEMBER_ID, 6L, 4200L, ENTRY_ID);
+    assertThat(memberRankSync.netGrantedPoints(MEMBER_ID)).isEqualTo(4200L);
   }
 
   @Test
@@ -47,7 +65,7 @@ class MemberRankSyncTest {
   void skipsEvaluationWhenNothingWasBooked() {
     memberRankSync.afterGrant(MEMBER_ID, null);
 
-    verify(memberRankService, never()).syncOnGrant(anyLong(), anyLong(), anyLong(), anyLong());
+    verify(memberRankService, never()).syncOnGrant(anyLong(), any(), anyLong());
     verifyNoInteractions(orderAttributionRepository);
     verifyNoInteractions(pointLedgerService);
   }
