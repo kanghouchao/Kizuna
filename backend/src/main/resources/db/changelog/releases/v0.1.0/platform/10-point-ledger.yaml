@@ -216,7 +216,7 @@ databaseChangeLog:
             sql: >-
               ALTER TABLE t_point_entries
               ADD CONSTRAINT ck_t_point_entries_amount_nonzero CHECK (amount <> 0)
-        # 「受注を根拠とする付与はすべて追跡・取消できる」（#381 要件 3）のうち、行内で表せる分を DB で押さえる。
+        # 「受注を根拠とする付与はすべて追跡・取消できる」のうち、行内で表せる分を DB で押さえる。
         # 付与と利用が受注を名乗らなければ、受注から辿る巻き戻しがその行を永久に見つけられない。
         # 上の order 外部キーの SET NULL とはこの行では両立しない。両立しない状態には到達しない —
         # 受注を消せるのは店舗削除だけで、仕訳を持つ店舗の削除はアプリケーション層が先に断る。
