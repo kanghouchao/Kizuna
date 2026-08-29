@@ -85,7 +85,8 @@ Per-directory `CLAUDE.md` files carry the area conventions and are auto-loaded w
 
 Forbidden operations (enforced locally by `.claude/settings.json` deny rules only — there are no hooks in this repo; they are policy even where enforcement is absent):
 
-- **Force push in any form** (`--force`, `-f`, `--force-with-lease`) — history rewrites go through a replacement PR.
+- **Force push to `master` or `releases/**`** — the GitHub ruleset rejects it server-side (`non_fast_forward`), and the deny rules block both naming those refs and the bare `git push --force` / `-f` / `--force-with-lease` forms (bare forms push the *current* branch implicitly, which is the only way to reach `master` without naming it). **Force push to a topic branch is allowed**, so a topic branch's history can be rewritten in place instead of through a replacement PR. Always name the remote and branch explicitly — string-matched deny rules cannot cover every spelling (`HEAD:master`, `+master`, …); the server-side rule is the real guard.
+- **Merging `master` into a topic branch** (`git merge master` / `git merge origin/master` / `git pull origin master`) — the branch stops being linear, and under `required_linear_history` GitHub then offers neither *Create a merge commit* nor *Rebase and merge*, leaving the PR unmergeable. Sync by rebasing the topic branch onto `master` and force-pushing it.
 - **Merging PRs** (`gh pr merge`, auto-merge) — the repository owner merges every PR by hand.
 - **Destructive git**: `git reset --hard`, `git clean`, `git branch -D`, `git commit --no-verify`.
 - **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
