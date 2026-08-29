@@ -57,9 +57,11 @@ class BenefitGrantServiceTest {
   void anApplicableRuleIsPostedWithItsPointsAndExpiry() {
     given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, 180, StoreScopeType.SPECIFIC_STORES));
 
-    benefitGrantService.grantVisitBenefits(
-        MEMBER_ID, ORDER_ID, STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
+    int granted =
+        benefitGrantService.grantVisitBenefits(
+            MEMBER_ID, ORDER_ID, STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
 
+    assertThat(granted).as("記帳した合計を返すこと（申領の応答がこの値を足す）").isEqualTo(500);
     PointEntry posted = captureSaved();
     assertThat(posted.getEntryType()).isEqualTo(PointEntryType.BENEFIT_GRANT);
     assertThat(posted.getAmount()).isEqualTo(500);
@@ -69,8 +71,8 @@ class BenefitGrantServiceTest {
     assertThat(posted.getBenefitRuleId()).isEqualTo(RULE_ID);
     assertThat(posted.getActorUserId()).isEqualTo(ACTOR_ID);
     assertThat(posted.getExpiresOn())
-        .as("期限は記帳した日から起算する（根拠受注の日ではない）")
-        .isEqualTo(LocalDate.now(ZoneId.of(TIMEZONE)).plusDays(180));
+        .as("期限は記帳した日から起算し、その日を含めて数える（根拠受注の日ではない）")
+        .isEqualTo(LocalDate.now(ZoneId.of(TIMEZONE)).plusDays(179));
   }
 
   @Test
@@ -91,9 +93,11 @@ class BenefitGrantServiceTest {
     when(pointEntryRepository.existsByBenefitRuleIdAndMemberId(RULE_ID, MEMBER_ID))
         .thenReturn(true);
 
-    benefitGrantService.grantVisitBenefits(
-        MEMBER_ID, "order-2", STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
+    int granted =
+        benefitGrantService.grantVisitBenefits(
+            MEMBER_ID, "order-2", STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
 
+    assertThat(granted).as("積まないなら合計も 0").isZero();
     verify(pointEntryRepository, never()).save(any());
   }
 

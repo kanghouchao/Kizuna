@@ -322,15 +322,20 @@ class BenefitRuleTest {
   }
 
   @Test
-  @DisplayName("付与ポイントの期限は付与日から算出し、無指定なら無期限になること")
+  @DisplayName("付与ポイントの期限は付与日を含めて数え、無指定なら無期限になること")
   void theGrantExpiryComesFromTheValidityDays() {
     BenefitRule dated =
         BenefitRule.define(
             BenefitRuleType.VISIT, definition().grantValidityDays(30).points(100).build());
+    BenefitRule singleDay =
+        BenefitRule.define(
+            BenefitRuleType.VISIT, definition().grantValidityDays(1).points(100).build());
     BenefitRule unlimited =
         BenefitRule.define(BenefitRuleType.VISIT, definition().points(100).build());
 
-    assertThat(dated.grantExpiryOn(FROM)).isEqualTo(FROM.plusDays(30));
+    // 期限当日はまだ使えるので、有効期間 30 日なら最終有効日は 29 日後。30 日後にすると 31 日使える。
+    assertThat(dated.grantExpiryOn(FROM)).isEqualTo(FROM.plusDays(29));
+    assertThat(singleDay.grantExpiryOn(FROM)).as("有効期間 1 日は付与日限り").isEqualTo(FROM);
     assertThat(unlimited.grantExpiryOn(FROM)).as("無期限指定は期限を持たない").isNull();
   }
 

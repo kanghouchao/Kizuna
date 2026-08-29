@@ -133,6 +133,20 @@ class MemberReceiptClaimServiceTest {
   }
 
   @Test
+  @DisplayName("来店特典が当たった申領は、伝票の予定額と特典の合計を返すこと")
+  void claimReportsThePlannedPointsAndTheBenefitTogether() {
+    // 応答は「この申領で記帳したポイント」。予定額だけを返すと、特典だけが付いた 0 円完了の伝票が
+    // 画面で「付与はありません」になり、成立した記帳が利用者へ嘘になる。
+    givenToken(OrderReceiptToken.issueFor(ORDER_ID, DIGEST, 0, OffsetDateTime.now()));
+    Mockito.when(
+            benefitGrantService.grantVisitBenefits(
+                MEMBER_ID, ORDER_ID, STORE_ID, ORDER_BUSINESS_DATE, PLATFORM_USER_ID))
+        .thenReturn(500);
+
+    assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isEqualTo(500);
+  }
+
+  @Test
   @DisplayName("付与予定額 0 の伝票でも帰属記録は生まれ、記帳額は 0 で渡ること")
   void claimOfAZeroPointReceiptStillRecordsTheVisit() {
     // 申領の効果は来店の可視化に閉じる。帰属は付与の有無と独立している

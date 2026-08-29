@@ -40,10 +40,12 @@ public class BenefitGrantService {
    *
    * @param orderDate 根拠受注の営業日。適用期間の窓はこの日で判じる（記帳した日ではない）
    * @param actorUserId 契機を起こした主体。完了なら操作した従業員、事後申領なら申領した会員本人
+   * @return この契機で記帳した特典ポイントの合計。当たった規則が無ければ 0
    */
-  public void grantVisitBenefits(
+  public int grantVisitBenefits(
       long memberId, String orderId, Long storeId, LocalDate orderDate, Long actorUserId) {
     LocalDate grantedOn = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    int granted = 0;
     for (BenefitRule rule : benefitRuleRepository.findByTypeAndEnabledTrue(BenefitRuleType.VISIT)) {
       if (!rule.firesFor(storeId, orderDate) || alreadyBenefited(rule, memberId, orderId)) {
         continue;
@@ -57,7 +59,9 @@ public class BenefitGrantService {
               rule.grantExpiryOn(grantedOn),
               rule.getId(),
               actorUserId));
+      granted += rule.getPoints();
     }
+    return granted;
   }
 
   /**

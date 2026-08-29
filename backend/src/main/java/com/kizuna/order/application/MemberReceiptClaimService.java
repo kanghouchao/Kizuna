@@ -57,7 +57,7 @@ public class MemberReceiptClaimService {
    *
    * @param email 認証主体（申領する会員本人）
    * @param rawToken QR が運ぶトークンの生値。保存された鍵付きダイジェストとの一致だけで照合する
-   * @return 記帳したポイント（付与予定額 0 の伝票では 0 で、台帳に行は書かない）
+   * @return この申領で記帳したポイント（伝票の付与予定額と、当たった来店特典の合計）
    */
   @StoreScopeExempt(reason = "トークンの鍵付きダイジェスト一致だけが申領を成立させる材料で、受注は店舗を跨いで引く（店舗で絞ると照合が成立しない）")
   @Transactional
@@ -105,15 +105,18 @@ public class MemberReceiptClaimService {
             token.getPlannedPoints(),
             platformUserId);
     // 窓の判定に申領日ではなく根拠受注の営業日を渡す理由は BenefitRule#firesFor に記す。
-    benefitGrantService.grantVisitBenefits(
-        member.memberId(),
-        token.getOrderId(),
-        order.getStoreId(),
-        order.getBusinessDate(),
-        platformUserId);
+    int benefitPoints =
+        benefitGrantService.grantVisitBenefits(
+            member.memberId(),
+            token.getOrderId(),
+            order.getStoreId(),
+            order.getBusinessDate(),
+            platformUserId);
     // 事後申領も帰属が成立する契機なので、完了経路と同じくここで昇格を判定する。
     memberRankSync.afterAttribution(member.memberId(), attribution.getId(), grantEntryId);
-    return new MemberReceiptClaimResponse(token.getPlannedPoints());
+    // 応答は「この申領で記帳したポイント」なので、伝票の付与予定額と特典の双方を足す。予定額だけを返すと、
+    // 特典だけが付いた 0 円完了の伝票が「付与はありません」と表示され、成立した記帳が利用者へ嘘になる。
+    return new MemberReceiptClaimResponse(token.getPlannedPoints() + benefitPoints);
   }
 
   private Long resolvePlatformUserId(String email) {

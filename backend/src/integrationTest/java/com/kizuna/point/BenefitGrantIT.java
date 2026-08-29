@@ -94,8 +94,8 @@ class BenefitGrantIT extends CrossStoreTestSupport {
     assertThat(benefit.orderId()).as("巻き戻しが拾えるよう受注を名乗ること").isEqualTo(orderId);
     assertThat(benefit.originatingStoreId()).isEqualTo(STORE_A);
     assertThat(benefit.expiresOn())
-        .as("期限は規則の付与ポイント有効期間から落ちること")
-        .isEqualTo(LocalDate.now(BUSINESS_ZONE).plusDays(VALIDITY_DAYS));
+        .as("期限は規則の付与ポイント有効期間から落ち、付与日を含めて数えること")
+        .isEqualTo(LocalDate.now(BUSINESS_ZONE).plusDays(VALIDITY_DAYS - 1L));
     assertThat(balanceOf(customerId))
         .as("受注付与とは別勘定で残高へ積み上がること")
         .isEqualTo(EXPECTED_ORDER_GRANT + BENEFIT_POINTS);
@@ -120,8 +120,14 @@ class BenefitGrantIT extends CrossStoreTestSupport {
     String rawToken = completeWithoutMember(orderId);
     RegisteredMember claimant = registerAndLogin("claim");
 
-    assertThat(claim(claimant, rawToken).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    ResponseEntity<JsonNode> claimed = claim(claimant, rawToken);
 
+    assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    // 応答は「この申領で記帳したポイント」。伝票の付与予定額に特典を足した額でなければ、特典だけが
+    // 付いた申領が画面で「付与はありません」になる。
+    assertThat(claimed.getBody().path("granted_points").asInt())
+        .as("伝票の付与予定額と特典の合計を返すこと")
+        .isEqualTo(EXPECTED_ORDER_GRANT + BENEFIT_POINTS);
     BenefitRow benefit = onlyBenefitGrantOf(claimant.id());
     assertThat(benefit.benefitRuleId()).isEqualTo(ruleId);
     assertThat(benefit.orderId()).isEqualTo(orderId);

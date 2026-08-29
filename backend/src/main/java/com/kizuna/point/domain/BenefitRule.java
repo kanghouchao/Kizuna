@@ -144,11 +144,11 @@ public class BenefitRule extends BaseEntity {
   /**
    * 付与するポイントの有効期限。付与ポイント有効期間が無指定なら無期限（null）。
    *
-   * <p>{@code grantValidityDays} 日<b>後</b>の日付を最終有効日にする。期限当日はまだ使えるので（台帳の判定）、実際に使える 日数は付与日を含めて {@code
-   * grantValidityDays + 1} 日になる。
+   * <p>期限当日はまだ使える（台帳の判定）ので、最終有効日は付与日を<b>含めて</b>数える — 有効期間 1 日なら付与日限り。 {@code grantValidityDays}
+   * 日後を期限にすると、管理面が「有効期間（日）」として受けた日数より 1 日長く使えてしまう。
    */
   public LocalDate grantExpiryOn(LocalDate grantedOn) {
-    return grantValidityDays == null ? null : grantedOn.plusDays(grantValidityDays);
+    return grantValidityDays == null ? null : grantedOn.plusDays(grantValidityDays - 1L);
   }
 
   private void assign(BenefitRuleDefinition definition) {
