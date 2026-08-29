@@ -20,6 +20,9 @@
  *
  * <p>会員本人向けの明細の読み口（{@code MemberPointService}）はこのモジュール自身が {@code /platform/me} 配下へ露出する。返すのは表示用の 読み側
  * projection で、引き当て・元取引・理由・実行者を持たず、書き込みの口も伴わない。
+ *
+ * <p>特典規則の管理（{@code BenefitRuleService}）もこのモジュール自身がプラットフォーム console へ露出する。他モジュールへは公開しない —
+ * 規則の唯一の産出は台帳仕訳であり、外から規則を読む必要がある利用者はまだ居ない。
  */
 @org.springframework.modulith.NamedInterface("application")
 package com.kizuna.point.application;

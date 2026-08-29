@@ -48,6 +48,14 @@ public enum PermissionCode {
   /** プラットフォーム共有領域への資産アップロード（登録・出力 — FileUploadController の platform 保存経路）。 */
   PLATFORM_ASSET_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
+  /**
+   * 特典規則の閲覧・登録・更新・停用（PlatformBenefitRuleController）。
+   *
+   * <p>{@link #SYSTEM_CONFIG_MANAGE} へ同居させない。ポイントを発行する規則と SMTP ホストは監査上同類ではなく、
+   * 共通設定を触れる者が黙って会員へポイントを配れる規則を建てられる形になるためである。
+   */
+  BENEFIT_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
+
   /** 授権店舗一覧の閲覧（PlatformStoreController）。 */
   STORE_VIEW(Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 

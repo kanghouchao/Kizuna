@@ -1,0 +1,172 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-012-benefit-rule-schema
+      author: kanghouchao
+      # 特典規則。1 行 = 五要素を持つ 1 規則で、期限付き施策は独立の種別ではなく適用期間を持つ規則として表す。
+      # store_scope_type / t_benefit_rule_stores は発火側の絞り込み（どの店舗の事象を拾うか）であって
+      # 付与されたポイントの利用範囲ではない（ポイントは常にプラットフォーム級 — ADR 0006）。
+      # 取消方法は種別から導くため列を持たない（ログイン × 受注連動のような非法な組合せを作れなくする）。
+      # 規則は停用で退場し削除しないので、削除経路の DDL も持たない。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_benefit_rules
+            remarks: 特典規則（紹介・ログイン・来店を契機とする追加ポイント付与の定義）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_benefit_rules
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                  remarks: 規則名（施策名。console の一覧で規則を見分ける表示名）
+              - column:
+                  name: type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 条件種別（REFERRAL/LOGIN/VISIT）。取消方法もこの値から導く
+              - column:
+                  name: store_scope_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 発火側の絞り込み種別（ALL_STORES/SPECIFIC_STORES）
+              - column:
+                  name: effective_from
+                  type: DATE
+                  remarks: 規則の適用期間の開始（発火の窓）。NULL は常設
+              - column:
+                  name: effective_until
+                  type: DATE
+                  remarks: 規則の適用期間の終了。NULL は常設
+              - column:
+                  name: grant_validity_days
+                  type: INTEGER
+                  remarks: 付与ポイントの有効期間（日数。記帳時に期限日へ固定する）。NULL は無期限
+              - column:
+                  name: repeat_policy
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 重複可否（ONCE_PER_MEMBER/EVERY_TIME）
+              - column:
+                  name: points
+                  type: INTEGER
+                  remarks: 紹介以外の固定付与点数
+              - column:
+                  name: referrer_points
+                  type: INTEGER
+                  remarks: 紹介規則が紹介者へ付与する点数
+              - column:
+                  name: referred_points
+                  type: INTEGER
+                  remarks: 紹介規則が被紹介者へ付与する点数
+              - column:
+                  name: enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+                  remarks: 停用標識。false が退場した規則で、再開の口は無い
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - createTable:
+            tableName: t_benefit_rule_stores
+            remarks: 特典規則が発火を拾う店舗集合（store_scope_type=SPECIFIC_STORES 時のみ行を持つ）
+            columns:
+              - column:
+                  name: rule_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: t_benefit_rule_stores
+            columnNames: rule_id,store_id
+            constraintName: pk_t_benefit_rule_stores
+        - addForeignKeyConstraint:
+            constraintName: fk_t_benefit_rule_stores_rule
+            baseTableName: t_benefit_rule_stores
+            baseColumnNames: rule_id
+            referencedTableName: t_benefit_rules
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            # 店舗削除には集合表が CASCADE で従う。残った空集合は「どの店舗でも発火しない」
+            # fail-closed 挙動で、規則が黙って全店舗へ広がることはない。
+            constraintName: fk_t_benefit_rule_stores_store
+            baseTableName: t_benefit_rule_stores
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 点数の形は種別が決める。紹介は二値・それ以外は一値で、どちらも他方の列を NULL に保つ。
+        # 集約側の検証と同じ規則を DB にも置き、規則行が経路を問わず片形の点数を持てないようにする。
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_points_shape CHECK (
+                (type = 'REFERRAL'
+                  AND points IS NULL
+                  AND referrer_points IS NOT NULL
+                  AND referred_points IS NOT NULL)
+                OR (type <> 'REFERRAL'
+                  AND points IS NOT NULL
+                  AND referrer_points IS NULL
+                  AND referred_points IS NULL))
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_points_positive CHECK (
+                (points IS NULL OR points > 0)
+                AND (referrer_points IS NULL OR referrer_points > 0)
+                AND (referred_points IS NULL OR referred_points > 0))
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_effective_period CHECK (
+                effective_from IS NULL
+                OR effective_until IS NULL
+                OR effective_from <= effective_until)
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_grant_validity CHECK (
+                grant_validity_days IS NULL OR grant_validity_days > 0)
+        # 発火事象が店舗文脈を持たないログイン規則は全店舗のみを取る。
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_login_all_stores CHECK (
+                type <> 'LOGIN' OR store_scope_type = 'ALL_STORES')
