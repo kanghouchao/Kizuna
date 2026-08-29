@@ -105,7 +105,7 @@ public class MemberReceiptClaimService {
             token.getPlannedPoints(),
             platformUserId);
     // 窓の判定に申領日ではなく根拠受注の営業日を渡す理由は BenefitRule#firesFor に記す。
-    int benefitPoints =
+    long benefitPoints =
         benefitGrantService.grantVisitBenefits(
             member.memberId(),
             token.getOrderId(),

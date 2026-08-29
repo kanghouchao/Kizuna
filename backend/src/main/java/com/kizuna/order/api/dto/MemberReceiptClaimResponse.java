@@ -7,8 +7,9 @@ package com.kizuna.order.api.dto;
  *
  * <p>伝票の付与予定額は発行時に確定した固定値だが、申領の契機で来店特典が当たればそのぶんも記帳される。応答はその 合計であって予定額ではない。0
  * が返るのは両方とも無い申領で、そのとき成立するのは来店の可視化だけである。 プリミティブで持つのは、{@code non_null}
- * 包含設定でも「付与ゼロ」の応答からキーが消えないようにするため。
+ * 包含設定でも「付与ゼロ」の応答からキーが消えないようにするため。long なのは残高と同じ理由 — 1 件の仕訳は int でも、 積み上がった合計は int
+ * を超えうる（特典の規則は排他でなく重ねて当たる）。
  *
  * @param grantedPoints この申領で台帳へ記帳したポイント
  */
-public record MemberReceiptClaimResponse(int grantedPoints) {}
+public record MemberReceiptClaimResponse(long grantedPoints) {}

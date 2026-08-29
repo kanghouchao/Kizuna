@@ -125,7 +125,7 @@ class BenefitGrantIT extends CrossStoreTestSupport {
     assertThat(claimed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     // 応答は「この申領で記帳したポイント」。伝票の付与予定額に特典を足した額でなければ、特典だけが
     // 付いた申領が画面で「付与はありません」になる。
-    assertThat(claimed.getBody().path("granted_points").asInt())
+    assertThat(claimed.getBody().path("granted_points").asLong())
         .as("伝票の付与予定額と特典の合計を返すこと")
         .isEqualTo(EXPECTED_ORDER_GRANT + BENEFIT_POINTS);
     BenefitRow benefit = onlyBenefitGrantOf(claimant.id());

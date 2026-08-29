@@ -141,7 +141,7 @@ class MemberReceiptClaimServiceTest {
     Mockito.when(
             benefitGrantService.grantVisitBenefits(
                 MEMBER_ID, ORDER_ID, STORE_ID, ORDER_BUSINESS_DATE, PLATFORM_USER_ID))
-        .thenReturn(500);
+        .thenReturn(500L);
 
     assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isEqualTo(500);
   }

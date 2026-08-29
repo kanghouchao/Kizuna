@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +58,7 @@ class BenefitGrantServiceTest {
   void anApplicableRuleIsPostedWithItsPointsAndExpiry() {
     given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, 180, StoreScopeType.SPECIFIC_STORES));
 
-    int granted =
+    long granted =
         benefitGrantService.grantVisitBenefits(
             MEMBER_ID, ORDER_ID, STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
 
@@ -93,7 +94,7 @@ class BenefitGrantServiceTest {
     when(pointEntryRepository.existsByBenefitRuleIdAndMemberId(RULE_ID, MEMBER_ID))
         .thenReturn(true);
 
-    int granted =
+    long granted =
         benefitGrantService.grantVisitBenefits(
             MEMBER_ID, "order-2", STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
 
@@ -164,6 +165,35 @@ class BenefitGrantServiceTest {
     verify(pointEntryRepository, never()).save(any());
   }
 
+  @Test
+  @DisplayName("重ねて当たった規則の合計が int を超えても、返す合計が回り込まないこと")
+  void theStackedTotalDoesNotWrapAround() {
+    // 規則は排他ではなく重ねて当たり、1 件の点数は int の上限までしか縛られていない。合計を int で
+    // 持つと回り込んで負になり、申領の応答が「付与はありません」へ落ちる（行はすべて積まれているのに）。
+    when(benefitRuleRepository.findByTypeAndEnabledTrue(BenefitRuleType.VISIT))
+        .thenReturn(
+            List.of(
+                rule(
+                    BenefitRuleRepeatPolicy.EVERY_TIME,
+                    null,
+                    StoreScopeType.ALL_STORES,
+                    Integer.MAX_VALUE,
+                    RULE_ID),
+                rule(
+                    BenefitRuleRepeatPolicy.EVERY_TIME,
+                    null,
+                    StoreScopeType.ALL_STORES,
+                    Integer.MAX_VALUE,
+                    RULE_ID + 1)));
+
+    long granted =
+        benefitGrantService.grantVisitBenefits(
+            MEMBER_ID, ORDER_ID, STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
+
+    assertThat(granted).isEqualTo(2L * Integer.MAX_VALUE);
+    verify(pointEntryRepository, times(2)).save(any());
+  }
+
   private void given(BenefitRule rule) {
     when(benefitRuleRepository.findByTypeAndEnabledTrue(BenefitRuleType.VISIT))
         .thenReturn(List.of(rule));
@@ -177,6 +207,15 @@ class BenefitGrantServiceTest {
 
   private static BenefitRule rule(
       BenefitRuleRepeatPolicy repeatPolicy, Integer validityDays, StoreScopeType scopeType) {
+    return rule(repeatPolicy, validityDays, scopeType, 500, RULE_ID);
+  }
+
+  private static BenefitRule rule(
+      BenefitRuleRepeatPolicy repeatPolicy,
+      Integer validityDays,
+      StoreScopeType scopeType,
+      int points,
+      long id) {
     BenefitRule rule =
         BenefitRule.define(
             BenefitRuleType.VISIT,
@@ -188,9 +227,9 @@ class BenefitGrantServiceTest {
                 .effectiveUntil(LocalDate.of(2026, 12, 31))
                 .grantValidityDays(validityDays)
                 .repeatPolicy(repeatPolicy)
-                .points(500)
+                .points(points)
                 .build());
-    ReflectionTestUtils.setField(rule, "id", RULE_ID);
+    ReflectionTestUtils.setField(rule, "id", id);
     return rule;
   }
 }
