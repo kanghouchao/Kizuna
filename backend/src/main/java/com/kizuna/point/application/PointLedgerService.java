@@ -397,8 +397,11 @@ public class PointLedgerService {
 
     List<PointEntry> uses = pendingUsesOf(orderId);
     Map<Long, Integer> returning = returnedAmountsByLot(uses);
+    lockCreditsOfMembersIn(uses, pointEntryRepository.findCreditsByOrderId(orderId));
+    // 対象を決めるのはロックを取った後。先に決めると、同じロットを共有する別受注の巻き戻しが
+    // その間に確定したとき、巻き戻し済みになったロットを取り逃して返した分が復活する。
+    // 戻り先のロットは利用と同じ会員のものなので、押さえる会員はこの再取得で増えない。
     List<PointEntry> targets = cancellationTargets(orderId, returning.keySet());
-    lockCreditsOfMembersIn(uses, targets);
 
     long restored = 0;
     for (PointEntry use : uses) {

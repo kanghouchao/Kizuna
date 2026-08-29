@@ -570,6 +570,21 @@ class PointLedgerServiceTest {
   }
 
   @Test
+  @DisplayName("取消の対象は行ロックを取った後に決めること（並行する巻き戻しの確定を取り逃さない）")
+  void rollbackDecidesTargetsAfterTakingTheRowLock() {
+    // 先に決めると、同じロットを共有する別受注の巻き戻しがその間に確定したとき、
+    // 巻き戻し済みになったロットを取り逃して返した分が復活する。
+    when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
+    when(pointEntryRepository.findRolledBackCreditsAmong(Set.of(1L))).thenReturn(List.of());
+
+    pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID);
+
+    InOrder inOrder = inOrder(pointEntryRepository);
+    inOrder.verify(pointEntryRepository).findCreditsForUpdate(MEMBER_ID);
+    inOrder.verify(pointEntryRepository).findRolledBackCreditsAmong(Set.of(1L));
+  }
+
+  @Test
   @DisplayName("下見は動く見込みの量だけを返し、台帳へ何も書かないこと")
   void previewRollbackReportsWhatWouldMove() {
     when(pointEntryRepository.findCreditsByOrderId("o1"))

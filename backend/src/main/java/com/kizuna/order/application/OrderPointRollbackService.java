@@ -3,6 +3,7 @@ package com.kizuna.order.application;
 import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackRequest;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
+import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -35,22 +36,31 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderPointRollbackService {
 
   private final OrderRepository orderRepository;
+  private final OrderAttributionService orderAttributionService;
   private final OrderAttributionRepository orderAttributionRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final PointLedgerService pointLedgerService;
   private final PlatformUserRepository platformUserRepository;
 
   /**
-   * その受注が既に巻き戻されているか。伝票の再発行の可否がこれで決まる。
+   * 巻き戻し済みでないことを確かめてから伝票を再発行する。
    *
-   * <p>先に現店舗の受注として引く。引かずに操作記録だけを見ると、他店舗の受注 ID に対して「巻き戻し済みか」が 応答の違いから読み取れてしまう（再発行そのものは 404
-   * に落ちるのに、こちらが先に 400 を返す）。
+   * <p>判定と発行を<b>受注行を押さえたままの 1 つの取引</b>で行う。判定だけ別の取引で先に済ませると、その隙間へ
+   * 巻き戻しが割り込んだとき、古い「まだ巻き戻されていない」を根拠に、申領が必ず拒む QR を発行してしまう。 巻き戻しも同じ受注行を押さえるので、先に取れたほうが結果を決める。
+   *
+   * <p>判定をここへ置くのは、再発行のサービスが台帳へ依存を持たないこと自体が「無効化は台帳へ波及しない」（ADR
+   * 0009）の構造的な証跡だからである。あちらへ台帳の読みを足すとその証跡が失われる。
    */
   @StoreScoped
-  @Transactional(readOnly = true)
-  public boolean isRolledBack(String orderId) {
-    requireScopedOrder(orderId);
-    return pointLedgerService.isRolledBack(orderId);
+  @Transactional
+  public OrderReceiptTokenResponse reissueReceiptTokenUnlessRolledBack(String orderId) {
+    orderRepository
+        .findScopedByIdForUpdate(orderId)
+        .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
+    if (pointLedgerService.isRolledBack(orderId)) {
+      throw new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません");
+    }
+    return orderAttributionService.reissueReceiptToken(orderId);
   }
 
   /** 実行前の下見。画面はこれで「何がいくら動くか」を示し、済んでいる受注では実行の導線を出さない。 */
