@@ -88,9 +88,10 @@ public class MemberReceiptClaimService {
 
     token.claim(now);
     orderReceiptTokenRepository.save(token);
-    orderAttributionRepository.save(
-        OrderAttribution.onReceiptClaim(
-            token.getOrderId(), member.memberId(), member.memberCode(), now));
+    OrderAttribution attribution =
+        orderAttributionRepository.save(
+            OrderAttribution.onReceiptClaim(
+                token.getOrderId(), member.memberId(), member.memberCode(), now));
     // 実行者は申領した本人。台帳では実行者 null が「機構が起こした仕訳」の形であり、人手の操作と混ぜない。
     Long grantEntryId =
         pointLedgerService.grantPlannedForOrder(
@@ -99,8 +100,8 @@ public class MemberReceiptClaimService {
             order.getStoreId(),
             token.getPlannedPoints(),
             platformUserId);
-    // 事後申領も帰属の成立と同時に付与を記帳するため、完了経路と同じくここで昇格を判定する。
-    memberRankSync.afterGrant(member.memberId(), grantEntryId);
+    // 事後申領も帰属が成立する契機なので、完了経路と同じくここで昇格を判定する。
+    memberRankSync.afterAttribution(member.memberId(), attribution.getId(), grantEntryId);
     return new MemberReceiptClaimResponse(token.getPlannedPoints());
   }
 

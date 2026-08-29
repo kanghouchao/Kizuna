@@ -52,6 +52,7 @@ class MemberReceiptClaimServiceTest {
   private static final String RAW_TOKEN = "raw-token";
   private static final String DIGEST = "digest-of-raw-token";
   private static final int PLANNED_POINTS = 120;
+  private static final long ATTRIBUTION_ID = 88L;
 
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private OrderAttributionRepository orderAttributionRepository;
@@ -113,12 +114,19 @@ class MemberReceiptClaimServiceTest {
   void claimOfAZeroPointReceiptStillRecordsTheVisit() {
     // 申領の効果は来店の可視化に閉じる。帰属は付与の有無と独立している
     givenToken(OrderReceiptToken.issueFor(ORDER_ID, DIGEST, 0, OffsetDateTime.now()));
+    // 付与 0 は台帳へ行を書かないので仕訳 ID は返らない（mock の既定値 0L だと本番の形にならない）
+    Mockito.when(
+            pointLedgerService.grantPlannedForOrder(
+                MEMBER_ID, ORDER_ID, STORE_ID, 0, PLATFORM_USER_ID))
+        .thenReturn(null);
 
     assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isZero();
 
     Mockito.verify(orderAttributionRepository).save(Mockito.any());
     Mockito.verify(pointLedgerService)
         .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, 0, PLATFORM_USER_ID);
+    // 台帳に行が無くても来店は回数へ入るので、判定は付与の有無に依らず起こす
+    Mockito.verify(memberRankSync).afterAttribution(MEMBER_ID, ATTRIBUTION_ID, null);
   }
 
   @Test
@@ -206,6 +214,15 @@ class MemberReceiptClaimServiceTest {
   private void givenToken(OrderReceiptToken token) {
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.of(token));
+    // 帰属記録は保存で採番され、その ID が昇格判定の契機として渡る
+    Mockito.lenient()
+        .when(orderAttributionRepository.save(Mockito.any()))
+        .thenAnswer(
+            invocation -> {
+              OrderAttribution saved = invocation.getArgument(0);
+              saved.setId(ATTRIBUTION_ID);
+              return saved;
+            });
     Order order =
         Order.builder()
             .businessDate(LocalDate.parse("2026-08-10"))

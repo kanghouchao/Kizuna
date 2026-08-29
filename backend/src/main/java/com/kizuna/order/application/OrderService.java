@@ -640,10 +640,12 @@ public class OrderService {
       // 帰属は付与の有無と独立している。0 円完了は台帳へ行を書かないが、来店した事実は記録として残す。
       // 会員コードは解決に使った関連のスナップショットをそのまま写す — 会員コードは発行後に変わらないため、
       // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
-      orderAttributionRepository.save(
-          OrderAttribution.onCompletion(id, memberId, link.getMemberCode(), OffsetDateTime.now()));
+      OrderAttribution attribution =
+          orderAttributionRepository.save(
+              OrderAttribution.onCompletion(
+                  id, memberId, link.getMemberCode(), OffsetDateTime.now()));
       // 今回の来店を回数へ含めるため、帰属を記録した後に見直す。
-      memberRankSync.afterGrant(memberId, grant.entryId());
+      memberRankSync.afterAttribution(memberId, attribution.getId(), grant.entryId());
     } else {
       receiptToken = issueReceiptToken(id, chargeAmount);
     }

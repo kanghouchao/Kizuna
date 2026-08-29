@@ -1,9 +1,6 @@
 package com.kizuna.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -24,6 +21,7 @@ class MemberRankSyncTest {
 
   private static final long MEMBER_ID = 7L;
   private static final long ENTRY_ID = 41L;
+  private static final long ATTRIBUTION_ID = 88L;
 
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private PointLedgerService pointLedgerService;
@@ -34,9 +32,10 @@ class MemberRankSyncTest {
   @Test
   @DisplayName("判定へは値ではなく供給口を渡すこと（読む時点は会員行のロックの内側で決まる）")
   void handsTheMetricsSupplierToTheRankServiceInsteadOfValues() {
-    memberRankSync.afterGrant(MEMBER_ID, ENTRY_ID);
+    memberRankSync.afterAttribution(MEMBER_ID, ATTRIBUTION_ID, ENTRY_ID);
 
-    verify(memberRankService).syncOnGrant(MEMBER_ID, memberRankSync, ENTRY_ID);
+    verify(memberRankService)
+        .syncOnAttribution(MEMBER_ID, memberRankSync, ATTRIBUTION_ID, ENTRY_ID);
     // 渡した時点では材料をまだ読んでいない
     verifyNoInteractions(orderAttributionRepository);
     verifyNoInteractions(pointLedgerService);
@@ -61,12 +60,10 @@ class MemberRankSyncTest {
   }
 
   @Test
-  @DisplayName("付与が記帳されていない回は判定そのものを起こさないこと")
-  void skipsEvaluationWhenNothingWasBooked() {
-    memberRankSync.afterGrant(MEMBER_ID, null);
+  @DisplayName("付与が記帳されていない回でも判定は走ること（0 円・単位未満の来店を取り逃さない）")
+  void evaluatesEvenWhenNoGrantWasBooked() {
+    memberRankSync.afterAttribution(MEMBER_ID, ATTRIBUTION_ID, null);
 
-    verify(memberRankService, never()).syncOnGrant(anyLong(), any(), anyLong());
-    verifyNoInteractions(orderAttributionRepository);
-    verifyNoInteractions(pointLedgerService);
+    verify(memberRankService).syncOnAttribution(MEMBER_ID, memberRankSync, ATTRIBUTION_ID, null);
   }
 }

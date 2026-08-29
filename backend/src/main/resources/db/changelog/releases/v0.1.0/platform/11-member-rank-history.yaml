@@ -2,9 +2,10 @@ databaseChangeLog:
   - changeSet:
       id: platform-v0100-011-member-rank-history-schema
       author: kanghouchao
-      # 会員ランクが上がった事実の追加型の記録。根拠は契機となった付与仕訳そのものを指す — 受注 ID で
-      # 指すと、同じ受注に同じ会員の付与が二本並ぶ場合（帰属の無効化 → 再発行 → 本人が申領し直す）に
-      # どちらが契機だったか辿れない。降格は存在しないので、遷移は必ず上位方向である。
+      # 会員ランクが上がった事実の追加型の記録。契機は帰属記録の成立で、付与の有無に依らず必ず在る。
+      # 付与を伴う昇格はその仕訳も併せて残す — 帰属記録から仕訳を辿る線が無いため、同じ受注に同じ
+      # 会員の付与が二本並ぶ場合（帰属の無効化 → 再発行 → 本人が申領し直す）にどちらが契機だったか
+      # 読めなくなる。降格は存在しないので、遷移は必ず上位方向である。
       preConditions:
         - dbms:
             type: postgresql
@@ -40,11 +41,15 @@ databaseChangeLog:
                     nullable: false
                   remarks: 遷移後のランク
               - column:
-                  name: triggering_entry_id
+                  name: triggering_attribution_id
                   type: BIGINT
                   constraints:
                     nullable: false
-                  remarks: 判定の契機となった付与仕訳（ORDER_GRANT）
+                  remarks: 判定の契機となった帰属記録
+              - column:
+                  name: triggering_entry_id
+                  type: BIGINT
+                  remarks: 契機と同時に記帳された付与仕訳（ORDER_GRANT）。付与の無い来店では NULL
               - column:
                   name: promoted_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -77,6 +82,15 @@ databaseChangeLog:
             baseTableName: t_member_rank_histories
             baseColumnNames: member_id
             referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 契機の帰属記録は会員削除では消えない（SET NULL で残る）が、履歴の側は会員と道連れなので
+        # 指し先だけが取り残される経路は無い。受注の削除は完了受注に届かないため実履歴も消えない。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_member_rank_histories_attribution
+            baseTableName: t_member_rank_histories
+            baseColumnNames: triggering_attribution_id
+            referencedTableName: t_order_attributions
             referencedColumnNames: id
             onDelete: CASCADE
         # 根拠の仕訳は会員削除で道連れになるため、こちらも CASCADE で同じ statement の中で消える。

@@ -1962,6 +1962,7 @@ class OrderServiceTest {
   private static final long MEMBER_ID = 100L;
   private static final long ACTOR_ID = 7L;
   private static final long GRANT_ENTRY_ID = 55L;
+  private static final long ATTRIBUTION_ID = 88L;
 
   /** 完了の対象になる受注が現に持つ版。要求はこれと同じ値を載せて初めて通る。 */
   private static final long CURRENT_VERSION = 4L;
@@ -1999,6 +2000,15 @@ class OrderServiceTest {
   private void stubLink(CustomerMemberLink link) {
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
+    // 帰属記録は保存で採番され、その ID が昇格判定の契機として渡る
+    lenient()
+        .when(orderAttributionRepository.save(any(OrderAttribution.class)))
+        .thenAnswer(
+            invocation -> {
+              OrderAttribution saved = invocation.getArgument(0);
+              saved.setId(ATTRIBUTION_ID);
+              return saved;
+            });
   }
 
   private void stubActiveLink(Long memberId) {
@@ -2243,6 +2253,8 @@ class OrderServiceTest {
 
     assertThat(order.getAutoGrantPoints()).isZero();
     assertThat(savedAttribution().getOrderId()).isEqualTo("o1");
+    // 台帳に行が無くても来店は回数へ入るので、判定は付与の有無に依らず起こす
+    verify(memberRankSync).afterAttribution(MEMBER_ID, ATTRIBUTION_ID, null);
   }
 
   @Test
