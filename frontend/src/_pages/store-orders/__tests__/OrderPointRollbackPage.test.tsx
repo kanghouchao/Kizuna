@@ -81,6 +81,19 @@ describe('ポイント巻き戻しのページ', () => {
     expect(screen.queryByText(/元のロットへ期限そのまま返っています/)).not.toBeInTheDocument();
   });
 
+  it('付与だけを打ち消した回に「対象が無かった」と名乗らないこと', async () => {
+    // 利用の無い受注が普通なので、逆転の有無だけで判じると取り消した額を並べながら否定してしまう
+    mockedPreview.mockResolvedValue(preview({ reversible_used_points: 0 }));
+    mockedRollback.mockResolvedValue({ cancelled_points: 120, restored_points: 0 });
+    render(<OrderPointRollbackPage />);
+
+    fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '誤完了' } });
+    fireEvent.click(screen.getByRole('button', { name: '巻き戻す' }));
+
+    expect(await screen.findByText(/未消費の付与を取り消しました/)).toBeInTheDocument();
+    expect(screen.queryByText(/打ち消す対象はありませんでした/)).not.toBeInTheDocument();
+  });
+
   it('理由が空欄なら送らず理由を出すこと（台帳の行だけを見て説明が辿れなくなる）', async () => {
     render(<OrderPointRollbackPage />);
 

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackRequest;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
+import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -56,6 +57,7 @@ class OrderPointRollbackServiceTest {
 
   @Mock private OrderRepository orderRepository;
   @Mock private OrderAttributionRepository orderAttributionRepository;
+  @Mock private OrderAttributionService orderAttributionService;
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private PointLedgerService pointLedgerService;
   @Mock private PlatformUserRepository platformUserRepository;
@@ -143,6 +145,34 @@ class OrderPointRollbackServiceTest {
     assertThatThrownBy(() -> service.rollback(ORDER_ID, request(), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
     Mockito.verifyNoInteractions(pointLedgerService);
+  }
+
+  @Test
+  @DisplayName("再発行は受注行を押さえてから巻き戻し済みかを判じ、済みなら発行しないこと")
+  void reissueRefusesARolledBackOrderWhileHoldingTheOrderLock() {
+    // 判定だけ別の取引で先に済ませると、その隙間へ巻き戻しが割り込んだとき、申領が必ず拒む QR を発行する。
+    givenOrder(OrderStatus.COMPLETED);
+    Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(true);
+
+    assertThatThrownBy(() -> service.reissueReceiptTokenUnlessRolledBack(ORDER_ID))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("巻き戻した受注には伝票を再発行できません");
+
+    InOrder inOrder = Mockito.inOrder(orderRepository, pointLedgerService);
+    inOrder.verify(orderRepository).findScopedByIdForUpdate(ORDER_ID);
+    inOrder.verify(pointLedgerService).isRolledBack(ORDER_ID);
+    Mockito.verifyNoInteractions(orderAttributionService);
+  }
+
+  @Test
+  @DisplayName("巻き戻されていない受注には従来どおり再発行すること")
+  void reissueProceedsForAnIntactOrder() {
+    givenOrder(OrderStatus.COMPLETED);
+    Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(false);
+    OrderReceiptTokenResponse issued = new OrderReceiptTokenResponse("raw");
+    Mockito.when(orderAttributionService.reissueReceiptToken(ORDER_ID)).thenReturn(issued);
+
+    assertThat(service.reissueReceiptTokenUnlessRolledBack(ORDER_ID)).isEqualTo(issued);
   }
 
   @Test

@@ -33,6 +33,7 @@ import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
@@ -422,7 +423,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void receiptTokenReissueRespondsCreated() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderAttributionService.reissueReceiptToken(any()))
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any()))
         .thenReturn(new OrderReceiptTokenResponse("raw-token"));
 
     mockMvc
@@ -562,7 +563,8 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void receiptTokenIsNotReissuedForARolledBackOrder() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderPointRollbackService.isRolledBack("o1")).thenReturn(true);
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack("o1"))
+        .thenThrow(new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません"));
 
     mockMvc
         .perform(storePost("/store/orders/o1/receipt-token", ""))

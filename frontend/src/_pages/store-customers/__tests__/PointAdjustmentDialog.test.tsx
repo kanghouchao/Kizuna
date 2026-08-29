@@ -76,6 +76,15 @@ describe('PointAdjustmentDialog', () => {
     expect(mockedAdjust).not.toHaveBeenCalled();
   });
 
+  it('空白だけの事由は送らず理由を出すこと（分類を繋ぐと台帳の必須検証を通り抜ける）', async () => {
+    renderDialog();
+
+    await submitWith('100', '   ');
+
+    expect(await screen.findByText('事由を入力してください')).toBeInTheDocument();
+    expect(mockedAdjust).not.toHaveBeenCalled();
+  });
+
   it('選んだ分類を接頭辞にして自由記述と連結して送る', async () => {
     renderDialog();
 

@@ -28,6 +28,22 @@ interface RollbackFormValues {
   reason: string;
 }
 
+/**
+ * 台帳に何が起きたかの一文。
+ *
+ * 利用の逆転と付与の取消は独立に起こるので、片方だけで判じると「打ち消す対象が無かった」と
+ * 名乗りながら取り消した額を並べることになる。
+ */
+function rollbackOutcomeText(result: OrderPointRollbackResult): string {
+  if (result.restored_points > 0) {
+    return '戻した利用は元のロットへ期限そのまま返っています。';
+  }
+  if (result.cancelled_points > 0) {
+    return '未消費の付与を取り消しました。逆転する利用はありませんでした。';
+  }
+  return '台帳に打ち消す対象はありませんでした。';
+}
+
 /** 巻き戻しで動く量の並び。実行前は下見、実行後は実績で同じ形を描く。 */
 function PointsSummary({ cancelled, restored }: { cancelled: number; restored: number }) {
   return (
@@ -139,9 +155,7 @@ export default function OrderPointRollbackPage() {
           <h2 className="text-foreground text-sm font-medium">巻き戻しました</h2>
           <PointsSummary cancelled={result.cancelled_points} restored={result.restored_points} />
           <p className="text-muted-foreground text-sm">
-            {result.restored_points > 0
-              ? '戻した利用は元のロットへ期限そのまま返っています。'
-              : '台帳に打ち消す対象はありませんでした。'}
+            {rollbackOutcomeText(result)}
             この受注は以後、伝票の申領を受け付けません。
           </p>
         </div>

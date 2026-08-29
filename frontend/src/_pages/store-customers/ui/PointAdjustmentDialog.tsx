@@ -105,7 +105,7 @@ export function PointAdjustmentDialog({
     try {
       const balance = await customerApi.adjustPoints(customerId, {
         delta: values.delta,
-        reason: values.reason_category + CATEGORY_SEPARATOR + values.reason,
+        reason: values.reason_category + CATEGORY_SEPARATOR + values.reason.trim(),
         // 欄が消えても react-hook-form は値を保つ。減算へ切り替えた後の持ち越しを送らないよう、
         // 送信可否は入力の有無ではなく今の増減で決める（undefined は JSON 化の段でキーごと消える）。
         expires_on: isGrant && values.expires_on ? values.expires_on : undefined,
@@ -209,7 +209,9 @@ export function PointAdjustmentDialog({
               control={control}
               name="reason"
               rules={{
-                required: '事由を入力してください',
+                // 空白だけの入力は required を素通りする。分類を前へ繋ぐと台帳側の @NotBlank も
+                // 通ってしまい、説明の無い準金銭的な調整が成立する
+                validate: value => value.trim() !== '' || '事由を入力してください',
                 maxLength: {
                   value: DETAIL_MAX_LENGTH,
                   message: `事由は${DETAIL_MAX_LENGTH}文字以内で入力してください`,
