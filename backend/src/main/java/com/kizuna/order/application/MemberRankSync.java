@@ -32,7 +32,6 @@ class MemberRankSync implements MemberRankMetrics {
    *
    * <p>付与の有無で判定を飛ばさない。回数条件は台帳を見ないので、会計 0 円や付与単位に満たない来店だけを重ねた会員も回数で上がる。
    *
-   * @param attributionId 今回成立した帰属記録
    * @param grantEntryId 同時に記帳した付与仕訳。付与が 0 なら null
    */
   void afterAttribution(long memberId, long attributionId, Long grantEntryId) {

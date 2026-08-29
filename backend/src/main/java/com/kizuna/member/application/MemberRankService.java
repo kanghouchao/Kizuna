@@ -36,7 +36,6 @@ public class MemberRankService {
    * <p>条件は OR — 完了受注の回数か付与の純額のどちらか一方の達成で足りる（高頻度客と高額客の両方を拾う）。 純額は取消仕訳の控除後なので減りうるが、ランクは戻らない（棘輪） —
    * 現在より上位でなければ何も書かない。
    *
-   * @param triggeringAttributionId 今回成立した帰属記録。履歴が指す契機になる
    * @param triggeringEntryId 同時に記帳された付与仕訳。付与が 0 なら null
    */
   public void syncOnAttribution(

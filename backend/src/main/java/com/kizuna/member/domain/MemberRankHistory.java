@@ -13,13 +13,11 @@ import lombok.NoArgsConstructor;
 /**
  * 会員ランクが上がった事実。追加型の記録で、行は書き換えない。
  *
- * <p>根拠は契機となった帰属記録を指す。昇格は帰属が成立した瞬間にしか起きないため、付与の有無に依らず必ず在る。
- *
- * <p>付与を伴う昇格ではその付与仕訳も併せて残す。帰属記録から仕訳を辿る線は無いため、これが無いと同じ受注に同じ会員の付与が二本並ぶ場合（無効化 → 再発行 →
+ * <p>契機は帰属記録で、付与を伴う昇格ではその付与仕訳も併せて残す。帰属記録から仕訳を辿る線が無いため、これが無いと同じ受注に同じ会員の付与が二本並ぶ場合（無効化 → 再発行 →
  * 本人が申領し直す）にどちらが契機だったか読めない。
  *
  * <p>不変条件（構築時に検証、違反は 400 系ドメイン例外 {@link InvalidMemberException}）: 会員
- * ID・根拠の帰属記録・遷移時刻が必須で、遷移先は遷移前より上位。
+ * ID・契機の帰属記録・遷移時刻が必須で、遷移先は遷移前より上位。
  */
 @Entity
 @Table(name = "t_member_rank_histories")
@@ -38,11 +36,14 @@ public class MemberRankHistory extends BaseEntity {
   @Column(name = "new_rank", nullable = false, updatable = false, length = 20)
   private MemberRank newRank;
 
-  /** 判定の契機となった帰属記録。 */
-  @Column(name = "triggering_attribution_id", nullable = false, updatable = false)
+  /**
+   * 判定の契機となった帰属記録。書き込み時は必須だが、読み出しでは欠落しうる — 指し先が消えたとき FK が SET NULL になるためで、棘輪で戻らない昇格の事実を
+   * 契機の道連れで失わせない。
+   */
+  @Column(name = "triggering_attribution_id", updatable = false)
   private Long triggeringAttributionId;
 
-  /** 契機と同時に記帳された付与仕訳（ORDER_GRANT）。付与の無い来店では欠落する。 */
+  /** 契機と同時に記帳された付与仕訳（ORDER_GRANT）。付与の無い来店では初めから無い。 */
   @Column(name = "triggering_entry_id", updatable = false)
   private Long triggeringEntryId;
 

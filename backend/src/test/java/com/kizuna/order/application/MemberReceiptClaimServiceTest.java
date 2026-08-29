@@ -125,7 +125,6 @@ class MemberReceiptClaimServiceTest {
     Mockito.verify(orderAttributionRepository).save(Mockito.any());
     Mockito.verify(pointLedgerService)
         .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, 0, PLATFORM_USER_ID);
-    // 台帳に行が無くても来店は回数へ入るので、判定は付与の有無に依らず起こす
     Mockito.verify(memberRankSync).afterAttribution(MEMBER_ID, ATTRIBUTION_ID, null);
   }
 
@@ -214,7 +213,6 @@ class MemberReceiptClaimServiceTest {
   private void givenToken(OrderReceiptToken token) {
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.of(token));
-    // 帰属記録は保存で採番され、その ID が昇格判定の契機として渡る
     Mockito.lenient()
         .when(orderAttributionRepository.save(Mockito.any()))
         .thenAnswer(
