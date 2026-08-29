@@ -272,6 +272,68 @@ class BenefitRuleTest {
         .hasMessageContaining("停用済み");
   }
 
+  @Test
+  @DisplayName("適用期間の窓は事象の日で判じ、両端の当日を含むこと")
+  void theEffectivePeriodIncludesBothBoundaryDays() {
+    BenefitRule rule =
+        BenefitRule.define(
+            BenefitRuleType.VISIT,
+            definition().effectiveFrom(FROM).effectiveUntil(UNTIL).points(100).build());
+
+    assertThat(rule.firesFor(3L, FROM)).as("開始当日は窓の内側").isTrue();
+    assertThat(rule.firesFor(3L, UNTIL)).as("終了当日も窓の内側").isTrue();
+    assertThat(rule.firesFor(3L, FROM.minusDays(1))).isFalse();
+    assertThat(rule.firesFor(3L, UNTIL.plusDays(1))).isFalse();
+  }
+
+  @Test
+  @DisplayName("適用期間を持たない規則はどの日の事象でも拾うこと")
+  void aPermanentRuleFiresOnAnyDay() {
+    BenefitRule rule = BenefitRule.define(BenefitRuleType.VISIT, definition().points(100).build());
+
+    assertThat(rule.firesFor(3L, LocalDate.of(2020, 1, 1))).isTrue();
+    assertThat(rule.firesFor(3L, LocalDate.of(2099, 12, 31))).isTrue();
+  }
+
+  @Test
+  @DisplayName("店舗集合の規則は集合外の店舗と店舗の指定が無い事象を拾わないこと")
+  void aStoreSetRuleFiresOnlyInsideItsSet() {
+    BenefitRule rule =
+        BenefitRule.define(
+            BenefitRuleType.VISIT,
+            definition()
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of(3L))
+                .points(100)
+                .build());
+
+    assertThat(rule.firesFor(3L, FROM)).isTrue();
+    assertThat(rule.firesFor(9L, FROM)).as("集合外の店舗").isFalse();
+    assertThat(rule.firesFor(null, FROM)).as("店舗の指定が無い事象は fail-closed").isFalse();
+  }
+
+  @Test
+  @DisplayName("停用した規則は窓の内側の事象でも拾わないこと")
+  void aDeactivatedRuleNeverFires() {
+    BenefitRule rule = BenefitRule.define(BenefitRuleType.VISIT, definition().points(100).build());
+    rule.deactivate();
+
+    assertThat(rule.firesFor(3L, FROM)).isFalse();
+  }
+
+  @Test
+  @DisplayName("付与ポイントの期限は付与日から算出し、無指定なら無期限になること")
+  void theGrantExpiryComesFromTheValidityDays() {
+    BenefitRule dated =
+        BenefitRule.define(
+            BenefitRuleType.VISIT, definition().grantValidityDays(30).points(100).build());
+    BenefitRule unlimited =
+        BenefitRule.define(BenefitRuleType.VISIT, definition().points(100).build());
+
+    assertThat(dated.grantExpiryOn(FROM)).isEqualTo(FROM.plusDays(30));
+    assertThat(unlimited.grantExpiryOn(FROM)).as("無期限指定は期限を持たない").isNull();
+  }
+
   private static BenefitRuleDefinition.BenefitRuleDefinitionBuilder definition() {
     return BenefitRuleDefinition.builder()
         .name("来店ボーナス")

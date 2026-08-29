@@ -68,6 +68,7 @@ import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
+import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
@@ -127,6 +128,7 @@ class OrderServiceTest {
   @Mock NominatableCastLookup nominatableCast;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PointLedgerService pointLedgerService;
+  @Mock BenefitGrantService benefitGrantService;
   @Mock MemberRankSync memberRankSync;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock RoleRepository roleRepository;
@@ -2228,6 +2230,45 @@ class OrderServiceTest {
     assertThat(attribution.getSource()).isEqualTo(OrderAttributionSource.COMPLETION);
     assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
     assertThat(attribution.getAttributedAt()).isNotNull();
+  }
+
+  @Test
+  void completeEvaluatesVisitBenefitsWithTheOrdersBusinessDate() {
+    // 特典の適用期間の窓は根拠受注の営業日で判じる。ここで完了した日を渡すと、規則の窓が閉じた後に
+    // 完了した窓内の受注が黙って無報酬になる（事後申領との判定基準も食い違う）。
+    Order order =
+        atCurrentVersion(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .customerId("cust-1")
+                .castId("cast-1")
+                .businessDate(CURRENT_BUSINESS_DATE)
+                .build());
+    order.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    stubWriteBackResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    verify(benefitGrantService)
+        .grantVisitBenefits(MEMBER_ID, "o1", STORE_ID, CURRENT_BUSINESS_DATE, ACTOR_ID);
+  }
+
+  @Test
+  void completeOfANonMemberOrderEvaluatesNoVisitBenefit() {
+    // 来店特典の条件は「会員へ帰属した受注の完了」。帰属しない完了で評価すると、台帳の宛先が無い。
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    stubReceiptTokenIssuance();
+    stubWriteBackResponse();
+
+    service.complete("o1", completion(12000, null), "staff@kizuna.test");
+
+    verifyNoInteractions(benefitGrantService);
   }
 
   @Test

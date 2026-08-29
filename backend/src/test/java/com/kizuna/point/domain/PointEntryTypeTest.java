@@ -23,8 +23,12 @@ class PointEntryTypeTest {
    *
    * <p>受注を根拠とするものは受注 ID を持たなければならない — 持たなければ、受注から辿る巻き戻しがその行を永久に
    * 見つけられない。利用取消は受注の授受を打ち消す側なので付与ではなく、受注 ID を持たない。
+   *
+   * <p>特典付与がここに居るのは、投産済みの特典が<b>受注を条件とする種別（来店）</b>だけだからである。受注を条件としない
+   * ログイン特典を投産するときは、その付与が巻き戻しの収集述語から外れることを承知のうえでこの枚挙を分けること。
    */
-  private static final Set<PointEntryType> ORDER_BASED_CREDITS = Set.of(PointEntryType.ORDER_GRANT);
+  private static final Set<PointEntryType> ORDER_BASED_CREDITS =
+      Set.of(PointEntryType.ORDER_GRANT, PointEntryType.BENEFIT_GRANT);
 
   private static final Set<PointEntryType> OTHER_CREDITS =
       Set.of(PointEntryType.MANUAL_ADJUST, PointEntryType.USE_CANCEL);
@@ -53,6 +57,9 @@ class PointEntryTypeTest {
             PointEntry.manualAdjust(7L, 3L, 500, "理由", null, List.of(), 9L, "key-1").getOrderId())
         .as("手動調整は受注を根拠としない")
         .isNull();
+    assertThat(PointEntry.grantForBenefit(7L, "o1", 3L, 200, null, 5L, 9L).getOrderId())
+        .as("投産済みの特典は受注を条件とするので受注 ID を持つ")
+        .isEqualTo("o1");
     assertThat(PointEntry.reverseUse(persistedUse(), "巻き戻し", 9L).getOrderId())
         .as("利用取消は打ち消す側であって付与ではない")
         .isNull();

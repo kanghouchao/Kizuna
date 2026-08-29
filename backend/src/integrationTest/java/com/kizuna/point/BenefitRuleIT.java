@@ -13,6 +13,7 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,15 @@ class BenefitRuleIT extends CrossStoreTestSupport {
     ensureEnabledUser(NON_HOLDER_EMAIL, "特典規則IT_門の外");
     hqToken = login(SEED_EMAIL);
     nonHolderToken = loginWithPassword(NON_HOLDER_EMAIL, PASSWORD);
+  }
+
+  /**
+   * 規則はプラットフォーム全体に効き、統合テストは 1 つの DB を共有する。ここで作った規則を生かしたまま残すと、
+   * 以降のテストの受注完了が黙って特典付与を積み、残高を数える断言が理由の分からない差で落ちる。
+   */
+  @AfterEach
+  void deactivateRulesLeftBehind() {
+    jdbcTemplate.update("UPDATE t_benefit_rules SET enabled = false WHERE enabled");
   }
 
   @Test

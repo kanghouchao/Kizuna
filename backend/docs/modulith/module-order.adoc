@@ -10,6 +10,7 @@
 * `c.k.s.application.BusinessDateService` (in Settings)
 * `c.k.p.application.PointLedgerService` (in Point)
 * `c.k.m.application.MemberRankService` (in Member)
+* `c.k.p.application.BenefitGrantService` (in Point)
 * `c.k.c.domain.CastRepository` (in Cast)
 * `c.k.s.application.ConfirmedShiftLookupService` (in Shift)
 * `c.k.c.domain.CustomerRepository` (in Customer)

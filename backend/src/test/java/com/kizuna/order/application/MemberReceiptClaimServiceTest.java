@@ -18,6 +18,7 @@ import com.kizuna.order.domain.OrderReceiptTokenStatus;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
+import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -58,6 +59,7 @@ class MemberReceiptClaimServiceTest {
   @Mock private OrderRepository orderRepository;
   @Mock private ReceiptTokenGenerator receiptTokenGenerator;
   @Mock private PointLedgerService pointLedgerService;
+  @Mock private BenefitGrantService benefitGrantService;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private MemberLookupService memberLookupService;
   @Mock private MemberRankSync memberRankSync;
@@ -106,6 +108,10 @@ class MemberReceiptClaimServiceTest {
     // 実行者は申領した本人。台帳では実行者 null が「機構が起こした仕訳」の形であり、人手の操作と混ぜない
     Mockito.verify(pointLedgerService)
         .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, PLANNED_POINTS, PLATFORM_USER_ID);
+    // 特典の適用期間の窓は根拠受注の営業日で判じる。申領した日を渡すと、90 日遅れの申領が
+    // 「窓の外」と判じられ、完了経路と同じ受注が経路の違いだけで別の結果になる。
+    Mockito.verify(benefitGrantService)
+        .grantVisitBenefits(MEMBER_ID, ORDER_ID, STORE_ID, ORDER_BUSINESS_DATE, PLATFORM_USER_ID);
   }
 
   @Test
@@ -203,12 +209,14 @@ class MemberReceiptClaimServiceTest {
   }
 
   /** 引ける伝票と、その受注（発生店舗の出どころ）を用意する。 */
+  private static final LocalDate ORDER_BUSINESS_DATE = LocalDate.parse("2026-08-10");
+
   private void givenToken(OrderReceiptToken token) {
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.of(token));
     Order order =
         Order.builder()
-            .businessDate(LocalDate.parse("2026-08-10"))
+            .businessDate(ORDER_BUSINESS_DATE)
             .pax(2)
             .status(OrderStatus.COMPLETED)
             .build();

@@ -10,6 +10,7 @@ import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
+import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -46,6 +47,7 @@ public class MemberReceiptClaimService {
   private final OrderRepository orderRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final PointLedgerService pointLedgerService;
+  private final BenefitGrantService benefitGrantService;
   private final PlatformUserRepository platformUserRepository;
   private final MemberLookupService memberLookupService;
   private final MemberRankSync memberRankSync;
@@ -99,6 +101,14 @@ public class MemberReceiptClaimService {
             order.getStoreId(),
             token.getPlannedPoints(),
             platformUserId);
+    // 来店特典の窓は根拠受注の営業日で判じる（申領した日ではない）。申領は最大 90 日遅れるが、遅れているのは
+    // 申領という手続きであって発火した事実ではない。適用期間が閉じた後でも窓内の受注には付与が起こりうる。
+    benefitGrantService.grantVisitBenefits(
+        member.memberId(),
+        token.getOrderId(),
+        order.getStoreId(),
+        order.getBusinessDate(),
+        platformUserId);
     // 事後申領も帰属の成立と同時に付与を記帳するため、完了経路と同じくここで昇格を判定する。
     memberRankSync.afterGrant(member.memberId(), grantEntryId);
     return new MemberReceiptClaimResponse(token.getPlannedPoints());

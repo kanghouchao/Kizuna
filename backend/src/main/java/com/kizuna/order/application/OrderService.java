@@ -42,6 +42,7 @@ import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
+import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.point.application.PointLedgerService.GrantedPoints;
 import com.kizuna.settings.application.BusinessDateService;
@@ -97,6 +98,7 @@ public class OrderService {
   private final NominatableCastLookup nominatableCast;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PointLedgerService pointLedgerService;
+  private final BenefitGrantService benefitGrantService;
   private final MemberRankSync memberRankSync;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
@@ -642,6 +644,10 @@ public class OrderService {
       // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
       orderAttributionRepository.save(
           OrderAttribution.onCompletion(id, memberId, link.getMemberCode(), OffsetDateTime.now()));
+      // 来店特典は帰属が物化した後に評価する。適用期間の窓は営業日で判じる（この完了を行った日ではない）。
+      // 会計金額に依らないので付与が 0 円の完了でも起こりうる。
+      benefitGrantService.grantVisitBenefits(
+          memberId, id, order.getStoreId(), order.getBusinessDate(), actorId);
       // 今回の来店を回数へ含めるため、帰属を記録した後に見直す。
       memberRankSync.afterGrant(memberId, grant.entryId());
     } else {
