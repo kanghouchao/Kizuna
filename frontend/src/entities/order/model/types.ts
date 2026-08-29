@@ -578,6 +578,29 @@ export interface OrderAttributionCorrection {
 // 誤帰属で付いたポイントの差し引き（POST /store/orders/{id}/attribution/correction）。
 // 宛先は名指した帰属記録が持つ会員で、顧客に現在紐づく会員ではない。points は引く量を正で渡す
 // （この口は与える方向を持たない — 授権が「その付与が誤りだった」ことにだけ由来するため）。
+/** ポイント巻き戻しの下見。store/orders/{id}/point-rollback-preview に対応。 */
+export interface OrderPointRollbackPreview {
+  /** 既に巻き戻し済みか。真なら実行は 409 になる。 */
+  already_rolled_back: boolean;
+  /** この受注が現に帰属している会員のコード。帰属していなければ応答から消える。 */
+  member_code?: string;
+  /** 取消で無効化される付与の未消費残の合計。 */
+  cancellable_points: number;
+  /** 逆転で元のロットへ返る利用の合計。 */
+  reversible_used_points: number;
+}
+
+/** ポイント巻き戻しの要求。冪等キーは取らない — 操作記録の一意性が収束を担う（ADR 0023）。 */
+export interface OrderPointRollbackRequest {
+  reason: string;
+}
+
+/** ポイント巻き戻しで実際に動いた量。仕訳ゼロの受注では両方 0 になるが、操作記録は書かれている。 */
+export interface OrderPointRollbackResult {
+  cancelled_points: number;
+  restored_points: number;
+}
+
 export interface OrderAttributionCorrectionRequest {
   attribution_id: number;
   points: number;

@@ -20,12 +20,14 @@ import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
+import com.kizuna.order.api.dto.OrderPointRollbackResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderCorrectionService;
+import com.kizuna.order.application.OrderPointRollbackService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderSortKey;
@@ -81,6 +83,7 @@ class OrderControllerTest {
   @MockitoBean private OrderAttributionService orderAttributionService;
   @MockitoBean private OrderAttributionCorrectionService orderAttributionCorrectionService;
   @MockitoBean private OrderCorrectionService orderCorrectionService;
+  @MockitoBean private OrderPointRollbackService orderPointRollbackService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
@@ -551,6 +554,47 @@ class OrderControllerTest {
             storePost(
                 "/store/orders/o1/attribution/invalidation",
                 "{\"attribution_id\": 1, \"reason\": \"" + "あ".repeat(500) + "\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("巻き戻しと下見は POINT_ADJUST が無ければ拒否されること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void pointRollbackIsRejectedWithoutPointAdjust() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/point-rollback", "{\"reason\": \"誤完了\"}"))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(storeGet("/store/orders/o1/point-rollback-preview"))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderPointRollbackService);
+  }
+
+  @Test
+  @DisplayName("理由の無い巻き戻しと列長を超える理由は 400 で撥ねられること")
+  @WithMockUser(authorities = "PERM_POINT_ADJUST")
+  void pointRollbackWithoutAValidReasonIsRejected() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(storePost("/store/orders/o1/point-rollback", "{\"reason\": \"   \"}"))
+        .andExpect(status().isBadRequest());
+    mockMvc
+        .perform(
+            storePost(
+                "/store/orders/o1/point-rollback", "{\"reason\": \"" + "あ".repeat(501) + "\"}"))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(orderPointRollbackService);
+
+    // 正向対照: 上限ちょうどは通る（400 が端点の不在でない証明）
+    when(orderPointRollbackService.rollback(any(), any(), any()))
+        .thenReturn(new OrderPointRollbackResponse(120, 300));
+    mockMvc
+        .perform(
+            storePost(
+                "/store/orders/o1/point-rollback", "{\"reason\": \"" + "あ".repeat(500) + "\"}"))
         .andExpect(status().isOk());
   }
 

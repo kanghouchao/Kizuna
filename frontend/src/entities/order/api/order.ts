@@ -33,6 +33,9 @@ import {
   OrderCorrectionRequest,
   OrderCorrectionResult,
   OrderCreateRequest,
+  OrderPointRollbackPreview,
+  OrderPointRollbackRequest,
+  OrderPointRollbackResult,
   OrderQueryParams,
   OrderReceiptTokenIssue,
   OrderReceptionist,
@@ -224,6 +227,29 @@ export const orderApi = {
       {
         params: { attribution_id: attributionId },
       }
+    );
+    return response.data;
+  },
+  /** ポイント巻き戻しの下見。実行前に動く量を示すためだけの読み口で、台帳へは何も書かない。 */
+  pointRollbackPreview: async (id: string | undefined): Promise<OrderPointRollbackPreview> => {
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/point-rollback-preview`
+    );
+    return response.data;
+  },
+  /**
+   * 受注を根拠とするポイントの授受を理由付きで打ち消す（巻き戻し。ADR 0023）。POINT_ADJUST 限定。
+   *
+   * 二度目は 409。冪等キーは取らない — 受注 1 件につき高々 1 行の操作記録が収束を担う。
+   * 巻き戻した受注は伝票トークンの事後申領を永久に拒むため、誤帰属の清掃には使えない。
+   */
+  pointRollback: async (
+    id: string | undefined,
+    data: OrderPointRollbackRequest
+  ): Promise<OrderPointRollbackResult> => {
+    const response = await apiClient.post(
+      `/store/orders/${requireId(id, '受注')}/point-rollback`,
+      data
     );
     return response.data;
   },

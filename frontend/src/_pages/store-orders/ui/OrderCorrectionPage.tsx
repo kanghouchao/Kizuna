@@ -14,7 +14,14 @@ import {
   toFeeLineInputs,
 } from '@/entities/order';
 import { ExternalLinkIcon } from 'lucide-react';
-import { getApiErrorMessage, isConflict, storePath, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  hasPermission,
+  isConflict,
+  readTokenClaims,
+  storePath,
+  useResource,
+} from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
 // 空欄は「値なし」として送る。この契約は全量送信なので、省略と空欄が同じ意味になる。
@@ -120,6 +127,13 @@ export default function OrderCorrectionPage() {
   const [hasSeeded, setHasSeeded] = useState(false);
   const [outcome, setOutcome] = useState<CorrectionOutcomeState | null>(null);
 
+  // 巻き戻しは POINT_ADJUST（店長）限定。押せない導線を描くと、理由を入力し終えてから 403 を受け取る。
+  // 強制はサーバ側 @PreAuthorize で、ここは導線の表示制御のみ（token 無し・壊れは出さない）。
+  const [canRollback, setCanRollback] = useState(false);
+  useEffect(() => {
+    setCanRollback(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
+  }, []);
+
   // 取得の到着はレンダーより後なので、初期値ではなく効果で播く（開いた最初のフレームが空欄になる）。
   useEffect(() => {
     if (current === null) {
@@ -215,6 +229,24 @@ export default function OrderCorrectionPage() {
       )}
 
       {outcome !== null && <CorrectionOutcome outcome={outcome} />}
+
+      {/* 門は台帳を読みも書きもしない（ADR 0019）。全否定が要る誤完了のためにポイント側の操作面を
+          指すだけで、機構は繋がない — 門はここが実行されたかを知らないまま */}
+      {seeded && completed && canRollback && (
+        <div className="bg-card flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+          <p className="text-muted-foreground text-sm">
+            この訂正でポイントは動きません。来店そのものが誤りで付与・利用を全否定するなら、ポイントの巻き戻しを使います。
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={storePath(storeId, `/orders/${orderId}/point-rollback`)} />}
+          >
+            <ExternalLinkIcon aria-hidden="true" />
+            ポイントの巻き戻しへ
+          </Button>
+        </div>
+      )}
 
       {/* 完了していない受注はサーバが撥ねる。欄を出してから 400 を返すより、開いた時点で理由を名乗る */}
       {seeded && !completed && (

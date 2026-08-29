@@ -34,7 +34,7 @@ databaseChangeLog:
                   type: VARCHAR(30)
                   constraints:
                     nullable: false
-                  remarks: 仕訳種別（ORDER_GRANT/USE/MANUAL_ADJUST/CANCEL/EXPIRE/WITHDRAWAL_CLEAR）
+                  remarks: 仕訳種別（ORDER_GRANT/USE/MANUAL_ADJUST/CANCEL/USE_CANCEL/EXPIRE/WITHDRAWAL_CLEAR）
               - column:
                   name: amount
                   type: INTEGER
@@ -52,11 +52,11 @@ databaseChangeLog:
               - column:
                   name: order_id
                   type: VARCHAR(64)
-                  remarks: 付与・利用の元になった受注
+                  remarks: 付与・利用の元になった受注（ORDER_GRANT・USE では必須）
               - column:
                   name: original_entry_id
                   type: BIGINT
-                  remarks: 取消対象の加算仕訳。CANCEL のみ設定される
+                  remarks: 打ち消す元の仕訳。CANCEL（加算ロット）と USE_CANCEL（元の利用）が設定する
               - column:
                   name: actor_user_id
                   type: BIGINT
@@ -64,7 +64,7 @@ databaseChangeLog:
               - column:
                   name: reason
                   type: VARCHAR(500)
-                  remarks: 手動調整の理由（MANUAL_ADJUST では必須）
+                  remarks: 人手の操作の理由（MANUAL_ADJUST・CANCEL・USE_CANCEL では必須）
               - column:
                   # 応答喪失後の再送が台帳へ二重記帳されるのを、クライアント生成キーの一意制約で
                   # 機構的に遮断する（ADR 0007）。PostgreSQL の UNIQUE は NULL 同士を別値と見るため
@@ -216,6 +216,22 @@ databaseChangeLog:
             sql: >-
               ALTER TABLE t_point_entries
               ADD CONSTRAINT ck_t_point_entries_amount_nonzero CHECK (amount <> 0)
+        # 「受注を根拠とする付与はすべて追跡・取消できる」（#381 要件 3）のうち、行内で表せる分を DB で押さえる。
+        # 付与と利用が受注を名乗らなければ、受注から辿る巻き戻しがその行を永久に見つけられない。
+        # 上の order 外部キーの SET NULL とはこの行では両立しない。両立しない状態には到達しない —
+        # 受注を消せるのは店舗削除だけで、仕訳を持つ店舗の削除はアプリケーション層が先に断る。
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_entries
+              ADD CONSTRAINT ck_t_point_entries_order_required CHECK (
+                entry_type NOT IN ('ORDER_GRANT', 'USE') OR order_id IS NOT NULL)
+        # 利用取消は元の利用を名指してはじめて「引き当ての逆転」になる。指し先を失った正の行は
+        # ロットでも消費でもない、意味を持たない残高の増加になる。
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_entries
+              ADD CONSTRAINT ck_t_point_entries_use_cancel_original CHECK (
+                entry_type <> 'USE_CANCEL' OR original_entry_id IS NOT NULL)
         - sql:
             sql: >-
               ALTER TABLE t_point_usage_allocations
@@ -248,6 +264,13 @@ databaseChangeLog:
             columns:
               - column:
                   name: source_entry_id
+        # 1 件の利用への逆転は高々 1 回。二度目が通ると、返した量が二重に元のロットへ戻る。
+        # 値を持つのは利用取消だけなので部分索引にする（CANCEL も同じ列を使う）。
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_point_entries_use_cancel_original
+              ON t_point_entries (original_entry_id)
+              WHERE entry_type = 'USE_CANCEL'
         # 訂正の読み口も書き込みの上限判定もこの列で台帳を集計する。PostgreSQL は参照側の外部キー列に
         # 索引を作らないので、無いとグループ全体の追記型台帳を毎回走査することになる。
         # 値を持つのは訂正の仕訳だけなので部分索引にする。
@@ -256,3 +279,81 @@ databaseChangeLog:
               CREATE INDEX idx_t_point_entries_corrected_attribution
               ON t_point_entries (corrected_attribution_id)
               WHERE corrected_attribution_id IS NOT NULL
+
+  - changeSet:
+      id: platform-v0100-010-point-rollback-schema
+      author: kanghouchao
+      # 受注 1 件のポイントを打ち消した操作の記録。台帳の仕訳とは別に物化するのは、仕訳ゼロの受注でも
+      # 操作が成立するため。伝票トークンの付与予定額は完了時点で固定され再発行でも計算し直されないので、
+      # 記録で拒まなければ 90 日窓内の申領が原額の付与を積み直せる。事後申領の入口はこの記録を見る。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_point_rollbacks
+            remarks: 受注を根拠とするポイントの授受を打ち消した操作の記録
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_point_rollbacks
+              - column:
+                  # 受注 1 件につき高々 1 行。二度目を静默 no-op で吞むと、初回の理由・実行者が
+                  # 書き換わったのかそのままなのかを利用者が判じられない（ADR 0013 の紀律）。
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_point_rollbacks_order
+                  remarks: 巻き戻した受注（1 件につき高々 1 行）
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+                  remarks: 巻き戻しの理由（必須）
+              - column:
+                  name: actor_user_id
+                  type: BIGINT
+                  remarks: 巻き戻しを起こした操作者
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 記録は受注が消えれば意味を失う（申領を拒む相手のトークンも受注と共に消える）。台帳の仕訳が
+        # SET NULL で生き残るのとは逆で、こちらは受注 1 件の操作そのものの記録である。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_rollbacks_order
+            baseTableName: t_point_rollbacks
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_point_rollbacks_actor
+            baseTableName: t_point_rollbacks
+            baseColumnNames: actor_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL

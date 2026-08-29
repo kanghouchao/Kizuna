@@ -315,6 +315,11 @@ describe('MemberLinkSection', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'ポイント調整' }));
     fireEvent.change(await screen.findByLabelText('増減ポイント'), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('combobox', { name: '事由の分類' }));
+    const category = await screen.findByRole('option', { name: '個別施策' });
+    // Base UI の Item は pointerdown を経ていない mouse click を無視する
+    fireEvent.pointerDown(category);
+    fireEvent.click(category);
     fireEvent.change(screen.getByLabelText('事由'), { target: { value: '手動付与' } });
     fireEvent.click(screen.getByRole('button', { name: '調整する' }));
 
