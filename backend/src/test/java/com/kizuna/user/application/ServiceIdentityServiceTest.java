@@ -12,6 +12,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityCreateRequest;
 import com.kizuna.user.api.dto.ServiceIdentityResponse;
+import com.kizuna.user.api.dto.ServiceIdentityRoleRef;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.PlatformUser;
@@ -111,9 +112,7 @@ class ServiceIdentityServiceTest {
     assertThat(saved.getEnabled()).isTrue();
     assertThat(saved.getRoleIds()).containsExactly(CUSTOM_ROLE);
     assertThat(res.displayName()).isEqualTo("夜間バッチ");
-    assertThat(res.roles())
-        .extracting(ServiceIdentityResponse.RoleRef::name)
-        .containsExactly("バッチ実行");
+    assertThat(res.roles()).extracting(ServiceIdentityRoleRef::name).containsExactly("バッチ実行");
   }
 
   @Test
