@@ -32,7 +32,7 @@ import org.hibernate.annotations.BatchSize;
  *       は空かつ MEMBER には授権不可（{@code authorizes} が無条件 true になる fail-open を塞ぐ）（{@link
  *       InvalidStoreScopeException}）
  *   <li>ロール: STAFF / SERVICE は 1 ロール以上、CAST/MEMBER は空（{@link InvalidRoleGrantException}）
- *   <li>資格情報: SERVICE は email・password をいずれも持たず、他の種別はいずれも必須（{@link
+ *   <li>資格情報: SERVICE は email・password・LINE 連携をいずれも持たず、他の種別は email・password が必須（{@link
  *       InvalidCredentialAssignmentException}）
  * </ul>
  */
@@ -107,7 +107,7 @@ public class PlatformUser extends BaseEntity {
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(userType, roles);
     validateScope(userType, storeScopeType, stores);
-    validateCredentials(userType, email, password);
+    validateCredentials(userType, email, password, lineUserId);
     this.email = email == null ? null : email.toLowerCase(Locale.ROOT);
     this.password = password;
     this.displayName = displayName;
@@ -165,6 +165,9 @@ public class PlatformUser extends BaseEntity {
    * @throws LineAlreadyLinkedException 既に別の LINE アカウントを連携済みの場合
    */
   public void linkLine(String lineUserId) {
+    if (this.userType == UserType.SERVICE) {
+      throw new InvalidCredentialAssignmentException("SERVICE は LINE を連携できません");
+    }
     if (this.lineUserId != null) {
       throw new LineAlreadyLinkedException("このアカウントは既に LINE と連携済みです");
     }
@@ -173,7 +176,7 @@ public class PlatformUser extends BaseEntity {
 
   /** エンコード済みパスワードで置き換える（呼び出し側で符号化済みであること）。版も増やし、全端末の既存セッションを失効させる。 */
   public void changePassword(String encodedPassword) {
-    validateCredentials(this.userType, this.email, encodedPassword);
+    validateCredentials(this.userType, this.email, encodedPassword, this.lineUserId);
     this.password = encodedPassword;
     this.credentialVersion++;
   }
@@ -188,13 +191,14 @@ public class PlatformUser extends BaseEntity {
   }
 
   /**
-   * 資格情報の不変条件。SERVICE が資格情報を持たないのは運用規約ではなく構造上の事実であり、対話ログイン不可の第一の防線は 「照合できる値がそもそも行に無い」ことで成り立つ。列は
-   * NULL 可なので、この検証だけが守衛である。
+   * 資格情報の不変条件。SERVICE が資格情報を持たないのは運用規約ではなく構造上の事実であり、対話ログイン不可の第一の防線は 「照合できる値がそもそも行に無い」ことで成り立つ。LINE
+   * 連携も対話ログインの同一性根拠なので同列に禁じる。列は NULL 可なので、この検証だけが守衛である。
    */
-  private static void validateCredentials(UserType userType, String email, String password) {
+  private static void validateCredentials(
+      UserType userType, String email, String password, String lineUserId) {
     if (userType == UserType.SERVICE) {
-      if (email != null || password != null) {
-        throw new InvalidCredentialAssignmentException("SERVICE は email・パスワードを持てません");
+      if (email != null || password != null || lineUserId != null) {
+        throw new InvalidCredentialAssignmentException("SERVICE は email・パスワード・LINE 連携を持てません");
       }
       return;
     }

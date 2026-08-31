@@ -339,6 +339,23 @@ class PlatformUserTest {
   }
 
   @Test
+  @DisplayName("SERVICE は LINE を連携済みとして構築できない（対話ログインの同一性根拠を一切持たない）")
+  void serviceWithLineUserIdThrows() {
+    assertThatThrownBy(() -> serviceBuilder().lineUserId("U-line-1").build())
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+  }
+
+  @Test
+  @DisplayName("SERVICE への linkLine は不変条件違反で拒否される（構築後にも LINE の同一性根拠を持てない）")
+  void serviceLinkLineThrows() {
+    PlatformUser user = serviceBuilder().build();
+
+    assertThatThrownBy(() -> user.linkLine("U-line-1"))
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+    assertThat(user.getLineUserId()).isNull();
+  }
+
+  @Test
   @DisplayName("SERVICE は少なくとも 1 つのロールが必要（STAFF と同じ不変条件）")
   void serviceWithoutRolesThrows() {
     assertThatThrownBy(() -> serviceBuilder().roleIds(Set.of()).build())
