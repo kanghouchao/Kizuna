@@ -75,7 +75,7 @@ function statusBadge(row: EmergencyElevationSummary) {
 
 /**
  * 緊急昇格の管理ページ（発動・履歴・撤回）。発動・履歴・撤回は同一の記録表を源とするため一頁に収める。
- * 店舗一覧の行操作には混ぜない — 緊急口を日常操作面から分離する（#832 地図の裁定）。
+ * 店舗一覧の行操作には混ぜない — 緊急口を日常操作面から分離する。
  */
 export default function EmergencyElevationsPage() {
   const list = useCursorList(cursor => emergencyElevationApi.list({ cursor }));
