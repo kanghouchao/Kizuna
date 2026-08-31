@@ -250,3 +250,14 @@ databaseChangeLog:
             columns:
               - column:
                   name: target_store_id
+        # 撤回時の「同じ発動者のまだ有効な発動」の読み口。表は追記型で増え続けるため走査に載せない。
+        - createIndex:
+            indexName: idx_t_emergency_elevations_activator_live
+            tableName: t_emergency_elevations
+            columns:
+              - column:
+                  name: activated_by
+              - column:
+                  name: status
+              - column:
+                  name: expires_at
