@@ -5,6 +5,7 @@
 |Spring components
 |_Repositories_
 
+* `c.k.u.domain.EmergencyElevationRepository`
 * `c.k.u.domain.PermissionRepository`
 * `c.k.u.domain.PlatformUserRepository`
 * `c.k.u.domain.RoleRepository`
@@ -12,7 +13,8 @@
 |* `c.k.s.storescope.StoreExistenceCheck` (in Shared)
 * `c.k.s.storescope.StoreContext` (in Shared)
 |Aggregate roots
-|* `c.k.u.domain.Permission`
+|* `c.k.u.domain.EmergencyElevation`
+* `c.k.u.domain.Permission`
 * `c.k.u.domain.PlatformUser`
 * `c.k.u.domain.Role`
 |===
