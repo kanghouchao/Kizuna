@@ -144,6 +144,11 @@ public class PlatformUser extends BaseEntity {
     this.enabled = true;
   }
 
+  /** 発行済みセッションを失効させる（版を 1 つ進める）。本人属性も授権も変えない、失効そのものが目的の操作に使う。 */
+  public void invalidateSessions() {
+    this.credentialVersion++;
+  }
+
   /** 表示名を更新する（自己プロフィール更新用。不変条件なし）。 */
   public void updateDisplayName(String displayName) {
     this.displayName = displayName;

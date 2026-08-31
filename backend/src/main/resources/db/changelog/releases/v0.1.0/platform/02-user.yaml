@@ -129,3 +129,119 @@ databaseChangeLog:
             referencedTableName: t_stores
             referencedColumnNames: id
             onDelete: CASCADE
+
+  - changeSet:
+      id: platform-v0100-002-emergency-elevation-schema
+      author: kanghouchao
+      # 緊急昇格 1 回分の記録。1 回の発動につき 1 行の追記型で、再発動は新しい行になる
+      # （行の書き換えも削除もしない）。担当店舗集合を迂回して店舗のデータへ届く唯一の経路なので、
+      # 誰が・どの店舗へ・いつ・なぜ届いたかを後から復元できることが記録の存在理由である。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_emergency_elevations
+            remarks: 緊急昇格の発動 1 回分の記録（追記型。再発動は新しい行）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_emergency_elevations
+              - column:
+                  name: activated_by
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 昇格を発動した操作者
+              - column:
+                  # 行分離の作用域ではなく昇格の宛先。列名が store_id でないのはその宣言でもある
+                  # （店舗行分離機構に載る表ではない）。
+                  name: target_store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 昇格が及ぶ唯一の店舗
+              - column:
+                  # 迂回の根拠そのものなので必須（分類軸ではないため enum 化しない）。
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+                  remarks: 発動の理由（必須）
+              - column:
+                  # 監査の復元はこの 2 列を基準にする。created_at は行の書き込み時刻でしかなく、
+                  # 昇格が効いていた区間の正本にはできない。
+                  name: activated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 発動した日時
+              - column:
+                  name: expires_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 昇格の期限（発動から 60 分）
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 記録の状態（ACTIVE=有効 / REVOKED=撤回済み）
+              - column:
+                  name: revoked_by
+                  type: BIGINT
+                  remarks: 撤回を実行した操作者（撤回時は必須。有効な記録では NULL）
+              - column:
+                  name: revoked_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 撤回した日時
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # 操作者は停止しても行が消えないため、削除を拒む NO ACTION で足りる。SET NULL に倒すと
+        # 「誰が迂回したか」を欠いた記録が残り、監査の目的そのものが失われる。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_emergency_elevations_activated_by
+            baseTableName: t_emergency_elevations
+            baseColumnNames: activated_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_emergency_elevations_revoked_by
+            baseTableName: t_emergency_elevations
+            baseColumnNames: revoked_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        # 店舗削除は準備中の誤登録の撤回としてしか起きない。誤登録された店舗への昇格記録は
+        # 監査対象の実履歴ではなく雑音なので、店舗に従わせる。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_emergency_elevations_store
+            baseTableName: t_emergency_elevations
+            baseColumnNames: target_store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
