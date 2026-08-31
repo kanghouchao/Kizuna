@@ -81,11 +81,8 @@ public class PlatformAuthService {
   }
 
   /**
-   * 緊急昇格中の身分に対してトークンを発行する。基底の claim は通常発行と同一の組み立てを通し、 昇格が変える点だけを上書きする。
-   *
-   * <p>期限は記録の {@code expiresAt} をそのまま渡す。トークンと記録で別々に「今から 60 分」を数えると 両者がずれ、監査で復元した区間と実際に効いていた区間が食い違う。
-   *
-   * <p>資格情報の版は本人の現在値のまま据え置く（ADR 0022）。昇格トークンも通常のセッションと同じ 失効機構に載り、撤回で版が進めば同時に効力を失う。
+   * 緊急昇格中の身分に対してトークンを発行する。基底の claim は通常発行と同一の組み立てを通し、昇格が変える点だけを 上書きする。期限は記録の {@code expiresAt}
+   * をそのまま渡す — 別々に 60 分を数えると監査で復元した区間と実効区間が 食い違う。資格情報の版は現在値のまま据え置き、撤回で版が進めば昇格トークンも同時に失効する（ADR 0022）。
    */
   @Transactional(readOnly = true)
   public Token issueElevatedTokenFor(PlatformUser user, EmergencyElevation elevation) {
