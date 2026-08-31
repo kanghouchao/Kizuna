@@ -234,12 +234,12 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: NO ACTION
-        # 店舗削除は準備中の誤登録の撤回としてしか起きない。誤登録された店舗への昇格記録は
-        # 監査対象の実履歴ではなく雑音なので、店舗に従わせる。
+        # 発動記録は監査の正本であり、誤登録の撤回（店舗削除）にも従わせない。拒否は
+        # DbConstraint 写像が業務例外へ落とす（NO ACTION なので制約名が報告される）。
         - addForeignKeyConstraint:
             constraintName: fk_t_emergency_elevations_store
             baseTableName: t_emergency_elevations
             baseColumnNames: target_store_id
             referencedTableName: t_stores
             referencedColumnNames: id
-            onDelete: CASCADE
+            onDelete: NO ACTION

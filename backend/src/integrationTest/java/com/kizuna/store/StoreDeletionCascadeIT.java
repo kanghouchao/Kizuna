@@ -8,11 +8,14 @@ import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.domain.EmergencyElevation;
+import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -38,8 +41,9 @@ import tools.jackson.databind.JsonNode;
  * <p>消せるのは、まだ開店しておらず確定した記録も持たない店舗だけ。消せる場合は店舗授権行（platform_user_stores）まで ON DELETE CASCADE
  * で従い、ユーザー本体は残る（授権集合が空になるだけの fail-closed）。
  *
- * <p>消せない場合の断りは 2 種類で、稼働中そのものと、確定した記録の存在（完了済み受注またはポイント仕訳の帰属）である。 記録による拒否はアプリケーション層でしか成立しない — 台帳の
- * originating_store_id は SET NULL のままで、DB は店舗の削除を 止めず帰属だけを外すため、止める場所はここしかない。
+ * <p>消せない場合の断りは 3 種類 — 稼働中そのもの、確定した記録の存在（完了済み受注またはポイント仕訳の帰属）、
+ * 緊急昇格の発動記録の存在である。記録による拒否はアプリケーション層でしか成立しない — 台帳の originating_store_id は SET NULL のままで、DB
+ * は店舗の削除を止めず帰属だけを外す。発動記録は逆に外部キー （NO ACTION）自体が止め、違反が業務例外へ写る。
  *
  * <p>様式は {@link SeedSequenceAlignmentIT}（HQ 管理者の平台ログイン + JdbcTemplate による実 DB 断言）に倣う。使い捨て tmpfs DB
  * のためシード store 1 は決して削除せず、第二店舗を直挿して検証する。
@@ -56,6 +60,7 @@ class StoreDeletionCascadeIT {
   @Autowired private RoleRepository roleRepository;
   @Autowired private PointEntryRepository pointEntryRepository;
   @Autowired private MemberRepository memberRepository;
+  @Autowired private EmergencyElevationRepository emergencyElevationRepository;
 
   private String platformLogin() {
     HttpHeaders headers = new HttpHeaders();
@@ -253,6 +258,34 @@ class StoreDeletionCascadeIT {
     assertThat(res.getBody().path("error").asString()).isEqualTo("当日実績が記録されている店舗は削除できません");
     assertThat(countAttendances(storeId)).as("実績行は残存すること").isEqualTo(1L);
     assertThat(countStore(storeId)).as("拒否された店舗は残存すること").isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("緊急昇格の発動記録を持つ店舗は準備中でも削除できず、記録が残ること")
+  void storeWithEmergencyElevationCannotBeDeleted() {
+    // 発動記録は監査の正本で、誤登録の撤回（店舗削除）にも従わせない。止めるのはアプリケーション層の
+    // 照会ではなく外部キー（NO ACTION）で、その違反が業務例外へ写ることをここで固定する。
+    Store store = freshStore("昇格記録あり検証店舗", "elevation-store-delete-it");
+    long storeId = store.getId();
+    Long adminId =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM t_users WHERE email = 'admin@kizuna.test'", Long.class);
+    long elevationId =
+        emergencyElevationRepository
+            .save(EmergencyElevation.activate(adminId, storeId, "店舗削除拒否の検証", OffsetDateTime.now()))
+            .getId();
+
+    ResponseEntity<JsonNode> res = deleteStore(storeId);
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("緊急昇格の記録が存在する店舗は削除できません");
+    assertThat(countStore(storeId)).as("拒否された店舗は残存すること").isEqualTo(1L);
+    assertThat(countEmergencyElevation(elevationId)).as("発動記録は残存すること").isEqualTo(1L);
+  }
+
+  private long countEmergencyElevation(long elevationId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM t_emergency_elevations WHERE id = ?", Long.class, elevationId);
   }
 
   private void insertAttendance(long storeId, String castId) {
