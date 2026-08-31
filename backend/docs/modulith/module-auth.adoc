@@ -3,7 +3,8 @@
 |Base package
 |`com.kizuna.auth`
 |Bean references
-|* `c.k.u.domain.PlatformUserRepository` (in User)
+|* `c.k.u.domain.EmergencyElevationRepository` (in User)
+* `c.k.u.domain.PlatformUserRepository` (in User)
 * `c.k.m.application.MemberRegistrationService` (in Member)
 * `c.k.u.domain.RoleRepository` (in User)
 * `c.k.u.domain.PermissionRepository` (in User)
