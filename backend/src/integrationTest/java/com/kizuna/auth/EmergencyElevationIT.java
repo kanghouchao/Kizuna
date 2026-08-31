@@ -70,6 +70,7 @@ class EmergencyElevationIT {
   private static final String OVERLAP_EMAIL = "elevation-overlap@kizuna.test";
   private static final String CROSS_ACTIVATOR_EMAIL = "elevation-cross-activator@kizuna.test";
   private static final String CROSS_REVOKER_EMAIL = "elevation-cross-revoker@kizuna.test";
+  private static final String LIST_EMAIL = "elevation-list@kizuna.test";
 
   private static final List<String> ALL_EMAILS =
       List.of(
@@ -79,7 +80,8 @@ class EmergencyElevationIT {
           REACTIVATE_EMAIL,
           OVERLAP_EMAIL,
           CROSS_ACTIVATOR_EMAIL,
-          CROSS_REVOKER_EMAIL);
+          CROSS_REVOKER_EMAIL,
+          LIST_EMAIL);
 
   private static final String CREDENTIAL_VERSION_KEY_PREFIX = "credential-version:";
 
@@ -485,6 +487,75 @@ class EmergencyElevationIT {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(errorOf(res.getBody())).isEqualTo(MISSING_STORE_MESSAGE);
     assertThat(elevationCountOf(holder.getId())).as("外部キー違反の行が残らないこと").isEqualTo(before);
+  }
+
+  /** 履歴一覧。全記録が並ぶ読み口なので、行の特定は並び位置ではなく id で行う（他 IT の行が混ざる）。 */
+  private ResponseEntity<JsonNode> listElevations(String token) {
+    return rest.exchange(
+        "/platform/emergency-elevations?size=500",
+        HttpMethod.GET,
+        new HttpEntity<>(bearer(token)),
+        JsonNode.class);
+  }
+
+  private static JsonNode rowOf(JsonNode body, long elevationId) {
+    for (JsonNode row : body.path("content")) {
+      if (row.path("id").asLong() == elevationId) {
+        return row;
+      }
+    }
+    throw new AssertionError("履歴一覧に id=" + elevationId + " の行が見つかりません");
+  }
+
+  @Test
+  @DisplayName("EMERGENCY_ELEVATE を持たない者の履歴一覧は 403 になること")
+  void listWithoutPermissionIsForbidden() {
+    ensureUser(NON_HOLDER_EMAIL, STORE_STAFF_ROLE, StoreScopeType.SPECIFIC_STORES, Set.of(STORE_A));
+
+    assertThat(listElevations(login(NON_HOLDER_EMAIL)).getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  @DisplayName("履歴一覧が発動者・店舗・理由・時刻と読み時点の実効状態を返し、トークンの生値を含まないこと")
+  void listShowsAuditFieldsWithEffectiveStatus() {
+    PlatformUser holder = ensureHolder(LIST_EMAIL);
+    String token = login(LIST_EMAIL);
+    ResponseEntity<JsonNode> activation = activate(token, STORE_A, "履歴確認の発動");
+    assertThat(activation.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    long activeId = activation.getBody().path("id").asLong();
+    // 自然失効の行（ACTIVE のまま期限切れ）は読み口が EXPIRED へ導出する対照として直挿する。
+    long expiredId =
+        elevationRepository
+            .save(
+                EmergencyElevation.activate(
+                    holder.getId(), STORE_B, "自然失効済みの発動", OffsetDateTime.now().minusHours(2)))
+            .getId();
+
+    ResponseEntity<JsonNode> res = listElevations(token);
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    JsonNode activeRow = rowOf(res.getBody(), activeId);
+    assertThat(activeRow.path("activated_by_name").asString()).isEqualTo("緊急昇格IT " + LIST_EMAIL);
+    assertThat(activeRow.path("store_name").asString()).isEqualTo("Sample Tenant");
+    assertThat(activeRow.path("reason").asString()).isEqualTo("履歴確認の発動");
+    assertThat(activeRow.path("status").asString()).isEqualTo("ACTIVE");
+    assertThat(activeRow.path("activated_at").isMissingNode()).isFalse();
+    assertThat(activeRow.path("expires_at").isMissingNode()).isFalse();
+    // 直列化は non_null 既定なので、未撤回の行に撤回欄はキーごと現れない。
+    assertThat(activeRow.has("revoked_by_name")).isFalse();
+    assertThat(activeRow.has("token")).as("トークンの生値は発動応答にしか現れないこと").isFalse();
+
+    assertThat(rowOf(res.getBody(), expiredId).path("status").asString())
+        .as("期限切れの ACTIVE 行は読み時点で EXPIRED へ導出されること")
+        .isEqualTo("EXPIRED");
+
+    // 撤回後は状態と撤回者が一覧へ反映される。撤回は発動者の全セッションを失効させるため、読み直しは再ログインで行う。
+    assertThat(revoke(token, activeId).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    JsonNode revokedRow = rowOf(listElevations(login(LIST_EMAIL)).getBody(), activeId);
+    assertThat(revokedRow.path("status").asString()).isEqualTo("REVOKED");
+    assertThat(revokedRow.path("revoked_by_name").asString()).isEqualTo("緊急昇格IT " + LIST_EMAIL);
+    assertThat(revokedRow.path("revoked_at").isMissingNode()).isFalse();
   }
 
   @Test
