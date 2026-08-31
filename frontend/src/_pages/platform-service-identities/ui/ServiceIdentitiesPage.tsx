@@ -141,16 +141,20 @@ export default function ServiceIdentitiesPage() {
     void list.reload();
     const target = editingIdentity;
     if (!target) return;
+    // この取り直しも同じ世代に属する。閉じて開き直した後に届く古い応答が、開き直しで
+    // 取った新しい版を戻すと、次の保存が避けられたはずの 409 になる。
+    const requestId = editRequestIdRef.current;
     void serviceIdentityApi
       .get(target.id ?? 0)
       // 成功保存の直後は onClose と競合するため、まだ同じ対象を開いているときだけ差し替える
-      .then(fresh =>
+      .then(fresh => {
+        if (requestId !== editRequestIdRef.current) return;
         setModal(current =>
           current.kind === 'edit' && current.identity.id === fresh.id
             ? { kind: 'edit', identity: fresh }
             : current
-        )
-      )
+        );
+      })
       .catch(() => {
         // 取り直せないときは古い値のまま。利用者は閉じて一覧から確認できる
       });

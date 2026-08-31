@@ -26,10 +26,11 @@ public class ServiceIdentityCreateRequest {
   private String displayName;
 
   @NotEmpty(message = "role_ids is required")
-  private Set<Long> roleIds;
+  private Set<@NotNull(message = "role_ids must not contain null") Long> roleIds;
 
   @NotNull(message = "store_scope_type is required")
   private StoreScopeType storeScopeType;
 
-  private Set<Long> storeIds;
+  // null 要素は永続化時に黙って捨てられ、非空検証を通ったのに店舗ゼロの行が残るため要素単位で拒む。
+  private Set<@NotNull(message = "store_ids must not contain null") Long> storeIds;
 }

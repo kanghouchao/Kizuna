@@ -16,6 +16,8 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -271,6 +273,44 @@ class ServiceIdentityManagementIT extends CrossStoreTestSupport {
                     "version",
                     version),
                 bearerJson(hq)),
+            String.class);
+    assertThat(rejectedUpdate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  // null 要素は @ElementCollection の永続化で黙って捨てられ、非空検証を通ったのに
+  // 店舗ゼロの行が残る抜け道になるため、要素単位の検証で入口から拒む。
+  @Test
+  @DisplayName("store_ids の null 要素を含む作成・授権変更は 400 で拒絶されること")
+  void nullStoreIdElementIsRejected() {
+    String hq = login(SEED_EMAIL);
+
+    Map<String, Object> createBody = new HashMap<>();
+    createBody.put("display_name", CANARY + "null-store");
+    createBody.put("role_ids", Set.of(customRoleId));
+    createBody.put("store_scope_type", "SPECIFIC_STORES");
+    createBody.put("store_ids", Collections.singletonList(null));
+    ResponseEntity<String> rejectedCreate =
+        rest.postForEntity(
+            "/platform/service-identities",
+            new HttpEntity<>(createBody, bearerJson(hq)),
+            String.class);
+    assertThat(rejectedCreate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    long id =
+        create(hq, CANARY + "null-store-update", Set.of(customRoleId))
+            .getBody()
+            .path("id")
+            .asLong();
+    Map<String, Object> updateBody = new HashMap<>();
+    updateBody.put("role_ids", Set.of(customRoleId));
+    updateBody.put("store_scope_type", "SPECIFIC_STORES");
+    updateBody.put("store_ids", Collections.singletonList(null));
+    updateBody.put("version", 0L);
+    ResponseEntity<String> rejectedUpdate =
+        rest.exchange(
+            "/platform/service-identities/" + id,
+            HttpMethod.PUT,
+            new HttpEntity<>(updateBody, bearerJson(hq)),
             String.class);
     assertThat(rejectedUpdate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }

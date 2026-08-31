@@ -36,8 +36,21 @@ jest.mock('@/features/staff-management', () => ({
           .map(store => store.name)
           .join('・') || '未選択',
   ServiceIdentityCreateModal: () => <div>作成モーダル</div>,
-  ServiceIdentityEditModal: ({ identity }: { identity: ServiceIdentityResponse }) => (
-    <div>編集モーダル: {identity.display_name}</div>
+  ServiceIdentityEditModal: ({
+    identity,
+    onClose,
+    onUpdated,
+  }: {
+    identity: ServiceIdentityResponse;
+    onClose: () => void;
+    onUpdated: () => void;
+  }) => (
+    <div>
+      <span>編集モーダル: {identity.display_name}</span>
+      <span>版{identity.version}</span>
+      <button onClick={onUpdated}>更新通知</button>
+      <button onClick={onClose}>編集を閉じる</button>
+    </div>
   ),
 }));
 
@@ -189,6 +202,38 @@ describe('サービスID管理ページ', () => {
 
     expect(screen.getByText('編集モーダル: 外部連携')).toBeInTheDocument();
     expect(screen.queryByText('編集モーダル: 夜間バッチ')).not.toBeInTheDocument();
+  });
+
+  // 409 後の取り直しも世代守衛に属する。閉じて開き直した後に届く古い応答が新しい版を
+  // 戻すと、次の保存が避けられたはずの 409 になる
+  it('開き直した後に届いた競合時の古い取り直し応答で、新しい版を戻さないこと', async () => {
+    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
+    const slow = new Promise<ServiceIdentityResponse>(resolve => {
+      resolveSlow = resolve;
+    });
+    mockedApi.get
+      .mockResolvedValueOnce(detail({ id: 1, version: 1 }))
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce(detail({ id: 1, version: 2 }));
+    render(<ServiceIdentitiesPage />);
+    await screen.findByText('夜間バッチ');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
+    expect(await screen.findByText('版1')).toBeInTheDocument();
+
+    // 更新通知（409 側の取り直し）が未着のまま、閉じて同じ対象を開き直す。
+    // 更新通知は一覧も取り直すため、行が描き直されるのを待ってから押す。
+    fireEvent.click(screen.getByRole('button', { name: '更新通知' }));
+    fireEvent.click(screen.getByRole('button', { name: '編集を閉じる' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: '編集' }))[0]);
+    expect(await screen.findByText('版2')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSlow(detail({ id: 1, version: 1 }));
+    });
+
+    expect(screen.getByText('版2')).toBeInTheDocument();
+    expect(screen.queryByText('版1')).not.toBeInTheDocument();
   });
 
   // 未着の編集詳細が後から届いて作成フローを乗っ取ると、作成のつもりの画面が別対象の編集に化ける
