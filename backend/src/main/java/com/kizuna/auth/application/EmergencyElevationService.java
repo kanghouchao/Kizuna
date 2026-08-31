@@ -80,11 +80,12 @@ public class EmergencyElevationService {
 
     // 版の増分は発動者の昇格トークンを全て失効させる。まだ有効な他の発動記録を開けたまま残すと
     // 監査の復元区間が実際に効いていた区間より長くなるため、道連れになる記録も同時に閉じる。
-    // 期限切れの記録は自然失効で完結しており触れない。
+    // 期限切れの記録は自然失効で完結しており、問い合わせの述語が最初から除外する。
     elevationRepository
-        .findByActivatedByAndStatus(elevation.getActivatedBy(), EmergencyElevationStatus.ACTIVE)
+        .findByActivatedByAndStatusAndExpiresAtAfter(
+            elevation.getActivatedBy(), EmergencyElevationStatus.ACTIVE, at)
         .stream()
-        .filter(s -> !s.getId().equals(elevationId) && at.isBefore(s.getExpiresAt()))
+        .filter(s -> !s.getId().equals(elevationId))
         .forEach(
             s -> {
               s.revoke(revoker.getId(), at);
