@@ -190,4 +190,26 @@ describe('サービスID管理ページ', () => {
     expect(screen.getByText('編集モーダル: 外部連携')).toBeInTheDocument();
     expect(screen.queryByText('編集モーダル: 夜間バッチ')).not.toBeInTheDocument();
   });
+
+  // 未着の編集詳細が後から届いて作成フローを乗っ取ると、作成のつもりの画面が別対象の編集に化ける
+  it('編集詳細が未着のまま作成を開くと、遅れて届いた応答を棄てて作成モーダルだけを表示すること', async () => {
+    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
+    const slow = new Promise<ServiceIdentityResponse>(resolve => {
+      resolveSlow = resolve;
+    });
+    mockedApi.get.mockReturnValue(slow);
+    render(<ServiceIdentitiesPage />);
+    await screen.findByText('夜間バッチ');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'サービスIDを追加' }));
+    expect(screen.getByText('作成モーダル')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSlow(detail({ id: 1, version: 9 }));
+    });
+
+    expect(screen.getByText('作成モーダル')).toBeInTheDocument();
+    expect(screen.queryByText('編集モーダル: 夜間バッチ')).not.toBeInTheDocument();
+  });
 });

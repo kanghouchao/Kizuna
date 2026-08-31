@@ -55,33 +55,43 @@ export default function ServiceIdentitiesPage() {
     refetch: refetchStores,
   } = useManagedList<PlatformStore>(() => platformAuthApi.stores());
 
-  const [createOpen, setCreateOpen] = useState(false);
-  // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
-  // 対象がそのページから外れた瞬間にモーダルが黙って閉じてしまう。
-  // 一覧の要約は version を持たないため、編集は詳細を取り直してから始める。
-  const [editingIdentity, setEditingIdentity] = useState<ServiceIdentityResponse | null>(null);
+  // モーダルは単一の状態で持ち、作成と編集が同時に開く形を構造的に排除する。編集対象を
+  // 一覧から導出しないのは、409 の再取得で対象が現在ページから外れた瞬間にモーダルが
+  // 黙って閉じるため。一覧の要約は version を持たないため、編集は詳細を取り直してから始める。
+  const [modal, setModal] = useState<
+    { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; identity: ServiceIdentityResponse }
+  >({ kind: 'none' });
+  const editingIdentity = modal.kind === 'edit' ? modal.identity : null;
 
-  // 詳細の取り直しは最新のクリックだけを採る世代守衛を通す。別の行を続けて押したとき、
-  // 遅い方の応答が後から届いて選び直した対象を上書きすると、別人の授権を編集する形になる。
+  // 詳細の取り直しは最新の操作だけを採る世代守衛を通す。別の行を続けて押したとき、遅い方の
+  // 応答が後から届いて選び直した対象を上書きすると、別のサービスIDの授権を編集する形になる。
+  // 作成モーダルを開く操作も世代を進め、未着の編集詳細が作成フローを乗っ取らないようにする。
   const editRequestIdRef = useRef(0);
+
+  const openCreate = () => {
+    editRequestIdRef.current++;
+    setModal({ kind: 'create' });
+  };
 
   const openEdit = async (identity: ServiceIdentitySummaryResponse) => {
     const requestId = ++editRequestIdRef.current;
     try {
       const fresh = await serviceIdentityApi.get(identity.id ?? 0);
       if (requestId !== editRequestIdRef.current) return;
-      setEditingIdentity(fresh);
+      setModal({ kind: 'edit', identity: fresh });
     } catch (error) {
       if (requestId !== editRequestIdRef.current) return;
       notify.error(getApiErrorMessage(error, 'サービスIDの取得に失敗しました'));
     }
   };
 
+  const closeModal = () => setModal({ kind: 'none' });
+
   // モーダルを開くたびに店舗目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
   // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
   // 確定する時序では、settle 後の失敗を検知して 1 回だけ取り直す（失敗が続く環境で無限に
   // 叩かない — それ以降の回復は StoreSetPicker の再試行導線が担う）。
-  const modalOpen = createOpen || editingIdentity !== null;
+  const modalOpen = modal.kind !== 'none';
   const prevModalOpenRef = useRef(false);
   const storesRetriedRef = useRef(false);
   useEffect(() => {
@@ -134,7 +144,13 @@ export default function ServiceIdentitiesPage() {
     void serviceIdentityApi
       .get(target.id ?? 0)
       // 成功保存の直後は onClose と競合するため、まだ同じ対象を開いているときだけ差し替える
-      .then(fresh => setEditingIdentity(current => (current?.id === fresh.id ? fresh : current)))
+      .then(fresh =>
+        setModal(current =>
+          current.kind === 'edit' && current.identity.id === fresh.id
+            ? { kind: 'edit', identity: fresh }
+            : current
+        )
+      )
       .catch(() => {
         // 取り直せないときは古い値のまま。利用者は閉じて一覧から確認できる
       });
@@ -146,7 +162,7 @@ export default function ServiceIdentitiesPage() {
         title="サービスID管理"
         description="定期処理・外部連携が使うサービスIDのロール・対象店舗を管理します。"
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={openCreate}>
             <PlusIcon />
             サービスIDを追加
           </Button>
@@ -276,24 +292,24 @@ export default function ServiceIdentitiesPage() {
 
       {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
           開くまで mount しないことで、ロール目録の取得を必要になった時点まで遅延させる */}
-      {createOpen && (
+      {modal.kind === 'create' && (
         <ServiceIdentityCreateModal
           stores={stores}
           storesLoading={storesLoading}
           storesFailed={storesFailed}
           onReloadStores={() => void refetchStores()}
-          onClose={() => setCreateOpen(false)}
+          onClose={closeModal}
           onCreated={list.reload}
         />
       )}
-      {editingIdentity !== null && (
+      {modal.kind === 'edit' && (
         <ServiceIdentityEditModal
-          identity={editingIdentity}
+          identity={modal.identity}
           stores={stores}
           storesLoading={storesLoading}
           storesFailed={storesFailed}
           onReloadStores={() => void refetchStores()}
-          onClose={() => setEditingIdentity(null)}
+          onClose={closeModal}
           onUpdated={handleEditUpdated}
         />
       )}

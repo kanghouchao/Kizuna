@@ -70,6 +70,9 @@ public enum PermissionCode {
    *
    * <p>作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさない {@link #STAFF_ACCOUNT_MANAGE} とは別の権限で仕切る。
    * 対話ログインできず全店バッチにもなりうる主体を、人のアカウントと別の鍵で管理する（ADR 0025）。
+   *
+   * <p>全店舗の作用域を<b>前提とする</b> — 店舗集合の選択肢は行使者自身の授権店舗一覧から引くため、担当を絞った
+   * 自作ロールでは既存サービスIDの対象範囲を部分的にしか表示・編集できない（{@link #BENEFIT_MANAGE} と同じ、 機構では強制しない付与時の約束）。
    */
   SERVICE_ID_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
