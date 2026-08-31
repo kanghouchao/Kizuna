@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * サービスID（本人種別 SERVICE）を本物の PostgreSQL で固定する統合テスト。
@@ -97,17 +98,46 @@ class ServiceIdentityIT {
             });
   }
 
+  @Test
+  @Transactional
+  @DisplayName("SERVICE は有効なロール保持者の母集団に数えられない（最後の管理者守衛はログインできる STAFF だけを数える）")
+  void serviceIdentityIsExcludedFromEnabledRoleHolderPopulation() {
+    Role role = saveCustomRole("守衛母集団");
+    platformUserRepository.saveAndFlush(serviceIdentityWith("母集団検査", role));
+    PlatformUser staff =
+        platformUserRepository.saveAndFlush(
+            PlatformUser.builder()
+                .email(unique("svc-it-staff") + "@kizuna.test")
+                .password(passwordEncoder.encode("pass"))
+                .displayName("サービスIT 職員")
+                .enabled(true)
+                .userType(UserType.STAFF)
+                .roleIds(Set.of(role.getId()))
+                .storeScopeType(StoreScopeType.ALL_STORES)
+                .storeIds(Set.of())
+                .build());
+
+    assertThat(platformUserRepository.findEnabledRoleHolderIds(Set.of(role.getId())))
+        .containsExactly(staff.getId());
+    assertThat(platformUserRepository.lockEnabledRoleHolderIds(Set.of(role.getId())))
+        .containsExactly(staff.getId());
+  }
+
   /** 用途ごとの自作ロールを 1 つ持つ SERVICE 行を作る（平台既定ロールは授与しない）。 */
   private PlatformUser saveServiceIdentity(String displayName) {
     return platformUserRepository.saveAndFlush(
-        PlatformUser.builder()
-            .displayName(displayName)
-            .enabled(true)
-            .userType(UserType.SERVICE)
-            .roleIds(Set.of(saveCustomRole(displayName).getId()))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
-            .build());
+        serviceIdentityWith(displayName, saveCustomRole(displayName)));
+  }
+
+  private static PlatformUser serviceIdentityWith(String displayName, Role role) {
+    return PlatformUser.builder()
+        .displayName(displayName)
+        .enabled(true)
+        .userType(UserType.SERVICE)
+        .roleIds(Set.of(role.getId()))
+        .storeScopeType(StoreScopeType.ALL_STORES)
+        .storeIds(Set.of())
+        .build();
   }
 
   private Role saveCustomRole(String label) {
