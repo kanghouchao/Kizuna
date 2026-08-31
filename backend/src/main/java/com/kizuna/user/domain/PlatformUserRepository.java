@@ -78,10 +78,13 @@ public interface PlatformUserRepository
    *
    * <p>母集団の全行を押さえるのは、計数だけでは最後の 2 人が同時に相互降級したとき双方が検査を通り 0 になるため（ADR 0020）。id
    * 昇順は獲得順序を揃えて待ちを環にしない。実体でなく id を返すのは、実体で受けるとロックの獲得が版の照合を伴い、 書きもしない他人の行の版が進んだだけで授権の更新が 409 に落ちるため。
+   *
+   * <p>母集団はログインして管理面を行使できる STAFF に限る。SERVICE もロールを持つが対話ログインできず、 最後の管理権限保持者としては数えられない。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select u.id from PlatformUser u where u.enabled = true"
+          + " and u.userType = com.kizuna.user.domain.UserType.STAFF"
           + " and exists (select 1 from PlatformUser h join h.roleIds rid"
           + " where h.id = u.id and rid in :roleIds)"
           + " order by u.id")
@@ -90,6 +93,7 @@ public interface PlatformUserRepository
   /** 同じ母集団を押さえずに読む。{@link #lockEnabledRoleHolderIds} の後に呼ぶと、新しいスナップショットで実際の顔ぶれが返る。 */
   @Query(
       "select u.id from PlatformUser u where u.enabled = true"
+          + " and u.userType = com.kizuna.user.domain.UserType.STAFF"
           + " and exists (select 1 from PlatformUser h join h.roleIds rid"
           + " where h.id = u.id and rid in :roleIds)")
   List<Long> findEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);
