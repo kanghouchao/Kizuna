@@ -67,6 +67,7 @@ class EmergencyElevationIT {
   private static final String NON_HOLDER_EMAIL = "elevation-nonholder@kizuna.test";
   private static final String REVOKE_EMAIL = "elevation-revoke@kizuna.test";
   private static final String REACTIVATE_EMAIL = "elevation-reactivate@kizuna.test";
+  private static final String OVERLAP_EMAIL = "elevation-overlap@kizuna.test";
   private static final String CROSS_ACTIVATOR_EMAIL = "elevation-cross-activator@kizuna.test";
   private static final String CROSS_REVOKER_EMAIL = "elevation-cross-revoker@kizuna.test";
 
@@ -76,6 +77,7 @@ class EmergencyElevationIT {
           NON_HOLDER_EMAIL,
           REVOKE_EMAIL,
           REACTIVATE_EMAIL,
+          OVERLAP_EMAIL,
           CROSS_ACTIVATOR_EMAIL,
           CROSS_REVOKER_EMAIL);
 
@@ -407,6 +409,38 @@ class EmergencyElevationIT {
     assertThat(errorOf(second.getBody()))
         .as("400 の出所がドメインの守衛であること")
         .isEqualTo(NOT_REVOCABLE_MESSAGE);
+  }
+
+  @Test
+  @DisplayName("撤回は同じ発動者のまだ有効な他の昇格も同時に閉じ、期限切れの記録には触れないこと")
+  void revocationClosesActivatorsOtherLiveElevations() {
+    PlatformUser holder = ensureHolder(OVERLAP_EMAIL);
+    String token = login(OVERLAP_EMAIL);
+    ResponseEntity<JsonNode> first = activate(token, STORE_A, "重ね発動の一度目");
+    ResponseEntity<JsonNode> second = activate(token, STORE_B, "重ね発動の二度目");
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    long firstId = first.getBody().path("id").asLong();
+    long secondId = second.getBody().path("id").asLong();
+    // 期限切れでも ACTIVE のままの行（自然失効）は道連れにならない対照として直挿する。
+    long expiredId =
+        elevationRepository
+            .save(
+                EmergencyElevation.activate(
+                    holder.getId(), STORE_A, "自然失効済みの発動", OffsetDateTime.now().minusHours(2)))
+            .getId();
+
+    assertThat(revoke(token, firstId).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+    EmergencyElevation sibling = reload(secondId);
+    assertThat(sibling.getStatus())
+        .as("まだ有効な他の発動も同時に閉じること（版の増分がそのトークンも殺すため）")
+        .isEqualTo(EmergencyElevationStatus.REVOKED);
+    assertThat(sibling.getRevokedBy()).isEqualTo(holder.getId());
+    assertThat(sibling.getRevokedAt()).as("同じ撤回の一部であること").isEqualTo(reload(firstId).getRevokedAt());
+    assertThat(reload(expiredId).getStatus())
+        .as("期限切れの記録は自然失効のまま")
+        .isEqualTo(EmergencyElevationStatus.ACTIVE);
   }
 
   @Test

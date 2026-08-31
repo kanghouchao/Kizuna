@@ -23,6 +23,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
@@ -169,6 +170,34 @@ class EmergencyElevationServiceTest {
     verify(userRepository).save(activator);
     verify(eventPublisher)
         .publishEvent(new PlatformUserCredentialsChanged("activator@kizuna.test", 1L));
+  }
+
+  @Test
+  @DisplayName("撤回が同じ発動者のまだ有効な他の昇格も同時に閉じ、期限切れの記録には触れないこと")
+  void revokeAlsoClosesActivatorsOtherLiveElevations() {
+    PlatformUser activator = user("activator@kizuna.test", 7L);
+    PlatformUser revoker = user("revoker@kizuna.test", 8L);
+    EmergencyElevation target = elevationOf(99L, 7L);
+    EmergencyElevation live = elevationOf(100L, 7L);
+    EmergencyElevation expired =
+        EmergencyElevation.activate(7L, 3L, REASON, OffsetDateTime.now().minusHours(2));
+    expired.setId(101L);
+    when(elevationRepository.findById(99L)).thenReturn(Optional.of(target));
+    when(userRepository.findByEmail("revoker@kizuna.test")).thenReturn(Optional.of(revoker));
+    when(userRepository.findById(7L)).thenReturn(Optional.of(activator));
+    when(elevationRepository.findByActivatedByAndStatus(7L, EmergencyElevationStatus.ACTIVE))
+        .thenReturn(List.of(live, expired));
+
+    service.revoke(99L, "revoker@kizuna.test");
+
+    // 版の増分が live のトークンも殺すので、記録も同じ撤回者・同じ時刻で閉じる。
+    assertThat(live.getStatus()).isEqualTo(EmergencyElevationStatus.REVOKED);
+    assertThat(live.getRevokedBy()).isEqualTo(8L);
+    assertThat(live.getRevokedAt()).isEqualTo(target.getRevokedAt());
+    verify(elevationRepository).save(live);
+    // 期限切れの記録は自然失効で完結しており、撤回の道連れにしない。
+    assertThat(expired.getStatus()).isEqualTo(EmergencyElevationStatus.ACTIVE);
+    assertThat(activator.getCredentialVersion()).as("版の増分は 1 回だけ").isEqualTo(1L);
   }
 
   @Test
