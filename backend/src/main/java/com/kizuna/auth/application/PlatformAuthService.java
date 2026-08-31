@@ -6,14 +6,17 @@ import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -22,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -73,7 +77,35 @@ public class PlatformAuthService {
    */
   @Transactional(readOnly = true)
   public Token issueTokenFor(PlatformUser user) {
+    return jwtIssuer.issue(user.getEmail(), baseClaims(user, permissionsOf(user)));
+  }
+
+  /**
+   * 緊急昇格中の身分に対してトークンを発行する。基底の claim は通常発行と同一の組み立てを通し、 昇格が変える点だけを上書きする。
+   *
+   * <p>期限は記録の {@code expiresAt} をそのまま渡す。トークンと記録で別々に「今から 60 分」を数えると 両者がずれ、監査で復元した区間と実際に効いていた区間が食い違う。
+   *
+   * <p>資格情報の版は本人の現在値のまま据え置く（ADR 0022）。昇格トークンも通常のセッションと同じ 失効機構に載り、撤回で版が進めば同時に効力を失う。
+   */
+  @Transactional(readOnly = true)
+  public Token issueElevatedTokenFor(PlatformUser user, EmergencyElevation elevation) {
     Set<PermissionCode> permissions = permissionsOf(user);
+    Map<String, Object> claims = baseClaims(user, permissions);
+    claims.put("authorities", elevatedAuthorities(user, permissions));
+    claims.put("storeBridge", true);
+    claims.put("storeScopeType", StoreScopeType.SPECIFIC_STORES.name());
+    claims.put("storeIds", List.of(elevation.getTargetStoreId()));
+    // 昇格中の操作を発動記録へ結び付けるための錨。今は誰も検証しないが、この claim が無いと
+    // 昇格中に何をしたかを後から記録へ辿れない。
+    claims.put("elevationId", elevation.getId());
+    return jwtIssuer.issue(user.getEmail(), claims, elevation.getExpiresAt().toInstant());
+  }
+
+  /**
+   * 全ての発行経路が共有する claim の組み立て。ここが唯一の組み立て点であることが、認証手段や発行経路が 増えても claim
+   * の内容が食い違わないことの保証である（片方だけ権限が欠ける・過剰になる齟齬は静かに生まれる）。
+   */
+  private Map<String, Object> baseClaims(PlatformUser user, Set<PermissionCode> permissions) {
     Map<String, Object> claims = new HashMap<>();
     claims.put("authorities", buildAuthorities(user, permissions));
     claims.put("userType", user.getUserType().name());
@@ -85,7 +117,25 @@ public class PlatformAuthService {
     // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止で
     // 即時に不一致となる（ADR 0022）。
     claims.put("credentialVersion", user.getCredentialVersion());
-    return jwtIssuer.issue(user.getEmail(), claims);
+    return claims;
+  }
+
+  /**
+   * 昇格中の authorities。本人の通常の授権に、店舗コンソールの全権限を重ねる。
+   *
+   * <p>{@link PermissionCode#grantsStoreConsole()} では組まない。あれは入場資格の述語で標識権限 {@code STORE_MENU_VIEW}
+   * を除くため、それで組むと店舗コンソールのメニューが一行も出ない昇格になる。
+   */
+  private static List<String> elevatedAuthorities(
+      PlatformUser user, Set<PermissionCode> permissions) {
+    return Stream.concat(
+            buildAuthorities(user, permissions).stream(),
+            Arrays.stream(PermissionCode.values())
+                .filter(code -> code.getConsole() == PermissionCode.Console.STORE)
+                .map(PermissionCode::authority))
+        .distinct()
+        .sorted()
+        .toList();
   }
 
   /** me 応答を返す（GET /platform/me）。ユーザー不在は空を返し、HTTP 表現は呼び出し側が決める。 */

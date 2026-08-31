@@ -24,9 +24,18 @@ public class PlatformJwtIssuer {
   private final JwtEncoder jwtEncoder;
   private final AppProperties appProperties;
 
+  /** 大域既定の有効期間（{@code app.jwt.expiration}）で発行する。通常のログイン経路はこちらを使う。 */
   public Token issue(String subject, Map<String, Object> claims) {
+    return issue(subject, claims, Instant.now().plusMillis(appProperties.getJwtExpiration()));
+  }
+
+  /**
+   * 期限を明示して発行する。トークンの exp を発行元の記録が持つ期限と同一の値に揃えるための口で、 大域既定とは独立に短命なトークンを作る経路（緊急昇格）が使う。
+   *
+   * <p>大域既定を短くして代用はできない。{@code app.jwt.expiration} は資格情報の版キャッシュの TTL も兼ねる。
+   */
+  public Token issue(String subject, Map<String, Object> claims, Instant exp) {
     Instant now = Instant.now();
-    Instant exp = now.plusMillis(appProperties.getJwtExpiration());
     JwtClaimsSet claimsSet =
         JwtClaimsSet.builder()
             .issuer(ISSUER_PLATFORM)

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.shared.config.AppProperties;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import javax.crypto.SecretKey;
@@ -54,5 +55,23 @@ class PlatformJwtIssuerTest {
     assertThat(decoded.getClaimAsStringList("authorities")).containsExactly("PERM_TEST");
     // exp クレームは JWT 仕様上 秒精度（NumericDate）のため、Token DTO のミリ秒値を秒へ切り捨てて比較する。
     assertThat(decoded.getExpiresAt().getEpochSecond()).isEqualTo(token.expiresAt() / 1000);
+  }
+
+  @Test
+  void explicitExpiryOverridesGlobalDefault() {
+    AppProperties appProperties = new AppProperties();
+    AppProperties.Jwt jwt = new AppProperties.Jwt();
+    jwt.setSecret(SECRET);
+    jwt.setExpiration(3_600_000L);
+    appProperties.setJwt(jwt);
+
+    PlatformJwtIssuer issuer =
+        new PlatformJwtIssuer(new JwtEncoderConfig().jwtEncoder(appProperties), appProperties);
+    Instant exp = Instant.now().plusSeconds(60);
+
+    Token token = issuer.issue("user@kizuna.test", Map.of("userType", "STAFF"), exp);
+
+    // 大域既定（1 時間）ではなく渡した期限で発行される。秒への切り捨ては JWT 仕様側の丸めである。
+    assertThat(token.expiresAt()).isEqualTo(exp.toEpochMilli());
   }
 }
