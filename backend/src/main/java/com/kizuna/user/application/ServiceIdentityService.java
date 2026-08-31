@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -125,12 +126,12 @@ public class ServiceIdentityService {
   }
 
   /**
-   * 停止する。既に停止済みでも 204 で受理する（冪等）。スタッフ停止と異なり直列化点・失効イベント・自己停止検査を持たない —
+   * 停止する。既に停止済みでも 204 で受理する（冪等）。スタッフ停止と異なり権限目録の直列化点・失効イベント・自己停止検査を持たない —
    * サービスIDは対話ログインできず、失効させるセッションが無く、最後の管理権限保持者の母集団（ログインできる STAFF）にも入らない。
    */
   @Transactional
   public void suspend(Long id) {
-    PlatformUser user = requireServiceIdentity(id);
+    PlatformUser user = requireServiceIdentityForUpdate(id);
     if (user.getEnabled()) {
       user.stop();
       repository.saveAndFlush(user);
@@ -140,7 +141,7 @@ public class ServiceIdentityService {
   /** 再開する。既に有効でも 204 で受理する（冪等）。 */
   @Transactional
   public void resume(Long id) {
-    PlatformUser user = requireServiceIdentity(id);
+    PlatformUser user = requireServiceIdentityForUpdate(id);
     if (!user.getEnabled()) {
       user.resume();
       repository.saveAndFlush(user);
@@ -161,9 +162,19 @@ public class ServiceIdentityService {
 
   /** サービスID管理の対象行を取り出す。本人種別が SERVICE 以外の行は、存在しても対象外として「見つからない」に倒す — 人のアカウントの在否をこの面から列挙させない。 */
   private PlatformUser requireServiceIdentity(Long id) {
-    return repository
-        .findById(id)
-        .filter(user -> user.getUserType() == UserType.SERVICE)
+    return requireService(repository.findById(id), id);
+  }
+
+  /**
+   * 停止・再開用に行を押さえて取り出す。冪等 204 の約束を並行再送でも守るための行ロック — 素の読みだと両方が enabled を読んだ後に遅い側が版競合で 409
+   * に化ける。事前検査で実体を読まずに最初から押さえる（読み後の昇格は版照合を伴う）。
+   */
+  private PlatformUser requireServiceIdentityForUpdate(Long id) {
+    return requireService(repository.findByIdForUpdate(id), id);
+  }
+
+  private static PlatformUser requireService(Optional<PlatformUser> row, Long id) {
+    return row.filter(user -> user.getUserType() == UserType.SERVICE)
         .orElseThrow(() -> new NotFoundException("サービスIDが見つかりません: " + id));
   }
 
