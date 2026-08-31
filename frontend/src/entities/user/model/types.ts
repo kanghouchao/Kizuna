@@ -11,7 +11,8 @@ export interface LoginResponse {
   expires_at: number;
 }
 
-// 本人種別（バックエンド user/domain/UserType.java と対応）
+// 本人種別。バックエンド user/domain/UserType.java には SERVICE（対話ログイン不可の
+// サービスID）もあるが、ログイン応答・/me には現れないため意図的に載せない（fail-closed）。
 export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
 
 // 権限コード（バックエンド user/domain/PermissionCode.java と対応）。
@@ -26,6 +27,7 @@ export type PlatformPermission =
   | 'PLATFORM_ASSET_MANAGE'
   | 'BENEFIT_MANAGE'
   | 'EMERGENCY_ELEVATE'
+  | 'SERVICE_ID_MANAGE'
   | 'STORE_VIEW'
   | 'ORDER_SET_MANAGE'
   | 'ORDER_MANAGE'
@@ -163,6 +165,40 @@ export interface PlatformStaffCreateRequest {
 // スタッフ授権編集リクエスト。停止・再開はアカウント管理の専用端点が担うのでここには無い
 // （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
 export interface PlatformStaffUpdateRequest {
+  role_ids: number[];
+  store_scope_type: PlatformStoreScopeType;
+  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
+  store_ids?: number[];
+  // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
+  version: number;
+}
+
+// サービスID（本人種別 SERVICE・資格情報なし）の応答。email を持たないこと以外は
+// PlatformStaffResponse と同形で、リクエストの role_ids と応答の roles の非対称も同じ。
+export interface ServiceIdentityResponse {
+  id?: number;
+  display_name?: string;
+  // enabled と version は Java 側が primitive のため、キーは必ず応答に含まれる。
+  enabled: boolean;
+  roles?: RoleRef[];
+  store_scope_type?: PlatformStoreScopeType;
+  store_ids?: number[];
+  // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
+  version: number;
+}
+
+// サービスID新規作成リクエスト。資格情報（email/password）はサーバ側に欄が無い。
+export interface ServiceIdentityCreateRequest {
+  display_name: string;
+  role_ids: number[];
+  store_scope_type: PlatformStoreScopeType;
+  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
+  store_ids?: number[];
+}
+
+// サービスID授権編集リクエスト。停止・再開は専用端点が担うのでここには無い
+// （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
+export interface ServiceIdentityUpdateRequest {
   role_ids: number[];
   store_scope_type: PlatformStoreScopeType;
   // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
