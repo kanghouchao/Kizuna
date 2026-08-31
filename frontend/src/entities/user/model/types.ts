@@ -271,3 +271,35 @@ export interface StoreManagerCandidateResponse {
 // 残り 3 項目を送れば新規作成しての任命で、混在・欠落はいずれも 400。
 export type StoreManagerAppointRequest =
   { user_id: number } | { email: string; password: string; display_name: string };
+
+// 緊急昇格の発動リクエスト。パスワード再入力は発動の直前関門（セッション奪取だけでは越えられない）
+export interface EmergencyElevationActivationRequest {
+  store_id: number;
+  reason: string;
+  password: string;
+}
+
+// 緊急昇格の発動レスポンス。昇格トークンの生値はこの応答にしか現れない（履歴からは取り直せない）
+export interface EmergencyElevationActivationResponse {
+  id?: number;
+  token?: string;
+  // Java 側が primitive の long のため、キーは必ず応答に含まれる
+  expires_at: number;
+}
+
+// 履歴一覧の実効状態。記録の状態列は期限切れを持たず、期限の比較はサーバの読み口が行う
+export type EmergencyElevationStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+
+// 緊急昇格の履歴一覧 1 件。撤回欄は未撤回の行でキーごと欠落する（non_null 方針）
+export interface EmergencyElevationSummary {
+  id?: number;
+  activated_by_name?: string;
+  target_store_id?: number;
+  store_name?: string;
+  reason?: string;
+  activated_at?: string;
+  expires_at?: string;
+  status?: EmergencyElevationStatus;
+  revoked_by_name?: string;
+  revoked_at?: string;
+}

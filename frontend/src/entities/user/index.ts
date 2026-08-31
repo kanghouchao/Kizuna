@@ -3,6 +3,7 @@ export { platformAuthApi } from './api/platform';
 export { platformLineApi } from './api/line';
 export { platformStaffApi, platformRoleApi } from './api/platform-staff';
 export { platformStaffAccountApi } from './api/platform-staff-account';
+export { emergencyElevationApi } from './api/emergency-elevation';
 export { storeStaffApi } from './api/store-staff';
 export { storeManagerApi } from './api/store-manager';
 export { resolvePlatformDestination } from './model/platformRouting';

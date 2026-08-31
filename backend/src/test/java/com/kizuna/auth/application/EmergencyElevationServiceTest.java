@@ -10,12 +10,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.EmergencyElevationActivationResponse;
+import com.kizuna.auth.api.dto.EmergencyElevationSummaryResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
+import com.kizuna.user.domain.EmergencyElevationView;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -194,6 +198,145 @@ class EmergencyElevationServiceTest {
     assertThat(live.getRevokedAt()).isEqualTo(target.getRevokedAt());
     verify(elevationRepository).save(live);
     assertThat(activator.getCredentialVersion()).as("版の増分は 1 回だけ").isEqualTo(1L);
+  }
+
+  /** 読み側 projection の試験用実装。値の写しだけを検証するので record で十分。 */
+  private record View(
+      Long id,
+      String activatorName,
+      Long targetStoreId,
+      String storeName,
+      String reason,
+      OffsetDateTime activatedAt,
+      OffsetDateTime expiresAt,
+      EmergencyElevationStatus status,
+      String revokerName,
+      OffsetDateTime revokedAt)
+      implements EmergencyElevationView {
+    @Override
+    public Long getId() {
+      return id;
+    }
+
+    @Override
+    public String getActivatorName() {
+      return activatorName;
+    }
+
+    @Override
+    public Long getTargetStoreId() {
+      return targetStoreId;
+    }
+
+    @Override
+    public String getStoreName() {
+      return storeName;
+    }
+
+    @Override
+    public String getReason() {
+      return reason;
+    }
+
+    @Override
+    public OffsetDateTime getActivatedAt() {
+      return activatedAt;
+    }
+
+    @Override
+    public OffsetDateTime getExpiresAt() {
+      return expiresAt;
+    }
+
+    @Override
+    public EmergencyElevationStatus getStatus() {
+      return status;
+    }
+
+    @Override
+    public String getRevokerName() {
+      return revokerName;
+    }
+
+    @Override
+    public OffsetDateTime getRevokedAt() {
+      return revokedAt;
+    }
+  }
+
+  private static View activeView(long id, OffsetDateTime activatedAt, OffsetDateTime expiresAt) {
+    return new View(
+        id,
+        "HQ管理者",
+        3L,
+        "店舗A",
+        REASON,
+        activatedAt,
+        expiresAt,
+        EmergencyElevationStatus.ACTIVE,
+        null,
+        null);
+  }
+
+  @Test
+  @DisplayName("履歴の実効状態が期限内 ACTIVE / 期限の瞬間から EXPIRED / 撤回済み REVOKED へ写ること")
+  void listDerivesEffectiveStatusAtReadTime() {
+    OffsetDateTime now = OffsetDateTime.now();
+    // 期限の瞬間ちょうどの行は EXPIRED 側 — 実体の revoke 述語（isBefore）が撥ねる行に撤回の口を出さない。
+    View live = activeView(3L, now.minusMinutes(10), now.plusMinutes(50));
+    View expiring = activeView(2L, now.minusMinutes(60), now);
+    View revoked =
+        new View(
+            1L,
+            "HQ管理者",
+            3L,
+            "店舗A",
+            REASON,
+            now.minusHours(2),
+            now.minusHours(1),
+            EmergencyElevationStatus.REVOKED,
+            "撤回者",
+            now.minusMinutes(90));
+    when(elevationRepository.findHistoryViews(any())).thenReturn(List.of(live, expiring, revoked));
+
+    CursorPage<EmergencyElevationSummaryResponse> page = service.list(null, 20);
+
+    assertThat(page.content())
+        .extracting(EmergencyElevationSummaryResponse::status)
+        .containsExactly("ACTIVE", "EXPIRED", "REVOKED");
+    assertThat(page.content().get(0).activatedByName()).isEqualTo("HQ管理者");
+    assertThat(page.content().get(0).storeName()).isEqualTo("店舗A");
+    assertThat(page.content().get(2).revokedByName()).isEqualTo("撤回者");
+    assertThat(page.nextCursor()).isNull();
+  }
+
+  @Test
+  @DisplayName("上限を超える履歴が続きの位置を返し、続きの取得が同じ並びの組で比較されること")
+  void listPagesByActivationCursor() {
+    OffsetDateTime base = OffsetDateTime.now();
+    View first = activeView(2L, base, base.plusMinutes(60));
+    View second = activeView(1L, base.minusMinutes(5), base.plusMinutes(55));
+    when(elevationRepository.findHistoryViews(any())).thenReturn(List.of(first, second));
+
+    CursorPage<EmergencyElevationSummaryResponse> firstPage = service.list(null, 1);
+
+    assertThat(firstPage.content()).hasSize(1);
+    assertThat(firstPage.nextCursor()).isNotNull();
+    // 続きの位置は返した最終行（発動時刻 + id）から作られている。
+    PageCursor cursor = PageCursor.decode(firstPage.nextCursor());
+    assertThat(cursor.timestampKey()).isEqualTo(first.activatedAt());
+    assertThat(cursor.longId()).isEqualTo(2L);
+
+    when(elevationRepository.findHistoryViewsAfter(eq(first.activatedAt()), eq(2L), any()))
+        .thenReturn(List.of(second));
+
+    CursorPage<EmergencyElevationSummaryResponse> secondPage =
+        service.list(firstPage.nextCursor(), 1);
+
+    assertThat(secondPage.content())
+        .extracting(EmergencyElevationSummaryResponse::id)
+        .containsExactly(1L);
+    assertThat(secondPage.nextCursor()).isNull();
   }
 
   @Test

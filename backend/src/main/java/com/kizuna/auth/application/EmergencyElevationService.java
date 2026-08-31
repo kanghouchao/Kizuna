@@ -1,25 +1,31 @@
 package com.kizuna.auth.application;
 
 import com.kizuna.auth.api.dto.EmergencyElevationActivationResponse;
+import com.kizuna.auth.api.dto.EmergencyElevationSummaryResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.web.CursorPage;
+import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
+import com.kizuna.user.domain.EmergencyElevationView;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Limit;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -102,6 +108,64 @@ public class EmergencyElevationService {
     userRepository.save(activator);
     eventPublisher.publishEvent(
         new PlatformUserCredentialsChanged(activator.getEmail(), activator.getCredentialVersion()));
+  }
+
+  /**
+   * 発動履歴（全記録・新しい発動から）。
+   *
+   * <p>続きの指定はカーソル（並びの鍵）で受ける。記録は追記型で行が消えないが、履歴を見ている最中にも 発動は増えるため、件数で位置を指すと続きを取った時点で境界の行を飛ばす。
+   *
+   * @param cursor 続きの位置。null なら先頭から
+   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
+   */
+  @Transactional(readOnly = true)
+  public CursorPage<EmergencyElevationSummaryResponse> list(String cursor, int requestedSize) {
+    int size = CursorPage.clampSize(requestedSize);
+    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
+    Limit limit = Limit.of(size + 1);
+    List<EmergencyElevationView> fetched =
+        cursor == null
+            ? elevationRepository.findHistoryViews(limit)
+            : fetchAfter(PageCursor.decode(cursor), limit);
+    // 実効状態の判定時刻は 1 回の読みで固定する。行ごとに now() を取ると、同じ応答の中で
+    // 期限の前後が入れ替わりうる。
+    OffsetDateTime now = OffsetDateTime.now();
+    return CursorPage.of(fetched, size, EmergencyElevationService::cursorOf)
+        .map(view -> toSummary(view, now));
+  }
+
+  private List<EmergencyElevationView> fetchAfter(PageCursor cursor, Limit limit) {
+    return elevationRepository.findHistoryViewsAfter(cursor.timestampKey(), cursor.longId(), limit);
+  }
+
+  /** 続きの位置は一覧の並び（発動時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
+  private static String cursorOf(EmergencyElevationView view) {
+    return new PageCursor(view.getActivatedAt().toString(), String.valueOf(view.getId())).encode();
+  }
+
+  /**
+   * 実効状態の導出。期限の瞬間は {@link EmergencyElevation#revoke} の述語（{@code isBefore}）と同じ側へ倒す —
+   * ここだけ「まだ有効」に見せると、撤回が必ず撥ねる行に撤回の口を出すことになる。
+   */
+  private static EmergencyElevationSummaryResponse toSummary(
+      EmergencyElevationView view, OffsetDateTime now) {
+    String status;
+    if (view.getStatus() == EmergencyElevationStatus.REVOKED) {
+      status = "REVOKED";
+    } else {
+      status = now.isBefore(view.getExpiresAt()) ? "ACTIVE" : "EXPIRED";
+    }
+    return new EmergencyElevationSummaryResponse(
+        view.getId(),
+        view.getActivatorName(),
+        view.getTargetStoreId(),
+        view.getStoreName(),
+        view.getReason(),
+        view.getActivatedAt(),
+        view.getExpiresAt(),
+        status,
+        view.getRevokerName(),
+        view.getRevokedAt());
   }
 
   /**
