@@ -3,6 +3,7 @@ package com.kizuna.user.api.platform;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityCreateRequest;
 import com.kizuna.user.api.dto.ServiceIdentityResponse;
+import com.kizuna.user.api.dto.ServiceIdentitySummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.application.ServiceIdentityService;
 import jakarta.validation.Valid;
@@ -39,7 +40,7 @@ public class ServiceIdentityController {
   // 副キー id は offset ページングの全順序化のため（表示名は重複しうる）。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
-  public ResponseEntity<Page<ServiceIdentityResponse>> list(
+  public ResponseEntity<Page<ServiceIdentitySummaryResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(sort = {"displayName", "id"}) Pageable pageable) {
     return ResponseEntity.ok(serviceIdentityService.list(search, pageable));

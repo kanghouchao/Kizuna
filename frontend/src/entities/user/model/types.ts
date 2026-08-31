@@ -173,8 +173,21 @@ export interface PlatformStaffUpdateRequest {
   version: number;
 }
 
-// サービスID（本人種別 SERVICE・資格情報なし）の応答。email を持たないこと以外は
-// PlatformStaffResponse と同形で、リクエストの role_ids と応答の roles の非対称も同じ。
+// サービスID一覧 1 件の要約。楽観ロック用 version は詳細（ServiceIdentityResponse）だけが持ち、
+// 授権編集は詳細を取り直してから始める（範式は RoleSummaryResponse / RoleResponse）。
+export interface ServiceIdentitySummaryResponse {
+  id?: number;
+  display_name?: string;
+  // enabled は Java 側が primitive のため、キーは必ず応答に含まれる。
+  enabled: boolean;
+  roles?: RoleRef[];
+  store_scope_type?: PlatformStoreScopeType;
+  store_ids?: number[];
+}
+
+// サービスID（本人種別 SERVICE・資格情報なし）の詳細応答（GET /{id} と作成・更新の応答）。
+// email を持たないこと以外は PlatformStaffResponse と同形で、
+// リクエストの role_ids と応答の roles の非対称も同じ。
 export interface ServiceIdentityResponse {
   id?: number;
   display_name?: string;

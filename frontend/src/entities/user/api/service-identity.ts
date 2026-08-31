@@ -3,6 +3,7 @@ import {
   RoleSummaryResponse,
   ServiceIdentityCreateRequest,
   ServiceIdentityResponse,
+  ServiceIdentitySummaryResponse,
   ServiceIdentityUpdateRequest,
 } from '../model/types';
 
@@ -16,7 +17,7 @@ export const serviceIdentityApi = {
     page: number;
     size: number;
     search?: string;
-  }): Promise<PageResult<ServiceIdentityResponse>> => {
+  }): Promise<PageResult<ServiceIdentitySummaryResponse>> => {
     const response = await apiClient.get('/platform/service-identities', {
       params: {
         ...toSpringPageParams(params.page, params.size),
@@ -25,7 +26,7 @@ export const serviceIdentityApi = {
     });
     return fromSpringPage(response.data);
   },
-  /** 1 件取得。競合後に一覧の現在ページへ居ない対象の最新版を取り直すために使う。 */
+  /** 1 件取得（version を持つ詳細）。授権編集の開始時と、競合後の最新版の取り直しに使う。 */
   get: async (id: number): Promise<ServiceIdentityResponse> => {
     const response = await apiClient.get(`/platform/service-identities/${id}`);
     return response.data;

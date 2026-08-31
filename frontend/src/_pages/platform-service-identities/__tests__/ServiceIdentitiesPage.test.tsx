@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
-import { ServiceIdentityResponse, platformAuthApi, serviceIdentityApi } from '@/entities/user';
+import {
+  ServiceIdentityResponse,
+  ServiceIdentitySummaryResponse,
+  platformAuthApi,
+  serviceIdentityApi,
+} from '@/entities/user';
 import { notify } from '@/shared/notify';
 import ServiceIdentitiesPage from '../ui/ServiceIdentitiesPage';
 
@@ -43,18 +48,27 @@ jest.mock('@/shared/notify', () => ({
 const mockedApi = serviceIdentityApi as jest.Mocked<typeof serviceIdentityApi>;
 const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
 
-const identity = (override: Partial<ServiceIdentityResponse>): ServiceIdentityResponse => ({
+const identity = (
+  override: Partial<ServiceIdentitySummaryResponse>
+): ServiceIdentitySummaryResponse => ({
   id: 1,
   display_name: '夜間バッチ',
   enabled: true,
   roles: [{ id: 3, name: 'バッチ実行' }],
   store_scope_type: 'SPECIFIC_STORES',
   store_ids: [10],
+  ...override,
+});
+
+const detail = (override: Partial<ServiceIdentityResponse>): ServiceIdentityResponse => ({
+  ...identity({}),
   version: 0,
   ...override,
 });
 
-const paginated = (rows: ServiceIdentityResponse[]): PageResult<ServiceIdentityResponse> => ({
+const paginated = (
+  rows: ServiceIdentitySummaryResponse[]
+): PageResult<ServiceIdentitySummaryResponse> => ({
   rows,
   page: 0,
   pageCount: 1,
@@ -127,7 +141,8 @@ describe('サービスID管理ページ', () => {
     await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
   });
 
-  it('追加ボタンで作成モーダルを、編集ボタンで対象を渡した編集モーダルを開くこと', async () => {
+  it('追加ボタンで作成モーダルを開き、編集ボタンは詳細（version 持ち）を取り直してから編集モーダルを開くこと', async () => {
+    mockedApi.get.mockResolvedValue(detail({ id: 1, version: 3 }));
     render(<ServiceIdentitiesPage />);
     await screen.findByText('夜間バッチ');
 
@@ -136,6 +151,7 @@ describe('サービスID管理ページ', () => {
     expect(screen.getByText('作成モーダル')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
-    expect(screen.getByText('編集モーダル: 夜間バッチ')).toBeInTheDocument();
+    expect(await screen.findByText('編集モーダル: 夜間バッチ')).toBeInTheDocument();
+    expect(mockedApi.get).toHaveBeenCalledWith(1);
   });
 });

@@ -6,6 +6,8 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityCreateRequest;
 import com.kizuna.user.api.dto.ServiceIdentityResponse;
+import com.kizuna.user.api.dto.ServiceIdentityRoleRef;
+import com.kizuna.user.api.dto.ServiceIdentitySummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
@@ -49,14 +51,22 @@ public class ServiceIdentityService {
   private final RoleRepository roleRepository;
 
   @Transactional(readOnly = true)
-  public Page<ServiceIdentityResponse> list(String search, Pageable pageable) {
+  public Page<ServiceIdentitySummaryResponse> list(String search, Pageable pageable) {
     Page<PlatformUser> identities = repository.findAll(identitySpec(search), pageable);
     Map<Long, String> roleNames =
         roleNamesOf(
             identities.getContent().stream()
                 .flatMap(user -> user.getRoleIds().stream())
                 .collect(Collectors.toSet()));
-    return identities.map(user -> toResponse(user, roleNames));
+    return identities.map(
+        user ->
+            new ServiceIdentitySummaryResponse(
+                user.getId(),
+                user.getDisplayName(),
+                user.getEnabled(),
+                rolesOf(user, roleNames),
+                user.getStoreScopeType(),
+                new HashSet<>(user.getStoreIds())));
   }
 
   /**
@@ -186,22 +196,24 @@ public class ServiceIdentityService {
 
   private static ServiceIdentityResponse toResponse(
       PlatformUser user, Map<Long, String> roleNames) {
-    List<ServiceIdentityResponse.RoleRef> roles =
-        user.getRoleIds().stream()
-            .map(id -> new ServiceIdentityResponse.RoleRef(id, roleNames.get(id)))
-            .sorted(
-                Comparator.comparing(
-                    ServiceIdentityResponse.RoleRef::name,
-                    Comparator.nullsLast(Comparator.naturalOrder())))
-            .toList();
     return new ServiceIdentityResponse(
         user.getId(),
         user.getDisplayName(),
         user.getEnabled(),
-        roles,
+        rolesOf(user, roleNames),
         user.getStoreScopeType(),
         new HashSet<>(user.getStoreIds()),
         user.getVersion());
+  }
+
+  private static List<ServiceIdentityRoleRef> rolesOf(
+      PlatformUser user, Map<Long, String> roleNames) {
+    return user.getRoleIds().stream()
+        .map(id -> new ServiceIdentityRoleRef(id, roleNames.get(id)))
+        .sorted(
+            Comparator.comparing(
+                ServiceIdentityRoleRef::name, Comparator.nullsLast(Comparator.naturalOrder())))
+        .toList();
   }
 
   private Map<Long, String> roleNamesOf(Set<Long> roleIds) {

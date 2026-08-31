@@ -5,6 +5,7 @@ import { useState } from 'react';
 import {
   PlatformStore,
   ServiceIdentityResponse,
+  ServiceIdentitySummaryResponse,
   platformAuthApi,
   serviceIdentityApi,
 } from '@/entities/user';
@@ -40,7 +41,7 @@ const PAGE_SIZE = 10;
 export default function ServiceIdentitiesPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const list = useListPage<ServiceIdentityResponse, string>(
+  const list = useListPage<ServiceIdentitySummaryResponse, string>(
     (page, search) =>
       serviceIdentityApi.list({ page, size: PAGE_SIZE, search: search || undefined }),
     ''
@@ -57,10 +58,19 @@ export default function ServiceIdentitiesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
   // 対象がそのページから外れた瞬間にモーダルが黙って閉じてしまう。
+  // 一覧の要約は version を持たないため、編集は詳細を取り直してから始める。
   const [editingIdentity, setEditingIdentity] = useState<ServiceIdentityResponse | null>(null);
 
+  const openEdit = async (identity: ServiceIdentitySummaryResponse) => {
+    try {
+      setEditingIdentity(await serviceIdentityApi.get(identity.id ?? 0));
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, 'サービスIDの取得に失敗しました'));
+    }
+  };
+
   // 停止は実行中の定期処理を次回から止める操作なので確認を挟む
-  const suspension = useDeleteAction<ServiceIdentityResponse>({
+  const suspension = useDeleteAction<ServiceIdentitySummaryResponse>({
     remove: identity => serviceIdentityApi.suspend(identity.id ?? 0),
     successMessage: 'サービスIDを停止しました',
     errorMessage: 'サービスIDの停止に失敗しました',
@@ -68,7 +78,7 @@ export default function ServiceIdentitiesPage() {
   });
 
   // 再開は元に戻す操作なので確認を挟まない
-  const resume = async (identity: ServiceIdentityResponse) => {
+  const resume = async (identity: ServiceIdentitySummaryResponse) => {
     try {
       await serviceIdentityApi.resume(identity.id ?? 0);
       notify.success('サービスIDを再開しました');
@@ -190,7 +200,7 @@ export default function ServiceIdentitiesPage() {
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    onClick={() => setEditingIdentity(identity)}
+                    onClick={() => void openEdit(identity)}
                   >
                     編集
                   </Button>
