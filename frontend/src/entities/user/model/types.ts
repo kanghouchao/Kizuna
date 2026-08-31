@@ -25,6 +25,7 @@ export type PlatformPermission =
   | 'PLATFORM_MENU_VIEW'
   | 'PLATFORM_ASSET_MANAGE'
   | 'BENEFIT_MANAGE'
+  | 'EMERGENCY_ELEVATE'
   | 'STORE_VIEW'
   | 'ORDER_SET_MANAGE'
   | 'ORDER_MANAGE'
