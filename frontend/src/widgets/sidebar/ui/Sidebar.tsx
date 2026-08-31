@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { useEffect, useState } from 'react';
 import {
+  BotIcon,
   BriefcaseIcon,
   BuildingIcon,
   ChartColumnIcon,
@@ -39,6 +40,7 @@ import {
 // キーはメニュー API（seed データ）が返す icon 文字列との wire 契約。
 // lucide-react のエクスポート名をそのまま用い、メニューが参照してよいアイコンの許可リストを兼ねる。
 const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
+  BotIcon,
   BriefcaseIcon,
   BuildingIcon,
   ChartColumnIcon,
