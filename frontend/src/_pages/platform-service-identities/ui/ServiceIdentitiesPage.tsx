@@ -1,7 +1,7 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   PlatformStore,
   ServiceIdentityResponse,
@@ -61,13 +61,48 @@ export default function ServiceIdentitiesPage() {
   // 一覧の要約は version を持たないため、編集は詳細を取り直してから始める。
   const [editingIdentity, setEditingIdentity] = useState<ServiceIdentityResponse | null>(null);
 
+  // 詳細の取り直しは最新のクリックだけを採る世代守衛を通す。別の行を続けて押したとき、
+  // 遅い方の応答が後から届いて選び直した対象を上書きすると、別人の授権を編集する形になる。
+  const editRequestIdRef = useRef(0);
+
   const openEdit = async (identity: ServiceIdentitySummaryResponse) => {
+    const requestId = ++editRequestIdRef.current;
     try {
-      setEditingIdentity(await serviceIdentityApi.get(identity.id ?? 0));
+      const fresh = await serviceIdentityApi.get(identity.id ?? 0);
+      if (requestId !== editRequestIdRef.current) return;
+      setEditingIdentity(fresh);
     } catch (error) {
+      if (requestId !== editRequestIdRef.current) return;
       notify.error(getApiErrorMessage(error, 'サービスIDの取得に失敗しました'));
     }
   };
+
+  // モーダルを開くたびに店舗目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
+  // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
+  // 確定する時序では、settle 後の失敗を検知して 1 回だけ取り直す（失敗が続く環境で無限に
+  // 叩かない — それ以降の回復は StoreSetPicker の再試行導線が担う）。
+  const modalOpen = createOpen || editingIdentity !== null;
+  const prevModalOpenRef = useRef(false);
+  const storesRetriedRef = useRef(false);
+  useEffect(() => {
+    const justOpened = modalOpen && !prevModalOpenRef.current;
+    prevModalOpenRef.current = modalOpen;
+    if (justOpened) {
+      if (storesLoading) {
+        // まだ読み込み中: settle 後の失敗にそなえて自動再試行の権利を残す
+        storesRetriedRef.current = false;
+      } else {
+        // 開幕の取り直し自体を 1 回目と数え、直後に失敗で settle しても連打しない
+        storesRetriedRef.current = true;
+        void refetchStores();
+      }
+      return;
+    }
+    if (modalOpen && !storesLoading && storesFailed && !storesRetriedRef.current) {
+      storesRetriedRef.current = true;
+      void refetchStores();
+    }
+  }, [modalOpen, storesLoading, storesFailed, refetchStores]);
 
   // 停止は実行中の定期処理を次回から止める操作なので確認を挟む
   const suspension = useDeleteAction<ServiceIdentitySummaryResponse>({

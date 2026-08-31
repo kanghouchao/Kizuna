@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
 import {
   ServiceIdentityResponse,
@@ -153,5 +153,41 @@ describe('サービスID管理ページ', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
     expect(await screen.findByText('編集モーダル: 夜間バッチ')).toBeInTheDocument();
     expect(mockedApi.get).toHaveBeenCalledWith(1);
+  });
+
+  // 他管理者の店舗追加・削除に追随するため、目録はモーダルを開くたびに取り直す
+  it('モーダルを開くと店舗目録を取り直すこと', async () => {
+    render(<ServiceIdentitiesPage />);
+    await screen.findByText('夜間バッチ');
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'サービスIDを追加' }));
+
+    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
+  });
+
+  // 遅い応答が後から届いて選び直した対象を上書きすると、別のサービスIDの授権を編集してしまう
+  it('編集を続けて押したとき、遅れて届いた前の詳細応答で対象を上書きしないこと', async () => {
+    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
+    const slow = new Promise<ServiceIdentityResponse>(resolve => {
+      resolveSlow = resolve;
+    });
+    mockedApi.get.mockImplementation(id =>
+      id === 1 ? slow : Promise.resolve(detail({ id: 2, display_name: '外部連携', version: 1 }))
+    );
+    render(<ServiceIdentitiesPage />);
+    await screen.findByText('夜間バッチ');
+
+    const editButtons = screen.getAllByRole('button', { name: '編集' });
+    fireEvent.click(editButtons[0]);
+    fireEvent.click(editButtons[1]);
+    expect(await screen.findByText('編集モーダル: 外部連携')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSlow(detail({ id: 1, version: 9 }));
+    });
+
+    expect(screen.getByText('編集モーダル: 外部連携')).toBeInTheDocument();
+    expect(screen.queryByText('編集モーダル: 夜間バッチ')).not.toBeInTheDocument();
   });
 });

@@ -196,11 +196,13 @@ class ServiceIdentityServiceTest {
         .isInstanceOf(NotFoundException.class);
   }
 
+  // 停止・再開は素の findById でなく行ロック付きの読みを使う（冪等 204 を並行再送でも守る）。
+  // 素の読みへ退行すると下のスタブに当たらず NotFound になり、両テストが赤くなる。
   @Test
-  @DisplayName("停止は enabled=false へ落とし、停止済みへの再送は何も書かない（冪等）")
+  @DisplayName("停止は行を押さえて enabled=false へ落とし、停止済みへの再送は何も書かない（冪等）")
   void suspend_isIdempotent() {
     PlatformUser existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
-    when(repository.findById(5L)).thenReturn(Optional.of(existing));
+    when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
     service.suspend(5L);
@@ -211,11 +213,11 @@ class ServiceIdentityServiceTest {
   }
 
   @Test
-  @DisplayName("再開は enabled=true へ戻し、有効への再送は何も書かない（冪等）")
+  @DisplayName("再開は行を押さえて enabled=true へ戻し、有効への再送は何も書かない（冪等）")
   void resume_isIdempotent() {
     PlatformUser existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
     existing.stop();
-    when(repository.findById(5L)).thenReturn(Optional.of(existing));
+    when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
     service.resume(5L);
