@@ -21,19 +21,19 @@ databaseChangeLog:
                     primaryKey: true
                     primaryKeyName: pk_t_users
               - column:
+                  # 資格情報の 2 列が NULL 可なのは本人種別 SERVICE のため。列に値が無いことが
+                  # 「サービスIDは対話ログインしない」の構造上の根拠で、種別ごとの要否は
+                  # PlatformUser の不変条件が守る。一意制約は複数の NULL を許すので保つ。
                   name: email
                   type: VARCHAR(255)
                   constraints:
-                    nullable: false
                     unique: true
                     uniqueConstraintName: uq_t_users_email
-                  remarks: ログイン ID を兼ねるメールアドレス
+                  remarks: ログイン ID を兼ねるメールアドレス（SERVICE は NULL）
               - column:
                   name: password
                   type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-                  remarks: bcrypt ハッシュ
+                  remarks: bcrypt ハッシュ（SERVICE は NULL）
               - column:
                   # 資格情報の版（ADR 0022）。パスワード変更・再設定・停止で単調増分し、
                   # 発行済み JWT の claim と相等比較してセッションを即時失効させる。
@@ -61,7 +61,7 @@ databaseChangeLog:
                   type: VARCHAR(20)
                   constraints:
                     nullable: false
-                  remarks: 本人種別（STAFF/CAST/MEMBER）
+                  remarks: 本人種別（STAFF/SERVICE/CAST/MEMBER）
               - column:
                   name: store_scope_type
                   type: VARCHAR(20)

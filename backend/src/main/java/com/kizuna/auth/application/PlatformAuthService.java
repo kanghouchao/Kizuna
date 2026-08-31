@@ -41,8 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
  * DisabledException が投げられる（enabled 判定がパスワード照合に先行するため、無効化アカウントでのパスワード正誤オラクルを塞ぐ）。列挙耐性・タイミング均一化も
  * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
- * <p>authorities の発行: STAFF は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER は本人種別標識 {@code
- * ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
+ * <p>authorities の発行: ロールで授権される種別（STAFF / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER
+ * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
+ * SERVICE は {@link #issueTokenFor} が拒否するため、この発行に到達しない。
  */
 @Service
 @RequiredArgsConstructor
@@ -74,9 +75,15 @@ public class PlatformAuthService {
    * claim を組み立てると、片方だけ 権限が欠ける・過剰になる齟齬が静かに生まれる）。
    *
    * <p>呼び出し側は本人性の確認（パスワード照合・LINE の id_token 検証）を済ませていること。
+   *
+   * <p>サービスID（SERVICE）はここで拒否する。単一の組立点であることは、認証手段が増えても種別の拒否が
+   * 片方の経路だけ抜け落ちないことの保証でもある（資格情報を持たないという第一の防線は ドメイン不変条件が担い、本守衛はその二重化）。
    */
   @Transactional(readOnly = true)
   public Token issueTokenFor(PlatformUser user) {
+    if (user.getUserType() == UserType.SERVICE) {
+      throw new ServiceIdentityLoginException("サービスIDは対話ログインできません");
+    }
     return jwtIssuer.issue(user.getEmail(), baseClaims(user, permissionsOf(user)));
   }
 
@@ -184,13 +191,13 @@ public class PlatformAuthService {
   }
 
   /**
-   * 保持ロールの権限並集。STAFF 以外は権限を持たない（本人種別の既定）。
+   * 保持ロールの権限並集。ロールで授権される種別（{@link UserType#holdsRoles()}）以外は権限を持たない。
    *
    * <p>ロールは権限を id 集合で持つため、id→コード→enum の 2 段で解決する。目録行はコード側 enum の播種済み写像であり、写像できないコードは存在しない前提で {@code
    * valueOf} が fail-loud に落ちる。
    */
   private Set<PermissionCode> permissionsOf(PlatformUser user) {
-    if (user.getUserType() != UserType.STAFF) {
+    if (!user.getUserType().holdsRoles()) {
       return Set.of();
     }
     Set<Long> permissionIds =
@@ -204,7 +211,7 @@ public class PlatformAuthService {
 
   private static List<String> buildAuthorities(PlatformUser user, Set<PermissionCode> permissions) {
     return switch (user.getUserType()) {
-      case STAFF -> permissions.stream().map(PermissionCode::authority).sorted().toList();
+      case STAFF, SERVICE -> permissions.stream().map(PermissionCode::authority).sorted().toList();
       case CAST -> List.of("ROLE_CAST");
       case MEMBER -> List.of("ROLE_MEMBER");
     };

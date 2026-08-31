@@ -21,8 +21,9 @@ import org.hibernate.annotations.BatchSize;
 /**
  * プラットフォーム共通ユーザー集約。email でログインし、授権は「ロール × 担当店舗集合」で表す。
  *
- * <p>本人種別（{@link UserType}）が STAFF のユーザーだけがロールを持ち、CAST / MEMBER は権限モデルに入らない（既定）。ロールは跨集約 ID 参照
- * （{@link Role}）。停止は {@link #stop()}（enabled=false）であり、行を削除しないことで過去の実行主体の記録を保持する。
+ * <p>本人種別（{@link UserType}）が {@link UserType#holdsRoles()} のユーザーだけがロールを持ち、CAST / MEMBER
+ * は権限モデルに入らない。ロールは跨集約 ID 参照（{@link Role}）。停止は {@link
+ * #stop()}（enabled=false）であり、行を削除しないことで過去の実行主体の記録を保持する。
  *
  * <p>不変条件（構築時と再割当時に検証、違反は 400 系ドメイン例外）:
  *
@@ -30,7 +31,9 @@ import org.hibernate.annotations.BatchSize;
  *   <li>店舗集合: {@code SPECIFIC_STORES} は非空（MEMBER のみ空を許容 — 登録時点で紐づけ店舗を持たないため）、{@code ALL_STORES}
  *       は空かつ MEMBER には授権不可（{@code authorizes} が無条件 true になる fail-open を塞ぐ）（{@link
  *       InvalidStoreScopeException}）
- *   <li>ロール: STAFF は 1 ロール以上、CAST/MEMBER は空（{@link InvalidRoleGrantException}）
+ *   <li>ロール: STAFF / SERVICE は 1 ロール以上、CAST/MEMBER は空（{@link InvalidRoleGrantException}）
+ *   <li>資格情報: SERVICE は email・password をいずれも持たず、他の種別はいずれも必須（{@link
+ *       InvalidCredentialAssignmentException}）
  * </ul>
  */
 @Entity
@@ -39,11 +42,12 @@ import org.hibernate.annotations.BatchSize;
 @NoArgsConstructor
 public class PlatformUser extends BaseEntity {
 
-  @Column(nullable = false, unique = true, length = 255)
+  /** ログイン ID を兼ねるメールアドレス。SERVICE のみ null（資格情報を持たないことの構造上の表現）。 */
+  @Column(unique = true, length = 255)
   private String email;
 
-  @Column(nullable = false)
-  private String password;
+  /** bcrypt ハッシュ。SERVICE のみ null。 */
+  @Column private String password;
 
   /**
    * 資格情報の版（ADR 0022）。パスワード変更・再設定・停止で単調に増え、発行済みトークンの claim との 相等比較でセッションを即時失効させる。楽観ロックの version
@@ -103,6 +107,7 @@ public class PlatformUser extends BaseEntity {
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(userType, roles);
     validateScope(userType, storeScopeType, stores);
+    validateCredentials(userType, email, password);
     this.email = email == null ? null : email.toLowerCase(Locale.ROOT);
     this.password = password;
     this.displayName = displayName;
@@ -168,16 +173,33 @@ public class PlatformUser extends BaseEntity {
 
   /** エンコード済みパスワードで置き換える（呼び出し側で符号化済みであること）。版も増やし、全端末の既存セッションを失効させる。 */
   public void changePassword(String encodedPassword) {
+    validateCredentials(this.userType, this.email, encodedPassword);
     this.password = encodedPassword;
     this.credentialVersion++;
   }
 
   private static void validateRoleGrant(UserType userType, Set<Long> roles) {
-    if (userType == UserType.STAFF && roles.isEmpty()) {
-      throw new InvalidRoleGrantException("STAFF には少なくとも 1 つのロールが必要です");
+    if (userType.holdsRoles() && roles.isEmpty()) {
+      throw new InvalidRoleGrantException("STAFF / SERVICE には少なくとも 1 つのロールが必要です");
     }
-    if (userType != UserType.STAFF && !roles.isEmpty()) {
+    if (!userType.holdsRoles() && !roles.isEmpty()) {
       throw new InvalidRoleGrantException("CAST / MEMBER にロールを授与できません");
+    }
+  }
+
+  /**
+   * 資格情報の不変条件。SERVICE が資格情報を持たないのは運用規約ではなく構造上の事実であり、対話ログイン不可の第一の防線は 「照合できる値がそもそも行に無い」ことで成り立つ。列は
+   * NULL 可なので、この検証だけが守衛である。
+   */
+  private static void validateCredentials(UserType userType, String email, String password) {
+    if (userType == UserType.SERVICE) {
+      if (email != null || password != null) {
+        throw new InvalidCredentialAssignmentException("SERVICE は email・パスワードを持てません");
+      }
+      return;
+    }
+    if (email == null || password == null) {
+      throw new InvalidCredentialAssignmentException("email・パスワードは必須です");
     }
   }
 

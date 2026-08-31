@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,13 +18,16 @@ import com.kizuna.auth.infrastructure.LineChannel;
 import com.kizuna.auth.infrastructure.LineChannelResolver;
 import com.kizuna.auth.infrastructure.LineIdentity;
 import com.kizuna.auth.infrastructure.LineRegistrationTicketStore;
+import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.member.application.MemberRegistrationService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.user.domain.LineAlreadyLinkedException;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
@@ -36,8 +40,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 /** {@link LineAuthService} の単体テスト。 */
 @ExtendWith(MockitoExtension.class)
@@ -269,5 +276,42 @@ class LineAuthServiceTest {
     assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationRequest()))
         .isInstanceOf(ConflictException.class);
     verify(userRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("LINE ログインもサービスID を拒否し、トークンを発行しない（発行の単一組立点を通るため経路ごとの抜けが無い）")
+  void lineLoginRejectsServiceIdentity() {
+    // 本件だけは PlatformAuthService の本物を噛ませる。mock のままでは「LINE 口が守衛を通ること」を
+    // 証明できず、守衛を外しても緑のままになる。
+    PlatformJwtIssuer jwtIssuer = mock(PlatformJwtIssuer.class);
+    PlatformAuthService realAuthService =
+        new PlatformAuthService(
+            userRepository,
+            mock(RoleRepository.class),
+            mock(PermissionRepository.class),
+            mock(PasswordEncoder.class),
+            jwtIssuer,
+            mock(AuthenticationManager.class),
+            mock(ApplicationEventPublisher.class));
+    LineAuthService service =
+        new LineAuthService(
+            channelResolver,
+            lineApiClient,
+            ticketStore,
+            userRepository,
+            memberRegistrationService,
+            realAuthService);
+    // ドメイン不変条件が禁じる「LINE 連携済みの SERVICE」を mock で組む（不変条件は緩めない）。
+    // enabled を true にするのは、停止扱いの DisabledException で緑になる偽陽性を避けるため。
+    PlatformUser serviceIdentity = mock(PlatformUser.class);
+    when(serviceIdentity.getEnabled()).thenReturn(true);
+    when(serviceIdentity.getUserType()).thenReturn(UserType.SERVICE);
+    stubVerifiedIdentity();
+    when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(serviceIdentity));
+
+    assertThatThrownBy(() -> service.login(authorizationRequest()))
+        .isInstanceOf(ServiceIdentityLoginException.class);
+
+    verify(jwtIssuer, never()).issue(anyString(), any());
   }
 }
