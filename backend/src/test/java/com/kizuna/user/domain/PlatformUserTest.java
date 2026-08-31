@@ -291,4 +291,118 @@ class PlatformUserTest {
         .isInstanceOf(LineAlreadyLinkedException.class);
     assertThat(user.getLineUserId()).isEqualTo("U-line-1");
   }
+
+  /** SERVICE・ALL_STORES・ロール {1} の妥当な既定値。資格情報を持たないことが構築の前提。 */
+  private PlatformUser.PlatformUserBuilder serviceBuilder() {
+    return PlatformUser.builder()
+        .displayName("夜間バッチ")
+        .enabled(true)
+        .userType(UserType.SERVICE)
+        .roleIds(Set.of(1L))
+        .storeScopeType(StoreScopeType.ALL_STORES)
+        .storeIds(Set.of());
+  }
+
+  @Test
+  @DisplayName("SERVICE は email・パスワードなしで構築できる（資格情報を持たないことが構造上の事実）")
+  void serviceWithoutCredentialsBuilds() {
+    PlatformUser user = serviceBuilder().build();
+
+    assertThat(user.getUserType()).isEqualTo(UserType.SERVICE);
+    assertThat(user.getEmail()).isNull();
+    assertThat(user.getPassword()).isNull();
+  }
+
+  @Test
+  @DisplayName("SERVICE は email を持てない（照合できる値が行に無いことが対話ログイン不可の第一の防線）")
+  void serviceWithEmailThrows() {
+    assertThatThrownBy(() -> serviceBuilder().email("svc@kizuna.test").build())
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+  }
+
+  @Test
+  @DisplayName("SERVICE はパスワードを持てない")
+  void serviceWithPasswordThrows() {
+    assertThatThrownBy(() -> serviceBuilder().password("hash").build())
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+  }
+
+  @Test
+  @DisplayName("SERVICE の changePassword は不変条件違反で拒否される（構築後にも資格情報を持てない）")
+  void serviceChangePasswordThrows() {
+    PlatformUser user = serviceBuilder().build();
+
+    assertThatThrownBy(() -> user.changePassword("new-encoded-hash"))
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+    assertThat(user.getPassword()).isNull();
+    assertThat(user.getCredentialVersion()).isZero();
+  }
+
+  @Test
+  @DisplayName("SERVICE は少なくとも 1 つのロールが必要（STAFF と同じ不変条件）")
+  void serviceWithoutRolesThrows() {
+    assertThatThrownBy(() -> serviceBuilder().roleIds(Set.of()).build())
+        .isInstanceOf(InvalidRoleGrantException.class);
+  }
+
+  @Test
+  @DisplayName("SERVICE は ALL_STORES を持てる（明示授与のみ。STAFF と同じ店舗集合の語彙）")
+  void serviceWithAllStoresAuthorizesAnyStore() {
+    PlatformUser user = serviceBuilder().build();
+
+    assertThat(user.authorizes(99L)).isTrue();
+  }
+
+  @Test
+  @DisplayName("SERVICE の SPECIFIC_STORES は空集合を許さない（STAFF と同じ不変条件）")
+  void serviceWithEmptySpecificStoresThrows() {
+    assertThatThrownBy(
+            () ->
+                serviceBuilder()
+                    .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                    .storeIds(Set.of())
+                    .build())
+        .isInstanceOf(InvalidStoreScopeException.class);
+  }
+
+  @Test
+  @DisplayName("SERVICE を停止しても行は残り、過去の実行主体の記録を保持する")
+  void serviceStopKeepsTheRow() {
+    PlatformUser user = serviceBuilder().build();
+
+    user.stop();
+
+    assertThat(user.getEnabled()).isFalse();
+    assertThat(user.getUserType()).isEqualTo(UserType.SERVICE);
+    assertThat(user.getRoleIds()).containsExactly(1L);
+  }
+
+  @Test
+  @DisplayName("STAFF は email なしで構築できない（放緩した列の守衛はドメイン不変条件だけ）")
+  void staffWithoutEmailThrows() {
+    assertThatThrownBy(() -> staffBuilder().email(null).build())
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+  }
+
+  @Test
+  @DisplayName("STAFF はパスワードなしで構築できない")
+  void staffWithoutPasswordThrows() {
+    assertThatThrownBy(() -> staffBuilder().password(null).build())
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+  }
+
+  @Test
+  @DisplayName("MEMBER も email・パスワードは必須（資格情報の免除は SERVICE だけ）")
+  void memberWithoutCredentialsThrows() {
+    assertThatThrownBy(
+            () ->
+                staffBuilder()
+                    .userType(UserType.MEMBER)
+                    .roleIds(Set.of())
+                    .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                    .storeIds(Set.of())
+                    .password(null)
+                    .build())
+        .isInstanceOf(InvalidCredentialAssignmentException.class);
+  }
 }

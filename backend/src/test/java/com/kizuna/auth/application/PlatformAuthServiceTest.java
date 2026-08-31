@@ -3,7 +3,9 @@ package com.kizuna.auth.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,6 +44,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -489,5 +492,27 @@ class PlatformAuthServiceTest {
     // 版の増分がイベントで運ばれ、commit 後にキャッシュへ反映される（全端末失効の発火）。
     verify(eventPublisher)
         .publishEvent(new PlatformUserCredentialsChanged("admin@kizuna.test", 1L));
+  }
+
+  /**
+   * ドメイン不変条件が禁じる「資格情報を持つ SERVICE」を mock で組む。真の経路では email が null で引けず種別の守衛に
+   * 到達しないため、二重化した第二の防線を単独で突くには mock しかない（テストを通すために不変条件を緩めない）。
+   */
+  private static PlatformUser serviceIdentity() {
+    PlatformUser user = mock(PlatformUser.class);
+    when(user.getUserType()).thenReturn(UserType.SERVICE);
+    return user;
+  }
+
+  @Test
+  void login_serviceIdentity_isRejectedWithoutIssuingToken() {
+    stubSuccessfulAuthentication("svc@kizuna.test", "pass", serviceIdentity());
+
+    assertThatThrownBy(() -> authService.login("svc@kizuna.test", "pass"))
+        .isInstanceOf(ServiceIdentityLoginException.class)
+        // 観測面を資格情報の不一致に揃える継承。外れると応答が種別の存在オラクルになる。
+        .isInstanceOf(BadCredentialsException.class);
+
+    verify(jwtIssuer, never()).issue(anyString(), any());
   }
 }
