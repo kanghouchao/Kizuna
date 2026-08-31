@@ -133,9 +133,7 @@ databaseChangeLog:
   - changeSet:
       id: platform-v0100-002-emergency-elevation-schema
       author: kanghouchao
-      # 緊急昇格 1 回分の記録。1 回の発動につき 1 行の追記型で、再発動は新しい行になる
-      # （行の書き換えも削除もしない）。担当店舗集合を迂回して店舗のデータへ届く唯一の経路なので、
-      # 誰が・どの店舗へ・いつ・なぜ届いたかを後から復元できることが記録の存在理由である。
+      # 緊急昇格 1 回分の記録。1 発動 1 行の追記型で、再発動は新しい行になる（書き換えも削除もしない）。
       preConditions:
         - dbms:
             type: postgresql

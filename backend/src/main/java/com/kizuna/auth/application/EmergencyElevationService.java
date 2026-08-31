@@ -25,12 +25,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 緊急昇格の発動と撤回。担当店舗集合を迂回して単一店舗のデータへ届く短命な昇格を起こす。
- *
- * <p>発動は再認証を伴う。セッションの奪取だけでは越えられない一段を置くためで、再認証は<b>いかなる書き込みよりも先</b>に 実行する —
- * 失敗した再認証が記録を残さないことを、巻き戻しではなく順序で保証する。
- */
+/** 緊急昇格の発動と撤回。発動の再認証は<b>いかなる書き込みよりも先</b>に実行し、失敗した再認証が記録を 残さないことを巻き戻しではなく順序で保証する。 */
 @Service
 @RequiredArgsConstructor
 public class EmergencyElevationService {
@@ -42,11 +37,8 @@ public class EmergencyElevationService {
   private final ApplicationEventPublisher eventPublisher;
 
   /**
-   * 宛先の店舗が実在しないことの写像。外部キー違反は全域ハンドラの兜底が 4xx へ落とす対象ではない（一意違反のみ）ため、 flush してこの場で捕まえないと「存在しない店舗への発動」が
-   * 500 になる。
-   *
-   * <p>店舗の指名に 404 を返すのは {@code X-Store-ID} の 403 規律とは別件である。発動できるのは全店舗を見る HQ の
-   * 権限保持者で、店舗の実在は元より秘匿対象ではない。
+   * 宛先の店舗が実在しないことの写像。外部キー違反は全域ハンドラが 4xx へ落とす対象ではない（一意違反のみ）ため、 flush してこの場で捕まえないと「存在しない店舗への発動」が 500
+   * になる。店舗の実在は HQ の発動資格保持者に 対して秘匿対象ではなく、404 でよい。
    */
   private static final Map<DbConstraint, Supplier<RuntimeException>> STORE_REFERENCE_VIOLATIONS =
       Map.of(
@@ -68,11 +60,8 @@ public class EmergencyElevationService {
   }
 
   /**
-   * 撤回。記録を閉じたうえで、発動者の資格情報の版を進めて発行済みセッションを失効させる（ADR 0022）。
-   *
-   * <p>版を進める対象が撤回者ではなく<b>発動者</b>なのは、失効させたいのが昇格トークンだからである。 自己撤回では同一人物になり、その場合も版は 1 度しか進まない。
-   *
-   * <p>撤回そのものの直列化は記録の楽観ロックに委ねる。同時に走った 2 つ目は版の不一致で 409 になる。
+   * 撤回。記録を閉じ、<b>発動者</b>（撤回者ではない — 失効させたいのは発動者へ発行済みの昇格トークン）の 資格情報の版を進めて全セッションを失効させる（ADR
+   * 0022）。撤回そのものの直列化は記録の楽観ロックに 委ね、同時に走った 2 つ目は版の不一致で 409 になる。
    */
   @Transactional
   public void revoke(Long elevationId, String operatorEmail) {
@@ -100,10 +89,8 @@ public class EmergencyElevationService {
   }
 
   /**
-   * 発動直前の再認証。判定は AuthenticationManager に委ね、失敗（BadCredentialsException 等）はそのまま 401 として 抜ける —
-   * ログインと同じ経路・同じ応答で、パスワードの正誤オラクルを新設しない。
-   *
-   * <p>email の小文字正規化もログインと揃える（保存済み email は全て小文字）。
+   * 発動直前の再認証。判定は AuthenticationManager に委ね、失敗はログインと同じ経路・同じ 401 で抜ける （パスワードの正誤オラクルを新設しない）。email
+   * の小文字正規化もログインと揃える。
    */
   private PlatformUser reauthenticate(String email, String rawPassword) {
     Authentication authentication =

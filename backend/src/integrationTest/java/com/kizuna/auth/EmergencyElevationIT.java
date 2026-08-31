@@ -42,13 +42,8 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 緊急昇格（発動・昇格トークン・撤回）を本物の PostgreSQL + Redis で固定する統合テスト。
- *
- * <p>昇格トークンが実際に店舗コンソールの書きへ届くこと、届く範囲が対象店舗 1 つに限られること、 撤回が発動者の全セッションを落とすことは、いずれも DB・Redis・JWT
- * 検証の三者が噛み合って初めて成り立つ。
- *
- * <p>対象は repository 直挿の専用ユーザーのみを使う（種子ユーザーの資格情報を書き換えると後続 IT が連鎖破綻するため）。 撤回は資格情報の版を進めるので、版を動かすケースは 1
- * ケース 1 ユーザーで分ける。
+ * 緊急昇格（発動・昇格トークン・撤回）を本物の PostgreSQL + Redis + JWT 検証の噛み合わせで固定する統合テスト。 種子ユーザーの資格情報は書き換えない（後続 IT
+ * が連鎖破綻する）— repository 直挿の専用ユーザーのみを使い、 資格情報の版を動かすケースは 1 ケース 1 ユーザーで分ける。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
