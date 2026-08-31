@@ -240,6 +240,17 @@ class PlatformUserTest {
   }
 
   @Test
+  @DisplayName("invalidateSessions は資格情報の版をちょうど 1 つ進める（緊急昇格の撤回時の失効 — ADR 0022）")
+  void invalidateSessionsBumpsCredentialVersionByOne() {
+    PlatformUser user = staffBuilder().build();
+    assertThat(user.getCredentialVersion()).isZero();
+
+    user.invalidateSessions();
+
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+  }
+
+  @Test
   @DisplayName("updateDisplayName は表示名を更新する")
   void updateDisplayNameUpdatesDisplayName() {
     PlatformUser user = staffBuilder().build();
