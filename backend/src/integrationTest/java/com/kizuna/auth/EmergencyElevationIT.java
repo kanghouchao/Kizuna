@@ -106,8 +106,6 @@ class EmergencyElevationIT {
     ALL_EMAILS.forEach(email -> redisTemplate.delete(CREDENTIAL_VERSION_KEY_PREFIX + email));
   }
 
-  // ---------------------------------------------------------------- 土台
-
   /**
    * 専用ユーザーを取得または作成する。
    *
@@ -240,8 +238,6 @@ class EmergencyElevationIT {
   private static String errorOf(JsonNode body) {
     return body == null ? "" : body.path("error").asString();
   }
-
-  // ---------------------------------------------------------------- ケース
 
   @Test
   @DisplayName("EMERGENCY_ELEVATE を持たない者の発動は 403 で、記録も残らないこと")
