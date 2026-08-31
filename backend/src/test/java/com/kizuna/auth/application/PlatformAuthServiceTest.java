@@ -14,6 +14,7 @@ import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
@@ -24,6 +25,9 @@ import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -251,6 +255,88 @@ class PlatformAuthServiceTest {
         ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
     verify(authenticationManager).authenticate(tokenCaptor.capture());
     assertThat(tokenCaptor.getValue().getPrincipal()).isEqualTo("admin@kizuna.test");
+  }
+
+  private static EmergencyElevation elevationTo(long targetStoreId) {
+    EmergencyElevation elevation =
+        EmergencyElevation.activate(
+            1L, targetStoreId, "決済障害の一次対応", OffsetDateTime.parse("2026-08-31T10:00:00Z"));
+    elevation.setId(99L);
+    return elevation;
+  }
+
+  private static List<String> allStoreConsoleAuthorities() {
+    return Arrays.stream(PermissionCode.values())
+        .filter(code -> code.getConsole() == PermissionCode.Console.STORE)
+        .map(PermissionCode::authority)
+        .toList();
+  }
+
+  @Test
+  void issueElevatedTokenFor_addsAllStoreAuthoritiesScopedToTargetStoreUntilRecordExpiry() {
+    PlatformUser admin = hqAdmin();
+    stubHqRole();
+    EmergencyElevation elevation = elevationTo(42L);
+    when(jwtIssuer.issue(eq("admin@kizuna.test"), any(), any()))
+        .thenReturn(new Token("elevated", 1L));
+
+    authService.issueElevatedTokenFor(admin, elevation);
+
+    ArgumentCaptor<Instant> expiresAtCaptor = ArgumentCaptor.forClass(Instant.class);
+    verify(jwtIssuer)
+        .issue(eq("admin@kizuna.test"), claimsCaptor.capture(), expiresAtCaptor.capture());
+    Map<String, Object> claims = claimsCaptor.getValue();
+    @SuppressWarnings("unchecked")
+    List<String> authorities = (List<String>) claims.get("authorities");
+    // 店舗コンソールの全権限が載る。標識権限 STORE_MENU_VIEW を含むのが要点で、入場資格の述語
+    // （grantsStoreConsole）で組むとメニューの一行も出ない昇格になる。
+    assertThat(authorities).containsAll(allStoreConsoleAuthorities());
+    assertThat(authorities).contains("PERM_STORE_MENU_VIEW");
+    // 本人の通常の授権も残る（昇格は加算であって置換ではない）。
+    assertThat(authorities).contains("PERM_STORE_MANAGE", "PERM_ROLE_MANAGE");
+    assertThat(authorities).isSorted().doesNotHaveDuplicates();
+    assertThat(claims.get("storeBridge")).isEqualTo(true);
+    // ALL_STORES の HQ 管理者でも、昇格中の作用域は宛先の 1 店舗へ絞られる。
+    assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
+    assertThat(claims.get("storeIds")).isEqualTo(List.of(42L));
+    assertThat(claims.get("elevationId")).isEqualTo(99L);
+    // 版は据え置き — 昇格トークンも通常のセッションと同じ失効機構に載る（撤回で同時に失効する）。
+    assertThat(claims.get("credentialVersion")).isEqualTo(0L);
+    // exp は記録の期限そのもの。別々に「今から 60 分」を数えると監査で復元した区間とずれる。
+    assertThat(expiresAtCaptor.getValue()).isEqualTo(elevation.getExpiresAt().toInstant());
+  }
+
+  @Test
+  void issueElevatedTokenFor_holderOfStorePermissions_doesNotDuplicateAuthorities() {
+    PlatformUser staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
+    stubRolePermissions(
+        STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_MENU_VIEW));
+    when(jwtIssuer.issue(eq("manager@kizuna.test"), any(), any()))
+        .thenReturn(new Token("elevated", 1L));
+
+    authService.issueElevatedTokenFor(staff, elevationTo(42L));
+
+    verify(jwtIssuer).issue(eq("manager@kizuna.test"), claimsCaptor.capture(), any());
+    @SuppressWarnings("unchecked")
+    List<String> authorities = (List<String>) claimsCaptor.getValue().get("authorities");
+    // 既に持つ店舗権限と重ねても二重に載らない。
+    assertThat(authorities).doesNotHaveDuplicates().containsAll(allStoreConsoleAuthorities());
+  }
+
+  @Test
+  void issueTokenFor_isUnaffectedByElevationClaims() {
+    PlatformUser admin = hqAdmin();
+    stubHqRole();
+    when(jwtIssuer.issue(eq("admin@kizuna.test"), any())).thenReturn(new Token("t", 1L));
+
+    authService.issueTokenFor(admin);
+
+    verify(jwtIssuer).issue(eq("admin@kizuna.test"), claimsCaptor.capture());
+    Map<String, Object> claims = claimsCaptor.getValue();
+    // 昇格固有の claim は通常発行には現れない（組み立てが共有でも上書きは昇格経路だけの責務）。
+    assertThat(claims).doesNotContainKey("elevationId");
+    assertThat(claims.get("storeBridge")).isEqualTo(false);
+    assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
   }
 
   @Test
