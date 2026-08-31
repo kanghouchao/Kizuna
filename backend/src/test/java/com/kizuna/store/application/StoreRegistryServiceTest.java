@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,14 +21,17 @@ import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -243,6 +247,26 @@ class StoreRegistryServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessage("当日実績が記録されている店舗は削除できません");
     verify(storeRepository, never()).deleteById(any());
+  }
+
+  // 発動記録は応用層で数えず、外部キー（NO ACTION）の違反を flush でこの場に顕在化させて写像する。
+  @Test
+  void delete_storeWithEmergencyElevation_isRejectedViaConstraintTranslation() {
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
+    when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
+    when(attendanceRecordCheck.existsForStore(1L)).thenReturn(false);
+    doThrow(
+            new DataIntegrityViolationException(
+                "could not execute statement",
+                new ConstraintViolationException(
+                    "違反", new SQLException("外部キー違反"), "fk_t_emergency_elevations_store")))
+        .when(storeRepository)
+        .flush();
+
+    assertThatThrownBy(() -> storeRegistryService.delete("1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("緊急昇格の記録が存在する店舗は削除できません");
   }
 
   @Test

@@ -52,10 +52,7 @@ public enum DbConstraint {
   FK_T_BENEFIT_RULE_STORES_STORE("fk_t_benefit_rule_stores_store"),
 
   /**
-   * t_emergency_elevations → t_stores の FK。実在しない店舗を宛先にした緊急昇格の発動を止める。
-   *
-   * <p>写像するのは挿入方向だけで、削除方向（親の店舗が消える）は CASCADE のため違反自体が起きない。 上の NO ACTION
-   * 規律は削除の拒否を写す外部キーへの要求であり、ここには掛からない。
+   * t_emergency_elevations → t_stores の FK。挿入方向は実在しない店舗を宛先にした発動を、 削除方向は発動記録（監査の正本）を道連れにする店舗削除を止める。
    */
   FK_T_EMERGENCY_ELEVATIONS_STORE("fk_t_emergency_elevations_store"),
 
