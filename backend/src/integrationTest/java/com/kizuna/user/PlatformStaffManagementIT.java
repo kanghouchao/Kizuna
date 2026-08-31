@@ -1030,7 +1030,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/permissions", HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody()).hasSize(23);
+    assertThat(res.getBody()).hasSize(24);
     assertThat(res.getBody().toString()).contains("ORDER_MANAGE").contains("PLATFORM");
   }
 

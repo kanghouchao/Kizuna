@@ -65,6 +65,14 @@ public enum PermissionCode {
    */
   EMERGENCY_ELEVATE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
+  /**
+   * サービスID（本人種別 SERVICE）の閲覧・作成・授権変更・停止・再開（ServiceIdentityController）。
+   *
+   * <p>作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさない {@link #STAFF_ACCOUNT_MANAGE} とは別の権限で仕切る。
+   * 対話ログインできず全店バッチにもなりうる主体を、人のアカウントと別の鍵で管理する（ADR 0025）。
+   */
+  SERVICE_ID_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
+
   /** 授権店舗一覧の閲覧（PlatformStoreController）。 */
   STORE_VIEW(Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
