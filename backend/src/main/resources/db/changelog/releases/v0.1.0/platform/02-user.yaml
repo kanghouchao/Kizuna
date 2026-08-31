@@ -243,3 +243,10 @@ databaseChangeLog:
             referencedTableName: t_stores
             referencedColumnNames: id
             onDelete: NO ACTION
+        # 参照側は自動では索引されない。店舗削除時の逆参照検査が追記型の全表走査にならないようにする。
+        - createIndex:
+            indexName: idx_t_emergency_elevations_target_store
+            tableName: t_emergency_elevations
+            columns:
+              - column:
+                  name: target_store_id

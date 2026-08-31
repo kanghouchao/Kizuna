@@ -9,6 +9,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
+import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -73,8 +74,22 @@ public class EmergencyElevationService {
         userRepository
             .findByEmail(operatorEmail)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
-    elevation.revoke(revoker.getId(), OffsetDateTime.now());
+    OffsetDateTime at = OffsetDateTime.now();
+    elevation.revoke(revoker.getId(), at);
     elevationRepository.save(elevation);
+
+    // 版の増分は発動者の昇格トークンを全て失効させる。まだ有効な他の発動記録を開けたまま残すと
+    // 監査の復元区間が実際に効いていた区間より長くなるため、道連れになる記録も同時に閉じる。
+    // 期限切れの記録は自然失効で完結しており触れない。
+    elevationRepository
+        .findByActivatedByAndStatus(elevation.getActivatedBy(), EmergencyElevationStatus.ACTIVE)
+        .stream()
+        .filter(s -> !s.getId().equals(elevationId) && at.isBefore(s.getExpiresAt()))
+        .forEach(
+            s -> {
+              s.revoke(revoker.getId(), at);
+              elevationRepository.save(s);
+            });
 
     // 発動者の行は外部キー（NO ACTION）が存在を保証する。引けないのは実装欠陥なので大きく失敗させる。
     PlatformUser activator =
