@@ -15,12 +15,13 @@ import lombok.Setter;
 public class StoreStaffUpdateRequest {
 
   @NotEmpty(message = "role_ids is required")
-  private Set<Long> roleIds;
+  private Set<@NotNull(message = "role_ids must not contain null") Long> roleIds;
 
   @NotNull(message = "store_scope_type is required")
   private StoreScopeType storeScopeType;
 
-  private Set<Long> storeIds;
+  // null 要素は永続化時に黙って捨てられ、非空検証を通ったのに店舗ゼロの行が残るため要素単位で拒む。
+  private Set<@NotNull(message = "store_ids must not contain null") Long> storeIds;
 
   /** 停止・再開。null は現状維持。false=停止（行は残り、過去の実行主体記録を保持）、true=再開。 */
   private Boolean enabled;

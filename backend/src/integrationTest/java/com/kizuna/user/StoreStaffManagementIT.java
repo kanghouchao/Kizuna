@@ -210,6 +210,65 @@ class StoreStaffManagementIT extends CrossStoreTestSupport {
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
+  // null 要素は @ElementCollection の永続化で黙って捨てられ、検証を通ったのに担当店舗ゼロの行が
+  // 残る抜け道になるため、要素単位の検証で入口から拒む。行使者は全店舗店長 — 担当範囲の
+  // 包含判定（G2）が null を弾かずに素通しする側で撃つ。
+  @Test
+  @DisplayName("role_ids / store_ids の null 要素を含む作成・編集は 400 で拒絶されること")
+  void nullGrantElementIsRejected() {
+    String email = "store-staff-it-null-element@kizuna.test";
+    long clerkRoleId = roleRepository.findByName(CLERK_ROLE).orElseThrow().getId();
+
+    ResponseEntity<String> nullStoreCreate =
+        rest.postForEntity(
+            "/store/staff-members",
+            new HttpEntity<>(
+                createBody(email, rolesJson(CLERK_ROLE), "SPECIFIC_STORES", "[null]"),
+                headersFor(ALL_STORES_MANAGER_EMAIL, STORE_A)),
+            String.class);
+    assertThat(nullStoreCreate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<String> nullRoleCreate =
+        rest.postForEntity(
+            "/store/staff-members",
+            new HttpEntity<>(
+                createBody(
+                    email, "[null," + clerkRoleId + "]", "SPECIFIC_STORES", "[" + STORE_A + "]"),
+                headersFor(ALL_STORES_MANAGER_EMAIL, STORE_A)),
+            String.class);
+    assertThat(nullRoleCreate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findByEmail(email)).as("拒否された作成に副作用がないこと").isEmpty();
+
+    PlatformUser target = platformUserRepository.findByEmail(CLERK_EMAIL).orElseThrow();
+    ResponseEntity<String> nullStoreUpdate =
+        rest.exchange(
+            "/store/staff-members/" + target.getId(),
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody(rolesJson(CLERK_ROLE), "SPECIFIC_STORES", "[null]", target.getVersion()),
+                headersFor(ALL_STORES_MANAGER_EMAIL, STORE_A)),
+            String.class);
+    assertThat(nullStoreUpdate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<String> nullRoleUpdate =
+        rest.exchange(
+            "/store/staff-members/" + target.getId(),
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody(
+                    "[null," + clerkRoleId + "]",
+                    "SPECIFIC_STORES",
+                    "[" + STORE_A + "]",
+                    target.getVersion()),
+                headersFor(ALL_STORES_MANAGER_EMAIL, STORE_A)),
+            String.class);
+    assertThat(nullRoleUpdate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    assertThat(platformUserRepository.findByEmail(CLERK_EMAIL).orElseThrow().getStoreIds())
+        .as("拒否された編集が部分適用されていないこと")
+        .isEqualTo(target.getStoreIds());
+  }
+
   @Test
   @DisplayName("店長が自店の平スタッフを作成でき、その本人が新しいメールでログインできること（AC1）")
   void managerCreatesStaffWhoCanLogIn() {
