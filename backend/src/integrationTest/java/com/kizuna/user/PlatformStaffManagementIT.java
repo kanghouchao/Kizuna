@@ -522,6 +522,70 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
+  // null 要素は @ElementCollection の永続化で黙って捨てられ、非空検証を通ったのに
+  // 授権ゼロの行が残る抜け道になるため、要素単位の検証で入口から拒む。
+  @Test
+  @DisplayName("role_ids / store_ids の null 要素を含む作成・授権変更は 400 で拒絶されること")
+  void nullGrantElementIsRejected() {
+    String hq = platformToken(SEED_EMAIL, PASSWORD);
+    String email = "staff-it-null-element@kizuna.test";
+
+    ResponseEntity<String> nullStoreCreate =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, rolesJson(HQ_SIDE_ROLE), "SPECIFIC_STORES", "[null]"),
+                bearerJson(hq)),
+            String.class);
+    assertThat(nullStoreCreate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<String> nullRoleCreate =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, "[null," + hqSideRoleId() + "]", "ALL_STORES", "[]"),
+                bearerJson(hq)),
+            String.class);
+    assertThat(nullRoleCreate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserRepository.findByEmail(email)).as("拒否された作成に副作用がないこと").isEmpty();
+
+    ResponseEntity<JsonNode> created =
+        rest.postForEntity(
+            "/platform/staff",
+            new HttpEntity<>(
+                createBody(email, rolesJson(HQ_SIDE_ROLE), "ALL_STORES", "[]"), bearerJson(hq)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    long staffId = created.getBody().path("id").asLong();
+    long version = created.getBody().path("version").asLong();
+
+    ResponseEntity<String> nullStoreUpdate =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody(rolesJson(HQ_SIDE_ROLE), "SPECIFIC_STORES", "[null]", version),
+                bearerJson(hq)),
+            String.class);
+    assertThat(nullStoreUpdate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<String> nullRoleUpdate =
+        rest.exchange(
+            "/platform/staff/" + staffId,
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                updateBody("[null," + hqSideRoleId() + "]", "ALL_STORES", "[]", version),
+                bearerJson(hq)),
+            String.class);
+    assertThat(nullRoleUpdate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    PlatformUser after = platformUserRepository.findByEmail(email).orElseThrow();
+    assertThat(after.getStoreScopeType())
+        .as("拒否された編集が部分適用されていないこと")
+        .isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(after.getStoreIds()).isEmpty();
+  }
+
   @Test
   @DisplayName("存在しない storeId での作成は FK 違反を 400 へ変換して拒否")
   void unknownStoreIdRejected() {
