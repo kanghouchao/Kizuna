@@ -3,7 +3,7 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
     id 'java'
     id 'jacoco'
-    id 'com.diffplug.spotless' version '8.9.0'
+    id 'com.diffplug.spotless' version '8.10.1'
 }
 
 group = 'com.kizuna'
@@ -25,8 +25,8 @@ java {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:4.1.1"
-        mavenBom "org.springframework.modulith:spring-modulith-bom:2.1.0"
-        mavenBom "software.amazon.awssdk:bom:2.49.5"
+        mavenBom "org.springframework.modulith:spring-modulith-bom:2.1.1"
+        mavenBom "software.amazon.awssdk:bom:2.54.7"
     }
 }
 
@@ -64,7 +64,7 @@ dependencies {
     // Spring Boot 4 で LiquibaseAutoConfiguration は単体 autoconfigure から spring-boot-liquibase へ分離された。
     // これが無いと liquibase-core があってもマイグレーションが一切実行されない（schema 未生成のまま起動する）。
     implementation 'org.springframework.boot:spring-boot-liquibase'
-    implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.15.4'
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.15.5'
     implementation 'org.mapstruct:mapstruct:1.6.3'
     implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
     // S3 互換オブジェクトストレージ（MinIO）連携。s3 モジュールは HTTP クライアント実装を test スコープでしか
