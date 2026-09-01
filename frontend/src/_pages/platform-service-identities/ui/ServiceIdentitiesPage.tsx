@@ -141,9 +141,9 @@ export default function ServiceIdentitiesPage() {
     void list.reload();
     const target = editingIdentity;
     if (!target) return;
-    // この取り直しも同じ世代に属する。閉じて開き直した後に届く古い応答が、開き直しで
-    // 取った新しい版を戻すと、次の保存が避けられたはずの 409 になる。
-    const requestId = editRequestIdRef.current;
+    // この取り直しも世代を進める（読むだけでは連続する 409 の取り直し同士を区別できない）。
+    // 古い応答が新しい版を戻すと、次の保存が避けられたはずの 409 になる。
+    const requestId = ++editRequestIdRef.current;
     void serviceIdentityApi
       .get(target.id ?? 0)
       // 成功保存の直後は onClose と競合するため、まだ同じ対象を開いているときだけ差し替える

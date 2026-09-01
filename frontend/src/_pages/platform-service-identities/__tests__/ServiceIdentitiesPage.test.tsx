@@ -236,6 +236,36 @@ describe('サービスID管理ページ', () => {
     expect(screen.queryByText('版1')).not.toBeInTheDocument();
   });
 
+  // 取り直し同士も世代で区別する。読むだけの守衛だと連続する 409 の取り直しが同じ世代を
+  // 共有し、遅い方の古い応答が新しい版を戻す
+  it('競合時の取り直しが連続したとき、遅れて届いた古い方の応答で新しい版を戻さないこと', async () => {
+    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
+    const slow = new Promise<ServiceIdentityResponse>(resolve => {
+      resolveSlow = resolve;
+    });
+    mockedApi.get
+      .mockResolvedValueOnce(detail({ id: 1, version: 1 }))
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce(detail({ id: 1, version: 2 }));
+    render(<ServiceIdentitiesPage />);
+    await screen.findByText('夜間バッチ');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
+    expect(await screen.findByText('版1')).toBeInTheDocument();
+
+    // 1 回目の取り直しが未着のまま 2 回目が走り、先に 2 回目（新しい版）が届く
+    fireEvent.click(screen.getByRole('button', { name: '更新通知' }));
+    fireEvent.click(screen.getByRole('button', { name: '更新通知' }));
+    expect(await screen.findByText('版2')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSlow(detail({ id: 1, version: 1 }));
+    });
+
+    expect(screen.getByText('版2')).toBeInTheDocument();
+    expect(screen.queryByText('版1')).not.toBeInTheDocument();
+  });
+
   // 未着の編集詳細が後から届いて作成フローを乗っ取ると、作成のつもりの画面が別対象の編集に化ける
   it('編集詳細が未着のまま作成を開くと、遅れて届いた応答を棄てて作成モーダルだけを表示すること', async () => {
     let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
