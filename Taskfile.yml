@@ -177,7 +177,7 @@ tasks:
         fi
 
   clean:
-    desc: 未使用のイメージとコンテナをクリーンアップ
+    desc: ビルド済み Docker イメージを削除（service=frontend|backend で個別指定可）
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
@@ -185,7 +185,6 @@ tasks:
         else
           task -d backend clean
           task -d frontend clean
-          docker system prune -f
         fi
 
   restart:
