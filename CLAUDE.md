@@ -91,7 +91,6 @@ Forbidden operations (enforced locally by `.claude/settings.json` deny rules onl
 - **Merging PRs** (`gh pr merge`, auto-merge) — the repository owner merges every PR by hand.
 - **Destructive git**: `git reset --hard`, `git clean`, `git branch -D`, `git commit --no-verify`.
 - **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
-- **`task clean` without `service=`** — it ends in `docker system prune -f`, which the deny rules do not see through the `task` spelling. `task clean service=backend|frontend` only removes that side's images and is fine.
 - **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed or read.
 
 Judge build/test success by **exit code only** — output may be in Japanese locale (「エラー」), so never grep for "error".
