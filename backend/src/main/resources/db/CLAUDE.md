@@ -56,6 +56,9 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   declarations (permission catalogue from `PermissionCode` / `SystemRole`). Its include stays
   **last** in `db.changelog-master.yaml`; `ChangelogOrderTests` pins this. Permission additions
   need only the enum — never hand-seed permission rows.
+- Every application table is `t_`-prefixed (`t_stores`, `t_casts`, …). The one bare name,
+  `event_publication`, belongs to Spring Modulith's event publication registry — do not rename
+  it to fit.
 
 ## Rules that keep the baseline correct
 
