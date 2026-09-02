@@ -93,7 +93,7 @@ Notes on coverage enforcement:
 
 - Frontend source: `frontend/src/` (Next.js + TypeScript)
 - Frontend middleware: `frontend/src/proxy.ts` — host/store resolution and cookies
-- Shared HTTP client (frontend): `frontend/src/lib/client.ts`
+- Shared HTTP client (frontend): `frontend/src/shared/api/client.ts` (browser axios client; `server-client.ts` beside it is the fetch wrapper for Server Components)
 - Frontend server components (store templates): `frontend/src/_pages/store-site/templates/`
 - Backend Java: `backend/src/main/java/com/kizuna/`
 - Backend changelogs/migrations: `backend/src/main/resources/db/changelog/`
