@@ -54,6 +54,6 @@ Outside the layers, at `src/` root: `styles/` (global CSS not owned by a slice),
   - Internal variables/functions: normal TypeScript conventions, but data coming from the API keeps snake_case
   - Store-side vocabulary uses the Store prefix: StoreProfile*. The unified account type is PlatformUser (`entities/user/api/platform.ts`)
 - **Coverage**: Jest thresholds of 70% lines/statements, 60% branches, 55% functions. Targets are shared/api, shared/lib, and entities (pages and templates are excluded).
-- **`task lint` is three checks**: `npm run lint` (ESLint) + `npm run lint:fsd` (Steiger) + `npm run typecheck` (tsc) — the Dockerfile lint stage runs all of them, so run all three locally before pushing.
+- **`task lint` is four checks**: `npm run format:check` (Prettier) + `npm run lint` (ESLint) + `npm run lint:fsd` (Steiger) + `npm run typecheck` (tsc) — the Dockerfile lint stage runs all of them in that order, so run all four locally before pushing.
 - **`PermissionCode` in `entities/user/model/types.ts` is a hand-maintained copy of the backend enum.** Add new codes there when the backend gains one; nothing checks parity.
 - **Disabling a Steiger rule requires a reason comment in steiger.config.mjs** (typo-in-layer-name / repetitive-naming / insignificant-slice are off by design decision or rule specification; excessive-slicing is off for `_pages/**` only — one screen = one slice there).

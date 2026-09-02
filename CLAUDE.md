@@ -67,7 +67,7 @@ task down                           # stop
 task logs service=backend           # view logs
 ```
 
-Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run lint && npm run lint:fsd && npm run typecheck` (the Docker lint stage runs all three); `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
+Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run format:check && npm run lint && npm run lint:fsd && npm run typecheck` (the Docker lint stage runs all four); `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
 
 `task build` also runs as a PR gate inside each side's `Lint and Test (frontend)` / `Lint and Test (backend)` job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
 
