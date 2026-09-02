@@ -17,6 +17,7 @@ Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/
 - The customer-visit aggregate is **Order** — never Reservation or Booking.
 - **CentralMenu and StoreMenu were unified into a single platform Menu aggregate** (decided 2026-07-18, #404 decision 2).
 - **StoreProfile** = store-facing display settings; **SystemConfig** = platform-level system settings, managed by SYSTEM_CONFIG_MANAGE permission holders. Do not mix.
+- **Cast is three layers** (#383; implementation #859–#863): **Cast** = the platform-level person, 1:1 with the CAST-type PlatformUser; **CastEnrollment** = one store-enrollment episode (StoreScoped; ENROLLED / SUSPENDED / WITHDRAWN); **CastProfile** = the public profile, 1:1 with an enrollment. **The code is not split yet** — `Cast` is still the single store-scoped row in `t_casts` — so CONTEXT.md gives the target vocabulary and the code gives what exists today.
 
 ## Language Policy
 
@@ -66,7 +67,7 @@ task down                           # stop
 task logs service=backend           # view logs
 ```
 
-Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run lint`; `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
+Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run lint && npm run lint:fsd && npm run typecheck` (the Docker lint stage runs all three); `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
 
 `task build` also runs as a PR gate inside each side's `Lint and Test (frontend)` / `Lint and Test (backend)` job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
 
@@ -90,6 +91,7 @@ Forbidden operations (enforced locally by `.claude/settings.json` deny rules onl
 - **Merging PRs** (`gh pr merge`, auto-merge) — the repository owner merges every PR by hand.
 - **Destructive git**: `git reset --hard`, `git clean`, `git branch -D`, `git commit --no-verify`.
 - **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
+- **`task clean` without `service=`** — it ends in `docker system prune -f`, which the deny rules do not see through the `task` spelling. `task clean service=backend|frontend` only removes that side's images and is fine.
 - **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed or read.
 
 Judge build/test success by **exit code only** — output may be in Japanese locale (「エラー」), so never grep for "error".
