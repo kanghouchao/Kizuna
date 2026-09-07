@@ -98,9 +98,10 @@ test {
     useJUnitPlatform()
 }
 
-// resources 配下の AI 規約文書（db/CLAUDE.md）は成果物に含めない
+// resources 配下の AI 規約文書（db/CLAUDE.md, db/AGENTS.md）は成果物に含めない
 processResources {
     exclude '**/CLAUDE.md'
+    exclude '**/AGENTS.md'
 }
 
 spotless {

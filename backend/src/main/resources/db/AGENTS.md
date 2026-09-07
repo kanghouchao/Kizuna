@@ -92,4 +92,4 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   existing DB fails validation. Pre-launch this just means "recreate the dev DB after changing
   them".
 - This file is excluded from the jar by `processResources` in `build.gradle` (the glob covers
-  any `CLAUDE.md` under resources) — keep the exclusion in step if you rename this file.
+  any `CLAUDE.md` or `AGENTS.md` under resources) — keep the exclusion in step if you rename this file.
