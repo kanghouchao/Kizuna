@@ -1,6 +1,5 @@
 package com.kizuna.cast.api.dto;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +17,6 @@ import lombok.NoArgsConstructor;
 public class CastPublicResponse {
   private String id;
   private String name;
-  private String status;
   private String photoUrl;
   private String introduction;
   private Integer age;
@@ -28,6 +26,4 @@ public class CastPublicResponse {
   private Integer hip;
   private Integer displayOrder;
   private List<CastCustomFieldView> customFields;
-  private OffsetDateTime createdAt;
-  private OffsetDateTime updatedAt;
 }

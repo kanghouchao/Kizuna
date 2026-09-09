@@ -31,6 +31,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** ハンドラ層で閉じている約束（offset ページングの全順序、削除 204）の単体テスト。 */
 @WebMvcTest(CastController.class)
@@ -102,5 +103,53 @@ class CastControllerTest {
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isNoContent());
+  }
+
+  @Test
+  @DisplayName("公開状態の切替はキャスト管理権限で操作できること")
+  @WithMockUser(authorities = "PERM_CAST_MANAGE")
+  void publicationCanBeChanged() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    mockMvc
+        .perform(
+            MockMvcRequestBuilders.patch("/store/casts/cast-1/publication")
+                .with(csrf())
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .contentType("application/json")
+                .content("{\"publication_status\":\"PUBLISHED\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @WithMockUser(authorities = "PERM_CAST_MANAGE")
+  void publicationRejectsMissingAndUnknownStatus() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    for (String body : List.of("{}", "{\"publication_status\":\"ACTIVE\"}")) {
+      mockMvc
+          .perform(
+              MockMvcRequestBuilders.patch("/store/casts/cast-1/publication")
+                  .with(csrf())
+                  .header("X-Role", "store")
+                  .header("X-Store-ID", "1")
+                  .contentType("application/json")
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    }
+  }
+
+  @Test
+  @WithMockUser(authorities = "PERM_CAST_INVITE")
+  void publicationRequiresManagePermission() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    mockMvc
+        .perform(
+            MockMvcRequestBuilders.patch("/store/casts/cast-1/publication")
+                .with(csrf())
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .contentType("application/json")
+                .content("{\"publication_status\":\"PUBLISHED\"}"))
+        .andExpect(status().isForbidden());
   }
 }

@@ -92,7 +92,7 @@ describe('プロフィールの数値欄は整数のみ受け付ける', () => {
     render(<CastForm onSubmit={onSubmit} />);
 
     fireEvent.change(screen.getByLabelText(label), { target: { value: '1.5' } });
-    fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '花子' } });
+    fireEvent.change(screen.getByLabelText('源氏名 *'), { target: { value: '花子' } });
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     expect(await screen.findByText(message)).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('プロフィールの数値欄は整数のみ受け付ける', () => {
     const onSubmit = jest.fn();
     render(<CastForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '花子' } });
+    fireEvent.change(screen.getByLabelText('源氏名 *'), { target: { value: '花子' } });
     fireEvent.change(screen.getByLabelText('年齢'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -115,7 +115,7 @@ describe('プロフィールの数値欄は整数のみ受け付ける', () => {
     const onSubmit = jest.fn();
     render(<CastForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '花子' } });
+    fireEvent.change(screen.getByLabelText('源氏名 *'), { target: { value: '花子' } });
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));

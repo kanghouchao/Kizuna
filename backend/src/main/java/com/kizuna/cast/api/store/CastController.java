@@ -3,6 +3,8 @@ package com.kizuna.cast.api.store;
 import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.api.dto.CastPublicResponse;
+import com.kizuna.cast.api.dto.CastPublicationRequest;
+import com.kizuna.cast.api.dto.CastPublicationResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
@@ -20,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -76,9 +79,16 @@ public class CastController {
     return ResponseEntity.status(HttpStatus.CREATED).body(castInvitationService.issue(id));
   }
 
+  @PatchMapping("/{id}/publication")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
+  public ResponseEntity<CastPublicationResponse> changePublication(
+      @PathVariable String id, @Valid @RequestBody CastPublicationRequest request) {
+    return ResponseEntity.ok(castService.changePublication(id, request.publicationStatus()));
+  }
+
   @GetMapping("/public")
   @PermitAll
   public ResponseEntity<List<CastPublicResponse>> listPublic() {
-    return ResponseEntity.ok(castService.listActive());
+    return ResponseEntity.ok(castService.listPublished());
   }
 }

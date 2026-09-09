@@ -17,7 +17,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.customer.application.CustomerReferenceResolver;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
@@ -230,8 +232,8 @@ class OrderServiceTest {
    *
    * <p>成立の条件そのもの（店舗一致・在籍中）を固定するのは {@link NominatableCastLookupTest} で、ここは空か否かの翻訳だけを見る。
    */
-  private static Cast nominatable(String castId) {
-    Cast cast = Cast.builder().name("指名キャスト").status("ACTIVE").build();
+  private static CastEnrollment nominatable(String castId) {
+    CastEnrollment cast = CastEnrollment.builder().status(CastEnrollmentStatus.ENROLLED).build();
     cast.setId(castId);
     cast.setStoreId(STORE_ID);
     return cast;
@@ -2700,7 +2702,7 @@ class OrderServiceTest {
     // 応答は下拉に要る最小限だけ。キャスト管理の応答を流用すると招待状態やカスタム項目まで付いてくる
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(nominatableCast.searchCandidates(STORE_ID, "花"))
-        .thenReturn(List.of(nominatable("cast-1")));
+        .thenReturn(List.of(CastProfile.builder().enrollmentId("cast-1").name("指名キャスト").build()));
 
     List<OrderCastCandidateResponse> result = service.listCastCandidates("花");
 

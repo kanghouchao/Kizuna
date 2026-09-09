@@ -82,7 +82,7 @@ describe('カスタムフィールド定義の編集モーダル', () => {
     await waitFor(() => expect(mockedApi.update).toHaveBeenCalledTimes(1));
     expect(mockedApi.update.mock.calls[0][0]).toBe('def-1');
     const body = mockedApi.update.mock.calls[0][1];
-    expect(body).toEqual({ label: '血液型', display_order: 12, is_public: false });
+    expect(body).toEqual({ label: '血液型', display_order: 12 });
     expect(typeof body.display_order).toBe('number');
   });
 
@@ -96,12 +96,12 @@ describe('カスタムフィールド定義の編集モーダル', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText('公開する(公開詳細ページに表示)'));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(mockedApi.update).toHaveBeenCalledTimes(1));
     const body = mockedApi.update.mock.calls[0][1];
-    expect(body.is_public).toBe(true);
+    expect(body).not.toHaveProperty('is_public');
   });
 
   it('label が空なら文言を欄の傍に出し、更新 API を呼ばない', async () => {

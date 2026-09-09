@@ -2,8 +2,9 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
@@ -61,7 +62,7 @@ class OrderCastCandidateIT extends CrossStoreTestSupport {
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private RoleRepository roleRepository;
   @Autowired private PermissionRepository permissionRepository;
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
   @BeforeEach
@@ -80,18 +81,19 @@ class OrderCastCandidateIT extends CrossStoreTestSupport {
     // いるのではないことを 1 本の中で示すため（店舗の絞り込みは X-Store-ID と storeFilter が担う）。
     ensureUser(ORDER_ONLY_EMAIL, Set.of(orderOnly.getId()));
 
-    ensureCast(ACTIVE_CAST_NAME, STORE_A, "ACTIVE");
-    ensureCast(SUSPENDED_CAST_NAME, STORE_A, "INACTIVE");
-    ensureCast(OTHER_STORE_CAST_NAME, STORE_B, "ACTIVE");
+    ensureCast(ACTIVE_CAST_NAME, STORE_A, "ENROLLED");
+    ensureCast(SUSPENDED_CAST_NAME, STORE_A, "SUSPENDED");
+    ensureCast(OTHER_STORE_CAST_NAME, STORE_B, "ENROLLED");
   }
 
   /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
   private void ensureCast(String name, long storeId, String status) {
-    boolean exists = castRepository.findAll().stream().anyMatch(c -> name.equals(c.getName()));
+    boolean exists = fixtureProfiles.findAll().stream().anyMatch(c -> name.equals(c.getName()));
     if (!exists) {
-      Cast cast = Cast.builder().name(name).status(status).build();
+      CastEnrollment cast =
+          CastEnrollment.builder().status(CastEnrollmentStatus.valueOf(status)).build();
       cast.setStoreId(storeId);
-      castRepository.save(cast);
+      saveEnrollmentFixture(cast, name, null);
     }
   }
 

@@ -2,8 +2,9 @@ package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -40,7 +41,7 @@ import tools.jackson.databind.JsonNode;
 class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
-  private static final String CAST_EMAIL = "schedule-cast@kizuna.test";
+  private String castEmail;
 
   /** v0.1.0 seed/05-demo.yaml の店舗スタッフ（ROLE_CAST を持たない）。役割線 403 の検証に使う。 */
   private static final String NON_CAST_STAFF_EMAIL = "yamada.jiro@kizuna.test";
@@ -67,7 +68,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
   /** 本人の非公開の確定シフトの開始時刻。店外へは出ないが本人には見える、を分ける目印。 */
   private static final String MY_A_UNPUBLISHED_START = "03:03:00";
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -78,11 +79,12 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
   @BeforeEach
   void prepareFixture() {
+    castEmail = "schedule-cast-" + System.nanoTime() + "@kizuna.test";
     storeBId = ensureStore(STORE_B_DOMAIN, "週間集約IT第二店舗");
     storeCId = ensureStore(STORE_C_DOMAIN, STORE_C_NAME);
 
     Long castUserId =
-        ensurePlatformUser(CAST_EMAIL, UserType.CAST, StoreScopeType.ALL_STORES, Set.of()).getId();
+        ensurePlatformUser(castEmail, UserType.CAST, StoreScopeType.ALL_STORES, Set.of()).getId();
 
     // 本人の cast 行を店 A・店 B の双方に作る（跨店集約の対象。cast_id 自限が同時に店舗自限として機能する所以）。
     String myCastA = createCast(STORE_A, "週間集約IT本人（店A）", castUserId);
@@ -160,9 +162,10 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
 
   /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
   private String createCast(long storeId, String name, Long platformUserId) {
-    Cast cast = Cast.builder().name(name).status("ACTIVE").platformUserId(platformUserId).build();
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(storeId);
-    return castRepository.save(cast).getId();
+    return saveEnrollmentFixture(cast, name, platformUserId).getId();
   }
 
   private void saveUnpublishedShift(String castId, long storeId, LocalTime start) {
@@ -242,7 +245,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("2 店所属キャストの確定シフトが週間で跨店集約されること(正向対照)")
   void myConfirmedShiftsAggregateAcrossStores() {
-    ResponseEntity<JsonNode> res = getSchedule(platformToken(CAST_EMAIL, PASSWORD));
+    ResponseEntity<JsonNode> res = getSchedule(platformToken(castEmail, PASSWORD));
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     JsonNode body = res.getBody();
@@ -256,7 +259,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("本人の週間スケジュールが公開可否で絞られないこと（本人可視は承認が担う）")
   void ownScheduleIgnoresPublication() {
-    ResponseEntity<JsonNode> res = getSchedule(platformToken(CAST_EMAIL, PASSWORD));
+    ResponseEntity<JsonNode> res = getSchedule(platformToken(castEmail, PASSWORD));
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(containsEntry(res.getBody(), STORE_A, MY_A_START))
@@ -270,7 +273,7 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("別キャスト・非所属店舗・TENTATIVE の実データが応答の生ボディに一切現れないこと(AC story 8)")
   void outOfScopeRealDataNeverAppearsInResponse() {
-    ResponseEntity<String> res = getScheduleRaw(platformToken(CAST_EMAIL, PASSWORD));
+    ResponseEntity<String> res = getScheduleRaw(platformToken(castEmail, PASSWORD));
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(res.getBody())

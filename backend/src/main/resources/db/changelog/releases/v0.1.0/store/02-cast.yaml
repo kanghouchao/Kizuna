@@ -7,8 +7,7 @@ databaseChangeLog:
             type: postgresql
       changes:
         - createTable:
-            tableName: t_casts
-            remarks: キャスト情報テーブル
+            tableName: t_cast_enrollments
             columns:
               - column:
                   name: id
@@ -16,103 +15,322 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                     primaryKey: true
-                    primaryKeyName: pk_t_casts
+                    primaryKeyName: pk_t_cast_enrollments
               - column:
                   name: store_id
                   type: BIGINT
                   constraints:
                     nullable: false
               - column:
-                  name: platform_user_id
+                  name: cast_id
                   type: BIGINT
-                  remarks: 紐づくプラットフォームユーザー ID（t_users 参照。未招待なら NULL）
-              - column:
-                  name: name
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-                  remarks: キャスト名
               - column:
                   name: status
-                  type: VARCHAR(50)
-                  defaultValue: ACTIVE
-                  remarks: ステータス
+                  type: VARCHAR(20)
+                  defaultValue: "ENROLLED"
+                  constraints:
+                    nullable: false
               - column:
-                  name: photo_url
-                  type: VARCHAR(500)
-                  remarks: 写真URL
-              - column:
-                  name: introduction
-                  type: TEXT
-                  remarks: 自己紹介
-              - column:
-                  name: age
-                  type: INTEGER
-                  remarks: 年齢
-              - column:
-                  name: height
-                  type: INTEGER
-                  remarks: 身長(cm)
-              - column:
-                  name: bust
-                  type: INTEGER
-                  remarks: バスト(cm)
-              - column:
-                  name: waist
-                  type: INTEGER
-                  remarks: ウエスト(cm)
-              - column:
-                  name: hip
-                  type: INTEGER
-                  remarks: ヒップ(cm)
+                  name: ended_at
+                  type: TIMESTAMP WITH TIME ZONE
               - column:
                   name: custom_fields
                   type: JSONB
-                  remarks: カスタムフィールド値（key→value。未設定は NULL でアプリ側は空マップ扱い）
-              - column:
-                  name: display_order
-                  type: INTEGER
-                  defaultValueNumeric: 0
-                  remarks: 表示順
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: CURRENT_TIMESTAMP
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
                   constraints:
                     nullable: false
               - column:
                   name: updated_at
                   type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: CURRENT_TIMESTAMP
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
                   constraints:
                     nullable: false
               - column:
                   name: version
                   type: BIGINT
-                  defaultValueNumeric: 0
+                  defaultValueNumeric: "0"
                   constraints:
                     nullable: false
-                  remarks: 楽観ロック用バージョン
         - addForeignKeyConstraint:
-            constraintName: fk_t_casts_store
-            baseTableName: t_casts
+            constraintName: fk_t_cast_enrollments_store
+            baseTableName: t_cast_enrollments
             baseColumnNames: store_id
             referencedTableName: t_stores
             referencedColumnNames: id
             onDelete: CASCADE
         - addForeignKeyConstraint:
-            constraintName: fk_t_casts_platform_user
-            baseTableName: t_casts
-            baseColumnNames: platform_user_id
+            constraintName: fk_t_cast_enrollments_cast
+            baseTableName: t_cast_enrollments
+            baseColumnNames: cast_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - sql:
+            sql: ALTER TABLE t_cast_enrollments ADD CONSTRAINT ck_t_cast_enrollments_status CHECK (status IN ('ENROLLED', 'SUSPENDED', 'WITHDRAWN'))
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_t_cast_enrollments_current ON t_cast_enrollments (cast_id, store_id) WHERE status <> 'WITHDRAWN'
+        - createTable:
+            tableName: t_cast_profiles
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_cast_profiles
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enrollment_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: photo_url
+                  type: VARCHAR(500)
+              - column:
+                  name: introduction
+                  type: TEXT
+              - column:
+                  name: age
+                  type: INTEGER
+              - column:
+                  name: height
+                  type: INTEGER
+              - column:
+                  name: bust
+                  type: INTEGER
+              - column:
+                  name: waist
+                  type: INTEGER
+              - column:
+                  name: hip
+                  type: INTEGER
+              - column:
+                  name: display_order
+                  type: INTEGER
+                  defaultValueNumeric: "0"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: custom_fields
+                  type: JSONB
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: publication_status
+                  type: VARCHAR(20)
+                  defaultValue: "UNPUBLISHED"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: "0"
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_profiles_store
+            baseTableName: t_cast_profiles
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_profiles_enrollment
+            baseTableName: t_cast_profiles
+            baseColumnNames: enrollment_id
+            referencedTableName: t_cast_enrollments
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - sql:
+            sql: ALTER TABLE t_cast_profiles ADD CONSTRAINT uq_t_cast_profiles_enrollment UNIQUE (enrollment_id)
+        - sql:
+            sql: ALTER TABLE t_cast_profiles ADD CONSTRAINT ck_t_cast_profiles_publication CHECK (publication_status IN ('PUBLISHED', 'UNPUBLISHED'))
+        - createTable:
+            tableName: t_cast_enrollment_status_histories
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_cast_enrollment_status_histories
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enrollment_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recorded_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: previous_status
+                  type: VARCHAR(20)
+              - column:
+                  name: new_status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: "0"
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_enrollment_status_histories_store
+            baseTableName: t_cast_enrollment_status_histories
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_enrollment_status_histories_enrollment
+            baseTableName: t_cast_enrollment_status_histories
+            baseColumnNames: enrollment_id
+            referencedTableName: t_cast_enrollments
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_enrollment_status_histories_actor
+            baseTableName: t_cast_enrollment_status_histories
+            baseColumnNames: actor_id
             referencedTableName: t_users
             referencedColumnNames: id
-            onDelete: SET NULL
+            onDelete: NO ACTION
         - sql:
-            # 本人ポータルは毎リクエスト platform_user_id での跨店逆引きを行う。大半の cast は
-            # 未招待で platform_user_id が NULL のため、対象を NOT NULL に絞った部分索引にする。
-            sql: >-
-              CREATE INDEX idx_t_casts_platform_user ON t_casts (platform_user_id)
-              WHERE platform_user_id IS NOT NULL
+            sql: ALTER TABLE t_cast_enrollment_status_histories ADD CONSTRAINT ck_t_cast_enrollment_status_histories_previous_status CHECK (previous_status IN ('ENROLLED', 'SUSPENDED', 'WITHDRAWN'))
+        - sql:
+            sql: ALTER TABLE t_cast_enrollment_status_histories ADD CONSTRAINT ck_t_cast_enrollment_status_histories_new_status CHECK (new_status IN ('ENROLLED', 'SUSPENDED', 'WITHDRAWN'))
+        - createTable:
+            tableName: t_cast_enrollment_snapshots
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_cast_enrollment_snapshots
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enrollment_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recorded_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: custom_fields
+                  type: JSONB
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: "CURRENT_TIMESTAMP"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: "0"
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_enrollment_snapshots_store
+            baseTableName: t_cast_enrollment_snapshots
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_enrollment_snapshots_enrollment
+            baseTableName: t_cast_enrollment_snapshots
+            baseColumnNames: enrollment_id
+            referencedTableName: t_cast_enrollments
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_cast_enrollment_snapshots_actor
+            baseTableName: t_cast_enrollment_snapshots
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: NO ACTION
         - createTable:
             tableName: t_cast_field_definitions
             remarks: キャストのカスタムフィールド定義テーブル（店舗別動的属性）
@@ -261,7 +479,7 @@ databaseChangeLog:
             constraintName: fk_t_cast_invitations_cast
             baseTableName: t_cast_invitations
             baseColumnNames: cast_id
-            referencedTableName: t_casts
+            referencedTableName: t_cast_enrollments
             referencedColumnNames: id
             onDelete: CASCADE
         - sql:

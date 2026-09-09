@@ -17,7 +17,7 @@ Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/
 - The customer-visit aggregate is **Order** — never Reservation or Booking.
 - **CentralMenu and StoreMenu were unified into a single platform Menu aggregate** (decided 2026-07-18, #404 decision 2).
 - **StoreProfile** = store-facing display settings; **SystemConfig** = platform-level system settings, managed by SYSTEM_CONFIG_MANAGE permission holders. Do not mix.
-- **Cast is three layers** (#383; implementation #859–#863): **Cast** = the platform-level person, 1:1 with the CAST-type PlatformUser; **CastEnrollment** = one store-enrollment episode (StoreScoped; ENROLLED / SUSPENDED / WITHDRAWN); **CastProfile** = the public profile, 1:1 with an enrollment. **The code is not split yet** — `Cast` is still the single store-scoped row in `t_casts` — so CONTEXT.md gives the target vocabulary and the code gives what exists today.
+- **Cast is three layers** (#383; implementation #859–#863): **Cast** = the platform-level person, 1:1 with the CAST-type PlatformUser; **CastEnrollment** = one store-enrollment episode (StoreScoped; ENROLLED / SUSPENDED / WITHDRAWN); **CastProfile** = the public profile, 1:1 with an enrollment. The three entities are separate. Store-side `cast_id` references point to CastEnrollment; history recording and dedicated enrollment operations are follow-up work.
 
 ## Language Policy
 

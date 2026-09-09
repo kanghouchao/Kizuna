@@ -1,12 +1,12 @@
 package com.kizuna.cast.application;
 
 import com.kizuna.cast.api.dto.CastInvitationResponse;
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
@@ -35,7 +35,7 @@ public class CastInvitationService {
   private static final int TOKEN_BYTES = 32;
   private static final String ALREADY_LINKED_MESSAGE = "この档案は既に平台身分と連携済みのため招待を発行できません";
 
-  private final CastRepository castRepository;
+  private final CastEnrollmentRepository castRepository;
   private final CastInvitationRepository castInvitationRepository;
   private final StoreRepository storeRepository;
   private final StoreContext storeContext;
@@ -60,11 +60,11 @@ public class CastInvitationService {
     // 招待行を書く前に店舗行・档案行を押さえる（ADR 0016）。招待を先に押さえると、同じ档案を
     // 「店舗 → 档案 → 招待」の順で辿る受諾と逆順になって環になる。
     storeRepository.lockAgainstDeletion(storeContext.getStoreId());
-    Cast cast =
+    CastEnrollment cast =
         castRepository
             .findScopedByIdForUpdate(castId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
-    if (cast.getPlatformUserId() != null) {
+    if (cast.getCastId() != null) {
       throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }
 
@@ -77,7 +77,7 @@ public class CastInvitationService {
     // 失効 UPDATE は受諾側の行ロック解放（＝受諾トランザクションのコミット）を待って完了するため、この時点で
     // 並行受諾は確定済み。档案が紐づいていないかを DB から再読込（スカラ投影で一次キャッシュを回避）して再確認し、
     // 紐づき済みなら新規発行を中止する。これで連携済み档案に有効トークンが残る矛盾を塞ぐ。
-    if (castRepository.findPlatformUserIdById(castId).isPresent()) {
+    if (castRepository.findCastIdById(castId).isPresent()) {
       throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }
 
@@ -108,12 +108,12 @@ public class CastInvitationService {
 
   /** ページ内の档案について招待状態（四態）を一括導出する。呼び出し元の storeFilter 有効なトランザクション内で使う。 */
   @StoreScopeExempt(reason = "storeFilter を有効化した呼出元のトランザクション内でのみ使う内部一括導出で、境界は呼出元が引く")
-  public Map<String, CastInvitationStatus> deriveStatuses(List<Cast> casts) {
+  public Map<String, CastInvitationStatus> deriveStatuses(List<CastEnrollment> casts) {
     if (casts.isEmpty()) {
       return Map.of();
     }
     OffsetDateTime now = OffsetDateTime.now();
-    List<String> castIds = casts.stream().map(Cast::getId).toList();
+    List<String> castIds = casts.stream().map(CastEnrollment::getId).toList();
 
     Map<String, List<CastInvitation>> invitationsByCast = new HashMap<>();
     for (CastInvitation invitation : castInvitationRepository.findByCastIdIn(castIds)) {
@@ -123,7 +123,7 @@ public class CastInvitationService {
     }
 
     Map<String, CastInvitationStatus> statuses = new HashMap<>();
-    for (Cast cast : casts) {
+    for (CastEnrollment cast : casts) {
       statuses.put(
           cast.getId(),
           deriveStatus(cast, invitationsByCast.getOrDefault(cast.getId(), List.of()), now));
@@ -132,8 +132,8 @@ public class CastInvitationService {
   }
 
   private CastInvitationStatus deriveStatus(
-      Cast cast, List<CastInvitation> invitations, OffsetDateTime now) {
-    if (cast.getPlatformUserId() != null) {
+      CastEnrollment cast, List<CastInvitation> invitations, OffsetDateTime now) {
+    if (cast.getCastId() != null) {
       return CastInvitationStatus.LINKED;
     }
     List<CastInvitation> pending =

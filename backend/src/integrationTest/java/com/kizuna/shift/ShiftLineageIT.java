@@ -2,8 +2,9 @@ package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -49,7 +50,7 @@ class ShiftLineageIT extends CrossStoreTestSupport {
 
   private static final String FOREIGN_STORE_DOMAIN = "lineage-it-foreign.kizuna.test";
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -168,11 +169,12 @@ class ShiftLineageIT extends CrossStoreTestSupport {
             .orElseGet(
                 () -> storeRepository.save(new Store("系列照会IT第二店舗", FOREIGN_STORE_DOMAIN, null)))
             .getId();
-    Cast foreignCast = Cast.builder().name("系列照会IT他店キャスト").status("ACTIVE").build();
+    CastEnrollment foreignCast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     foreignCast.setStoreId(foreignStoreId);
     Shift foreignShift =
         Shift.builder()
-            .castId(castRepository.save(foreignCast).getId())
+            .castId(saveEnrollmentFixture(foreignCast, "系列照会IT他店キャスト", null).getId())
             .workDate(LocalDate.now().plusDays(3))
             .startTime(LocalTime.of(18, 0))
             .endTime(LocalTime.of(23, 0))
@@ -328,14 +330,10 @@ class ShiftLineageIT extends CrossStoreTestSupport {
         .findFirst()
         .orElseGet(
             () -> {
-              Cast cast =
-                  Cast.builder()
-                      .name("系列照会IT本人")
-                      .status("ACTIVE")
-                      .platformUserId(platformUserId)
-                      .build();
+              CastEnrollment cast =
+                  CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
               cast.setStoreId(STORE_A);
-              return castRepository.save(cast).getId();
+              return saveEnrollmentFixture(cast, "系列照会IT本人", platformUserId).getId();
             });
   }
 

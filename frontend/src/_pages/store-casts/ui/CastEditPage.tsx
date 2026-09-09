@@ -6,7 +6,7 @@ import { CastForm, CastFormData } from './CastForm';
 import { CastUpdateRequest, castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
 import { storePath, useResource } from '@/shared/lib';
-import { RegionError } from '@/shared/ui';
+import { RegionError, Button } from '@/shared/ui';
 
 /** キャスト編集ページ */
 export default function CastEditPage() {
@@ -16,11 +16,32 @@ export default function CastEditPage() {
   const router = useRouter();
   const {
     data: cast,
+    setData: setCast,
     isLoading,
     failure,
     reload: reloadCast,
   } = useResource(() => castApi.get(id), [id]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const publication = cast?.publication_status;
+  const changePublication = async () => {
+    if (!cast) return;
+    setIsPublishing(true);
+    try {
+      const result = await castApi.changePublication(
+        id,
+        publication === 'PUBLISHED' ? 'UNPUBLISHED' : 'PUBLISHED'
+      );
+      setCast(current =>
+        current?.id === id ? { ...current, publication_status: result.publication_status } : current
+      );
+      notify.success('公開状態を更新しました');
+    } catch {
+      notify.error('公開状態の更新に失敗しました');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   const handleSubmit = async (data: CastFormData) => {
     try {
@@ -80,6 +101,17 @@ export default function CastEditPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">キャスト編集</h1>
         <p className="text-sm text-muted-foreground mt-1">「{cast.name}」の情報を編集します。</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <span>公開状態: {publication === 'PUBLISHED' ? '公開' : '非公開'}</span>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isPublishing}
+          onClick={() => void changePublication()}
+        >
+          {publication === 'PUBLISHED' ? '非公開にする' : '公開する'}
+        </Button>
       </div>
       <CastForm
         initialData={{

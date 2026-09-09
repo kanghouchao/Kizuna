@@ -41,7 +41,7 @@ function claimsWith(permissions: string[]): TokenClaims {
 const cast: CastResponse = {
   id: 'cast-1',
   name: '花子',
-  status: 'ACTIVE',
+  status: 'ENROLLED',
   invitation_status: 'NOT_INVITED',
   created_at: '2026-07-01T00:00:00Z',
   updated_at: '2026-07-01T00:00:00Z',

@@ -21,7 +21,6 @@ import {
   FormLabel,
   FormMessage,
   Input,
-  Label,
 } from '@/shared/ui';
 
 interface CastFieldEditModalProps {
@@ -36,12 +35,11 @@ interface CastFieldEditModalProps {
 interface CastFieldEditFormValues {
   label: string;
   display_order: number;
-  is_public: boolean;
 }
 
 const DISPLAY_ORDER_REQUIRED = '表示順を入力してください';
 
-/** カスタムフィールド定義の編集モーダル(label・表示順・公開設定のみ、key は不変のため編集不可)。 */
+/** カスタムフィールド定義の編集モーダル(label・表示順のみ、key は不変のため編集不可)。 */
 export function CastFieldEditModal({
   open,
   onClose,
@@ -51,7 +49,6 @@ export function CastFieldEditModal({
   const form = useForm<CastFieldEditFormValues>();
   const {
     control,
-    register,
     handleSubmit,
     reset,
     formState: { isSubmitting },
@@ -62,7 +59,6 @@ export function CastFieldEditModal({
     reset({
       label: definition.label,
       display_order: definition.display_order,
-      is_public: definition.is_public,
     });
   }, [open, definition, reset]);
 
@@ -72,7 +68,6 @@ export function CastFieldEditModal({
       const request: CastFieldDefinitionUpdateRequest = {
         label: values.label,
         display_order: values.display_order,
-        is_public: values.is_public,
       };
       await castFieldDefinitionApi.update(definition.id, request);
       notify.success('フィールドを更新しました');
@@ -152,10 +147,9 @@ export function CastFieldEditModal({
                 </FormItem>
               )}
             />
-            <Label className="font-normal">
-              <input type="checkbox" {...register('is_public')} />
-              公開する(公開詳細ページに表示)
-            </Label>
+            <p className="text-sm text-muted-foreground">
+              公開区分: {definition?.is_public ? '公開' : '内部'}（作成後は変更できません）
+            </p>
             <div className="flex justify-end gap-3 border-t pt-4">
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル

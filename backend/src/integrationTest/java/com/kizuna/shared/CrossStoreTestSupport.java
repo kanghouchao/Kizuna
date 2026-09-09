@@ -2,6 +2,13 @@ package com.kizuna.shared;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfileRepository;
+import com.kizuna.cast.domain.CastPublicationStatus;
+import com.kizuna.cast.domain.CastRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
@@ -32,6 +39,55 @@ public abstract class CrossStoreTestSupport {
   protected static final long STORE_B = 2L;
 
   @Autowired protected TestRestTemplate rest;
+
+  @Autowired protected CastProfileRepository fixtureProfiles;
+  @Autowired private CastRepository fixturePeople;
+  @Autowired private CastEnrollmentRepository fixtureEnrollments;
+
+  protected Long personIdForUser(Long userId) {
+    return fixturePeople
+        .findByPlatformUserId(userId)
+        .orElseGet(() -> fixturePeople.save(Cast.builder().platformUserId(userId).build()))
+        .getId();
+  }
+
+  protected Long platformUserIdForEnrollment(String id) {
+    Long personId = fixtureEnrollments.findById(id).orElseThrow().getCastId();
+    return personId == null
+        ? null
+        : fixturePeople.findById(personId).orElseThrow().getPlatformUserId();
+  }
+
+  protected void publishCastFixture(String id, long storeId) {
+    var response =
+        rest.exchange(
+            "/store/casts/" + id + "/publication",
+            HttpMethod.PATCH,
+            new HttpEntity<>("{\"publication_status\":\"PUBLISHED\"}", storeHeaders(storeId)),
+            String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+  }
+
+  protected CastEnrollment saveEnrollmentFixture(
+      CastEnrollment enrollment, String name, Long userId) {
+    if (userId != null) {
+      var person =
+          fixturePeople
+              .findByPlatformUserId(userId)
+              .orElseGet(() -> fixturePeople.save(Cast.builder().platformUserId(userId).build()));
+      enrollment.linkCast(person.getId());
+    }
+    var saved = fixtureEnrollments.save(enrollment);
+    var profile =
+        CastProfile.builder()
+            .enrollmentId(saved.getId())
+            .name(name)
+            .publicationStatus(CastPublicationStatus.PUBLISHED)
+            .build();
+    profile.setStoreId(saved.getStoreId());
+    fixtureProfiles.save(profile);
+    return saved;
+  }
 
   protected String token;
 

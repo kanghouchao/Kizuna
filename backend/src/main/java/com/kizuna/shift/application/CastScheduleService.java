@@ -1,6 +1,6 @@
 package com.kizuna.shift.application;
 
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScopeExempt;
@@ -28,7 +28,7 @@ public class CastScheduleService {
   private static final int MAX_SPAN_DAYS = 31;
 
   private final PlatformUserRepository platformUserRepository;
-  private final CastRepository castRepository;
+  private final CastEnrollmentRepository castRepository;
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
 

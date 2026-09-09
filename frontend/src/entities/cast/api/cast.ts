@@ -2,6 +2,7 @@ import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/share
 import { requireId } from '@/shared/lib';
 import {
   CastCreateRequest,
+  CastPublicationStatus,
   CastFieldDefinitionCreateRequest,
   CastFieldDefinitionResponse,
   CastFieldDefinitionUpdateRequest,
@@ -13,6 +14,16 @@ import {
 } from '../model/types';
 
 export const castApi = {
+  changePublication: async (
+    id: string,
+    publication_status: CastPublicationStatus
+  ): Promise<{ publication_status: CastPublicationStatus }> => {
+    const response = await apiClient.patch(
+      `/store/casts/${requireId(id, 'キャスト')}/publication`,
+      { publication_status }
+    );
+    return response.data;
+  },
   /** キャスト一覧を取得する */
   list: async (params?: PaginationParams): Promise<PageResult<CastSummaryResponse>> => {
     const response = await apiClient.get('/store/casts', { params });

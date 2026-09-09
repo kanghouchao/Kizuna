@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -47,7 +47,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CastShiftRequestServiceTest {
 
   @Mock private PlatformUserRepository platformUserRepository;
-  @Mock private CastRepository castRepository;
+  @Mock private CastEnrollmentRepository castRepository;
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private ShiftRepository shiftRepository;
   @Mock private AttendanceRepository attendanceRepository;

@@ -9,6 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface StoreRepository extends JpaRepository<Store, Long> {
 
+  @Query(value = "select id from t_stores where id = :id for no key update", nativeQuery = true)
+  Optional<Long> lockCastFields(@Param("id") Long id);
+
   Page<Store> findByNameContainingIgnoreCaseOrDomainContainingIgnoreCase(
       String name, String domain, Pageable pageable);
 

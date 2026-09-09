@@ -94,8 +94,7 @@ describe('識別子を欠いた castApi / castFieldDefinitionApi', () => {
     ['castApi.issueInvitation', () => castApi.issueInvitation(undefined), 'キャスト'],
     [
       'castFieldDefinitionApi.update',
-      () =>
-        castFieldDefinitionApi.update(undefined, { label: 'x', display_order: 1, is_public: true }),
+      () => castFieldDefinitionApi.update(undefined, { label: 'x', display_order: 1 }),
       'フィールド',
     ],
     ['castFieldDefinitionApi.delete', () => castFieldDefinitionApi.delete(undefined), 'フィールド'],

@@ -117,6 +117,11 @@ export async function createCast(
     throw new Error(`create cast failed: ${res.status()} ${await res.text()}`);
   }
   const body = await res.json();
+  const publication = await request.patch(`/api/store/casts/${body.id}/publication`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { publication_status: 'PUBLISHED' },
+  });
+  if (!publication.ok()) throw new Error(`publish cast failed: ${publication.status()} ${await publication.text()}`);
   return body.id as string;
 }
 

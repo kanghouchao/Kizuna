@@ -50,11 +50,12 @@ public interface ShiftRepository
       """
       select s.castId as castId, c.name as castName, c.photoUrl as castPhotoUrl,
              s.startTime as startTime, s.endTime as endTime
-      from Shift s join com.kizuna.cast.domain.Cast c on c.id = s.castId
+      from Shift s join com.kizuna.cast.domain.CastEnrollment e on e.id = s.castId
+      join com.kizuna.cast.domain.CastProfile c on c.enrollmentId = e.id
       where s.storeId = :storeId and s.workDate = :workDate
         and s.status = com.kizuna.shift.domain.ShiftStatus.CONFIRMED
         and s.published = true
-        and c.status = 'ACTIVE'
+        and e.status = com.kizuna.cast.domain.CastEnrollmentStatus.ENROLLED
       order by s.startTime asc, s.castId asc
       """)
   List<ConfirmedShiftCastView> findConfirmedCasts(

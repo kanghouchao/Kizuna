@@ -43,6 +43,7 @@ class StoreContextFailClosedIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d でのアクティブなキャスト作成が成功すること", storeId)
         .isTrue();
+    publishCastFixture(created.getBody().path("id").asString(), storeId);
   }
 
   @Test

@@ -1,6 +1,8 @@
 package com.kizuna.cast.api.dto;
 
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastInvitationStatus;
+import com.kizuna.cast.domain.CastPublicationStatus;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -15,7 +17,8 @@ import lombok.NoArgsConstructor;
 public class CastResponse {
   private String id;
   private String name;
-  private String status;
+  private CastEnrollmentStatus status;
+  private CastPublicationStatus publicationStatus;
   private String photoUrl;
   private String introduction;
   private Integer age;

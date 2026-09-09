@@ -11,11 +11,15 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
 import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
 import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionPatch;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.store.domain.StoreRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +34,10 @@ class CastFieldDefinitionServiceTest {
 
   @Mock private CastFieldDefinitionRepository repository;
   @Mock private CastFieldDefinitionMapper mapper;
+  @Mock private StoreRepository storeRepository;
+  @Mock private StoreContext storeContext;
+  @Mock private CastEnrollmentRepository enrollmentRepository;
+  @Mock private CastProfileRepository profileRepository;
 
   @InjectMocks private CastFieldDefinitionService service;
 
@@ -161,6 +169,8 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void delete_hardDeletesById() {
+    when(repository.findById("d1"))
+        .thenReturn(Optional.of(CastFieldDefinition.builder().key("memo").build()));
     when(repository.existsById("d1")).thenReturn(true);
 
     service.delete("d1");

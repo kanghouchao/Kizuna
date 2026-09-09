@@ -1,5 +1,6 @@
 package com.kizuna.cast.domain;
 
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,8 +14,8 @@ import org.hibernate.annotations.Filter;
 /**
  * キャストのカスタムフィールド定義（店舗別動的属性のスキーマ）。
  *
- * <p>key はプログラム識別子で店舗内一意・不変（コンストラクタ/ビルダーでのみ設定、setter も apply も持たない）。 label/displayOrder/isPublic のみ
- * {@link CastFieldDefinitionPatch} で部分更新できる。
+ * <p>key はプログラム識別子で店舗内一意・不変（コンストラクタ/ビルダーでのみ設定、setter も apply も持たない）。 label/displayOrder のみ {@link
+ * CastFieldDefinitionPatch} で部分更新できる。
  */
 @Entity
 @Table(name = "t_cast_field_definitions")
@@ -35,19 +36,19 @@ public class CastFieldDefinition extends StoreScopedEntity {
   @Column(name = "display_order", nullable = false)
   private Integer displayOrder;
 
-  @Column(name = "is_public", nullable = false)
+  @Column(name = "is_public", nullable = false, updatable = false)
   private Boolean isPublic;
 
   /** 部分更新コマンドを適用する。null のフィールドは変更しない。key は不変（Patch に含まれない）。 */
   public void apply(CastFieldDefinitionPatch patch) {
+    if (patch.isPublic() != null) {
+      if (!this.isPublic.equals(patch.isPublic())) throw new ServiceException("公開区分は作成後に変更できません");
+    }
     if (patch.label() != null) {
       this.label = patch.label();
     }
     if (patch.displayOrder() != null) {
       this.displayOrder = patch.displayOrder();
-    }
-    if (patch.isPublic() != null) {
-      this.isPublic = patch.isPublic();
     }
   }
 }

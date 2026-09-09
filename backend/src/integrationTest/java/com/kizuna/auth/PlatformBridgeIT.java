@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.auth.infrastructure.JwtEncoderConfig;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
@@ -71,7 +71,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
   private static final LocalDate MARKER_DATE = LocalDate.of(2999, 2, 1);
 
   @Autowired private OrderRepository orderRepository;
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RoleRepository roleRepository;
