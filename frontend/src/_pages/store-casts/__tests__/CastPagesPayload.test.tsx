@@ -155,6 +155,24 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(body).not.toHaveProperty('invitation_status');
   });
 
+  it('退店済みの取得値を汎用更新の状態として送信しないこと', async () => {
+    mockedCastApi.get.mockResolvedValue({
+      id: 'cast-1',
+      name: '花子',
+      status: 'WITHDRAWN',
+    });
+    mockedCastApi.update.mockResolvedValue({} as never);
+    mockedFieldApi.list.mockResolvedValue([]);
+
+    render(<CastEditPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedCastApi.update).toHaveBeenCalledTimes(1));
+    const body = mockedCastApi.update.mock.calls[0][1];
+    expect(body.name).toBe('花子');
+    expect(JSON.parse(JSON.stringify(body))).not.toHaveProperty('status');
+  });
+
   it('セレクトで選び直した在籍状態が送信ボディに反映されること', async () => {
     mockedCastApi.get.mockResolvedValue({
       id: 'cast-1',

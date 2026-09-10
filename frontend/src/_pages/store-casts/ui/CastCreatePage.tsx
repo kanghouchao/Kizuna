@@ -20,7 +20,7 @@ export default function CastCreatePage() {
       setIsSubmitting(true);
       const requestData: CastCreateRequest = {
         name: data.name,
-        status: data.status,
+        status: data.status === 'WITHDRAWN' ? undefined : data.status,
         photo_url: data.photo_url,
         introduction: data.introduction,
         age: data.age ?? undefined,

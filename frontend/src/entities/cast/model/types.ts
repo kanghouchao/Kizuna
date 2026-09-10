@@ -1,4 +1,5 @@
 export type CastEnrollmentStatus = 'ENROLLED' | 'SUSPENDED' | 'WITHDRAWN';
+export type CastEditableStatus = Exclude<CastEnrollmentStatus, 'WITHDRAWN'>;
 export type CastPublicationStatus = 'PUBLISHED' | 'UNPUBLISHED';
 // キャストの招待状態（四態。cast/domain/CastInvitationStatus.java と対応）
 export type CastInvitationStatus = 'NOT_INVITED' | 'INVITED' | 'EXPIRED' | 'LINKED';
@@ -68,7 +69,7 @@ export interface CastPublicResponse {
 // キャスト作成リクエスト
 export interface CastCreateRequest {
   name: string;
-  status?: CastEnrollmentStatus;
+  status?: CastEditableStatus;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -82,7 +83,7 @@ export interface CastCreateRequest {
 // キャスト更新リクエスト
 export interface CastUpdateRequest {
   name?: string;
-  status?: CastEnrollmentStatus;
+  status?: CastEditableStatus;
   photo_url?: string;
   introduction?: string;
   age?: number;

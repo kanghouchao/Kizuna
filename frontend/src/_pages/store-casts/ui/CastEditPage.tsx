@@ -48,7 +48,7 @@ export default function CastEditPage() {
       setIsSubmitting(true);
       const requestData: CastUpdateRequest = {
         name: data.name,
-        status: data.status,
+        status: data.status === 'WITHDRAWN' ? undefined : data.status,
         photo_url: data.photo_url,
         introduction: data.introduction,
         age: data.age ?? undefined,
