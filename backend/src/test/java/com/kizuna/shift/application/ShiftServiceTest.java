@@ -4,18 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
@@ -26,6 +29,7 @@ import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -49,7 +53,9 @@ class ShiftServiceTest {
   @Mock private ShiftRepository shiftRepository;
   @Mock private AttendanceRepository attendanceRepository;
   @Mock private ShiftMapper shiftMapper;
-  @Mock private CastService castService;
+  @Mock private CastEnrollmentRepository enrollments;
+  @Mock private StoreRepository storeRepository;
+  @Mock private StoreContext storeContext;
   @Mock private CastProfileRepository castRepository;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private BusinessDateService businessDateService;
@@ -58,6 +64,12 @@ class ShiftServiceTest {
 
   private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final Long ACTOR_ID = 42L;
+
+  private CastEnrollment enrollment(String id) {
+    CastEnrollment enrollment = CastEnrollment.builder().build();
+    enrollment.setId(id);
+    return enrollment;
+  }
 
   private void givenActor() {
     PlatformUser actor =
@@ -107,7 +119,7 @@ class ShiftServiceTest {
     Shift entity = Shift.builder().castId("c1").status(ShiftStatus.TENTATIVE).build();
 
     givenActor();
-    when(castService.existsForCurrentStore("c1")).thenReturn(true);
+    when(enrollments.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(enrollment("c1")));
     when(shiftMapper.toEntity(req, ACTOR_ID)).thenReturn(entity);
     when(shiftRepository.save(any()))
         .thenAnswer(
@@ -122,6 +134,9 @@ class ShiftServiceTest {
     when(shiftMapper.toResponse(any(), any())).thenReturn(resp);
 
     ShiftResponse res = shiftService.create(req, ACTOR_EMAIL);
+    var locks = inOrder(storeRepository, enrollments);
+    locks.verify(storeRepository).lockAgainstDeletion(any());
+    locks.verify(enrollments).findScopedByIdForUpdate("c1");
     assertThat(res.getId()).isEqualTo("s_new");
     // 作成の実行者は認証主体から解決して写像へ渡す（実際に列へ載ることは ShiftCrossStoreIT が見る）
     verify(shiftMapper).toEntity(req, ACTOR_ID);
@@ -142,7 +157,7 @@ class ShiftServiceTest {
   void create_rejectsWhenCastNotInStore() {
     ShiftCreateRequest req = validCreateRequest();
 
-    when(castService.existsForCurrentStore("c1")).thenReturn(false);
+    when(enrollments.findScopedByIdForUpdate("c1")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> shiftService.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
@@ -185,7 +200,7 @@ class ShiftServiceTest {
   @Test
   void update_rejectsWhenCastNotInStore() {
     // 行き先のキャストはシフトより先に押さえるので、不在はシフトを読む前に決まる。
-    when(castService.existsForCurrentStoreForUpdate("foreign")).thenReturn(false);
+    when(enrollments.findScopedByIdForUpdate("foreign")).thenReturn(Optional.empty());
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setCastId("foreign");
@@ -244,7 +259,7 @@ class ShiftServiceTest {
   void update_rejectsCastChangeWhenActiveAttendanceExists() {
     Shift s = shiftWithAttribution();
     when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    when(castService.existsForCurrentStoreForUpdate("c2")).thenReturn(true);
+    when(enrollments.findScopedByIdForUpdate("c2")).thenReturn(Optional.of(enrollment("c2")));
     when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -285,7 +300,7 @@ class ShiftServiceTest {
     Shift s = shiftWithAttribution();
     givenActor();
     when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    when(castService.existsForCurrentStoreForUpdate("c1")).thenReturn(true);
+    when(enrollments.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(enrollment("c1")));
     lenient().when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
     when(shiftRepository.save(any())).thenReturn(s);
 

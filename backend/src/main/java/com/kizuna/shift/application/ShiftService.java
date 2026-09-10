@@ -1,6 +1,7 @@
 package com.kizuna.shift.application;
 
-import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.settings.application.BusinessDateService;
@@ -8,6 +9,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
@@ -18,6 +20,7 @@ import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -36,7 +39,9 @@ public class ShiftService {
   private final ShiftRepository shiftRepository;
   private final AttendanceRepository attendanceRepository;
   private final ShiftMapper shiftMapper;
-  private final CastService castService;
+  private final CastEnrollmentRepository enrollments;
+  private final StoreRepository storeRepository;
+  private final StoreContext storeContext;
   private final CastProfileRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
@@ -87,9 +92,7 @@ public class ShiftService {
     if (request.getStartTime().equals(request.getEndTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
-    if (!castService.existsForCurrentStore(request.getCastId())) {
-      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
-    }
+    requireActiveMembership(lockEnrollment(request.getCastId()));
 
     // store_id は StoreScopeStampListener が @PrePersist で採番する
     Shift shift = shiftMapper.toEntity(request, resolveActorId(actorEmail));
@@ -99,17 +102,15 @@ public class ShiftService {
   @StoreScoped
   @Transactional
   public ShiftResponse update(String id, ShiftUpdateRequest request, String actorEmail) {
-    // 付け替え先のキャストはシフトより先に押さえる。この更新は cast_id を書くので、書き込みが行き先の
-    // キャスト行に key share を要求する — シフトを先に押さえると、キャスト → シフト の順で進む記録と
-    // 環になる（契約は CastEnrollmentRepository#findScopedByIdForUpdate）。
-    if (request.getCastId() != null
-        && !castService.existsForCurrentStoreForUpdate(request.getCastId())) {
-      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
-    }
+    CastEnrollment target =
+        request.getCastId() == null ? null : lockEnrollment(request.getCastId());
 
     // 実績の有無を読んで可否を決める以上、実績の記録・訂正と直列でなければ守衛は素通りされる。
     // ロックはこの取引でのシフトの最初の読み込みでなければならない（{@link ShiftRepository#findScopedByIdForUpdate}）。
     Shift shift = findShiftForUpdate(id);
+    if (target != null && !target.getId().equals(shift.getCastId())) {
+      requireActiveMembership(target);
+    }
 
     // 部分更新のマージ結果（実効の開始・終了）で判定する。片方だけ来て既存値と一致する穴を塞ぐ。
     LocalTime effectiveStart =
@@ -131,6 +132,20 @@ public class ShiftService {
     shift.stampUpdatedBy(resolveActorId(actorEmail));
 
     return toResponse(shiftRepository.save(shift));
+  }
+
+  /** 店舗・在籍・シフトの順序を守り、作成と付け替えを退店から直列化する。 */
+  private CastEnrollment lockEnrollment(String id) {
+    storeRepository.lockAgainstDeletion(storeContext.getStoreId());
+    return enrollments
+        .findScopedByIdForUpdate(id)
+        .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + id));
+  }
+
+  private static void requireActiveMembership(CastEnrollment enrollment) {
+    if (!enrollment.isMembershipActive()) {
+      throw new ServiceException("退店済みの在籍にはシフトを作成・付け替えできません");
+    }
   }
 
   /** 実績が物化した帰属（営業日・キャスト）を動かす更新か。現行と同値の再送は変更ではないので通す。 */

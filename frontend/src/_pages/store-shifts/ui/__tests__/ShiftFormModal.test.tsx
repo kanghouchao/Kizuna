@@ -108,6 +108,33 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
     mockedDelete.mockResolvedValue(undefined);
   });
 
+  it('新規作成では退店済みを候補と既定値から除き、停止中を選べること', async () => {
+    renderModal({
+      casts: [
+        { ...cast('retired', '退店キャスト'), status: 'WITHDRAWN' },
+        { ...cast('suspended', '停止キャスト'), status: 'SUSPENDED' },
+      ],
+    });
+    expect(selectedLabel(CAST_SELECT)).toBe('停止キャスト');
+    fireEvent.click(selectAt(CAST_SELECT));
+    expect(await screen.findByRole('option', { name: '停止キャスト' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '退店キャスト' })).not.toBeInTheDocument();
+  });
+
+  it('退店済みの元キャストを維持したまま既存シフトを保存できること', async () => {
+    renderModal({
+      editing: EDITING,
+      casts: [
+        cast('cast-1', 'キャストA'),
+        { ...cast('cast-2', '退店キャスト'), status: 'WITHDRAWN' },
+      ],
+    });
+    expect(selectedLabel(CAST_SELECT)).toBe('退店キャスト');
+    submit();
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][1].cast_id).toBe('cast-2');
+  });
+
   it('新規作成の既定値が先頭キャスト・未確定・秒付き時刻で送られること', async () => {
     renderModal();
 

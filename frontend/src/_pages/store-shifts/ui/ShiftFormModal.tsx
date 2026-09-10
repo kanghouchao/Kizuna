@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
@@ -89,12 +89,26 @@ export function ShiftFormModal({
 
   // 候補は Select と項目描画の両方が読む。引き金に出る文言は items から引かれるので、
   // 選べる値の一覧はここ一箇所に持つ。
+  const selectableCasts = useMemo(
+    () => casts.filter(c => c.status !== 'WITHDRAWN' || c.id === editing?.cast_id),
+    [casts, editing?.cast_id]
+  );
   const castOptions =
-    casts.length === 0
-      ? [{ value: SELECT_NONE, label: 'キャストが未登録です' }]
-      : casts
+    selectableCasts.length === 0
+      ? [
+          {
+            value: SELECT_NONE,
+            label: casts.length === 0 ? 'キャストが未登録です' : '選択できるキャストがいません',
+            disabled: false,
+          },
+        ]
+      : selectableCasts
           .filter(c => c.id !== undefined)
-          .map(c => ({ value: c.id as string, label: c.name ?? '' }));
+          .map(c => ({
+            value: c.id as string,
+            label: c.name ?? '',
+            disabled: c.status === 'WITHDRAWN',
+          }));
 
   useEffect(() => {
     if (!open) return;
@@ -109,7 +123,7 @@ export function ShiftFormModal({
       });
     } else {
       reset({
-        cast_id: casts[0]?.id ?? '',
+        cast_id: selectableCasts[0]?.id ?? '',
         work_date: defaultDate,
         start_time: '18:00',
         end_time: '23:00',
@@ -117,7 +131,7 @@ export function ShiftFormModal({
         published: true,
       });
     }
-  }, [open, editing, defaultDate, casts, reset]);
+  }, [open, editing, defaultDate, selectableCasts, reset]);
 
   const submit = async (values: ShiftFormValues) => {
     const payload = {
@@ -184,7 +198,7 @@ export function ShiftFormModal({
                   </FormControl>
                   <SelectContent>
                     {castOptions.map(o => (
-                      <SelectItem key={o.value} value={o.value}>
+                      <SelectItem key={o.value} value={o.value} disabled={o.disabled}>
                         {o.label}
                       </SelectItem>
                     ))}

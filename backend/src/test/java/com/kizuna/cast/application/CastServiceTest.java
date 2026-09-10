@@ -3,6 +3,7 @@ package com.kizuna.cast.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.api.dto.CastCreateRequest;
@@ -16,9 +17,11 @@ import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationRepository;
+import com.kizuna.cast.domain.CastManagementView;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
+import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -30,12 +33,15 @@ import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class CastServiceTest {
@@ -45,6 +51,7 @@ class CastServiceTest {
   @Mock CastInvitationRepository invitationRepository;
   @Mock CastFieldDefinitionRepository definitions;
   @Mock AttendanceReferenceCheck attendance;
+  @Mock OrderReferenceCheck orders;
   @Mock StoreRepository stores;
   @Mock CastEnrollmentStatusHistoryRepository histories;
   @Mock CastEnrollmentSnapshotRepository snapshots;
@@ -66,7 +73,8 @@ class CastServiceTest {
             context,
             invitations,
             definitions,
-            attendance);
+            attendance,
+            orders);
   }
 
   private void existing() {
@@ -103,6 +111,7 @@ class CastServiceTest {
     request.setName("花");
     var response = service.create(request, "actor");
     assertThat(response.getId()).isEqualTo("e1");
+    assertThat(response.isDeletable()).isTrue();
     assertThat(response.getName()).isEqualTo("花");
     assertThat(response.getPublicationStatus()).isEqualTo(CastPublicationStatus.UNPUBLISHED);
   }
@@ -164,10 +173,39 @@ class CastServiceTest {
   }
 
   @Test
+  void listResolvesReferencesOnceForTheWholePage() {
+    var views =
+        List.of("free", "order", "attendance").stream()
+            .map(
+                id -> {
+                  var enrollment = CastEnrollment.builder().build();
+                  enrollment.setId(id);
+                  return new CastManagementView(enrollment, CastProfile.builder().name(id).build());
+                })
+            .toList();
+    when(profiles.search(any(), any())).thenReturn(new PageImpl<>(views));
+    when(orders.findReferencedCastIds(any())).thenReturn(Set.of("order"));
+    when(attendance.findReferencedCastIds(any())).thenReturn(Set.of("attendance"));
+    var response = service.list(null, PageRequest.of(0, 20));
+    assertThat(response.getContent())
+        .extracting(r -> r.isDeletable())
+        .containsExactly(true, false, false);
+    verify(orders).findReferencedCastIds(Set.of("free", "order", "attendance"));
+    verify(attendance).findReferencedCastIds(Set.of("free", "order", "attendance"));
+  }
+
+  @Test
+  void updateReturnsReferenceAwareDeletability() {
+    existing();
+    when(orders.findReferencedCastIds(Set.of("e1"))).thenReturn(Set.of("e1"));
+    assertThat(service.update("e1", new CastUpdateRequest(), "actor").isDeletable()).isFalse();
+  }
+
+  @Test
   void attendancePreventsDeletion() {
     when(enrollments.findScopedByIdForUpdate("e1"))
         .thenReturn(Optional.of(CastEnrollment.builder().build()));
-    when(attendance.existsForCast("e1")).thenReturn(true);
+    when(attendance.findReferencedCastIds(List.of("e1"))).thenReturn(Set.of("e1"));
     assertThatThrownBy(() -> service.delete("e1")).isInstanceOf(ConflictException.class);
   }
 }
