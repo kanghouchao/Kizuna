@@ -196,6 +196,30 @@ class CastInvitationServiceTest {
   }
 
   @Test
+  void deriveStatuses_withdrawnUnlinkedEnrollmentsAreUnavailableButLinkedRemainsLinked() {
+    CastEnrollment pending = cast("pending", null);
+    CastEnrollment expired = cast("expired", null);
+    CastEnrollment notInvited = cast("not-invited", null);
+    CastEnrollment linked = cast("linked", 5L);
+    List<CastEnrollment> enrollments = List.of(pending, expired, notInvited, linked);
+    enrollments.forEach(enrollment -> enrollment.withdraw(OffsetDateTime.now()));
+    when(castInvitationRepository.findByCastIdIn(any()))
+        .thenReturn(
+            List.of(
+                invitation(
+                    "pending", CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1)),
+                invitation(
+                    "expired", CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
+
+    Map<String, CastInvitationStatus> statuses = castInvitationService.deriveStatuses(enrollments);
+
+    assertThat(statuses.get("pending").name()).isEqualTo("UNAVAILABLE");
+    assertThat(statuses.get("expired").name()).isEqualTo("UNAVAILABLE");
+    assertThat(statuses.get("not-invited").name()).isEqualTo("UNAVAILABLE");
+    assertThat(statuses.get("linked")).isEqualTo(CastInvitationStatus.LINKED);
+  }
+
+  @Test
   void deriveStatuses_emptyInputSkipsQuery() {
     Map<String, CastInvitationStatus> statuses = castInvitationService.deriveStatuses(List.of());
 

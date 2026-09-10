@@ -60,6 +60,32 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
                     JsonNode.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
+    var publicView =
+        rest.postForEntity(
+            "/platform/cast-invitations/view", Map.of("token", token), JsonNode.class);
+    assertThat(publicView.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(publicView.getBody().path("status").asString()).isEqualTo("UNAVAILABLE");
+    var detail =
+        rest.exchange(
+            "/store/casts/" + id,
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(detail.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(detail.getBody().path("invitation_status").asString()).isEqualTo("UNAVAILABLE");
+    var list =
+        rest.exchange(
+            "/store/casts?size=100&search=在籍履歴検証",
+            HttpMethod.GET,
+            new HttpEntity<>(storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat((Iterable<JsonNode>) list.getBody().path("content"))
+        .anySatisfy(
+            row -> {
+              assertThat(row.path("id").asString()).isEqualTo(id);
+              assertThat(row.path("invitation_status").asString()).isEqualTo("UNAVAILABLE");
+            });
     assertThat(
             jdbc.queryForObject(
                 "select status from t_cast_invitations where token = ?", String.class, token))

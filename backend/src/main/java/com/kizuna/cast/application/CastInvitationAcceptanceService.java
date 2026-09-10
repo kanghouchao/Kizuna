@@ -58,7 +58,7 @@ public class CastInvitationAcceptanceService {
   private final StoreRepository storeRepository;
   private final PasswordEncoder passwordEncoder;
 
-  /** 招待を照会する。受諾可否のビュー状態（VALID/EXPIRED/USED）と店舗名・档案名を返す。 */
+  /** 招待を照会する。受諾可否のビュー状態と店舗名・档案名を返す。 */
   @StoreScopeExempt(reason = TOKEN_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public CastInvitationDetailResponse view(String token) {
@@ -70,7 +70,7 @@ public class CastInvitationAcceptanceService {
             .findByEnrollmentId(cast.getId())
             .orElseThrow(() -> new NotFoundException("プロフィールが見つかりません"))
             .getName(),
-        viewStatus(invitation),
+        viewStatus(invitation, cast),
         invitation.getExpiresAt());
   }
 
@@ -212,9 +212,12 @@ public class CastInvitationAcceptanceService {
     return storeRepository.findById(storeId).map(Store::getName).orElse(null);
   }
 
-  private String viewStatus(CastInvitation invitation) {
+  private String viewStatus(CastInvitation invitation, CastEnrollment enrollment) {
     if (invitation.getStatus() != CastInvitation.Status.PENDING) {
       return "USED";
+    }
+    if (!enrollment.isMembershipActive()) {
+      return "UNAVAILABLE";
     }
     return invitation.isExpired(OffsetDateTime.now()) ? "EXPIRED" : "VALID";
   }

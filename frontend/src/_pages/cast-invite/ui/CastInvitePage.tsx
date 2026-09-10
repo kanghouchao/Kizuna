@@ -45,9 +45,11 @@ export default function CastInvitePage() {
           return;
         }
         setInvalidMessage(
-          response.status === 'EXPIRED'
-            ? '招待の有効期限が切れています。店舗の担当者に再発行を依頼してください。'
-            : 'この招待は既に使用されています。心当たりがない場合は店舗の担当者にご確認ください。'
+          response.status === 'UNAVAILABLE'
+            ? 'この招待は利用できません。店舗の担当者にご確認ください。'
+            : response.status === 'EXPIRED'
+              ? '招待の有効期限が切れています。店舗の担当者に再発行を依頼してください。'
+              : 'この招待は既に使用されています。心当たりがない場合は店舗の担当者にご確認ください。'
         );
         setStage('invalid');
       } catch {

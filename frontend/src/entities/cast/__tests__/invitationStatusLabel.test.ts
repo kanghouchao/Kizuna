@@ -22,6 +22,13 @@ describe('castInvitationStatusLabel', () => {
     });
   });
 
+  it('UNAVAILABLE は「招待不可」を返すこと', () => {
+    expect(castInvitationStatusLabel('UNAVAILABLE')).toEqual({
+      text: '招待不可',
+      color: 'bg-muted text-foreground',
+    });
+  });
+
   it('LINKED は「連携済み」を返すこと', () => {
     expect(castInvitationStatusLabel('LINKED')).toEqual({
       text: '連携済み',

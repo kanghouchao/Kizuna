@@ -110,7 +110,7 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
     expect(await screen.findByRole('button', { name: '招待を発行' })).toBeInTheDocument();
   });
 
-  it.each(['NOT_INVITED', 'INVITED', 'EXPIRED'] as const)(
+  it.each(['NOT_INVITED', 'INVITED', 'EXPIRED', 'UNAVAILABLE'] as const)(
     '退店済みでは招待状態 %s でも発行・再発行を表示しないこと',
     async invitation_status => {
       mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
@@ -120,6 +120,10 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
       render(<CastListPage />);
       await screen.findByText('花子');
       expect(screen.getByText('退店')).toBeInTheDocument();
+      if (invitation_status === 'UNAVAILABLE') {
+        expect(screen.getByText('招待不可')).toBeInTheDocument();
+        expect(screen.queryByText('招待中')).not.toBeInTheDocument();
+      }
       expect(screen.queryByRole('button', { name: '招待を発行' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '再発行' })).not.toBeInTheDocument();
     }
