@@ -10,15 +10,20 @@ import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
+import com.kizuna.cast.domain.CastInvitation;
+import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
@@ -33,6 +38,9 @@ public class CastEnrollmentService {
   private final CastEnrollmentStatusHistoryRepository histories;
   private final CastEnrollmentSnapshotRepository snapshots;
   private final PlatformUserRepository users;
+  private final CastInvitationRepository invitations;
+  private final StoreRepository stores;
+  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional
@@ -61,6 +69,8 @@ public class CastEnrollmentService {
     CastEnrollmentStatus previous = enrollment.getStatus();
     OffsetDateTime at = now();
     enrollment.withdraw(at);
+    invitations.invalidatePending(
+        id, CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
     record(enrollment, previous, actorEmail, at);
     return response(enrollment);
   }
@@ -76,14 +86,33 @@ public class CastEnrollmentService {
   public void replaceInternalFields(
       CastEnrollment enrollment, Map<String, String> values, String actorEmail) {
     if (enrollment.getCustomFields().equals(values)) return;
+    saveSnapshot(enrollment, actorId(actorEmail));
+    enrollment.replaceCustomFields(values);
+  }
+
+  @StoreScoped
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void removeInternalField(List<CastEnrollment> enrollments, String key, String actorEmail) {
+    var affected =
+        enrollments.stream()
+            .filter(enrollment -> enrollment.getCustomFields().containsKey(key))
+            .toList();
+    if (affected.isEmpty()) return;
+    Long actorId = actorId(actorEmail);
+    for (CastEnrollment enrollment : affected) {
+      saveSnapshot(enrollment, actorId);
+      enrollment.removeCustomField(key);
+    }
+  }
+
+  private void saveSnapshot(CastEnrollment enrollment, Long actorId) {
     snapshots.save(
         CastEnrollmentSnapshot.builder()
             .enrollmentId(enrollment.getId())
-            .actorId(actorId(actorEmail))
+            .actorId(actorId)
             .recordedAt(now())
             .customFields(new HashMap<>(enrollment.getCustomFields()))
             .build());
-    enrollment.replaceCustomFields(values);
   }
 
   @StoreScoped
@@ -138,6 +167,7 @@ public class CastEnrollmentService {
   }
 
   private CastEnrollment requireLocked(String id) {
+    stores.lockAgainstDeletion(storeContext.getStoreId());
     return enrollments
         .findScopedByIdForUpdate(id)
         .orElseThrow(() -> new NotFoundException("在籍が見つかりません"));

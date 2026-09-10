@@ -33,6 +33,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 class CastFieldDefinitionServiceTest {
 
   @Mock private CastFieldDefinitionRepository repository;
+  @Mock private CastEnrollmentService enrollmentService;
   @Mock private CastFieldDefinitionMapper mapper;
   @Mock private StoreRepository storeRepository;
   @Mock private StoreContext storeContext;

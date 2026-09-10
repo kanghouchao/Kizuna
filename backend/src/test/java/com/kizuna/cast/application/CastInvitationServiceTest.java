@@ -95,6 +95,17 @@ class CastInvitationServiceTest {
   }
 
   @Test
+  void issue_rejectsWithdrawnEnrollment() {
+    CastEnrollment enrollment = cast("c1", null);
+    enrollment.withdraw(OffsetDateTime.now());
+    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(enrollment));
+
+    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+        .isInstanceOf(CastInvitationStateException.class);
+    verify(castInvitationRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
   void issue_invalidatesPendingViaConditionalUpdateBeforeReissuing() {
     // 旧 PENDING の失効は管理エンティティの invalidate() ではなく条件付き一括 UPDATE で行い、
     // それが新規 PENDING の INSERT より前に実行されることを確認する（受諾との直列化）。

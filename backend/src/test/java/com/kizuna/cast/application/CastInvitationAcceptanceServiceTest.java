@@ -98,6 +98,26 @@ class CastInvitationAcceptanceServiceTest {
     return cast;
   }
 
+  @Test
+  void acceptance_rejectsWithdrawnEnrollmentBeforeClaimOrUserWrite() {
+    CastEnrollment enrollment = cast("c1", "退店済み");
+    enrollment.withdraw(OffsetDateTime.now());
+    when(castInvitationRepository.findByToken("tok"))
+        .thenReturn(
+            Optional.of(
+                invitation(
+                    "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1))));
+    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(enrollment));
+
+    assertThatThrownBy(() -> service.acceptAsNewUser("tok", new CastInvitationAcceptRequest()))
+        .isInstanceOf(CastInvitationStateException.class);
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
+        .isInstanceOf(CastInvitationStateException.class);
+    verify(castInvitationRepository, never()).claimPending(any(), any(), any(), any());
+    verify(platformUserRepository, never()).save(any());
+    verify(platformUserRepository, never()).findByEmailForUpdate(any());
+  }
+
   private PlatformUser user(long id, UserType userType, Set<Long> storeIds) {
     PlatformUser user =
         PlatformUser.builder()

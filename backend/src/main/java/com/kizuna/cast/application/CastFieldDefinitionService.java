@@ -13,7 +13,6 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
-import java.util.HashMap;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -81,16 +80,7 @@ public class CastFieldDefinitionService {
       throw new NotFoundException("カスタムフィールド定義が見つかりません");
     }
     String key = repository.findById(id).orElseThrow().getKey();
-    enrollmentRepository
-        .findAllForUpdate()
-        .forEach(
-            enrollment -> {
-              if (enrollment.getCustomFields().containsKey(key)) {
-                var values = new HashMap<>(enrollment.getCustomFields());
-                values.remove(key);
-                enrollmentService.replaceInternalFields(enrollment, values, actorEmail);
-              }
-            });
+    enrollmentService.removeInternalField(enrollmentRepository.findAllForUpdate(), key, actorEmail);
     profileRepository.findAll().forEach(profile -> profile.removeCustomField(key));
     repository.deleteById(id);
   }

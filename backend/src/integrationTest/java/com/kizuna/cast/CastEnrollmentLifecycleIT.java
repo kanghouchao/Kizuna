@@ -10,6 +10,7 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -39,6 +41,113 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
   @Autowired StoreContext storeContext;
   @Autowired PlatformTransactionManager transactions;
   @Autowired JdbcTemplate jdbc;
+  @Autowired DataSource dataSource;
+
+  @Test
+  void withdrawalInvalidatesPendingInvitationAndRejectsReissueAndAcceptance() {
+    String id = create();
+    var invitation =
+        rest.postForEntity(
+            "/store/casts/" + id + "/invitation",
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(invitation.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String token = invitation.getBody().path("token").asString();
+    assertThat(
+            rest.postForEntity(
+                    "/store/casts/" + id + "/withdrawal",
+                    new HttpEntity<>(storeHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(
+            jdbc.queryForObject(
+                "select status from t_cast_invitations where token = ?", String.class, token))
+        .isEqualTo("INVALIDATED");
+    assertThat(
+            rest.postForEntity(
+                    "/store/casts/" + id + "/invitation",
+                    new HttpEntity<>(managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    String email = "withdrawn-invitation-" + System.nanoTime() + "@kizuna.test";
+    assertThat(
+            rest.postForEntity(
+                    "/platform/cast-invitations/acceptance",
+                    Map.of(
+                        "token",
+                        token,
+                        "email",
+                        email,
+                        "password",
+                        NEW_ACCOUNT_PASSWORD,
+                        "display_name",
+                        "退店済み"),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(users.findByEmail(email)).isEmpty();
+    assertThat(
+            jdbc.queryForObject(
+                "select cast_id from t_cast_enrollments where id = ?", Long.class, id))
+        .isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"suspension", "resumption", "withdrawal"})
+  void stateChangeLocksStoreBeforeEnrollment(String operation) throws Exception {
+    String id = create();
+    var headers = storeHeaders(STORE_A);
+    if (operation.equals("resumption")) {
+      assertThat(
+              rest.postForEntity(
+                      "/store/casts/" + id + "/suspension",
+                      new HttpEntity<>(headers),
+                      JsonNode.class)
+                  .getStatusCode())
+          .isEqualTo(HttpStatus.OK);
+    }
+    try (Connection holder = dataSource.getConnection()) {
+      holder.setAutoCommit(false);
+      try (var statement =
+          holder.prepareStatement("select id from t_stores where id = ? for update")) {
+        statement.setLong(1, STORE_A);
+        assertThat(statement.executeQuery().next()).isTrue();
+      }
+      var waiting =
+          CompletableFuture.supplyAsync(
+              () ->
+                  rest.postForEntity(
+                      "/store/casts/" + id + "/" + operation,
+                      new HttpEntity<>(headers),
+                      JsonNode.class));
+      try {
+        boolean blocked = false;
+        for (int attempt = 0; attempt < 100; attempt++) {
+          if (jdbc.queryForObject(
+                  "select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query like '%t_stores%'",
+                  Integer.class)
+              > 0) {
+            blocked = true;
+            break;
+          }
+          if (waiting.isDone()) break;
+          TimeUnit.MILLISECONDS.sleep(50);
+        }
+        assertThat(blocked).as("店舗行のロック待ちに到達すること").isTrue();
+        try (var statement =
+            holder.prepareStatement(
+                "select id from t_cast_enrollments where id = ? for update nowait")) {
+          statement.setString(1, id);
+          assertThat(statement.executeQuery().next()).as("店舗で待つ間は在籍行を押さえていないこと").isTrue();
+        }
+      } finally {
+        holder.rollback();
+      }
+      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+  }
 
   private String create() {
     var response =

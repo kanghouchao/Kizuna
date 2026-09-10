@@ -15,6 +15,7 @@ import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
+import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
@@ -41,6 +42,7 @@ class CastServiceTest {
   @Mock CastEnrollmentRepository enrollments;
   @Mock CastProfileRepository profiles;
   @Mock CastInvitationService invitations;
+  @Mock CastInvitationRepository invitationRepository;
   @Mock CastFieldDefinitionRepository definitions;
   @Mock AttendanceReferenceCheck attendance;
   @Mock StoreRepository stores;
@@ -56,7 +58,8 @@ class CastServiceTest {
     service =
         new CastService(
             enrollments,
-            new CastEnrollmentService(enrollments, histories, snapshots, users),
+            new CastEnrollmentService(
+                enrollments, histories, snapshots, users, invitationRepository, stores, context),
             Mappers.getMapper(CastMapper.class),
             profiles,
             stores,

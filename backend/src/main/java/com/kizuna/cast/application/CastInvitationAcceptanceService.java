@@ -193,9 +193,14 @@ public class CastInvitationAcceptanceService {
    * StoreRepository#lockAgainstDeletion}）。照会（{@link #view}）は書かないのでこの口を通らない。
    */
   private CastEnrollment requireCastForUpdate(String castId) {
-    return castRepository
-        .findByIdForUpdate(castId)
-        .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
+    CastEnrollment enrollment =
+        castRepository
+            .findByIdForUpdate(castId)
+            .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
+    if (!enrollment.isMembershipActive()) {
+      throw new CastInvitationStateException("退店済みの在籍の招待は受諾できません");
+    }
+    return enrollment;
   }
 
   private String storeName(Long storeId) {
