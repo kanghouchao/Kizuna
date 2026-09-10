@@ -10,8 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.application.CastService;
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -50,7 +50,7 @@ class ShiftServiceTest {
   @Mock private AttendanceRepository attendanceRepository;
   @Mock private ShiftMapper shiftMapper;
   @Mock private CastService castService;
-  @Mock private CastRepository castRepository;
+  @Mock private CastProfileRepository castRepository;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private BusinessDateService businessDateService;
 
@@ -364,8 +364,8 @@ class ShiftServiceTest {
     return shift;
   }
 
-  private Cast activeCast(String id, String name, String photoUrl) {
-    Cast cast = Cast.builder().name(name).photoUrl(photoUrl).build();
+  private CastProfile activeCast(String id, String name, String photoUrl) {
+    CastProfile cast = CastProfile.builder().name(name).enrollmentId(id).photoUrl(photoUrl).build();
     cast.setId(id);
     return cast;
   }
@@ -432,7 +432,7 @@ class ShiftServiceTest {
             .build();
     when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of(first, second));
-    when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
+    when(castRepository.findPublished())
         .thenReturn(List.of(activeCast("cA", "キャストA", "urlA"), activeCast("cB", "キャストB", "urlB")));
 
     List<PublicShiftResponse> result = shiftService.listPublicToday();
@@ -485,8 +485,7 @@ class ShiftServiceTest {
             .build();
     when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
         .thenReturn(List.of(active, orphan));
-    when(castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE"))
-        .thenReturn(List.of(activeCast("cA", "キャストA", "urlA")));
+    when(castRepository.findPublished()).thenReturn(List.of(activeCast("cA", "キャストA", "urlA")));
 
     List<PublicShiftResponse> result = shiftService.listPublicToday();
 

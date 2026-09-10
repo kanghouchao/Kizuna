@@ -115,6 +115,63 @@ class ShiftPublicationIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("未公開プロフィールは会員候補に出ず、公開と取消が候補へ反映されること")
+  void memberCandidatesRequirePublishedProfile() {
+    String castId = createCast("プロフィール公開境界_" + UUID.randomUUID(), false);
+    seedShift(castId, LocalTime.of(14, 0), ShiftStatus.CONFIRMED, true);
+    String memberToken = registerAndLoginAsMember();
+
+    assertThat(memberCandidateIds(memberToken)).contains(publishedCastId).doesNotContain(castId);
+    publishCastFixture(castId, STORE_A);
+    assertThat(memberCandidateIds(memberToken)).contains(castId);
+    unpublishProfile(castId);
+    assertThat(memberCandidateIds(memberToken)).doesNotContain(castId);
+  }
+
+  @Test
+  @DisplayName("未公開プロフィールの在籍 ID 直送を拒否し、公開後だけ会員指名できること")
+  void memberNominationRequiresPublishedProfile() {
+    String castId = createCast("プロフィール指名境界_" + UUID.randomUUID(), false);
+    seedShift(castId, LocalTime.of(14, 0), ShiftStatus.CONFIRMED, true);
+    String memberToken = registerAndLoginAsMember();
+    String absentCastId = createCast("出勤なし_" + UUID.randomUUID());
+
+    ResponseEntity<JsonNode> hidden = requestReservation(memberToken, castId);
+    assertThat(hidden.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(hidden.getBody().path("error").asString())
+        .isEqualTo(
+            requestReservation(memberToken, absentCastId).getBody().path("error").asString());
+    publishCastFixture(castId, STORE_A);
+    assertThat(requestReservation(memberToken, castId).getStatusCode())
+        .isEqualTo(HttpStatus.CREATED);
+    unpublishProfile(castId);
+    assertThat(requestReservation(memberToken, castId).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(confirmedShiftLookupService.hasConfirmedShift(STORE_A, castId, today)).isTrue();
+  }
+
+  private List<String> memberCandidateIds(String memberToken) {
+    ResponseEntity<JsonNode> response =
+        rest.exchange(
+            "/platform/shifts/casts?store_id=" + STORE_A + "&date=" + today,
+            HttpMethod.GET,
+            new HttpEntity<>(bearer(memberToken)),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    return castIdsOf(response.getBody());
+  }
+
+  private void unpublishProfile(String castId) {
+    ResponseEntity<JsonNode> response =
+        rest.exchange(
+            "/store/casts/" + castId + "/publication",
+            HttpMethod.PATCH,
+            new HttpEntity<>("{\"publication_status\":\"UNPUBLISHED\"}", storeHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
   @DisplayName("受注確定の内部検証が公開可否を見ないこと")
   void hasConfirmedShiftIgnoresPublication() {
     assertThat(confirmedShiftLookupService.hasConfirmedShift(STORE_A, publishedCastId, today))
@@ -213,12 +270,19 @@ class ShiftPublicationIT extends CrossStoreTestSupport {
   }
 
   private String createCast(String name) {
+    return createCast(name, true);
+  }
+
+  private String createCast(String name, boolean published) {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/casts",
             new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(created.getStatusCode()).as("前提: キャスト作成が成功すること").isEqualTo(HttpStatus.CREATED);
+    if (published) {
+      publishCastFixture(created.getBody().path("id").asString(), STORE_A);
+    }
     return created.getBody().path("id").asString();
   }
 

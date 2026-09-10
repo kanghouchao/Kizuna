@@ -1,65 +1,72 @@
 package com.kizuna.cast.api.dto;
 
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastInvitationStatus;
-import com.kizuna.cast.domain.CastPatch;
+import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfilePatch;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface CastMapper {
-
-  @Mapping(target = "invitationStatus", ignore = true)
-  CastResponse toResponse(Cast cast);
-
-  /** 招待状態を詰めた応答に変換する（詳細用）。 */
+  @Mapping(target = ".", source = "profile")
+  @Mapping(target = "id", source = "enrollment.id")
+  @Mapping(target = "status", source = "enrollment.status")
   @Mapping(target = "invitationStatus", source = "invitationStatus")
-  CastResponse toResponse(Cast cast, CastInvitationStatus invitationStatus);
+  @Mapping(target = "createdAt", source = "enrollment.createdAt")
+  @Mapping(target = "updatedAt", source = "enrollment.updatedAt")
+  @Mapping(target = "customFields", expression = "java(combine(enrollment, profile))")
+  CastResponse toResponse(
+      CastEnrollment enrollment, CastProfile profile, CastInvitationStatus invitationStatus);
 
-  /** 一覧の行に変換する。招待状態は一覧でも必ず要るので、状態を伴わない多重定義は持たない。 */
+  @Mapping(target = ".", source = "profile")
+  @Mapping(target = "id", source = "enrollment.id")
+  @Mapping(target = "status", source = "enrollment.status")
   @Mapping(target = "invitationStatus", source = "invitationStatus")
-  CastSummaryResponse toSummaryResponse(Cast cast, CastInvitationStatus invitationStatus);
+  CastSummaryResponse toSummaryResponse(
+      CastEnrollment enrollment, CastProfile profile, CastInvitationStatus invitationStatus);
 
-  @Mapping(target = "status", defaultValue = "ACTIVE")
-  @Mapping(target = "platformUserId", ignore = true)
+  @Mapping(target = "enrollmentId", source = "enrollmentId")
+  @Mapping(target = "displayOrder", defaultValue = "0")
+  @Mapping(target = "publicationStatus", constant = "UNPUBLISHED")
   @Mapping(target = "customFields", ignore = true)
-  Cast toEntity(CastCreateRequest request);
+  CastProfile toProfile(CastCreateRequest request, String enrollmentId);
 
-  /** 更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */
-  CastPatch toPatch(CastUpdateRequest request);
+  CastProfilePatch toPatch(CastUpdateRequest request);
 
+  @Mapping(target = "id", source = "enrollmentId")
   @Mapping(target = "customFields", ignore = true)
-  CastPublicResponse toPublicResponseBase(Cast cast);
+  CastPublicResponse toPublicResponseBase(CastProfile profile);
 
-  /**
-   * 公開キャスト詳細に変換する。可視性フィルタの最終防波堤として、公開かつ値が非空の定義のみを表示順で整形する（リポジトリ側の絞り込みに二重で依存しない）。
-   *
-   * @param cast 対象キャスト
-   * @param definitions 公開対象のカスタムフィールド定義（呼び出し側で公開・生存のみを渡す想定だが、本メソッドでも公開判定する）
-   */
-  default CastPublicResponse toPublicResponse(Cast cast, List<CastFieldDefinition> definitions) {
-    CastPublicResponse response = toPublicResponseBase(cast);
-    Map<String, String> values = Optional.ofNullable(cast.getCustomFields()).orElse(Map.of());
-    List<CastCustomFieldView> views =
+  default Map<String, String> combine(CastEnrollment enrollment, CastProfile profile) {
+    Map<String, String> values = new HashMap<>(enrollment.getCustomFields());
+    values.putAll(profile.getCustomFields());
+    return values;
+  }
+
+  default CastPublicResponse toPublicResponse(
+      CastProfile profile, List<CastFieldDefinition> definitions) {
+    CastPublicResponse response = toPublicResponseBase(profile);
+    response.setCustomFields(
         definitions.stream()
-            .filter(definition -> Boolean.TRUE.equals(definition.getIsPublic()))
             .sorted(Comparator.comparing(CastFieldDefinition::getDisplayOrder))
+            .filter(definition -> Boolean.TRUE.equals(definition.getIsPublic()))
+            .filter(
+                definition ->
+                    profile.getCustomFields().get(definition.getKey()) != null
+                        && !profile.getCustomFields().get(definition.getKey()).isEmpty())
             .map(
-                definition -> {
-                  String value = values.get(definition.getKey());
-                  return value == null || value.isEmpty()
-                      ? null
-                      : new CastCustomFieldView(definition.getKey(), definition.getLabel(), value);
-                })
-            .filter(Objects::nonNull)
-            .toList();
-    response.setCustomFields(views);
+                definition ->
+                    new CastCustomFieldView(
+                        definition.getKey(),
+                        definition.getLabel(),
+                        profile.getCustomFields().get(definition.getKey())))
+            .toList());
     return response;
   }
 }

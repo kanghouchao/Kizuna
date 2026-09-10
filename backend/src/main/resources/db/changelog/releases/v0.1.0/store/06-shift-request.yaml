@@ -119,7 +119,7 @@ databaseChangeLog:
             constraintName: fk_t_shift_requests_cast
             baseTableName: t_shift_requests
             baseColumnNames: cast_id
-            referencedTableName: t_casts
+            referencedTableName: t_cast_enrollments
             referencedColumnNames: id
             onDelete: CASCADE
         - addForeignKeyConstraint:

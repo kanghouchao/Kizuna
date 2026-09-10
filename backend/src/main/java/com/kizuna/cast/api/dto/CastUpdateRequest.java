@@ -13,7 +13,7 @@ public class CastUpdateRequest {
    *
    * <p>2 択に縛るのは、この値が指名の可否と候補一覧の判定根拠になるため — 打ち間違いはそのキャストを恒久的に指名不能かつ候補から不可視にする。
    */
-  @Pattern(regexp = "ACTIVE|INACTIVE", message = "在籍状態は ACTIVE または INACTIVE です")
+  @Pattern(regexp = "ENROLLED|SUSPENDED", message = "在籍状態は ENROLLED または SUSPENDED です")
   private String status;
 
   private String photoUrl;

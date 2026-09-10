@@ -3,8 +3,8 @@ package com.kizuna.cast.api.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
-import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastFieldDefinition;
+import com.kizuna.cast.domain.CastProfile;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,13 +25,13 @@ class CastPublicResponseMappingTest {
         .build();
   }
 
-  private Cast castWith(Map<String, String> customFields) {
-    return Cast.builder().name("テスト").customFields(customFields).build();
+  private CastProfile castWith(Map<String, String> customFields) {
+    return CastProfile.builder().customFields(customFields).build();
   }
 
   @Test
   void excludesNonPublicDefinitions() {
-    Cast cast = castWith(Map.of("blood_type", "A型", "secret", "内緒"));
+    CastProfile cast = castWith(Map.of("blood_type", "A型", "secret", "内緒"));
     List<CastFieldDefinition> definitions =
         List.of(definition("blood_type", "血液型", 0, true), definition("secret", "秘密", 1, false));
 
@@ -48,7 +48,7 @@ class CastPublicResponseMappingTest {
     values.put("blood_type", "A型");
     values.put("hobby", "");
     // "height" は定義があるが値なし
-    Cast cast = castWith(values);
+    CastProfile cast = castWith(values);
     List<CastFieldDefinition> definitions =
         List.of(
             definition("blood_type", "血液型", 0, true),
@@ -64,7 +64,7 @@ class CastPublicResponseMappingTest {
 
   @Test
   void sortsByDisplayOrderAscending() {
-    Cast cast = castWith(Map.of("a", "1", "b", "2", "c", "3"));
+    CastProfile cast = castWith(Map.of("a", "1", "b", "2", "c", "3"));
     List<CastFieldDefinition> definitions =
         List.of(
             definition("c", "C", 2, true),
@@ -81,7 +81,7 @@ class CastPublicResponseMappingTest {
 
   @Test
   void nullCustomFieldsYieldsEmptyList() {
-    Cast cast = castWith(null);
+    CastProfile cast = castWith(Map.of());
     List<CastFieldDefinition> definitions = List.of(definition("blood_type", "血液型", 0, true));
 
     CastPublicResponse response = mapper.toPublicResponse(cast, definitions);

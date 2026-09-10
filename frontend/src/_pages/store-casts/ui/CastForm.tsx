@@ -31,7 +31,7 @@ import { integerRule, useManagedList } from '@/shared/lib';
 /** キャストフォームのデータ型 */
 export interface CastFormData {
   name: string;
-  status: string;
+  status: 'ENROLLED' | 'SUSPENDED' | 'WITHDRAWN';
   photo_url: string;
   introduction: string;
   age: number | null;
@@ -56,8 +56,8 @@ interface CastFormProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: 'ACTIVE', label: '在籍中' },
-  { value: 'INACTIVE', label: '在籍停止' },
+  { value: 'ENROLLED', label: '在籍中' },
+  { value: 'SUSPENDED', label: '在籍停止' },
 ];
 
 /**
@@ -113,7 +113,7 @@ export function CastForm({
   const form = useForm<CastFormData>({
     defaultValues: {
       name: '',
-      status: 'ACTIVE',
+      status: 'ENROLLED',
       photo_url: '',
       introduction: '',
       age: null,
@@ -167,10 +167,10 @@ export function CastForm({
                 <FormField
                   control={control}
                   name="name"
-                  rules={{ required: '名前を入力してください' }}
+                  rules={{ required: '源氏名を入力してください' }}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>名前 *</FormLabel>
+                      <FormLabel>源氏名 *</FormLabel>
                       <FormControl>
                         <Input type="text" required {...field} />
                       </FormControl>

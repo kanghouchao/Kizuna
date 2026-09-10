@@ -190,7 +190,7 @@ databaseChangeLog:
             constraintName: fk_t_attendances_cast
             baseTableName: t_attendances
             baseColumnNames: cast_id
-            referencedTableName: t_casts
+            referencedTableName: t_cast_enrollments
             referencedColumnNames: id
             onDelete: NO ACTION
         - addForeignKeyConstraint:

@@ -11,6 +11,7 @@ jest.mock('@/entities/cast', () => ({
     create: jest.fn(),
     get: jest.fn(),
     update: jest.fn(),
+    changePublication: jest.fn(),
   },
   castFieldDefinitionApi: {
     list: jest.fn(),
@@ -38,6 +39,30 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     jest.clearAllMocks();
   });
 
+  it('公開切替は未保存の源氏名を維持し、非公開へ戻せること', async () => {
+    mockedCastApi.get.mockResolvedValue({
+      id: 'cast-1',
+      name: '花子',
+      status: 'ENROLLED',
+      publication_status: 'UNPUBLISHED',
+    });
+    mockedFieldApi.list.mockResolvedValue([]);
+    mockedCastApi.changePublication
+      .mockResolvedValueOnce({ publication_status: 'PUBLISHED' })
+      .mockResolvedValueOnce({ publication_status: 'UNPUBLISHED' });
+    const { container } = render(<CastEditPage />);
+    await screen.findByRole('button', { name: '公開する' });
+    fireEvent.change(inputByName(container, 'name'), { target: { value: '未保存の源氏名' } });
+    fireEvent.click(screen.getByRole('button', { name: '公開する' }));
+    await screen.findByRole('button', { name: '非公開にする' });
+    expect(inputByName(container, 'name').value).toBe('未保存の源氏名');
+    expect(mockedCastApi.changePublication).toHaveBeenLastCalledWith('cast-1', 'PUBLISHED');
+    fireEvent.click(screen.getByRole('button', { name: '非公開にする' }));
+    await screen.findByRole('button', { name: '公開する' });
+    expect(mockedCastApi.changePublication).toHaveBeenLastCalledWith('cast-1', 'UNPUBLISHED');
+    expect(mockedCastApi.get).toHaveBeenCalledTimes(1);
+  });
+
   it('新規登録は未操作の既定値ごとバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
     mockedCastApi.create.mockResolvedValue({} as never);
 
@@ -49,7 +74,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     const body = mockedCastApi.create.mock.calls[0][0] as unknown as Record<string, unknown>;
     expect(body).toHaveProperty('name', '花子');
     // 在籍状態を未操作のときの既定ペイロード
-    expect(body).toHaveProperty('status', 'ACTIVE');
+    expect(body).toHaveProperty('status', 'ENROLLED');
     expect(body).toHaveProperty('photo_url', '');
     expect(body).toHaveProperty('introduction', '');
     expect(body).toHaveProperty('display_order', 0);
@@ -82,7 +107,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     mockedCastApi.get.mockResolvedValue({
       id: 'cast-1',
       name: '花子',
-      status: 'INACTIVE',
+      status: 'SUSPENDED',
       photo_url: '',
       introduction: '紹介',
       age: 25,
@@ -119,7 +144,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     const body = mockedCastApi.update.mock.calls[0][1] as unknown as Record<string, unknown>;
     expect(body).toHaveProperty('name', '花子');
     // プリフィルされた在籍状態が往復で変わらないこと
-    expect(body).toHaveProperty('status', 'INACTIVE');
+    expect(body).toHaveProperty('status', 'SUSPENDED');
     expect(body).toHaveProperty('introduction', '紹介');
     expect(body).toHaveProperty('age', 25);
     expect(body).toHaveProperty('display_order', 3);
@@ -130,11 +155,29 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(body).not.toHaveProperty('invitation_status');
   });
 
+  it('退店済みの取得値を汎用更新の状態として送信しないこと', async () => {
+    mockedCastApi.get.mockResolvedValue({
+      id: 'cast-1',
+      name: '花子',
+      status: 'WITHDRAWN',
+    });
+    mockedCastApi.update.mockResolvedValue({} as never);
+    mockedFieldApi.list.mockResolvedValue([]);
+
+    render(<CastEditPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockedCastApi.update).toHaveBeenCalledTimes(1));
+    const body = mockedCastApi.update.mock.calls[0][1];
+    expect(body.name).toBe('花子');
+    expect(JSON.parse(JSON.stringify(body))).not.toHaveProperty('status');
+  });
+
   it('セレクトで選び直した在籍状態が送信ボディに反映されること', async () => {
     mockedCastApi.get.mockResolvedValue({
       id: 'cast-1',
       name: '花子',
-      status: 'INACTIVE',
+      status: 'SUSPENDED',
       photo_url: '',
       introduction: '',
       display_order: 0,
@@ -160,8 +203,8 @@ describe('キャスト登録・更新の送信ペイロード', () => {
 
     await waitFor(() => expect(mockedCastApi.update).toHaveBeenCalledTimes(1));
     const body = mockedCastApi.update.mock.calls[0][1] as unknown as Record<string, unknown>;
-    // 取得値 INACTIVE ではなく、選び直した値がフォーム状態に届いていること
-    expect(body).toHaveProperty('status', 'ACTIVE');
+    // 取得値 SUSPENDED ではなく、選び直した値がフォーム状態に届いていること
+    expect(body).toHaveProperty('status', 'ENROLLED');
   });
 });
 
@@ -185,7 +228,7 @@ describe('キャスト編集の取得失敗', () => {
     mockedCastApi.get.mockResolvedValue({
       id: 'cast-1',
       name: '花子',
-      status: 'ACTIVE',
+      status: 'ENROLLED',
       display_order: 0,
       invitation_status: 'NOT_INVITED',
       created_at: '2026-07-01T00:00:00Z',

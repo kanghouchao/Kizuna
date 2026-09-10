@@ -2,8 +2,9 @@ package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.CrossStoreTestSupport;
@@ -77,7 +78,7 @@ class BusinessDateIT extends CrossStoreTestSupport {
 
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private ShiftRequestRepository shiftRequestRepository;
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private SystemConfigService systemConfigService;
@@ -211,6 +212,7 @@ class BusinessDateIT extends CrossStoreTestSupport {
             new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(created.getStatusCode()).as("前提: キャスト作成が成功すること").isEqualTo(HttpStatus.CREATED);
+    publishCastFixture(created.getBody().path("id").asString(), STORE_A);
     return created.getBody().path("id").asString();
   }
 
@@ -322,9 +324,10 @@ class BusinessDateIT extends CrossStoreTestSupport {
                             .storeIds(Set.of())
                             .build()));
     if (castRepository.findIdsByPlatformUserIdAndStoreId(castUser.getId(), STORE_A).isEmpty()) {
-      Cast cast = Cast.builder().name("営業日IT本人").platformUserId(castUser.getId()).build();
+      CastEnrollment cast =
+          CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
       cast.setStoreId(STORE_A);
-      castRepository.save(cast);
+      saveEnrollmentFixture(cast, "営業日IT本人", castUser.getId());
     }
     return login(CAST_EMAIL);
   }

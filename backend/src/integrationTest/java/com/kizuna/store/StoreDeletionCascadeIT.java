@@ -305,11 +305,11 @@ class StoreDeletionCascadeIT {
 
   private void insertCast(long storeId, String castId) {
     jdbcTemplate.update(
-        "INSERT INTO t_casts (id, store_id, name, created_at, updated_at, version)"
+        "INSERT INTO t_cast_enrollments (id, store_id, status, created_at, updated_at, version)"
             + " VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
         castId,
         storeId,
-        "受注カスケード検証キャスト");
+        "ENROLLED");
   }
 
   private void insertOrder(long storeId, String customerId, String castId) {

@@ -2,8 +2,9 @@ package com.kizuna.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.member.domain.Member;
@@ -192,7 +193,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   @Autowired private CustomerRepository customerRepository;
   @Autowired private MemberRepository memberRepository;
   @Autowired private PointEntryRepository pointEntryRepository;
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private OrderRepository orderRepository;
   @Autowired private OrderAttributionRepository orderAttributionRepository;
 
@@ -446,9 +447,10 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
    * {@code OrderAttributionIT} が固定している。
    */
   private void seedAttributedVisit(long memberId) {
-    Cast cast = Cast.builder().name(VISIT_CAST_NAME).build();
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(STORE_A);
-    String castId = castRepository.save(cast).getId();
+    String castId = saveEnrollmentFixture(cast, VISIT_CAST_NAME, null).getId();
 
     Order order =
         Order.builder()

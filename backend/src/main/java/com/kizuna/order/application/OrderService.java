@@ -789,7 +789,10 @@ public class OrderService {
     return nominatableCast.searchCandidates(storeContext.getStoreId(), search).stream()
         .map(
             cast ->
-                OrderCastCandidateResponse.builder().id(cast.getId()).name(cast.getName()).build())
+                OrderCastCandidateResponse.builder()
+                    .id(cast.getEnrollmentId())
+                    .name(cast.getName())
+                    .build())
         .toList();
   }
 

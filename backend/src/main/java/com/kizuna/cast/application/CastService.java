@@ -3,22 +3,30 @@ package com.kizuna.cast.application;
 import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastPublicResponse;
+import com.kizuna.cast.api.dto.CastPublicationResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationStatus;
-import com.kizuna.cast.domain.CastPatch;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastManagementView;
+import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfileRepository;
+import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.store.domain.StoreRepository;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,7 +34,9 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,8 +47,24 @@ public class CastService {
   /** カスタムフィールド値の最大文字数。 */
   static final int MAX_VALUE_LENGTH = 500;
 
-  private final CastRepository castRepository;
+  private static final Set<String> PROFILE_SORT_FIELDS =
+      Set.of(
+          "name",
+          "photoUrl",
+          "introduction",
+          "age",
+          "height",
+          "bust",
+          "waist",
+          "hip",
+          "displayOrder",
+          "publicationStatus");
+
+  private final CastEnrollmentRepository castRepository;
   private final CastMapper castMapper;
+  private final CastProfileRepository profileRepository;
+  private final StoreRepository storeRepository;
+  private final StoreContext storeContext;
   private final CastInvitationService castInvitationService;
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
   private final AttendanceReferenceCheck attendanceReferenceCheck;
@@ -46,22 +72,57 @@ public class CastService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<CastSummaryResponse> list(String search, Pageable pageable) {
-    Page<Cast> page =
-        search != null
-            ? castRepository.findByNameContainingIgnoreCase(search, pageable)
-            : castRepository.findAll(pageable);
+    Sort sort =
+        Sort.by(
+            pageable.getSort().stream()
+                .map(
+                    order -> {
+                      String alias =
+                          PROFILE_SORT_FIELDS.contains(order.getProperty()) ? "p." : "e.";
+                      return order.withProperty(alias + order.getProperty());
+                    })
+                .toList());
+    if (sort.getOrderFor("e.id") == null) sort = sort.and(Sort.by("e.id"));
+    Page<CastManagementView> page =
+        profileRepository.search(
+            pattern(search),
+            PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort));
     Map<String, CastInvitationStatus> statuses =
-        castInvitationService.deriveStatuses(page.getContent());
-    return page.map(cast -> castMapper.toSummaryResponse(cast, statuses.get(cast.getId())));
+        castInvitationService.deriveStatuses(
+            page.getContent().stream().map(CastManagementView::enrollment).toList());
+    return page.map(
+        view ->
+            castMapper.toSummaryResponse(
+                view.enrollment(), view.profile(), statuses.get(view.enrollment().getId())));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CastResponse get(String id) {
-    Cast cast =
-        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
-    CastInvitationStatus status = castInvitationService.deriveStatuses(List.of(cast)).get(id);
-    return castMapper.toResponse(cast, status);
+    CastEnrollment enrollment = requireEnrollment(id);
+    return castMapper.toResponse(
+        enrollment,
+        requireProfile(id),
+        castInvitationService.deriveStatuses(List.of(enrollment)).get(id));
+  }
+
+  private CastEnrollment requireEnrollment(String id) {
+    return castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
+  }
+
+  private CastProfile requireProfile(String id) {
+    return profileRepository
+        .findByEnrollmentId(id)
+        .orElseThrow(() -> new NotFoundException("プロフィールが見つかりません"));
+  }
+
+  public static String pattern(String search) {
+    return "%"
+        + (search == null ? "" : search.trim())
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        + "%";
   }
 
   /**
@@ -77,7 +138,7 @@ public class CastService {
   /**
    * {@link #existsForCurrentStore} と同じ判定を、そのキャストを指す行を建てる間だけ押さえて行う。
    *
-   * <p>ロック順序の契約（キャスト → シフト）は {@link CastRepository#findScopedByIdForUpdate} に記す。キャストと
+   * <p>ロック順序の契約（キャスト → シフト）は {@link CastEnrollmentRepository#findScopedByIdForUpdate} に記す。キャストと
    * シフトを同時に指す行を建てる操作は、この口を通ってからシフトを押さえる。
    */
   @StoreScoped
@@ -89,24 +150,54 @@ public class CastService {
   @StoreScoped
   @Transactional
   public CastResponse create(CastCreateRequest request) {
-    // store_id は StoreScopeStampListener が @PrePersist で採番する
-    Cast cast = castMapper.toEntity(request);
-    return castMapper.toResponse(castRepository.save(cast));
+    storeRepository.lockCastFields(storeContext.getStoreId());
+    CastEnrollment enrollment =
+        castRepository.save(
+            CastEnrollment.builder()
+                .status(
+                    request.getStatus() == null
+                        ? CastEnrollmentStatus.ENROLLED
+                        : CastEnrollmentStatus.valueOf(request.getStatus()))
+                .build());
+    CastProfile profile = profileRepository.save(castMapper.toProfile(request, enrollment.getId()));
+    return castMapper.toResponse(enrollment, profile, null);
   }
 
   @StoreScoped
   @Transactional
   public CastResponse update(String id, CastUpdateRequest request) {
-    Cast cast =
-        castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
-
-    CastPatch patch = castMapper.toPatch(request);
-    if (patch.customFields() != null) {
-      validateCustomFields(patch.customFields());
+    storeRepository.lockCastFields(storeContext.getStoreId());
+    CastEnrollment enrollment = requireEnrollment(id);
+    CastProfile profile = requireProfile(id);
+    if (request.getName() != null && request.getName().isBlank())
+      throw new ServiceException("源氏名は必須です");
+    if (request.getStatus() != null)
+      enrollment.changeStatus(CastEnrollmentStatus.valueOf(request.getStatus()));
+    if (request.getCustomFields() != null) {
+      validateCustomFields(request.getCustomFields());
+      Map<String, String> internal = new HashMap<>();
+      Map<String, String> external = new HashMap<>();
+      for (CastFieldDefinition definition :
+          castFieldDefinitionRepository.findAllByOrderByDisplayOrderAsc()) {
+        if (request.getCustomFields().containsKey(definition.getKey())) {
+          (Boolean.TRUE.equals(definition.getIsPublic()) ? external : internal)
+              .put(definition.getKey(), request.getCustomFields().get(definition.getKey()));
+        }
+      }
+      enrollment.replaceCustomFields(internal);
+      profile.replaceCustomFields(external);
     }
-    cast.apply(patch);
+    profile.apply(castMapper.toPatch(request));
+    return castMapper.toResponse(enrollment, profile, null);
+  }
 
-    return castMapper.toResponse(castRepository.save(cast));
+  @StoreScoped
+  @Transactional
+  public CastPublicationResponse changePublication(String id, CastPublicationStatus status) {
+    requireEnrollment(id);
+    CastProfile profile = requireProfile(id);
+    profile.changePublication(status);
+    return new CastPublicationResponse(profile.getPublicationStatus());
   }
 
   /** カスタムフィールド値を検証する。未知 key・値の文字数超過はいずれも {@link ServiceException}（400）。 */
@@ -129,7 +220,7 @@ public class CastService {
 
   /**
    * キャストを削除する。受注から参照されている行は削除できない — 過去の受注が誰の担当だったかは売上の根拠であり、 参照ごと消えてよいものではない。在籍しなくなったキャストは削除ではなく
-   * INACTIVE で表す。
+   * SUSPENDED で表す。
    *
    * <p>当日実績からの参照も同じく削除を止める。こちらは外部キー任せにできない — キャストの削除はシフトへ連鎖するため、
    * 実績が先に当たるのはシフト側の外部キーでありうる。どちらが鳴るかで断りの文言が変わらないよう、実績は前置の判定で見る（ADR 0014）。 判定がシフト経由の参照まで数える理由は
@@ -177,10 +268,10 @@ public class CastService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<CastPublicResponse> listActive() {
+  public List<CastPublicResponse> listPublished() {
     List<CastFieldDefinition> publicDefinitions =
         castFieldDefinitionRepository.findByIsPublicTrueOrderByDisplayOrderAsc();
-    return castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE").stream()
+    return profileRepository.findPublished().stream()
         .map(cast -> castMapper.toPublicResponse(cast, publicDefinitions))
         .toList();
   }

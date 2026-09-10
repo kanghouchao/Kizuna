@@ -231,7 +231,7 @@ databaseChangeLog:
             constraintName: fk_t_orders_cast
             baseTableName: t_orders
             baseColumnNames: cast_id
-            referencedTableName: t_casts
+            referencedTableName: t_cast_enrollments
             referencedColumnNames: id
             onDelete: NO ACTION
         - addForeignKeyConstraint:
@@ -646,7 +646,7 @@ databaseChangeLog:
             constraintName: fk_t_order_applications_cast
             baseTableName: t_order_applications
             baseColumnNames: cast_id
-            referencedTableName: t_casts
+            referencedTableName: t_cast_enrollments
             referencedColumnNames: id
             onDelete: NO ACTION
         - addForeignKeyConstraint:

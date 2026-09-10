@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
@@ -98,7 +99,8 @@ class EmergencyElevationIT {
   @Autowired private TestRestTemplate rest;
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private EmergencyElevationRepository elevationRepository;
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
+  @Autowired private CastProfileRepository fixtureProfiles;
   @Autowired private RoleRepository roleRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RedisTemplate<String, Object> redisTemplate;
@@ -225,8 +227,11 @@ class EmergencyElevationIT {
         JsonNode.class);
   }
 
-  private Optional<Cast> findCastByName(String name) {
-    return castRepository.findAll().stream().filter(c -> name.equals(c.getName())).findFirst();
+  private Optional<CastEnrollment> findCastByName(String name) {
+    return fixtureProfiles.findAll().stream()
+        .filter(c -> name.equals(c.getName()))
+        .findFirst()
+        .flatMap(p -> castRepository.findById(p.getEnrollmentId()));
   }
 
   private long elevationCountOf(Long userId) {

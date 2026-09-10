@@ -2,8 +2,9 @@ package com.kizuna.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
@@ -72,7 +73,7 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private RoleRepository roleRepository;
   @Autowired private PermissionRepository permissionRepository;
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
   @BeforeEach
@@ -138,11 +139,12 @@ class AuthorizationScenesIT extends CrossStoreTestSupport {
 
     // 内部キャスト情報のカナリア（リポジトリ直挿 — テストスレッドは storeFilter を経由しない）。
     boolean canaryExists =
-        castRepository.findAll().stream().anyMatch(c -> CAST_CANARY_NAME.equals(c.getName()));
+        fixtureProfiles.findAll().stream().anyMatch(c -> CAST_CANARY_NAME.equals(c.getName()));
     if (!canaryExists) {
-      Cast cast = Cast.builder().name(CAST_CANARY_NAME).status("在籍").build();
+      CastEnrollment cast =
+          CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
       cast.setStoreId(STORE_A);
-      castRepository.save(cast);
+      saveEnrollmentFixture(cast, CAST_CANARY_NAME, null);
     }
   }
 

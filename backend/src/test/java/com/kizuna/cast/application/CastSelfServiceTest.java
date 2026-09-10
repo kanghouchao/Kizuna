@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastStoreView;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.PlatformUser;
@@ -23,7 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CastSelfServiceTest {
 
   @Mock private PlatformUserRepository platformUserRepository;
-  @Mock private CastRepository castRepository;
+  @Mock private CastEnrollmentRepository castRepository;
 
   @InjectMocks private CastSelfService service;
 

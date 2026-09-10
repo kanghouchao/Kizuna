@@ -1,6 +1,6 @@
 package com.kizuna.shift.application;
 
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CastShiftRequestService {
 
   private final PlatformUserRepository platformUserRepository;
-  private final CastRepository castRepository;
+  private final CastEnrollmentRepository castRepository;
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
   private final AttendanceRepository attendanceRepository;

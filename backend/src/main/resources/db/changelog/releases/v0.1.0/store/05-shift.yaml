@@ -98,7 +98,7 @@ databaseChangeLog:
             constraintName: fk_t_shifts_cast
             baseTableName: t_shifts
             baseColumnNames: cast_id
-            referencedTableName: t_casts
+            referencedTableName: t_cast_enrollments
             referencedColumnNames: id
             onDelete: CASCADE
         - addForeignKeyConstraint:

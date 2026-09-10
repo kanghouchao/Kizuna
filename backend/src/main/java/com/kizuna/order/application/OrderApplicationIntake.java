@@ -1,6 +1,6 @@
 package com.kizuna.order.application;
 
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -53,7 +53,7 @@ public class OrderApplicationIntake {
     if (castId == null) {
       return;
     }
-    Cast cast =
+    CastEnrollment cast =
         nominatableCast
             .find(storeId, castId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));

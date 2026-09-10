@@ -1,7 +1,11 @@
 package com.kizuna.order.application;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import java.util.List;
 import java.util.Optional;
@@ -32,20 +36,21 @@ class NominatableCastLookup {
       "キャスト読み取りの暗黙の絞り込みに頼らず、店舗の一致を引き当ての述語に明示することが境界";
 
   /** 指名を成立させる在籍状態。 */
-  private static final String ACTIVE_STATUS = "ACTIVE";
+  private static final CastEnrollmentStatus ENROLLED_STATUS = CastEnrollmentStatus.ENROLLED;
 
   /** 1 回に返す候補の件数。絞り込みは名前で行うため、続きを辿る手段は持たせず上限で切る。 */
   private static final Limit CANDIDATE_LIMIT = Limit.of(10);
 
-  private final CastRepository castRepository;
+  private final CastEnrollmentRepository castRepository;
+  private final CastProfileRepository profileRepository;
 
   /** 指名先として成立するキャストを引く。成立しないときは空を返し、何を投げるかは呼び出し側が決める。 */
   @StoreScopeExempt(reason = EXPLICIT_STORE_PREDICATE)
-  Optional<Cast> find(Long storeId, String castId) {
+  Optional<CastEnrollment> find(Long storeId, String castId) {
     return castRepository
         .findById(castId)
         .filter(cast -> storeId.equals(cast.getStoreId()))
-        .filter(cast -> ACTIVE_STATUS.equals(cast.getStatus()));
+        .filter(cast -> ENROLLED_STATUS.equals(cast.getStatus()));
   }
 
   /**
@@ -54,10 +59,8 @@ class NominatableCastLookup {
    * <p>検索語なし（null・空白のみ）は絞り込みなしと同じに扱う。コンボボックスは開いた時点で語なしに一度取りに行くため、 ここで空を返すと候補が何も出ないまま打ち始めることになる。
    */
   @StoreScopeExempt(reason = EXPLICIT_STORE_PREDICATE)
-  List<Cast> searchCandidates(Long storeId, String keyword) {
+  List<CastProfile> searchCandidates(Long storeId, String keyword) {
     String name = keyword == null ? "" : keyword.trim();
-    return castRepository
-        .findByStoreIdAndStatusAndNameContainingIgnoreCaseOrderByDisplayOrderAscIdAsc(
-            storeId, ACTIVE_STATUS, name, CANDIDATE_LIMIT);
+    return profileRepository.findCandidates(storeId, CastService.pattern(name), CANDIDATE_LIMIT);
   }
 }

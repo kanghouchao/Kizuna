@@ -39,7 +39,7 @@ public class ConfirmedShiftLookupService {
   private final StoreExistenceCheck storeExistenceCheck;
   private final BusinessDateService businessDateService;
 
-  /** 指定店舗・指定日の露出可能（CONFIRMED ∧ 公開可）なシフトに入っている ACTIVE キャストを返す。 */
+  /** 指定店舗・指定日に公開可能なプロフィールと確定シフトを持つ在籍中のキャストを返す。 */
   @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public List<PublicShiftResponse> listConfirmedCasts(Long storeId, LocalDate workDate) {
@@ -79,7 +79,7 @@ public class ConfirmedShiftLookupService {
   }
 
   /**
-   * 指定店舗・指定キャスト・指定日に露出可能（CONFIRMED ∧ 公開可）なシフトがあるか。会員経由の指名の書き込み検証が使う。
+   * 指定店舗・指定キャスト・指定日に、在籍中かつプロフィールと確定シフトの両方が公開されているか。会員の指名申請の検証に使う。
    *
    * <p>{@link #listConfirmedCasts} と同じ述語をここで共有する — 候補から隠すだけでは cast_id を直接送る要求を防げない。
    * 粒度も候補と揃えて日単位で、時間帯の照合はしない。
@@ -87,8 +87,7 @@ public class ConfirmedShiftLookupService {
   @StoreScopeExempt(reason = EXPLICIT_STORE_ID_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public boolean hasPubliclyVisibleShift(Long storeId, String castId, LocalDate workDate) {
-    return shiftRepository.existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
-        storeId, castId, workDate, ShiftStatus.CONFIRMED);
+    return shiftRepository.existsPubliclyVisibleShift(storeId, castId, workDate);
   }
 
   private void validateWorkDate(LocalDate workDate) {

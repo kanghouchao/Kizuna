@@ -2,6 +2,8 @@ package com.kizuna.cast.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.shared.exception.ServiceException;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,13 +55,13 @@ class CastFieldDefinitionTest {
   }
 
   @Test
-  @DisplayName("apply は isPublic のみ単独更新できる")
+  @DisplayName("公開区分は作成後に変更できない")
   void apply_updatesIsPublicOnly() {
     CastFieldDefinition d = definition();
 
-    d.apply(new CastFieldDefinitionPatch(null, null, true));
-
-    assertThat(d.getIsPublic()).isTrue();
+    Assertions.assertThatThrownBy(() -> d.apply(new CastFieldDefinitionPatch(null, null, true)))
+        .isInstanceOf(ServiceException.class);
+    assertThat(d.getIsPublic()).isFalse();
     assertThat(d.getLabel()).isEqualTo("血液型");
     assertThat(d.getDisplayOrder()).isEqualTo(3);
   }
@@ -69,7 +71,7 @@ class CastFieldDefinitionTest {
   void key_isImmutableThroughApply() {
     CastFieldDefinition d = definition();
 
-    d.apply(new CastFieldDefinitionPatch("別ラベル", 9, true));
+    d.apply(new CastFieldDefinitionPatch("別ラベル", 9, null));
 
     assertThat(d.getKey()).isEqualTo("blood_type");
   }

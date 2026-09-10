@@ -4,10 +4,14 @@ import com.kizuna.cast.api.dto.CastAcceptanceResponse;
 import com.kizuna.cast.api.dto.CastInvitationAcceptRequest;
 import com.kizuna.cast.api.dto.CastInvitationDetailResponse;
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
@@ -47,7 +51,9 @@ public class CastInvitationAcceptanceService {
       "招待 token は店舗横断で一意かつ推測不能で、辿れる档案・店舗は token が指す 1 件に限られる";
 
   private final CastInvitationRepository castInvitationRepository;
-  private final CastRepository castRepository;
+  private final CastEnrollmentRepository castRepository;
+  private final CastRepository personRepository;
+  private final CastProfileRepository profileRepository;
   private final PlatformUserRepository platformUserRepository;
   private final StoreRepository storeRepository;
   private final PasswordEncoder passwordEncoder;
@@ -57,10 +63,13 @@ public class CastInvitationAcceptanceService {
   @Transactional(readOnly = true)
   public CastInvitationDetailResponse view(String token) {
     CastInvitation invitation = findByToken(token);
-    Cast cast = requireCast(invitation.getCastId());
+    CastEnrollment cast = requireCast(invitation.getCastId());
     return new CastInvitationDetailResponse(
         storeName(invitation.getStoreId()),
-        cast.getName(),
+        profileRepository
+            .findByEnrollmentId(cast.getId())
+            .orElseThrow(() -> new NotFoundException("プロフィールが見つかりません"))
+            .getName(),
         viewStatus(invitation),
         invitation.getExpiresAt());
   }
@@ -71,7 +80,7 @@ public class CastInvitationAcceptanceService {
   public CastAcceptanceResponse acceptAsNewUser(String token, CastInvitationAcceptRequest request) {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
-    Cast cast = requireCastForUpdate(invitation.getCastId());
+    CastEnrollment cast = requireCastForUpdate(invitation.getCastId());
     if (platformUserRepository
         .findByEmail(request.getEmail().toLowerCase(Locale.ROOT))
         .isPresent()) {
@@ -103,7 +112,7 @@ public class CastInvitationAcceptanceService {
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
-    Cast cast = requireCastForUpdate(invitation.getCastId());
+    CastEnrollment cast = requireCastForUpdate(invitation.getCastId());
     claim(invitation);
 
     // 身分は档案・招待の後に押さえる（順序は ADR 0016）。ロック取得後の新鮮な読み込みで storeIds の
@@ -149,9 +158,22 @@ public class CastInvitationAcceptanceService {
     }
   }
 
-  private void link(Cast cast, Long platformUserId) {
-    cast.linkPlatformUser(platformUserId);
-    castRepository.save(cast);
+  private void link(CastEnrollment cast, Long platformUserId) {
+    Cast person =
+        personRepository
+            .findByPlatformUserId(platformUserId)
+            .orElseGet(
+                () -> personRepository.save(Cast.builder().platformUserId(platformUserId).build()));
+    cast.linkCast(person.getId());
+    try {
+      castRepository.saveAndFlush(cast);
+    } catch (DataIntegrityViolationException ex) {
+      throw IntegrityViolations.translate(
+          ex,
+          Map.of(
+              DbConstraint.UQ_T_CAST_ENROLLMENTS_CURRENT,
+              () -> new ConflictException("この店舗には既に有効な在籍があります")));
+    }
   }
 
   private CastInvitation findByToken(String token) {
@@ -160,7 +182,7 @@ public class CastInvitationAcceptanceService {
         .orElseThrow(() -> new NotFoundException("招待が見つかりません"));
   }
 
-  private Cast requireCast(String castId) {
+  private CastEnrollment requireCast(String castId) {
     return castRepository.findById(castId).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
   }
 
@@ -170,7 +192,7 @@ public class CastInvitationAcceptanceService {
    * <p>押さえる順序は ADR 0016 に従う。受諾は身分の所属店舗も書くので、その手前で店舗行も押さえてある （{@link
    * StoreRepository#lockAgainstDeletion}）。照会（{@link #view}）は書かないのでこの口を通らない。
    */
-  private Cast requireCastForUpdate(String castId) {
+  private CastEnrollment requireCastForUpdate(String castId) {
     return castRepository
         .findByIdForUpdate(castId)
         .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));

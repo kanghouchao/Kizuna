@@ -3,8 +3,9 @@ package com.kizuna.shift;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -23,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -58,7 +60,7 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
 
   private static final LocalDate OTHER_WORK_DATE = LocalDate.of(2999, 6, 3);
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private ShiftRequestRepository shiftRequestRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -67,11 +69,14 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
 
   private Long castUserId;
   private String castToken;
+  private boolean enrollmentLinked;
 
   @BeforeEach
   void prepareCastIdentity() {
-    castUserId = ensureCastUser().getId();
-    castToken = platformToken(CAST_EMAIL);
+    String email = "attendance-guard-" + UUID.randomUUID() + "@kizuna.test";
+    castUserId = ensureCastUser(email).getId();
+    castToken = platformToken(email);
+    enrollmentLinked = false;
   }
 
   @Test
@@ -226,7 +231,7 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
     try (Connection holder = dataSource.getConnection()) {
       holder.setAutoCommit(false);
       try (var statement =
-          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE")) {
+          holder.prepareStatement("SELECT id FROM t_cast_enrollments WHERE id = ? FOR UPDATE")) {
         statement.setString(1, castId);
         assertThat(statement.executeQuery().next()).as("前提: キャスト行を押さえられること").isTrue();
       }
@@ -262,7 +267,7 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
     try (Connection holder = dataSource.getConnection()) {
       holder.setAutoCommit(false);
       try (var statement =
-          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE")) {
+          holder.prepareStatement("SELECT id FROM t_cast_enrollments WHERE id = ? FOR UPDATE")) {
         statement.setString(1, destinationCastId);
         assertThat(statement.executeQuery().next()).as("前提: 行き先のキャスト行を押さえられること").isTrue();
       }
@@ -348,8 +353,7 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
    *
    * <p>戻り値は {@code call} の応答。押さえずに読む実装なら、待つ前に読んだ値のまま進むので結果が変わる。
    */
-  private <T> T whileHoldingTheShiftRow(
-      String shiftId, java.util.concurrent.Callable<T> call, ThrowingConsumer mutate)
+  private <T> T whileHoldingTheShiftRow(String shiftId, Callable<T> call, ThrowingConsumer mutate)
       throws Exception {
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try (Connection holder = dataSource.getConnection()) {
@@ -406,14 +410,12 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
   }
 
   private String newCast() {
-    Cast cast =
-        Cast.builder()
-            .name("予実守衛IT-" + UUID.randomUUID())
-            .status("ACTIVE")
-            .platformUserId(castUserId)
-            .build();
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(STORE_A);
-    return castRepository.save(cast).getId();
+    Long userId = enrollmentLinked ? null : castUserId;
+    enrollmentLinked = true;
+    return saveEnrollmentFixture(cast, "予実守衛IT-" + UUID.randomUUID(), userId).getId();
   }
 
   /** 主題は交差の守衛なので、シフトは作成 API の検証を経由せずリポジトリ直挿しで置く。 */
@@ -531,14 +533,14 @@ class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
         .asBoolean();
   }
 
-  private PlatformUser ensureCastUser() {
+  private PlatformUser ensureCastUser(String email) {
     return platformUserRepository
-        .findByEmail(CAST_EMAIL)
+        .findByEmail(email)
         .orElseGet(
             () ->
                 platformUserRepository.save(
                     PlatformUser.builder()
-                        .email(CAST_EMAIL)
+                        .email(email)
                         .password(passwordEncoder.encode(PASSWORD))
                         .displayName("予実守衛IT キャスト")
                         .enabled(true)

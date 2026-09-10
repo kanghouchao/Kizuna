@@ -29,6 +29,9 @@ databaseChangeLog:
       file: store/01-store-profile.yaml
       relativeToChangelogFile: true
   - include:
+      file: platform/13-cast.yaml
+      relativeToChangelogFile: true
+  - include:
       file: store/02-cast.yaml
       relativeToChangelogFile: true
   - include:

@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.api.dto.CastScheduleResponse;
@@ -31,7 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CastScheduleServiceTest {
 
   @Mock private PlatformUserRepository platformUserRepository;
-  @Mock private CastRepository castRepository;
+  @Mock private CastEnrollmentRepository castRepository;
   @Mock private ShiftRepository shiftRepository;
   @Mock private ShiftMapper shiftMapper;
 

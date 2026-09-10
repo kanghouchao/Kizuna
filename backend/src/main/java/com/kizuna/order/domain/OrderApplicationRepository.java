@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderApplicationRepository extends JpaRepository<OrderApplication, String> {
 
-  // キャストの表示名は ID 参照のため JPQL join で取得する。Cast は HQL の予約語と衝突しうるため FQCN で参照する。
+  // キャストの表示名は ID 参照のため JPQL join で取得する。
   String VIEW_SELECT =
       """
       select a.id as id,
@@ -25,7 +25,8 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
              a.contactName as contactName, a.contactPhoneNumber as contactPhoneNumber,
              a.orderId as orderId, a.declinedReason as declinedReason
       from com.kizuna.order.domain.OrderApplication a
-        left join com.kizuna.cast.domain.Cast k on k.id = a.castId
+        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = a.castId
+        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
       """;
 
   String VIEW_WHERE = " where a.status in :statuses ";
@@ -62,7 +63,8 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
              a.pax as pax, k.name as castName, a.status as status
       from com.kizuna.order.domain.OrderApplication a
         join com.kizuna.store.domain.Store st on st.id = a.storeId
-        left join com.kizuna.cast.domain.Cast k on k.id = a.castId
+        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = a.castId
+        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
       """;
 
   // 本人は店舗文脈を確立できず storeFilter は働かないため、申請者の一致が唯一の隔離境界である。先頭と続きの

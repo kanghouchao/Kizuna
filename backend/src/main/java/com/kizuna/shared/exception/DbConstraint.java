@@ -17,6 +17,7 @@ package com.kizuna.shared.exception;
  * <p>各成員の字面が DDL に実在することと、上の NO ACTION 規律は適応度テスト（{@code DbConstraintLiteralTests}）が機械検証する。
  */
 public enum DbConstraint {
+  UQ_T_CAST_ENROLLMENTS_CURRENT("uq_t_cast_enrollments_current"),
 
   /** t_users.email の一意制約。 */
   UQ_T_USERS_EMAIL("uq_t_users_email"),
@@ -33,13 +34,13 @@ public enum DbConstraint {
   /** t_user_stores → t_stores の FK。 */
   FK_T_USER_STORES_STORE("fk_t_user_stores_store"),
 
-  /** t_cast_invitations → t_casts の FK。 */
+  /** t_cast_invitations → t_cast_enrollments の FK。 */
   FK_T_CAST_INVITATIONS_CAST("fk_t_cast_invitations_cast"),
 
-  /** t_orders → t_casts の FK。受注が担当キャストを指したまま消えないようにする。 */
+  /** t_orders → t_cast_enrollments の FK。受注が担当キャストを指したまま消えないようにする。 */
   FK_T_ORDERS_CAST("fk_t_orders_cast"),
 
-  /** t_order_applications → t_casts の FK。予約申請が指名キャストを指したまま消えないようにする。 */
+  /** t_order_applications → t_cast_enrollments の FK。予約申請が指名キャストを指したまま消えないようにする。 */
   FK_T_ORDER_APPLICATIONS_CAST("fk_t_order_applications_cast"),
 
   /** t_orders → t_customers(id, alive) の複合 FK。受注が顧客を指したまま顧客が消える・墓標になることを拒む。 */
@@ -77,7 +78,7 @@ public enum DbConstraint {
   /** t_customers.merged_into_id の自己参照 FK。墓標の指す先が消えると旧 ID の解決が切れる。 */
   FK_T_CUSTOMERS_MERGED_INTO("fk_t_customers_merged_into"),
 
-  /** t_attendances → t_casts の FK。実績の指すキャストが消えることを拒む。 */
+  /** t_attendances → t_cast_enrollments の FK。実績の指すキャストが消えることを拒む。 */
   FK_T_ATTENDANCES_CAST("fk_t_attendances_cast"),
 
   /** t_attendances → t_shifts の FK。キャスト削除がシフトへ連鎖する経路では、こちらが先に鳴る。 */

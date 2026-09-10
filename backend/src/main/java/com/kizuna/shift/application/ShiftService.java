@@ -1,8 +1,8 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.cast.application.CastService;
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -37,7 +37,7 @@ public class ShiftService {
   private final AttendanceRepository attendanceRepository;
   private final ShiftMapper shiftMapper;
   private final CastService castService;
-  private final CastRepository castRepository;
+  private final CastProfileRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
 
@@ -48,10 +48,10 @@ public class ShiftService {
   }
 
   /**
-   * 公開出勤表用に「現在の営業日」の露出可能（CONFIRMED ∧ 公開可）なシフトを start_time 昇順で返す。 ACTIVE でないキャストのシフトは公開一覧 ({@code
-   * /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている cast.domain（{@link Cast}）を
-   * 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は {@code @StoreScoped} によりセッション全体で有効なので t_casts
-   * 参照も現店舗に絞られる。
+   * 公開出勤表用に「現在の営業日」の露出可能（CONFIRMED ∧ 公開可）なシフトを start_time 昇順で返す。 公開条件（PUBLISHED ∧
+   * ENROLLED）を満たさないキャストのシフトは公開一覧 ({@code /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている
+   * cast.domain（{@code CastProfile}）を 直接参照して結合する（cast.api.dto は公開面ではないため）。storeFilter は
+   * {@code @StoreScoped} によりセッション全体で有効なので t_cast_enrollments 参照も現店舗に絞られる。
    */
   @StoreScoped
   @Transactional(readOnly = true)
@@ -62,14 +62,14 @@ public class ShiftService {
     if (shifts.isEmpty()) {
       return List.of();
     }
-    Map<String, Cast> activeCasts =
-        castRepository.findByStatusOrderByDisplayOrderAsc("ACTIVE").stream()
-            .collect(Collectors.toMap(Cast::getId, Function.identity()));
+    Map<String, CastProfile> activeCasts =
+        castRepository.findPublished().stream()
+            .collect(Collectors.toMap(CastProfile::getEnrollmentId, Function.identity()));
     return shifts.stream()
         .filter(shift -> activeCasts.containsKey(shift.getCastId()))
         .map(
             shift -> {
-              Cast cast = activeCasts.get(shift.getCastId());
+              CastProfile cast = activeCasts.get(shift.getCastId());
               return PublicShiftResponse.builder()
                   .castId(shift.getCastId())
                   .castName(cast.getName())
@@ -101,7 +101,7 @@ public class ShiftService {
   public ShiftResponse update(String id, ShiftUpdateRequest request, String actorEmail) {
     // 付け替え先のキャストはシフトより先に押さえる。この更新は cast_id を書くので、書き込みが行き先の
     // キャスト行に key share を要求する — シフトを先に押さえると、キャスト → シフト の順で進む記録と
-    // 環になる（契約は CastRepository#findScopedByIdForUpdate）。
+    // 環になる（契約は CastEnrollmentRepository#findScopedByIdForUpdate）。
     if (request.getCastId() != null
         && !castService.existsForCurrentStoreForUpdate(request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());

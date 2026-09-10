@@ -23,7 +23,7 @@ public interface OrderRepository
       @Param("storeId") Long storeId, @Param("status") OrderStatus status);
 
   // 関連集約の表示名は ID 参照のため JPQL join で取得する。
-  // Order / Cast は HQL の予約語と衝突しうるため FQCN でエンティティを参照する。
+  // Order は HQL の予約語と衝突しうるため FQCN でエンティティを参照する。
   String VIEW_SELECT =
       """
       select o.id as id,
@@ -57,7 +57,8 @@ public interface OrderRepository
              o.createdAt as createdAt, o.version as version
       from com.kizuna.order.domain.Order o
         left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
-        left join com.kizuna.cast.domain.Cast k on k.id = o.castId
+        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = o.castId
+        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
         left join com.kizuna.user.domain.PlatformUser u on u.id = o.receptionistId
         left join com.kizuna.user.domain.PlatformUser cu on cu.id = o.cancelledBy
       """;

@@ -3,17 +3,22 @@ package com.kizuna.cast;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,17 +42,31 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
 
   private static final String MANAGER_EMAIL = "tanaka.hanako@kizuna.test";
   private static final String HQ_ADMIN_EMAIL = "admin@kizuna.test";
-  private static final String LINK_USER_EMAIL = "yamada.jiro@kizuna.test";
   private static final String PASSWORD = "pass";
   private static final String FOREIGN_DOMAIN = "cast-invitation-it.kizuna.test";
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private CastInvitationRepository castInvitationRepository;
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
 
   private String managerToken;
   private long foreignStoreId;
+
+  private long newCastUser() {
+    return platformUserRepository
+        .save(
+            PlatformUser.builder()
+                .email("invitation-fixture-" + System.nanoTime() + "@kizuna.test")
+                .password("unused-fixture-hash")
+                .displayName("招待テスト本人")
+                .enabled(true)
+                .userType(UserType.CAST)
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of(STORE_A))
+                .build())
+        .getId();
+  }
 
   @BeforeEach
   void prepareManagerAndForeignStore() {
@@ -119,9 +138,9 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
   @DisplayName("平台身分と連携済みの档案には発行できないこと（400）")
   void issuingForLinkedCastIsRejected() {
     String castId = createCast(STORE_A, managerToken, "連携済み発行不可テスト");
-    long linkUserId = platformUserRepository.findByEmail(LINK_USER_EMAIL).orElseThrow().getId();
-    Cast cast = castRepository.findById(castId).orElseThrow();
-    cast.linkPlatformUser(linkUserId);
+    long linkUserId = newCastUser();
+    CastEnrollment cast = castRepository.findById(castId).orElseThrow();
+    cast.linkCast(personIdForUser(linkUserId));
     castRepository.save(cast);
 
     ResponseEntity<JsonNode> res = issueInvitation(castId, STORE_A, managerToken);
@@ -216,9 +235,10 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
   @DisplayName("他店舗の档案 ID を自店文脈から発行しても 404 で拒否され、他店舗のデータが不変であること")
   void crossStoreIssueIsRejectedAndForeignDataUnchanged() {
     // リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。
-    Cast foreignCast = Cast.builder().name("他店舗機密キャスト").build();
+    CastEnrollment foreignCast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     foreignCast.setStoreId(foreignStoreId);
-    String foreignCastId = castRepository.save(foreignCast).getId();
+    String foreignCastId = saveEnrollmentFixture(foreignCast, "他店舗機密キャスト", null).getId();
 
     // tanaka の授権店舗(店舗1)文脈から、他店舗の档案 ID を発行しようとする。
     ResponseEntity<JsonNode> res = issueInvitation(foreignCastId, STORE_A, managerToken);
@@ -227,7 +247,7 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
     // 他店舗の档案には招待が一切作られていない（実データ断言）。
     assertThat(castInvitationRepository.findByCastIdIn(List.of(foreignCastId))).isEmpty();
     // 他店舗の档案の紐づけも変わっていない。
-    assertThat(castRepository.findById(foreignCastId).orElseThrow().getPlatformUserId()).isNull();
+    assertThat(castRepository.findById(foreignCastId).orElseThrow().getCastId()).isNull();
   }
 
   @Test
@@ -254,9 +274,9 @@ class CastInvitationApiIT extends CrossStoreTestSupport {
     castInvitationRepository.save(expiredInvitation);
 
     // 連携済み: 档案に平台身分を紐づける。
-    long linkUserId = platformUserRepository.findByEmail(LINK_USER_EMAIL).orElseThrow().getId();
-    Cast linkedCast = castRepository.findById(linked).orElseThrow();
-    linkedCast.linkPlatformUser(linkUserId);
+    long linkUserId = newCastUser();
+    CastEnrollment linkedCast = castRepository.findById(linked).orElseThrow();
+    linkedCast.linkCast(personIdForUser(linkUserId));
     castRepository.save(linkedCast);
 
     ResponseEntity<JsonNode> res =

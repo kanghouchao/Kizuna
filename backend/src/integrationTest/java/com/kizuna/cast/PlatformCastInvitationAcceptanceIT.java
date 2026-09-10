@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.cast.application.CastInvitationAcceptanceService;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -49,7 +49,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   private static final String PASSWORD = "pass";
   private static final String EXISTING_CAST_EMAIL = "cast-existing-it@kizuna.test";
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private CastInvitationRepository castInvitationRepository;
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -78,8 +78,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     assertThat(user.getUserType()).isEqualTo(UserType.CAST);
     assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(user.getStoreIds()).contains(STORE_A);
-    assertThat(castRepository.findById(castId).orElseThrow().getPlatformUserId())
-        .isEqualTo(user.getId());
+    assertThat(platformUserIdForEnrollment(castId)).isEqualTo(user.getId());
     assertThat(castInvitationRepository.findByToken(token).orElseThrow().getStatus())
         .isEqualTo(CastInvitation.Status.ACCEPTED);
   }
@@ -227,8 +226,7 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     assertThat(res.getStatusCode().is2xxSuccessful()).isTrue();
     PlatformUser reloaded = platformUserRepository.findByEmail(EXISTING_CAST_EMAIL).orElseThrow();
     assertThat(reloaded.getStoreIds()).contains(STORE_A, STORE_B);
-    assertThat(castRepository.findById(castId).orElseThrow().getPlatformUserId())
-        .isEqualTo(castUser.getId());
+    assertThat(platformUserIdForEnrollment(castId)).isEqualTo(castUser.getId());
     assertThat(castInvitationRepository.findByToken(token).orElseThrow().getStatus())
         .isEqualTo(CastInvitation.Status.ACCEPTED);
   }
@@ -236,25 +234,25 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("同一 SPECIFIC_STORES CAST の並行受諾で店舗集合の更新が取りこぼされないこと")
   void concurrentExistingAcceptancesDoNotLoseStoreUpdates() throws Exception {
-    String email = "cast-concurrent-it-" + System.nanoTime() + "@kizuna.test";
-    // 店舗{1} 所属の CAST を用意する。
-    platformUserRepository.save(
-        PlatformUser.builder()
-            .email(email)
-            .password(passwordEncoder.encode(PASSWORD))
-            .displayName("並行受諾IT")
-            .enabled(true)
-            .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(STORE_A))
-            .build());
-
     ExecutorService pool = Executors.newFixedThreadPool(2);
     try {
       // ロックが無いと storeIds の read-modify-write が競合し、後着の save が先着の追加を上書きする。
       // 片方が既存店舗{1}(冪等)、もう片方が新規店舗{2} を追加する構図を反復し、
       // 「最後書き勝ちで店舗2が消える」取りこぼしを確実に顕在化させる。
       for (int i = 0; i < 8; i++) {
+        String email = "cast-concurrent-it-" + System.nanoTime() + "@kizuna.test";
+        // 店舗{1} 所属の CAST を用意する。
+        platformUserRepository.save(
+            PlatformUser.builder()
+                .email(email)
+                .password(passwordEncoder.encode(PASSWORD))
+                .displayName("並行受諾IT")
+                .enabled(true)
+                .userType(UserType.CAST)
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of(STORE_A))
+                .build());
+
         // 反復ごとに新しい档案と招待を用意する（招待は使い捨て、档案は二重紐づけ防御があるため）。
         String castA = createCast(STORE_A, "並行受諾A" + i);
         String castB = createCast(STORE_B, "並行受諾B" + i);
@@ -264,8 +262,6 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
         String tokenB =
             directInsertInvitation(
                 castB, STORE_B, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
-        // 前反復の追加をリセットし、店舗{1} からやり直す。
-        resetStores(email, Set.of(STORE_A));
 
         CyclicBarrier barrier = new CyclicBarrier(2);
         Future<?> f1 = pool.submit(acceptTask(barrier, tokenA, email));
@@ -273,6 +269,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
         f1.get(30, TimeUnit.SECONDS);
         f2.get(30, TimeUnit.SECONDS);
 
+        assertThat(castRepository.findById(castA).orElseThrow().getCastId())
+            .isEqualTo(castRepository.findById(castB).orElseThrow().getCastId());
         PlatformUser reloaded = platformUserRepository.findByEmail(email).orElseThrow();
         assertThat(reloaded.getStoreIds())
             .as("反復 %d: 並行受諾後に両店舗が保持されること", i)
@@ -391,8 +389,9 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("既存アカウント受諾が招待行より先にキャスト行を押さえること")
   void existingAcceptanceTakesTheCastRowBeforeTheInvitationRow() throws Exception {
-    ensureExistingCastUser();
-    String castBearer = platformToken(EXISTING_CAST_EMAIL, PASSWORD);
+    String email = "cast-lockorder-existing-" + System.nanoTime() + "@kizuna.test";
+    createExistingCastUser(email);
+    String castBearer = platformToken(email, PASSWORD);
     String castId = createCast(STORE_B, "受諾ロック順既存テスト");
     String token = issue(castId, STORE_B);
 
@@ -432,7 +431,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
           .isInstanceOf(TimeoutException.class);
 
       try (var statement =
-          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE NOWAIT")) {
+          holder.prepareStatement(
+              "SELECT id FROM t_cast_enrollments WHERE id = ? FOR UPDATE NOWAIT")) {
         statement.setString(1, castId);
         assertThat(statement.executeQuery().next()).as("店舗で待っている間、档案行はまだ押さえられていないこと").isTrue();
       }
@@ -485,7 +485,8 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
           .isInstanceOf(TimeoutException.class);
 
       try (var statement =
-          holder.prepareStatement("SELECT id FROM t_casts WHERE id = ? FOR UPDATE NOWAIT")) {
+          holder.prepareStatement(
+              "SELECT id FROM t_cast_enrollments WHERE id = ? FOR UPDATE NOWAIT")) {
         statement.setString(1, castId);
         assertThatThrownBy(statement::executeQuery)
             .as("招待で待っている間、キャスト行は既に押さえられていること")
@@ -505,18 +506,20 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
   private PlatformUser ensureExistingCastUser() {
     return platformUserRepository
         .findByEmail(EXISTING_CAST_EMAIL)
-        .orElseGet(
-            () ->
-                platformUserRepository.save(
-                    PlatformUser.builder()
-                        .email(EXISTING_CAST_EMAIL)
-                        .password(passwordEncoder.encode(PASSWORD))
-                        .displayName("既存キャストIT")
-                        .enabled(true)
-                        .userType(UserType.CAST)
-                        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                        .storeIds(Set.of(STORE_A))
-                        .build()));
+        .orElseGet(() -> createExistingCastUser(EXISTING_CAST_EMAIL));
+  }
+
+  private PlatformUser createExistingCastUser(String email) {
+    return platformUserRepository.save(
+        PlatformUser.builder()
+            .email(email)
+            .password(passwordEncoder.encode(PASSWORD))
+            .displayName("既存キャストIT")
+            .enabled(true)
+            .userType(UserType.CAST)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(STORE_A))
+            .build());
   }
 
   private String createCast(long storeId, String name) {
@@ -561,19 +564,13 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     return token;
   }
 
-  private void resetStores(String email, Set<Long> stores) {
-    PlatformUser user = platformUserRepository.findByEmail(email).orElseThrow();
-    user.reassignStores(StoreScopeType.SPECIFIC_STORES, stores);
-    platformUserRepository.save(user);
-  }
-
   private Runnable acceptTask(CyclicBarrier barrier, String token, String email) {
     return () -> {
       try {
         barrier.await(10, TimeUnit.SECONDS);
         acceptanceService.acceptAsExistingUser(token, email);
-      } catch (Exception ignored) {
-        // 競合下では例外（デッドロック等）もあり得るが、取りこぼしは最終状態の断言で検証する。
+      } catch (Exception ex) {
+        throw new AssertionError("並行受諾が成功すること", ex);
       }
     };
   }
@@ -643,5 +640,35 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.setBearerAuth(bearerToken);
     return headers;
+  }
+
+  @Test
+  @DisplayName("同店の重複受諾は409となり招待を消費しない")
+  void duplicateEnrollmentRollsBackInvitation() {
+    String first = createCast(STORE_A, "重複受諾一件目");
+    String email = "duplicate-enrollment-" + System.nanoTime() + "@kizuna.test";
+    assertThat(acceptNewUser(issue(first, STORE_A), email, "password1234", "同店本人").getStatusCode())
+        .isEqualTo(HttpStatus.CREATED);
+    String second = createCast(STORE_A, "重複受諾二件目");
+    String invitationToken = issue(second, STORE_A);
+    var response =
+        rest.exchange(
+            "/platform/cast-invitations/acceptance/existing",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                tokenBody(invitationToken), bearer(platformToken(email, "password1234"))),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(castInvitationRepository.findByToken(invitationToken).orElseThrow().getStatus())
+        .isEqualTo(CastInvitation.Status.PENDING);
+    assertThat(platformUserIdForEnrollment(second)).isNull();
+    HttpHeaders publicHeaders = new HttpHeaders();
+    publicHeaders.setContentType(MediaType.APPLICATION_JSON);
+    var view =
+        rest.postForEntity(
+            "/platform/cast-invitations/view",
+            new HttpEntity<>(tokenBody(invitationToken), publicHeaders),
+            JsonNode.class);
+    assertThat(view.getBody().path("status").asString()).isEqualTo("VALID");
   }
 }

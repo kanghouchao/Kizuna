@@ -10,7 +10,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -60,8 +61,8 @@ class OrderApplicationIntakeTest {
    *
    * <p>成立の条件そのもの（店舗一致・在籍中）を固定するのは {@link NominatableCastLookupTest} で、ここは空か否かの翻訳だけを見る。
    */
-  private static Cast nominatable(String castId) {
-    Cast cast = Cast.builder().name("さくら").status("ACTIVE").build();
+  private static CastEnrollment nominatable(String castId) {
+    CastEnrollment cast = CastEnrollment.builder().status(CastEnrollmentStatus.ENROLLED).build();
     cast.setId(castId);
     cast.setStoreId(STORE_ID);
     return cast;

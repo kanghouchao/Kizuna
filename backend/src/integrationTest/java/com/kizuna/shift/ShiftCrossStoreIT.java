@@ -2,8 +2,9 @@ package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -40,7 +41,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
   /** {@code storeHeaders} が名乗る v0.1.0 seed/05-demo.yaml の店舗スタッフ。実行者列の期待値をここから引く。 */
   private static final String SEED_STORE_STAFF_EMAIL = "yamada.jiro@kizuna.test";
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
 
   @Autowired private ShiftRepository shiftRepository;
 
@@ -61,14 +62,15 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
   }
 
   /**
-   * 他店舗の Cast をリポジトリ直挿しで用意する。 HTTP 経由の作成は store A の JWT + 他店舗の X-Store-ID が StoreIdInterceptor に
-   * 403 で弾かれるため、{@code @StoreScoped} を経由せず storeFilter が無効な リポジトリ直接呼び出しで他店舗のデータを書く（MenuCrossStoreIT
-   * と同型）。帰属先は実在する第二店舗の採番 id を使う。
+   * 他店舗の CastEnrollment をリポジトリ直挿しで用意する。 HTTP 経由の作成は store A の JWT + 他店舗の X-Store-ID が
+   * StoreIdInterceptor に 403 で弾かれるため、{@code @StoreScoped} を経由せず storeFilter が無効な
+   * リポジトリ直接呼び出しで他店舗のデータを書く（MenuCrossStoreIT と同型）。帰属先は実在する第二店舗の採番 id を使う。
    */
   private String createForeignCast(String name) {
-    Cast cast = Cast.builder().name(name).build();
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(ensureForeignStoreId());
-    return castRepository.save(cast).getId();
+    return saveEnrollmentFixture(cast, name, null).getId();
   }
 
   private String createCastAs(long storeId, String name) {
@@ -82,6 +84,7 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
         .isTrue();
     String id = created.getBody().path("id").asString();
     assertThat(id).isNotBlank();
+    publishCastFixture(id, storeId);
     return id;
   }
 
@@ -392,11 +395,12 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
         .isEqualTo(status);
   }
 
-  /** 第二店舗の ACTIVE な Cast をリポジトリ直挿しで用意する（公開エンドポイントは ACTIVE のみ結合するため）。 */
+  /** 第二店舗の ACTIVE な CastEnrollment をリポジトリ直挿しで用意する（公開エンドポイントは ACTIVE のみ結合するため）。 */
   private String createActiveForeignCast(String name, long storeId) {
-    Cast cast = Cast.builder().name(name).status("ACTIVE").build();
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(storeId);
-    return castRepository.save(cast).getId();
+    return saveEnrollmentFixture(cast, name, null).getId();
   }
 
   /** 第二店舗の本日 CONFIRMED シフトをリポジトリ直挿しで用意する。 */

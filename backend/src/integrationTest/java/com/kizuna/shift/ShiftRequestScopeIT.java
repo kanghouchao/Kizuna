@@ -2,8 +2,9 @@ package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
@@ -59,7 +60,7 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
   private static final String STORE_FOREIGN_DOMAIN = "shift-request-it-foreign.kizuna.test";
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRequestRepository shiftRequestRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private StoreRepository storeRepository;
@@ -118,9 +119,10 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
 
   /** リポジトリ直挿（テストスレッドは @StoreScoped を経由せず storeFilter が無効なので他店舗にも書ける）。 */
   private String createCast(long storeId, String name, Long platformUserId) {
-    Cast cast = Cast.builder().name(name).status("ACTIVE").platformUserId(platformUserId).build();
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(storeId);
-    return castRepository.save(cast).getId();
+    return saveEnrollmentFixture(cast, name, platformUserId).getId();
   }
 
   private String saveShiftRequest(
@@ -802,10 +804,12 @@ class ShiftRequestScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("同一店舗に本人の档案が複数並存しても提出でき、店舗セレクタ一覧は店舗単位に畳まれること")
-  void duplicateProfilesInSameStore_doNotBreakSubmitNorStoreList() {
-    // 既存アカウントが同店の招待を複数受諾した状態を再現する（受諾フローに同店唯一性の守衛は無い）。
-    createCast(STORE_A, "出勤希望IT本人第二档案", castUserId);
+  @DisplayName("同店の退店履歴と現在在籍が並存しても提出でき、店舗セレクタ一覧は店舗単位に畳まれること")
+  void historicalEnrollmentInSameStore_doesNotBreakSubmitNorStoreList() {
+    CastEnrollment historical =
+        CastEnrollment.builder().status(CastEnrollmentStatus.WITHDRAWN).build();
+    historical.setStoreId(STORE_A);
+    saveEnrollmentFixture(historical, "出勤希望IT本人過去在籍", castUserId);
 
     ResponseEntity<JsonNode> created =
         submit(castToken, submitBody(STORE_A, tomorrow(), "11:00:00", "13:00:00", "複数档案でも提出できる"));

@@ -113,6 +113,7 @@ class TentativeShiftInvariantIT extends CrossStoreTestSupport {
             new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(created.getStatusCode()).as("前提: キャスト作成が成功すること").isEqualTo(HttpStatus.CREATED);
+    publishCastFixture(created.getBody().path("id").asString(), STORE_A);
     return created.getBody().path("id").asString();
   }
 

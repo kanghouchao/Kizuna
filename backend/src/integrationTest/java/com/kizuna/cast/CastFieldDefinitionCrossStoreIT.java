@@ -2,10 +2,11 @@ package com.kizuna.cast;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -31,7 +32,7 @@ import tools.jackson.databind.JsonNode;
 class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
 
   @Autowired private CastFieldDefinitionRepository fieldDefinitionRepository;
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
 
   private final long nonce = System.nanoTime();
 
@@ -73,10 +74,15 @@ class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
     return fieldDefinitionRepository.save(definition);
   }
 
-  private Cast insertActiveCastForStoreB(Map<String, String> customFields) {
-    Cast cast = Cast.builder().name("店舗Bキャスト").status("ACTIVE").customFields(customFields).build();
+  private CastEnrollment insertActiveCastForStoreB(Map<String, String> customFields) {
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(STORE_B);
-    return castRepository.save(cast);
+    CastEnrollment saved = saveEnrollmentFixture(cast, "店舗Bキャスト", null);
+    var profile = fixtureProfiles.findByEnrollmentId(saved.getId()).orElseThrow();
+    profile.replaceCustomFields(customFields);
+    fixtureProfiles.save(profile);
+    return saved;
   }
 
   @Test

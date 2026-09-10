@@ -2,8 +2,9 @@ package com.kizuna.shift;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Attendance;
@@ -41,7 +42,7 @@ class AbsenceDerivationIT extends CrossStoreTestSupport {
 
   private static final String FOREIGN_STORE_DOMAIN = "absence-it-foreign.kizuna.test";
 
-  @Autowired private CastRepository castRepository;
+  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private AttendanceRepository attendanceRepository;
   @Autowired private StoreRepository storeRepository;
@@ -127,9 +128,10 @@ class AbsenceDerivationIT extends CrossStoreTestSupport {
 
   /** リポジトリ直挿（テストスレッドは {@code @StoreScoped} を経由せず storeFilter が無効なので他店舗にも書ける）。 */
   private String seedCast(long storeId, String namePrefix) {
-    Cast cast = Cast.builder().name(namePrefix + "_" + System.nanoTime()).status("ACTIVE").build();
+    CastEnrollment cast =
+        CastEnrollment.builder().status(CastEnrollmentStatus.valueOf("ENROLLED")).build();
     cast.setStoreId(storeId);
-    return castRepository.save(cast).getId();
+    return saveEnrollmentFixture(cast, namePrefix + "_" + System.nanoTime(), null).getId();
   }
 
   private Shift shiftOf(long storeId, String castId, ShiftStatus status, LocalDate workDate) {

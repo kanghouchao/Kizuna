@@ -1,11 +1,15 @@
+export type CastEnrollmentStatus = 'ENROLLED' | 'SUSPENDED' | 'WITHDRAWN';
+export type CastEditableStatus = Exclude<CastEnrollmentStatus, 'WITHDRAWN'>;
+export type CastPublicationStatus = 'PUBLISHED' | 'UNPUBLISHED';
 // キャストの招待状態（四態。cast/domain/CastInvitationStatus.java と対応）
 export type CastInvitationStatus = 'NOT_INVITED' | 'INVITED' | 'EXPIRED' | 'LINKED';
 
 // キャスト（Cast）レスポンス
 export interface CastResponse {
+  publication_status?: CastPublicationStatus;
   id?: string;
   name?: string;
-  status?: string;
+  status?: CastEnrollmentStatus;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -26,9 +30,10 @@ export interface CastResponse {
  * 要る項目だけを持つ。紹介文・カスタム項目・作成更新時刻は詳細の読み口が返す。
  */
 export interface CastSummaryResponse {
+  publication_status?: CastPublicationStatus;
   id?: string;
   name?: string;
-  status?: string;
+  status?: CastEnrollmentStatus;
   photo_url?: string;
   age?: number;
   bust?: number;
@@ -50,7 +55,6 @@ export interface CastCustomFieldView {
 export interface CastPublicResponse {
   id?: string;
   name?: string;
-  status?: string;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -60,14 +64,12 @@ export interface CastPublicResponse {
   hip?: number;
   display_order?: number;
   custom_fields?: CastCustomFieldView[];
-  created_at?: string;
-  updated_at?: string;
 }
 
 // キャスト作成リクエスト
 export interface CastCreateRequest {
   name: string;
-  status?: string;
+  status?: CastEditableStatus;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -81,7 +83,7 @@ export interface CastCreateRequest {
 // キャスト更新リクエスト
 export interface CastUpdateRequest {
   name?: string;
-  status?: string;
+  status?: CastEditableStatus;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -116,7 +118,6 @@ export interface CastFieldDefinitionCreateRequest {
 export interface CastFieldDefinitionUpdateRequest {
   label?: string;
   display_order?: number;
-  is_public?: boolean;
 }
 
 // キャスト招待発行レスポンス

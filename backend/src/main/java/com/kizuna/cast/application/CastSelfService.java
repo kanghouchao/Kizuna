@@ -1,7 +1,7 @@
 package com.kizuna.cast.application;
 
 import com.kizuna.cast.api.dto.CastStoreResponse;
-import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 本人（キャスト）ポータルの所属店舗解決ユースケース。
  *
- * <p>cast_id 単層自限（{@link CastRepository#findIdsByPlatformUserId}）と同じ基点（platform_user_id
+ * <p>cast_id 単層自限（{@link CastEnrollmentRepository#findIdsByPlatformUserId}）と同じ基点（platform_user_id
  * 逆引き）で、StoreContext を経由せず跨店で解決する。
  */
 @Service
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CastSelfService {
 
   private final PlatformUserRepository platformUserRepository;
-  private final CastRepository castRepository;
+  private final CastEnrollmentRepository castRepository;
 
   @StoreScopeExempt(reason = "認証済み email から逆引きした本人の platform_user_id が唯一の境界で、所属店舗の跨店解決自体が業務要件")
   @Transactional(readOnly = true)

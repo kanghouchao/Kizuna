@@ -53,8 +53,9 @@ key share どうしは衝突せず、key share と FOR NO KEY UPDATE も衝突�
 **行ロックは外部キーの連鎖の向き（上流 → 下流）に押さえる。**
 
 ```
-t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
-          │           │            └─ t_attendances ── t_attendance_corrections
+t_stores ─┬─ t_cast_enrollments ─┬─ t_shifts ─┬─ t_shift_requests
+          │                      │            └─ t_attendances ── t_attendance_corrections
+          │                      └─ t_cast_profiles / 在籍履歴二表 / t_cast_invitations
           └─ （t_user_stores ほかの店舗スコープ表）
 ```
 
@@ -65,9 +66,9 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 - **INSERT が要求する親行の key share もこの向きに並ぶ。** 5 表とも外部キーの宣言順が
   store → cast → shift で揃っているため（前節の事実 4）、書き込み側は放っておけばこの順で進む。
 
-**`t_users` はこの向きの、明示された例外である。** 監査列（`created_by` / `updated_by` / `processed_by`）と
-`t_casts.platform_user_id` により身分は 5 表すべての親だが、どの表も身分への外部キーを**最後に**宣言して
-いるため、書き込みが要求する key share は必ず最後に来る — 上流でありながら末尾で取られる。これが問題に
+**`t_users` はこの向きの、明示された例外である。** 監査列（`created_by` / `updated_by` / `processed_by`）は身分を参照し、
+在籍は `t_cast_enrollments.cast_id → t_casts.id` と `t_casts.platform_user_id → t_users.id` を経て身分につながる。
+監査 FK は各表で最後に宣言し、本人の作成・解決も受諾で身分ロックを得てから行う。これが問題に
 ならないのは、身分の行に FOR UPDATE を載せる経路が招待受諾の 1 本
 （`PlatformUserRepository#findByEmailForUpdate`）しか無く、それも档案を押さえた後だからである。key share
 どうしは衝突しないので、身分の行が待ちの結節点になるのはその 1 本が押さえている間に限られる。
@@ -81,13 +82,13 @@ t_stores ─┬─ t_casts ─┬─ t_shifts ─┬─ t_shift_requests
 
 ## 一覧表
 
-5 表（`t_casts` / `t_shifts` / `t_shift_requests` / `t_attendances` / `t_attendance_corrections`）と、
+5 表（`t_cast_enrollments` / `t_shifts` / `t_shift_requests` / `t_attendances` / `t_attendance_corrections`）と、
 **外部キーで隣接する表**（`t_stores` / `t_users` / `t_cast_invitations` / `t_orders` / `t_user_stores`）を
 書く応用層の経路をすべて挙げ、明示ロック・書き込みが暗黙に要求する親行・削除の連鎖を書き出したもの。
 判定の列は上の向きに従うか否かである。
 
 **隣接表まで広げるのが要点である。** 5 表を書かない経路でも、5 表の行を key share で要求すれば対になる —
-招待の発行は `t_cast_invitations` しか書かないが、新票の INSERT が `t_casts` の key share を要求するため、
+招待の発行は `t_cast_invitations` しか書かないが、新票の INSERT が `t_cast_enrollments` の key share を要求するため、
 档案を押さえる経路と順序を争う。表を 5 表の書き手だけで作ると、この一群がまるごと視野から落ちる。
 
 | 経路 | 明示的に押さえる行 | 暗黙に要求する親行（KS） | 削除の連鎖 | 判定 |
@@ -214,3 +215,9 @@ FOR NO KEY UPDATE どうしも衝突するので、UPDATE だけでも順序は�
   新しく `@Lock(PESSIMISTIC_WRITE)` の読み口を足すときも同じで、「対ごとの洗い出し」の 3 群を引き直す。
 - 一意索引を**部分**にすると、そのキー列を変える UPDATE は FOR UPDATE ではなく FOR NO KEY UPDATE に
   落ちる（事実 3）。同時実行の強さが変わるので、部分化は一意性の話だけでは決められない。
+
+## キャスト三層下の追加の順序
+
+在籍を参照するシフト・受注・招待は t_cast_enrollments に留まり、公開プロフィールと履歴二表はその子となる。本人 t_casts は店舗削除の連鎖に含めず、ユーザーとの FK および在籍からの FK は NO ACTION で保護する。
+
+定義の削除と custom fields 値の編集は店舗行の FOR NO KEY UPDATE → 在籍 → プロフィールの順で直列化する。招待受諾の店舗 FOR KEY SHARE とは競合せず、本人の resolve-or-create は既存のユーザー行ロック後に行う。既存の店舗 → 在籍 → 招待 → ユーザーの順序を逆転させない。三層の帰属は ADR 0026 を参照する。

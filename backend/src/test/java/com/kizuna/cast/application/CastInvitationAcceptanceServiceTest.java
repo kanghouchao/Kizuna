@@ -12,9 +12,13 @@ import com.kizuna.cast.api.dto.CastAcceptanceResponse;
 import com.kizuna.cast.api.dto.CastInvitationAcceptRequest;
 import com.kizuna.cast.api.dto.CastInvitationDetailResponse;
 import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
+import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
@@ -25,14 +29,18 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -42,10 +50,31 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 class CastInvitationAcceptanceServiceTest {
 
   @Mock private CastInvitationRepository castInvitationRepository;
-  @Mock private CastRepository castRepository;
+  @Mock private CastEnrollmentRepository castRepository;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private StoreRepository storeRepository;
   @Mock private PasswordEncoder passwordEncoder;
+  @Mock private CastRepository personRepository;
+  @Mock private CastProfileRepository profileRepository;
+  private final Map<String, String> profileNames = new HashMap<>();
+
+  @BeforeEach
+  void profilesAndPeople() {
+    Mockito.lenient()
+        .when(profileRepository.findByEnrollmentId(any()))
+        .thenAnswer(
+            inv ->
+                Optional.of(
+                    CastProfile.builder().name(profileNames.get(inv.getArgument(0))).build()));
+    Mockito.lenient()
+        .when(personRepository.save(any()))
+        .thenAnswer(
+            inv -> {
+              Cast person = inv.getArgument(0);
+              person.setId(person.getPlatformUserId());
+              return person;
+            });
+  }
 
   @InjectMocks private CastInvitationAcceptanceService service;
 
@@ -62,9 +91,10 @@ class CastInvitationAcceptanceServiceTest {
     return invitation;
   }
 
-  private Cast cast(String id, String name) {
-    Cast cast = Cast.builder().name(name).build();
+  private CastEnrollment cast(String id, String name) {
+    CastEnrollment cast = CastEnrollment.builder().build();
     cast.setId(id);
+    profileNames.put(id, name);
     return cast;
   }
 
@@ -159,7 +189,7 @@ class CastInvitationAcceptanceServiceTest {
   void acceptAsNewUser_createsCastIdentityLinksAndAccepts() {
     CastInvitation invitation =
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
-    Cast cast = cast("c1", "花子档案");
+    CastEnrollment cast = cast("c1", "花子档案");
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast));
     when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
@@ -184,7 +214,7 @@ class CastInvitationAcceptanceServiceTest {
     verify(castInvitationRepository)
         .claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED));
-    assertThat(cast.getPlatformUserId()).isEqualTo(42L);
+    assertThat(cast.getCastId()).isEqualTo(42L);
 
     ArgumentCaptor<PlatformUser> captor = ArgumentCaptor.forClass(PlatformUser.class);
     verify(platformUserRepository).save(captor.capture());
@@ -274,7 +304,7 @@ class CastInvitationAcceptanceServiceTest {
   void acceptAsExistingUser_addsStoreAndLinks() {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
-    Cast cast = cast("c2", "花子档案（店舗B）");
+    CastEnrollment cast = cast("c2", "花子档案（店舗B）");
     PlatformUser existing = user(7L, UserType.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
@@ -290,7 +320,7 @@ class CastInvitationAcceptanceServiceTest {
     assertThat(response.storeName()).isEqualTo("店舗B");
     assertThat(existing.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
     assertThat(existing.getUserType()).isEqualTo(UserType.CAST);
-    assertThat(cast.getPlatformUserId()).isEqualTo(7L);
+    assertThat(cast.getCastId()).isEqualTo(7L);
     // 招待の状態遷移は条件付き UPDATE（claimPending）が担う。エンティティは受諾後に変更しない。
     verify(castInvitationRepository)
         .claimPending(
@@ -302,7 +332,7 @@ class CastInvitationAcceptanceServiceTest {
   void acceptAsExistingUser_preservesAllStoresScopeWithoutDowngrade() {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
-    Cast cast = cast("c2", "花子档案（全店）");
+    CastEnrollment cast = cast("c2", "花子档案（全店）");
     PlatformUser existing = allStoresUser(7L);
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
@@ -319,7 +349,7 @@ class CastInvitationAcceptanceServiceTest {
     // ALL_STORES 授権は招待受諾で SPECIFIC_STORES へ降格させない（全店アクセス権を1店舗に狭めない）。
     assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
     assertThat(existing.getStoreIds()).isEmpty();
-    assertThat(cast.getPlatformUserId()).isEqualTo(7L);
+    assertThat(cast.getCastId()).isEqualTo(7L);
     // 授権に変更がないため PlatformUser は永続化しない（档案の紐づけのみ）。
     verify(platformUserRepository, never()).save(any());
   }

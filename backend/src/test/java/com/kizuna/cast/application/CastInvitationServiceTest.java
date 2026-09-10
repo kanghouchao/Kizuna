@@ -9,12 +9,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.api.dto.CastInvitationResponse;
-import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitation;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
@@ -36,15 +36,15 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 class CastInvitationServiceTest {
 
-  @Mock private CastRepository castRepository;
+  @Mock private CastEnrollmentRepository castRepository;
   @Mock private CastInvitationRepository castInvitationRepository;
   @Mock private StoreRepository storeRepository;
   @Mock private StoreContext storeContext;
 
   @InjectMocks private CastInvitationService castInvitationService;
 
-  private Cast cast(String id, Long platformUserId) {
-    Cast cast = Cast.builder().name("キャスト").platformUserId(platformUserId).build();
+  private CastEnrollment cast(String id, Long platformUserId) {
+    CastEnrollment cast = CastEnrollment.builder().castId(platformUserId).build();
     cast.setId(id);
     cast.setStoreId(1L);
     return cast;
@@ -153,7 +153,7 @@ class CastInvitationServiceTest {
     // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が档案を紐づけた状況を模す。
     // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する。
     when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
-    when(castRepository.findPlatformUserIdById("c1")).thenReturn(Optional.of(77L));
+    when(castRepository.findCastIdById("c1")).thenReturn(Optional.of(77L));
 
     assertThatThrownBy(() -> castInvitationService.issue("c1"))
         .isInstanceOf(CastInvitationStateException.class);
@@ -162,10 +162,10 @@ class CastInvitationServiceTest {
 
   @Test
   void deriveStatuses_returnsFourStates() {
-    Cast linked = cast("linked", 5L);
-    Cast invited = cast("invited", null);
-    Cast expired = cast("expired", null);
-    Cast notInvited = cast("not-invited", null);
+    CastEnrollment linked = cast("linked", 5L);
+    CastEnrollment invited = cast("invited", null);
+    CastEnrollment expired = cast("expired", null);
+    CastEnrollment notInvited = cast("not-invited", null);
 
     when(castInvitationRepository.findByCastIdIn(any()))
         .thenReturn(

@@ -40,7 +40,8 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
       from com.kizuna.order.domain.OrderAttribution a
         join com.kizuna.order.domain.Order o on o.id = a.orderId
         join com.kizuna.store.domain.Store st on st.id = o.storeId
-        left join com.kizuna.cast.domain.Cast k on k.id = o.castId
+        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = o.castId
+        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
       """;
 
   // 本人は店舗文脈を確立できず storeFilter は働かないため、帰属先会員の一致が唯一の隔離境界である。受注の状態は
