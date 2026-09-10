@@ -21,6 +21,11 @@ public interface CastEnrollmentRepository extends JpaRepository<CastEnrollment, 
   @Query("select e from CastEnrollment e where e.id = :id")
   Optional<CastEnrollment> findByIdForUpdate(@Param("id") String id);
 
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select e from CastEnrollment e where e.id = :id and e.storeId = :storeId")
+  Optional<CastEnrollment> findByIdAndStoreIdForUpdate(
+      @Param("id") String id, @Param("storeId") Long storeId);
+
   @Query("select e.castId from CastEnrollment e where e.id = :id")
   Optional<Long> findCastIdById(@Param("id") String id);
 

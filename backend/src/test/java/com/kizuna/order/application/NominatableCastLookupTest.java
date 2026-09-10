@@ -1,6 +1,7 @@
 package com.kizuna.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +10,7 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
+import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +34,7 @@ class NominatableCastLookupTest {
   private static final long OTHER_STORE_ID = 2L;
 
   @Mock CastEnrollmentRepository castRepository;
+  @Mock StoreRepository storeRepository;
   @Mock CastProfileRepository profileRepository;
 
   @InjectMocks NominatableCastLookup lookup;
@@ -50,28 +53,32 @@ class NominatableCastLookupTest {
   @DisplayName("当店に在籍中のキャストは指名先として成立すること")
   void findReturnsActiveCastOfTheStore() {
     CastEnrollment active = cast("cast-1", STORE_ID, "ENROLLED");
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(active));
+    when(castRepository.findByIdAndStoreIdForUpdate("cast-1", STORE_ID))
+        .thenReturn(Optional.of(active));
 
-    assertThat(lookup.find(STORE_ID, "cast-1")).contains(active);
+    assertThat(lookup.findForUpdate(STORE_ID, "cast-1")).contains(active);
+    var locks = inOrder(storeRepository, castRepository);
+    locks.verify(storeRepository).lockAgainstDeletion(STORE_ID);
+    locks.verify(castRepository).findByIdAndStoreIdForUpdate("cast-1", STORE_ID);
   }
 
   @Test
   @DisplayName("他店舗のキャストは成立しないこと")
   void findRejectsCastOfAnotherStore() {
     // 店舗の一致を述語に置くのは、キャストの読み取りに掛かる絞り込みへ暗黙に頼らないため
-    when(castRepository.findById("cast-1"))
+    when(castRepository.findByIdAndStoreIdForUpdate("cast-1", STORE_ID))
         .thenReturn(Optional.of(cast("cast-1", OTHER_STORE_ID, "ENROLLED")));
 
-    assertThat(lookup.find(STORE_ID, "cast-1")).isEmpty();
+    assertThat(lookup.findForUpdate(STORE_ID, "cast-1")).isEmpty();
   }
 
   @Test
   @DisplayName("在籍停止のキャストは成立しないこと")
   void findRejectsSuspendedCast() {
-    when(castRepository.findById("cast-1"))
+    when(castRepository.findByIdAndStoreIdForUpdate("cast-1", STORE_ID))
         .thenReturn(Optional.of(cast("cast-1", STORE_ID, "SUSPENDED")));
 
-    assertThat(lookup.find(STORE_ID, "cast-1")).isEmpty();
+    assertThat(lookup.findForUpdate(STORE_ID, "cast-1")).isEmpty();
   }
 
   @Test
@@ -79,17 +86,18 @@ class NominatableCastLookupTest {
   void findRejectsCastWithoutStatus() {
     // API 経由の作成はマッパの既定値で在籍中になるが、既定値は API 経路だけの話。未設定を通すと
     // 「在籍中だけを指名できる」が静かに崩れる
-    when(castRepository.findById("cast-1")).thenReturn(Optional.of(cast("cast-1", STORE_ID, null)));
+    when(castRepository.findByIdAndStoreIdForUpdate("cast-1", STORE_ID))
+        .thenReturn(Optional.of(cast("cast-1", STORE_ID, null)));
 
-    assertThat(lookup.find(STORE_ID, "cast-1")).isEmpty();
+    assertThat(lookup.findForUpdate(STORE_ID, "cast-1")).isEmpty();
   }
 
   @Test
   @DisplayName("存在しないキャストは成立しないこと")
   void findReturnsEmptyWhenCastIsMissing() {
-    when(castRepository.findById("nope")).thenReturn(Optional.empty());
+    when(castRepository.findByIdAndStoreIdForUpdate("nope", STORE_ID)).thenReturn(Optional.empty());
 
-    assertThat(lookup.find(STORE_ID, "nope")).isEmpty();
+    assertThat(lookup.findForUpdate(STORE_ID, "nope")).isEmpty();
   }
 
   @Test

@@ -7,6 +7,7 @@ import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.storescope.StoreScopeExempt;
+import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -42,13 +43,15 @@ class NominatableCastLookup {
   private static final Limit CANDIDATE_LIMIT = Limit.of(10);
 
   private final CastEnrollmentRepository castRepository;
+  private final StoreRepository storeRepository;
   private final CastProfileRepository profileRepository;
 
-  /** 指名先として成立するキャストを引く。成立しないときは空を返し、何を投げるかは呼び出し側が決める。 */
+  /** 店舗・在籍の順でロックし、指名を書き込む取引が終わるまで停止・退店との排他を保つ。 */
   @StoreScopeExempt(reason = EXPLICIT_STORE_PREDICATE)
-  Optional<CastEnrollment> find(Long storeId, String castId) {
+  Optional<CastEnrollment> findForUpdate(Long storeId, String castId) {
+    storeRepository.lockAgainstDeletion(storeId);
     return castRepository
-        .findById(castId)
+        .findByIdAndStoreIdForUpdate(castId, storeId)
         .filter(cast -> storeId.equals(cast.getStoreId()))
         .filter(cast -> ENROLLED_STATUS.equals(cast.getStatus()));
   }

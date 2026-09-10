@@ -55,7 +55,7 @@ public class OrderApplicationIntake {
     }
     CastEnrollment cast =
         nominatableCast
-            .find(storeId, castId)
+            .findForUpdate(storeId, castId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
     // 失敗の文言を非公開かどうかで分けない — 分けた瞬間、隠したはずのシフトの存在が申請者に読み取れる。
     if (!confirmedShiftLookupService.hasPubliclyVisibleShift(storeId, cast.getId(), businessDate)) {

@@ -235,14 +235,12 @@ public class OrderService {
       order.replaceStoreFeeLines(orderMapper.toFeeLineDrafts(request.getFeeLines()));
     }
 
-    // 複雑な関連ロジックの処理（顧客のスマートリンク）
-    handleCustomerLinking(request, order);
-
     // 指名は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
     // 店舗が起こす受注は常に新しい指名を立てるため、据え置きの余地は無く無条件に要求する。
     nominatableCast
-        .find(storeContext.getStoreId(), request.getCastId())
+        .findForUpdate(storeContext.getStoreId(), request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
+    handleCustomerLinking(request, order);
     order.assignCast(request.getCastId());
     order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
 
@@ -311,7 +309,7 @@ public class OrderService {
       // cast_id には FK も掛かっているので、素通しが存在しないキャストを通すことにはならない。
       if (!castId.equals(order.getCastId())) {
         nominatableCast
-            .find(storeContext.getStoreId(), castId)
+            .findForUpdate(storeContext.getStoreId(), castId)
             .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
       }
     } else if (order.getCastId() != null) {
@@ -425,7 +423,7 @@ public class OrderService {
     application.ensureDecidable(today);
     if (request.getCastId() != null) {
       nominatableCast
-          .find(storeContext.getStoreId(), request.getCastId())
+          .findForUpdate(storeContext.getStoreId(), request.getCastId())
           .orElseThrow(() -> new ServiceException("指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
       if (!confirmedShiftLookupService.hasConfirmedShift(
           storeContext.getStoreId(), request.getCastId(), request.getBusinessDate())) {
