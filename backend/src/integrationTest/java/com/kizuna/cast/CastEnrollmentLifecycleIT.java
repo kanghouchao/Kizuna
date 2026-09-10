@@ -44,7 +44,7 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
   @Autowired DataSource dataSource;
 
   @Test
-  void withdrawalInvalidatesPendingInvitationAndRejectsReissueAndAcceptance() {
+  void withdrawalPreservesPendingInvitationButRejectsReissueAndAcceptance() {
     String id = create();
     var invitation =
         rest.postForEntity(
@@ -63,7 +63,7 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
     assertThat(
             jdbc.queryForObject(
                 "select status from t_cast_invitations where token = ?", String.class, token))
-        .isEqualTo("INVALIDATED");
+        .isEqualTo("PENDING");
     assertThat(
             rest.postForEntity(
                     "/store/casts/" + id + "/invitation",

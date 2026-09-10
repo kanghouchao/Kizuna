@@ -11,7 +11,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentSnapshot;
 import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
-import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -35,7 +34,6 @@ class CastEnrollmentServiceTest {
   @Mock CastEnrollmentRepository enrollments;
   @Mock CastEnrollmentSnapshotRepository snapshots;
   @Mock CastEnrollmentStatusHistoryRepository histories;
-  @Mock CastInvitationRepository invitations;
   @Mock PlatformUserRepository users;
   @Mock StoreRepository stores;
   @Mock StoreContext storeContext;
