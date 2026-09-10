@@ -18,6 +18,7 @@ import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -43,6 +44,7 @@ public class ShiftRequestService {
   private final ShiftRequestMapper shiftRequestMapper;
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
+  private final StoreRepository storeRepository;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -159,6 +161,7 @@ public class ShiftRequestService {
   @Transactional
   public StoreShiftRequestResponse approve(String id, Boolean published, String actorEmail) {
     ShiftRequest request = findOwnRequest(id);
+    storeRepository.lockAgainstDeletion(request.getStoreId());
     enrollments
         .findScopedByIdForUpdate(request.getCastId())
         .filter(CastEnrollment::isMembershipActive)

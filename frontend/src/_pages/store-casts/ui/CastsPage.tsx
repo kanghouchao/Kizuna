@@ -198,7 +198,7 @@ export default function CastListPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {canInvite && (
+                      {canInvite && cast.status !== 'WITHDRAWN' && (
                         <InvitationButton
                           castId={cast.id}
                           status={cast.invitation_status}

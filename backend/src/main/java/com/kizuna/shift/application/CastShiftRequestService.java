@@ -22,6 +22,7 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -49,6 +50,7 @@ public class CastShiftRequestService {
   private final AttendanceRepository attendanceRepository;
   private final ShiftRequestMapper shiftRequestMapper;
   private final BusinessDateService businessDateService;
+  private final StoreRepository storeRepository;
 
   @StoreScopeExempt(reason = "所属判定は「指定店舗に本人の未退店の在籍が存在すること」で行い、store_id はその判定に通った店舗を明示設定する")
   @Transactional
@@ -61,7 +63,7 @@ public class CastShiftRequestService {
             .findFirst()
             .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
 
-    requireActiveMembership(castId);
+    requireActiveMembership(castId, request.getStoreId());
 
     ShiftRequest entity =
         ShiftRequest.builder()
@@ -91,7 +93,7 @@ public class CastShiftRequestService {
             .findById(request.getShiftId())
             .filter(s -> castIds.contains(s.getCastId()))
             .orElseThrow(() -> new NotFoundException("対象のシフトが見つかりません: " + request.getShiftId()));
-    requireActiveMembership(shift.getCastId());
+    requireActiveMembership(shift.getCastId(), shift.getStoreId());
     if (shift.getStatus() != ShiftStatus.CONFIRMED) {
       throw new ServiceException("確定済みのシフトのみ変更申請できます");
     }
@@ -168,7 +170,8 @@ public class CastShiftRequestService {
     }
   }
 
-  private void requireActiveMembership(String id) {
+  private void requireActiveMembership(String id, Long storeId) {
+    storeRepository.lockAgainstDeletion(storeId);
     castRepository
         .findByIdForUpdate(id)
         .filter(CastEnrollment::isMembershipActive)

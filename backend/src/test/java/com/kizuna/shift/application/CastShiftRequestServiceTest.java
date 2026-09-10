@@ -31,6 +31,7 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
@@ -48,6 +49,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class CastShiftRequestServiceTest {
+  @Mock private StoreRepository storeRepository;
 
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private CastEnrollmentRepository castRepository;

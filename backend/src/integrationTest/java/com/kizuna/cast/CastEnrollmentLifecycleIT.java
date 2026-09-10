@@ -108,6 +108,12 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
                   .getStatusCode())
           .isEqualTo(HttpStatus.OK);
     }
+    assertStoreLockedBeforeEnrollment(
+        id, "/store/casts/" + id + "/" + operation, new HttpEntity<>(headers), HttpStatus.OK);
+  }
+
+  private void assertStoreLockedBeforeEnrollment(
+      String id, String path, HttpEntity<?> entity, HttpStatus expectedStatus) throws Exception {
     try (Connection holder = dataSource.getConnection()) {
       holder.setAutoCommit(false);
       try (var statement =
@@ -116,12 +122,7 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
         assertThat(statement.executeQuery().next()).isTrue();
       }
       var waiting =
-          CompletableFuture.supplyAsync(
-              () ->
-                  rest.postForEntity(
-                      "/store/casts/" + id + "/" + operation,
-                      new HttpEntity<>(headers),
-                      JsonNode.class));
+          CompletableFuture.supplyAsync(() -> rest.postForEntity(path, entity, JsonNode.class));
       try {
         boolean blocked = false;
         for (int attempt = 0; attempt < 100; attempt++) {
@@ -145,7 +146,7 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
       } finally {
         holder.rollback();
       }
-      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(waiting.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(expectedStatus);
     }
   }
 
@@ -452,70 +453,12 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
   @ParameterizedTest
   @ValueSource(strings = {"NEW_SUBMIT", "CHANGE_SUBMIT", "NEW_APPROVE", "CHANGE_APPROVE"})
   void withdrawalSerializesWithSubmissionAndApproval(String operation) throws Exception {
-    String email = "race-" + System.nanoTime() + "@kizuna.test";
-    PlatformUser user =
-        users.save(
-            PlatformUser.builder()
-                .email(email)
-                .password(passwords.encode(NEW_ACCOUNT_PASSWORD))
-                .displayName("競合検証")
-                .userType(UserType.CAST)
-                .enabled(true)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                .storeIds(Set.of(STORE_A))
-                .build());
-    CastEnrollment enrollment = CastEnrollment.builder().build();
-    enrollment.setStoreId(STORE_A);
-    String id = saveEnrollmentFixture(enrollment, "競合検証", user.getId()).getId();
-    HttpHeaders bearer = new HttpHeaders();
-    bearer.setContentType(MediaType.APPLICATION_JSON);
-    bearer.setBearerAuth(loginWithPassword(email, NEW_ACCOUNT_PASSWORD));
-    var requestedSlot =
-        Map.of(
-            "store_id",
-            STORE_A,
-            "work_date",
-            "2999-06-01",
-            "start_time",
-            "18:00",
-            "end_time",
-            "23:00");
-    var newRequest =
-        rest.postForEntity(
-            "/platform/me/shift-requests", new HttpEntity<>(requestedSlot, bearer), JsonNode.class);
-    assertThat(newRequest.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    String pendingId = newRequest.getBody().path("id").asString();
-    String path = "/platform/me/shift-requests";
-    HttpEntity<?> entity = new HttpEntity<>(requestedSlot, bearer);
-    if (operation.startsWith("CHANGE")) {
-      var approved =
-          rest.postForEntity(
-              "/store/shift-requests/" + pendingId + "/approval",
-              new HttpEntity<>(storeHeaders(STORE_A)),
-              JsonNode.class);
-      assertThat(approved.getStatusCode()).isEqualTo(HttpStatus.OK);
-      var requestedChange =
-          Map.of(
-              "shift_id",
-              approved.getBody().path("shift_id").asString(),
-              "work_date",
-              "2999-06-02",
-              "start_time",
-              "19:00",
-              "end_time",
-              "23:00");
-      path += "/changes";
-      entity = new HttpEntity<>(requestedChange, bearer);
-      if (operation.endsWith("APPROVE")) {
-        var change = rest.postForEntity(path, entity, JsonNode.class);
-        assertThat(change.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        pendingId = change.getBody().path("id").asString();
-      }
-    }
-    if (operation.endsWith("APPROVE")) {
-      path = "/store/shift-requests/" + pendingId + "/approval";
-      entity = new HttpEntity<>(storeHeaders(STORE_A));
-    }
+    var fixture = prepareShiftOperation(operation);
+    String id = fixture.enrollmentId();
+    HttpHeaders bearer = fixture.bearer();
+    String path = fixture.path();
+    HttpEntity<?> entity = fixture.entity();
+    String pendingId = fixture.pendingId();
     int before =
         rest.exchange(
                 "/platform/me/shift-requests",
@@ -595,4 +538,90 @@ class CastEnrollmentLifecycleIT extends CrossStoreTestSupport {
       withdrawal.get(10, TimeUnit.SECONDS);
     }
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"NEW_SUBMIT", "CHANGE_SUBMIT", "NEW_APPROVE", "CHANGE_APPROVE"})
+  void shiftSubmissionAndApprovalLockStoreBeforeEnrollment(String operation) throws Exception {
+    var fixture = prepareShiftOperation(operation);
+    assertStoreLockedBeforeEnrollment(
+        fixture.enrollmentId(),
+        fixture.path(),
+        fixture.entity(),
+        operation.endsWith("APPROVE") ? HttpStatus.OK : HttpStatus.CREATED);
+  }
+
+  private ShiftOperation prepareShiftOperation(String operation) {
+    String email = "race-" + System.nanoTime() + "@kizuna.test";
+    PlatformUser user =
+        users.save(
+            PlatformUser.builder()
+                .email(email)
+                .password(passwords.encode(NEW_ACCOUNT_PASSWORD))
+                .displayName("競合検証")
+                .userType(UserType.CAST)
+                .enabled(true)
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of(STORE_A))
+                .build());
+    CastEnrollment enrollment = CastEnrollment.builder().build();
+    enrollment.setStoreId(STORE_A);
+    String id = saveEnrollmentFixture(enrollment, "競合検証", user.getId()).getId();
+    HttpHeaders bearer = new HttpHeaders();
+    bearer.setContentType(MediaType.APPLICATION_JSON);
+    bearer.setBearerAuth(loginWithPassword(email, NEW_ACCOUNT_PASSWORD));
+    var requestedSlot =
+        Map.of(
+            "store_id",
+            STORE_A,
+            "work_date",
+            "2999-06-01",
+            "start_time",
+            "18:00",
+            "end_time",
+            "23:00");
+    var newRequest =
+        rest.postForEntity(
+            "/platform/me/shift-requests", new HttpEntity<>(requestedSlot, bearer), JsonNode.class);
+    assertThat(newRequest.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String pendingId = newRequest.getBody().path("id").asString();
+    String path = "/platform/me/shift-requests";
+    HttpEntity<?> entity = new HttpEntity<>(requestedSlot, bearer);
+    if (operation.startsWith("CHANGE")) {
+      var approved =
+          rest.postForEntity(
+              "/store/shift-requests/" + pendingId + "/approval",
+              new HttpEntity<>(storeHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(approved.getStatusCode()).isEqualTo(HttpStatus.OK);
+      var requestedChange =
+          Map.of(
+              "shift_id",
+              approved.getBody().path("shift_id").asString(),
+              "work_date",
+              "2999-06-02",
+              "start_time",
+              "19:00",
+              "end_time",
+              "23:00");
+      path += "/changes";
+      entity = new HttpEntity<>(requestedChange, bearer);
+      if (operation.endsWith("APPROVE")) {
+        var change = rest.postForEntity(path, entity, JsonNode.class);
+        assertThat(change.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        pendingId = change.getBody().path("id").asString();
+      }
+    }
+    if (operation.endsWith("APPROVE")) {
+      path = "/store/shift-requests/" + pendingId + "/approval";
+      entity = new HttpEntity<>(storeHeaders(STORE_A));
+    }
+    return new ShiftOperation(id, bearer, path, entity, pendingId);
+  }
+
+  private record ShiftOperation(
+      String enrollmentId,
+      HttpHeaders bearer,
+      String path,
+      HttpEntity<?> entity,
+      String pendingId) {}
 }

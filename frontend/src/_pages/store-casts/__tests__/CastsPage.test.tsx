@@ -110,6 +110,28 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
     expect(await screen.findByRole('button', { name: '招待を発行' })).toBeInTheDocument();
   });
 
+  it.each(['NOT_INVITED', 'INVITED', 'EXPIRED'] as const)(
+    '退店済みでは招待状態 %s でも発行・再発行を表示しないこと',
+    async invitation_status => {
+      mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
+      mockedCastApi.list.mockResolvedValue(
+        toPage([{ ...cast, status: 'WITHDRAWN', invitation_status }])
+      );
+      render(<CastListPage />);
+      await screen.findByText('花子');
+      expect(screen.getByText('退店')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '招待を発行' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '再発行' })).not.toBeInTheDocument();
+    }
+  );
+
+  it('停止中でも招待を発行できること', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
+    mockedCastApi.list.mockResolvedValue(toPage([{ ...cast, status: 'SUSPENDED' }]));
+    render(<CastListPage />);
+    expect(await screen.findByRole('button', { name: '招待を発行' })).toBeInTheDocument();
+  });
+
   it('CAST_INVITE 能力が無ければ「招待を発行」ボタンが表示されず、招待状態バッジは表示されること', async () => {
     mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
 
