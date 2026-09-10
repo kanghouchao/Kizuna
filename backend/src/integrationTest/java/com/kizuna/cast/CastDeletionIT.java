@@ -49,7 +49,7 @@ class CastDeletionIT extends CrossStoreTestSupport {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody().path("error").asString())
-        .isEqualTo("受注が紐づいているキャストは削除できません。在籍停止に変更してください");
+        .isEqualTo("受注が紐づいているキャストは削除できません。退店操作を利用してください");
     assertThat(get(castId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
   }
 
@@ -72,7 +72,7 @@ class CastDeletionIT extends CrossStoreTestSupport {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody().path("error").asString())
-        .isEqualTo("実績が記録されているキャストは削除できません。在籍停止に変更してください");
+        .isEqualTo("実績が記録されているキャストは削除できません。退店操作を利用してください");
     assertThat(get(castId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
   }
 
@@ -97,7 +97,7 @@ class CastDeletionIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody().path("error").asString())
         .as("どちらの外部キーが鳴りうる経路でも断りの文言が変わらないこと")
-        .isEqualTo("実績が記録されているキャストは削除できません。在籍停止に変更してください");
+        .isEqualTo("実績が記録されているキャストは削除できません。退店操作を利用してください");
     assertThat(get(inheritingCastId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
   }
 

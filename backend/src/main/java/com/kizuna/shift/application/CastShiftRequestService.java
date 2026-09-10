@@ -1,5 +1,6 @@
 package com.kizuna.shift.application;
 
+import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
@@ -33,9 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 本人（キャスト）の出勤希望ユースケース（新規希望・変更申請の提出、履歴）。
  *
- * <p>提出は StoreContext が確立していない {@code /platform/me} 配下のため、対象店舗への所属は「当該店舗に本人の cast
- * 行が存在すること」で判定し、{@link ShiftRequest} の store_id を明示設定する（{@code @StoreScoped} を経由しないため
- * StoreScopeStampListener の自動採番に頼れない）。
+ * <p>提出は StoreContext が確立していない {@code /platform/me}
+ * 配下のため、対象店舗への所属は「当該店舗に本人の未退店の在籍が存在すること」で判定し、{@link ShiftRequest} の store_id
+ * を明示設定する（{@code @StoreScoped} を経由しないため StoreScopeStampListener の自動採番に頼れない）。
  */
 @Service
 @RequiredArgsConstructor
@@ -49,17 +50,18 @@ public class CastShiftRequestService {
   private final ShiftRequestMapper shiftRequestMapper;
   private final BusinessDateService businessDateService;
 
-  @StoreScopeExempt(reason = "所属判定は「指定店舗に本人の cast 行が存在すること」で行い、store_id はその判定に通った店舗を明示設定する")
+  @StoreScopeExempt(reason = "所属判定は「指定店舗に本人の未退店の在籍が存在すること」で行い、store_id はその判定に通った店舗を明示設定する")
   @Transactional
   public ShiftRequestResponse submit(String email, ShiftRequestCreateRequest request) {
     validateRequestedSlot(request.getWorkDate(), request.getStartTime(), request.getEndTime());
 
     Long userId = resolveUserId(email);
-    // 同一店舗に本人の档案が複数並存し得るため、最古の档案 id を決定的に選ぶ（リポジトリが古い順で返す）。
     String castId =
         castRepository.findIdsByPlatformUserIdAndStoreId(userId, request.getStoreId()).stream()
             .findFirst()
             .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
+
+    requireActiveMembership(castId);
 
     ShiftRequest entity =
         ShiftRequest.builder()
@@ -89,6 +91,7 @@ public class CastShiftRequestService {
             .findById(request.getShiftId())
             .filter(s -> castIds.contains(s.getCastId()))
             .orElseThrow(() -> new NotFoundException("対象のシフトが見つかりません: " + request.getShiftId()));
+    requireActiveMembership(shift.getCastId());
     if (shift.getStatus() != ShiftStatus.CONFIRMED) {
       throw new ServiceException("確定済みのシフトのみ変更申請できます");
     }
@@ -163,6 +166,13 @@ public class CastShiftRequestService {
     if (workDate.isBefore(businessDateService.currentBusinessDate())) {
       throw new ServiceException("勤務日は本日以降を指定してください");
     }
+  }
+
+  private void requireActiveMembership(String id) {
+    castRepository
+        .findByIdForUpdate(id)
+        .filter(CastEnrollment::isMembershipActive)
+        .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
   }
 
   private Long resolveUserId(String email) {

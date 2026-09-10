@@ -60,16 +60,16 @@ class CastThreeLayersIT extends CrossStoreTestSupport {
     assertThat(visible(id)).isTrue();
     var suspended =
         rest.exchange(
-            "/store/casts/" + id,
-            HttpMethod.PUT,
-            new HttpEntity<>(Map.of("status", "SUSPENDED"), storeHeaders(STORE_A)),
+            "/store/casts/" + id + "/suspension",
+            HttpMethod.POST,
+            new HttpEntity<>(storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(suspended.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(visible(id)).isFalse();
     rest.exchange(
-        "/store/casts/" + id,
-        HttpMethod.PUT,
-        new HttpEntity<>(Map.of("status", "ENROLLED"), storeHeaders(STORE_A)),
+        "/store/casts/" + id + "/resumption",
+        HttpMethod.POST,
+        new HttpEntity<>(storeHeaders(STORE_A)),
         JsonNode.class);
     assertThat(visible(id)).isTrue();
     publish(id, "UNPUBLISHED");

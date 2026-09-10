@@ -1,7 +1,17 @@
-import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
+import {
+  CursorPageResult,
+  PageResult,
+  PaginationParams,
+  apiClient,
+  fromCursorPage,
+  fromSpringPage,
+} from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
   CastCreateRequest,
+  CastEnrollmentStatusResponse,
+  CastEnrollmentStatusHistory,
+  CastEnrollmentSnapshot,
   CastPublicationStatus,
   CastFieldDefinitionCreateRequest,
   CastFieldDefinitionResponse,
@@ -14,6 +24,37 @@ import {
 } from '../model/types';
 
 export const castApi = {
+  suspend: async (id: string): Promise<CastEnrollmentStatusResponse> => {
+    const response = await apiClient.post(`/store/casts/${requireId(id, 'キャスト')}/suspension`);
+    return response.data;
+  },
+  resume: async (id: string): Promise<CastEnrollmentStatusResponse> => {
+    const response = await apiClient.post(`/store/casts/${requireId(id, 'キャスト')}/resumption`);
+    return response.data;
+  },
+  withdraw: async (id: string): Promise<CastEnrollmentStatusResponse> => {
+    const response = await apiClient.post(`/store/casts/${requireId(id, 'キャスト')}/withdrawal`);
+    return response.data;
+  },
+  statusHistories: async (
+    id: string,
+    cursor?: string
+  ): Promise<CursorPageResult<CastEnrollmentStatusHistory>> => {
+    const response = await apiClient.get(
+      `/store/casts/${requireId(id, 'キャスト')}/status-histories`,
+      { params: { cursor, size: 20 } }
+    );
+    return fromCursorPage(response.data);
+  },
+  snapshots: async (
+    id: string,
+    cursor?: string
+  ): Promise<CursorPageResult<CastEnrollmentSnapshot>> => {
+    const response = await apiClient.get(`/store/casts/${requireId(id, 'キャスト')}/snapshots`, {
+      params: { cursor, size: 20 },
+    });
+    return fromCursorPage(response.data);
+  },
   changePublication: async (
     id: string,
     publication_status: CastPublicationStatus

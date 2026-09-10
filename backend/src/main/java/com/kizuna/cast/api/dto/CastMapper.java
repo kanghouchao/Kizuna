@@ -17,7 +17,9 @@ public interface CastMapper {
   @Mapping(target = ".", source = "profile")
   @Mapping(target = "id", source = "enrollment.id")
   @Mapping(target = "status", source = "enrollment.status")
+  @Mapping(target = "deletable", expression = "java(enrollment.isDeletable())")
   @Mapping(target = "invitationStatus", source = "invitationStatus")
+  @Mapping(target = "endedAt", source = "enrollment.endedAt")
   @Mapping(target = "createdAt", source = "enrollment.createdAt")
   @Mapping(target = "updatedAt", source = "enrollment.updatedAt")
   @Mapping(target = "customFields", expression = "java(combine(enrollment, profile))")
@@ -27,6 +29,7 @@ public interface CastMapper {
   @Mapping(target = ".", source = "profile")
   @Mapping(target = "id", source = "enrollment.id")
   @Mapping(target = "status", source = "enrollment.status")
+  @Mapping(target = "deletable", expression = "java(enrollment.isDeletable())")
   @Mapping(target = "invitationStatus", source = "invitationStatus")
   CastSummaryResponse toSummaryResponse(
       CastEnrollment enrollment, CastProfile profile, CastInvitationStatus invitationStatus);

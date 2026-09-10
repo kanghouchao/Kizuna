@@ -12,6 +12,9 @@ jest.mock('@/entities/cast', () => ({
     get: jest.fn(),
     update: jest.fn(),
     changePublication: jest.fn(),
+    resume: jest.fn(),
+    statusHistories: jest.fn(async () => ({ rows: [], nextCursor: null })),
+    snapshots: jest.fn(async () => ({ rows: [], nextCursor: null })),
   },
   castFieldDefinitionApi: {
     list: jest.fn(),
@@ -134,8 +137,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     render(<CastEditPage />);
     const customField = (await screen.findByLabelText('血液型')) as HTMLInputElement;
     expect(customField.value).toBe('A');
-    // 取得値の在籍状態がセレクトに選択済みとして表示されること
-    expect(screen.getByRole('combobox', { name: '在籍状態' })).toHaveTextContent('在籍停止');
+    expect(screen.getByText('在籍状態: 在籍停止')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -143,8 +145,7 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(mockedCastApi.update.mock.calls[0][0]).toBe('cast-1');
     const body = mockedCastApi.update.mock.calls[0][1] as unknown as Record<string, unknown>;
     expect(body).toHaveProperty('name', '花子');
-    // プリフィルされた在籍状態が往復で変わらないこと
-    expect(body).toHaveProperty('status', 'SUSPENDED');
+    expect(body).not.toHaveProperty('status');
     expect(body).toHaveProperty('introduction', '紹介');
     expect(body).toHaveProperty('age', 25);
     expect(body).toHaveProperty('display_order', 3);
@@ -173,38 +174,18 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(JSON.parse(JSON.stringify(body))).not.toHaveProperty('status');
   });
 
-  it('セレクトで選び直した在籍状態が送信ボディに反映されること', async () => {
-    mockedCastApi.get.mockResolvedValue({
-      id: 'cast-1',
-      name: '花子',
-      status: 'SUSPENDED',
-      photo_url: '',
-      introduction: '',
-      display_order: 0,
-      custom_fields: {},
-      invitation_status: 'NOT_INVITED',
-      created_at: '2026-07-01T00:00:00Z',
-      updated_at: '2026-07-01T00:00:00Z',
-    });
-    mockedCastApi.update.mockResolvedValue({} as never);
+  it('再開操作は専用 API を使い、未保存の資料入力を維持する', async () => {
+    mockedCastApi.get.mockResolvedValue({ id: 'cast-1', name: '花子', status: 'SUSPENDED' });
+    mockedCastApi.resume.mockResolvedValue({ id: 'cast-1', status: 'ENROLLED' });
     mockedFieldApi.list.mockResolvedValue([]);
-
-    render(<CastEditPage />);
-    const trigger = await screen.findByRole('combobox', { name: '在籍状態' });
-    expect(trigger).toHaveTextContent('在籍停止');
-
-    // キーボードで開く経路のみを使う（ポインタ系 API は jsdom に無い）
-    fireEvent.click(trigger);
-    const option = await screen.findByRole('option', { name: '在籍中' });
-    // Base UI の Item は pointerdown を経ていない mouse click を無視する
-    fireEvent.pointerDown(option);
-    fireEvent.click(option);
-    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-
-    await waitFor(() => expect(mockedCastApi.update).toHaveBeenCalledTimes(1));
-    const body = mockedCastApi.update.mock.calls[0][1] as unknown as Record<string, unknown>;
-    // 取得値 SUSPENDED ではなく、選び直した値がフォーム状態に届いていること
-    expect(body).toHaveProperty('status', 'ENROLLED');
+    const { container } = render(<CastEditPage />);
+    await screen.findByRole('button', { name: '再開する' });
+    fireEvent.change(inputByName(container, 'name'), { target: { value: '未保存の源氏名' } });
+    fireEvent.click(screen.getByRole('button', { name: '再開する' }));
+    await screen.findByRole('button', { name: '停止する' });
+    expect(inputByName(container, 'name').value).toBe('未保存の源氏名');
+    expect(mockedCastApi.resume).toHaveBeenCalledWith('cast-1');
+    expect(mockedCastApi.update).not.toHaveBeenCalled();
   });
 });
 

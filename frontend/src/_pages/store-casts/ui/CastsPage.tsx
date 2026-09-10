@@ -81,6 +81,8 @@ export default function CastListPage() {
     switch (status) {
       case 'ENROLLED':
         return { text: '在籍中', color: 'bg-success/10 text-success-strong' };
+      case 'WITHDRAWN':
+        return { text: '退店', color: 'bg-muted text-muted-foreground' };
       case 'SUSPENDED':
         return { text: '在籍停止', color: 'bg-muted text-foreground' };
       default:
@@ -210,7 +212,13 @@ export default function CastListPage() {
                       >
                         <SquarePenIcon />
                       </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => deletion.ask(cast)}>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={!cast.deletable}
+                        aria-label="草稿を削除"
+                        onClick={() => deletion.ask(cast)}
+                      >
                         <Trash2Icon />
                       </Button>
                     </div>

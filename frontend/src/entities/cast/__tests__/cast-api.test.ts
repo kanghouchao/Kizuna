@@ -111,3 +111,26 @@ describe('識別子を欠いた castApi / castFieldDefinitionApi', () => {
     expect(apiClient.delete).not.toHaveBeenCalled();
   });
 });
+
+it.each([
+  ['suspend', 'suspension'],
+  ['resume', 'resumption'],
+  ['withdraw', 'withdrawal'],
+] as const)('%s は専用状態操作を POST する', async (method, path) => {
+  await castApi[method]('c1');
+  expect(apiClient.post).toHaveBeenLastCalledWith(`/store/casts/c1/${path}`);
+});
+
+it.each([
+  ['statusHistories', 'status-histories'],
+  ['snapshots', 'snapshots'],
+] as const)('%s は履歴のカーソルを引き継ぐ', async (method, path) => {
+  mockedGet.mockResolvedValueOnce({ data: { content: [{ id: 'h1' }], next_cursor: 'next' } });
+  await expect(castApi[method]('c1', 'before')).resolves.toEqual({
+    rows: [{ id: 'h1' }],
+    nextCursor: 'next',
+  });
+  expect(mockedGet).toHaveBeenLastCalledWith(`/store/casts/c1/${path}`, {
+    params: { cursor: 'before', size: 20 },
+  });
+});

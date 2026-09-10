@@ -173,7 +173,7 @@ class CastFieldDefinitionServiceTest {
         .thenReturn(Optional.of(CastFieldDefinition.builder().key("memo").build()));
     when(repository.existsById("d1")).thenReturn(true);
 
-    service.delete("d1");
+    service.delete("d1", "actor");
 
     verify(repository).deleteById("d1");
   }
@@ -182,7 +182,7 @@ class CastFieldDefinitionServiceTest {
   void delete_throwsWhenNotFound() {
     when(repository.existsById("missing")).thenReturn(false);
 
-    assertThatThrownBy(() -> service.delete("missing"))
+    assertThatThrownBy(() -> service.delete("missing", "actor"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("見つかりません");
 
