@@ -32,6 +32,7 @@ When('在籍操作で退店を一度取り消してから確定する', async ({
 Then('退店状態と入店からの在籍履歴が表示される', async ({ page }) => {
   await expect(page.getByText('在籍状態: 退店', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '退店する', exact: true })).toHaveCount(0);
+  await page.locator('summary').filter({ hasText: /^在籍履歴$/ }).click();
   const history = page.getByRole('region', { name: '在籍履歴', exact: true });
   await expect(history.getByRole('listitem')).toHaveCount(4);
   await expect(history.getByText('入店（在籍中）', { exact: true })).toBeVisible();

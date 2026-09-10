@@ -170,3 +170,20 @@ After({ tags: '@cast-custom-fields' }, async ({ request }) => {
   createdFieldKey = '';
   createdFieldLabel = '';
 });
+
+When('同じキーを公開フィールドとして再作成する', async ({ page }) => {
+  await addFieldDefinition(page, createdFieldKey, createdFieldLabel, true);
+  const row = page.getByRole('row').filter({ hasText: createdFieldLabel });
+  await row.getByRole('button', { name: '編集', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(/作成後は変更できません/)).toBeVisible();
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'フィールド一覧へ戻る' }).click();
+});
+
+Then('再作成したフィールドの値は空で公開プロフィールに表示される', async ({ page }) => {
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/${currentCastId}/edit`);
+  const publicProfile = page.getByRole('region', { name: '公開プロフィール', exact: true });
+  await expect(publicProfile.getByLabel(createdFieldLabel, { exact: true })).toHaveValue('');
+  await expect(page.getByRole('region', { name: '内部情報', exact: true }).getByLabel(createdFieldLabel, { exact: true })).toHaveCount(0);
+});

@@ -1,6 +1,6 @@
 'use client';
 
-import { Control, useForm } from 'react-hook-form';
+import { Control, UseFormRegister, useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
 import {
@@ -31,7 +31,7 @@ import { integerRule, useManagedList } from '@/shared/lib';
 /** キャストフォームのデータ型 */
 export interface CastFormData {
   name: string;
-  status: 'ENROLLED' | 'SUSPENDED' | 'WITHDRAWN';
+  status: 'ENROLLED' | 'SUSPENDED';
   photo_url: string;
   introduction: string;
   age: number | null;
@@ -146,14 +146,54 @@ export function CastForm({
       {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
           我々の文言は永久に描かれない。執行は各 rules が担う */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
-        {/* 基本情報 */}
-        <Card>
+        {!isEdit && (
+          <Card>
+            <CardHeader>
+              <CardTitle role="heading" aria-level={2}>
+                在籍
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FormField
+                control={control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>在籍状態</FormLabel>
+                    <Select
+                      items={STATUS_OPTIONS}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+        )}
+        <Card role="region" aria-label="公開プロフィール">
           <CardHeader>
             <CardTitle role="heading" aria-level={2}>
-              基本情報
+              公開プロフィール
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
+            <p className="text-sm text-muted-foreground">
+              公開中かつ在籍中の場合に、公開サイトへ表示される情報です。
+            </p>
             <div className="flex gap-8">
               <div className="grid gap-2">
                 <Label>写真</Label>
@@ -178,35 +218,6 @@ export function CastForm({
                     </FormItem>
                   )}
                 />
-                {!isEdit && (
-                  <FormField
-                    control={control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>在籍状態</FormLabel>
-                        <Select
-                          items={STATUS_OPTIONS}
-                          value={field.value}
-                          onValueChange={field.onChange}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {STATUS_OPTIONS.map(o => (
-                              <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-                )}
                 <FormField
                   control={control}
                   name="display_order"
@@ -228,17 +239,6 @@ export function CastForm({
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* プロフィール */}
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              プロフィール
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <NumericProfileField control={control} name="age" label="年齢" />
               <NumericProfileField control={control} name="height" label="身長" unit="cm" />
@@ -248,79 +248,56 @@ export function CastForm({
               <NumericProfileField control={control} name="waist" label="ウエスト" unit="cm" />
               <NumericProfileField control={control} name="hip" label="ヒップ" unit="cm" />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="introduction">自己紹介</Label>
+              <Textarea
+                id="introduction"
+                rows={4}
+                {...register('introduction')}
+                placeholder="自己紹介を入力してください..."
+              />
+            </div>
+            {isEdit && !isLoadingDefinitions && !definitionsFailed && (
+              <CustomFields
+                definitions={definitions.filter(d => d.is_public)}
+                existingValues={existingCustomFields}
+                register={register}
+              />
+            )}
           </CardContent>
         </Card>
-
-        {/* 自己紹介 */}
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              自己紹介
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              id="introduction"
-              rows={4}
-              {...register('introduction')}
-              placeholder="自己紹介を入力してください..."
-            />
-          </CardContent>
-        </Card>
-
-        {/* カスタムフィールド（編集時のみ。作成時はキャストがまだ無いため値を付与できない） */}
         {isEdit && (
-          <Card>
-            <CardHeader>
-              <CardTitle role="heading" aria-level={2}>
-                カスタムフィールド
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingDefinitions ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">読み込み中...</div>
-              ) : definitionsFailed ? (
-                // 「登録されていません」と言い切ると、読めなかっただけの状態が事実に化ける。
-                // 定義が取れないまま保存しても custom_fields 自体を送らないので既存値は消えない
-                <RegionError
-                  message="カスタムフィールド定義の取得に失敗しました"
-                  onRetry={() => void refetchDefinitions()}
-                  className="justify-center p-6"
-                />
-              ) : definitions.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  カスタムフィールドは登録されていません
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {definitions.map(definition => {
-                    const key = definition.key;
-                    if (key === undefined) return null;
-                    return (
-                      <div key={key} className="grid gap-2">
-                        <Label htmlFor={`cast-custom-field-${key}`}>{definition.label}</Label>
-                        <Input
-                          id={`cast-custom-field-${key}`}
-                          type="text"
-                          // 自身が所有するキーのみ初期値に採用する。プレーンオブジェクトの
-                          // ブラケットアクセスは 'constructor' 等の継承プロパティを拾うため hasOwn で防ぐ。
-                          defaultValue={
-                            existingCustomFields && Object.hasOwn(existingCustomFields, key)
-                              ? existingCustomFields[key]
-                              : ''
-                          }
-                          {...register(`custom_fields.${key}`)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <>
+            {isLoadingDefinitions ? (
+              <p role="status">カスタムフィールドを読み込み中...</p>
+            ) : definitionsFailed ? (
+              <RegionError
+                message="カスタムフィールド定義の取得に失敗しました"
+                onRetry={() => void refetchDefinitions()}
+              />
+            ) : null}
+            <Card role="region" aria-label="内部情報">
+              <CardHeader>
+                <CardTitle role="heading" aria-level={2}>
+                  内部情報
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  店舗内で管理する情報です。公開サイトには表示されません。
+                </p>
+                {!isLoadingDefinitions && !definitionsFailed && (
+                  <CustomFields
+                    definitions={definitions.filter(d => !d.is_public)}
+                    existingValues={existingCustomFields}
+                    register={register}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </>
         )}
 
-        {/* ボタン */}
         <div className="flex justify-end gap-4">
           <Button type="button" variant="outline" onClick={() => router.back()}>
             キャンセル
@@ -331,5 +308,42 @@ export function CastForm({
         </div>
       </form>
     </Form>
+  );
+}
+
+function CustomFields({
+  definitions,
+  existingValues,
+  register,
+}: {
+  definitions: CastFieldDefinitionResponse[];
+  existingValues?: Record<string, string>;
+  register: UseFormRegister<CastFormData>;
+}) {
+  if (definitions.length === 0)
+    return <p className="text-sm text-muted-foreground">カスタムフィールドは登録されていません</p>;
+  return (
+    <div className="space-y-4">
+      {definitions.map(definition => {
+        const key = definition.key;
+        if (key === undefined) return null;
+        return (
+          <div key={key} className="grid gap-2">
+            <Label className="break-all" htmlFor={`cast-custom-field-${key}`}>
+              {definition.label}
+            </Label>
+            <Input
+              id={`cast-custom-field-${key}`}
+              type="text"
+              // 継承プロパティを値として取り込まないよう、所有するキーだけを読む。
+              defaultValue={
+                existingValues && Object.hasOwn(existingValues, key) ? existingValues[key] : ''
+              }
+              {...register(`custom_fields.${key}`)}
+            />
+          </div>
+        );
+      })}
+    </div>
   );
 }

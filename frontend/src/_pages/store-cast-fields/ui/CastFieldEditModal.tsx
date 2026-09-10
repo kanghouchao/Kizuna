@@ -150,6 +150,12 @@ export function CastFieldEditModal({
             <p className="text-sm text-muted-foreground">
               公開区分: {definition?.is_public ? '公開' : '内部'}（作成後は変更できません）
             </p>
+            <p className="text-sm text-muted-foreground">
+              公開区分を変えるには、一覧でこのフィールドを削除してから新しく作成してください。削除すると全キャストの現在の値も消え、再作成しても復元されません。
+            </p>
+            <Button type="button" variant="link" onClick={onClose}>
+              フィールド一覧へ戻る
+            </Button>
             <div className="flex justify-end gap-3 border-t pt-4">
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル

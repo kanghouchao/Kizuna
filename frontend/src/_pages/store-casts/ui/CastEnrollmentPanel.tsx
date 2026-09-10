@@ -50,7 +50,7 @@ export function CastEnrollmentPanel({
 
   return (
     <div className="space-y-6">
-      <section aria-label="在籍操作" className="space-y-3">
+      <section aria-label="在籍操作" className="space-y-3 rounded-xl border bg-card p-6">
         <h2 className="text-lg font-semibold">在籍</h2>
         <p>在籍状態: {status ? statusLabels[status] : '不明'}</p>
         {endedAt && <p>退店日時: {new Date(endedAt).toLocaleString('ja-JP')}</p>}
@@ -87,87 +87,97 @@ export function CastEnrollmentPanel({
           )}
         </div>
       </section>
-      <section aria-label="在籍履歴" className="space-y-3">
-        <h2 className="text-lg font-semibold">在籍履歴</h2>
-        {history.failed ? (
-          <RegionError message="在籍履歴の取得に失敗しました" onRetry={history.reload} />
-        ) : (
-          <>
-            {!history.isLoading && history.rows.length === 0 && (
-              <p className="text-muted-foreground">在籍履歴はありません</p>
-            )}
-            <ul className="space-y-2">
-              {history.rows.map(row => (
-                <li key={row.id} className="rounded-md border p-3">
-                  <p>
-                    {row.previous_status
-                      ? `${statusLabels[row.previous_status]} → ${statusLabels[row.new_status]}`
-                      : `入店（${statusLabels[row.new_status]}）`}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(row.recorded_at).toLocaleString('ja-JP')} · 実行者 ID: {row.actor_id}
-                  </p>
-                </li>
-              ))}
-            </ul>
-            {history.isLoading && <p role="status">読み込み中...</p>}
-            {history.hasMore && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={history.isLoading}
-                onClick={history.loadMore}
-              >
-                在籍履歴をさらに読み込む
-              </Button>
-            )}
-          </>
-        )}
+      <section aria-label="在籍履歴" className="space-y-3 rounded-xl border bg-card p-6">
+        <details className="space-y-3">
+          <summary className="cursor-pointer rounded-sm text-lg font-semibold focus-visible:outline-2 focus-visible:outline-ring">
+            在籍履歴
+          </summary>
+          {history.failed ? (
+            <RegionError message="在籍履歴の取得に失敗しました" onRetry={history.reload} />
+          ) : (
+            <>
+              {!history.isLoading && history.rows.length === 0 && (
+                <p className="text-muted-foreground">在籍履歴はありません</p>
+              )}
+              <ul className="space-y-2">
+                {history.rows.map(row => (
+                  <li key={row.id} className="rounded-md border p-3">
+                    <p>
+                      {row.previous_status
+                        ? `${statusLabels[row.previous_status]} → ${statusLabels[row.new_status]}`
+                        : `入店（${statusLabels[row.new_status]}）`}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(row.recorded_at).toLocaleString('ja-JP')} · 実行者 ID:{' '}
+                      {row.actor_id}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              {history.isLoading && <p role="status">読み込み中...</p>}
+              {history.hasMore && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={history.isLoading}
+                  onClick={history.loadMore}
+                >
+                  在籍履歴をさらに読み込む
+                </Button>
+              )}
+            </>
+          )}
+        </details>
       </section>
-      <section aria-label="内部情報の編集履歴" className="space-y-3">
-        <h2 className="text-lg font-semibold">内部情報の編集履歴</h2>
-        <p className="text-sm text-muted-foreground">各変更の直前の値を表示します。</p>
-        {snapshots.failed ? (
-          <RegionError message="内部情報履歴の取得に失敗しました" onRetry={snapshots.reload} />
-        ) : (
-          <>
-            {!snapshots.isLoading && snapshots.rows.length === 0 && (
-              <p className="text-muted-foreground">内部情報の編集履歴はありません</p>
-            )}
-            <ul className="space-y-2">
-              {snapshots.rows.map(row => (
-                <li key={row.id} className="rounded-md border p-3">
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(row.recorded_at).toLocaleString('ja-JP')} · 実行者 ID: {row.actor_id}
-                  </p>
-                  {Object.keys(row.custom_fields).length === 0 ? (
-                    <p>未入力</p>
-                  ) : (
-                    <dl>
-                      {Object.entries(row.custom_fields).map(([key, value]) => (
-                        <div key={key} className="grid grid-cols-2 gap-3">
-                          <dt className="break-all">{key}</dt>
-                          <dd className="whitespace-pre-wrap break-all">{value ?? '未入力'}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {snapshots.isLoading && <p role="status">読み込み中...</p>}
-            {snapshots.hasMore && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={snapshots.isLoading}
-                onClick={snapshots.loadMore}
-              >
-                内部情報履歴をさらに読み込む
-              </Button>
-            )}
-          </>
-        )}
+      <section aria-label="内部情報の編集履歴" className="space-y-3 rounded-xl border bg-card p-6">
+        <details className="space-y-3">
+          <summary className="cursor-pointer rounded-sm text-lg font-semibold focus-visible:outline-2 focus-visible:outline-ring">
+            内部情報の編集履歴
+          </summary>
+          <p className="text-sm text-muted-foreground">各変更の直前の値を表示します。</p>
+          {snapshots.failed ? (
+            <RegionError message="内部情報履歴の取得に失敗しました" onRetry={snapshots.reload} />
+          ) : (
+            <>
+              {!snapshots.isLoading && snapshots.rows.length === 0 && (
+                <p className="text-muted-foreground">内部情報の編集履歴はありません</p>
+              )}
+              <ul className="space-y-2">
+                {snapshots.rows.map(row => (
+                  <li key={row.id} className="rounded-md border p-3">
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(row.recorded_at).toLocaleString('ja-JP')} · 実行者 ID:{' '}
+                      {row.actor_id}
+                    </p>
+                    {Object.keys(row.custom_fields).length === 0 ? (
+                      <p>未入力</p>
+                    ) : (
+                      <dl>
+                        {Object.entries(row.custom_fields).map(([key, value]) => (
+                          <div key={key} className="grid grid-cols-2 gap-3">
+                            <dt className="break-all">{key}</dt>
+                            <dd className="whitespace-pre-wrap break-all">{value ?? '未入力'}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {snapshots.isLoading && <p role="status">読み込み中...</p>}
+              {snapshots.hasMore && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={snapshots.isLoading}
+                  onClick={snapshots.loadMore}
+                >
+                  内部情報履歴をさらに読み込む
+                </Button>
+              )}
+            </>
+          )}
+        </details>
       </section>
       <ConfirmDialog
         open={confirming}

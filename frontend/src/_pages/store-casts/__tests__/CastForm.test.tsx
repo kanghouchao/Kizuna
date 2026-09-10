@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CastForm } from '../ui/CastForm';
 import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
 
@@ -121,4 +121,48 @@ describe('プロフィールの数値欄は整数のみ受け付ける', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/整数で入力してください/)).not.toBeInTheDocument();
   });
+});
+
+it('公開項目と内部項目を分けて編集し、両方の値を保存する', async () => {
+  mockedApi.list.mockResolvedValue([
+    { ...definition('hobby', '趣味'), is_public: true },
+    definition('memo', '管理メモ'),
+  ]);
+  const onSubmit = jest.fn();
+  render(
+    <CastForm
+      initialData={{ name: '花子' }}
+      existingCustomFields={{ hobby: '読書', memo: '確認済み' }}
+      onSubmit={onSubmit}
+    />
+  );
+  await screen.findByLabelText('趣味');
+  const publicFields = screen.getByRole('region', { name: '公開プロフィール' });
+  const internalFields = screen.getByRole('region', { name: '内部情報' });
+  expect(within(publicFields).getByLabelText('源氏名 *')).toHaveValue('花子');
+  expect(within(publicFields).getByLabelText('趣味')).toHaveValue('読書');
+  expect(within(publicFields).queryByLabelText('管理メモ')).not.toBeInTheDocument();
+  fireEvent.change(within(internalFields).getByLabelText('管理メモ'), {
+    target: { value: '更新済み' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  expect(onSubmit.mock.calls[0][0].custom_fields).toEqual({ hobby: '読書', memo: '更新済み' });
+});
+
+it('定義取得に失敗したまま保存しても既存カスタムフィールドを消さない', async () => {
+  mockedApi.list.mockRejectedValueOnce(new Error('network'));
+  const onSubmit = jest.fn();
+  render(
+    <CastForm
+      initialData={{ name: '花子' }}
+      existingCustomFields={{ memo: '保持する値' }}
+      onSubmit={onSubmit}
+    />
+  );
+  await screen.findByText('カスタムフィールド定義の取得に失敗しました');
+  expect(screen.queryByText('カスタムフィールドは登録されていません')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  expect(onSubmit.mock.calls[0][0].custom_fields).toBeUndefined();
 });
