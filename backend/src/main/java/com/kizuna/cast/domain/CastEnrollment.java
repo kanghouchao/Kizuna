@@ -49,10 +49,28 @@ public class CastEnrollment extends StoreScopedEntity {
     this.castId = Objects.requireNonNull(castId);
   }
 
-  public void changeStatus(CastEnrollmentStatus status) {
-    if (status == CastEnrollmentStatus.WITHDRAWN || this.status == CastEnrollmentStatus.WITHDRAWN)
-      throw new ServiceException("退店済みの在籍は変更できません");
-    this.status = status;
+  public void suspend() {
+    if (status != CastEnrollmentStatus.ENROLLED) throw new ServiceException("在籍中のキャストのみ停止できます");
+    status = CastEnrollmentStatus.SUSPENDED;
+  }
+
+  public void resume() {
+    if (status != CastEnrollmentStatus.SUSPENDED) throw new ServiceException("在籍停止中のキャストのみ再開できます");
+    status = CastEnrollmentStatus.ENROLLED;
+  }
+
+  public boolean isMembershipActive() {
+    return status != CastEnrollmentStatus.WITHDRAWN;
+  }
+
+  public boolean isDeletable() {
+    return castId == null && isMembershipActive();
+  }
+
+  public void withdraw(OffsetDateTime now) {
+    if (status == CastEnrollmentStatus.WITHDRAWN) throw new ServiceException("退店済みの在籍は変更できません");
+    status = CastEnrollmentStatus.WITHDRAWN;
+    endedAt = Objects.requireNonNull(now);
   }
 
   public void replaceCustomFields(Map<String, String> values) {

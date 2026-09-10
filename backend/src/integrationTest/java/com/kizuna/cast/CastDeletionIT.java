@@ -2,6 +2,9 @@ package com.kizuna.cast;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.order.domain.OrderApplication;
+import com.kizuna.order.domain.OrderApplicationRepository;
+import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -36,6 +39,7 @@ class CastDeletionIT extends CrossStoreTestSupport {
   private static final LocalDate ATTENDANCE_DATE = LocalDate.of(2999, 6, 1);
 
   @Autowired private ShiftRepository shiftRepository;
+  @Autowired private OrderApplicationRepository applicationRepository;
 
   private final long nonce = System.nanoTime();
 
@@ -44,12 +48,13 @@ class CastDeletionIT extends CrossStoreTestSupport {
   void rejectsDeletingCastReferencedByOrder() {
     String castId = createCast("受注あり");
     createOrderFor(castId);
+    assertDeletable(castId, false);
 
     ResponseEntity<JsonNode> response = delete(castId);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody().path("error").asString())
-        .isEqualTo("受注が紐づいているキャストは削除できません。在籍停止に変更してください");
+        .isEqualTo("受注が紐づいているキャストは削除できません。退店操作を利用してください");
     assertThat(get(castId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
   }
 
@@ -58,6 +63,7 @@ class CastDeletionIT extends CrossStoreTestSupport {
   void deletesCastWithoutOrders() {
     String castId = createCast("受注なし");
 
+    assertDeletable(castId, true);
     assertThat(delete(castId).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(get(castId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }
@@ -67,12 +73,13 @@ class CastDeletionIT extends CrossStoreTestSupport {
   void rejectsDeletingCastReferencedByWalkInAttendance() {
     String castId = createCast("飛び込み実績あり");
     recordAttendance(castId, null);
+    assertDeletable(castId, false);
 
     ResponseEntity<JsonNode> response = delete(castId);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody().path("error").asString())
-        .isEqualTo("実績が記録されているキャストは削除できません。在籍停止に変更してください");
+        .isEqualTo("実績が記録されているキャストは削除できません。退店操作を利用してください");
     assertThat(get(castId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
   }
 
@@ -89,6 +96,8 @@ class CastDeletionIT extends CrossStoreTestSupport {
 
     String inheritingCastId = createCast("付け替え先");
     reassignShift(shiftId, inheritingCastId);
+    assertDeletable(recordedCastId, false);
+    assertDeletable(inheritingCastId, false);
 
     ResponseEntity<JsonNode> response = delete(inheritingCastId);
 
@@ -97,8 +106,43 @@ class CastDeletionIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.CONFLICT);
     assertThat(response.getBody().path("error").asString())
         .as("どちらの外部キーが鳴りうる経路でも断りの文言が変わらないこと")
-        .isEqualTo("実績が記録されているキャストは削除できません。在籍停止に変更してください");
+        .isEqualTo("実績が記録されているキャストは削除できません。退店操作を利用してください");
     assertThat(get(inheritingCastId).getStatusCode()).as("削除は成立していないこと").isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
+  @DisplayName("予約申請に参照される在籍は一覧・詳細とも削除不可になること")
+  void orderApplicationPreventsDeletionInManagementResponses() {
+    String castId = createCast("予約申請あり");
+    OrderApplication application =
+        OrderApplication.builder()
+            .castId(castId)
+            .businessDate(ATTENDANCE_DATE)
+            .status(OrderApplicationStatus.PENDING)
+            .contactName("申請者")
+            .contactPhoneNumber("09000000000")
+            .build();
+    application.setStoreId(STORE_A);
+    applicationRepository.saveAndFlush(application);
+    assertDeletable(castId, false);
+    assertThat(delete(castId).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+  }
+
+  private void assertDeletable(String castId, boolean expected) {
+    assertThat(get(castId).getBody().path("deletable").asBoolean()).isEqualTo(expected);
+    var listed =
+        rest.exchange(
+            "/store/casts?search=削除検証&size=100",
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(listed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode found = null;
+    for (JsonNode row : listed.getBody().path("content")) {
+      if (castId.equals(row.path("id").asString())) found = row;
+    }
+    assertThat(found).isNotNull();
+    assertThat(found.path("deletable").asBoolean()).isEqualTo(expected);
   }
 
   private void reassignShift(String shiftId, String castId) {

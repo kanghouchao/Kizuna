@@ -178,33 +178,35 @@ export function CastForm({
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>在籍状態</FormLabel>
-                      <Select
-                        items={STATUS_OPTIONS}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map(o => (
-                            <SelectItem key={o.value} value={o.value}>
-                              {o.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
+                {!isEdit && (
+                  <FormField
+                    control={control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>在籍状態</FormLabel>
+                        <Select
+                          items={STATUS_OPTIONS}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {STATUS_OPTIONS.map(o => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={control}
                   name="display_order"

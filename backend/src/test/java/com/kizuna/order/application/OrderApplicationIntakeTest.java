@@ -97,7 +97,7 @@ class OrderApplicationIntakeTest {
   void rejectsACastThatIsNotNominatable() {
     // 対象は店舗の外の申請者なので、他店舗・在籍停止・不在を区別しない — 区別すると、その id のキャストが
     // 当該店舗に在籍することそのものが分かってしまう（店舗スタッフ向けの OrderService は同じ述語から 400 を返す）。
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.empty());
+    when(nominatableCast.findForUpdate(STORE_ID, "cast-1")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> intake.validateRequestedVisit(STORE_ID, today(), "cast-1"))
         .isInstanceOf(NotFoundException.class);
@@ -110,17 +110,18 @@ class OrderApplicationIntakeTest {
   @DisplayName("指名の判定は申請先の店舗で行うこと")
   void checksTheNominationAgainstTheRequestedStore() {
     // 申請者は店舗を授権されず storeFilter も働かないため、店舗の一致は問い合わせ自体に載せるしかない
-    when(nominatableCast.find(OTHER_STORE_ID, "cast-1")).thenReturn(Optional.empty());
+    when(nominatableCast.findForUpdate(OTHER_STORE_ID, "cast-1")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> intake.validateRequestedVisit(OTHER_STORE_ID, today(), "cast-1"))
         .isInstanceOf(NotFoundException.class);
-    verify(nominatableCast).find(OTHER_STORE_ID, "cast-1");
+    verify(nominatableCast).findForUpdate(OTHER_STORE_ID, "cast-1");
   }
 
   @Test
   @DisplayName("指名検証が候補の読み口と同じ述語（公開可も見る）を使うこと")
   void validatesNominationThroughThePublicationGate() {
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "cast-1"))
+        .thenReturn(Optional.of(nominatable("cast-1")));
     when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
         .thenReturn(false);
 
@@ -134,7 +135,8 @@ class OrderApplicationIntakeTest {
   @Test
   @DisplayName("公開された出勤予定のあるキャストは指名できること")
   void acceptsNominationBackedByAPubliclyVisibleShift() {
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "cast-1"))
+        .thenReturn(Optional.of(nominatable("cast-1")));
     when(confirmedShiftLookupService.hasPubliclyVisibleShift(STORE_ID, "cast-1", today()))
         .thenReturn(true);
 

@@ -1,6 +1,9 @@
 package com.kizuna.cast.api.store;
 
 import com.kizuna.cast.api.dto.CastCreateRequest;
+import com.kizuna.cast.api.dto.CastEnrollmentSnapshotResponse;
+import com.kizuna.cast.api.dto.CastEnrollmentStatusHistoryResponse;
+import com.kizuna.cast.api.dto.CastEnrollmentStatusResponse;
 import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastPublicationRequest;
@@ -8,10 +11,13 @@ import com.kizuna.cast.api.dto.CastPublicationResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
+import com.kizuna.shared.web.CursorPage;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CastController {
 
   private final CastService castService;
+  private final CastEnrollmentService enrollmentService;
   private final CastInvitationService castInvitationService;
 
   @GetMapping
@@ -55,15 +62,17 @@ public class CastController {
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public ResponseEntity<CastResponse> create(@Valid @RequestBody CastCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(castService.create(request));
+  public ResponseEntity<CastResponse> create(
+      @Valid @RequestBody CastCreateRequest request, Principal principal) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(castService.create(request, principal.getName()));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastResponse> update(
-      @PathVariable String id, @Valid @RequestBody CastUpdateRequest request) {
-    return ResponseEntity.ok(castService.update(id, request));
+      @PathVariable String id, @Valid @RequestBody CastUpdateRequest request, Principal principal) {
+    return ResponseEntity.ok(castService.update(id, request, principal.getName()));
   }
 
   @DeleteMapping("/{id}")
@@ -84,6 +93,42 @@ public class CastController {
   public ResponseEntity<CastPublicationResponse> changePublication(
       @PathVariable String id, @Valid @RequestBody CastPublicationRequest request) {
     return ResponseEntity.ok(castService.changePublication(id, request.publicationStatus()));
+  }
+
+  @PostMapping("/{id}/suspension")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
+  public CastEnrollmentStatusResponse suspend(@PathVariable String id, Principal principal) {
+    return enrollmentService.suspend(id, principal.getName());
+  }
+
+  @PostMapping("/{id}/resumption")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
+  public CastEnrollmentStatusResponse resume(@PathVariable String id, Principal principal) {
+    return enrollmentService.resume(id, principal.getName());
+  }
+
+  @PostMapping("/{id}/withdrawal")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
+  public CastEnrollmentStatusResponse withdraw(@PathVariable String id, Principal principal) {
+    return enrollmentService.withdraw(id, principal.getName());
+  }
+
+  @GetMapping("/{id}/status-histories")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
+  public CursorPage<CastEnrollmentStatusHistoryResponse> history(
+      @PathVariable String id,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return enrollmentService.history(id, cursor, size);
+  }
+
+  @GetMapping("/{id}/snapshots")
+  @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
+  public CursorPage<CastEnrollmentSnapshotResponse> snapshots(
+      @PathVariable String id,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return enrollmentService.snapshots(id, cursor, size);
   }
 
   @GetMapping("/public")

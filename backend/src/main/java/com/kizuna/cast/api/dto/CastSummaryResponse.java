@@ -19,6 +19,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CastSummaryResponse {
   private String id;
+  private boolean deletable;
   private String name;
   private CastEnrollmentStatus status;
   private CastPublicationStatus publicationStatus;

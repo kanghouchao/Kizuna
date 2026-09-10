@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
@@ -29,6 +31,7 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
@@ -36,6 +39,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -45,6 +49,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class CastShiftRequestServiceTest {
+  @Mock private StoreRepository storeRepository;
 
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private CastEnrollmentRepository castRepository;
@@ -55,6 +60,13 @@ class CastShiftRequestServiceTest {
   @Mock private BusinessDateService businessDateService;
 
   @InjectMocks private CastShiftRequestService service;
+
+  @BeforeEach
+  void membership() {
+    lenient()
+        .when(castRepository.findByIdForUpdate(any()))
+        .thenReturn(Optional.of(CastEnrollment.builder().build()));
+  }
 
   private static final String EMAIL = "cast@kizuna.test";
 
@@ -153,27 +165,6 @@ class CastShiftRequestServiceTest {
     assertThat(saved.getWorkDate()).isEqualTo(req.getWorkDate());
     assertThat(saved.getStartTime()).isEqualTo(req.getStartTime());
     assertThat(saved.getEndTime()).isEqualTo(req.getEndTime());
-  }
-
-  @Test
-  void submit_picksOldestCastRowWhenMultipleProfilesInSameStore() {
-    ShiftRequestCreateRequest req = validRequest();
-    PlatformUser user = userWithId(42L);
-    when(businessDateService.currentBusinessDate())
-        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
-    // 同一店舗に本人の档案が複数並存する場合、先頭（最古の档案）が決定的に選ばれる。
-    when(castRepository.findIdsByPlatformUserIdAndStoreId(42L, 1L))
-        .thenReturn(List.of("cast-old", "cast-new"));
-    when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-    when(shiftRequestMapper.toResponse(any()))
-        .thenReturn(ShiftRequestResponse.builder().id("sr1").build());
-
-    service.submit(EMAIL, req);
-
-    ArgumentCaptor<ShiftRequest> captor = ArgumentCaptor.forClass(ShiftRequest.class);
-    verify(shiftRequestRepository).save(captor.capture());
-    assertThat(captor.getValue().getCastId()).isEqualTo("cast-old");
   }
 
   private ShiftChangeRequestCreateRequest validChangeRequest() {

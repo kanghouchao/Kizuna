@@ -3,7 +3,6 @@ package com.kizuna.member;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.cast.domain.CastEnrollment;
-import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
@@ -193,7 +192,6 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   @Autowired private CustomerRepository customerRepository;
   @Autowired private MemberRepository memberRepository;
   @Autowired private PointEntryRepository pointEntryRepository;
-  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private OrderRepository orderRepository;
   @Autowired private OrderAttributionRepository orderAttributionRepository;
 

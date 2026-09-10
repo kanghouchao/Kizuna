@@ -3,7 +3,6 @@ package com.kizuna.order;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.cast.domain.CastEnrollment;
-import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.user.domain.Permission;
@@ -62,7 +61,6 @@ class OrderCastCandidateIT extends CrossStoreTestSupport {
   @Autowired private PlatformUserRepository platformUserRepository;
   @Autowired private RoleRepository roleRepository;
   @Autowired private PermissionRepository permissionRepository;
-  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
   @BeforeEach

@@ -8,6 +8,7 @@ export type CastInvitationStatus = 'NOT_INVITED' | 'INVITED' | 'EXPIRED' | 'LINK
 export interface CastResponse {
   publication_status?: CastPublicationStatus;
   id?: string;
+  deletable?: boolean;
   name?: string;
   status?: CastEnrollmentStatus;
   photo_url?: string;
@@ -21,6 +22,7 @@ export interface CastResponse {
   // 作成・更新の応答では招待状態を載せないため、一覧・詳細以外では欠落する
   invitation_status?: CastInvitationStatus;
   custom_fields?: Record<string, string>;
+  ended_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -32,6 +34,7 @@ export interface CastResponse {
 export interface CastSummaryResponse {
   publication_status?: CastPublicationStatus;
   id?: string;
+  deletable?: boolean;
   name?: string;
   status?: CastEnrollmentStatus;
   photo_url?: string;
@@ -83,7 +86,6 @@ export interface CastCreateRequest {
 // キャスト更新リクエスト
 export interface CastUpdateRequest {
   name?: string;
-  status?: CastEditableStatus;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -147,4 +149,25 @@ export interface CastInvitationAcceptRequest {
 // 招待受諾の完了応答
 export interface CastAcceptanceResponse {
   store_name?: string;
+}
+
+export interface CastEnrollmentStatusResponse {
+  id: string;
+  status: CastEnrollmentStatus;
+  ended_at?: string;
+}
+
+export interface CastEnrollmentStatusHistory {
+  id: string;
+  previous_status?: CastEnrollmentStatus;
+  new_status: CastEnrollmentStatus;
+  actor_id: number;
+  recorded_at: string;
+}
+
+export interface CastEnrollmentSnapshot {
+  id: string;
+  actor_id: number;
+  recorded_at: string;
+  custom_fields: Record<string, string | null>;
 }

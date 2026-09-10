@@ -237,6 +237,18 @@ databaseChangeLog:
                   defaultValueNumeric: "0"
                   constraints:
                     nullable: false
+        - createIndex:
+            indexName: idx_t_cast_enrollment_status_histories_enrollment_recorded
+            tableName: t_cast_enrollment_status_histories
+            columns:
+              - column:
+                  name: enrollment_id
+              - column:
+                  name: recorded_at
+                  descending: true
+              - column:
+                  name: id
+                  descending: true
         - addForeignKeyConstraint:
             constraintName: fk_t_cast_enrollment_status_histories_store
             baseTableName: t_cast_enrollment_status_histories
@@ -316,6 +328,18 @@ databaseChangeLog:
                   defaultValueNumeric: "0"
                   constraints:
                     nullable: false
+        - createIndex:
+            indexName: idx_t_cast_enrollment_snapshots_enrollment_recorded
+            tableName: t_cast_enrollment_snapshots
+            columns:
+              - column:
+                  name: enrollment_id
+              - column:
+                  name: recorded_at
+                  descending: true
+              - column:
+                  name: id
+                  descending: true
         - addForeignKeyConstraint:
             constraintName: fk_t_cast_enrollment_snapshots_store
             baseTableName: t_cast_enrollment_snapshots

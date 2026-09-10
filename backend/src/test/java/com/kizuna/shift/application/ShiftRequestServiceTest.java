@@ -3,11 +3,14 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -23,6 +26,7 @@ import com.kizuna.shift.domain.ShiftRequestStateException;
 import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -33,6 +37,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -42,6 +47,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ShiftRequestServiceTest {
+  @Mock private StoreRepository storeRepository;
+
+  @Mock private CastEnrollmentRepository enrollments;
+
+  @BeforeEach
+  void membership() {
+    CastEnrollment enrollment = CastEnrollment.builder().build();
+    enrollment.setId("c1");
+    lenient().when(enrollments.findScopedByIdForUpdate(any())).thenReturn(Optional.of(enrollment));
+    lenient().when(enrollments.findAllById(any())).thenReturn(List.of(enrollment));
+  }
 
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private ShiftRepository shiftRepository;

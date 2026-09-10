@@ -5,6 +5,7 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.application.CastFieldDefinitionService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -51,8 +52,8 @@ public class CastFieldDefinitionController {
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable String id) {
-    service.delete(id);
+  public ResponseEntity<Void> delete(@PathVariable String id, Principal principal) {
+    service.delete(id, principal.getName());
     return ResponseEntity.noContent().build();
   }
 }

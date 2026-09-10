@@ -4,6 +4,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository
     extends JpaRepository<Order, String>, JpaSpecificationExecutor<Order> {
+
+  @Query(
+      """
+      select o.castId from com.kizuna.order.domain.Order o where o.castId in :castIds
+      union
+      select a.castId from com.kizuna.order.domain.OrderApplication a where a.castId in :castIds
+      """)
+  Set<String> findReferencedCastIds(@Param("castIds") Collection<String> castIds);
 
   /** 指定店舗に指定状態の受注が 1 件でも存在するか。 */
   @Query(

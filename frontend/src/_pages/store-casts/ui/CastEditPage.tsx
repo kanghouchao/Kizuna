@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
+import { CastEnrollmentPanel } from './CastEnrollmentPanel';
 import { CastUpdateRequest, castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
 import { storePath, useResource } from '@/shared/lib';
@@ -48,7 +49,6 @@ export default function CastEditPage() {
       setIsSubmitting(true);
       const requestData: CastUpdateRequest = {
         name: data.name,
-        status: data.status === 'WITHDRAWN' ? undefined : data.status,
         photo_url: data.photo_url,
         introduction: data.introduction,
         age: data.age ?? undefined,
@@ -113,10 +113,14 @@ export default function CastEditPage() {
           {publication === 'PUBLISHED' ? '非公開にする' : '公開する'}
         </Button>
       </div>
+      <CastEnrollmentPanel
+        key={id}
+        cast={cast}
+        onChanged={result => setCast(current => (current ? { ...current, ...result } : current))}
+      />
       <CastForm
         initialData={{
           name: cast.name,
-          status: cast.status,
           photo_url: cast.photo_url || '',
           introduction: cast.introduction || '',
           age: cast.age ?? null,

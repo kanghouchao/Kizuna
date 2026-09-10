@@ -18,6 +18,7 @@ import com.kizuna.cast.domain.CastManagementView;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
+import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
@@ -27,6 +28,7 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,6 +63,7 @@ public class CastService {
           "publicationStatus");
 
   private final CastEnrollmentRepository castRepository;
+  private final CastEnrollmentService enrollmentService;
   private final CastMapper castMapper;
   private final CastProfileRepository profileRepository;
   private final StoreRepository storeRepository;
@@ -68,6 +71,7 @@ public class CastService {
   private final CastInvitationService castInvitationService;
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
   private final AttendanceReferenceCheck attendanceReferenceCheck;
+  private final OrderReferenceCheck orderReferenceCheck;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -90,10 +94,15 @@ public class CastService {
     Map<String, CastInvitationStatus> statuses =
         castInvitationService.deriveStatuses(
             page.getContent().stream().map(CastManagementView::enrollment).toList());
+    Set<String> deletable =
+        deletableIds(page.getContent().stream().map(CastManagementView::enrollment).toList());
     return page.map(
         view ->
             castMapper.toSummaryResponse(
-                view.enrollment(), view.profile(), statuses.get(view.enrollment().getId())));
+                view.enrollment(),
+                view.profile(),
+                statuses.get(view.enrollment().getId()),
+                deletable.contains(view.enrollment().getId())));
   }
 
   @StoreScoped
@@ -103,7 +112,22 @@ public class CastService {
     return castMapper.toResponse(
         enrollment,
         requireProfile(id),
-        castInvitationService.deriveStatuses(List.of(enrollment)).get(id));
+        castInvitationService.deriveStatuses(List.of(enrollment)).get(id),
+        deletableIds(List.of(enrollment)).contains(id));
+  }
+
+  private Set<String> deletableIds(List<CastEnrollment> enrollments) {
+    Set<String> candidates =
+        enrollments.stream()
+            .filter(CastEnrollment::isDeletable)
+            .map(CastEnrollment::getId)
+            .collect(Collectors.toCollection(HashSet::new));
+    if (candidates.isEmpty()) return candidates;
+    Set<String> ids = Set.copyOf(candidates);
+    Set<String> referenced = new HashSet<>(attendanceReferenceCheck.findReferencedCastIds(ids));
+    referenced.addAll(orderReferenceCheck.findReferencedCastIds(ids));
+    candidates.removeAll(referenced);
+    return candidates;
   }
 
   private CastEnrollment requireEnrollment(String id) {
@@ -125,22 +149,7 @@ public class CastService {
         + "%";
   }
 
-  /**
-   * 指定 id のキャストが現在店舗に属するか判定する（他モジュールからの帰属チェック用ポート）。 storeFilter が効くため、他店舗のキャストは存在しないものとして false
-   * を返す。
-   */
-  @StoreScoped
-  @Transactional(readOnly = true)
-  public boolean existsForCurrentStore(String id) {
-    return castRepository.findById(id).isPresent();
-  }
-
-  /**
-   * {@link #existsForCurrentStore} と同じ判定を、そのキャストを指す行を建てる間だけ押さえて行う。
-   *
-   * <p>ロック順序の契約（キャスト → シフト）は {@link CastEnrollmentRepository#findScopedByIdForUpdate} に記す。キャストと
-   * シフトを同時に指す行を建てる操作は、この口を通ってからシフトを押さえる。
-   */
+  /** 実績の参照先が現在店舗に属することを、削除と直列化して確認する。在籍の後にシフトをロックする。 */
   @StoreScoped
   @Transactional
   public boolean existsForCurrentStoreForUpdate(String id) {
@@ -149,7 +158,7 @@ public class CastService {
 
   @StoreScoped
   @Transactional
-  public CastResponse create(CastCreateRequest request) {
+  public CastResponse create(CastCreateRequest request, String actorEmail) {
     storeRepository.lockCastFields(storeContext.getStoreId());
     CastEnrollment enrollment =
         castRepository.save(
@@ -159,20 +168,23 @@ public class CastService {
                         ? CastEnrollmentStatus.ENROLLED
                         : CastEnrollmentStatus.valueOf(request.getStatus()))
                 .build());
+    enrollmentService.recordCreation(enrollment, actorEmail);
     CastProfile profile = profileRepository.save(castMapper.toProfile(request, enrollment.getId()));
-    return castMapper.toResponse(enrollment, profile, null);
+    return castMapper.toResponse(
+        enrollment, profile, null, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
   }
 
   @StoreScoped
   @Transactional
-  public CastResponse update(String id, CastUpdateRequest request) {
+  public CastResponse update(String id, CastUpdateRequest request, String actorEmail) {
     storeRepository.lockCastFields(storeContext.getStoreId());
-    CastEnrollment enrollment = requireEnrollment(id);
+    CastEnrollment enrollment =
+        castRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
     CastProfile profile = requireProfile(id);
     if (request.getName() != null && request.getName().isBlank())
       throw new ServiceException("源氏名は必須です");
-    if (request.getStatus() != null)
-      enrollment.changeStatus(CastEnrollmentStatus.valueOf(request.getStatus()));
     if (request.getCustomFields() != null) {
       validateCustomFields(request.getCustomFields());
       Map<String, String> internal = new HashMap<>();
@@ -184,11 +196,12 @@ public class CastService {
               .put(definition.getKey(), request.getCustomFields().get(definition.getKey()));
         }
       }
-      enrollment.replaceCustomFields(internal);
+      enrollmentService.replaceInternalFields(enrollment, internal, actorEmail);
       profile.replaceCustomFields(external);
     }
     profile.apply(castMapper.toPatch(request));
-    return castMapper.toResponse(enrollment, profile, null);
+    return castMapper.toResponse(
+        enrollment, profile, null, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
   }
 
   @StoreScoped
@@ -218,21 +231,18 @@ public class CastService {
     }
   }
 
-  /**
-   * キャストを削除する。受注から参照されている行は削除できない — 過去の受注が誰の担当だったかは売上の根拠であり、 参照ごと消えてよいものではない。在籍しなくなったキャストは削除ではなく
-   * SUSPENDED で表す。
-   *
-   * <p>当日実績からの参照も同じく削除を止める。こちらは外部キー任せにできない — キャストの削除はシフトへ連鎖するため、
-   * 実績が先に当たるのはシフト側の外部キーでありうる。どちらが鳴るかで断りの文言が変わらないよう、実績は前置の判定で見る（ADR 0014）。 判定がシフト経由の参照まで数える理由は
-   * {@link AttendanceReferenceCheck} 側にある。
-   */
+  /** 本人未紐づけの草稿のみ削除できる。受注・実績の参照は履歴の根拠なので維持する。 */
   @StoreScoped
   @Transactional
   public void delete(String id) {
-    if (!castRepository.existsById(id)) {
-      throw new NotFoundException("キャストが見つかりません");
+    CastEnrollment enrollment =
+        castRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
+    if (!enrollment.isDeletable()) {
+      throw new ConflictException("本人紐づけ済み・退店済みの在籍は削除できません");
     }
-    if (attendanceReferenceCheck.existsForCast(id)) {
+    if (attendanceReferenceCheck.findReferencedCastIds(List.of(id)).contains(id)) {
       throw attendanceReferenced();
     }
     try {
@@ -246,9 +256,9 @@ public class CastService {
           ex,
           Map.of(
               DbConstraint.FK_T_ORDERS_CAST,
-              () -> new ConflictException("受注が紐づいているキャストは削除できません。在籍停止に変更してください"),
+              () -> new ConflictException("受注が紐づいているキャストは削除できません。退店操作を利用してください"),
               DbConstraint.FK_T_ORDER_APPLICATIONS_CAST,
-              () -> new ConflictException("予約申請が紐づいているキャストは削除できません。在籍停止に変更してください"),
+              () -> new ConflictException("予約申請が紐づいているキャストは削除できません。退店操作を利用してください"),
               DbConstraint.FK_T_ATTENDANCES_CAST,
               CastService::attendanceReferenced,
               DbConstraint.FK_T_ATTENDANCES_SHIFT,
@@ -263,7 +273,7 @@ public class CastService {
    * 判定を擦り抜けられるのは、判定と削除の間に実績が記録された並行の場合だけである — シフトへの連鎖があるので、そのとき鳴る外部キーはキャスト側とは限らない。
    */
   private static ConflictException attendanceReferenced() {
-    return new ConflictException("実績が記録されているキャストは削除できません。在籍停止に変更してください");
+    return new ConflictException("実績が記録されているキャストは削除できません。退店操作を利用してください");
   }
 
   @StoreScoped

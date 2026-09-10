@@ -64,6 +64,9 @@ public class CastInvitationService {
         castRepository
             .findScopedByIdForUpdate(castId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
+    if (!cast.isMembershipActive()) {
+      throw new CastInvitationStateException("退店済みの在籍には招待を発行できません");
+    }
     if (cast.getCastId() != null) {
       throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }

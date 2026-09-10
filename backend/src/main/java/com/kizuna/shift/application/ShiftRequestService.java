@@ -1,5 +1,7 @@
 package com.kizuna.shift.application;
 
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -16,6 +18,7 @@ import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -35,11 +38,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class ShiftRequestService {
 
   private final ShiftRequestRepository shiftRequestRepository;
+  private final CastEnrollmentRepository enrollments;
   private final ShiftRepository shiftRepository;
   private final AttendanceRepository attendanceRepository;
   private final ShiftRequestMapper shiftRequestMapper;
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
+  private final StoreRepository storeRepository;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -73,6 +78,13 @@ public class ShiftRequestService {
             ? Set.of()
             : attendanceRepository.findShiftIdsWithActiveAttendance(targetShifts.keySet());
 
+    Set<String> activeEnrollments =
+        enrollments
+            .findAllById(requests.stream().map(ShiftRequest::getCastId).distinct().toList())
+            .stream()
+            .filter(CastEnrollment::isMembershipActive)
+            .map(CastEnrollment::getId)
+            .collect(Collectors.toSet());
     return requests.stream()
         .map(
             request -> {
@@ -84,7 +96,9 @@ public class ShiftRequestService {
                 response.setCurrentEndTime(target.getEndTime());
               }
               response.setApprovable(
-                  approvable(request, target, currentBusinessDate, shiftsWithActiveAttendance));
+                  activeEnrollments.contains(request.getCastId())
+                      && approvable(
+                          request, target, currentBusinessDate, shiftsWithActiveAttendance));
               return response;
             })
         .toList();
@@ -147,6 +161,11 @@ public class ShiftRequestService {
   @Transactional
   public StoreShiftRequestResponse approve(String id, Boolean published, String actorEmail) {
     ShiftRequest request = findOwnRequest(id);
+    storeRepository.lockAgainstDeletion(request.getStoreId());
+    enrollments
+        .findScopedByIdForUpdate(request.getCastId())
+        .filter(CastEnrollment::isMembershipActive)
+        .orElseThrow(() -> new ServiceException("退店済みの在籍の出勤希望は承認できません"));
     Long actorId = resolveActorId(actorEmail);
     request.approve(actorId, OffsetDateTime.now());
 

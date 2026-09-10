@@ -296,7 +296,7 @@ class OrderServiceTest {
     when(orderMapper.toEntity(req)).thenReturn(entity);
     // 指定された顧客は共有の解決口を通って書き込み先になる（そこで行が押さえられる）
     when(customerReferenceResolver.resolveForWrite("c1")).thenReturn("c1");
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
@@ -313,6 +313,7 @@ class OrderServiceTest {
 
   @Test
   void createRejectsACustomerThatCannotBeResolved() {
+    when(storeContext.getStoreId()).thenReturn(STORE_ID);
     // 不在の顧客も他店舗の顧客も、解決口が同じ 404 に落とす（存在の有無は漏れない）
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCustomerId("missing");
@@ -320,6 +321,7 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(customerReferenceResolver.resolveForWrite("missing"))
         .thenThrow(new NotFoundException("顧客が見つかりません"));
 
@@ -345,7 +347,7 @@ class OrderServiceTest {
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
     when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", 1L))
         .thenReturn(List.of());
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
 
     when(orderMapper.toCustomer(req)).thenReturn(newCustomer);
@@ -445,7 +447,7 @@ class OrderServiceTest {
 
   /** 顧客照合の後に続く検証（指名・受付担当）と応答の組み立てを通す stub。 */
   private void stubCreateHappyPath() {
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
@@ -463,7 +465,7 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(nominatableCast.find(STORE_ID, "retired")).thenReturn(Optional.empty());
+    when(nominatableCast.findForUpdate(STORE_ID, "retired")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         // 対象は店舗スタッフなので、列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す
@@ -481,7 +483,7 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
     when(platformUserRepository.findById(1L))
         .thenReturn(
@@ -501,7 +503,7 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
     when(platformUserRepository.findById(1L))
         .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
@@ -520,7 +522,7 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 店舗を授権していても、ロールが ORDER_MANAGE を含まない STAFF（HQ 系ロールのみ等）は受付担当者になれない。
     PlatformUser staffWithoutOrderManage =
         PlatformUser.builder()
@@ -549,7 +551,7 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 停止(enabled=false)された STAFF はロール・店舗授権を保持したままだが、受付担当者にはなれない。
     PlatformUser stopped = authorizedReceptionist();
     stopped.stop();
@@ -606,7 +608,7 @@ class OrderServiceTest {
     actor.setId(7L);
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
@@ -628,7 +630,7 @@ class OrderServiceTest {
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
-    when(nominatableCast.find(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findByEmail(ACTOR_EMAIL))
         .thenReturn(
             Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
@@ -647,7 +649,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
-    when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
@@ -692,7 +694,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(patchWith(builder -> builder.courseName("90 分コース")));
-    when(nominatableCast.find(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
+    when(nominatableCast.findForUpdate(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
@@ -829,7 +831,7 @@ class OrderServiceTest {
     Order existing = Order.builder().status(OrderStatus.CONFIRMED).build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
-    when(nominatableCast.find(STORE_ID, "none")).thenReturn(Optional.empty());
+    when(nominatableCast.findForUpdate(STORE_ID, "none")).thenReturn(Optional.empty());
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -870,7 +872,7 @@ class OrderServiceTest {
 
     assertThat(confirmed.getPax()).isEqualTo(5);
     assertThat(confirmed.getCastId()).isEqualTo("g1");
-    verify(nominatableCast, never()).find(any(), anyString());
+    verify(nominatableCast, never()).findForUpdate(any(), anyString());
   }
 
   @Test
@@ -969,7 +971,7 @@ class OrderServiceTest {
     assertThat(confirmed.getPax()).isEqualTo(5);
     assertThat(confirmed.getRemarks()).isEqualTo("人数を直した");
     assertThat(confirmed.getCastId()).as("指名なしのままであること").isNull();
-    verify(nominatableCast, never()).find(any(), anyString());
+    verify(nominatableCast, never()).findForUpdate(any(), anyString());
   }
 
   @Test
@@ -1073,7 +1075,7 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.update("o1", req))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("指名を外すことはできません");
-    verify(nominatableCast, never()).find(any(), anyString());
+    verify(nominatableCast, never()).findForUpdate(any(), anyString());
   }
 
   /** 作業キューの読み口が返す 1 行分の projection。並びの鍵になる項目だけを埋める。 */
@@ -1720,7 +1722,7 @@ class OrderServiceTest {
     stubBusinessDate();
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.empty());
+    when(nominatableCast.findForUpdate(STORE_ID, "cast-1")).thenReturn(Optional.empty());
 
     OrderApplicationConfirmationRequest request = confirmation();
     request.setCastId("cast-1");
@@ -1740,7 +1742,8 @@ class OrderServiceTest {
     stubBusinessDate();
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "cast-1"))
+        .thenReturn(Optional.of(nominatable("cast-1")));
     when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", CURRENT_BUSINESS_DATE))
         .thenReturn(false);
 
@@ -1761,7 +1764,8 @@ class OrderServiceTest {
     stubBusinessDate();
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(nominatableCast.find(STORE_ID, "cast-1")).thenReturn(Optional.of(nominatable("cast-1")));
+    when(nominatableCast.findForUpdate(STORE_ID, "cast-1"))
+        .thenReturn(Optional.of(nominatable("cast-1")));
     when(confirmedShiftLookupService.hasConfirmedShift(STORE_ID, "cast-1", CURRENT_BUSINESS_DATE))
         .thenReturn(true);
     stubConfirmActor();

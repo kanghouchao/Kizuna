@@ -27,6 +27,7 @@ public class CastFieldDefinitionService {
   static final int MAX_DEFINITIONS = 20;
 
   private final CastFieldDefinitionRepository repository;
+  private final CastEnrollmentService enrollmentService;
   private final CastFieldDefinitionMapper mapper;
   private final StoreRepository storeRepository;
   private final StoreContext storeContext;
@@ -73,13 +74,13 @@ public class CastFieldDefinitionService {
 
   @StoreScoped
   @Transactional
-  public void delete(String id) {
+  public void delete(String id, String actorEmail) {
     storeRepository.lockCastFields(storeContext.getStoreId());
     if (!repository.existsById(id)) {
       throw new NotFoundException("カスタムフィールド定義が見つかりません");
     }
     String key = repository.findById(id).orElseThrow().getKey();
-    enrollmentRepository.findAll().forEach(enrollment -> enrollment.removeCustomField(key));
+    enrollmentService.removeInternalField(enrollmentRepository.findAllForUpdate(), key, actorEmail);
     profileRepository.findAll().forEach(profile -> profile.removeCustomField(key));
     repository.deleteById(id);
   }

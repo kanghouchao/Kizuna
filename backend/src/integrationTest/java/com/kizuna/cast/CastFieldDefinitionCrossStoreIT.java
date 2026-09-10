@@ -3,7 +3,6 @@ package com.kizuna.cast;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.cast.domain.CastEnrollment;
-import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
@@ -32,7 +31,6 @@ import tools.jackson.databind.JsonNode;
 class CastFieldDefinitionCrossStoreIT extends CrossStoreTestSupport {
 
   @Autowired private CastFieldDefinitionRepository fieldDefinitionRepository;
-  @Autowired private CastEnrollmentRepository castRepository;
 
   private final long nonce = System.nanoTime();
 

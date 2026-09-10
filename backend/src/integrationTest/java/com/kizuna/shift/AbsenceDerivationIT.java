@@ -3,7 +3,6 @@ package com.kizuna.shift;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.cast.domain.CastEnrollment;
-import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.CrossStoreTestSupport;
@@ -42,7 +41,6 @@ class AbsenceDerivationIT extends CrossStoreTestSupport {
 
   private static final String FOREIGN_STORE_DOMAIN = "absence-it-foreign.kizuna.test";
 
-  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private AttendanceRepository attendanceRepository;
   @Autowired private StoreRepository storeRepository;

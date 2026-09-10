@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.cast.domain.CastEnrollment;
-import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
@@ -53,14 +52,12 @@ import tools.jackson.databind.JsonNode;
 class ShiftAttendanceGuardIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
-  private static final String CAST_EMAIL = "shift-attendance-guard-it-cast@kizuna.test";
 
   /** 現在の営業日より確実に後。承認・提出に掛かる営業日の関門を主題から外す。 */
   private static final LocalDate WORK_DATE = LocalDate.of(2999, 6, 1);
 
   private static final LocalDate OTHER_WORK_DATE = LocalDate.of(2999, 6, 3);
 
-  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private ShiftRequestRepository shiftRequestRepository;
   @Autowired private PlatformUserRepository platformUserRepository;

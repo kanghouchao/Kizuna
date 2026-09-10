@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.cast.api.dto.CastSummaryResponse;
+import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -46,6 +47,7 @@ class CastControllerTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private CastService castService;
+  @MockitoBean private CastEnrollmentService enrollmentService;
   @MockitoBean private CastInvitationService castInvitationService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
