@@ -3,7 +3,6 @@ package com.kizuna.shift;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.cast.domain.CastEnrollment;
-import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
@@ -68,7 +67,6 @@ class PlatformScheduleScopeIT extends CrossStoreTestSupport {
   /** 本人の非公開の確定シフトの開始時刻。店外へは出ないが本人には見える、を分ける目印。 */
   private static final String MY_A_UNPUBLISHED_START = "03:03:00";
 
-  @Autowired private CastEnrollmentRepository castRepository;
   @Autowired private ShiftRepository shiftRepository;
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;

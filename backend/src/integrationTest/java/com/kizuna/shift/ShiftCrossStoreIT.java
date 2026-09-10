@@ -3,7 +3,6 @@ package com.kizuna.shift;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.cast.domain.CastEnrollment;
-import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shift.domain.Shift;
@@ -40,8 +39,6 @@ class ShiftCrossStoreIT extends CrossStoreTestSupport {
 
   /** {@code storeHeaders} が名乗る v0.1.0 seed/05-demo.yaml の店舗スタッフ。実行者列の期待値をここから引く。 */
   private static final String SEED_STORE_STAFF_EMAIL = "yamada.jiro@kizuna.test";
-
-  @Autowired private CastEnrollmentRepository castRepository;
 
   @Autowired private ShiftRepository shiftRepository;
 
