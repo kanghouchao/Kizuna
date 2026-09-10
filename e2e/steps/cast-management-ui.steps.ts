@@ -8,26 +8,37 @@ import {
   issueCastInvitation,
   loginAsStoreAdmin,
   loginViaUiAndEnterStore,
-  STORE1_ID,
+  deleteCast,
   getAuthorizedStores,
   loginPlatformUser,
   acceptExistingCastInvitation,
   withdrawCast,
 } from "./store-api";
 
-const { Given, When, Then } = createBdd();
+const { Given, When, Then, After } = createBdd();
 let castId: string;
 let castName: string;
 let email: string;
 let password: string;
 let invitation: string;
 let adminToken: string;
+let firstStoreId: string;
+let firstStoreName: string;
+let storefrontCast: { id: string; storeId: string } | undefined;
+
+After({ tags: "@cast-publication" }, async ({ request }) => {
+  if (!storefrontCast) return;
+  const { id, storeId } = storefrontCast;
+  storefrontCast = undefined;
+  await deleteCast(request, adminToken, id, storeId);
+});
 
 Given("公開切替用のキャスト編集画面を開く", async ({ page, request }) => {
   const store = await loginViaUiAndEnterStore(page);
   adminToken = await loginAsStoreAdmin(request);
   castName = `公開切替-${randomUUID()}`;
-  castId = await createCast(request, adminToken, castName);
+  castId = await createCast(request, adminToken, castName, store);
+  storefrontCast = { id: castId, storeId: store };
   await page.goto(`${PLATFORM_URL}/store/${store}/casts/${castId}/edit`);
   await expect(
     page.getByRole("button", { name: "非公開にする" }),
@@ -73,37 +84,57 @@ Then("再公開すると店面に源氏名が表示される", async ({ page }) 
 
 Given(
   "二店舗に在籍するキャストと同店の未受諾招待を用意する",
-  async ({ request }) => {
+  async ({ page, request }) => {
+    firstStoreId = await loginViaUiAndEnterStore(page);
     adminToken = await loginAsStoreAdmin(request);
+    const stores = await getAuthorizedStores(request, adminToken);
+    const firstStore = stores.find((store) => String(store.id) === firstStoreId);
+    const secondStore = stores.find((store) => String(store.id) !== firstStoreId);
+    expect(firstStore).toBeDefined();
+    expect(secondStore).toBeDefined();
+    firstStoreName = firstStore!.name;
+    const secondStoreId = String(secondStore!.id);
     email = `cast-ui-${randomUUID()}@kizuna.test`;
     password = randomUUID();
-    castId = await createCast(request, adminToken, `店舗選択-${randomUUID()}`);
+    castId = await createCast(
+      request,
+      adminToken,
+      `店舗選択-${randomUUID()}`,
+      firstStoreId,
+    );
     await acceptCastInvitation(
       request,
-      await issueCastInvitation(request, adminToken, castId),
+      await issueCastInvitation(request, adminToken, castId, firstStoreId),
       email,
       password,
       "店舗選択キャスト",
     );
     const token = await loginPlatformUser(request, email, password);
-    const stores = await getAuthorizedStores(request, adminToken);
-    const secondStore = stores.find((store) => String(store.id) !== STORE1_ID);
-    expect(secondStore).toBeDefined();
     const second = await createCast(
       request,
       adminToken,
       "二店舗目の源氏名",
-      String(secondStore!.id),
+      secondStoreId,
     );
     const secondInvite = await issueCastInvitation(
       request,
       adminToken,
       second,
-      String(secondStore!.id),
+      secondStoreId,
     );
     await acceptExistingCastInvitation(request, token, secondInvite);
-    const duplicate = await createCast(request, adminToken, "再入店の源氏名");
-    invitation = await issueCastInvitation(request, adminToken, duplicate);
+    const duplicate = await createCast(
+      request,
+      adminToken,
+      "再入店の源氏名",
+      firstStoreId,
+    );
+    invitation = await issueCastInvitation(
+      request,
+      adminToken,
+      duplicate,
+      firstStoreId,
+    );
   },
 );
 
@@ -153,7 +184,7 @@ Then(
   async ({ page, request }) => {
     await portalStores(page);
     await expect(page.getByRole("option")).toHaveCount(2);
-    await withdrawCast(request, adminToken, castId);
+    await withdrawCast(request, adminToken, castId, firstStoreId);
     await page.reload();
     await expect(
       page.getByRole("combobox", { name: "店舗", exact: true }),
@@ -161,7 +192,7 @@ Then(
     await page.getByRole("combobox", { name: "店舗", exact: true }).click();
     await expect(page.getByRole("option")).toHaveCount(1);
     await expect(
-      page.getByRole("option", { name: "Sample Tenant", exact: true }),
+      page.getByRole("option", { name: firstStoreName, exact: true }),
     ).toHaveCount(0);
   },
 );
@@ -174,9 +205,9 @@ Then("同じ招待を受諾するとポータルで二店舗を選択できる",
   await portalStores(page);
   await expect(page.getByRole("option")).toHaveCount(2);
   await page
-    .getByRole("option", { name: "Sample Tenant", exact: true })
+    .getByRole("option", { name: firstStoreName, exact: true })
     .click();
   await expect(
     page.getByRole("combobox", { name: "店舗", exact: true }),
-  ).toContainText("Sample Tenant");
+  ).toContainText(firstStoreName);
 });
