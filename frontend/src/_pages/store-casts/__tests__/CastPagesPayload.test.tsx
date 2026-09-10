@@ -250,3 +250,24 @@ describe('キャスト編集の取得失敗', () => {
     );
   });
 });
+
+it('公開切替が失敗しても元の状態と入力を保持し、再試行できる', async () => {
+  mockedCastApi.get.mockResolvedValue({
+    id: 'cast-1',
+    name: '花子',
+    status: 'ENROLLED',
+    publication_status: 'UNPUBLISHED',
+  });
+  mockedFieldApi.list.mockResolvedValue([]);
+  mockedCastApi.changePublication
+    .mockRejectedValueOnce(new Error('network'))
+    .mockResolvedValueOnce({ publication_status: 'PUBLISHED' });
+  render(<CastEditPage />);
+  fireEvent.change(await screen.findByLabelText('源氏名 *'), { target: { value: '未保存' } });
+  fireEvent.click(screen.getByRole('button', { name: '公開する' }));
+  await waitFor(() => expect(notify.error).toHaveBeenCalledWith('公開状態の更新に失敗しました'));
+  expect(screen.getByText('公開状態: 非公開')).toBeInTheDocument();
+  expect(screen.getByLabelText('源氏名 *')).toHaveValue('未保存');
+  fireEvent.click(screen.getByRole('button', { name: '公開する' }));
+  expect(await screen.findByRole('button', { name: '非公開にする' })).toBeEnabled();
+});

@@ -26,7 +26,7 @@ export default function CastEditPage() {
   const [isPublishing, setIsPublishing] = useState(false);
   const publication = cast?.publication_status;
   const changePublication = async () => {
-    if (!cast) return;
+    if (!cast || isPublishing) return;
     setIsPublishing(true);
     try {
       const result = await castApi.changePublication(
@@ -102,17 +102,23 @@ export default function CastEditPage() {
         <h1 className="text-2xl font-bold text-foreground">キャスト編集</h1>
         <p className="text-sm text-muted-foreground mt-1">「{cast.name}」の情報を編集します。</p>
       </div>
-      <div className="flex items-center gap-3">
-        <span>公開状態: {publication === 'PUBLISHED' ? '公開' : '非公開'}</span>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={isPublishing}
-          onClick={() => void changePublication()}
-        >
-          {publication === 'PUBLISHED' ? '非公開にする' : '公開する'}
-        </Button>
-      </div>
+      <section aria-label="公開状態" className="space-y-3 rounded-xl border bg-card p-6">
+        <h2 className="text-lg font-semibold">公開状態</h2>
+        <p className="text-sm text-muted-foreground">
+          公開中かつ在籍中の場合のみ、公開サイトに表示されます。在籍停止・退店では表示されません。
+        </p>
+        <div className="flex items-center gap-3">
+          <span>公開状態: {publication === 'PUBLISHED' ? '公開' : '非公開'}</span>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPublishing}
+            onClick={() => void changePublication()}
+          >
+            {publication === 'PUBLISHED' ? '非公開にする' : '公開する'}
+          </Button>
+        </div>
+      </section>
       <CastEnrollmentPanel
         key={id}
         cast={cast}

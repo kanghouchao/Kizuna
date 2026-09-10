@@ -130,6 +130,9 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
               <input type="checkbox" {...register('is_public')} />
               公開する(公開詳細ページに表示)
             </Label>
+            <p className="text-sm text-muted-foreground">
+              公開区分は作成後に変更できません。変更には削除と再作成が必要です。
+            </p>
             <div className="flex justify-end gap-3 border-t pt-4">
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル

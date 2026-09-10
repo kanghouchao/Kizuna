@@ -73,6 +73,8 @@ it('履歴を追加読み込みし、失敗時はその領域から再試行で�
     nextCursor: null,
   });
   render(<CastEnrollmentPanel cast={{ id: 'e1', status: 'SUSPENDED' }} onChanged={jest.fn()} />);
+  fireEvent.click(screen.getByText('在籍履歴', { selector: 'summary' }));
+  fireEvent.click(screen.getByText('内部情報の編集履歴', { selector: 'summary' }));
   fireEvent.click(await screen.findByRole('button', { name: '在籍履歴をさらに読み込む' }));
   expect(await screen.findByText('入店（在籍中）')).toBeInTheDocument();
   expect(api.statusHistories).toHaveBeenLastCalledWith('e1', 'next');
@@ -83,4 +85,12 @@ it('履歴を追加読み込みし、失敗時はその領域から再試行で�
   );
   expect(await screen.findByText('deleted_key')).toBeInTheDocument();
   expect(screen.getByText('変更前')).toBeInTheDocument();
+});
+
+it('履歴は初期状態で折り畳み、開くと読める', async () => {
+  render(<CastEnrollmentPanel cast={{ id: 'e1', status: 'ENROLLED' }} onChanged={jest.fn()} />);
+  const summary = screen.getByText('在籍履歴', { selector: 'summary' });
+  expect(summary.closest('details')).not.toHaveAttribute('open');
+  fireEvent.click(summary);
+  expect(await screen.findByText('在籍履歴はありません')).toBeVisible();
 });

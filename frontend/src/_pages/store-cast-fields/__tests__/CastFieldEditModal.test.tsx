@@ -189,3 +189,13 @@ describe('カスタムフィールド定義の編集モーダル', () => {
     expect(mockedApi.update).not.toHaveBeenCalled();
   });
 });
+
+it('公開区分の変更は削除と再作成を案内し、保存せず一覧へ戻れる', () => {
+  const onClose = jest.fn();
+  render(
+    <CastFieldEditModal open definition={definition()} onClose={onClose} onUpdated={jest.fn()} />
+  );
+  expect(screen.getByText(/削除してから新しく作成/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'フィールド一覧へ戻る' }));
+  expect(onClose).toHaveBeenCalled();
+});

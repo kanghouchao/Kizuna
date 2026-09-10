@@ -14,13 +14,12 @@ export default function CastCreatePage() {
   const storeId = params.storeId as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /** フォーム送信処理 */
   const handleSubmit = async (data: CastFormData) => {
     try {
       setIsSubmitting(true);
       const requestData: CastCreateRequest = {
         name: data.name,
-        status: data.status === 'WITHDRAWN' ? undefined : data.status,
+        status: data.status,
         photo_url: data.photo_url,
         introduction: data.introduction,
         age: data.age ?? undefined,

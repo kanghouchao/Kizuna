@@ -112,6 +112,8 @@ Then('店舗切替に {string} が表示されない', async ({ page }, storeNam
 Then('キャスト一覧に {string} が表示される', async ({ page }, _label: string) => {
   // {string} は可読性のための表記。実際の照合は一意名（createdCastName）で行う。
   await page.goto(castsUrl(page), { waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('名前で検索...').fill(createdCastName);
+  await page.getByRole('button', { name: '検索', exact: true }).click();
   await expect(page.getByText(createdCastName, { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
@@ -126,9 +128,10 @@ When('店舗を {string} に切り替える', async ({ page }, storeName: string
 });
 
 Then('キャスト一覧に {string} が表示されない', async ({ page }, _label: string) => {
-  // 切替後の店舗2はキャスト未登録のため一覧は空。cookie は切替時に同期設定済みなので
-  // 再取得のため一覧を開き直し、空表示の確定後に播種キャストの非表示を断言する。
+  // 対象の源氏名で検索し、他のキャストの有無によらず店舗境界を検証する。
   await page.goto(castsUrl(page), { waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('名前で検索...').fill(createdCastName);
+  await page.getByRole('button', { name: '検索', exact: true }).click();
   await expect(page.getByText('キャストが登録されていません', { exact: true })).toBeVisible({
     timeout: 15000,
   });

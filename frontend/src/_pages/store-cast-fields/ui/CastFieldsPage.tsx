@@ -126,6 +126,7 @@ export default function CastFieldsPage() {
       <ConfirmDialog
         open={deletion.target !== null}
         title={deletion.target ? `「${deletion.target.label}」を削除しますか？` : ''}
+        description="全キャストのこのフィールドの現在の値も削除されます。同じキーで再作成しても値は復元されません。"
         onConfirm={() => void deletion.confirm()}
         onClose={deletion.cancel}
       />

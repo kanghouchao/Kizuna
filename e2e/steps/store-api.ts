@@ -107,10 +107,11 @@ export async function setCustomTexts(
 export async function createCast(
   request: APIRequestContext,
   token: string,
-  name: string
+  name: string,
+  storeId: string = STORE1_ID
 ): Promise<string> {
   const res = await request.post('/api/store/casts', {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { name },
   });
   if (!res.ok()) {
@@ -118,7 +119,7 @@ export async function createCast(
   }
   const body = await res.json();
   const publication = await request.patch(`/api/store/casts/${body.id}/publication`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { publication_status: 'PUBLISHED' },
   });
   if (!publication.ok()) throw new Error(`publish cast failed: ${publication.status()} ${await publication.text()}`);
@@ -233,10 +234,11 @@ export async function deleteShift(
 export async function issueCastInvitation(
   request: APIRequestContext,
   token: string,
-  castId: string
+  castId: string,
+  storeId: string = STORE1_ID
 ): Promise<string> {
   const res = await request.post(`/api/store/casts/${castId}/invitation`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
     throw new Error(`issue cast invitation failed: ${res.status()} ${await res.text()}`);
@@ -384,4 +386,53 @@ export async function cancelOrder(
   if (!res.ok()) {
     throw new Error(`cancel order failed: ${res.status()} ${await res.text()}`);
   }
+}
+
+export async function loginPlatformUser(
+  request: APIRequestContext,
+  email: string,
+  password: string,
+): Promise<string> {
+  const response = await request.post("/api/platform/login", {
+    data: { email, password },
+  });
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()).token;
+}
+
+export async function getAuthorizedStores(
+  request: APIRequestContext,
+  token: string,
+): Promise<{ id: number; name: string }[]> {
+  const response = await request.get("/api/platform/stores/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  return response.json();
+}
+
+export async function acceptExistingCastInvitation(
+  request: APIRequestContext,
+  token: string,
+  invitation: string,
+): Promise<void> {
+  const response = await request.post(
+    "/api/platform/cast-invitations/acceptance/existing",
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { token: invitation },
+    },
+  );
+  expect(response.ok()).toBeTruthy();
+}
+
+export async function withdrawCast(
+  request: APIRequestContext,
+  token: string,
+  castId: string,
+): Promise<void> {
+  const response = await request.post(`/api/store/casts/${castId}/withdrawal`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBeTruthy();
 }

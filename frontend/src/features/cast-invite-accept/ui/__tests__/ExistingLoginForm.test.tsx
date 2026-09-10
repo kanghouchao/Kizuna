@@ -1,3 +1,4 @@
+import { notify } from '@/shared/notify';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
 import { ExistingLoginForm } from '../ExistingLoginForm';
@@ -174,4 +175,33 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
     expect(getPlatformConsole()).toBe('STORE_MANAGER');
     expect(getPlatformStoreId()).toBe('7');
   });
+});
+
+it('同店の重複受諾409では理由を通知して入力と旧セッションを維持する', async () => {
+  const error = jest.spyOn(notify, 'error').mockReturnValue('notification-id');
+  Cookies.set('token', 'previous-token');
+  startPlatformSession('STORE_MANAGER');
+  setPlatformStore('7');
+  mockedAuthApi.login.mockResolvedValue({ token: 'cast-token', expires_at: Date.now() + 3600000 });
+  mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue({
+    response: { status: 409, data: { message: 'この店舗には既に有効な在籍があります' } },
+  });
+  const onSuccess = jest.fn();
+  render(<ExistingLoginForm token="invite-token" onSuccess={onSuccess} onBack={jest.fn()} />);
+  fireEvent.change(screen.getByLabelText('メールアドレス'), {
+    target: { value: 'cast@kizuna.test' },
+  });
+  fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'input-value' } });
+  fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
+  await waitFor(() => expect(error).toHaveBeenCalledWith('この店舗には既に有効な在籍があります'));
+  expect(screen.getByLabelText('メールアドレス')).toHaveValue('cast@kizuna.test');
+  expect(screen.getByRole('button', { name: 'ログインして受諾する' })).toBeEnabled();
+  expect(Cookies.get('token')).toBe('previous-token');
+  expect(getPlatformConsole()).toBe('STORE_MANAGER');
+  expect(getPlatformStoreId()).toBe('7');
+  expect(onSuccess).not.toHaveBeenCalled();
+  error.mockRestore();
+  Cookies.remove('token');
+  Cookies.remove('platform-role');
+  Cookies.remove('platform-store-id');
 });
