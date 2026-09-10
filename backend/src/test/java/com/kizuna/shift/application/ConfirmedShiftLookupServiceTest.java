@@ -135,15 +135,12 @@ class ConfirmedShiftLookupServiceTest {
   @Test
   @DisplayName("店外向けの述語は確定状態に加えて公開可でも絞ること")
   void hasPubliclyVisibleShiftAddsThePublicationGate() {
-    when(shiftRepository.existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
-            anyLong(), anyString(), any(), any()))
+    when(shiftRepository.existsPubliclyVisibleShift(anyLong(), anyString(), any()))
         .thenReturn(true);
 
     assertThat(service.hasPubliclyVisibleShift(STORE_ID, "cast-1", today())).isTrue();
 
-    verify(shiftRepository)
-        .existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
-            STORE_ID, "cast-1", today(), ShiftStatus.CONFIRMED);
+    verify(shiftRepository).existsPubliclyVisibleShift(STORE_ID, "cast-1", today());
     verify(shiftRepository, never())
         .existsByStoreIdAndCastIdAndWorkDateAndStatus(anyLong(), anyString(), any(), any());
   }

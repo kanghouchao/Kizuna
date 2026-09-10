@@ -41,7 +41,7 @@ public interface ShiftRepository
       @Param("to") LocalDate to);
 
   /**
-   * 指定店舗・指定日の確定シフトに入っている ACTIVE キャストを返す。
+   * 指定店舗・指定日に公開可能なシフトとプロフィールを持つ在籍中のキャストを返す。
    *
    * <p>会員ポータルからの参照は店舗文脈（{@code @StoreScoped}）を持たず storeFilter が働かないため、where 句の {@code s.storeId}
    * が唯一の店舗隔離境界である。並びは一意な副キー cast_id まで固定する。
@@ -56,6 +56,8 @@ public interface ShiftRepository
         and s.status = com.kizuna.shift.domain.ShiftStatus.CONFIRMED
         and s.published = true
         and e.status = com.kizuna.cast.domain.CastEnrollmentStatus.ENROLLED
+        and c.publicationStatus = com.kizuna.cast.domain.CastPublicationStatus.PUBLISHED
+        and e.storeId = s.storeId and c.storeId = s.storeId
       order by s.startTime asc, s.castId asc
       """)
   List<ConfirmedShiftCastView> findConfirmedCasts(
@@ -65,9 +67,23 @@ public interface ShiftRepository
   boolean existsByStoreIdAndCastIdAndWorkDateAndStatus(
       Long storeId, String castId, LocalDate workDate, ShiftStatus status);
 
-  /** 上と同じ問いを店外向けの露出関門（CONFIRMED ∧ 公開可）で答える。 */
-  boolean existsByStoreIdAndCastIdAndWorkDateAndStatusAndPublishedTrue(
-      Long storeId, String castId, LocalDate workDate, ShiftStatus status);
+  /** 会員候補と同じ在籍・プロフィール・シフトの公開条件で、在籍 ID の直送も検証する。 */
+  @Query(
+      """
+      select count(s) > 0
+      from Shift s join com.kizuna.cast.domain.CastEnrollment e on e.id = s.castId
+      join com.kizuna.cast.domain.CastProfile c on c.enrollmentId = e.id
+      where s.storeId = :storeId and s.castId = :castId and s.workDate = :workDate
+        and s.status = com.kizuna.shift.domain.ShiftStatus.CONFIRMED
+        and s.published = true
+        and e.status = com.kizuna.cast.domain.CastEnrollmentStatus.ENROLLED
+        and c.publicationStatus = com.kizuna.cast.domain.CastPublicationStatus.PUBLISHED
+        and e.storeId = s.storeId and c.storeId = s.storeId
+      """)
+  boolean existsPubliclyVisibleShift(
+      @Param("storeId") Long storeId,
+      @Param("castId") String castId,
+      @Param("workDate") LocalDate workDate);
 
   /**
    * 現店舗のシフト 1 件を、予実の交差を触る間だけ押さえて引く。
