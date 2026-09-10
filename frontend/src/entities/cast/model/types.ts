@@ -1,8 +1,8 @@
 export type CastEnrollmentStatus = 'ENROLLED' | 'SUSPENDED' | 'WITHDRAWN';
 export type CastEditableStatus = Exclude<CastEnrollmentStatus, 'WITHDRAWN'>;
 export type CastPublicationStatus = 'PUBLISHED' | 'UNPUBLISHED';
-// キャストの招待状態（四態。cast/domain/CastInvitationStatus.java と対応）
-export type CastInvitationStatus = 'NOT_INVITED' | 'INVITED' | 'EXPIRED' | 'LINKED';
+// キャストの招待状態（cast/domain/CastInvitationStatus.java と対応）
+export type CastInvitationStatus = 'NOT_INVITED' | 'INVITED' | 'EXPIRED' | 'LINKED' | 'UNAVAILABLE';
 
 // キャスト（Cast）レスポンス
 export interface CastResponse {
@@ -129,7 +129,7 @@ export interface CastInvitationIssueResponse {
 }
 
 // 招待照会（公開ランディング）の受諾可否状態
-export type CastInvitationViewStatus = 'VALID' | 'EXPIRED' | 'USED';
+export type CastInvitationViewStatus = 'VALID' | 'EXPIRED' | 'USED' | 'UNAVAILABLE';
 
 // 招待照会（公開ランディング）レスポンス
 export interface CastInvitationDetailResponse {

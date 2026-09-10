@@ -22,11 +22,11 @@ interface InvitationButtonProps {
   onIssued: (invitation: IssuedInvitation) => void;
 }
 
-/** キャスト一覧の行内招待発行ボタン（未招待/期限切れ→発行、招待中→再発行、連携済みは非表示。裁定9）。 */
+/** キャスト一覧の行内招待発行ボタン。連携済み・招待不可の在籍では表示しない。 */
 export function InvitationButton({ castId, status, onIssued }: InvitationButtonProps) {
   const [issuing, setIssuing] = useState(false);
 
-  if (status === 'LINKED') return null;
+  if (status === 'LINKED' || status === 'UNAVAILABLE') return null;
 
   const handleIssue = async () => {
     setIssuing(true);

@@ -39,6 +39,8 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -179,6 +181,25 @@ class CastInvitationAcceptanceServiceTest {
     assertThat(response.status()).isEqualTo("VALID");
     assertThat(response.storeName()).isEqualTo("店舗A");
     assertThat(response.castName()).isEqualTo("花子档案");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void view_returnsUnavailableForWithdrawnEnrollmentWithoutConsumingInvitation(boolean expired) {
+    CastEnrollment enrollment = cast("c1", "退店済み");
+    enrollment.withdraw(OffsetDateTime.now());
+    CastInvitation pending =
+        invitation(
+            "c1",
+            1L,
+            CastInvitation.Status.PENDING,
+            OffsetDateTime.now().plusHours(expired ? -1 : 1));
+    when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(pending));
+    when(castRepository.findById("c1")).thenReturn(Optional.of(enrollment));
+    stubStore(1L, "店舗A");
+
+    assertThat(service.view("tok").status()).isEqualTo("UNAVAILABLE");
+    assertThat(pending.getStatus()).isEqualTo(CastInvitation.Status.PENDING);
   }
 
   @Test

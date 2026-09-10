@@ -24,9 +24,9 @@ describe('キャスト招待の行内発行ボタン', () => {
     } as never);
   });
 
-  it('連携済みなら何も描画しない', () => {
+  it.each(['LINKED', 'UNAVAILABLE'] as const)('%s なら何も描画しない', status => {
     const { container } = render(
-      <InvitationButton castId="c1" status="LINKED" onIssued={jest.fn()} />
+      <InvitationButton castId="c1" status={status} onIssued={jest.fn()} />
     );
 
     expect(container).toBeEmptyDOMElement();

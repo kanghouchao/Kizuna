@@ -12,6 +12,8 @@ export function castInvitationStatusLabel(status: CastInvitationStatus | undefin
       return { text: '招待中', color: 'bg-primary/10 text-primary-strong' };
     case 'EXPIRED':
       return { text: '期限切れ', color: 'bg-destructive/10 text-destructive-strong' };
+    case 'UNAVAILABLE':
+      return { text: '招待不可', color: 'bg-muted text-foreground' };
     case 'NOT_INVITED':
     default:
       return { text: '未招待', color: 'bg-muted text-foreground' };

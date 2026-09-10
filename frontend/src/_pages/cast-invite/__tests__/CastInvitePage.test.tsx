@@ -34,6 +34,19 @@ describe('CastInvitePage', () => {
     expect(mockedView).toHaveBeenCalledWith('raw-invitation-token');
   });
 
+  it('利用不可の招待では理由を表示し登録・ログインを案内しない', async () => {
+    window.location.hash = '#withdrawn-invitation';
+    mockedView.mockResolvedValue({ status: 'UNAVAILABLE', store_name: '銀座店' });
+
+    render(<CastInvitePage />);
+
+    await screen.findByText('この招待は利用できません。店舗の担当者にご確認ください。');
+    expect(screen.queryByRole('button', { name: '新規登録して受諾' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '既存アカウントでログイン' })
+    ).not.toBeInTheDocument();
+  });
+
   it('パーセント符号化されたトークンを復元して照会する', async () => {
     window.location.hash = '#a%2Fb';
     mockedView.mockResolvedValue({ status: 'VALID', store_name: '銀座店' });
