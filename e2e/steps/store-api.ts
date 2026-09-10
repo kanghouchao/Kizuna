@@ -130,10 +130,11 @@ export async function createCast(
 export async function deleteCast(
   request: APIRequestContext,
   token: string,
-  id: string
+  id: string,
+  storeId: string = STORE1_ID
 ): Promise<void> {
   const res = await request.delete(`/api/store/casts/${id}`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
     throw new Error(`delete cast failed: ${res.status()} ${await res.text()}`);
@@ -430,9 +431,10 @@ export async function withdrawCast(
   request: APIRequestContext,
   token: string,
   castId: string,
+  storeId: string = STORE1_ID,
 ): Promise<void> {
   const response = await request.post(`/api/store/casts/${castId}/withdrawal`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
   });
   expect(response.ok()).toBeTruthy();
 }
