@@ -10,8 +10,6 @@ import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
-import com.kizuna.cast.domain.CastInvitation;
-import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -38,7 +36,6 @@ public class CastEnrollmentService {
   private final CastEnrollmentStatusHistoryRepository histories;
   private final CastEnrollmentSnapshotRepository snapshots;
   private final PlatformUserRepository users;
-  private final CastInvitationRepository invitations;
   private final StoreRepository stores;
   private final StoreContext storeContext;
 
@@ -69,8 +66,6 @@ public class CastEnrollmentService {
     CastEnrollmentStatus previous = enrollment.getStatus();
     OffsetDateTime at = now();
     enrollment.withdraw(at);
-    invitations.invalidatePending(
-        id, CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
     record(enrollment, previous, actorEmail, at);
     return response(enrollment);
   }

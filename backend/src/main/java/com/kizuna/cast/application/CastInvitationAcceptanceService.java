@@ -125,6 +125,11 @@ public class CastInvitationAcceptanceService {
     if (user.getUserType() != UserType.CAST) {
       throw new AccessDeniedException("CAST アカウントのみ既存受諾できます");
     }
+    if (!castRepository
+        .findIdsByPlatformUserIdAndStoreId(user.getId(), invitation.getStoreId())
+        .isEmpty()) {
+      throw new ConflictException("この店舗には既に有効な在籍があります");
+    }
 
     // ALL_STORES は既に全店アクセス権を持つため、SPECIFIC_STORES へ降格させない（不変条件で storeIds は空）。
     // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する（束・精算範囲は触らない — CAST は保持しない）。

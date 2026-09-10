@@ -20,6 +20,7 @@ import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -30,6 +31,7 @@ import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -317,6 +319,28 @@ class CastInvitationAcceptanceServiceTest {
     // クレームが 0 行なら受諾権を確定できず、身分作成の前に弾かれること（二重登録の防止）。
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("New@Example.com")))
         .isInstanceOf(CastInvitationStateException.class);
+    verify(platformUserRepository, never()).save(any());
+  }
+
+  @Test
+  void acceptAsExistingUser_rejectsCurrentEnrollmentWithoutLinkingOrChangingStores() {
+    CastInvitation invitation =
+        invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+    CastEnrollment enrollment = cast("c2", "招待先");
+    PlatformUser existing = user(7L, UserType.CAST, Set.of(1L));
+    when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
+    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(enrollment));
+    when(castInvitationRepository.claimPending(any(), any(), any(), any())).thenReturn(1);
+    when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
+        .thenReturn(Optional.of(existing));
+    when(castRepository.findIdsByPlatformUserIdAndStoreId(7L, 2L)).thenReturn(List.of("current"));
+
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("この店舗には既に有効な在籍があります");
+    assertThat(enrollment.getCastId()).isNull();
+    assertThat(existing.getStoreIds()).containsExactly(1L);
+    verify(castRepository, never()).saveAndFlush(any());
     verify(platformUserRepository, never()).save(any());
   }
 

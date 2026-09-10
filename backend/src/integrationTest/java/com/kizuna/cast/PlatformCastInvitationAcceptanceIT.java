@@ -16,6 +16,7 @@ import com.kizuna.user.domain.UserType;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
@@ -28,6 +29,8 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -642,13 +645,23 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
     return headers;
   }
 
-  @Test
-  @DisplayName("同店の重複受諾は409となり招待を消費しない")
-  void duplicateEnrollmentRollsBackInvitation() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("同店の在籍中・停止中の重複受諾は409となり、退店後に同じ招待で再受諾できる")
+  void duplicateEnrollmentCanBeRetriedAfterWithdrawal(boolean suspended) {
     String first = createCast(STORE_A, "重複受諾一件目");
     String email = "duplicate-enrollment-" + System.nanoTime() + "@kizuna.test";
     assertThat(acceptNewUser(issue(first, STORE_A), email, "password1234", "同店本人").getStatusCode())
         .isEqualTo(HttpStatus.CREATED);
+    if (suspended) {
+      assertThat(
+              rest.postForEntity(
+                      "/store/casts/" + first + "/suspension",
+                      new HttpEntity<>(storeHeaders(STORE_A, managerToken)),
+                      JsonNode.class)
+                  .getStatusCode())
+          .isEqualTo(HttpStatus.OK);
+    }
     String second = createCast(STORE_A, "重複受諾二件目");
     String invitationToken = issue(second, STORE_A);
     var response =
@@ -670,5 +683,75 @@ class PlatformCastInvitationAcceptanceIT extends CrossStoreTestSupport {
             new HttpEntity<>(tokenBody(invitationToken), publicHeaders),
             JsonNode.class);
     assertThat(view.getBody().path("status").asString()).isEqualTo("VALID");
+    assertThat(
+            rest.postForEntity(
+                    "/store/casts/" + first + "/withdrawal",
+                    new HttpEntity<>(storeHeaders(STORE_A, managerToken)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(
+            rest.postForEntity(
+                    "/platform/cast-invitations/acceptance/existing",
+                    new HttpEntity<>(
+                        tokenBody(invitationToken), bearer(platformToken(email, "password1234"))),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(platformUserIdForEnrollment(second)).isEqualTo(platformUserIdForEnrollment(first));
+    assertThat(castInvitationRepository.findByToken(invitationToken).orElseThrow().getStatus())
+        .isEqualTo(CastInvitation.Status.ACCEPTED);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"cast_id", "platform_user_id"})
+  void storeCannotCreateOrUpdateAnEnrollmentWithAnIdentity(String identityField) {
+    PlatformUser person =
+        createExistingCastUser("unilateral-" + System.nanoTime() + "@kizuna.test");
+    Long identityId =
+        identityField.equals("cast_id") ? personIdForUser(person.getId()) : person.getId();
+    var body = Map.of("name", "単方紐づけ", identityField, identityId);
+    assertThat(
+            rest.postForEntity(
+                    "/store/casts",
+                    new HttpEntity<>(body, storeHeaders(STORE_A, managerToken)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    String enrollment = createCast(STORE_A, "未紐づけ");
+    assertThat(
+            rest.exchange(
+                    "/store/casts/" + enrollment,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(body, storeHeaders(STORE_A, managerToken)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(platformUserIdForEnrollment(enrollment)).isNull();
+  }
+
+  @Test
+  void existingAcceptanceRejectsAnEnrollmentWithdrawnAfterIssueWithoutConsumingInvitation() {
+    String enrollment = createCast(STORE_A, "発行後退店");
+    String invitation = issue(enrollment, STORE_A);
+    PlatformUser user = createExistingCastUser("withdrawn-" + System.nanoTime() + "@kizuna.test");
+    assertThat(
+            rest.postForEntity(
+                    "/store/casts/" + enrollment + "/withdrawal",
+                    new HttpEntity<>(storeHeaders(STORE_A, managerToken)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(
+            rest.postForEntity(
+                    "/platform/cast-invitations/acceptance/existing",
+                    new HttpEntity<>(
+                        tokenBody(invitation), bearer(platformToken(user.getEmail(), PASSWORD))),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(castInvitationRepository.findByToken(invitation).orElseThrow().getStatus())
+        .isEqualTo(CastInvitation.Status.PENDING);
+    assertThat(platformUserIdForEnrollment(enrollment)).isNull();
   }
 }
