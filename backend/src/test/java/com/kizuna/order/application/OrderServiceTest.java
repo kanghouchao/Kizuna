@@ -76,6 +76,7 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -100,6 +101,8 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
@@ -125,7 +128,13 @@ class OrderServiceTest {
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PointLedgerService pointLedgerService;
   @Mock AttributionMaterializer materializer;
-  @Mock PlatformUserRepository platformUserRepository;
+  private final PlatformUserRepository platformUserRepository =
+      Mockito.mock(PlatformUserRepository.class);
+
+  @Spy
+  private ActorIdentityService actorIdentityService =
+      new ActorIdentityService(platformUserRepository);
+
   @Mock RoleRepository roleRepository;
   @Mock StoreContext storeContext;
   @Mock BusinessDateService businessDateService;

@@ -16,7 +16,7 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -43,7 +43,7 @@ public class MemberOrderApplicationService {
 
   private final OrderApplicationRepository orderApplicationRepository;
   private final OrderApplicationIntake orderApplicationIntake;
-  private final PlatformUserRepository platformUserRepository;
+  private final ActorIdentityService actorIdentityService;
   private final MemberLookupService memberLookupService;
   private final StoreExistenceCheck storeExistenceCheck;
   private final BusinessDateService businessDateService;
@@ -121,7 +121,7 @@ public class MemberOrderApplicationService {
   @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、申請者（requesterMemberId）の一致を取り出しの条件に載せることが唯一の境界")
   @Transactional
   public MemberOrderApplicationResponse withdraw(String email, String applicationId) {
-    Long platformUserId = resolvePlatformUserId(email);
+    Long platformUserId = actorIdentityService.requireUserId(email);
     MemberLookup member = resolveMemberByPlatformUserId(platformUserId);
     OrderApplication application = ownedApplication(member.memberId(), applicationId);
     application.withdraw(platformUserId, OffsetDateTime.now());
@@ -138,14 +138,7 @@ public class MemberOrderApplicationService {
   }
 
   private MemberLookup resolveMember(String email) {
-    return resolveMemberByPlatformUserId(resolvePlatformUserId(email));
-  }
-
-  private Long resolvePlatformUserId(String email) {
-    return platformUserRepository
-        .findByEmail(email)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
+    return resolveMemberByPlatformUserId(actorIdentityService.requireUserId(email));
   }
 
   private MemberLookup resolveMemberByPlatformUserId(Long platformUserId) {

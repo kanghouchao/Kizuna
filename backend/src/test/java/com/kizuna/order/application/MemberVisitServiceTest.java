@@ -14,6 +14,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -33,6 +34,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Limit;
 
@@ -43,7 +45,13 @@ class MemberVisitServiceTest {
   private static final long PLATFORM_USER_ID = 10L;
   private static final long MEMBER_ID = 7L;
 
-  @Mock private PlatformUserRepository platformUserRepository;
+  private final PlatformUserRepository platformUserRepository =
+      Mockito.mock(PlatformUserRepository.class);
+
+  @Spy
+  private ActorIdentityService actorIdentityService =
+      new ActorIdentityService(platformUserRepository);
+
   @Mock private MemberLookupService memberLookupService;
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private PointLedgerService pointLedgerService;

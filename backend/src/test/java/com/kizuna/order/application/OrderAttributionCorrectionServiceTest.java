@@ -15,6 +15,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
@@ -58,7 +60,13 @@ class OrderAttributionCorrectionServiceTest {
   @Mock private OrderRepository orderRepository;
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private PointLedgerService pointLedgerService;
-  @Mock private PlatformUserRepository platformUserRepository;
+  private final PlatformUserRepository platformUserRepository =
+      Mockito.mock(PlatformUserRepository.class);
+
+  @Spy
+  private ActorIdentityService actorIdentityService =
+      new ActorIdentityService(platformUserRepository);
+
   @Mock private StoreContext storeContext;
 
   @InjectMocks private OrderAttributionCorrectionService service;

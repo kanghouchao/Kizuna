@@ -46,12 +46,12 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -94,6 +94,7 @@ public class OrderService {
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PointLedgerService pointLedgerService;
   private final AttributionMaterializer materializer;
+  private final ActorIdentityService actorIdentityService;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final StoreContext storeContext;
@@ -428,7 +429,7 @@ public class OrderService {
       validateReceptionist(request.getReceptionistId());
     }
     validateCustomerChoice(application, request);
-    Long actorId = resolveActorId(actorEmail);
+    Long actorId = actorIdentityService.requireUserId(actorEmail);
 
     Order order =
         Order.builder()
@@ -541,7 +542,7 @@ public class OrderService {
       // 関連の照会は行を押さえないため、着ける前に顧客参照の解決を通す。
       return customerReferenceResolver.resolveForWrite(established.get().getCustomerId());
     }
-    Long actorId = resolveActorId(actorEmail);
+    Long actorId = actorIdentityService.requireUserId(actorEmail);
     // store_id は StoreScopeStampListener が @PrePersist で採番する。
     Customer customer =
         customerRepository.save(
@@ -609,7 +610,7 @@ public class OrderService {
     int granted = 0;
     String receiptToken = null;
     if (memberId != null) {
-      Long actorId = resolveActorId(actorEmail);
+      Long actorId = actorIdentityService.requireUserId(actorEmail);
       granted =
           materializer
               .materialize(
@@ -696,19 +697,6 @@ public class OrderService {
   }
 
   /**
-   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
-   *
-   * <p>解決できない認証主体は黙って null にせず失敗させる — 追記型の台帳では実行者 null が「機構が起こした仕訳」の形であり、
-   * 失効した認証セッションによる人手の操作がそれと区別できなくなる。
-   */
-  private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
-        .findByEmail(actorEmail)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
-  }
-
-  /**
    * 確定済みの受注を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみで、理由・実行者・時刻を記録に残す（ADR 0013）。
    *
    * <p>汎用更新から状態を動かす裏口を閉じた代わりに立てた専用の口。未確定申請の謝絶（{@link #decline}）とは別物で、
@@ -722,7 +710,8 @@ public class OrderService {
   public void cancel(String id, OrderCancellationRequest request, String actorEmail) {
     Order order =
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
-    order.cancelWith(request.getReason(), resolveActorId(actorEmail), OffsetDateTime.now());
+    order.cancelWith(
+        request.getReason(), actorIdentityService.requireUserId(actorEmail), OffsetDateTime.now());
     orderRepository.save(order);
   }
 
@@ -737,7 +726,7 @@ public class OrderService {
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
     application.decline(
         request.getReason(),
-        resolveActorId(actorEmail),
+        actorIdentityService.requireUserId(actorEmail),
         OffsetDateTime.now(),
         businessDateService.currentBusinessDate());
     orderApplicationRepository.save(application);

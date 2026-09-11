@@ -12,7 +12,7 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,7 +43,7 @@ public class MemberReceiptClaimService {
   private final OrderRepository orderRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final PointLedgerService pointLedgerService;
-  private final PlatformUserRepository platformUserRepository;
+  private final ActorIdentityService actorIdentityService;
   private final MemberLookupService memberLookupService;
   private final AttributionMaterializer materializer;
 
@@ -51,7 +51,7 @@ public class MemberReceiptClaimService {
   @StoreScopeExempt(reason = "トークンの鍵付きダイジェスト一致だけが申領を成立させる材料で、受注は店舗を跨いで引く（店舗で絞ると照合が成立しない）")
   @Transactional
   public MemberReceiptClaimResponse claim(String email, String rawToken) {
-    Long platformUserId = resolvePlatformUserId(email);
+    Long platformUserId = actorIdentityService.requireUserId(email);
     MemberLookup member = resolveMember(platformUserId);
 
     OrderReceiptToken token =
@@ -90,13 +90,6 @@ public class MemberReceiptClaimService {
             platformUserId,
             new AttributionMaterializer.ReceiptClaim(token.getPlannedPoints()));
     return new MemberReceiptClaimResponse((long) result.grantedPoints() + result.benefitPoints());
-  }
-
-  private Long resolvePlatformUserId(String email) {
-    return platformUserRepository
-        .findByEmail(email)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 
   private MemberLookup resolveMember(Long platformUserId) {

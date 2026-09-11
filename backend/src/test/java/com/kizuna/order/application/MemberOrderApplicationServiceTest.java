@@ -29,6 +29,7 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -46,6 +47,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Limit;
 
@@ -63,7 +66,13 @@ class MemberOrderApplicationServiceTest {
 
   @Mock OrderApplicationRepository orderApplicationRepository;
   @Mock OrderApplicationIntake orderApplicationIntake;
-  @Mock PlatformUserRepository platformUserRepository;
+  private final PlatformUserRepository platformUserRepository =
+      Mockito.mock(PlatformUserRepository.class);
+
+  @Spy
+  private ActorIdentityService actorIdentityService =
+      new ActorIdentityService(platformUserRepository);
+
   @Mock MemberLookupService memberLookupService;
   @Mock StoreExistenceCheck storeExistenceCheck;
   @Mock BusinessDateService businessDateService;

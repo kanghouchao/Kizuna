@@ -15,10 +15,8 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -47,7 +45,7 @@ public class OrderAttributionService {
   private final OrderAttributionRepository orderAttributionRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
-  private final PlatformUserRepository platformUserRepository;
+  private final ActorIdentityService actorIdentityService;
 
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
   @StoreScoped
@@ -81,7 +79,8 @@ public class OrderAttributionService {
       throw new ConflictException("この受注の帰属は別の操作で変わりました。最新の状態を確認してからやり直してください");
     }
 
-    attribution.invalidate(request.getReason(), resolveActorId(actorEmail), OffsetDateTime.now());
+    attribution.invalidate(
+        request.getReason(), actorIdentityService.requireUserId(actorEmail), OffsetDateTime.now());
     return toResponse(orderAttributionRepository.save(attribution));
   }
 
@@ -161,18 +160,6 @@ public class OrderAttributionService {
   /** 直近の帰属記録。無効化で行を消さないため複数行を持ちうるが、有効な行は部分一意索引により高々 1 件で、あればそれが直近になる。 */
   private Optional<OrderAttribution> latestAttribution(String orderId) {
     return orderAttributionRepository.findFirstByOrderIdOrderByIdDesc(orderId);
-  }
-
-  /**
-   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
-   *
-   * <p>解決できない認証主体は黙って null にせず失敗させる — 無効化の実行者は訂正の根拠の一部であり、失効した認証セッションによる 操作を実行者不明のまま通すと記録が監査に耐えない。
-   */
-  private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
-        .findByEmail(actorEmail)
-        .map(PlatformUser::getId)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 
   /**
