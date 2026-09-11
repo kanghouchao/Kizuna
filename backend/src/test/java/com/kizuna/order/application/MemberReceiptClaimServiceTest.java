@@ -8,17 +8,12 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
 import com.kizuna.order.domain.Order;
-import com.kizuna.order.domain.OrderAttribution;
-import com.kizuna.order.domain.OrderAttributionRepository;
-import com.kizuna.order.domain.OrderAttributionSource;
-import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderReceiptTokenStatus;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
-import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -34,9 +29,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -54,21 +49,16 @@ class MemberReceiptClaimServiceTest {
   private static final String RAW_TOKEN = "raw-token";
   private static final String DIGEST = "digest-of-raw-token";
   private static final int PLANNED_POINTS = 120;
-  private static final long ATTRIBUTION_ID = 88L;
 
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
-  @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private OrderRepository orderRepository;
   @Mock private ReceiptTokenGenerator receiptTokenGenerator;
   @Mock private PointLedgerService pointLedgerService;
-  @Mock private BenefitGrantService benefitGrantService;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private MemberLookupService memberLookupService;
-  @Mock private MemberRankSync memberRankSync;
+  @Mock private AttributionMaterializer materializer;
 
   @InjectMocks private MemberReceiptClaimService service;
-
-  @Captor private ArgumentCaptor<OrderAttribution> savedAttribution;
 
   @BeforeEach
   void resolveAuthenticatedMember() {
@@ -93,57 +83,48 @@ class MemberReceiptClaimServiceTest {
   @Test
   @DisplayName("有効なトークンの申領で、帰属記録（RECEIPT_TOKEN）と発行時の確定額の記帳が成立すること")
   void claimRecordsTheAttributionAndBooksThePlannedPoints() {
-    OrderReceiptToken token = issuedToken(OffsetDateTime.now());
+    OrderReceiptToken token = Mockito.spy(issuedToken(OffsetDateTime.now()));
     givenToken(token);
 
     MemberReceiptClaimResponse response = service.claim(EMAIL, RAW_TOKEN);
 
     assertThat(response.grantedPoints()).isEqualTo(PLANNED_POINTS);
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
-    Mockito.verify(orderAttributionRepository).save(savedAttribution.capture());
-    OrderAttribution attribution = savedAttribution.getValue();
-    assertThat(attribution.getOrderId()).isEqualTo(ORDER_ID);
-    assertThat(attribution.getMemberId()).isEqualTo(MEMBER_ID);
-    assertThat(attribution.getMemberCode()).isEqualTo(MEMBER_CODE);
-    assertThat(attribution.getSource()).isEqualTo(OrderAttributionSource.RECEIPT_TOKEN);
-    assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
-    // 実行者は申領した本人。台帳では実行者 null が「機構が起こした仕訳」の形であり、人手の操作と混ぜない
-    Mockito.verify(pointLedgerService)
-        .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, PLANNED_POINTS, PLATFORM_USER_ID);
-    // 特典の適用期間の窓は根拠受注の営業日で判じる。申領した日を渡すと、90 日遅れの申領が
-    // 「窓の外」と判じられ、完了経路と同じ受注が経路の違いだけで別の結果になる。
-    Mockito.verify(benefitGrantService)
-        .grantVisitBenefits(MEMBER_ID, ORDER_ID, STORE_ID, ORDER_BUSINESS_DATE, PLATFORM_USER_ID);
+    Mockito.verify(orderReceiptTokenRepository).save(token);
+    var occurredAt = ArgumentCaptor.forClass(OffsetDateTime.class);
+    Mockito.verify(materializer)
+        .materialize(
+            Mockito.eq(MEMBER_ID),
+            Mockito.eq(MEMBER_CODE),
+            Mockito.eq(ORDER_ID),
+            Mockito.eq(STORE_ID),
+            Mockito.eq(ORDER_BUSINESS_DATE),
+            occurredAt.capture(),
+            Mockito.eq(PLATFORM_USER_ID),
+            Mockito.eq(new AttributionMaterializer.ReceiptClaim(PLANNED_POINTS)));
+    Mockito.verify(token).claim(occurredAt.getValue());
   }
 
-  @Test
-  @DisplayName("会員行は帰属記録・台帳より先に押さえること（後から押さえると並行する申領同士が死錠する）")
-  void claimLocksTheMemberRowBeforeAnythingReferencesIt() {
-    givenToken(issuedToken(OffsetDateTime.now()));
-
-    service.claim(EMAIL, RAW_TOKEN);
-
-    InOrder inOrder =
-        Mockito.inOrder(memberRankSync, orderAttributionRepository, pointLedgerService);
-    inOrder.verify(memberRankSync).beforeMemberWrites(MEMBER_ID);
-    inOrder.verify(orderAttributionRepository).save(Mockito.any());
-    inOrder
-        .verify(pointLedgerService)
-        .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, PLANNED_POINTS, PLATFORM_USER_ID);
-  }
-
-  @Test
+  @ParameterizedTest
+  @CsvSource({"0, 500", "120, 620"})
   @DisplayName("来店特典が当たった申領は、伝票の予定額と特典の合計を返すこと")
-  void claimReportsThePlannedPointsAndTheBenefitTogether() {
+  void claimReportsThePlannedPointsAndTheBenefitTogether(int plannedPoints, long expectedTotal) {
     // 応答は「この申領で記帳したポイント」。予定額だけを返すと、特典だけが付いた 0 円完了の伝票が
     // 画面で「付与はありません」になり、成立した記帳が利用者へ嘘になる。
-    givenToken(OrderReceiptToken.issueFor(ORDER_ID, DIGEST, 0, OffsetDateTime.now()));
-    Mockito.when(
-            benefitGrantService.grantVisitBenefits(
-                MEMBER_ID, ORDER_ID, STORE_ID, ORDER_BUSINESS_DATE, PLATFORM_USER_ID))
-        .thenReturn(500L);
+    givenToken(OrderReceiptToken.issueFor(ORDER_ID, DIGEST, plannedPoints, OffsetDateTime.now()));
+    Mockito.doReturn(new AttributionMaterializer.Result(plannedPoints, 500))
+        .when(materializer)
+        .materialize(
+            Mockito.anyLong(),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.any());
 
-    assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isEqualTo(500);
+    assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isEqualTo(expectedTotal);
   }
 
   @Test
@@ -151,18 +132,17 @@ class MemberReceiptClaimServiceTest {
   void claimOfAZeroPointReceiptStillRecordsTheVisit() {
     // 申領の効果は来店の可視化に閉じる。帰属は付与の有無と独立している
     givenToken(OrderReceiptToken.issueFor(ORDER_ID, DIGEST, 0, OffsetDateTime.now()));
-    // 付与 0 は台帳へ行を書かないので仕訳 ID は返らない（mock の既定値 0L だと本番の形にならない）
-    Mockito.when(
-            pointLedgerService.grantPlannedForOrder(
-                MEMBER_ID, ORDER_ID, STORE_ID, 0, PLATFORM_USER_ID))
-        .thenReturn(null);
-
     assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isZero();
-
-    Mockito.verify(orderAttributionRepository).save(Mockito.any());
-    Mockito.verify(pointLedgerService)
-        .grantPlannedForOrder(MEMBER_ID, ORDER_ID, STORE_ID, 0, PLATFORM_USER_ID);
-    Mockito.verify(memberRankSync).afterAttribution(MEMBER_ID, ATTRIBUTION_ID, null);
+    Mockito.verify(materializer)
+        .materialize(
+            Mockito.eq(MEMBER_ID),
+            Mockito.eq(MEMBER_CODE),
+            Mockito.eq(ORDER_ID),
+            Mockito.eq(STORE_ID),
+            Mockito.eq(ORDER_BUSINESS_DATE),
+            Mockito.any(OffsetDateTime.class),
+            Mockito.eq(PLATFORM_USER_ID),
+            Mockito.eq(new AttributionMaterializer.ReceiptClaim(0)));
   }
 
   @Test
@@ -192,7 +172,7 @@ class MemberReceiptClaimServiceTest {
     assertThat(expired.getStatus())
         .as("撥ねた伝票は未申領のまま残ること")
         .isEqualTo(OrderReceiptTokenStatus.ISSUED);
-    Mockito.verify(orderAttributionRepository, Mockito.never()).save(Mockito.any());
+    Mockito.verifyNoInteractions(materializer);
     Mockito.verifyNoInteractions(pointLedgerService);
   }
 
@@ -215,10 +195,7 @@ class MemberReceiptClaimServiceTest {
 
     assertThat(rolledBack).isInstanceOf(NotFoundException.class).hasMessage(missing.getMessage());
     assertThat(token.getStatus()).as("撥ねた伝票は未申領のまま残ること").isEqualTo(OrderReceiptTokenStatus.ISSUED);
-    Mockito.verify(orderAttributionRepository, Mockito.never()).save(Mockito.any());
-    Mockito.verify(pointLedgerService, Mockito.never())
-        .grantPlannedForOrder(
-            Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyInt(), Mockito.any());
+    Mockito.verifyNoInteractions(materializer);
   }
 
   @Test
@@ -229,7 +206,7 @@ class MemberReceiptClaimServiceTest {
 
     assertThatThrownBy(() -> service.claim(EMAIL, RAW_TOKEN))
         .isInstanceOf(StaleSessionException.class);
-    Mockito.verifyNoInteractions(orderAttributionRepository, pointLedgerService);
+    Mockito.verifyNoInteractions(materializer, pointLedgerService);
   }
 
   @Test
@@ -239,7 +216,7 @@ class MemberReceiptClaimServiceTest {
 
     assertThatThrownBy(() -> service.claim(EMAIL, RAW_TOKEN))
         .isInstanceOf(StaleSessionException.class);
-    Mockito.verifyNoInteractions(orderAttributionRepository, pointLedgerService);
+    Mockito.verifyNoInteractions(materializer, pointLedgerService);
   }
 
   private static OrderReceiptToken issuedToken(OffsetDateTime issuedAt) {
@@ -253,12 +230,21 @@ class MemberReceiptClaimServiceTest {
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.of(token));
     Mockito.lenient()
-        .when(orderAttributionRepository.save(Mockito.any()))
+        .when(
+            materializer.materialize(
+                Mockito.anyLong(),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any()))
         .thenAnswer(
             invocation -> {
-              OrderAttribution saved = invocation.getArgument(0);
-              saved.setId(ATTRIBUTION_ID);
-              return saved;
+              assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
+              AttributionMaterializer.ReceiptClaim trigger = invocation.getArgument(7);
+              return new AttributionMaterializer.Result(trigger.plannedPoints(), 0);
             });
     Order order =
         Order.builder()

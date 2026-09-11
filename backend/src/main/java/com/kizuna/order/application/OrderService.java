@@ -29,8 +29,6 @@ import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
-import com.kizuna.order.domain.OrderAttribution;
-import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderReceiptToken;
@@ -42,9 +40,7 @@ import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
-import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
-import com.kizuna.point.application.PointLedgerService.GrantedPoints;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
@@ -89,7 +85,6 @@ public class OrderService {
   private final OrderRepository orderRepository;
   private final OrderApplicationRepository orderApplicationRepository;
   private final OrderSearchQuery orderSearchQuery;
-  private final OrderAttributionRepository orderAttributionRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final CustomerRepository customerRepository;
@@ -98,8 +93,7 @@ public class OrderService {
   private final NominatableCastLookup nominatableCast;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PointLedgerService pointLedgerService;
-  private final BenefitGrantService benefitGrantService;
-  private final MemberRankSync memberRankSync;
+  private final AttributionMaterializer materializer;
   private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final StoreContext storeContext;
@@ -564,21 +558,7 @@ public class OrderService {
     return customer.getId();
   }
 
-  /**
-   * 受注を完了する（会計の確定）。会計金額を確定し、会員に紐づく受注ならポイントの利用と自動付与を台帳へ記帳する。
-   *
-   * <p>ポイントが台帳へ入る経路をこの操作（と手動調整）に限るため、汎用更新は完了への遷移を受け付けない。
-   *
-   * <p>利用は付与より先に記帳する。順序が逆だと、その受注の付与で同じ受注の利用を賄えてしまう。
-   *
-   * <p>非会員の受注ではポイントの利用も付与も起こらない。会員に紐づかない顧客には台帳そのものが存在しない。
-   *
-   * <p>会員に達した完了は、記帳と同一トランザクションで受注帰属記録（根拠 COMPLETION）を残す。会員の来店履歴はこの記録だけから読むため、
-   * ここで記録が生まれない受注はその会員から永久に見えない。
-   *
-   * <p>会員に達しなかった完了（顧客の有無は問わない）は、代わりに伝票トークンを発行して生値を応答で一度だけ返す。 事後帰属の証明はこのトークンの所持だけであり（ADR
-   * 0008）、この応答を逃した客に v1 の救済経路は無い。
-   */
+  /** 会計と会員への帰属を同一トランザクションで確定する。汎用更新からは完了へ遷移させない。 会員に達しない受注では、事後帰属の所持証明となる伝票トークンを発行して生値を返す。 */
   @StoreScoped
   @Transactional
   public OrderCompletionResponse complete(
@@ -630,29 +610,18 @@ public class OrderService {
     String receiptToken = null;
     if (memberId != null) {
       Long actorId = resolveActorId(actorEmail);
-      // 会員行は台帳の仕訳・帰属記録より先に押さえる。挿入の外部キー検査が会員行へ FOR KEY SHARE を
-      // 置くため、書いた後に昇格判定が FOR UPDATE を求めると並行する完了同士が死錠する。
-      memberRankSync.beforeMemberWrites(memberId);
-      // 単位の制約と残高の充足は台帳側が判定する（利用の入口が増えても規則が分かれないため）。
-      if (usePoints > 0) {
-        pointLedgerService.useForOrder(memberId, id, order.getStoreId(), usePoints, actorId);
-      }
-      GrantedPoints grant =
-          pointLedgerService.grantForOrder(memberId, id, order.getStoreId(), chargeAmount, actorId);
-      granted = grant.points();
-      // 帰属は付与の有無と独立している。0 円完了は台帳へ行を書かないが、来店した事実は記録として残す。
-      // 会員コードは解決に使った関連のスナップショットをそのまま写す — 会員コードは発行後に変わらないため、
-      // 関連時点の値がそのまま帰属時点の値であり、会員行が消えた後も誰の来店だったかを読めるようにする。
-      OrderAttribution attribution =
-          orderAttributionRepository.save(
-              OrderAttribution.onCompletion(
-                  id, memberId, link.getMemberCode(), OffsetDateTime.now()));
-      // 来店特典は帰属が物化した後に評価する。窓の判定に営業日を渡す理由は BenefitRule#firesFor に記す。
-      // 台帳の仕訳は会員行へ外部キーを張る書き込みなので、先に取った会員行のロックの内側に留める。
-      benefitGrantService.grantVisitBenefits(
-          memberId, id, order.getStoreId(), order.getBusinessDate(), actorId);
-      // 今回の来店を回数へ含めるため、帰属を記録した後に見直す。
-      memberRankSync.afterAttribution(memberId, attribution.getId(), grant.entryId());
+      granted =
+          materializer
+              .materialize(
+                  memberId,
+                  link.getMemberCode(),
+                  id,
+                  order.getStoreId(),
+                  order.getBusinessDate(),
+                  OffsetDateTime.now(),
+                  actorId,
+                  new AttributionMaterializer.Completion(chargeAmount, usePoints))
+              .grantedPoints();
     } else {
       receiptToken = issueReceiptToken(id, chargeAmount);
     }
