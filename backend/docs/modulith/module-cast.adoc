@@ -5,16 +5,22 @@
 |Spring components
 |_Services_
 
+* `c.k.c.application.CastEnrollmentService`
 * `c.k.c.application.CastFieldDefinitionService`
 * `c.k.c.application.CastInvitationAcceptanceService`
 * `c.k.c.application.CastInvitationService`
 * `c.k.c.application.CastSelfService`
 * `c.k.c.application.CastService`
+* `c.k.c.application.PlatformCastService`
 
 _Repositories_
 
+* `c.k.c.domain.CastEnrollmentRepository`
+* `c.k.c.domain.CastEnrollmentSnapshotRepository`
+* `c.k.c.domain.CastEnrollmentStatusHistoryRepository`
 * `c.k.c.domain.CastFieldDefinitionRepository`
 * `c.k.c.domain.CastInvitationRepository`
+* `c.k.c.domain.CastProfileRepository`
 * `c.k.c.domain.CastRepository`
 |Bean references
 |* `c.k.u.domain.PlatformUserRepository` (in User)
@@ -22,6 +28,10 @@ _Repositories_
 * `c.k.s.storescope.StoreContext` (in Shared)
 |Aggregate roots
 |* `c.k.c.domain.Cast`
+* `c.k.c.domain.CastEnrollment`
+* `c.k.c.domain.CastEnrollmentSnapshot`
+* `c.k.c.domain.CastEnrollmentStatusHistory`
 * `c.k.c.domain.CastFieldDefinition`
 * `c.k.c.domain.CastInvitation`
+* `c.k.c.domain.CastProfile`
 |===

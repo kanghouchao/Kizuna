@@ -14,8 +14,11 @@ _Repositories_
 |* `c.k.s.application.BusinessDateService` (in Settings)
 * `c.k.c.application.CastService` (in Cast)
 * `c.k.u.domain.PlatformUserRepository` (in User)
-* `c.k.c.domain.CastRepository` (in Cast)
+* `c.k.c.domain.CastEnrollmentRepository` (in Cast)
+* `c.k.s.domain.StoreRepository` (in Store)
 * `c.k.s.storescope.StoreExistenceCheck` (in Shared)
+* `c.k.s.storescope.StoreContext` (in Shared)
+* `c.k.c.domain.CastProfileRepository` (in Cast)
 |Aggregate roots
 |* `c.k.s.domain.Shift`
 |===
