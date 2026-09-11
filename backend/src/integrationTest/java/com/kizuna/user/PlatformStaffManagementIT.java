@@ -1085,7 +1085,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("権限目録は ROLE_MANAGE 保持者に 23 件の code+console を返すこと")
+  @DisplayName("権限目録は ROLE_MANAGE 保持者に 25 件の code+console を返すこと")
   void permissionCatalogIsExposedToRoleManage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
@@ -1094,7 +1094,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
             "/platform/permissions", HttpMethod.GET, new HttpEntity<>(bearer(hq)), JsonNode.class);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(res.getBody()).hasSize(24);
+    assertThat(res.getBody()).hasSize(25);
     assertThat(res.getBody().toString()).contains("ORDER_MANAGE").contains("PLATFORM");
   }
 

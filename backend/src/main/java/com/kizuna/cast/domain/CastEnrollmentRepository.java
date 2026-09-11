@@ -3,12 +3,27 @@ package com.kizuna.cast.domain;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CastEnrollmentRepository extends JpaRepository<CastEnrollment, String> {
+  @Query(
+      """
+      select e.id as id, e.storeId as storeId, st.name as storeName,
+             p.name as name, e.status as status, e.endedAt as endedAt
+      from CastEnrollment e
+      join com.kizuna.store.domain.Store st on st.id = e.storeId
+      join CastProfile p on p.enrollmentId = e.id
+      where e.castId = :personId
+      order by e.createdAt desc, e.id desc
+      """)
+  Page<CastPersonEnrollmentView> findPersonEnrollments(
+      @Param("personId") Long personId, Pageable pageable);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select e from CastEnrollment e order by e.id")
   List<CastEnrollment> findAllForUpdate();

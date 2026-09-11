@@ -23,6 +23,9 @@ public enum PermissionCode {
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
+  /** キャスト本人の検索と全店舗の在籍照会。担当店舗集合に依存しない平台専用の読み取り。 */
+  CAST_PERSON_VIEW(Console.PLATFORM, SystemRole.HQ_ADMIN),
+
   /**
    * ロール定義の閲覧・登録・更新・削除と権限目録の参照（RoleController / PermissionController）。
    *

@@ -36,6 +36,7 @@ export type PlatformPermission =
   | 'CUSTOMER_MERGE'
   | 'POINT_ADJUST'
   | 'SHIFT_MANAGE'
+  | 'CAST_PERSON_VIEW'
   | 'CAST_MANAGE'
   | 'CAST_INVITE'
   | 'CAST_FIELD_DEF_VIEW'

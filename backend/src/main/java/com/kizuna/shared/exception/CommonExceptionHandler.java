@@ -12,9 +12,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -155,6 +159,12 @@ public class CommonExceptionHandler {
 
   @ExceptionHandler(AccessDeniedException.class)
   public ResponseEntity<Map<String, Object>> handle(AccessDeniedException ex) {
+    // 方法認可の匿名拒否だけを認証要求へ写す。公開 API の店舗文脈欠落など、認証と無関係な拒否は 403 を保つ。
+    if (ex instanceof AuthorizationDeniedException
+        && !new AuthenticationTrustResolverImpl()
+            .isAuthenticated(SecurityContextHolder.getContext().getAuthentication())) {
+      return handle(new InsufficientAuthenticationException("認証が必要です"));
+    }
     log.warn(ex.getMessage());
     Map<String, Object> body = new HashMap<>();
     body.put("error", "アクセス権限がありません");

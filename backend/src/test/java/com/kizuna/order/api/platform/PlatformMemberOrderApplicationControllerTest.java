@@ -102,13 +102,11 @@ class PlatformMemberOrderApplicationControllerTest {
         .andExpect(status().isForbidden());
   }
 
-  // 本番は未認証の拒否を PlatformAuthenticationEntryPoint が 401 に変換するが、@WebMvcTest の
-  // 最小チェーンにはその entry point が載らないため、ここで見えるのは認可拒否そのもの（403）である。
   @Test
   @DisplayName("匿名では会員の予約申請経路に到達できないこと")
   @WithAnonymousUser
   void anonymousIsRejected() throws Exception {
-    mockMvc.perform(get("/platform/me/order-applications")).andExpect(status().isForbidden());
+    mockMvc.perform(get("/platform/me/order-applications")).andExpect(status().isUnauthorized());
   }
 
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。

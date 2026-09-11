@@ -676,7 +676,6 @@ class MemberOrderIT extends CrossStoreTestSupport {
     assertThat(reasonless.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
-  // トークンを持たない要求は認証の失敗ではなく認可の拒否として扱われる（401 は失効・改竄トークンの側）。
   @Test
   @DisplayName("匿名では会員の予約申請経路に到達できないこと")
   void anonymousCannotReachMemberApplicationRoutes() {
@@ -686,7 +685,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
             HttpMethod.GET,
             new HttpEntity<>(jsonHeaders()),
             JsonNode.class);
-    assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(anonymous.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
   @Test
