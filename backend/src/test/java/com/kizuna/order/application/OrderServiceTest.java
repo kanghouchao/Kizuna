@@ -51,10 +51,6 @@ import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
-import com.kizuna.order.domain.OrderAttribution;
-import com.kizuna.order.domain.OrderAttributionRepository;
-import com.kizuna.order.domain.OrderAttributionSource;
-import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderFeeLineDraft;
 import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderPatch;
@@ -70,7 +66,6 @@ import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
-import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
@@ -124,14 +119,12 @@ class OrderServiceTest {
   @Mock CustomerRepository customerRepository;
   @Mock CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock CustomerReferenceResolver customerReferenceResolver;
-  @Mock OrderAttributionRepository orderAttributionRepository;
   @Mock OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock ReceiptTokenGenerator receiptTokenGenerator;
   @Mock NominatableCastLookup nominatableCast;
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PointLedgerService pointLedgerService;
-  @Mock BenefitGrantService benefitGrantService;
-  @Mock MemberRankSync memberRankSync;
+  @Mock AttributionMaterializer materializer;
   @Mock PlatformUserRepository platformUserRepository;
   @Mock RoleRepository roleRepository;
   @Mock StoreContext storeContext;
@@ -201,11 +194,9 @@ class OrderServiceTest {
     // 明細の入力 → 下書きの翻訳（表示値から帯符号へ）は写像の既定実装をそのまま通す。ここを mock の
     // 既定値（null）に任せると、内訳が黙って空になったまま合計の検証が通ってしまう。
     lenient().when(orderMapper.toFeeLineDrafts(anyList())).thenAnswer(Answers.CALLS_REAL_METHODS);
-    // 付与の記帳は「何ポイント積んだか」と「どの仕訳を積んだか」を返す。既定値（null）に任せると
-    // 完了の続きが読めなくなるため、付与の無い形で緩く stub する。
     lenient()
-        .when(pointLedgerService.grantForOrder(anyLong(), any(), any(), anyInt(), any()))
-        .thenReturn(new PointLedgerService.GrantedPoints(0, null));
+        .when(materializer.materialize(anyLong(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(new AttributionMaterializer.Result(0, 0));
   }
 
   private PlatformUser receptionist(
@@ -1969,8 +1960,6 @@ class OrderServiceTest {
 
   private static final long MEMBER_ID = 100L;
   private static final long ACTOR_ID = 7L;
-  private static final long GRANT_ENTRY_ID = 55L;
-  private static final long ATTRIBUTION_ID = 88L;
 
   /** 完了の対象になる受注が現に持つ版。要求はこれと同じ値を載せて初めて通る。 */
   private static final long CURRENT_VERSION = 4L;
@@ -2008,15 +1997,6 @@ class OrderServiceTest {
   private void stubLink(CustomerMemberLink link) {
     when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
-    // 帰属記録は保存で採番され、その ID が昇格判定の契機として渡る
-    lenient()
-        .when(orderAttributionRepository.save(any(OrderAttribution.class)))
-        .thenAnswer(
-            invocation -> {
-              OrderAttribution saved = invocation.getArgument(0);
-              saved.setId(ATTRIBUTION_ID);
-              return saved;
-            });
   }
 
   private void stubActiveLink(Long memberId) {
@@ -2061,40 +2041,26 @@ class OrderServiceTest {
   }
 
   @Test
-  void completeLocksTheMemberRowBeforeAnythingReferencesIt() {
-    // 会員へ外部キーを張る書き込みが先に走ると、その FOR KEY SHARE を跨いで昇格判定が FOR UPDATE を
-    // 求める形になり、同じ会員への並行する完了同士が死錠する
+  void completePassesTheAccountingAndUsesTheMaterializedGrant() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
     stubActor();
+    when(materializer.materialize(
+            eq(MEMBER_ID),
+            eq("123456789012"),
+            eq("o1"),
+            eq(STORE_ID),
+            any(),
+            any(),
+            eq(ACTOR_ID),
+            any()))
+        .thenReturn(new AttributionMaterializer.Result(120, 500));
     stubWriteBackResponse();
 
     service.complete("o1", completion(12000, 300), "staff@kizuna.test");
 
-    InOrder inOrder = inOrder(memberRankSync, pointLedgerService, orderAttributionRepository);
-    inOrder.verify(memberRankSync).beforeMemberWrites(MEMBER_ID);
-    inOrder.verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
-    inOrder.verify(pointLedgerService).grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID);
-    inOrder.verify(orderAttributionRepository).save(any(OrderAttribution.class));
-  }
-
-  @Test
-  void completeUsesPointsBeforeGrantingThem() {
-    // 順序が逆だと、その受注の付与で同じ受注の利用を賄えてしまう
-    Order order = confirmedOrderWithCustomer();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    stubActiveLink(MEMBER_ID);
-    stubActor();
-    when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
-        .thenReturn(new PointLedgerService.GrantedPoints(120, GRANT_ENTRY_ID));
-    stubWriteBackResponse();
-
-    service.complete("o1", completion(12000, 300), "staff@kizuna.test");
-
-    InOrder inOrder = inOrder(pointLedgerService);
-    inOrder.verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
-    inOrder.verify(pointLedgerService).grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID);
+    verifyCompletionMaterialized(12000, 300);
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     // 付与の基準は利用の行が入る前の総和で、合計は利用のぶん下がる（客が現金で払う額）
     assertThat(order.getTotalFee()).isEqualTo(11700);
@@ -2104,18 +2070,26 @@ class OrderServiceTest {
   }
 
   @Test
-  void completeWithoutPointUsageDoesNotTouchTheUsageLedger() {
+  void completeWithoutPointUsagePassesZeroUsage() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
     stubActor();
-    when(pointLedgerService.grantForOrder(MEMBER_ID, "o1", STORE_ID, 12000, ACTOR_ID))
-        .thenReturn(new PointLedgerService.GrantedPoints(120, GRANT_ENTRY_ID));
+    when(materializer.materialize(
+            eq(MEMBER_ID),
+            eq("123456789012"),
+            eq("o1"),
+            eq(STORE_ID),
+            any(),
+            any(),
+            eq(ACTOR_ID),
+            any()))
+        .thenReturn(new AttributionMaterializer.Result(120, 500));
     stubWriteBackResponse();
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
-    verify(pointLedgerService, never()).useForOrder(anyLong(), any(), any(), anyInt(), any());
+    verifyCompletionMaterialized(12000, 0);
     assertThat(usedPointsOf(order)).isZero();
   }
 
@@ -2131,7 +2105,7 @@ class OrderServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("非会員の受注ではポイントを利用できません");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -2146,7 +2120,7 @@ class OrderServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("利用ポイントは会計金額を超えられません");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -2161,7 +2135,7 @@ class OrderServiceTest {
 
     service.complete("o1", completion(300, 300), "staff@kizuna.test");
 
-    verify(pointLedgerService).useForOrder(MEMBER_ID, "o1", STORE_ID, 300, ACTOR_ID);
+    verifyCompletionMaterialized(300, 300);
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     assertThat(usedPointsOf(order)).isEqualTo(300);
   }
@@ -2181,7 +2155,7 @@ class OrderServiceTest {
         .hasMessage("この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
     assertThat(order.getFeeLines()).as("撥ねた要求は内訳を当てないこと").isEmpty();
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -2239,8 +2213,7 @@ class OrderServiceTest {
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     assertThat(order.getAutoGrantPoints()).isZero();
     // 台帳へは何も積まない（付与予定額の算定で規則は読むが、書き込みは起きない）
-    verify(pointLedgerService, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
-    verify(pointLedgerService, never()).useForOrder(anyLong(), any(), any(), anyInt(), any());
+    verifyNoInteractions(materializer);
     // 顧客が未設定なら押さえる行も引く紐づけも無い
     verify(customerRepository, never()).findByIdForUpdate(any());
     verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
@@ -2257,14 +2230,7 @@ class OrderServiceTest {
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
-    OrderAttribution attribution = savedAttribution();
-    assertThat(attribution.getOrderId()).isEqualTo("o1");
-    assertThat(attribution.getMemberId()).isEqualTo(MEMBER_ID);
-    // 会員コードは帰属時点のスナップショット。会員行が消えた後も誰の来店だったかを読めるようにする
-    assertThat(attribution.getMemberCode()).isEqualTo("123456789012");
-    assertThat(attribution.getSource()).isEqualTo(OrderAttributionSource.COMPLETION);
-    assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
-    assertThat(attribution.getAttributedAt()).isNotNull();
+    verifyCompletionMaterialized(12000, 0);
   }
 
   @Test
@@ -2287,8 +2253,16 @@ class OrderServiceTest {
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
-    verify(benefitGrantService)
-        .grantVisitBenefits(MEMBER_ID, "o1", STORE_ID, CURRENT_BUSINESS_DATE, ACTOR_ID);
+    verify(materializer)
+        .materialize(
+            eq(MEMBER_ID),
+            eq("123456789012"),
+            eq("o1"),
+            eq(STORE_ID),
+            eq(CURRENT_BUSINESS_DATE),
+            any(OffsetDateTime.class),
+            eq(ACTOR_ID),
+            eq(new AttributionMaterializer.Completion(12000, 0)));
   }
 
   @Test
@@ -2303,7 +2277,7 @@ class OrderServiceTest {
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
-    verifyNoInteractions(benefitGrantService);
+    verifyNoInteractions(materializer);
   }
 
   @Test
@@ -2318,9 +2292,7 @@ class OrderServiceTest {
     service.complete("o1", completion(0, null), "staff@kizuna.test");
 
     assertThat(order.getAutoGrantPoints()).isZero();
-    assertThat(savedAttribution().getOrderId()).isEqualTo("o1");
-    // 台帳に行が無くても来店は回数へ入るので、判定は付与の有無に依らず起こす
-    verify(memberRankSync).afterAttribution(MEMBER_ID, ATTRIBUTION_ID, null);
+    verifyCompletionMaterialized(0, 0);
   }
 
   @Test
@@ -2335,7 +2307,7 @@ class OrderServiceTest {
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
-    verifyNoInteractions(orderAttributionRepository);
+    verifyNoInteractions(materializer);
   }
 
   @Test
@@ -2358,17 +2330,21 @@ class OrderServiceTest {
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
-    verifyNoInteractions(orderAttributionRepository);
-    verify(pointLedgerService, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
+    verifyNoInteractions(materializer);
   }
 
-  private OrderAttribution savedAttribution() {
-    ArgumentCaptor<OrderAttribution> captor = ArgumentCaptor.forClass(OrderAttribution.class);
-    verify(orderAttributionRepository).save(captor.capture());
-    return captor.getValue();
+  private void verifyCompletionMaterialized(int amount, int usePoints) {
+    verify(materializer)
+        .materialize(
+            eq(MEMBER_ID),
+            eq("123456789012"),
+            eq("o1"),
+            eq(STORE_ID),
+            any(),
+            any(OffsetDateTime.class),
+            eq(ACTOR_ID),
+            eq(new AttributionMaterializer.Completion(amount, usePoints)));
   }
-
-  // ==================== 伝票トークンの発行 ====================
 
   private static final String RAW_TOKEN = "raw-receipt-token";
   private static final String TOKEN_DIGEST = "digest-of-the-raw-receipt-token";
@@ -2474,7 +2450,7 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("非会員の受注ではポイントを利用できません");
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
   }
 
   @Test
@@ -2489,7 +2465,7 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
         .isInstanceOf(StaleSessionException.class);
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -2505,7 +2481,7 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
     assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -2524,7 +2500,7 @@ class OrderServiceTest {
                     "o1", completionAt(CURRENT_VERSION - 1, 12000, null), "staff@kizuna.test"))
         .isInstanceOf(ConflictException.class)
         .hasMessage("この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -2534,7 +2510,7 @@ class OrderServiceTest {
 
     assertThatThrownBy(() -> service.complete("nope", completion(12000, null), "staff@kizuna.test"))
         .isInstanceOf(NotFoundException.class);
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
   }
 
   @Test
@@ -2613,7 +2589,7 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.completionPreview("o1", -1))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会計金額は 0 以上");
-    verifyNoInteractions(pointLedgerService);
+    verifyNoInteractions(pointLedgerService, materializer);
   }
 
   /** 編集後の応答組み立て（読み口 → DTO）だけを満たす stub。編集そのものの検証は集約の状態で行う。 */

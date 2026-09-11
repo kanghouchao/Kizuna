@@ -4,13 +4,10 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
 import com.kizuna.order.domain.Order;
-import com.kizuna.order.domain.OrderAttribution;
-import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
-import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -43,22 +40,14 @@ public class MemberReceiptClaimService {
       "この伝票は申領できません。QR の有効期限（90 日）と、既に取り込み済みでないかをご確認ください";
 
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
-  private final OrderAttributionRepository orderAttributionRepository;
   private final OrderRepository orderRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final PointLedgerService pointLedgerService;
-  private final BenefitGrantService benefitGrantService;
   private final PlatformUserRepository platformUserRepository;
   private final MemberLookupService memberLookupService;
-  private final MemberRankSync memberRankSync;
+  private final AttributionMaterializer materializer;
 
-  /**
-   * 伝票トークンを申領し、その来店を本人の記録として確定する。
-   *
-   * @param email 認証主体（申領する会員本人）
-   * @param rawToken QR が運ぶトークンの生値。保存された鍵付きダイジェストとの一致だけで照合する
-   * @return この申領で記帳したポイント（伝票の付与予定額と、当たった来店特典の合計）
-   */
+  /** 伝票トークンを申領し、その来店を本人の記録として確定する。 */
   @StoreScopeExempt(reason = "トークンの鍵付きダイジェスト一致だけが申領を成立させる材料で、受注は店舗を跨いで引く（店舗で絞ると照合が成立しない）")
   @Transactional
   public MemberReceiptClaimResponse claim(String email, String rawToken) {
@@ -88,35 +77,19 @@ public class MemberReceiptClaimService {
             .findById(token.getOrderId())
             .orElseThrow(() -> new NotFoundException(UNCLAIMABLE_MESSAGE));
 
-    // 会員行は帰属記録・台帳より先に押さえる（理由は MemberRankSync#beforeMemberWrites）。
-    memberRankSync.beforeMemberWrites(member.memberId());
     token.claim(now);
     orderReceiptTokenRepository.save(token);
-    OrderAttribution attribution =
-        orderAttributionRepository.save(
-            OrderAttribution.onReceiptClaim(
-                token.getOrderId(), member.memberId(), member.memberCode(), now));
-    // 実行者は申領した本人。台帳では実行者 null が「機構が起こした仕訳」の形であり、人手の操作と混ぜない。
-    Long grantEntryId =
-        pointLedgerService.grantPlannedForOrder(
+    AttributionMaterializer.Result result =
+        materializer.materialize(
             member.memberId(),
-            token.getOrderId(),
-            order.getStoreId(),
-            token.getPlannedPoints(),
-            platformUserId);
-    // 窓の判定に申領日ではなく根拠受注の営業日を渡す理由は BenefitRule#firesFor に記す。
-    long benefitPoints =
-        benefitGrantService.grantVisitBenefits(
-            member.memberId(),
+            member.memberCode(),
             token.getOrderId(),
             order.getStoreId(),
             order.getBusinessDate(),
-            platformUserId);
-    // 事後申領も帰属が成立する契機なので、完了経路と同じくここで昇格を判定する。
-    memberRankSync.afterAttribution(member.memberId(), attribution.getId(), grantEntryId);
-    // 応答は「この申領で記帳したポイント」なので、伝票の付与予定額と特典の双方を足す。予定額だけを返すと、
-    // 特典だけが付いた 0 円完了の伝票が「付与はありません」と表示され、成立した記帳が利用者へ嘘になる。
-    return new MemberReceiptClaimResponse(token.getPlannedPoints() + benefitPoints);
+            now,
+            platformUserId,
+            new AttributionMaterializer.ReceiptClaim(token.getPlannedPoints()));
+    return new MemberReceiptClaimResponse((long) result.grantedPoints() + result.benefitPoints());
   }
 
   private Long resolvePlatformUserId(String email) {
