@@ -193,6 +193,24 @@ class PlatformLineAuthIT {
   }
 
   @Test
+  @DisplayName("停止済みの LINE 連携身分は 401 で拒否し、トークンを返さない")
+  void stoppedLinkedUserCannotLogin() {
+    String sub = uniqueSub("stopped");
+    String email = uniqueEmail("stopped");
+    String ticket = ticketForUnknownSub(sub, "停止対象", email);
+    assertThat(lineRegister(ticket, "停止対象", email).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    PlatformUser user = platformUserRepository.findByEmail(email).orElseThrow();
+    user.stop();
+    platformUserRepository.saveAndFlush(user);
+
+    ResponseEntity<JsonNode> response = lineLogin();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody().path("error").asString()).isEqualTo("アカウントが無効化されています");
+    assertThat(response.getBody().has("token")).isFalse();
+  }
+
+  @Test
   @DisplayName("チャネル設定済みなら config は enabled=true とチャネル ID を返す（前端が認可要求を組み立てられる）")
   void configExposesChannelId() {
     ResponseEntity<JsonNode> res = rest.getForEntity("/platform/line/config", JsonNode.class);

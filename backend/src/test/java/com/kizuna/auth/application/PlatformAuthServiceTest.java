@@ -45,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -502,6 +503,45 @@ class PlatformAuthServiceTest {
     PlatformUser user = mock(PlatformUser.class);
     when(user.getUserType()).thenReturn(UserType.SERVICE);
     return user;
+  }
+
+  @Test
+  void issueTokenFor_disabledUser_isRejectedWithoutIssuingToken() {
+    PlatformUser user = hqAdmin();
+    user.stop();
+
+    assertThatThrownBy(() -> authService.issueTokenFor(user)).isInstanceOf(DisabledException.class);
+
+    verify(jwtIssuer, never()).issue(any(), any());
+  }
+
+  @Test
+  void login_disabledPrincipal_isRejectedWithoutIssuingToken() {
+    PlatformUser user = hqAdmin();
+    user.stop();
+    stubSuccessfulAuthentication("admin@kizuna.test", "pass", user);
+
+    assertThatThrownBy(() -> authService.login("admin@kizuna.test", "pass"))
+        .isInstanceOf(DisabledException.class);
+    verify(jwtIssuer, never()).issue(any(), any());
+  }
+
+  @Test
+  void issueElevatedTokenFor_disabledUser_isRejectedWithoutIssuingToken() {
+    PlatformUser user = hqAdmin();
+    user.stop();
+
+    assertThatThrownBy(() -> authService.issueElevatedTokenFor(user, elevationTo(42L)))
+        .isInstanceOf(DisabledException.class);
+    verify(jwtIssuer, never()).issue(any(), any(), any());
+  }
+
+  @Test
+  void issueElevatedTokenFor_serviceIdentity_isRejectedWithoutIssuingToken() {
+    assertThatThrownBy(() -> authService.issueElevatedTokenFor(serviceIdentity(), elevationTo(42L)))
+        .isInstanceOf(ServiceIdentityLoginException.class);
+
+    verify(jwtIssuer, never()).issue(any(), any(), any());
   }
 
   @Test

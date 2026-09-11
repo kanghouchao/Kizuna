@@ -22,7 +22,6 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.authentication.DisabledException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -126,9 +125,6 @@ public class LineAuthService {
 
   /** 連携済み身分へのトークン発行。停止済みアカウントはパスワードログインと同じく 401 で拒否する。 */
   private LineLoginResponse issueTokenForLinkedUser(PlatformUser user) {
-    if (!Boolean.TRUE.equals(user.getEnabled())) {
-      throw new DisabledException("アカウントが無効化されています");
-    }
     return LineLoginResponse.registered(authService.issueTokenFor(user));
   }
 }
