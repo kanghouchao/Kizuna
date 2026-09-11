@@ -90,7 +90,7 @@ export function CastEnrollmentPanel({
       <section aria-label="在籍履歴" className="space-y-3 rounded-xl border bg-card p-6">
         <details className="space-y-3">
           <summary className="cursor-pointer rounded-sm text-lg font-semibold focus-visible:outline-2 focus-visible:outline-ring">
-            在籍履歴
+            <h2 className="inline">在籍履歴</h2>
           </summary>
           {history.failed ? (
             <RegionError message="在籍履歴の取得に失敗しました" onRetry={history.reload} />
@@ -132,7 +132,7 @@ export function CastEnrollmentPanel({
       <section aria-label="内部情報の編集履歴" className="space-y-3 rounded-xl border bg-card p-6">
         <details className="space-y-3">
           <summary className="cursor-pointer rounded-sm text-lg font-semibold focus-visible:outline-2 focus-visible:outline-ring">
-            内部情報の編集履歴
+            <h2 className="inline">内部情報の編集履歴</h2>
           </summary>
           <p className="text-sm text-muted-foreground">各変更の直前の値を表示します。</p>
           {snapshots.failed ? (
