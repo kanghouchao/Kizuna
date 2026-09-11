@@ -9,7 +9,7 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.application.ActorIdentityService;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberVisitService {
 
-  private final PlatformUserRepository platformUserRepository;
+  private final ActorIdentityService actorIdentityService;
   private final MemberLookupService memberLookupService;
   private final OrderAttributionRepository orderAttributionRepository;
   private final PointLedgerService pointLedgerService;
@@ -78,11 +78,7 @@ public class MemberVisitService {
   }
 
   private Long resolveMemberId(String email) {
-    Long platformUserId =
-        platformUserRepository
-            .findByEmail(email)
-            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-            .getId();
+    Long platformUserId = actorIdentityService.requireUserId(email);
     return memberLookupService
         .findByPlatformUserId(platformUserId)
         .map(MemberLookup::memberId)

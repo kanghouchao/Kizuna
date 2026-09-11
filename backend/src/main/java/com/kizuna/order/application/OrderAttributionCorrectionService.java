@@ -9,11 +9,9 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.application.ActorIdentityService;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -39,7 +37,7 @@ public class OrderAttributionCorrectionService {
   private final OrderRepository orderRepository;
   private final OrderAttributionRepository orderAttributionRepository;
   private final PointLedgerService pointLedgerService;
-  private final PlatformUserRepository platformUserRepository;
+  private final ActorIdentityService actorIdentityService;
   private final StoreContext storeContext;
 
   /** 訂正の進み具合。画面が差し引く既定値（付与の全額）と引き残しを示すための読み口。 */
@@ -144,7 +142,7 @@ public class OrderAttributionCorrectionService {
         storeContext.getStoreId(),
         -request.getPoints(),
         request.getReason(),
-        resolveActorId(actorEmail),
+        actorIdentityService.requireUserId(actorEmail),
         request.getIdempotencyKey(),
         attribution.getId());
     return new OrderAttributionCorrectionResponse(granted, already + request.getPoints());
@@ -178,7 +176,7 @@ public class OrderAttributionCorrectionService {
         storeContext.getStoreId(),
         -request.getPoints(),
         request.getReason(),
-        resolveActorId(actorEmail),
+        actorIdentityService.requireUserId(actorEmail),
         request.getIdempotencyKey(),
         attribution.getId());
     return new OrderAttributionCorrectionResponse(granted, already + request.getPoints());
@@ -270,18 +268,5 @@ public class OrderAttributionCorrectionService {
     return pointLedgerService
         .grantedPointsByOrder(memberId, List.of(orderId))
         .getOrDefault(orderId, 0L);
-  }
-
-  /**
-   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
-   *
-   * <p>解決できない認証主体は黙って null にせず失敗させる — 追記型の台帳では実行者 null が「機構が起こした仕訳」の形で
-   * あり、失効した認証セッションによる人手の操作がそれと区別できなくなる。
-   */
-  private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
-        .findByEmail(actorEmail)
-        .map(PlatformUser::getId)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 }

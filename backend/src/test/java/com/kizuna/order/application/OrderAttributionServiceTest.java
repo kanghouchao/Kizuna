@@ -20,6 +20,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -39,6 +40,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,7 +60,12 @@ class OrderAttributionServiceTest {
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private ReceiptTokenGenerator receiptTokenGenerator;
-  @Mock private PlatformUserRepository platformUserRepository;
+  private final PlatformUserRepository platformUserRepository =
+      Mockito.mock(PlatformUserRepository.class);
+
+  @Spy
+  private ActorIdentityService actorIdentityService =
+      new ActorIdentityService(platformUserRepository);
 
   @InjectMocks private OrderAttributionService service;
 

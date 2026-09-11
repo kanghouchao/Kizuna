@@ -10,10 +10,8 @@ import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +33,7 @@ public class OrderCorrectionService {
 
   private final OrderRepository orderRepository;
   private final OrderCorrectionRepository orderCorrectionRepository;
-  private final PlatformUserRepository platformUserRepository;
+  private final ActorIdentityService actorIdentityService;
   private final OrderMapper orderMapper;
 
   /**
@@ -63,7 +61,10 @@ public class OrderCorrectionService {
 
     orderCorrectionRepository.save(
         OrderCorrection.snapshotOf(
-            order, request.getReason(), resolveActorId(actorEmail), OffsetDateTime.now()));
+            order,
+            request.getReason(),
+            actorIdentityService.requireUserId(actorEmail),
+            OffsetDateTime.now()));
     order.correct(
         new OrderCorrectionCommand(
             request.getActualArrivalTime(),
@@ -75,18 +76,5 @@ public class OrderCorrectionService {
     orderRepository.save(order);
 
     return new OrderCorrectionResponse(previousTotalFee, order.getTotalFee());
-  }
-
-  /**
-   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
-   *
-   * <p>解決できない認証主体は黙って null にせず失敗させる — 痕の実行者 null は「利用者が後から削除された」の形であり、
-   * 失効した認証セッションによる操作がそれと区別できなくなる。
-   */
-  private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
-        .findByEmail(actorEmail)
-        .map(PlatformUser::getId)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 }

@@ -15,10 +15,8 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +38,7 @@ public class OrderPointRollbackService {
   private final OrderAttributionRepository orderAttributionRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final PointLedgerService pointLedgerService;
-  private final PlatformUserRepository platformUserRepository;
+  private final ActorIdentityService actorIdentityService;
 
   /**
    * 巻き戻し済みでないことを確かめてから伝票を再発行する。
@@ -100,7 +98,7 @@ public class OrderPointRollbackService {
     orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
     PointRollbackResult result =
         pointLedgerService.rollbackForOrder(
-            orderId, request.getReason(), resolveActorId(actorEmail));
+            orderId, request.getReason(), actorIdentityService.requireUserId(actorEmail));
     return new OrderPointRollbackResponse(result.cancelledPoints(), result.restoredPoints());
   }
 
@@ -122,18 +120,5 @@ public class OrderPointRollbackService {
         .map(OrderAttribution::getMemberCode)
         .findFirst()
         .orElse(null);
-  }
-
-  /**
-   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
-   *
-   * <p>解決できない認証主体は黙って null にせず失敗させる — 追記型の台帳では実行者 null が「機構が起こした仕訳」の形で
-   * あり、失効した認証セッションによる人手の操作がそれと区別できなくなる。
-   */
-  private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
-        .findByEmail(actorEmail)
-        .map(PlatformUser::getId)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 }
