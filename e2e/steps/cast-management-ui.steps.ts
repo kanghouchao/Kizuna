@@ -39,11 +39,11 @@ After({ tags: "@cast-multi-store" }, async ({ request }) => {
   for (const [id, storeId] of activeEnrollments) {
     try {
       await withdrawCast(request, adminToken, id, storeId);
+      activeEnrollments.delete(id);
     } catch (error) {
       failures.push(error);
     }
   }
-  activeEnrollments.clear();
   if (failures.length > 0) {
     throw new AggregateError(failures, "テスト用在籍の退店処理に失敗しました");
   }
