@@ -77,6 +77,7 @@ import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.ReceptionistEligibilityService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -135,7 +136,12 @@ class OrderServiceTest {
   private ActorIdentityService actorIdentityService =
       new ActorIdentityService(platformUserRepository);
 
-  @Mock RoleRepository roleRepository;
+  private final RoleRepository roleRepository = Mockito.mock(RoleRepository.class);
+
+  @Spy
+  private ReceptionistEligibilityService receptionistEligibilityService =
+      new ReceptionistEligibilityService(platformUserRepository, roleRepository);
+
   @Mock StoreContext storeContext;
   @Mock BusinessDateService businessDateService;
   @Mock OrderMapper orderMapper;

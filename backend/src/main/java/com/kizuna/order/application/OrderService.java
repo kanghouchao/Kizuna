@@ -52,14 +52,9 @@ import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
-import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.UserType;
+import com.kizuna.user.application.ReceptionistEligibilityService;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -95,8 +90,7 @@ public class OrderService {
   private final PointLedgerService pointLedgerService;
   private final AttributionMaterializer materializer;
   private final ActorIdentityService actorIdentityService;
-  private final PlatformUserRepository platformUserRepository;
-  private final RoleRepository roleRepository;
+  private final ReceptionistEligibilityService receptionistEligibilityService;
   private final StoreContext storeContext;
   private final BusinessDateService businessDateService;
   private final OrderMapper orderMapper;
@@ -753,13 +747,8 @@ public class OrderService {
   }
 
   private Optional<Long> eligibleReceptionistId(String actorEmail) {
-    Long storeId = storeContext.getStoreId();
-    Set<Long> orderManageRoleIds =
-        roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
-    return platformUserRepository
-        .findByEmail(actorEmail)
-        .filter(user -> isEligibleReceptionist(user, storeId, orderManageRoleIds))
-        .map(PlatformUser::getId);
+    return receptionistEligibilityService.findEligibleIdByEmail(
+        actorEmail, storeContext.getStoreId());
   }
 
   /**
@@ -784,51 +773,22 @@ public class OrderService {
   }
 
   private void validateReceptionist(Long receptionistId) {
-    Long storeId = storeContext.getStoreId();
-    Set<Long> orderManageRoleIds =
-        roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
-    platformUserRepository
-        .findById(receptionistId)
-        .filter(user -> isEligibleReceptionist(user, storeId, orderManageRoleIds))
-        .orElseThrow(() -> new NotFoundException("受付担当者が見つかりません: " + receptionistId));
+    if (!receptionistEligibilityService.isEligible(receptionistId, storeContext.getStoreId())) {
+      throw new NotFoundException("受付担当者が見つかりません: " + receptionistId);
+    }
   }
 
-  /**
-   * 受付選択肢の一覧（現店舗を授権する ORDER_MANAGE 保持 STAFF）。書き込み時の {@link #validateReceptionist} と同一の適格条件を共有する。
-   *
-   * <p>店舗授権の絞り込みは {@link PlatformUserRepository#findAuthorizedByUserTypeOrderByDisplayNameAsc} が DB
-   * 層で行う（無関係な他店舗ユーザーの ElementCollection を読み込まないため）。ロールの判定のみ {@link #isEligibleReceptionist}
-   * で引き続き行う。
-   */
   @StoreScoped
   @Transactional(readOnly = true)
   public List<OrderReceptionistResponse> listReceptionists() {
-    Long storeId = storeContext.getStoreId();
-    Set<Long> orderManageRoleIds =
-        roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
-    return platformUserRepository
-        .findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, storeId)
-        .stream()
-        .filter(user -> isEligibleReceptionist(user, storeId, orderManageRoleIds))
+    return receptionistEligibilityService.listCandidates(storeContext.getStoreId()).stream()
         .map(
-            user ->
+            candidate ->
                 OrderReceptionistResponse.builder()
-                    .id(user.getId())
-                    .displayName(user.getDisplayName())
+                    .id(candidate.id())
+                    .displayName(candidate.displayName())
                     .build())
         .toList();
-  }
-
-  // 受付担当者は「有効(enabled)かつ受注管理権限（ORDER_MANAGE）を持つ STAFF」かつ「現店舗(店舗)を授権する
-  // PlatformUser」でなければならない。t_users には store_id が無いため、単なる存在確認では
-  // 他店舗/CAST/MEMBER も通ってしまう。停止済み(enabled=false)の口座はロール・授権を保持したままなので明示的に弾く。
-  // 書き込み時の検証（validateReceptionist）と一覧（listReceptionists）が同一条件を共有する。
-  private boolean isEligibleReceptionist(
-      PlatformUser user, Long storeId, Set<Long> orderManageRoleIds) {
-    return user.getUserType() == UserType.STAFF
-        && user.getEnabled()
-        && user.authorizes(storeId)
-        && !Collections.disjoint(user.getRoleIds(), orderManageRoleIds);
   }
 
   /**
