@@ -21,13 +21,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.service.annotation.HttpExchange;
 
 /**
- * 全 HTTP handler が<b>方法級</b>の授権宣言を持ち、かつ <b>public・非 final・非 static</b> であることを機械検証する。{@code
- * SecurityConfig} は {@code anyRequest().permitAll()} なので、宣言漏れも advise
- * 不能も等しく「誰でも叩ける端点」を静默に生む。クラス級の宣言を認めないのは、後から足した handler が公開設定を継承するため。public 限定は規約（api-guidelines
- * §7）— CGLIB が advise できないのは private・final・static だけだが、例外形を作らないため public 以外を一律拒否する。
- *
- * <p>枚挙は Spring の {@code RequestMappingHandlerMapping} と同一規則（{@code isHandler} と同じ
- * {@code @Controller} 述語・{@code MethodIntrospector}・{@code @RequestMapping}／{@code @HttpExchange}）。
+ * 全 handler の方法級授権と public・非 final・非 static を検証する（backend/AGENTS.md の API contract）。 SecurityConfig
+ * が全要求を許可するため、宣言漏れ・proxy 対象外は公開端点となる。クラス級宣言も継承による公開を防ぐため認めない。 列挙は Spring と同じ Controller
+ * 判定・MethodIntrospector・RequestMapping／HttpExchange を使う。
  */
 class EndpointAuthorizationDeclarationTests {
 
@@ -78,7 +74,7 @@ class EndpointAuthorizationDeclarationTests {
     assertThat(unadvisable)
         .as(
             "public でない・final・static な handler。private / final / static は proxy が advise できず授権注釈が実行時に黙って外れる。"
-                + "protected / package-private は技術上は advise できるが、規約 §7 により handler は public に限る")
+                + "protected / package-private は技術上は advise できるが、API 契約により handler は public に限る")
         .isEmpty();
   }
 
@@ -90,7 +86,7 @@ class EndpointAuthorizationDeclarationTests {
 
   /**
    * CGLIB が override できないのは private・final・static。protected / package-private は override
-   * できるが、規約（§7）で handler は public に限るため、判定はあえて厳格側に置く。
+   * できるが、クラスの説明にある API 契約で handler は public に限るため、判定はあえて厳格側に置く。
    */
   private static boolean isAdvisable(Method method) {
     int modifiers = method.getModifiers();

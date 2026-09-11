@@ -53,7 +53,10 @@ public class ShiftController {
     return ResponseEntity.ok(shiftLineageService.detail(id));
   }
 
-  /** シフトの変更申請履歴。詳細に埋めないのは、提出のたびに増え続けて有界でないためである （api-guidelines §5）。出生の NEW は高々 1 本なので詳細側にある。 */
+  /**
+   * シフトの変更申請履歴。詳細に埋めないのは、提出のたびに増え続けて有界でないためである （backend/AGENTS.md の Pagination）。出生の NEW は高々 1
+   * 本なので詳細側にある。
+   */
   @GetMapping("/{id}/change-requests")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<CursorPage<ShiftRequestLineageResponse>> changeRequests(

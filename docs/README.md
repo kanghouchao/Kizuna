@@ -17,8 +17,8 @@
 | 0005 | [フロントエンドの UI 基盤を Radix から Base UI へ移す](adr/0005-frontend-shadcn-ui-on-base-ui.md) | 採用 |
 | 0006 | [会員ポイント台帳は platform 帰属とし、発生店舗は originating_store_id で帰属記録する](adr/0006-point-ledger-is-platform-scoped.md) | 採用 |
 | 0007 | [台帳への人手書き込みはクライアント生成の冪等キーで再送を機械的に遮断する](adr/0007-ledger-writes-carry-client-idempotency-keys.md) | 採用 |
-| 0008 | [受注の帰属は顧客経路に一本化し、会員可視性は受注単位の帰属記録で与える](adr/0008-order-attribution-single-path-via-customer.md) | 帰属の取消は 0023 |
-| 0009 | [帰属は完了時に確定する受注単位の不変事実として記録する](adr/0009-attribution-is-immutable-fact-fixed-at-completion.md) | 訂正・失効は 0012 / 0023 |
+| 0008 | [受注の帰属は顧客経路に一本化し、会員可視性は受注単位の帰属記録で与える](adr/0008-order-attribution-single-path-via-customer.md) | 帰属無効化は 0009、無効化後のポイント訂正は 0012、受注のポイント巻き戻しは 0023 |
+| 0009 | [帰属は完了時に確定する受注単位の不変事実として記録する](adr/0009-attribution-is-immutable-fact-fixed-at-completion.md) | 帰属無効化は本 ADR。無効化後のポイント訂正は 0012。0023 の巻き戻しとは別操作 |
 | 0010 | [顧客統合は付替えと墓標で表し、行を削除しない](adr/0010-customer-merge-is-repoint-and-tombstone.md) | 採用 |
 | 0011 | [伝票トークンは受注ごとに 1 本だけ生かし、再発行が前の 1 本を失効させる](adr/0011-receipt-token-reissue-revokes-the-previous-one.md) | 採用 |
 | 0012 | [誤帰属の台帳訂正は帰属記録を宛先に取り、無効化とは別段の人手操作とする](adr/0012-attribution-point-correction-addresses-the-attribution-record.md) | 採用 |
@@ -39,7 +39,18 @@
 
 ## 旧システム調査資料
 
-2026-07-17 時点の issue 本文・回答を保存した資料。Kizuna の実装仕様ではない。元の「確認済み」は回答で確認した旧業務、「未確定」「確認待ち」は未解決の要求を表す。「現行」は調査当時の旧システムを指す。未解決事項を実装済みとして読み替えない。
+2026-07-17 時点の issue 本文・回答を保存した資料。Kizuna の現在の実装仕様ではない。各資料の表記は次の意味で読む。
+
+| 表記 | 意味 |
+| --- | --- |
+| 現行 | 調査当時の旧システム。現在の Kizuna を指さない |
+| 確認済み | 旧システムの動作としてコード上確認できた事実 |
+| 移行元提案 | 回答者（移行元）による Kizuna への引き継ぎ方針の提案。採否は裁定票と増補仕様で確定し、確認済みの旧業務や採用済みの要件とは区別する |
+| Kizuna 既定 | 資料中の issue で調査時点までに決定済みだった Kizuna の方針。提案ではないが、実装完了を意味しない。現在の有効性は後続 ADR・仕様で確認する |
+| 業務確認待ち・確認待ち | コードだけでは判断できず、業務担当者への確認が必要な事項 |
+| 未確定 | 調査時点で結論が出ていない事項 |
+
+未解決事項を実装済みとして読み替えない。
 
 - [利用者とアクセス範囲](legacy-business/actors-and-access.md): 出典 [#364](https://github.com/kanghouchao/Kizuna/issues/364)。機能権限、担当店舗、精算範囲。
 - [データモデル](legacy-business/data-model.md): 出典は文書冒頭を参照。旧データの粒度、対応候補、未確定事項。

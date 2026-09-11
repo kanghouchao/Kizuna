@@ -117,12 +117,8 @@ public class ShiftLineageService {
   }
 
   /**
-   * シフトの変更申請履歴。続きはカーソルで辿る。
-   *
-   * <p>詳細へ埋めないのは、提出のたびに増え続け 1 本のシフトに対する上限も一意性の守衛も無いためである （api-guidelines §5）。出生の NEW だけが構造的に高々 1
-   * 本なので詳細に残る。
-   *
-   * <p>断面を固定するのは詳細と同じ理由による。履歴と実行主体を 2 回に分けて問い合わせるので、間に承認が commit されると同じ応答の中で申請の状態と実行主体が食い違う。
+   * 有界でない変更申請はカーソルで辿り、高々 1 本の出生 NEW だけを詳細へ残す（backend/AGENTS.md の Pagination）。
+   * 履歴と実行主体を別々に取得するため、途中の承認で同じ応答内の状態が食い違わないよう断面を固定する。
    */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)

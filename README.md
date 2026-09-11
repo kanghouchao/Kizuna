@@ -23,6 +23,15 @@ cp infrastructure/.env.example infrastructure/development/.env
 
 コピー先の環境設定を調整する。ローカルのプラットフォームホストは `APP_DOMAIN=kizuna.test` とし、必須変数はサンプルの説明に従う。実際の `.env` はコミットしない。
 
+初回の `task up` より前に、開発用の管理者と demo スタッフのパスワードを自分で決め、bcrypt ハッシュを生成する。`htpasswd`（macOS 標準、Linux は Apache の utilities パッケージ）が必要。次のコマンドはパスワードを非表示で 2 回入力させる。平文を引数やシェル履歴に残す `-b` は使わない。
+
+```bash
+htpasswd -nBC 10 initial-admin
+htpasswd -nBC 10 demo-staff
+```
+
+それぞれの出力の `initial-admin:` / `demo-staff:` より後ろをコピーし、無視対象の `infrastructure/development/.env` に `INITIAL_ADMIN_PASSWORD_HASH` / `DEMO_USER_PASSWORD_HASH` として設定する。Compose の変数展開でハッシュ内の `$` が変わらないよう、各値の全体をシングルクォートで囲む。サンプルにはこの 2 変数がないため自分で追加する。管理者は最初に選んだパスワード、demo スタッフ 2 名は二つ目に選んだパスワードでログインする。この手順は空の開発 DB への初回投入用であり、適用済み DB のパスワード変更には使わない。
+
 `/etc/hosts` に次を追加する。
 
 ```text
