@@ -70,12 +70,10 @@ class PlatformShiftControllerTest {
     mockMvc.perform(get(PATH)).andExpect(status().isForbidden());
   }
 
-  // 本番は未認証の拒否を PlatformAuthenticationEntryPoint が 401 に変換するが、@WebMvcTest の
-  // 最小チェーンにはその entry point が載らないため、ここで見えるのは認可拒否そのもの（403）である。
   @Test
   @DisplayName("匿名では指名候補の出勤参照に到達できないこと")
   @WithAnonymousUser
   void anonymousIsRejected() throws Exception {
-    mockMvc.perform(get(PATH)).andExpect(status().isForbidden());
+    mockMvc.perform(get(PATH)).andExpect(status().isUnauthorized());
   }
 }
