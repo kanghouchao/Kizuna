@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-## Context
+## 決定時の背景
 
 #732（予実交差の守衛）の実装で、レビューの指摘が 4 巡続いた。1 巡目は元実装の check-then-act の欠陥
 だったが、2〜4 巡目はいずれも 1 巡目の修正が持ち込んだロック順序の環である。同じ盲点が 3 回に分かれて
@@ -48,7 +48,7 @@ FOR UPDATE を載せるのは DELETE と、明示的な `@Lock(PESSIMISTIC_WRITE
 key share どうしは衝突せず、key share と FOR NO KEY UPDATE も衝突しないので、**書き込みが親行へ要求する
 だけの key share は、それ単独では誰も待たせない**。洗うべき対はこの 3 通りに対応する 3 群で尽きる。
 
-## Decision
+## 決定
 
 **行ロックは外部キーの連鎖の向き（上流 → 下流）に押さえる。**
 
@@ -70,7 +70,7 @@ t_stores ─┬─ t_cast_enrollments ─┬─ t_shifts ─┬─ t_shift_reque
 在籍は `t_cast_enrollments.cast_id → t_casts.id` と `t_casts.platform_user_id → t_users.id` を経て身分につながる。
 監査 FK は各表で最後に宣言し、本人の作成・解決も受諾で身分ロックを得てから行う。これが問題に
 ならないのは、身分の行に FOR UPDATE を載せる経路が招待受諾の 1 本
-（`PlatformUserRepository#findByEmailForUpdate`）しか無く、それも档案を押さえた後だからである。key share
+（`PlatformUserRepository#findByEmailForUpdate`）だけだった（決定時の調査）。現在の全経路の保証ではない。key share
 どうしは衝突しないので、身分の行が待ちの結節点になるのはその 1 本が押さえている間に限られる。
 **身分の行を押さえる経路（身分の削除を含む）を足すときは、この表を引き直すこと。**
 
@@ -80,7 +80,9 @@ t_stores ─┬─ t_cast_enrollments ─┬─ t_shifts ─┬─ t_shift_reque
 **明示的に行を押さえる経路は、この向きに従う** — 例外は下に窓①として挙げた 2 経路だけで、理由を付けて
 残している。破りやすいのは、下流の行を先に `FOR UPDATE` してから上流の親を要求する形である。
 
-## 一覧表
+## 決定時の経路一覧
+
+**以下の経路数・排他ロック数は決定時の調査記録で、現在の全経路を列挙したものではない。** 三層化後の追加規則は末尾に示す。現在の利用者ロックにはスタッフ・アカウント管理等もあるため、変更時は実装から再棚卸しする。
 
 5 表（`t_cast_enrollments` / `t_shifts` / `t_shift_requests` / `t_attendances` / `t_attendance_corrections`）と、
 **外部キーで隣接する表**（`t_stores` / `t_users` / `t_cast_invitations` / `t_orders` / `t_user_stores`）を
@@ -196,7 +198,7 @@ FOR NO KEY UPDATE どうしも衝突するので、UPDATE だけでも順序は�
 閉じるが、窓①の環は消えない（向きの問題であって、押さえる時点の問題ではない）。準備中かつ記録ゼロの
 店舗に並行して記録が建つ想定が現実的でないため、閉じずに残す。
 
-## Consequences
+## 帰結
 
 - 招待受諾は店舗行 → 档案（キャスト行）→ 招待行の順に押さえる。档案が招待の後だったためキャスト削除
   （キャスト行 → 招待行へ CASCADE）と環になり、店舗行を取っていなかったため店舗削除とも環になっていた。

@@ -1,156 +1,63 @@
-# Kizuna Platform — Platform CMS, CRM, & HRM for Multiple Stores (Spring Boot + Next.js)
+# Kizuna
 
-![Docker](https://img.shields.io/badge/Docker-latest-blue.svg)
-[![CodeQL](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml/badge.svg)](https://github.com/kanghouchao/Kizuna/actions/workflows/codeql.yml)
-[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/kanghouchao/Kizuna/security/dependabot)
+単一グループの複数店舗を運営する CMS / CRM / HRM。Spring Boot の API と Next.js の画面を、Docker Compose と Task で構築・検証する。
 
-Kizuna Platform is a modern platform system for running multiple stores under a single group, combining CMS, CRM, and HRM capabilities, built with a split architecture: Spring Boot backend and Next.js frontend, orchestrated with Docker compose.
+## システムの入口
 
-## Highlights
+- プラットフォームコンソール: 店舗・アカウント・ロール・システム設定の管理。
+- 店舗コンソール: 授権された店舗の顧客・注文・キャスト・シフト管理。
+- キャスト／会員ポータル: 本人の出勤希望、予約申請、来店・ポイント情報。
+- 公開店舗サイト: 店舗ドメインの `/`、`/casts`、`/schedule`、`/menu`、`/about`、`/reservation`。
 
-- Multi-store by host name: one frontend, isolated store contexts
-- Split architecture: Spring Boot API + Next.js app
-- Comprehensive suite: CMS (Content), CRM (Customer Relationships), HRM (Human Resources)
-- Stateless JWT auth; platform and store APIs split
-- Responsive UI with Tailwind CSS
-- Container-first: easy local dev and ops via Task + Docker Compose
+ログインは `/platform/login` に統一し、サーバが返すコンソールと本人種別から遷移先を決める。ホスト名による公開サイトの選択と、API の権限・店舗分離は別の仕組みである。Traefik は `/api` を除去してバックエンドへ転送する。JWT の失効はセッション単位とアカウント単位で管理する。
 
-## Architecture
+## 開発環境の起動
 
-Traefik routes all requests to the right service. The frontend and backend are fully decoupled and communicate over HTTP. All frontend API calls go through the reverse proxy under the `/api` prefix.
-
-### Module Structure & Domain Separation
-
-The application is strictly divided into two functional domains based on the user actor:
-
-1.  **Platform Domain (`/platform`)** - _The Platform Headquarters_
-    - **User:** Platform Admin / System Owner.
-    - **Purpose:** Manage stores, system-wide settings, billing, and global analytics.
-    - **Access:** Only accessible via the Admin Domain (e.g., `admin.kizuna.com`).
-
-2.  **Store Domain (`/store`)** - _The Store Operations_
-    - **User:** Store Managers, Store Staff, Casts.
-    - **Purpose:** Day-to-day store operations (Orders, Cast management, Customer CRM).
-    - **Access:** Accessible via Store Domains (e.g., `store1.kizuna.com`).
-    - **Sub-modules:**
-      - `/store/{storeId}/...`: The secured back-office area (requires login).
-      - Public store site: served from the store domain root (`/`, `/casts`, `/schedule`, `/menu`, `/about`), rendered with the template selected in the store profile.
-
-### Platform/store flow and cookies
-
-- Frontend middleware decides the role based on the host name and resolves the store via backend
-- Middleware sets cookies for server components to read:
-  - `x-mw-role`: `platform | store`
-  - `x-mw-store-template`: template key to load SSR store page
-  - `x-mw-store-id`, `x-mw-store-name`, `x-mw-store-domain`: store meta
-- In server components, read via `cookies()` (not raw `headers()`).
-
-## Quick Start
-
-### Prerequisites
-
-- Docker & Docker Compose
-- [Task](https://taskfile.dev) (go-task) — every build/test/lint command in this repo is driven through it
-
-### Setup
-
-1. Clone the repo
+前提: Git、Docker Compose / Buildx、[Task](https://taskfile.dev)。E2E にはホストの `jq` も必要。
 
 ```bash
 git clone https://github.com/kanghouchao/Kizuna.git
 cd Kizuna
-```
-
-2. copy .env.example to .env and adjust if needed
-
-```bash
 cp infrastructure/.env.example infrastructure/development/.env
 ```
 
-3. edit .env to set your preferred admin domain (e.g. `kizuna.com`)
+コピー先の環境設定を調整する。ローカルのプラットフォームホストは `APP_DOMAIN=kizuna.test` とし、必須変数はサンプルの説明に従う。実際の `.env` はコミットしない。
 
-4. Start services
+初回の `task up` より前に、開発用の管理者と demo スタッフのパスワードを自分で決め、bcrypt ハッシュを生成する。`htpasswd`（macOS 標準、Linux は Apache の utilities パッケージ）が必要。次のコマンドはパスワードを非表示で 2 回入力させる。平文を引数やシェル履歴に残す `-b` は使わない。
 
 ```bash
-task build up
+htpasswd -nBC 10 initial-admin
+htpasswd -nBC 10 demo-staff
 ```
 
-5. Map local domains (for admin/store switching)
+それぞれの出力の `initial-admin:` / `demo-staff:` より後ろをコピーし、無視対象の `infrastructure/development/.env` に `INITIAL_ADMIN_PASSWORD_HASH` / `DEMO_USER_PASSWORD_HASH` として設定する。Compose の変数展開でハッシュ内の `$` が変わらないよう、各値の全体をシングルクォートで囲む。サンプルにはこの 2 変数がないため自分で追加する。管理者は最初に選んだパスワード、demo スタッフ 2 名は二つ目に選んだパスワードでログインする。この手順は空の開発 DB への初回投入用であり、適用済み DB のパスワード変更には使わない。
 
-Add the following lines to `/etc/hosts` (example using the repo default):
+`/etc/hosts` に次を追加する。
 
 ```text
 127.0.0.1 kizuna.test store1.kizuna.test store2.kizuna.test
 ```
 
-6. Access
-
-- Platform (admin UI): [kizuna.test](http://kizuna.test) (or your configured admin domain)
-- Sample store (store UI): [store1.kizuna.test](http://store1.kizuna.test)
-
-7. Default Credentials
-
-Login is by email address. The accounts come from the seed changelogs under [`seed/`](./backend/src/main/resources/db/changelog/releases/v0.1.0/seed/).
-
-- **HQ Admin:** `admin@kizuna.test` — all stores. Part of the baseline, so it is seeded in **every** environment including production.
-- **Store Manager:** `tanaka.hanako@kizuna.test` — store1 + store2
-- **Store Staff:** `yamada.jiro@kizuna.test` — store1
-
-The two store accounts and the sample stores themselves are demo data: they are seeded only under `LIQUIBASE_CONTEXTS=demo`, which is already the default in `infrastructure/development/docker-compose.yml` (the application default is `production`, i.e. no demo data).
-
-All accounts share the same default password `pass`
-
-8. Login and have fun!
-
-### Useful Task commands
-
-- `task help` — list all commands
-- `task build` or `task build service=frontend|backend` — build docker images for all or specified service
-- `task up` — start the full stack (Traefik, DB, Redis, backend, frontend)
-- `task down` — stop and remove containers
-- `task clean` or `task clean service=frontend|backend` — remove the built docker images for all or the specified service. Database volumes are never touched.
-- `task ps` — show running services
-- `task logs` or `task logs service=frontend|backend|traefik|database` — follow service logs
-- `task test` or `task test service=backend|frontend` — run tests
-- `task lint` or `task lint service=frontend|backend` — run linters for all or specified service
-- `task format` or `task format service=frontend|backend` — run code formatters (Spotless for backend, eslint fixes for frontend)
-
-### Observability quick reference
-
-- Backend Actuator exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`; the readiness probe includes database and Redis checks.
-- Backend responses include an `X-Request-ID` header. Logs render `req=<id>` and `store=<value>` from the same correlation ID to make tracing requests across services easier.
-
-## Project Structure
-
-```text
-Kizuna/
-├── backend/                     # Backend Spring Boot API
-├── frontend/                    # Frontend Next.js app
-├── e2e/                         # Playwright BDD end-to-end suite
-├── docs/                        # Design docs and ADRs
-├── infrastructure/              # Docker Compose / Traefik config per environment
-│   ├── .env.example             # Example env file
-│   ├── development/             # docker-compose.yml + Traefik config (development)
-│   └── release/                 # docker-compose.yml + Traefik config (release)
-└── Taskfile.yml
+```bash
+task build
+task up
 ```
 
-## Troubleshooting
+[プラットフォーム](http://kizuna.test/platform/login)と[公開店舗サイト](http://store1.kizuna.test)から利用できる。`task up` は再ビルドしないため、変更後は対象サービスを先にビルドする。
 
-- If ports are busy, ensure nothing else is using 80, 443
-- Confirm `/etc/hosts` entries resolve to your machine
-- If you cannot log in, note that the seeded passwords are fixed at the **first** deployment. The hashes come from changelog parameters — `initialAdminPasswordHash` (env `INITIAL_ADMIN_PASSWORD_HASH`) for the HQ admin, `demoUserPasswordHash` (env `DEMO_USER_PASSWORD_HASH`) for the demo store users — and Liquibase checksums each changeset *after* the parameter is expanded. Set those env vars before the first `task up`; editing them against an already-migrated database makes the backend fail to start with a checksum validation error. Rotate passwords through the application instead. If you are already locked out of a local database, recreate the database itself (`DROP DATABASE kizuna` + `CREATE DATABASE kizuna`, then `task up`) — never by removing the Docker volume.
+開発環境は `LIQUIBASE_CONTEXTS=demo` でサンプル店舗とスタッフを投入する。HQ の `admin@kizuna.test` は baseline、店長 `tanaka.hanako@kizuna.test` とスタッフ `yamada.jiro@kizuna.test` は demo データである。初期パスワードのハッシュは `INITIAL_ADMIN_PASSWORD_HASH` / `DEMO_USER_PASSWORD_HASH` の設定を参照する。初回適用後の変更は Liquibase のチェックサムに影響するため、パスワード更新はアプリから行う。
 
-## Support
+起動しない場合は `task ps` と `task logs service=backend` で確認する。`localhost:8080` はバックエンドではなく Traefik。baseline の適用済みチェックサムが変わった開発 DB は、[DB 再作成手順](backend/src/main/resources/db/AGENTS.md#after-editing-the-baseline-the-dev-db-must-be-recreated)に従う。Docker ボリュームは削除しない。
 
-- Open an issue: [github.com/kanghouchao/Kizuna/issues](https://github.com/kanghouchao/Kizuna/issues)
+## 文書案内
 
-## Contributing & AI Guidelines
+| 目的 | 文書 |
+| --- | --- |
+| 開発・検証・PR | [貢献ガイド](CONTRIBUTING.md) |
+| ドメインの用語と境界 | [CONTEXT.md](CONTEXT.md) |
+| UI の設計 | [デザインシステム](frontend/DESIGN.md) |
+| 設計の理由・履歴 | [ADR と資料索引](docs/README.md) |
+| AI の作業規則 | [AGENTS.md](AGENTS.md) |
+| 脆弱性の報告 | [セキュリティ方針](SECURITY.md) |
 
-- Contributing Guide: see `CONTRIBUTING.md`
-- AI submission rules and PR checklist: see `.github/pull_request_template.md` and `CLAUDE.md`
-
----
-
-Author: [kanghouchao](https://github.com/kanghouchao)
-Repository: [github.com/kanghouchao/Kizuna](https://github.com/kanghouchao/Kizuna)
+機能・不具合は [GitHub Issues](https://github.com/kanghouchao/Kizuna/issues)へ。脆弱性は公開 issue に記載しない。

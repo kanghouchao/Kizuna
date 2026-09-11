@@ -24,7 +24,7 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
       String shiftId, ShiftRequestType type);
 
   // シフトの変更申請履歴。提出のたびに増え続け、1 本のシフトに対する件数の上限も一意性の守衛も無いので、
-  // 裸の一覧では返さない（api-guidelines §5）。新しい申請が先頭で、createdAt が同値になりうる分は
+  // 裸の一覧では返さない（backend/AGENTS.md の Pagination）。新しい申請が先頭で、createdAt が同値になりうる分は
   // 一意な副キー id を重ねて全順序にする。カーソルの比較も同じ組で行う。
   String CHANGE_HISTORY_SELECT =
       """

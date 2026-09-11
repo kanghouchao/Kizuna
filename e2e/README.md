@@ -46,17 +46,17 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
   backend / frontend / gateway ＋ テストランナー）
 
 ブラウザの `baseURL` は環境変数 `BASE_URL`（既定 `http://store1.kizuna.test`）で
-切り替えます。store / platform の判別は Host ヘッダで frontend middleware が行うため、
+切り替えます。store / platform の判別は Host ヘッダで frontend proxy が行うため、
 gateway サービスに network alias `store1.kizuna.test` / `kizuna.test` を付与しています。
 alias はネットワーク単位なので、スタックを複数立てても互いに干渉しません。
 
 ## シナリオの追加手順
 
 1. `features/` に `.feature` を追加し、先頭に `# language: ja` を記述する
-2. `steps/` に対応するステップ定義を追加する（`createBdd()` の `Given` / `もし` 等）
+2. `steps/` に対応するステップ定義を追加する（`createBdd()` の `Given` / `When` / `Then`）
 3. `task e2e` で実行する
 
-日本語 Gherkin のキーワードは以下を使用できます（英語キーワードも併用可）。
+日本語 Gherkin のキーワードは以下を使用できます（シナリオは日本語に統一）。
 
 | 役割 | 日本語キーワード |
 | --- | --- |

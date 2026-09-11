@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-## Context
+## 決定時の背景
 
 会員ポイント台帳（`t_point_entries` / `t_point_usage_allocations`）はグループ共通の会員残高の唯一の正本であり、
 A 店で獲得したポイントを B 店で利用できることが仕様の中核にある。同時に、各仕訳は発生店舗を監査根拠として
@@ -15,7 +15,7 @@ A 店で獲得したポイントを B 店で利用できることが仕様の中
 仕訳を濾過し、残高計算そのものが壊れる — 分離機構の fail-closed が、店舗横断であることが正しさの条件で
 あるデータに対しては「安全側」ではなく「壊す側」に働く。
 
-## Decision
+## 決定
 
 台帳エンティティは `BaseEntity`（platform 層）とし、`StoreScopedEntity` を継承しない。発生店舗の列は
 `store_id` ではなく **`originating_store_id`** と命名する。これは店舗**帰属**（scope）ではなく発生源の
@@ -26,7 +26,7 @@ A 店で獲得したポイントを B 店で利用できることが仕様の中
 FK は `ON DELETE SET NULL` とする。店舗削除で当該店舗の受注（`t_orders`）は CASCADE で消えるが、会員の
 残高と仕訳履歴はグループ資産として生き残らなければならない（`order_id` 参照も同様に SET NULL）。
 
-## Consequences
+## 帰結
 
 台帳には Hibernate フィルタによる行レベル分離が存在しない。店舗コンソールからの読み書き口
 （完了処理・残高照会・手動調整）は application 層の権限と「自店舗の顧客に ACTIVE な紐づけがあること」の
