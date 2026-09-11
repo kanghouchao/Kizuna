@@ -29,6 +29,7 @@ import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>authorities の発行: ロールで授権される種別（STAFF / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER
  * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
- * SERVICE は {@link #issueTokenFor} が拒否するため、この発行に到達しない。
+ * SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
  */
 @Service
 @RequiredArgsConstructor
@@ -70,20 +71,9 @@ public class PlatformAuthService {
     return issueTokenFor(user);
   }
 
-  /**
-   * 認証済みの身分に対してトークンを発行する。パスワードログインと LINE ログインの双方から呼ばれ、 認証手段が変わっても claim の内容が一致することを構造的に保証する（認証手段ごとに
-   * claim を組み立てると、片方だけ 権限が欠ける・過剰になる齟齬が静かに生まれる）。
-   *
-   * <p>呼び出し側は本人性の確認（パスワード照合・LINE の id_token 検証）を済ませていること。
-   *
-   * <p>サービスID（SERVICE）はここで拒否する。単一の組立点であることは、認証手段が増えても種別の拒否が
-   * 片方の経路だけ抜け落ちないことの保証でもある（資格情報を持たないという第一の防線は ドメイン不変条件が担い、本守衛はその二重化）。
-   */
+  /** 本人性を確認済みの身分に通常トークンを発行する。呼び出し側はパスワード照合や LINE の id_token 検証を済ませていること。 */
   @Transactional(readOnly = true)
   public Token issueTokenFor(PlatformUser user) {
-    if (user.getUserType() == UserType.SERVICE) {
-      throw new ServiceIdentityLoginException("サービスIDは対話ログインできません");
-    }
     return jwtIssuer.issue(user.getEmail(), baseClaims(user, permissionsOf(user)));
   }
 
@@ -106,10 +96,16 @@ public class PlatformAuthService {
   }
 
   /**
-   * 全ての発行経路が共有する claim の組み立て。ここが唯一の組み立て点であることが、認証手段や発行経路が 増えても claim
-   * の内容が食い違わないことの保証である（片方だけ権限が欠ける・過剰になる齟齬は静かに生まれる）。
+   * 全ての発行経路が共有する適格性検査と claim の組み立て。停止中の身分と SERVICE をここで拒否し、 認証手段や昇格の有無による検査漏れ・claim の齟齬を防ぐ。SERVICE
+   * の資格情報を禁じるドメイン不変条件に加え、 発行時にも種別を検査して対話ログインを拒否する。
    */
   private Map<String, Object> baseClaims(PlatformUser user, Set<PermissionCode> permissions) {
+    if (user.getUserType() == UserType.SERVICE) {
+      throw new ServiceIdentityLoginException("サービスIDは対話ログインできません");
+    }
+    if (!Boolean.TRUE.equals(user.getEnabled())) {
+      throw new DisabledException("アカウントが無効化されています");
+    }
     Map<String, Object> claims = new HashMap<>();
     claims.put("authorities", buildAuthorities(user, permissions));
     claims.put("userType", user.getUserType().name());

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.LineAuthorizationRequest;
@@ -60,6 +61,7 @@ class LineAuthServiceTest {
   @Mock private PlatformUserRepository userRepository;
   @Mock private MemberRegistrationService memberRegistrationService;
   @Mock private PlatformAuthService authService;
+  @Mock private PlatformJwtIssuer jwtIssuer;
 
   @InjectMocks private LineAuthService lineAuthService;
 
@@ -168,9 +170,9 @@ class LineAuthServiceTest {
     user.stop();
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(user));
 
-    assertThatThrownBy(() -> lineAuthService.login(authorizationRequest()))
+    assertThatThrownBy(() -> withRealTokenIssuance().login(authorizationRequest()))
         .isInstanceOf(DisabledException.class);
-    verify(authService, never()).issueTokenFor(any());
+    verifyNoInteractions(jwtIssuer);
   }
 
   @Test
@@ -281,9 +283,19 @@ class LineAuthServiceTest {
   @Test
   @DisplayName("LINE ログインもサービスID を拒否し、トークンを発行しない（発行の単一組立点を通るため経路ごとの抜けが無い）")
   void lineLoginRejectsServiceIdentity() {
-    // 本件だけは PlatformAuthService の本物を噛ませる。mock のままでは「LINE 口が守衛を通ること」を
-    // 証明できず、守衛を外しても緑のままになる。
-    PlatformJwtIssuer jwtIssuer = mock(PlatformJwtIssuer.class);
+    LineAuthService service = withRealTokenIssuance();
+    // ドメイン不変条件が禁じる「LINE 連携済みの SERVICE」を mock で組む（不変条件は緩めない）。
+    PlatformUser serviceIdentity = mock(PlatformUser.class);
+    when(serviceIdentity.getUserType()).thenReturn(UserType.SERVICE);
+    stubVerifiedIdentity();
+    when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(serviceIdentity));
+
+    assertThatThrownBy(() -> service.login(authorizationRequest()))
+        .isInstanceOf(ServiceIdentityLoginException.class);
+    verifyNoInteractions(jwtIssuer);
+  }
+
+  private LineAuthService withRealTokenIssuance() {
     PlatformAuthService realAuthService =
         new PlatformAuthService(
             userRepository,
@@ -293,25 +305,42 @@ class LineAuthServiceTest {
             jwtIssuer,
             mock(AuthenticationManager.class),
             mock(ApplicationEventPublisher.class));
-    LineAuthService service =
-        new LineAuthService(
-            channelResolver,
-            lineApiClient,
-            ticketStore,
-            userRepository,
-            memberRegistrationService,
-            realAuthService);
-    // ドメイン不変条件が禁じる「LINE 連携済みの SERVICE」を mock で組む（不変条件は緩めない）。
-    // enabled を true にするのは、停止扱いの DisabledException で緑になる偽陽性を避けるため。
-    PlatformUser serviceIdentity = mock(PlatformUser.class);
-    when(serviceIdentity.getEnabled()).thenReturn(true);
-    when(serviceIdentity.getUserType()).thenReturn(UserType.SERVICE);
-    stubVerifiedIdentity();
-    when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(serviceIdentity));
+    return new LineAuthService(
+        channelResolver,
+        lineApiClient,
+        ticketStore,
+        userRepository,
+        memberRegistrationService,
+        realAuthService);
+  }
 
-    assertThatThrownBy(() -> service.login(authorizationRequest()))
+  @Test
+  void registerRejectsDisabledIdentityAtTokenIssuance() {
+    when(ticketStore.peek("ticket-1")).thenReturn(Optional.of("U-line-1"));
+    PlatformUser user = member("member@kizuna.test");
+    user.stop();
+    when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
+        .thenReturn(user);
+
+    assertThatThrownBy(() -> withRealTokenIssuance().register(registrationRequest()))
+        .isInstanceOf(DisabledException.class);
+    verifyNoInteractions(jwtIssuer);
+  }
+
+  @Test
+  void registerRejectsServiceIdentityAtTokenIssuance() {
+    when(ticketStore.peek("ticket-1")).thenReturn(Optional.of("U-line-1"));
+    PlatformUser user =
+        PlatformUser.builder()
+            .userType(UserType.SERVICE)
+            .enabled(true)
+            .roleIds(Set.of(10L))
+            .build();
+    when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
+        .thenReturn(user);
+
+    assertThatThrownBy(() -> withRealTokenIssuance().register(registrationRequest()))
         .isInstanceOf(ServiceIdentityLoginException.class);
-
-    verify(jwtIssuer, never()).issue(anyString(), any());
+    verifyNoInteractions(jwtIssuer);
   }
 }
