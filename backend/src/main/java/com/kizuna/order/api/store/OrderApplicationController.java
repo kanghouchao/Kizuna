@@ -1,5 +1,6 @@
 package com.kizuna.order.api.store;
 
+import com.kizuna.customer.application.MemberCustomerConflictException;
 import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
 import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
@@ -10,8 +11,6 @@ import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
-import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.TooManyRequestsException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
@@ -21,7 +20,6 @@ import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -111,11 +109,7 @@ public class OrderApplicationController {
     try {
       return ResponseEntity.status(HttpStatus.CREATED)
           .body(orderService.confirmApplication(id, request, principal.getName()));
-    } catch (DataIntegrityViolationException ex) {
-      if (!IntegrityViolations.violates(
-          ex, DbConstraint.UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER)) {
-        throw ex;
-      }
+    } catch (MemberCustomerConflictException ex) {
       return ResponseEntity.status(HttpStatus.CREATED)
           .body(orderService.confirmApplication(id, request, principal.getName()));
     }

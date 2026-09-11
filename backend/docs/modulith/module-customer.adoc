@@ -5,6 +5,7 @@
 |Spring components
 |_Services_
 
+* `c.k.c.application.CustomerProvisioningService`
 * `c.k.c.application.CustomerReferenceResolver`
 
 _Repositories_
