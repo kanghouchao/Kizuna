@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.customer.application.CustomerProvisioningService;
 import com.kizuna.customer.application.CustomerReferenceResolver;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
@@ -147,6 +148,19 @@ class OrderServiceTest {
   @Mock OrderMapper orderMapper;
 
   @InjectMocks OrderService service;
+
+  @BeforeEach
+  void wireCustomerProvisioning() {
+    ReflectionTestUtils.setField(
+        service,
+        "customerProvisioningService",
+        new CustomerProvisioningService(
+            customerRepository,
+            customerMemberLinkRepository,
+            customerReferenceResolver,
+            storeContext));
+    Mockito.lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
+  }
 
   @Captor ArgumentCaptor<Order> orderCaptor;
   @Captor ArgumentCaptor<Customer> customerCaptor;
@@ -345,9 +359,14 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    Customer newCustomer = Customer.builder().phoneNumber("09012345678").build();
-    // 保存で採番される id（@SnowflakeId）。受注はこの id で顧客に着く
-    newCustomer.setId("c-new");
+    req.setPhoneNumber2("0902");
+    req.setAddress("住所");
+    req.setBuildingName("建物");
+    req.setLandmark("目印");
+    req.setClassification("区分");
+    req.setHasPet(true);
+    req.setNgType("種別");
+    req.setNgContent("内容");
 
     when(storeContext.getStoreId()).thenReturn(1L);
     when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
@@ -356,9 +375,13 @@ class OrderServiceTest {
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
 
-    when(orderMapper.toCustomer(req)).thenReturn(newCustomer);
-
-    when(customerRepository.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
+    when(customerRepository.save(any(Customer.class)))
+        .thenAnswer(
+            i -> {
+              Customer saved = i.getArgument(0);
+              saved.setId("c-new");
+              return saved;
+            });
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -368,6 +391,16 @@ class OrderServiceTest {
 
     verify(customerRepository).save(customerCaptor.capture());
     assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09012345678");
+    Customer created = customerCaptor.getValue();
+    assertThat(created.getName()).isEqualTo("New Guy");
+    assertThat(created.getPhoneNumber2()).isEqualTo("0902");
+    assertThat(created.getAddress()).isEqualTo("住所");
+    assertThat(created.getBuildingName()).isEqualTo("建物");
+    assertThat(created.getLandmark()).isEqualTo("目印");
+    assertThat(created.getClassification()).isEqualTo("区分");
+    assertThat(created.getHasPet()).isTrue();
+    assertThat(created.getNgType()).isEqualTo("種別");
+    assertThat(created.getNgContent()).isEqualTo("内容");
     // 起こしたばかりの行は他の経路の書き換えに晒されていないので、解決を経ずに着ける
     verifyNoInteractions(customerReferenceResolver);
     verify(orderRepository).save(orderCaptor.capture());

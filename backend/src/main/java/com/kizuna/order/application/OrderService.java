@@ -1,11 +1,13 @@
 package com.kizuna.order.application;
 
+import com.kizuna.customer.application.CustomerProvisioningService;
 import com.kizuna.customer.application.CustomerReferenceResolver;
-import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.application.MemberRequestCustomerInput;
+import com.kizuna.customer.application.NewCustomerInput;
+import com.kizuna.customer.application.StoreCustomerInput;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
@@ -43,7 +45,6 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -85,6 +86,7 @@ public class OrderService {
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerReferenceResolver customerReferenceResolver;
+  private final CustomerProvisioningService customerProvisioningService;
   private final NominatableCastLookup nominatableCast;
   private final ConfirmedShiftLookupService confirmedShiftLookupService;
   private final PointLedgerService pointLedgerService;
@@ -394,8 +396,7 @@ public class OrderService {
    * <p>受付担当が未指定で、確定した本人が受付候補の条件を満たす場合はその本人を補う。条件を満たさない実行者 （店舗を授権する HQ
    * 管理者など）では未設定のまま残し、受付担当の適格条件を確定操作で迂回させない。
    *
-   * <p>顧客は確定の時点で決め直す（{@link #ensureCustomerForRequester}）。完了時の会員解決は顧客の現在の関連だけを見る （ADR 0008
-   * の一本道）ため、古い参照を持ち回ると申請者の来店とポイントが別会員へ積まれる。
+   * <p>顧客は確定の時点で決め直す。完了時の会員解決は顧客の現在の関連だけを見る （ADR 0008 の一本道）ため、古い参照を持ち回ると申請者の来店とポイントが別会員へ積まれる。
    */
   @StoreScoped
   @Transactional
@@ -457,7 +458,13 @@ public class OrderService {
     } else if (application.getRequesterMemberId() != null) {
       // 申請者の会員 ID が欠落した申請（会員行の削除後）は整える先が無いため、顧客未設定のまま成立させる
       // （無帰属受注は正規の状態）。
-      order.linkCustomer(ensureCustomerForRequester(application, actorEmail));
+      order.linkCustomer(
+          customerProvisioningService.ensureMemberRequestCustomer(
+              new MemberRequestCustomerInput(
+                  application.getRequesterMemberId(),
+                  application.getRequesterMemberCode(),
+                  application.getRequesterDeclaredName(),
+                  actorId)));
     }
     Order saved = orderRepository.save(order);
     application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
@@ -498,59 +505,14 @@ public class OrderService {
       return;
     }
     if (request.getNewCustomer() != null) {
-      // store_id は StoreScopeStampListener が @PrePersist で採番する。
-      // 起こしたばかりの行は他の経路の書き換えに晒されていないため、解決を経ずにそのまま着ける。
-      Customer customer =
-          customerRepository.save(
-              Customer.builder()
-                  .name(request.getNewCustomer().getName())
-                  .phoneNumber(request.getNewCustomer().getPhoneNumber())
-                  .build());
-      order.linkCustomer(customer.getId());
+      order.linkCustomer(
+          customerProvisioningService.createCustomer(
+              new NewCustomerInput(
+                  request.getNewCustomer().getName(), request.getNewCustomer().getPhoneNumber())));
       return;
     }
     order.recordContactIfUnlinked(
         application.getContactName(), application.getContactPhoneNumber());
-  }
-
-  /**
-   * 会員申請の受注が着く当店の顧客を、確定の時点で決め直す。当店に申請者会員の有効な関連があればその顧客を使い、無ければ台帳行と関連（根拠 {@link
-   * LinkReason#MEMBER_REQUEST}）を起こす。判断の材料は「今の関連」だけ — 関連が解除された行に着け続けると完了しても
-   * 会員へ達さず、付け替えられた行に着け続けると別会員へ達する。
-   *
-   * <p>自動で整えるのは、ログイン態が本人証明・当該店舗への申請が明示の確認であり、帰属の成立要件をこの経路が構造的に満たすため（ADR 0008）。
-   * 来店時の会員コード再提示は要求しない。整備がここで漏れると、完了時の会員解決（顧客 → 有効な関連 → 会員）が空振りしてポイントが記帳されない。
-   *
-   * <p>起こす台帳行の氏名は本人が申請時に名乗った名前で、電話は空。店舗はプラットフォーム側プロフィール（表示名・メール）へ到達しないため、
-   * 店舗が知る名前は本人がその店舗へ名乗ると決めた名前だけになる。関連の会員コードは申請時のスナップショットを写す — 会員コードは発行後に変わらない。
-   *
-   * <p>関連は flush まで進めて書く。同一会員・同一店舗の申請 2 件の並行確定は双方が「関連なし」を観測しうるため、収束は部分一意索引 {@link
-   * DbConstraint#UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER} の違反として現れなければならない（掴む位置は controller —
-   * {@code OrderApplicationController#confirm}）。
-   */
-  private String ensureCustomerForRequester(OrderApplication application, String actorEmail) {
-    Optional<CustomerMemberLink> established =
-        customerMemberLinkRepository.findByStoreIdAndMemberIdAndStatus(
-            application.getStoreId(), application.getRequesterMemberId(), LinkStatus.ACTIVE);
-    if (established.isPresent()) {
-      // 関連の照会は行を押さえないため、着ける前に顧客参照の解決を通す。
-      return customerReferenceResolver.resolveForWrite(established.get().getCustomerId());
-    }
-    Long actorId = actorIdentityService.requireUserId(actorEmail);
-    // store_id は StoreScopeStampListener が @PrePersist で採番する。
-    Customer customer =
-        customerRepository.save(
-            Customer.builder().name(application.getRequesterDeclaredName()).build());
-    customerMemberLinkRepository.saveAndFlush(
-        CustomerMemberLink.builder()
-            .customerId(customer.getId())
-            .memberId(application.getRequesterMemberId())
-            .memberCode(application.getRequesterMemberCode())
-            .reason(LinkReason.MEMBER_REQUEST)
-            .linkedBy(actorId)
-            .linkedAt(OffsetDateTime.now())
-            .build());
-    return customer.getId();
   }
 
   /** 会計と会員への帰属を同一トランザクションで確定する。汎用更新からは完了へ遷移させない。 会員に達しない受注では、事後帰属の所持証明となる伝票トークンを発行して生値を返す。 */
@@ -791,37 +753,22 @@ public class OrderService {
         .toList();
   }
 
-  /**
-   * 受注を店舗台帳の顧客に着ける。顧客 ID の指定があればそれを、無ければ電話番号で当店の台帳を照合する。
-   *
-   * <p>電話番号の照合は一致件数で 3 分岐する。0 件なら録入内容で顧客を起こして紐づけ、1 件ならその顧客に紐づけ、 <b>2
-   * 件以上なら自動照合を断念して顧客未設定のまま成立させる</b>（無帰属受注は正規の状態）。同店同号は正規に起こりうる —
-   * 同伴者の連絡先共有や旧システムからの移行分がそれで、一致行の中に会員関連付きの行があり得る以上、機械が 1 行を選ぶことは 誤帰属の入口になる（ADR 0009）。並び順で 1
-   * 行に決める形も同じ理由で採らない。
-   *
-   * <p>顧客に着かなかった受注には、録入された連絡先を受注側へ写す。写さないと、台帳にも受注にも残らないまま入力が消える。
-   *
-   * <p>既存の行へ着ける ID は {@link CustomerReferenceResolver} から得る。顧客参照を書く経路が共有する解決口で、
-   * 書く直前に対象の行を押さえる。取得できない顧客（不在・他店舗）はそこで 404 になる。
-   */
   private void handleCustomerLinking(OrderCreateRequest req, Order order) {
-    if (req.getCustomerId() != null && !req.getCustomerId().isEmpty()) {
-      order.linkCustomer(customerReferenceResolver.resolveForWrite(req.getCustomerId()));
-      return;
-    }
-    if (req.getPhoneNumber() != null && !req.getPhoneNumber().isEmpty()) {
-      List<String> matched =
-          customerRepository.findAliveIdsByPhoneNumberAndStoreId(
-              req.getPhoneNumber(), storeContext.getStoreId());
-      if (matched.isEmpty()) {
-        // 起こしたばかりの行は他の経路の書き換えに晒されていないため、解決を経ずにそのまま着ける。
-        // store_id は StoreScopeStampListener が @PrePersist で採番する
-        order.linkCustomer(customerRepository.save(orderMapper.toCustomer(req)).getId());
-      } else if (matched.size() == 1) {
-        // 照合は行を押さえない問い合わせなので、着ける前に解決を通す（照合そのものの 3 分岐は変わらない）。
-        order.linkCustomer(customerReferenceResolver.resolveForWrite(matched.get(0)));
-      }
-    }
+    customerProvisioningService
+        .resolveStoreCustomer(
+            new StoreCustomerInput(
+                req.getCustomerId(),
+                req.getCustomerName(),
+                req.getPhoneNumber(),
+                req.getPhoneNumber2(),
+                req.getAddress(),
+                req.getBuildingName(),
+                req.getLandmark(),
+                req.getClassification(),
+                req.getHasPet(),
+                req.getNgType(),
+                req.getNgContent()))
+        .ifPresent(order::linkCustomer);
     order.recordContactIfUnlinked(req.getCustomerName(), req.getPhoneNumber());
   }
 }

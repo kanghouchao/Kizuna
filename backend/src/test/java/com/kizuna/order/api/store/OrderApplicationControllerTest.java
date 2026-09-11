@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.customer.application.MemberCustomerConflictException;
 import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
 import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
@@ -184,13 +185,25 @@ class OrderApplicationControllerTest {
     // 配線そのものは決定的なこの単体テストが受け持つ。
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.confirmApplication(any(), any(), any()))
-        .thenThrow(integrityViolation("uq_t_customer_member_links_active_member"))
+        .thenThrow(new MemberCustomerConflictException())
         .thenReturn(OrderResponse.builder().id("order-1").build());
 
     mockMvc
         .perform(storePost("/store/order-applications/a1/confirmation", CONFIRMATION_BODY))
         .andExpect(status().isCreated());
 
+    verify(orderService, times(2)).confirmApplication(any(), any(), any());
+  }
+
+  @Test
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void confirmationReturnsConflictAfterOneRetry() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.confirmApplication(any(), any(), any()))
+        .thenThrow(new MemberCustomerConflictException());
+    mockMvc
+        .perform(storePost("/store/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .andExpect(status().isConflict());
     verify(orderService, times(2)).confirmApplication(any(), any(), any());
   }
 

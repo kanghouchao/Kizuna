@@ -1,8 +1,2 @@
-/**
- * customer モジュールのアプリケーション層。
- *
- * <p>パッケージ全体は公開しない。公開するのは {@code CustomerReferenceResolver} 型のみで、そこに {@code @NamedInterface}
- * を直接付けている — パッケージに付けると同居する店舗向けサービス（顧客 CRUD・ポイント調整・会員紐づけ）まで公開面に入り、意図しない跨モジュール依存を Modulith
- * の検証が通してしまう。
- */
+/** customer モジュールのアプリケーション層。 公開は顧客参照解決・顧客整備のサービスとその入力・競合例外に型単位で限定する。 */
 package com.kizuna.customer.application;

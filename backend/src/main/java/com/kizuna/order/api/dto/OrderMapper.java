@@ -1,6 +1,5 @@
 package com.kizuna.order.api.dto;
 
-import com.kizuna.customer.domain.Customer;
 import com.kizuna.order.domain.InvalidOrderFeeLineException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLine;
@@ -105,12 +104,4 @@ public interface OrderMapper {
 
   /** 注文更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */
   OrderPatch toPatch(OrderUpdateRequest request);
-
-  /** 電話番号からの顧客スマートリンク用に、作成リクエストから顧客行を起こします。 */
-  @Mapping(target = "name", source = "customerName")
-  @Mapping(target = "lineId", ignore = true)
-  @Mapping(target = "usageAreas", ignore = true)
-  // 起こしたばかりの行は定義上まだ生きている。統合先参照は統合だけが立てる。
-  @Mapping(target = "mergedIntoId", ignore = true)
-  Customer toCustomer(OrderCreateRequest request);
 }
