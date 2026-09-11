@@ -18,6 +18,7 @@
 * `c.k.c.domain.CustomerRepository` (in Customer)
 * `c.k.c.domain.CustomerMemberLinkRepository` (in Customer)
 * `c.k.c.application.CustomerReferenceResolver` (in Customer)
+* `c.k.c.application.CustomerProvisioningService` (in Customer)
 * `c.k.u.application.ReceptionistEligibilityService` (in User)
 * `c.k.s.storescope.StoreScopeExecutor` (in Shared)
 * `c.k.s.config.AppProperties` (in Shared)
