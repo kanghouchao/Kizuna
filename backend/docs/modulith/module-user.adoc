@@ -3,7 +3,12 @@
 |Base package
 |`com.kizuna.user`
 |Spring components
-|_Repositories_
+|_Services_
+
+* `c.k.u.application.ActorIdentityService`
+* `c.k.u.application.ReceptionistEligibilityService`
+
+_Repositories_
 
 * `c.k.u.domain.EmergencyElevationRepository`
 * `c.k.u.domain.PermissionRepository`
