@@ -4,21 +4,11 @@ Status: Accepted
 
 Supersedes: [0004](0004-frontend-shadcn-ui-on-radix.md)
 
-## Context
+## 決定時の背景
 
-[0004](0004-frontend-shadcn-ui-on-radix.md) は shadcn/ui を vendoring する方式を採り、その base として
-Radix を選んだ。当時すでに shadcn/ui の既定 base は Base UI へ切り替わっていたが、Radix も引き続き
-サポートされており、移行コストを払う理由が無かった。
+ADR 0004 の vendoring と token 方式は維持し、部品ごとに asChild/render や状態属性の異なる基盤が混ざるのを避ける。cmdk が Radix を推移的に導入するため、直接依存だけの削除では移行を完了できない。選定時の比較は ADR 0004 と本決定の参照先に残す。
 
-その後 Radix 側の更新は Toast の撤回（shadcn は `sonner` へ誘導）に代表されるように部品単位の縮小へ
-向かい、shadcn の新しいレシピ群（`base-*` スタイル）は Base UI を前提に整備されている。基盤を分けた
-まま部品ごとに別の base を混ぜると、`asChild` と `render`、`data-[state=open]` と `data-open` という
-二つの語彙が同じ画面に同居し、規約が「どちらの部品か」を条件に分岐しはじめる。
-
-加えて `radix-ui` は直接依存だけの問題ではない。Combobox を持たない穴を埋めていた `cmdk` が
-`@radix-ui/react-dialog` などを推移的に引き込んでおり、直接依存を外しても Radix は依存ツリーに残る。
-
-## Decision
+## 決定
 
 base を **Base UI（`@base-ui/react`）** に一本化する。`radix-ui` と `cmdk` は依存から外す。
 
@@ -43,7 +33,7 @@ base を **Base UI（`@base-ui/react`）** に一本化する。`radix-ui` と `
 0004 が定めた残りの決定——トークン層、ダークモードの方式、意味色の語彙、kebab-case とバレル経由の
 参照、生成物を無改変で保つ方針——はいずれも base に依存しないため、そのまま引き継ぐ。
 
-## Consequences
+## 帰結
 
 `Select` の引き金に出る文言の出どころが変わる。Radix は選択中 `SelectItem` の `ItemText` を写して
 いたが、Base UI は `Select.Root` の `items` から引く。渡さなければ生の値がそのまま利用者に見える

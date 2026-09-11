@@ -2,7 +2,7 @@
 
 **Pre-launch mode is in effect: the schema is a single squashed baseline, and schema changes
 edit that baseline in place.** This file is the normative source for editing anything under
-`db/changelog/`; `backend/CLAUDE.md` only summarizes it.
+`db/changelog/`; the backend instructions point here.
 
 ## The one rule that differs from normal Liquibase practice
 

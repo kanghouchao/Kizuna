@@ -1,27 +1,22 @@
-# CLAUDE.md
+# Project Instructions
 
-## Project Overview
+## Read by task
 
-A platform CMS/CRM/HRM system for running the operations of multiple stores under a single group.
+Kizuna operates multiple stores within one group (CMS / CRM / HRM). Before reasoning about domain terms, read [CONTEXT.md](CONTEXT.md). Before revisiting an architectural decision, read the relevant [ADR](docs/README.md).
 
-Java is pinned to 25 by `backend/.java-version` (jenv, effective under `backend/`) and `backend/gradle/gradle-daemon-jvm.properties` (Gradle daemon). Builds, tests, and Spotless must run on JDK 25.
+- Backend work: [backend/AGENTS.md](backend/AGENTS.md); builds, tests, and Spotless require JDK 25.
+- Endpoint work: read [API contract](backend/AGENTS.md#api-contract) before adding or changing an endpoint. Cross-frontend/backend work requires approval of the API contract before implementation.
+- Frontend work: [frontend/AGENTS.md](frontend/AGENTS.md); for any UI work read [DESIGN.md](frontend/DESIGN.md) first.
+- Infrastructure: [infrastructure/AGENTS.md](infrastructure/AGENTS.md).
+- E2E: [e2e/AGENTS.md](e2e/AGENTS.md).
+- Schema changes: [database rules](backend/src/main/resources/db/AGENTS.md).
+- Development and PR verification: [CONTRIBUTING.md](CONTRIBUTING.md). Final verification before committing uses Taskfiles (Docker parity); judge success by exit code only. Local toolchains are for fast iteration.
 
-## Key documents
-
-- [CONTEXT.md](CONTEXT.md) — the ubiquitous language, in full (Tenant/Store, PlatformUser, AuthSession, StoreScope, Store Context). The glossary below is a summary; **read CONTEXT.md before reasoning about domain terms**.
-- [ADRs](docs/adr/) — accepted architecture decisions. Read the relevant one before revisiting a decided question.
-
-## Domain Glossary
-
-- **Central** is retired as a structural concept — it survives only as the former name of the platform-management permission group (`PermissionCode.Console.PLATFORM`). Authorization is RBAC: behavior follows **Role** (a bundle of `Permission` rows); data follows store (`StoreScope`) and stores hang off the user, never off the role. Accounts are unified as **PlatformUser**; store-side vocabulary uses the Store prefix (e.g. StoreProfile).
-- The customer-visit aggregate is **Order** — never Reservation or Booking.
-- **CentralMenu and StoreMenu were unified into a single platform Menu aggregate** (decided 2026-07-18, #404 decision 2).
-- **StoreProfile** = store-facing display settings; **SystemConfig** = platform-level system settings, managed by SYSTEM_CONFIG_MANAGE permission holders. Do not mix.
-- **Cast is three layers** (#383; implementation #859–#863): **Cast** = the platform-level person, 1:1 with the CAST-type PlatformUser; **CastEnrollment** = one store-enrollment episode (StoreScoped; ENROLLED / SUSPENDED / WITHDRAWN); **CastProfile** = the public profile, 1:1 with an enrollment. The three entities are separate. Store-side `cast_id` references point to CastEnrollment; history recording and dedicated enrollment operations are follow-up work.
+`AGENTS.md` is the instruction source in each directory; `CLAUDE.md` is its single-line loader. Historical source-system research in `docs/legacy-business/` is design input, not a description of current Kizuna behavior.
 
 ## Language Policy
 
-- **AI-instruction docs** (this file and the per-directory `CLAUDE.md` files): **English**.
+- **AI-instruction docs** (this file, per-directory `AGENTS.md`, and `CLAUDE.md` loaders): **English**.
 - **Human-facing docs** (`docs/**`, `README.md`), **code comments**, **GitHub issues/PRs**, and **commit messages**: **Japanese**.
 - Code identifiers, module names, and shell commands stay verbatim regardless of the surrounding language.
 
@@ -31,56 +26,9 @@ Comments justify the code **as it is now**: invariants, security rationale, non-
 
 - **Javadoc/JSDoc are optional.** Never write `@param`/`@return` that only restate the signature. No numbered step comments (`// 1. ...`), no section banners.
 - **Length: a comment block stays within 3–5 lines.** Longer reasoning gets compressed to the conclusion plus its one key reason; the full argument goes to the commit message or an ADR. Practical reason: google-java-format re-wraps long CJK blocks badly, so long prose degrades on the next `spotlessApply`.
-- **Single-source the explanation.** When one rationale covers many sites, state it in exactly one place and do not duplicate it per call site (precedent: ADR 0002's dormant-filter caveat lives only in the `StoreIsolationTests` method Javadoc, not on the eight entities).
+- **Single-source the explanation.** When one rationale covers many sites, state it in exactly one place and do not duplicate it per call site (precedent: ADR 0002's dormant-filter caveat lives only in the `StoreIsolationTests` method Javadoc, not on each entity).
 - **Fix on touch — delete vs. compress.** Within the region you touched, **delete** the clearly-violating forms: numbered step comments, `@param`/`@return` that restate the signature, section banners, chatter that restates the code, and English comments (language policy). This is an explicit exception to the default of touching only task-related lines. A long but load-bearing comment — invariant reasoning, a security rationale, a fail-open trap — is **not** a deletion target: at most **compress** it to conclusion + key reason and move the full argument to the commit message or an ADR, and only when you were already rewriting that comment or you are confident the compression keeps the reasoning. When in doubt, leave it as is.
 - **Surviving mandatory-comment exceptions**: transitional-exception notes in `package-info.java` (backend/CLAUDE.md) and rule-disable reasons in `steiger.config.mjs` (frontend/CLAUDE.md).
-
-## API Design & API-first
-
-API contract rules live in [docs/api-guidelines.md](docs/api-guidelines.md) (Japanese) — the normative source; read it before adding or changing an endpoint. Any task spanning frontend + backend must present the API contract design (endpoints, methods, status codes, request/response fields, authorization, pagination form) for approval **before** implementation. Every controller handler must carry `@PreAuthorize` or `@PermitAll` — `SecurityConfig` is `anyRequest().permitAll()`, so a missing annotation is a silently public endpoint; `EndpointAuthorizationDeclarationTests` enforces this with no exemption list.
-
-## Build, Test & Verify
-
-The system is built and tested with Docker Compose; all commands are driven through the `task` tool so local runs match CI/CD. Recommended workflow:
-
-```bash
-# Build
-task build                          # all services
-task build service=frontend         # frontend only
-task build service=backend          # backend only
-
-# Test (70% coverage required — coverage is measured on unit tests only)
-task test                           # unit + integration (backward-compatible full run)
-task test-unit                      # frontend Jest + backend unit + coverage gate (the PR gate)
-task test-integration               # backend integration only
-task test service=frontend          # Jest only
-task test service=backend           # JUnit + Jacoco + integration
-task e2e                            # Playwright BDD e2e — needs `jq` on the host; PR author's local responsibility, not run in CI
-
-# Lint & format
-task lint                           # check
-task format                         # auto-fix
-
-# Local startup
-task up                             # start full stack (does NOT rebuild images — run task build first to pick up code changes)
-task down                           # stop
-task logs service=backend           # view logs
-```
-
-Use the Taskfile (Docker = CI parity) for final verification before committing. For fast red-green iteration use the local toolchains: `frontend/` → `npm test` / `npm run format:check && npm run lint && npm run lint:fsd && npm run typecheck` (the Docker lint stage runs all four); `backend/` → `./gradlew test` / `./gradlew spotlessApply`.
-
-`task build` also runs as a PR gate inside each side's `Lint and Test (frontend)` / `Lint and Test (backend)` job (`.github/workflows/lint-and-test.yml`): a production build failure turns that check red, so a change that breaks the production build cannot pass CI.
-
-CI is tiered (issue #241) and parallelized by side (#346). The PR gate is three required checks — **Lint and Test (frontend)**, **Lint and Test (backend)**, **Repo Lint** — each running lint + unit(coverage) + build for its own side (`task -d frontend|backend lint` / `test` or `test-unit` / `build`) in parallel jobs. Those steps are skipped when the diff touches none of `frontend/`, `backend/`, `e2e/`, `infrastructure/`, `Taskfile*`, `.github/workflows/`, `.github/scripts/` — in a docs-only PR both side jobs still start and report success; what is skipped are their Buildx / lint / test / build **steps**, while **Repo Lint (actionlint) is ungated and always executes**. The detection is by path prefix, so a CLAUDE.md under those directories still triggers the full gate. **Integration and E2E do not run in CI at all**: they are the PR author's local responsibility — run `task test` (unit + integration) and `task e2e` locally before opening a PR, as the PR template's 検証 section requires. Code review is local-only and manual: review the branch diff before opening a PR (the `mattpocock-skills:code-review` skill is the recommended tool). There is no CI-side automated review job and no Claude-triggered GitHub Action.
-
-## Code Style & Conventions
-
-Per-directory `CLAUDE.md` files carry the area conventions and are auto-loaded when working there:
-
-- [Backend](backend/CLAUDE.md)
-- [Frontend](frontend/CLAUDE.md) — plus the design system in [frontend/DESIGN.md](frontend/DESIGN.md) (read FIRST for any UI work)
-- [Infrastructure](infrastructure/CLAUDE.md)
-- [E2E](e2e/CLAUDE.md) — Playwright BDD scenarios (Japanese Gherkin)
 
 ## Repository-wide guardrails
 
@@ -92,8 +40,6 @@ Forbidden operations (enforced locally by `.claude/settings.json` deny rules onl
 - **Destructive git**: `git reset --hard`, `git clean`, `git branch -D`, `git commit --no-verify`.
 - **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
 - **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed or read.
-
-Judge build/test success by **exit code only** — output may be in Japanese locale (「エラー」), so never grep for "error".
 
 Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/pull_request_template.md`. All in Japanese.
 

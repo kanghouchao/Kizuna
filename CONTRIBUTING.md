@@ -1,136 +1,44 @@
-# Contributing Guide
+# 開発・貢献ガイド
 
-The goal of this document is to make contributions safe, reviewable, and fast to ship. The emphasis is on clear human-reviewed changes and high-quality code.
+変更は一つの目的に絞り、実装と検証結果をレビューできる単位で提出する。環境の準備は [README](README.md)、領域の規約は [AGENTS.md](AGENTS.md) から辿る。
 
-Keep changes small and focused. If a change touches more than one area (frontend/backend/environment), prefer separate pull requests.
+## 実装前
 
-## Quick checklist (before opening a PR)
+- 用語は [CONTEXT.md](CONTEXT.md)、既存の設計判断は [ADR](docs/README.md) を確認する。
+- API の追加・変更は [API 契約規約](backend/AGENTS.md#api-contract)に従う。前後端にまたがる変更では、端点・メソッド・成功／失敗コード・要求／応答の型と省略可否・授権・ページングを実装前に提示して承認を得る。
+- UI は [デザインシステム](frontend/DESIGN.md)、スキーマは [DB 規約](backend/src/main/resources/db/AGENTS.md)を確認する。
+- 人向け文書、コメント、issue、PR、コミットメッセージは日本語。AI 指令は英語。識別子とコマンドは翻訳しない。
 
-- Build: project builds locally (see "Try locally" below).
-- Lint / format: run linters and formatters for the affected area.
-- Tests: unit tests for the changed area pass and new behavior is covered by tests.
-- Smoke: include a short validation checklist in the PR description for reviewers.
-- PR size: prefer smaller PRs that are easy to review (one logical change per PR).
+## コマンドと検証
 
-## Try locally (minimal reproducible steps)
+最終検証は Taskfile を使い、Docker によって CI と条件を揃える。省略可能な `service=frontend` / `service=backend` は対応するタスクで対象を限定する。全コマンドは `task help` を参照する。
 
-You should install Docker, Docker Buildx and [Task](https://taskfile.dev) to run the full stack locally. The Taskfiles provide common commands.
+| コマンド | 用途 |
+| --- | --- |
+| `task build` | 前後端の本番イメージをビルド |
+| `task lint` | Repo Lint と前後端の整形・静的検査 |
+| `task lint-repo` | actionlint によるワークフロー検査 |
+| `task test-unit` | 前後端の単体テストとカバレッジゲート |
+| `task test-integration` | バックエンド統合テスト |
+| `task test` | 前後端単体テストとバックエンド統合テスト |
+| `task e2e` | 独立した使い捨てスタックで E2E |
+| `task format` | 自動整形（差分を確認する） |
+| `task up` / `task down` | 開発スタックの起動／停止 |
+| `task logs service=backend` | 指定サービスのログ |
+| `task clean` | ビルド済みイメージの削除。DB ボリュームは対象外 |
 
-Before opening a PR it's helpful to run a minimal local validation to save reviewers time. Example quick steps (copy/paste):
+高速な反復では `frontend/` の npm scripts と `backend/` の Gradle wrapper を使える。バックエンドは **JDK 25** 必須（`.java-version` と daemon JVM 設定）。フロントエンド lint は `format:check`、`lint`、`lint:fsd`、`typecheck` の四つ。
 
-- Build & tests:
+カバレッジの正本は [Jest 設定](frontend/jest.config.cjs)と [Gradle 設定](backend/build.gradle)。単体テストが測定対象で、Jest は行／文 70%、分岐 60%、関数 55%、Jacoco は行 70% を要求する。生成 DTO・設定等の除外範囲も設定を参照する。
 
-```bash
-task test build
-```
+判定はコマンドの **exit code のみ**を使う。実施していない検証は未実施と記載する。
 
-- Start full stack for manual smoke checks (requires Docker/Buildx):
+## CI と PR
 
-```bash
-task up
-```
+[CI](.github/workflows/lint-and-test.yml) は `Lint and Test (frontend)`、`Lint and Test (backend)`、`Repo Lint` の三チェック。前後端はそれぞれ lint・単体テスト・本番 build を実行する。コード領域に触れない docs-only 差分では前後端の重いステップを省略するが、Repo Lint は常に走る。`frontend/`・`backend/` 等の配下の文書変更もコード領域判定に入る。
 
-## Local development & useful commands
+統合テストと E2E は CI で実行しない。PR 作成前は `task lint`、`task test`、`task build`、`task e2e` とローカルコードレビューを実施し、[PR テンプレート](.github/pull_request_template.md)の検証欄に結果を記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
 
-This repository uses Task and Docker for local development. Common commands (run from the repository root):
+issue は [機能](.github/ISSUE_TEMPLATE/feature.md)／[不具合](.github/ISSUE_TEMPLATE/bug.md)テンプレートを使う。コミットの要約は短く、PR タイトルは conventional commit 形式と日本語を使う。非自明な判断は理由を説明し、関連 issue を紐づける。
 
-- Build all images: task build service=frontend|backend
-- Start local stack: task up
-- Show running containers: task ps
-- Follow logs for a service: task logs service=backend|frontend|traefik|database
-- Run tests for a service: task test service=frontend|backend
-- Lint or format: task lint service=frontend|backend
-- Format: task format service=frontend|backend
-- Stop and remove containers: task down
-- Remove the built images of a service: task clean service=frontend|backend (database volumes are never touched)
-
-Notes:
-- When you are not specifying service=..., the command applies to both frontend and backend, or all services(e.g. `task logs`).
-- Frontend dev server: `frontend/` uses Next.js (run `npm run dev` inside `frontend` for a typical dev workflow).
-- Backend build/test: use the Gradle wrapper in `backend/` (e.g. `./gradlew build` or `./gradlew test`).
-	- On Windows PowerShell use `gradlew.bat build` or `gradlew.bat test`.
-	- Alternatively use WSL for a POSIX-like environment and run `./gradlew ...` there.
-
-## Code quality and style
-
-High-quality code is essential. Follow these conventions:
-
-- Keep functions and components small and focused.
-- Add unit tests for new logic and bug fixes. If a change touches security or data migrations, include an integration or smoke test where practical.
-- Avoid large formatting-only changes in the same PR as functional changes.
-- Follow existing project style: backend uses Spotless + Google Java Format; frontend uses ESLint.
-- Run linters and formatters before opening a PR.
-
-Commit message guidance:
-
-- Use present-tense, short summary in the first line (<= 72 chars).
-- Provide a short description body if the change is non-trivial.
-- Reference the issue number when applicable (e.g., `Closes #123`).
-
-## Tests & Coverage (repeat)
-
-- Frontend: Jest, Testing Library; put tests under `frontend/src/**/__tests__/**`.
-- Backend: JUnit; generate Jacoco report to `backend/build/reports/jacoco`.
-
-## Quality gates
-
-Before requesting review, please ensure the following (CI will also verify these):
-
-1. Build passes for the affected service(s).
-2. Lint/Typecheck (frontend) and code format (backend Spotless) pass.
-3. Unit tests for the affected service(s) pass; add tests for new behavior.
-4. Include a short smoke validation list in the PR description.
-5. Coverage: maintain at least 70% line coverage for unit tests (CI enforces a 70% gate).
-
-Coverage targets are enforced in CI; aim to keep changes well tested and add tests for new behavior.
-
-Notes on coverage enforcement:
-
-- Frontend: Jest's config (`frontend/jest.config.cjs`) enables `collectCoverage` and a global coverageThreshold (lines: 70). Running `npm test` will fail if thresholds are not met — CI runs the same tests.
-- Backend: Jacoco is configured in `backend/build.gradle` and the Gradle `check` task depends on `jacocoTestCoverageVerification`. The project is configured to enforce a minimum 70% line coverage (excludes generated/build directories). CI runs the backend test stage via the Dockerfile, which invokes the Gradle test and coverage verification steps; failures will fail the CI job.
-
-## Repo conventions and important paths
-
-- Frontend source: `frontend/src/` (Next.js + TypeScript)
-- Frontend middleware: `frontend/src/proxy.ts` — host/store resolution and cookies
-- Shared HTTP client (frontend): `frontend/src/shared/api/client.ts` (browser axios client; `server-client.ts` beside it is the fetch wrapper for Server Components)
-- Frontend server components (store templates): `frontend/src/_pages/store-site/templates/`
-- Backend Java: `backend/src/main/java/com/kizuna/`
-- Backend changelogs/migrations: `backend/src/main/resources/db/changelog/`
-- `Taskfile.yml` at repo root and the compose files under `infrastructure/` control local orchestration.
-
-Architecture reminders:
-
-- Traefik routes `/api/*` to the backend and strips the prefix before it reaches Spring Boot.
-- Backend namespaces: `/platform/*` (admin) and `/store/*` (store).
-- Store selection is host-based; middleware sets cookies consumed by server components (`x-mw-role`, `x-mw-store-id`, `x-mw-store-name`, `x-mw-store-domain`, `x-mw-store-template`). Server components should read these via `cookies()`.
-
-## PR workflow and review checklist
-
-When opening a PR, include:
-
-**You can use the template in [here](.github/pull_request_template.md)**
-
-Note: the repository has a CI check that validates PR bodies contain required sections (Context & Motivation, Scope of Changes, Quality Gates, Test Notes, Risk & Mitigation). Omitting those headings will cause the PR template check to fail in CI.
-
-- A short summary of what changed and why.
-- The commands used to validate locally (build/test/lint).
-- A short smoke checklist for reviewers (what to click/observe, basic expected behavior).
-- Any DB migration or infra changes, including rollout and rollback notes.
-- Tests added/updated and where they live.
-
-
-Reviewers will check:
-
-- Does the change have tests (or a good rationale if not)?
-- Is the change small and focused enough to review?
-- Are linters and formatters satisfied?
-- Any security or infra impact clearly documented?
-
-## Optional: AI-assisted contributions
-
-AI tools may be used to help draft code, tests, or documentation, but all AI-assisted changes must be carefully reviewed by a human before merging. If you used AI assistance, it is helpful (but not required) to note that in the PR and include a brief summary of how the output was validated.
-
-Suggested minimal note (optional): "Parts of this PR were drafted with AI assistance; I reviewed and adjusted the generated code and added tests to cover behavior X."
-
-Thanks for contributing!
+master への同期は rebase。master を作業ブランチへ merge しない。PR のマージは所有者が手動で行う。Git・データ保護の禁止操作は [共通ガードレール](AGENTS.md#repository-wide-guardrails)に従う。
