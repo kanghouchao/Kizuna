@@ -24,6 +24,7 @@ let invitation: string;
 let adminToken: string;
 let firstStoreId: string;
 let firstStoreName: string;
+const activeEnrollments = new Map<string, string>();
 let storefrontCast: { id: string; storeId: string } | undefined;
 
 After({ tags: "@cast-publication" }, async ({ request }) => {
@@ -33,6 +34,21 @@ After({ tags: "@cast-publication" }, async ({ request }) => {
   await deleteCast(request, adminToken, id, storeId);
 });
 
+After({ tags: "@cast-multi-store" }, async ({ request }) => {
+  const failures: unknown[] = [];
+  for (const [id, storeId] of activeEnrollments) {
+    try {
+      await withdrawCast(request, adminToken, id, storeId);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  activeEnrollments.clear();
+  if (failures.length > 0) {
+    throw new AggregateError(failures, "テスト用在籍の退店処理に失敗しました");
+  }
+});
+
 Given("公開切替用のキャスト編集画面を開く", async ({ page, request }) => {
   const store = await loginViaUiAndEnterStore(page);
   adminToken = await loginAsStoreAdmin(request);
@@ -40,6 +56,8 @@ Given("公開切替用のキャスト編集画面を開く", async ({ page, requ
   castId = await createCast(request, adminToken, castName, store);
   storefrontCast = { id: castId, storeId: store };
   await page.goto(`${PLATFORM_URL}/store/${store}/casts/${castId}/edit`);
+  await expect(page.getByRole("heading", { name: "在籍履歴", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "内部情報の編集履歴", level: 2 })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "非公開にする" }),
   ).toBeVisible();
@@ -102,6 +120,7 @@ Given(
       `店舗選択-${randomUUID()}`,
       firstStoreId,
     );
+    activeEnrollments.set(castId, firstStoreId);
     await acceptCastInvitation(
       request,
       await issueCastInvitation(request, adminToken, castId, firstStoreId),
@@ -116,6 +135,7 @@ Given(
       "二店舗目の源氏名",
       secondStoreId,
     );
+    activeEnrollments.set(second, secondStoreId);
     const secondInvite = await issueCastInvitation(
       request,
       adminToken,
@@ -129,6 +149,7 @@ Given(
       "再入店の源氏名",
       firstStoreId,
     );
+    activeEnrollments.set(duplicate, firstStoreId);
     invitation = await issueCastInvitation(
       request,
       adminToken,
@@ -185,6 +206,7 @@ Then(
     await portalStores(page);
     await expect(page.getByRole("option")).toHaveCount(2);
     await withdrawCast(request, adminToken, castId, firstStoreId);
+    activeEnrollments.delete(castId);
     await page.reload();
     await expect(
       page.getByRole("combobox", { name: "店舗", exact: true }),
