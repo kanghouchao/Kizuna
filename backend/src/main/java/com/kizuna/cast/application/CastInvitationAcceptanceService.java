@@ -170,15 +170,11 @@ public class CastInvitationAcceptanceService {
             .orElseGet(
                 () -> personRepository.save(Cast.builder().platformUserId(platformUserId).build()));
     cast.linkCast(person.getId());
-    try {
-      castRepository.saveAndFlush(cast);
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(
-          ex,
-          Map.of(
-              DbConstraint.UQ_T_CAST_ENROLLMENTS_CURRENT,
-              () -> new ConflictException("この店舗には既に有効な在籍があります")));
-    }
+    IntegrityViolations.translateOnFailure(
+        () -> castRepository.saveAndFlush(cast),
+        Map.of(
+            DbConstraint.UQ_T_CAST_ENROLLMENTS_CURRENT,
+            () -> new ConflictException("この店舗には既に有効な在籍があります")));
   }
 
   private CastInvitation findByToken(String token) {

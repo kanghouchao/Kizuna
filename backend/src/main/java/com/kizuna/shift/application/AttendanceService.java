@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -155,18 +154,9 @@ public class AttendanceService {
     }
   }
 
-  /**
-   * 一意性違反を業務例外へ写して保存する。
-   *
-   * <p>{@code save} ではなく {@code saveAndFlush} で書くのが要点である。flush を commit まで遅らせると、違反はこのメソッドが返った後に
-   * 起き、写像は決して命中しない。
-   */
   private Attendance saveWithinUniqueness(Attendance attendance) {
-    try {
-      return attendanceRepository.saveAndFlush(attendance);
-    } catch (DataIntegrityViolationException e) {
-      throw IntegrityViolations.translate(e, DUPLICATE_ACTIVE_ATTENDANCE);
-    }
+    return IntegrityViolations.translateOnFailure(
+        () -> attendanceRepository.saveAndFlush(attendance), DUPLICATE_ACTIVE_ATTENDANCE);
   }
 
   private Attendance findAttendance(String id) {

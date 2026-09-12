@@ -1,6 +1,7 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
@@ -245,9 +246,8 @@ public class PlatformStaffService {
    * 違反（requireRoles 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
    */
   private PlatformUser save(PlatformUser user) {
-    return IntegrityMappedSaves.save(
-        repository,
-        user,
+    return IntegrityViolations.translateOnFailure(
+        () -> repository.saveAndFlush(user),
         Map.of(
             DbConstraint.UQ_T_USERS_EMAIL,
             () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています"),

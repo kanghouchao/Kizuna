@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,22 +90,14 @@ public class CastInvitationService {
             .expiresAt(OffsetDateTime.now().plus(CastInvitation.VALIDITY))
             .build();
     invitation.setStoreId(cast.getStoreId());
-    // 真の並行発行で他トランザクションが同一档案の PENDING を先に確定していた場合、部分ユニーク
-    // インデックス違反となるが、ここで catch しない — CommonExceptionHandler が SQLSTATE で一意違反
-    // だけを 409 へ写像し、FK 等の他の整合性違反は実装欠陥として 500 のまま大きく失敗させる分類を
-    // 持っているため、そこへ委ねる。唯一の例外は cast FK 違反で、档案不在と同じ分類
-    // （NotFoundException → 404）へ変換する。冒頭で档案行を押さえるようになってからは並行削除に
-    // 割り込まれないが、分類の出口としては残す。
-    try {
-      CastInvitation saved = castInvitationRepository.saveAndFlush(invitation);
-      return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(
-          ex,
-          Map.of(
-              DbConstraint.FK_T_CAST_INVITATIONS_CAST,
-              () -> new NotFoundException("キャストが見つかりません: " + castId)));
-    }
+    // 在籍の参照違反は事前照会と同じ 404 に揃える。並行発行の一意制約違反は全域ハンドラの 409 に委ねる。
+    CastInvitation saved =
+        IntegrityViolations.translateOnFailure(
+            () -> castInvitationRepository.saveAndFlush(invitation),
+            Map.of(
+                DbConstraint.FK_T_CAST_INVITATIONS_CAST,
+                () -> new NotFoundException("キャストが見つかりません: " + castId)));
+    return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
   }
 
   /** ページ内の档案について招待状態を一括導出する。呼び出し元の storeFilter 有効なトランザクション内で使う。 */

@@ -171,9 +171,8 @@ public class RoleService {
    * 保存時の名称一意制約違反（並行作成レース）を事前チェックと同じ 400 へ変換する。それ以外の整合性違反は実装欠陥であり（権限は事前検証済み）、 握りつぶさず全域ハンドラの分類に委ねる。
    */
   private Role save(Role role) {
-    return IntegrityMappedSaves.save(
-        roleRepository,
-        role,
+    return IntegrityViolations.translateOnFailure(
+        () -> roleRepository.saveAndFlush(role),
         Map.of(DbConstraint.UQ_T_ROLES_NAME, () -> new ServiceException("このロール名は既に使われています")));
   }
 

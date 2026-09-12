@@ -1,6 +1,7 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
@@ -197,9 +198,8 @@ public class ServiceIdentityService {
    * ロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
    */
   private PlatformUser save(PlatformUser user) {
-    return IntegrityMappedSaves.save(
-        repository,
-        user,
+    return IntegrityViolations.translateOnFailure(
+        () -> repository.saveAndFlush(user),
         Map.of(
             DbConstraint.FK_T_USER_STORES_STORE,
             () -> new InvalidStoreScopeException("指定された店舗が存在しません"),

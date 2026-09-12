@@ -1,6 +1,7 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -309,9 +310,8 @@ public class StoreManagerService {
    * 店舗が消えるレース）は店舗エラーへ変換する（いずれも 400）。ロール FK は既定ロールが削除不能なので写像を持たない。
    */
   private PlatformUser save(PlatformUser user) {
-    return IntegrityMappedSaves.save(
-        repository,
-        user,
+    return IntegrityViolations.translateOnFailure(
+        () -> repository.saveAndFlush(user),
         Map.of(
             DbConstraint.UQ_T_USERS_EMAIL,
             () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています"),

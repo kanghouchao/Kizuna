@@ -21,7 +21,6 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,17 +99,12 @@ public class LineAuthService {
       throw new ConflictException(LINE_TAKEN_MESSAGE);
     }
     user.linkLine(identity.lineUserId());
-    try {
-      userRepository.saveAndFlush(user);
-    } catch (DataIntegrityViolationException ex) {
-      // 事前チェックを擦り抜けた並行連携。ここで違反し得る一意制約は LINE ユーザー ID だけであり、
-      // 「先に確定した別要求と衝突した」なので 409 に写像する。
-      throw IntegrityViolations.translate(
-          ex,
-          Map.of(
-              DbConstraint.UQ_T_USERS_LINE_USER_ID,
-              () -> new ConflictException(LINE_TAKEN_MESSAGE)));
-    }
+    // 事前チェックを擦り抜けた並行連携。ここで違反し得る一意制約は LINE ユーザー ID だけであり、
+    // 「先に確定した別要求と衝突した」なので 409 に写像する。
+    IntegrityViolations.translateOnFailure(
+        () -> userRepository.saveAndFlush(user),
+        Map.of(
+            DbConstraint.UQ_T_USERS_LINE_USER_ID, () -> new ConflictException(LINE_TAKEN_MESSAGE)));
   }
 
   /** 認可コードを LINE と交換し、id_token を LINE に検証させて本人同一性を得る。 */
