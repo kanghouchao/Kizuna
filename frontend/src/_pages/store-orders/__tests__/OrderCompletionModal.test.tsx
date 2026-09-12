@@ -78,6 +78,9 @@ describe('OrderCompletionModal', () => {
       fee_lines: [
         { kind: 'BASE_COURSE', name: '90 分コース', amount: 18000, system_owned: false },
         { kind: 'OPTION', name: '指名', amount: 2000, system_owned: false },
+        { kind: 'POINT_REDEMPTION', name: 'ポイント利用', amount: 500, system_owned: true },
+        { kind: 'MANUAL_ADJUST', name: '調整加算', amount: 300, system_owned: true },
+        { kind: 'MANUAL_ADJUST', name: '調整減算', amount: -200, system_owned: true },
       ],
     });
     const queueRow: Order = { id: 'o1', status: 'CONFIRMED', customer_name: '山田太郎' };
@@ -93,6 +96,10 @@ describe('OrderCompletionModal', () => {
 
     expect(await screen.findByLabelText('コース名')).toHaveValue('90 分コース');
     expect(screen.getByLabelText('明細2の名称')).toHaveValue('指名');
+    expect(screen.getByText('-¥500')).toBeInTheDocument();
+    expect(screen.getByText('¥300')).toBeInTheDocument();
+    expect(screen.getByText('¥-200')).toBeInTheDocument();
+    expect(screen.queryByLabelText('明細3の名称')).not.toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledWith('o1');
   });
 

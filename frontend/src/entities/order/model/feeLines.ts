@@ -29,7 +29,7 @@ export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineInput[]
 }
 
 /** 符号が減算に固定された種別。入力も表示も正値なので、足すときだけ符号を戻す。 */
-function isDeduction(kind: OrderFeeLineKind): boolean {
+export function isDeduction(kind: OrderFeeLineKind): boolean {
   return kind === 'DISCOUNT' || kind === 'POINT_REDEMPTION';
 }
 

@@ -327,7 +327,7 @@ export function OrderCompletionModal({
                 )}
               />
               <OrderFeeLinesField
-                systemLines={systemOwnedFeeLines(order?.fee_lines)}
+                systemLines={systemOwnedFeeLines(detail?.fee_lines)}
                 courseName={courseName}
               />
               {/* 見込みが読めなくても送信は塞がない。単位も残高も会員資格もサーバ側が再検証する */}
