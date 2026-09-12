@@ -21,7 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 会員ポータルからの来店履歴の読み取りユースケース。
  *
  * <p>来店として見えるのは有効な帰属記録を持つ受注だけで、関連（Customer–Member Link）の区間は読み直さない（ADR 0009）。したがって関連を解除しても過去の来店は
- * 見え続け、関連成立以前・無帰属・未完了・謝絶／取下げの受注は現れない。本人が申請した予約の追跡は {@link MemberOrderService} が別の読み口として並置する。
+ * 見え続け、関連成立以前・無帰属・未完了・謝絶／取下げの受注は現れない。本人が申請した予約の追跡は {@link MemberOrderApplicationService}
+ * が別の読み口として並置する。
  *
  * <p>帰属記録は店舗で分割されない（台帳と同じ platform 帰属）ため storeFilter は働かない。本人の会員 ID の一致を問い合わせ自体に載せることが唯一の隔離境界である。
  *

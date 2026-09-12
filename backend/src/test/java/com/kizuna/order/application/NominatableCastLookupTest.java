@@ -25,7 +25,7 @@ import org.springframework.data.domain.Limit;
  * 指名先として成立するかの判定そのものを固定するテスト。
  *
  * <p>会員の申請・店舗の受注作成・汎用更新・申請編集・確定と候補一覧が共有する述語なので、条件の判定はここが唯一の証跡になる。 呼び出し側（{@link OrderService} /
- * {@link MemberOrderService}）のテストは「空が返ったとき何を投げるか」の翻訳だけを固定する。
+ * {@link MemberOrderApplicationService}）のテストは「空が返ったとき何を投げるか」の翻訳だけを固定する。
  */
 @ExtendWith(MockitoExtension.class)
 class NominatableCastLookupTest {
