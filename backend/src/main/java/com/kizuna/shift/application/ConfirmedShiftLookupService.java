@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @NamedInterface("application")
 public class ConfirmedShiftLookupService {
 
-  /** 予約で扱える先の上限日数。候補一覧の照会と申請の利用日検証（MemberOrderService）が共有し、無制限の未来日を防ぐ。 */
+  /** 予約で扱える先の上限日数。候補一覧の照会と申請の利用日検証（MemberOrderApplicationService）が共有し、無制限の未来日を防ぐ。 */
   public static final int MAX_LOOKAHEAD_DAYS = 90;
 
   private static final String EXPLICIT_STORE_ID_IS_THE_BOUNDARY =

@@ -1085,7 +1085,7 @@ class PlatformStaffManagementIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("権限目録は ROLE_MANAGE 保持者に 25 件の code+console を返すこと")
+  @DisplayName("権限目録は ROLE_MANAGE 保持者に code+console を返すこと")
   void permissionCatalogIsExposedToRoleManage() {
     String hq = platformToken(SEED_EMAIL, PASSWORD);
 
