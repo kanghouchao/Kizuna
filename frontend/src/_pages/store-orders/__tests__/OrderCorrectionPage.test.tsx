@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
 import { Order, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
 
 const mockPush = jest.fn();
+let mockParams = { storeId: '1', id: 'o1' };
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -18,7 +19,7 @@ jest.mock('@/entities/order', () => ({
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
-  useParams: () => ({ storeId: '1', id: 'o1' }),
+  useParams: () => mockParams,
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -54,6 +55,7 @@ const ATTRIBUTED = { id: 1, attributed: true, member_code: '123456789012' };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = { storeId: '1', id: 'o1' };
   mockedOrderApi.attribution.mockResolvedValue(ATTRIBUTED);
 });
 
@@ -202,4 +204,83 @@ describe('完了後訂正のページ', () => {
     expect(await screen.findByText(/完了した受注だけが訂正できます/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '訂正する' })).not.toBeInTheDocument();
   });
+});
+
+test('対象変更直後から旧フォームを隠し、新しい詳細で初期化する', async () => {
+  let resolve!: (order: Order) => void;
+  mockedOrderApi.get.mockResolvedValueOnce(completedOrder()).mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    })
+  );
+  const { rerender } = render(<OrderCorrectionPage />);
+  await screen.findByLabelText('コース（分）');
+  mockParams = { storeId: '2', id: 'o2' };
+  rerender(<OrderCorrectionPage />);
+  expect(screen.queryByLabelText('コース（分）')).not.toBeInTheDocument();
+  await act(async () => resolve(completedOrder({ id: 'o2', pax: 8, course_minutes: 90 })));
+  expect(await screen.findByLabelText('コース（分）')).toHaveValue(90);
+});
+
+test('競合再取得中は編集停止し、失敗したら入力置換を通知しない', async () => {
+  let reject!: (error: unknown) => void;
+  mockedOrderApi.get.mockResolvedValueOnce(completedOrder()).mockReturnValueOnce(
+    new Promise((_, fail) => {
+      reject = fail;
+    })
+  );
+  mockedOrderApi.correct.mockRejectedValueOnce({ response: { status: 409 } });
+  render(<OrderCorrectionPage />);
+  fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
+  fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+  await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));
+  expect(screen.queryByLabelText('理由')).not.toBeInTheDocument();
+  expect(notify.warning).not.toHaveBeenCalled();
+  await act(async () => reject(new Error('network')));
+  expect(screen.getByRole('alert')).toHaveTextContent('受注を取得できませんでした。');
+  expect(notify.warning).not.toHaveBeenCalled();
+});
+
+test('訂正後の帰属取得中に別対象へ移ると、古い通知と結果を出さない', async () => {
+  let resolve!: (value: typeof ATTRIBUTED) => void;
+  mockedOrderApi.get.mockResolvedValue(completedOrder());
+  mockedOrderApi.correct.mockResolvedValueOnce({ previous_total_fee: 100, total_fee: 200 });
+  mockedOrderApi.attribution.mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    })
+  );
+  const { rerender } = render(<OrderCorrectionPage />);
+  fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
+  fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+  await waitFor(() => expect(mockedOrderApi.attribution).toHaveBeenCalled());
+  expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
+  jest.mocked(notify.success).mockClear();
+  mockParams = { storeId: '1', id: 'o2' };
+  rerender(<OrderCorrectionPage />);
+  await act(async () => resolve(ATTRIBUTED));
+  expect(notify.success).not.toHaveBeenCalled();
+  expect(screen.queryByText('訂正しました')).not.toBeInTheDocument();
+});
+
+test('帰属取得が未着でも訂正成功を通知し、詳細を更新して編集を再開する', async () => {
+  let resolve!: (value: typeof ATTRIBUTED) => void;
+  mockedOrderApi.get.mockResolvedValue(completedOrder({ version: 8 }));
+  mockedOrderApi.correct.mockResolvedValueOnce({ previous_total_fee: 100, total_fee: 200 });
+  mockedOrderApi.attribution.mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    })
+  );
+  render(<OrderCorrectionPage />);
+  fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
+  fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+  await waitFor(() => expect(mockedOrderApi.attribution).toHaveBeenCalled());
+  expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
+  await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText('訂正しました')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('button', { name: '訂正する' })).toBeEnabled());
+  await act(async () => resolve(ATTRIBUTED));
+  expect(screen.getByText(/会員コード 123456789012/)).toBeInTheDocument();
+  expect(notify.success).toHaveBeenCalledTimes(1);
 });

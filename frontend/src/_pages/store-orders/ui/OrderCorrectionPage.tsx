@@ -20,7 +20,8 @@ import {
   isConflict,
   readTokenClaims,
   storePath,
-  useResource,
+  useKeyedResource,
+  useResourceInitialization,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
@@ -115,17 +116,18 @@ export default function OrderCorrectionPage() {
   const orderId = params.id as string;
   const router = useRouter();
 
-  const {
-    data: current,
-    isLoading,
-    failure,
-    reload,
-  } = useResource<Order>(() => orderApi.get(orderId), [orderId]);
+  const resource = useKeyedResource<Order>(['order', storeId, orderId], () =>
+    orderApi.get(orderId)
+  );
+  const { data: current, isLoading, failure, reload } = resource;
 
   const form = useForm<OrderCorrectionFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, watch, formState } = form;
-  const [hasSeeded, setHasSeeded] = useState(false);
-  const [outcome, setOutcome] = useState<CorrectionOutcomeState | null>(null);
+  const [outcomeState, setOutcome] = useState<
+    (CorrectionOutcomeState & { orderId: string; storeId: string }) | null
+  >(null);
+  const outcome =
+    outcomeState?.orderId === orderId && outcomeState.storeId === storeId ? outcomeState : null;
 
   // 巻き戻しは POINT_ADJUST（店長）限定。押せない導線を描くと、理由を入力し終えてから 403 を受け取る。
   // 強制はサーバ側 @PreAuthorize で、ここは導線の表示制御のみ（token 無し・壊れは出さない）。
@@ -135,10 +137,7 @@ export default function OrderCorrectionPage() {
   }, []);
 
   // 取得の到着はレンダーより後なので、初期値ではなく効果で播く（開いた最初のフレームが空欄になる）。
-  useEffect(() => {
-    if (current === null) {
-      return;
-    }
+  const initialized = useResourceInitialization(resource.success, current => {
     reset({
       actual_arrival_time: toTimeInput(current.actual_arrival_time),
       actual_end_time: toTimeInput(current.actual_end_time),
@@ -148,10 +147,8 @@ export default function OrderCorrectionPage() {
       fee_lines: storeEditableFeeLines(current.fee_lines),
       reason: '',
     });
-    setHasSeeded(true);
-  }, [current, reset]);
-
-  const seeded = current !== null && hasSeeded;
+  });
+  const seeded = current !== null && initialized && !isLoading;
   const completed = current?.status === 'COMPLETED';
 
   /**
@@ -174,6 +171,7 @@ export default function OrderCorrectionPage() {
     if (current === null) {
       return;
     }
+    const operation = resource.capture();
     try {
       const corrected = await orderApi.correct(orderId, {
         // 開いた時点の版をそのまま返す。全量を送る口なので、間に別の操作者の訂正が挟まっていれば
@@ -187,18 +185,25 @@ export default function OrderCorrectionPage() {
         extension_minutes: optionalNumber(values.extension_minutes),
         fee_lines: toFeeLineInputs(values.fee_lines),
       });
+      if (!operation.isCurrent()) return;
       notify.success('受注を訂正しました');
-      // 結果は差し替えではなく併記で残す。一覧へ戻すと、何がどう変わったかを確かめる面が消える。
-      setOutcome({ result: corrected, memberCode: await attributedMemberCode() });
-      await reload();
-    } catch (error) {
-      if (isConflict(error)) {
-        // 版の食い違い。取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる。
-        // 取り直せば播種の効果が最新の値と版でフォームを組み直す（入力は破棄され、頁は開いたまま）。
-        notify.warning(
-          '他の操作者がこの受注を訂正しました。最新の内容を確認してからやり直してください'
+      setOutcome({ result: corrected, memberCode: '不明', orderId, storeId });
+      void reload();
+      // 補助情報の遅延で訂正結果を隠さない。詳細再取得後の世代に結び付け、旧対象へは反映しない。
+      const enrichment = resource.capture();
+      void attributedMemberCode().then(memberCode => {
+        if (!enrichment.isCurrent()) return;
+        setOutcome(outcome =>
+          outcome?.result === corrected ? { ...outcome, memberCode } : outcome
         );
-        await reload();
+      });
+    } catch (error) {
+      if (!operation.isCurrent()) return;
+      if (isConflict(error)) {
+        const result = await reload();
+        if (result.status === 'success' && result.isCurrent()) {
+          notify.warning('他の操作者がこの受注を訂正しました。入力を最新の内容に置き換えました');
+        }
         return;
       }
       notify.error(getApiErrorMessage(error, '受注の訂正に失敗しました'));

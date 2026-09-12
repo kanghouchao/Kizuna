@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -9,7 +10,13 @@ import {
   OrderAttributionSource,
   orderApi,
 } from '@/entities/order';
-import { getApiErrorMessage, hasPermission, readTokenClaims, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  hasPermission,
+  readTokenClaims,
+  useKeyedResource,
+  useResourceInitialization,
+} from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { AttributionCorrectionStep } from './AttributionCorrectionStep';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
@@ -51,15 +58,6 @@ interface InvalidationFormValues {
   reason: string;
 }
 
-/**
- * 取得した帰属の現況と、その取得元の受注。取得フックは取り直しの間も前の値を保つため、
- * 値だけでは別の受注の現況と見分けられない。
- */
-interface AttributionSnapshot {
-  orderId: string;
-  body: OrderAttribution;
-}
-
 /** 再発行された伝票トークンと、その発行元の受注（現況と同じ理由で、値だけでは別の受注のものと見分けられない）。 */
 interface ReissuedReceiptToken {
   orderId: string;
@@ -79,7 +77,7 @@ interface CorrectionTarget {
 interface OrderAttributionModalProps {
   /** 訂正の対象。null なら閉じている。 */
   order: OrderArchiveRow | null;
-  onClose: () => void;
+  onClose: (missing?: boolean) => void;
 }
 
 function formatDateTime(value?: string): string {
@@ -97,7 +95,7 @@ function formatDateTime(value?: string): string {
  * 無効化された受注は「会員へ帰属しない状態」へ戻り、正しい本人は再発行された QR の所持証明で
  * 来店を取り戻せる。申領期限は再発行から 90 日で数え直される。
  */
-export function OrderAttributionModal({ order, onClose }: OrderAttributionModalProps) {
+export function OrderAttributionModal({ order, onClose: closeModal }: OrderAttributionModalProps) {
   const form = useForm<InvalidationFormValues>({ defaultValues: { reason: '' } });
   const {
     control,
@@ -107,31 +105,33 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   } = form;
 
   const orderId = order?.id ?? '';
-  // 閉じている間は取りに行かない（開いた時点で取り直す）
-  const {
-    data: snapshot,
-    setData: setSnapshot,
-    isLoading,
-    failure,
-    reload,
-  } = useResource<AttributionSnapshot>(
-    order === null ? null : async () => ({ orderId, body: await orderApi.attribution(order.id) }),
-    [orderId]
+  const storeId = useParams()?.storeId as string;
+  const resource = useKeyedResource<OrderAttribution>(
+    ['attribution', storeId, orderId],
+    order === null ? null : () => orderApi.attribution(order.id)
   );
-  // 別の受注へ切り替わった瞬間は現況を持たない状態から始める（レンダー期の判定なので、前の受注の
-  // 帰属で無効化・再発行の可否を決めるフレームが 1 つも無い）。
-  const attribution = snapshot !== null && snapshot.orderId === orderId ? snapshot.body : null;
+  const { data: attribution, isLoading, failure, reload } = resource;
+  const onClose = () => {
+    if (resource.failure === 'notFound') closeModal(true);
+    else closeModal();
+  };
+  const initialized = useResourceInitialization(resource.success, () => reset({ reason: '' }));
   // 差し引きの宛先に渡す ID。サーバが名指す「まだ差し引かれていない誤付与を持つ記録」で、現況の記録とは
   // 別でありうる。閉包の中で直に読むと省略可能なままで型が絞れないため、束縛を 1 つ挟む。
   const pendingCorrectionId = attribution?.pending_correction_attribution_id;
 
   const [reissued, setReissued] = useState<ReissuedReceiptToken | null>(null);
-  const receiptToken = reissued !== null && reissued.orderId === orderId ? reissued.token : null;
+  const receiptToken =
+    resource.data !== null && reissued !== null && reissued.orderId === orderId
+      ? reissued.token
+      : null;
   const [isReissuing, setIsReissuing] = useState(false);
 
   const [correcting, setCorrecting] = useState<CorrectionTarget | null>(null);
   const correctionTarget =
-    correcting !== null && correcting.orderId === orderId ? correcting : null;
+    resource.data !== null && correcting !== null && correcting.orderId === orderId
+      ? correcting
+      : null;
   // 差し引きの送信中は閉じない。子が持つ送信状態をここへ上げる（ESC・背景押下で閉じると、訂正が
   // 成立したか分からないまま冪等キーが失われ、開き直しでは別のキーになる）。
   const [isCorrectingBusy, setIsCorrectingBusy] = useState(false);
@@ -145,27 +145,26 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
   }, []);
 
   useEffect(() => {
-    if (!order) return;
-    reset({ reason: '' });
     // 発行済みの QR も一緒に戻す。「今だけ表示できる」と書いた画面が、開き直しで前の QR を出し直さない
     setReissued(null);
     setCorrecting(null);
     setIsCorrectingBusy(false);
-  }, [order, reset]);
+    setIsReissuing(false);
+  }, [orderId, storeId]);
 
   const invalidate = async (values: InvalidationFormValues) => {
     // 対象は画面が読み口で得た記録そのものを名指す。受注から導く形へ戻すと、開いたまま別の操作者が
     // 訂正を一巡させた場合に、この理由が新しく成立した正しい帰属へ当たって来店を消す
-    if (!order || attribution?.id === undefined) return;
+    if (!order || attribution?.id === undefined || !initialized || isLoading) return;
+    const operation = resource.capture();
     try {
       const updated = await orderApi.invalidateAttribution(order.id, {
         attribution_id: attribution.id,
         reason: values.reason,
       });
+      if (!operation.replace(updated)) return;
       notify.success('帰属を無効化しました');
       // 応答が訂正後の現況を持つので、取り直さず差し替える（読み込み表示で一瞬消えない）
-      setSnapshot({ orderId, body: updated });
-      reset({ reason: '' });
       // そのまま二段目へ送る。ここで通常の画面に戻すと、誤って付与された分が相手の台帳に残ったまま
       // 「訂正が済んだ」ことになり、やり残しに気づく機会がどこにも無くなる。宛先には今まさに倒した
       // 記録を渡す（受注から導き直さない）。
@@ -175,6 +174,7 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
         memberCode: attribution.member_code,
       });
     } catch (error) {
+      if (!operation.isCurrent()) return;
       // 帰属していない・既に無効化済みは、サーバが対処できる文言を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, '帰属の無効化に失敗しました'));
     }
@@ -182,15 +182,18 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
 
   const reissue = async () => {
     if (!order) return;
+    const operation = resource.capture();
     try {
       setIsReissuing(true);
       const issued = await orderApi.reissueReceiptToken(order.id);
+      if (!operation.isCurrent()) return;
       notify.success('伝票QRを再発行しました');
       setReissued({ orderId, token: issued.receipt_token });
     } catch (error) {
+      if (!operation.isCurrent()) return;
       notify.error(getApiErrorMessage(error, '伝票QRの再発行に失敗しました'));
     } finally {
-      setIsReissuing(false);
+      if (operation.isCurrent()) setIsReissuing(false);
     }
   };
 
@@ -242,8 +245,15 @@ export function OrderAttributionModal({ order, onClose }: OrderAttributionModalP
               void reload();
             }}
           />
-        ) : isLoading ? (
+        ) : isLoading || (failure === null && !initialized) ? (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">読み込み中...</p>
+        ) : failure === 'notFound' ? (
+          <div role="alert" className="space-y-3 px-6 py-5">
+            <p className="text-sm text-destructive-strong">この受注は見つかりませんでした。</p>
+            <Button type="button" variant="outline" onClick={onClose}>
+              閉じる
+            </Button>
+          </div>
         ) : failure !== null ? (
           // 読めなかった現況を「未帰属」で描くと、他人の来店が残っているのに再発行を勧めることになる
           <RegionError

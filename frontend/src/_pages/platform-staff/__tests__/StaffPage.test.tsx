@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
 import { PlatformStaffResponse, platformAuthApi, platformStaffApi } from '@/entities/user';
 import StaffPage from '../ui/StaffPage';
@@ -14,18 +14,27 @@ jest.mock('@/features/staff-management', () => {
   return {
     StaffCreateModal: () => React.createElement('div', null, '作成モーダル表示中'),
     StaffEditModal: ({
-      staff,
+      resource,
       onUpdated,
     }: {
-      staff: { display_name: string };
+      resource: import('@/shared/lib').KeyedResource<PlatformStaffResponse>;
       onUpdated: () => void;
     }) =>
       React.createElement(
         'div',
         null,
-        `編集モーダル:${staff.display_name}`,
+        `編集モーダル:${resource.data?.display_name ?? '読み込み中'}`,
         // 409 で本体が呼ぶ一覧再取得を、テストから起こせるようにする
-        React.createElement('button', { onClick: onUpdated }, '競合再取得')
+        React.createElement(
+          'button',
+          {
+            onClick: () => {
+              onUpdated();
+              void resource.reload();
+            },
+          },
+          '競合再取得'
+        )
       ),
     roleSetLabel: () => 'ロールラベル',
   };
@@ -76,6 +85,9 @@ async function pickStore(optionName: string) {
 describe('管理者管理ページ', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedStaffApi.get.mockImplementation(async id =>
+      staff({ id, display_name: id === 2 ? '鈴木花子' : '山田太郎' })
+    );
     mockedAuthApi.stores.mockResolvedValue([]);
     mockedStaffApi.list.mockResolvedValue(
       paginated([
@@ -103,7 +115,7 @@ describe('管理者管理ページ', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
 
-    expect(screen.getByText('編集モーダル:山田太郎')).toBeInTheDocument();
+    expect(await screen.findByText('編集モーダル:山田太郎')).toBeInTheDocument();
   });
 
   it('行そのものをクリックしても編集モーダルは開かないこと', async () => {
@@ -176,14 +188,14 @@ describe('管理者管理ページ', () => {
   // 外れても（本人の改名で検索から外れる・他の追加で次ページへずれる）モーダルは閉じず、
   // 版が古いまま再試行が 409 を繰り返さないよう id で最新値を取り直す。
   it('再取得で対象が現在ページから外れても、id で最新値を取り直してモーダルを開いたままにすること', async () => {
-    mockedStaffApi.get.mockResolvedValue(
-      staff({ id: 2, display_name: '鈴木花子（改名後）', version: 3 })
-    );
+    mockedStaffApi.get
+      .mockResolvedValueOnce(staff({ id: 2, display_name: '鈴木花子' }))
+      .mockResolvedValue(staff({ id: 2, display_name: '鈴木花子（改名後）', version: 3 }));
 
     render(<StaffPage />);
     await screen.findByText('鈴木花子');
     fireEvent.click(screen.getAllByRole('button', { name: '編集' })[1]);
-    expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
+    expect(await screen.findByText('編集モーダル:鈴木花子')).toBeInTheDocument();
 
     // 再取得後の頁には対象が居ない
     mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
@@ -204,7 +216,7 @@ describe('管理者管理ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
 
     await waitFor(() => expect(mockedStaffApi.get).toHaveBeenCalledWith(2));
-    expect(screen.getByText('編集モーダル:鈴木花子')).toBeInTheDocument();
+    expect(screen.getByText('編集モーダル:読み込み中')).toBeInTheDocument();
   });
 
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
@@ -435,4 +447,26 @@ describe('管理者管理ページ固有の要素', () => {
     // e2e（staff-management）は button ロールで取得するため、リンク化してはならない
     expect(screen.getByRole('button', { name: '管理者を追加' })).toBeInTheDocument();
   });
+});
+
+test('同じ ID の連続競合再取得では最後に開始した応答だけを採用する', async () => {
+  let resolveOld!: (value: PlatformStaffResponse) => void;
+  mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '一覧' })]));
+  mockedStaffApi.get
+    .mockResolvedValueOnce(staff({ id: 1, display_name: '初期' }))
+    .mockReturnValueOnce(
+      new Promise(done => {
+        resolveOld = done;
+      })
+    )
+    .mockResolvedValueOnce(staff({ id: 1, display_name: '最新', version: 3 }));
+  render(<StaffPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+  await screen.findByText('編集モーダル:初期');
+  fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
+  fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
+  await screen.findByText('編集モーダル:最新');
+  await act(async () => resolveOld(staff({ id: 1, display_name: '古い応答', version: 2 })));
+  expect(screen.getByText('編集モーダル:最新')).toBeInTheDocument();
+  expect(screen.queryByText('編集モーダル:古い応答')).not.toBeInTheDocument();
 });

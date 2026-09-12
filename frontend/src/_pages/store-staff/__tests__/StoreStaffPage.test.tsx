@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
 import { StoreStaffResponse, storeStaffApi, useStoreContext } from '@/entities/user';
 import StoreStaffPage from '../ui/StoreStaffPage';
@@ -13,8 +13,17 @@ jest.mock('@/features/staff-management', () => {
   const React = require('react');
   return {
     StoreStaffCreateModal: () => React.createElement('div', null, '作成モーダル表示中'),
-    StoreStaffEditModal: ({ staff }: { staff: { display_name: string } }) =>
-      React.createElement('div', null, `編集モーダル:${staff.display_name}`),
+    StoreStaffEditModal: ({
+      resource,
+    }: {
+      resource: import('@/shared/lib').KeyedResource<StoreStaffResponse>;
+    }) =>
+      React.createElement(
+        'div',
+        null,
+        `編集モーダル:${resource.data?.display_name ?? '読み込み中'}`,
+        React.createElement('button', { onClick: () => void resource.reload() }, '競合再取得')
+      ),
     roleSetLabel: () => 'ロールラベル',
   };
 });
@@ -77,11 +86,12 @@ describe('StoreStaffPage', () => {
 
   it('編集ボタンから対象を渡して編集モーダルを開く', async () => {
     mockedApi.list.mockResolvedValue(paginated([staff({ display_name: '編集できる人' })]));
+    mockedApi.get.mockResolvedValue(staff({ display_name: '編集できる人' }));
 
     render(<StoreStaffPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-    await waitFor(() => expect(screen.getByText('編集モーダル:編集できる人')).toBeInTheDocument());
+    expect(await screen.findByText('編集モーダル:編集できる人')).toBeInTheDocument();
   });
 
   it('一覧の取得に失敗したら再試行導線つきで失敗を名乗る', async () => {
@@ -91,4 +101,26 @@ describe('StoreStaffPage', () => {
 
     expect(await screen.findByText('スタッフ一覧の取得に失敗しました')).toBeInTheDocument();
   });
+});
+
+test('同じ ID の連続競合再取得では最後に開始した応答だけを採用する', async () => {
+  let resolveOld!: (value: StoreStaffResponse) => void;
+  mockedApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '一覧' })]));
+  mockedApi.get
+    .mockResolvedValueOnce(staff({ id: 1, display_name: '初期' }))
+    .mockReturnValueOnce(
+      new Promise(done => {
+        resolveOld = done;
+      })
+    )
+    .mockResolvedValueOnce(staff({ id: 1, display_name: '最新', version: 3 }));
+  render(<StoreStaffPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+  await screen.findByText('編集モーダル:初期');
+  fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
+  fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
+  await screen.findByText('編集モーダル:最新');
+  await act(async () => resolveOld(staff({ id: 1, display_name: '古い応答', version: 2 })));
+  expect(screen.getByText('編集モーダル:最新')).toBeInTheDocument();
+  expect(screen.queryByText('編集モーダル:古い応答')).not.toBeInTheDocument();
 });

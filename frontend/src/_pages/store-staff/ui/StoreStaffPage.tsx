@@ -2,13 +2,14 @@
 
 import { PlusIcon } from 'lucide-react';
 import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { StoreStaffResponse, storeStaffApi, useStoreContext } from '@/entities/user';
 import {
   StoreStaffCreateModal,
   StoreStaffEditModal,
   roleSetLabel,
 } from '@/features/staff-management';
-import { useListPage } from '@/shared/lib';
+import { useKeyedResource, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -50,11 +51,19 @@ export default function StoreStaffPage() {
   // 付与できる範囲と同じ集合なので、選べたものはサーバの店舗部分集合検査も通る。
   const { stores, loadFailed: storesFailed, reload: reloadStores } = useStoreContext();
 
-  const [createOpen, setCreateOpen] = useState(false);
-  // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
-  // 対象がそのページから外れた瞬間にモーダルが黙って閉じ、「最新の内容を確認してください」と
-  // 言いながら内容を見せない状態になる。
-  const [editingStaff, setEditingStaff] = useState<StoreStaffResponse | null>(null);
+  const [modal, setModal] = useState<
+    { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }
+  >({ kind: 'none' });
+  const editingId = modal.kind === 'edit' ? modal.id : null;
+  const storeId = useParams()?.storeId;
+  const editing = useKeyedResource<StoreStaffResponse>(
+    ['storeStaffApi', storeId as string, editingId],
+    editingId === null ? null : () => storeStaffApi.get(editingId)
+  );
+  const closeModal = () => {
+    if (editing.failure === 'notFound') void list.reload();
+    setModal({ kind: 'none' });
+  };
 
   const storePickerProps = {
     stores: stores ?? [],
@@ -63,33 +72,13 @@ export default function StoreStaffPage() {
     onReloadStores: reloadStores,
   };
 
-  /**
-   * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
-   *
-   * 競合（409）でモーダルが開いたままのとき、最新の版を渡せて初めて再試行が通る。
-   * 一覧の現在ページから導出すると対象が頁の外にいる場合に古い版のままとなり、
-   * 再試行が 409 を繰り返すため、頁とは無関係な id 取得で最新化する。
-   */
-  const handleEditUpdated = () => {
-    void list.reload();
-    const target = editingStaff;
-    if (!target) return;
-    void storeStaffApi
-      .get(target.id ?? 0)
-      // 成功保存の直後は onClose と競合するため、まだ同じ対象を開いているときだけ差し替える
-      .then(fresh => setEditingStaff(current => (current?.id === fresh.id ? fresh : current)))
-      .catch(() => {
-        // 取り直せない（停止・付け替えで対象外になった等）ときは古い値のまま。利用者は閉じて一覧から確認できる
-      });
-  };
-
   return (
     <>
       <ListPage
         title="スタッフ管理"
         description="この店舗のスタッフのロール・担当店舗を管理します。店長など、スタッフ管理の権限を持つアカウントは表示のみです。"
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => setModal({ kind: 'create' })}>
             <PlusIcon />
             スタッフを追加
           </Button>
@@ -175,7 +164,7 @@ export default function StoreStaffPage() {
                       variant="ghost"
                       size="sm"
                       className="text-primary-strong"
-                      onClick={() => setEditingStaff(member)}
+                      onClick={() => setModal({ kind: 'edit', id: member.id ?? 0 })}
                     >
                       編集
                     </Button>
@@ -192,19 +181,19 @@ export default function StoreStaffPage() {
 
       {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
           開くまで mount しないことで、可授ロールの取得を必要になった時点まで遅延させる */}
-      {createOpen && (
+      {modal.kind === 'create' && (
         <StoreStaffCreateModal
           {...storePickerProps}
-          onClose={() => setCreateOpen(false)}
+          onClose={() => closeModal()}
           onCreated={list.reload}
         />
       )}
-      {editingStaff !== null && (
+      {modal.kind === 'edit' && (
         <StoreStaffEditModal
-          staff={editingStaff}
+          resource={editing}
           {...storePickerProps}
-          onClose={() => setEditingStaff(null)}
-          onUpdated={handleEditUpdated}
+          onClose={closeModal}
+          onUpdated={list.reload}
         />
       )}
     </>

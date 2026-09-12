@@ -1,13 +1,7 @@
 'use client';
 
 import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
-import { isNotFound } from '../apiError';
-
-/**
- * 取得の失敗。404 は何度押しても取れないため、再試行を出せる失敗と分けて渡す
- * （提示の形が違う — DESIGN.md「領域内エラー態」）。
- */
-type ResourceFailure = 'notFound' | 'error';
+import { createResourceRequest, ResourceFailure } from './resourceRequest';
 
 interface ResourceResult<T> {
   /** 取得できていないとき（未取得・失敗）は null。 */
@@ -23,25 +17,7 @@ interface ResourceResult<T> {
   reload: () => Promise<void>;
 }
 
-/**
- * 単一リソース（詳細 1 件・選択肢・統計）の取得ライフサイクル
- * （初回取得 / loading / 失敗の分類 / 再取得 / 順不同レスポンス守衛）。
- * fetcher は毎レンダー最新のクロージャを参照するため、state をそのまま閉じ込めてよい。
- * 取得パラメータ（詳細頁の id 等）は deps に列挙する — 変わると取り直す。
- * deps は毎レンダー同じ長さで渡すこと（React が依存配列の長さの変化を許さない）。
- *
- * <p>fetcher に null を渡す間は取りに行かない。閉じたモーダルのように、まだ取る理由が無い
- * 場面のための形。無効化は「取りに行かない」であって「読めていたものを忘れる」ではないので、
- * 持っている値はそのまま残す（在途のリクエストだけ無効化する）。
- *
- * <p>失敗は failure で伝えるだけで、提示は行わない。取得に失敗した領域が自分で名乗るのか
- * 通知に出すのかは呼び出し側の場面が決めることで、フックの内側に隠れてはならない。
- *
- * <p>既知の限界：読み込み中の表示は 1 コミット遅れる。deps の変化と fetcher の有効化は
- * どちらもそのレンダーを終えた効果で取得を始めるため、切り替わったフレームは取得前の姿
- * （data 無し・isLoading false）で一度描かれる。常時 mount のモーダルを開いた最初のフレームが
- * これに当たる。
- */
+/** 単一値の取得。無効化中も保持値を残し、取得条件は deps で指定する。 */
 export function useResource<T>(
   fetcher: (() => Promise<T>) | null,
   deps: unknown[] = []
@@ -52,7 +28,7 @@ export function useResource<T>(
     fetcherRef.current = fetcher;
   });
   // 並行リクエストが順不同で完了しても、最新のリクエストだけが state を更新する
-  const requestIdRef = useRef(0);
+  const [request] = useState(createResourceRequest);
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(fetcher !== null);
   const [failure, setFailure] = useState<ResourceFailure | null>(null);
@@ -60,7 +36,7 @@ export function useResource<T>(
   const load = useCallback(async () => {
     const currentFetcher = fetcherRef.current;
     // 在途のリクエストは、これから取りに行くかどうかに関わらず無効化する
-    const requestId = ++requestIdRef.current;
+    request.invalidate();
     // 失敗も同じく、取りに行くかどうかに関わらず畳む。再取得中に残すと押した再試行が効いて
     // いるのか分からず、取りに行かなくなった後に残すと、押しても何も起きない再試行が出たまま
     // になる（値と違って、前の失敗が今の状態を説明することは無い）。
@@ -70,33 +46,17 @@ export function useResource<T>(
       return;
     }
     setIsLoading(true);
-    try {
-      const result = await currentFetcher();
-      if (requestId === requestIdRef.current) {
-        // 本体の無い応答（204・空ボディ）は「取れた」ではない。data の null は「取れて
-        // いない」を意味するので、成功として通すと failure だけを見ている呼び出し側が
-        // 中身の無い姿を本物として描く。undefined のまま持たないのも同じ理由で、
-        // `!== null` の判定を素通りして参照した先で落ちる。
-        if (result == null) setFailure('error');
-        setData(result ?? null);
-      }
-    } catch (error) {
-      // 読めなかった値は残さない — 領域に前回の内容が居座ると、それが最新に見える
-      if (requestId === requestIdRef.current) {
-        setData(null);
-        setFailure(isNotFound(error) ? 'notFound' : 'error');
-      }
-    } finally {
-      if (requestId === requestIdRef.current) setIsLoading(false);
-    }
-  }, []);
+    const result = await request.run(currentFetcher);
+    if (result.status === 'stale' || !result.isCurrent()) return;
+    setData(result.status === 'success' ? result.data : null);
+    setFailure(result.status === 'success' ? null : result.status);
+    setIsLoading(false);
+  }, [request]);
 
   useEffect(() => {
     void load();
     return () => {
-      // requestIdRef はリクエストカウンタであり DOM ref ではない
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      requestIdRef.current++;
+      request.invalidate();
     };
     // fetcher は ref 越しに最新を読むので依存に載せない。取り直しの契機は deps だけ
     // eslint-disable-next-line react-hooks/exhaustive-deps

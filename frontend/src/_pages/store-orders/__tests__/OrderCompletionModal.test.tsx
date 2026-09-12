@@ -463,7 +463,7 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[0][1].expected_version).toBe(7);
   });
 
-  it('版の食い違いはサーバの文言を出したうえで、取り直した内容と版で播き直す', async () => {
+  it('版の食い違いは入力置換を警告し、取り直した内容と版で播き直す', async () => {
     // 取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（行き止まり）
     mockedGet
       .mockResolvedValueOnce({
@@ -493,8 +493,8 @@ describe('OrderCompletionModal', () => {
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
 
     await waitFor(() =>
-      expect(notify.error).toHaveBeenCalledWith(
-        'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください'
+      expect(notify.warning).toHaveBeenCalledWith(
+        '他の操作者が更新しました。入力を最新の内容に置き換えました'
       )
     );
     expect(onCompleted).not.toHaveBeenCalled();

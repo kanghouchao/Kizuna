@@ -2,11 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import type { PlatformStaffResponse } from '@/entities/user';
 import { platformRoleApi, platformStaffApi } from '@/entities/user';
+import { useKeyedResource } from '@/shared/lib';
 import { StaffEditModal } from '../StaffEditModal';
 
 jest.mock('@/entities/user', () => ({
   platformRoleApi: { list: jest.fn() },
-  platformStaffApi: { update: jest.fn() },
+  platformStaffApi: { get: jest.fn(), update: jest.fn() },
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -32,18 +33,22 @@ const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResp
 const renderModal = (props: Partial<React.ComponentProps<typeof StaffEditModal>> = {}) => {
   const onClose = jest.fn();
   const onUpdated = jest.fn();
-  render(
-    <StaffEditModal
-      staff={staff()}
-      stores={[]}
-      storesLoading={false}
-      storesFailed={false}
-      onReloadStores={jest.fn()}
-      onClose={onClose}
-      onUpdated={onUpdated}
-      {...props}
-    />
-  );
+  function Harness() {
+    const resource = useKeyedResource(['staff', 42], () => platformStaffApi.get(42));
+    return (
+      <StaffEditModal
+        resource={resource}
+        stores={[]}
+        storesLoading={false}
+        storesFailed={false}
+        onReloadStores={jest.fn()}
+        onClose={onClose}
+        onUpdated={onUpdated}
+        {...props}
+      />
+    );
+  }
+  render(<Harness />);
   return { onClose, onUpdated };
 };
 
@@ -54,6 +59,7 @@ describe('スタッフ授権編集モーダル', () => {
       { id: 3, name: '店長', system: true, permission_count: 0 },
       { id: 4, name: '経理', system: false, permission_count: 0 },
     ]);
+    mockedStaffApi.get.mockResolvedValue(staff());
     mockedStaffApi.update.mockResolvedValue({} as never);
   });
 
@@ -61,12 +67,12 @@ describe('スタッフ授権編集モーダル', () => {
     renderModal();
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('山田太郎 の権限を編集')).toBeInTheDocument();
+    expect(await screen.findByText('山田太郎 の権限を編集')).toBeInTheDocument();
   });
 
   it('保存は楽観ロックの version を含む現在値をそのまま送信する', async () => {
     renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -84,15 +90,16 @@ describe('スタッフ授権編集モーダル', () => {
   // 400 で弾くため授権の更新そのものが通らなくなる。
   it('状態を切り替える欄を持たない', async () => {
     renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     expect(screen.queryByLabelText('停止')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('有効')).not.toBeInTheDocument();
   });
 
   it('ロールの選択を全て外すと、その組の傍に文言を出し更新 API を呼ばない', async () => {
-    renderModal({ staff: staff({ roles: [] }) });
-    await screen.findByRole('dialog');
+    mockedStaffApi.get.mockResolvedValue(staff({ roles: [] }));
+    renderModal();
+    await screen.findByRole('button', { name: '保存する' });
 
     const submitButton = screen.getByRole('button', { name: '保存する' });
     fireEvent.click(submitButton);
@@ -108,7 +115,7 @@ describe('スタッフ授権編集モーダル', () => {
 
   it('保存成功で完了トーストを出し onUpdated と onClose を呼ぶ', async () => {
     const { onClose, onUpdated } = renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -120,13 +127,13 @@ describe('スタッフ授権編集モーダル', () => {
   it('409 は固定文言で警告し一覧を再取得したままモーダルを閉じない', async () => {
     mockedStaffApi.update.mockRejectedValue({ response: { status: 409 } });
     const { onClose, onUpdated } = renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() =>
       expect(mockedNotify.warning).toHaveBeenCalledWith(
-        '他の管理者が更新しました。最新の内容を確認してください'
+        '他の担当者が更新しました。入力を最新の内容に置き換えました'
       )
     );
     expect(onUpdated).toHaveBeenCalledTimes(1);
@@ -137,7 +144,7 @@ describe('スタッフ授権編集モーダル', () => {
   it('409 以外の失敗は onUpdated を呼ばない', async () => {
     mockedStaffApi.update.mockRejectedValue({ response: { status: 400 } });
     const { onClose, onUpdated } = renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -149,7 +156,7 @@ describe('スタッフ授権編集モーダル', () => {
 
   it('キャンセルは更新せず閉じる', async () => {
     const { onClose } = renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
 
@@ -159,7 +166,7 @@ describe('スタッフ授権編集モーダル', () => {
 
   it('Escape で閉じる', async () => {
     const { onClose } = renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
@@ -171,7 +178,7 @@ describe('スタッフ授権編集モーダル', () => {
   it('送信中は閉じられない', async () => {
     mockedStaffApi.update.mockImplementationOnce(() => new Promise(() => {}));
     const { onClose } = renderModal();
-    await screen.findByRole('dialog');
+    await screen.findByRole('button', { name: '保存する' });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
     await screen.findByRole('button', { name: '保存中...' });

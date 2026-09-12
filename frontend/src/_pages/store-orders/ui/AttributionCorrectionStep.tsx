@@ -1,10 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { OrderAttributionCorrection, orderApi } from '@/entities/order';
-import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  integerRule,
+  useKeyedResource,
+  useResourceInitialization,
+  ResourceSuccess,
+} from '@/shared/lib';
 import {
   Button,
   Form,
@@ -47,13 +54,23 @@ export function AttributionCorrectionStep({
   onBusyChange,
   onDone,
 }: AttributionCorrectionStepProps) {
-  const { data, isLoading, failure, reload } = useResource<OrderAttributionCorrection>(
-    async () => orderApi.attributionCorrection(orderId, attributionId),
-    [orderId, attributionId]
+  const storeId = useParams()?.storeId as string;
+  const resource = useKeyedResource<OrderAttributionCorrection>(
+    ['attributionCorrection', storeId, orderId, attributionId],
+    () => orderApi.attributionCorrection(orderId, attributionId)
   );
+  const { data, success, isLoading, failure, reload } = resource;
 
   if (isLoading) {
     return <p className="px-6 py-8 text-center text-sm text-muted-foreground">読み込み中...</p>;
+  }
+  if (failure === 'notFound') {
+    return (
+      <div role="alert" className="space-y-3 px-6 py-5">
+        <p>この帰属記録は見つかりませんでした。</p>
+        <Button onClick={onDone}>閉じる</Button>
+      </div>
+    );
   }
   if (failure !== null) {
     return (
@@ -64,7 +81,7 @@ export function AttributionCorrectionStep({
       />
     );
   }
-  if (data === null) {
+  if (data === null || success === null) {
     return null;
   }
   // 取得できてからフォームを起こす。既定値は取得値から作るため、先に組むと最初の 1 レンダーだけ空欄になる。
@@ -73,7 +90,8 @@ export function AttributionCorrectionStep({
       orderId={orderId}
       attributionId={attributionId}
       memberCode={memberCode}
-      status={data}
+      success={success}
+      capture={resource.capture}
       onBusyChange={onBusyChange}
       onDone={onDone}
     />
@@ -81,7 +99,8 @@ export function AttributionCorrectionStep({
 }
 
 interface CorrectionFormProps extends AttributionCorrectionStepProps {
-  status: OrderAttributionCorrection;
+  success: ResourceSuccess<OrderAttributionCorrection>;
+  capture: () => { isCurrent: () => boolean };
 }
 
 interface CorrectionFormValues {
@@ -93,10 +112,12 @@ function CorrectionForm({
   orderId,
   attributionId,
   memberCode,
-  status,
+  success,
+  capture,
   onBusyChange,
   onDone,
 }: CorrectionFormProps) {
+  const status = success.data;
   const remaining = status.granted_points - status.corrected_points;
   const form = useForm<CorrectionFormValues>({
     defaultValues: { points: remaining, reason: '' },
@@ -106,6 +127,10 @@ function CorrectionForm({
     handleSubmit,
     formState: { isSubmitting },
   } = form;
+
+  const initialized = useResourceInitialization(success, value =>
+    form.reset({ points: value.granted_points - value.corrected_points, reason: '' })
+  );
 
   // 送信中を親へ上げる。片付けで必ず false へ戻すのは、成功時に onDone がこの段を畳むため —
   // 畳まれた瞬間の isSubmitting はまだ true で、通知だけでは親が送信中のまま固まる。
@@ -119,6 +144,7 @@ function CorrectionForm({
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const submit = async (values: CorrectionFormValues) => {
+    const operation = capture();
     try {
       await orderApi.correctAttributionPoints(orderId, {
         attribution_id: attributionId,
@@ -126,13 +152,17 @@ function CorrectionForm({
         reason: values.reason,
         idempotency_key: idempotencyKey,
       });
+      if (!operation.isCurrent()) return;
       notify.success('誤って付与されたポイントを差し引きました');
       onDone();
     } catch (error) {
+      if (!operation.isCurrent()) return;
       // 残高不足・上限超過は、サーバが対処できる文言（引ける額を含む）を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, 'ポイントの差し引きに失敗しました'));
     }
   };
+
+  if (!initialized) return <p className="px-6 py-5">読み込み中...</p>;
 
   if (remaining <= 0) {
     return (

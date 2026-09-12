@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -14,7 +15,13 @@ import {
   systemOwnedFeeLines,
   toFeeLineInputs,
 } from '@/entities/order';
-import { getApiErrorMessage, integerRule, isConflict, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  integerRule,
+  isConflict,
+  useKeyedResource,
+  useResourceInitialization,
+} from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
@@ -45,15 +52,6 @@ interface OrderCompletionFormValues {
 /** 内訳を持たない受注を開いたときの初期行。打ち始められる空の 1 行を出す。 */
 const EMPTY_FEE_LINE: OrderFeeLineInput = { kind: 'OPTION', name: '', amount: NaN };
 
-/**
- * 取得した見込みと、その取得元の受注。取得フックは取り直しの間も前の値を保つため、
- * 値だけでは別の受注の見込みと見分けられない。
- */
-interface PreviewSnapshot {
-  orderId: string;
-  body: OrderCompletionPreview;
-}
-
 /** 発行された伝票トークンと、その発行元の受注（見込みと同じ理由で、値だけでは別の受注のものと見分けられない）。 */
 interface IssuedReceiptToken {
   orderId: string;
@@ -63,7 +61,7 @@ interface IssuedReceiptToken {
 interface OrderCompletionModalProps {
   /** 完了処理の対象。null なら閉じている。 */
   order: OrderWorkQueueRow | null;
-  onClose: () => void;
+  onClose: (missing?: boolean) => void;
   /** 完了の成功後に呼ばれる（受注の状態と会計欄が変わるため、一覧の取り直しに使う）。 */
   onCompleted: () => void;
   /**
@@ -86,7 +84,7 @@ interface OrderCompletionModalProps {
  */
 export function OrderCompletionModal({
   order,
-  onClose,
+  onClose: closeModal,
   onCompleted,
   onSuperseded,
 }: OrderCompletionModalProps) {
@@ -102,6 +100,7 @@ export function OrderCompletionModal({
   } = form;
 
   const orderId = order?.id ?? '';
+  const storeId = useParams()?.storeId as string;
   // 合計はサーバが行から導出する。ここで足すのは、見込みの取得と利用ポイントの上限判定に要る
   // 「ポイント利用が入る前の総和」を手元で持つためだけ。
   const chargeAmount = feeLinesTotal(watch('fee_lines') ?? []);
@@ -112,84 +111,20 @@ export function OrderCompletionModal({
   const [committed, setCommitted] = useState<{ orderId: string; fee: number } | null>(null);
   const committedFee = committed !== null && committed.orderId === orderId ? committed.fee : 0;
 
-  // 播種は行ではなく詳細の読み口から取る。この面は作業キューの行から開かれ、行は明細もコース名も
-  // 持たない（一覧と詳細の DTO は分かれている）。行だけで播くと、内訳のある受注が空行で開き、
-  // そのまま完了すると既存の内訳を丸ごと上書きして失う。
-  const {
-    data: detail,
-    setData: setDetail,
-    failure: detailFailure,
-    reload: reloadDetail,
-  } = useResource<Order>(order === null ? null : () => orderApi.get(order.id), [orderId]);
-  // 播種の効果から呼ぶ親の口。依存へ載せると親の再レンダーごとに効果が走り直すので、
-  // ref 越しに最新を読む（useResource の fetcherRef と同じ作法）。
-  const onSupersededRef = useRef(onSuperseded);
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onSupersededRef.current = onSuperseded;
-    onCloseRef.current = onClose;
-  });
-  // 終端の名乗りを受注 1 件につき一度に抑える印。効果は同じ詳細のまま再実行されうるので、
-  // これが無いと通知と送り出しが重複する。
-  const supersededIdRef = useRef<string | null>(null);
-  // 播き終えた受注。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
-  // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
-  const seededOrder = detail !== null && detail.id === orderId;
-  const [seededId, setSeededId] = useState<string | null>(null);
-  const seeded = seededOrder && seededId === orderId;
-
-  // 閉じている間は取りに行かない（開いた時点で取り直す）。播く前に取りに行かないのは、
-  // 内訳が入る前の総和 0 で見込みを引くと、明細のある受注の付与予定が最初の 1 画面だけ 0 で出るため。
-  const {
-    data: snapshot,
-    isLoading: previewLoading,
-    failure: previewFailure,
-    reload: reloadPreview,
-  } = useResource<PreviewSnapshot>(
-    order === null || !seeded
-      ? null
-      : async () => ({ orderId, body: await orderApi.completionPreview(order.id, committedFee) }),
-    [orderId, committedFee, seeded]
+  const resource = useKeyedResource<Order>(
+    ['order', storeId, orderId],
+    order === null ? null : () => orderApi.get(order.id)
   );
-  // 別の受注へ切り替わった瞬間は見込みを持たない状態から始める（レンダー期の判定なので、前の受注の
-  // 紐づけで欄の可否や送信可否を決めるフレームが 1 つも無い）。同じ受注で金額を取り直している間だけ
-  // 前の値を出したままにする。
-  const preview = snapshot !== null && snapshot.orderId === orderId ? snapshot.body : null;
-
-  // 発行された伝票トークン。会員へ帰属しなかった完了でだけ返るので、これが在る間は QR を出したまま
-  // 閉じずに待つ（生値はこの応答にしか現れず、閉じると二度と出せない）。
-  const [issued, setIssued] = useState<IssuedReceiptToken | null>(null);
-  const receiptToken = issued !== null && issued.orderId === orderId ? issued.token : null;
-
-  // 開き直したら播種をやり直す。useResource は取りに行かない間も持っている値を残すので、印を消さないと
-  // 取り直しの完了を待たずに前の受注の内訳が出る。
-  //
-  // 発行済みの QR もここで戻す。播種の効果に委ねると、取り直しが同じ値を返して効果が走らなかった
-  // ときに「今だけ表示できる」と書いた画面が前の QR を出し直す。
-  useEffect(() => {
-    setSeededId(null);
-    setIssued(null);
-    supersededIdRef.current = null;
-  }, [orderId]);
-
-  // 取得できたら播く。取得の到着はレンダーより後なので、初期値ではなく効果で入れる。
-  //
-  // 播き直しの引き金は<b>取得値そのものの到着</b>だけにする。useResource は取り直しの間も前の値を
-  // 持ったままなので、印の有無で播くと開き直した瞬間に陳腐化した値で播いて印が立ち、後から着いた
-  // 新しい内容が捨てられる — その内訳のまま完了すると、他の操作者が直した明細を古い値で上書きする。
-  // 取り直し中は前と同じ値のまま効果が走らず、印を消した状態が続くのでフォームは出ない。
-  useEffect(() => {
-    if (detail === null) return;
-    // 終端の詳細は播種元にならない。播くと一致する版で再送できてしまい、今度は終端拒否の
-    // 400 が行き止まりになる。完了はもう成立しないので、どの経路の取得で着いた姿でも
-    // ここで一度だけ名乗って閉じ、行を作業キューからアーカイブへ送り出す。
+  const { data: detail, failure: detailFailure, reload: reloadDetail } = resource;
+  const onClose = () => {
+    if (resource.failure === 'notFound') closeModal(true);
+    else closeModal();
+  };
+  const initialized = useResourceInitialization(resource.success, detail => {
     if (detail.status === 'COMPLETED' || detail.status === 'CANCELLED') {
-      if (supersededIdRef.current !== (detail.id ?? null)) {
-        supersededIdRef.current = detail.id ?? null;
-        notify.error('この受注は別の操作者により完了または取消済みです');
-        onSupersededRef.current(detail.status);
-        onCloseRef.current();
-      }
+      notify.error('この受注は別の操作者により完了または取消済みです');
+      onSuperseded(detail.status);
+      onClose();
       return;
     }
     const existing = storeEditableFeeLines(detail.fee_lines);
@@ -198,15 +133,39 @@ export function OrderCompletionModal({
       fee_lines: existing.length > 0 ? existing : [EMPTY_FEE_LINE],
       use_points: NaN,
     });
-    // 見込みの基準も播いた内訳の総和から始める。0 のままだと、明細のある受注の付与予定が
-    // 欄を離れるまで嘘になる
-    setCommitted({ orderId: detail.id ?? '', fee: feeLinesTotal(existing) });
-    setSeededId(detail.id ?? null);
-  }, [detail, reset]);
+    setCommitted({ orderId, fee: feeLinesTotal(existing) });
+  });
+  const seeded =
+    initialized &&
+    !resource.isLoading &&
+    detail !== null &&
+    detail.status !== 'COMPLETED' &&
+    detail.status !== 'CANCELLED';
+  const {
+    data: preview,
+    isLoading: previewLoading,
+    failure: previewFailure,
+    reload: reloadPreview,
+  } = useKeyedResource<OrderCompletionPreview>(
+    ['completionPreview', storeId, orderId],
+    order === null || !seeded ? null : () => orderApi.completionPreview(order.id, committedFee),
+    [committedFee]
+  );
+
+  // 発行された伝票トークン。会員へ帰属しなかった完了でだけ返るので、これが在る間は QR を出したまま
+  // 閉じずに待つ（生値はこの応答にしか現れず、閉じると二度と出せない）。
+  const [issued, setIssued] = useState<IssuedReceiptToken | null>(null);
+  const receiptToken =
+    resource.data !== null && issued !== null && issued.orderId === orderId ? issued.token : null;
+
+  useEffect(() => {
+    setIssued(null);
+  }, [orderId, storeId]);
 
   const submit = async (values: OrderCompletionFormValues) => {
     // 版は完了の必須項目。詳細が無い／版を運んでいない姿では送る先が決まらないので、送らない
-    if (!order || detail === null || detail.version === undefined) return;
+    if (!seeded || !order || detail === null || detail.version === undefined) return;
+    const operation = resource.capture();
     // 欄が消えても react-hook-form は値を保つ。非会員の受注へ持ち越した利用を送らないよう、
     // 送信可否は入力ではなく今の見込みで決める。
     const usePoints = preview?.member_linked === true ? values.use_points : NaN;
@@ -223,6 +182,7 @@ export function OrderCompletionModal({
         // （undefined は JSON 化の段でキーごと消える）。
         use_points: usePoints > 0 ? usePoints : undefined,
       });
+      if (!operation.isCurrent()) return;
       notify.success('オーダーを完了しました');
       onCompleted();
       // 会員へ帰属した完了はトークンを持たないので、これまでどおり閉じる。
@@ -232,20 +192,16 @@ export function OrderCompletionModal({
         onClose();
       }
     } catch (error) {
+      if (!operation.isCurrent()) return;
       if (isConflict(error)) {
-        // 版の食い違い。まだ完了できる姿かは取り直した現物の状態で分かれる — CONFIRMED なら
-        // 競合の文言を出して最新の内訳と版で播き直し（打ちかけの入力は破棄される）、終端なら
-        // 播種の効果が名乗って閉じる。文言はどちらの枝でも一度だけ出す
-        try {
-          const fresh = await orderApi.get(order.id);
-          if (fresh.status !== 'COMPLETED' && fresh.status !== 'CANCELLED') {
-            notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
-          }
-          setDetail(fresh);
-        } catch {
-          // 取り直せなくても行き止まりにしない。文言を出し、取得フックの取り直しに任せる
-          notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
-          await reloadDetail();
+        const result = await reloadDetail();
+        if (
+          result.status === 'success' &&
+          result.isCurrent() &&
+          result.data.status !== 'COMPLETED' &&
+          result.data.status !== 'CANCELLED'
+        ) {
+          notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
         }
         return;
       }
