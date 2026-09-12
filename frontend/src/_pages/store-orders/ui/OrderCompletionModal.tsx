@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
   Order,
+  OrderWorkQueueRow,
   OrderCompletionPreview,
   OrderFeeLineInput,
   feeLinesTotal,
@@ -61,7 +62,7 @@ interface IssuedReceiptToken {
 
 interface OrderCompletionModalProps {
   /** 完了処理の対象。null なら閉じている。 */
-  order: Order | null;
+  order: OrderWorkQueueRow | null;
   onClose: () => void;
   /** 完了の成功後に呼ばれる（受注の状態と会計欄が変わるため、一覧の取り直しに使う）。 */
   onCompleted: () => void;

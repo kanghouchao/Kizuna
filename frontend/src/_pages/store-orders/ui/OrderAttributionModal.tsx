@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { Order, OrderAttribution, OrderAttributionSource, orderApi } from '@/entities/order';
+import {
+  OrderArchiveRow,
+  OrderAttribution,
+  OrderAttributionSource,
+  orderApi,
+} from '@/entities/order';
 import { getApiErrorMessage, hasPermission, readTokenClaims, useResource } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { AttributionCorrectionStep } from './AttributionCorrectionStep';
@@ -73,7 +78,7 @@ interface CorrectionTarget {
 
 interface OrderAttributionModalProps {
   /** 訂正の対象。null なら閉じている。 */
-  order: Order | null;
+  order: OrderArchiveRow | null;
   onClose: () => void;
 }
 

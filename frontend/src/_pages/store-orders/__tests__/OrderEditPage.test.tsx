@@ -29,6 +29,7 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 /** 確定済みの受注 1 件。fixture は手書きで、Order 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<Order> = {}): Order {
   return {
+    fee_lines: [],
     id: 'o1',
     business_date: '2026-07-03',
     arrival_scheduled_start_time: '19:30:00',

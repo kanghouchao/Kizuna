@@ -26,6 +26,7 @@ const mockedPreview = orderApi.pointRollbackPreview as jest.Mock;
 const mockedRollback = orderApi.pointRollback as jest.Mock;
 
 const completedOrder: Order = {
+  fee_lines: [],
   id: 'o1',
   status: 'COMPLETED',
   business_date: '2026-08-29',

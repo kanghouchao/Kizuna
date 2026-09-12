@@ -118,8 +118,8 @@ export interface Order {
   /** 実際の到着・終了時刻。完了後の訂正の門だけがこれを直せる。 */
   actual_arrival_time?: string;
   actual_end_time?: string;
-  /** 受注金額の内訳。減項は正値で返る。 */
-  fee_lines?: OrderFeeLine[];
+  /** 受注金額の内訳。明細がない場合も空配列で返る。減項は正値で返る。 */
+  fee_lines: OrderFeeLine[];
   carrier?: string;
   media_name?: string;
   /** 明細の総和。ポイント利用の減算も含むため、ポイント控除後の請求額にあたる。 */

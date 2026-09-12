@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { OrderAttributionModal } from '../ui/OrderAttributionModal';
-import { Order, OrderAttribution, orderApi } from '@/entities/order';
+import { OrderArchiveRow, OrderAttribution, orderApi } from '@/entities/order';
 import { TokenClaims, readTokenClaims } from '@/shared/lib';
 
 // hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
@@ -47,7 +47,7 @@ function claimsWith(permissions: string[]): TokenClaims {
   };
 }
 
-const completedOrder: Order = {
+const completedOrder: OrderArchiveRow = {
   id: 'o1',
   status: 'COMPLETED',
   business_date: '2026-08-10',
