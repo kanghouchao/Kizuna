@@ -32,6 +32,7 @@ user モジュールの application 層に統一操作を置き、集約の行�
 ## 実装上の決定（Implementation Decisions）
 
 - user.application に具体クラスの統一操作を置く。停止・パスワード変更・明示的な全セッション失効を扱う。汎用コールバックや設定可能な操作フレームワークは導入しない。
+- 統一操作クラスだけを型単位の `@NamedInterface("credential-operations")` で公開し、auth の PlatformAuthService と EmergencyElevationService は `user::credential-operations` を経由して同期参照する。ActorIdentityService と ReceptionistEligibilityService の既存の公開方式に揃え、application パッケージ全体の公開や公開のためだけの interface / Impl 分割は行わない。公開メソッドは上記三操作に限定し、引数の PlatformUser は既存の `user::domain` 公開境界を使う。
 - 増版は PlatformUser の行為メソッドに残す。application 層での read-modify-write や HQL 一括更新は行わない。
 - 人と SERVICE は初回停止で増版し、停止済みへの再要求では増版しない。人は再要求でも現在版を通知し、SERVICE は統一操作内の明示的な種別分岐で通知しない。
 - パスワード変更と明示失効は集約が進めた版を通知する。SERVICE の資格情報保持禁止は維持する。
@@ -59,7 +60,7 @@ user モジュールの application 層に統一操作を置き、集約の行�
 | CredentialVersionServiceTest / CredentialVersionIT | 単調キャッシュ反映と実際のセッション失効を存続 |
 | 統一操作の契約テスト | 人の初回停止、同版再通知、パスワード変更、明示失効、SERVICE の初回・反復停止と無通知を集中検証 |
 | トランザクション結合テスト | 実際の Spring プロキシで、トランザクションなしの拒否、外側 rollback 時の版の非永続化と Redis 無反映を検証 |
-| ArchUnit / ModularityTests | 迂回とモジュール依存循環を検出 |
+| ArchUnit / ModularityTests | 迂回を検出し、統一操作クラスが `user::credential-operations` に公開されることを検証。auth の二つの呼出元を含む `modules.verify()` で内部型への不正参照と依存循環がないことを検証 |
 
 ArchUnit の先例は AttributionMaterializationTests、commit/rollback の先例は AuthSessionServiceTest、実際の認証結果の先例は CredentialVersionIT。既存境界を再利用し、業務サービスごとのイベント内容検証は複製しない。
 
@@ -81,6 +82,7 @@ ArchUnit の先例は AttributionMaterializationTests、commit/rollback の先�
 ### spec 完了条件
 
 - [x] application 層で束ね、既存イベント機構と afterCommit を維持する。
+- [x] 統一操作だけを公開する named interface と auth からの参照境界を定義した。
 - [x] SERVICE は増版し、統一操作内で通知を省く。
 - [x] テストの置換・存続対応表を作成した。
 - [x] ADR 0022 と ADR 0025 との整合を確認した。
