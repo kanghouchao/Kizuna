@@ -51,3 +51,11 @@ base を **Base UI（`@base-ui/react`）** に一本化する。`radix-ui` と `
 依存ツリーから Radix は完全に消えた。プリミティブの追加は今後 shadcn の `base-*` レシピから行う。
 ただし当リポジトリのクラス列は `new-york-v4` 由来であり `base-*` 族とは見た目が異なるため、
 生成物をそのまま貼るのではなく、配線だけを取り込んでクラス列は既存に合わせる。
+
+## 検索選択の境界
+
+Combobox の純 UI は `shared/ui/combobox.tsx` に置き、公開入口から利用する。
+[shadcn の Base UI レシピ](https://ui.shadcn.com/docs/components/base/combobox)の配線を採り、
+既存のクラス列を保つ vendored 部品として扱う。必要な単一選択の部品だけを収める。
+候補 API、検索語、debounce、選択済みの業務値はページ slice の CastSearchCombobox が所有する。
+三つの受注フォームが同じ検索操作を使っても、共有 UI が受注型や API に依存しないための境界である。

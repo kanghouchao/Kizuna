@@ -17,36 +17,21 @@ export default function CreateOrderPage() {
     setIsSubmitting(true);
     try {
       const request: OrderCreateRequest = {
+        ...data,
         // 未選択は「自分」の意。項目ごと送らないことでサーバが実行者本人を受付担当に据える
         // （JWT にも /platform/me にも利用者 id が無いため、画面の側で自分を選択値にはできない）
-        receptionist_id: data.receptionistId === '' ? undefined : Number(data.receptionistId),
-        business_date: data.businessDate,
-        arrival_scheduled_start_time: data.arrivalStartTime
-          ? `${data.arrivalStartTime}:00`
+        receptionist_id: data.receptionist_id === '' ? undefined : Number(data.receptionist_id),
+        arrival_scheduled_start_time: data.arrival_scheduled_start_time
+          ? `${data.arrival_scheduled_start_time}:00`
           : undefined,
-        arrival_scheduled_end_time: data.arrivalEndTime ? `${data.arrivalEndTime}:00` : undefined,
-        customer_name: data.customerName,
-        phone_number: data.phoneNumber,
-        phone_number2: data.phoneNumber2,
-        address: data.address,
-        building_name: data.buildingName,
-        classification: data.classification,
-        landmark: data.landmark,
-        has_pet: data.hasPet,
-        ng_type: data.ngType,
-        ng_content: data.ngContent,
-        cast_id: data.castId, // 注: ユーザーが名前を入力する場合、ID解決が必要かもしれないが、フォーム上は 'castId' となっている
+        arrival_scheduled_end_time: data.arrival_scheduled_end_time
+          ? `${data.arrival_scheduled_end_time}:00`
+          : undefined,
         // 空欄は「未入力」として送らない — Number('') は 0 になり、サーバ側の @Min(1) に撥ねられる
         pax: `${data.pax ?? ''}` === '' ? undefined : Number(data.pax),
-        reception_route: data.receptionRoute,
-        course_name: data.courseName,
-        course_minutes: Number(data.courseMinutes),
-        extension_minutes: Number(data.extensionMinutes),
+        course_minutes: Number(data.course_minutes),
+        extension_minutes: Number(data.extension_minutes),
         fee_lines: toFeeLineInputs(data.fee_lines),
-        carrier: data.carrier,
-        media_name: data.mediaName,
-        remarks: data.remarks,
-        cast_driver_message: data.castDriverMessage,
       };
 
       await orderApi.create(request);

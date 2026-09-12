@@ -1,10 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronsUpDownIcon } from 'lucide-react';
-import { Combobox } from '@base-ui/react/combobox';
 import { OrderCastCandidate, orderApi } from '@/entities/order';
-import { Button, Label, RegionError } from '@/shared/ui';
+import {
+  Button,
+  Label,
+  RegionError,
+  Combobox,
+  ComboboxTrigger,
+  ComboboxContent,
+  ComboboxInput,
+  ComboboxEmpty,
+  ComboboxList,
+  ComboboxItem,
+} from '@/shared/ui';
 
 interface CastSearchComboboxProps {
   /** ラベルと引き金を結ぶ id。同一画面で衝突しない値を親が与える。 */
@@ -28,7 +37,7 @@ interface CastSearchComboboxProps {
   'aria-describedby'?: string;
   /**
    * 必須の指名かどうか。引き金へ aria-required として手で載せる。
-   * Combobox.Root の required は使えない——この構成は value を null に固定して選択を出来事としてだけ
+   * Combobox の required は使えない——この構成は value を null に固定して選択を出来事としてだけ
    * 受け取るため、Root 側の必須は永久に未充足のままになり、実測で送信そのものが通らなくなった。
    */
   required?: boolean;
@@ -117,7 +126,7 @@ export function CastSearchCombobox({
        * 選択を持つのは親なので、combobox 自身の値は常に null に固定して選択を出来事としてだけ受け取る。
        * 絞り込みはサーバ側の読み口が担うため filter は切る。
        */}
-      <Combobox.Root
+      <Combobox
         items={options}
         filter={null}
         value={null}
@@ -129,13 +138,13 @@ export function CastSearchCombobox({
         itemToStringLabel={(cast: OrderCastCandidate) => cast.name ?? ''}
         disabled={disabled}
       >
-        <Combobox.Trigger
+        <ComboboxTrigger
           render={
             <Button
               id={id}
               type="button"
               variant="outline"
-              className="w-full justify-between font-normal"
+              className="min-w-0"
               ref={triggerRef}
               aria-invalid={ariaInvalid}
               aria-describedby={ariaDescribedby}
@@ -143,52 +152,35 @@ export function CastSearchCombobox({
             />
           }
         >
-          <span className={selectedName ? '' : 'text-muted-foreground'}>
+          <span className={selectedName ? 'truncate' : 'truncate text-muted-foreground'}>
             {selectedName || '名前で検索'}
           </span>
-          <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
-        </Combobox.Trigger>
-        <Combobox.Portal>
-          <Combobox.Positioner align="start" sideOffset={4} className="isolate z-50">
-            {/* 引き金の幅に合わせるが、狭い桁に置かれても候補が潰れないよう下限を持たせる */}
-            <Combobox.Popup className="w-(--anchor-width) min-w-72 origin-(--transform-origin) rounded-md border bg-popover text-popover-foreground shadow-md outline-hidden">
-              <div className="flex h-9 items-center gap-2 border-b px-3">
-                <Combobox.Input
-                  placeholder="名前で検索"
-                  className="flex h-10 w-full bg-transparent py-3 text-sm outline-hidden placeholder:text-muted-foreground"
-                />
-              </div>
-              {isLoading ? (
-                <div className="py-6 text-center text-sm text-muted-foreground">検索中...</div>
-              ) : failed ? (
-                <RegionError
-                  message="キャスト候補の取得に失敗しました"
-                  onRetry={() => setAttempt(count => count + 1)}
-                  className="justify-center px-3 py-6"
-                />
-              ) : (
-                <>
-                  <Combobox.Empty className="py-6 text-center text-sm">
-                    該当するキャストがいません
-                  </Combobox.Empty>
-                  <Combobox.List className="max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto p-1">
-                    {(cast: OrderCastCandidate) => (
-                      <Combobox.Item
-                        key={cast.id}
-                        value={cast}
-                        className="relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
-                      >
-                        <span className="font-medium">{cast.name}</span>
-                        <span className="ml-auto text-xs text-muted-foreground">ID: {cast.id}</span>
-                      </Combobox.Item>
-                    )}
-                  </Combobox.List>
-                </>
-              )}
-            </Combobox.Popup>
-          </Combobox.Positioner>
-        </Combobox.Portal>
-      </Combobox.Root>
+        </ComboboxTrigger>
+        <ComboboxContent className="min-w-72">
+          <ComboboxInput placeholder="名前で検索" />
+          {isLoading ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">検索中...</div>
+          ) : failed ? (
+            <RegionError
+              message="キャスト候補の取得に失敗しました"
+              onRetry={() => setAttempt(count => count + 1)}
+              className="justify-center px-3 py-6"
+            />
+          ) : (
+            <>
+              <ComboboxEmpty>該当するキャストがいません</ComboboxEmpty>
+              <ComboboxList>
+                {(cast: OrderCastCandidate) => (
+                  <ComboboxItem key={cast.id} value={cast}>
+                    <span className="font-medium">{cast.name}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">ID: {cast.id}</span>
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+            </>
+          )}
+        </ComboboxContent>
+      </Combobox>
     </div>
   );
 }
