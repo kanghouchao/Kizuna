@@ -9,7 +9,7 @@ import {
   platformStaffApi,
 } from '@/entities/user';
 import { StaffCreateModal, StaffEditModal, roleSetLabel } from '@/features/staff-management';
-import { useListPage, useManagedList } from '@/shared/lib';
+import { useKeyedResource, useListPage, useManagedList } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -66,18 +66,24 @@ export default function StaffPage() {
     refetch: refetchStores,
   } = useManagedList<PlatformStore>(() => platformAuthApi.stores());
 
-  const [createOpen, setCreateOpen] = useState(false);
-  // 編集対象は一覧から独立して保持する。分頁後の現在ページから導出すると、409 の再取得で
-  // 対象がそのページから外れた瞬間（本人が PUT /platform/me で改名して検索から外れる、
-  // 他の管理者の追加で行が次ページへずれる等）にモーダルが黙って閉じ、
-  // 「最新の内容を確認してください」と言いながら内容を見せない状態になる。
-  const [editingStaff, setEditingStaff] = useState<PlatformStaffResponse | null>(null);
+  const [modal, setModal] = useState<
+    { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }
+  >({ kind: 'none' });
+  const editingId = modal.kind === 'edit' ? modal.id : null;
+  const editing = useKeyedResource<PlatformStaffResponse>(
+    ['platformStaffApi', editingId],
+    editingId === null ? null : () => platformStaffApi.get(editingId)
+  );
+  const closeModal = () => {
+    if (editing.failure === 'notFound') void list.reload();
+    setModal({ kind: 'none' });
+  };
 
   // モーダルを開くたびに目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
   // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
   // 確定する時序では、settle 後の失敗を検知して 1 回だけ取り直す（失敗が続く環境で無限に
   // 叩かない — それ以降の回復は StoreSetPicker の再試行導線が担う）。
-  const modalOpen = createOpen || editingStaff !== null;
+  const modalOpen = modal.kind !== 'none';
   const prevModalOpenRef = useRef(false);
   const storesRetriedRef = useRef(false);
   useEffect(() => {
@@ -120,33 +126,13 @@ export default function StaffPage() {
       .map(store => ({ value: String(store.id), label: store.name ?? String(store.id) })),
   ];
 
-  /**
-   * 更新後の後始末。一覧を取り直しつつ、編集対象は id で取り直す。
-   *
-   * 競合（409）でモーダルが開いたままのとき、最新の版を渡せて初めて再試行が通る。
-   * 一覧の現在ページから導出すると対象が頁の外にいる場合に古い版のままとなり、
-   * 再試行が 409 を繰り返すため、頁とは無関係な id 取得で最新化する。
-   */
-  const handleEditUpdated = () => {
-    void list.reload();
-    const target = editingStaff;
-    if (!target) return;
-    void platformStaffApi
-      .get(target.id ?? 0)
-      // 成功保存の直後は onClose と競合するため、まだ同じ対象を開いているときだけ差し替える
-      .then(fresh => setEditingStaff(current => (current?.id === fresh.id ? fresh : current)))
-      .catch(() => {
-        // 取り直せない（削除済み等）ときは古い値のまま。利用者は閉じて一覧から確認できる
-      });
-  };
-
   return (
     <>
       <ListPage
         title="管理者管理"
         description="プラットフォーム権限を持つアカウントのロール・担当店舗を管理します。"
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => setModal({ kind: 'create' })}>
             <PlusIcon />
             管理者を追加
           </Button>
@@ -269,7 +255,7 @@ export default function StaffPage() {
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    onClick={() => setEditingStaff(member)}
+                    onClick={() => setModal({ kind: 'edit', id: member.id ?? 0 })}
                   >
                     編集
                   </Button>
@@ -282,25 +268,25 @@ export default function StaffPage() {
 
       {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
           開くまで mount しないことで、ロール目録の取得を必要になった時点まで遅延させる */}
-      {createOpen && (
+      {modal.kind === 'create' && (
         <StaffCreateModal
           stores={stores}
           storesLoading={storesLoading}
           storesFailed={storesFailed}
           onReloadStores={() => void refetchStores()}
-          onClose={() => setCreateOpen(false)}
+          onClose={() => closeModal()}
           onCreated={list.reload}
         />
       )}
-      {editingStaff !== null && (
+      {modal.kind === 'edit' && (
         <StaffEditModal
-          staff={editingStaff}
+          resource={editing}
           stores={stores}
           storesLoading={storesLoading}
           storesFailed={storesFailed}
           onReloadStores={() => void refetchStores()}
-          onClose={() => setEditingStaff(null)}
-          onUpdated={handleEditUpdated}
+          onClose={closeModal}
+          onUpdated={list.reload}
         />
       )}
     </>

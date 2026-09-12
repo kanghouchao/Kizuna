@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ExternalLinkIcon } from 'lucide-react';
 import {
@@ -14,7 +13,13 @@ import {
   systemOwnedFeeLines,
   toFeeLineInputs,
 } from '@/entities/order';
-import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  storePath,
+  useResource,
+  useKeyedResource,
+  useResourceInitialization,
+} from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { UNLINKED_NOTE, customerHeadingText, customerLabel } from '../lib/customerLabel';
 // 日付・時刻・数値の空欄は「送らない」。この契約は null を「変更しない」と読むため空への書き換えを
@@ -130,12 +135,10 @@ export default function OrderEditPage() {
   const orderId = params.id as string;
   const router = useRouter();
 
-  const {
-    data: current,
-    isLoading,
-    failure,
-    reload,
-  } = useResource<Order>(() => orderApi.get(orderId), [orderId]);
+  const resource = useKeyedResource<Order>(['order', storeId, orderId], () =>
+    orderApi.get(orderId)
+  );
+  const { data: current, isLoading, failure, reload } = resource;
 
   const {
     data: receptionistOptions,
@@ -156,14 +159,10 @@ export default function OrderEditPage() {
   const { dirtyFields } = formState;
   // 播き終えたか。フォームを出す条件をこれにするのは、取得の到着がレンダーより後で、
   // 「取れた」で出すと播く前の 1 フレームが空欄のまま描かれるため（DESIGN.md）。
-  const [hasSeeded, setHasSeeded] = useState(false);
 
   // 取得できたら播く。取得の到着はレンダーより後なので、values ではなく効果で入れる
   // （初期値として渡すと、開いた最初のフレームが空欄のまま描かれる）。
-  useEffect(() => {
-    if (current === null) {
-      return;
-    }
+  const initialized = useResourceInitialization(resource.success, current => {
     reset({
       receptionist_id: current.receptionist_id != null ? String(current.receptionist_id) : '',
       cast_id: current.cast_id ?? '',
@@ -184,11 +183,8 @@ export default function OrderEditPage() {
       contact_name: current.contact_name ?? '',
       contact_phone_number: current.contact_phone_number ?? '',
     });
-    setHasSeeded(true);
-  }, [current, reset]);
-
-  // 取得は最初のレンダーより後に着く。播き終えるまでフォームを出さない（空欄のまま保存できてしまう）
-  const seeded = current !== null && hasSeeded;
+  });
+  const seeded = current !== null && initialized && !isLoading;
   const linked = current?.customer_id != null;
 
   const submit = async (values: OrderEditFormValues) => {
@@ -234,11 +230,14 @@ export default function OrderEditPage() {
         ? { fee_lines: toFeeLineInputs(values.fee_lines) }
         : {}),
     };
+    const operation = resource.capture();
     try {
       await orderApi.update(orderId, request);
+      if (!operation.isCurrent()) return;
       notify.success('受注を更新しました');
       router.push(storePath(storeId, '/orders'));
     } catch (error) {
+      if (!operation.isCurrent()) return;
       // 終端状態の凍結など、サーバは対処の分かる文言を返す。汎用文言に潰さない
       notify.error(getApiErrorMessage(error, '受注の更新に失敗しました'));
     }

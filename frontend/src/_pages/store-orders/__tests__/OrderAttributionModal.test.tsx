@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
+import { AttributionCorrectionStep } from '../ui/AttributionCorrectionStep';
 import { OrderAttributionModal } from '../ui/OrderAttributionModal';
 import { OrderArchiveRow, OrderAttribution, orderApi } from '@/entities/order';
 import { TokenClaims, readTokenClaims } from '@/shared/lib';
@@ -399,4 +400,46 @@ describe('OrderAttributionModal', () => {
     );
     expect(screen.getByLabelText('無効化の理由')).toHaveValue('取り違え');
   });
+});
+
+test('帰属記録の複合キーが変わったら旧上限と理由を隠す', async () => {
+  let resolve!: (value: { granted_points: number; corrected_points: number }) => void;
+  mockedCorrectionStatus
+    .mockResolvedValueOnce({ granted_points: 100, corrected_points: 0 })
+    .mockReturnValueOnce(
+      new Promise(done => {
+        resolve = done;
+      })
+    );
+  const props = { orderId: 'o1', attributionId: 1, onBusyChange: jest.fn(), onDone: jest.fn() };
+  const { rerender } = render(<AttributionCorrectionStep {...props} />);
+  fireEvent.change(await screen.findByLabelText('訂正の理由'), { target: { value: '旧理由' } });
+  rerender(<AttributionCorrectionStep {...props} attributionId={2} />);
+  expect(screen.queryByLabelText('訂正の理由')).not.toBeInTheDocument();
+  await act(async () => resolve({ granted_points: 200, corrected_points: 50 }));
+  expect(await screen.findByLabelText('差し引くポイント')).toHaveValue(150);
+  expect(screen.getByLabelText('訂正の理由')).toHaveValue('');
+});
+
+test('旧対象の無効化応答は別対象の現況・通知・訂正段階へ反映しない', async () => {
+  let resolve!: (value: OrderAttribution) => void;
+  mockedReadClaims.mockReturnValue(claimsWith(['POINT_ADJUST']));
+  mockedAttribution.mockResolvedValue(attributed);
+  mockedInvalidate.mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    })
+  );
+  const props = { order: completedOrder, onClose: jest.fn() };
+  const { rerender } = render(<OrderAttributionModal {...props} />);
+  fireEvent.change(await screen.findByLabelText('無効化の理由'), { target: { value: '訂正' } });
+  fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
+  await waitFor(() => expect(mockedInvalidate).toHaveBeenCalled());
+  mockedAttribution.mockResolvedValue({ ...attributed, id: 502, member_code: '999999999999' });
+  rerender(<OrderAttributionModal {...props} order={{ ...completedOrder, id: 'o2' }} />);
+  await screen.findByText('999999999999');
+  await act(async () => resolve(invalidated));
+  expect(screen.getByText('999999999999')).toBeInTheDocument();
+  expect(screen.queryByText('誤付与の差し引き')).not.toBeInTheDocument();
+  expect(notify.success).not.toHaveBeenCalled();
 });

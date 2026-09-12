@@ -338,14 +338,23 @@ export default function OrderListPage() {
       />
       <OrderCompletionModal
         order={completing}
-        onClose={() => setCompleting(null)}
+        onClose={missing => {
+          setCompleting(null);
+          if (missing) queue.reload();
+        }}
         // 完了した受注は作業キューから外れて完了のアーカイブへ移る
         onCompleted={() => removeFromQueue(completing?.id ?? '', 'COMPLETED')}
         // 別の操作者が先に終端化していた受注も、行はキューに残さず該当のアーカイブへ移す
         onSuperseded={status => removeFromQueue(completing?.id ?? '', status)}
       />
       {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
-      <OrderAttributionModal order={correcting} onClose={() => setCorrecting(null)} />
+      <OrderAttributionModal
+        order={correcting}
+        onClose={missing => {
+          setCorrecting(null);
+          if (missing) setArchived(prev => ({ ...prev, COMPLETED: prev.COMPLETED + 1 }));
+        }}
+      />
     </div>
   );
 }

@@ -37,18 +37,25 @@ jest.mock('@/features/staff-management', () => ({
           .join('・') || '未選択',
   ServiceIdentityCreateModal: () => <div>作成モーダル</div>,
   ServiceIdentityEditModal: ({
-    identity,
+    resource,
     onClose,
     onUpdated,
   }: {
-    identity: ServiceIdentityResponse;
+    resource: import('@/shared/lib').KeyedResource<ServiceIdentityResponse>;
     onClose: () => void;
     onUpdated: () => void;
   }) => (
     <div>
-      <span>編集モーダル: {identity.display_name}</span>
-      <span>版{identity.version}</span>
-      <button onClick={onUpdated}>更新通知</button>
+      <span>編集モーダル: {resource.data?.display_name}</span>
+      <span>版{resource.data?.version}</span>
+      <button
+        onClick={() => {
+          onUpdated();
+          void resource.reload();
+        }}
+      >
+        更新通知
+      </button>
       <button onClick={onClose}>編集を閉じる</button>
     </div>
   ),

@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderEditPage from '../ui/OrderEditPage';
 import { Order, orderApi } from '@/entities/order';
 
 const mockPush = jest.fn();
+let mockParams = { storeId: '1', id: 'o1' };
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -17,7 +18,7 @@ jest.mock('@/entities/order', () => ({
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
-  useParams: () => ({ storeId: '1', id: 'o1' }),
+  useParams: () => mockParams,
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -49,6 +50,7 @@ function confirmedOrder(overrides: Partial<Order> = {}): Order {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = { storeId: '1', id: 'o1' };
   mockedOrderApi.listReceptionists.mockResolvedValue([]);
   mockedOrderApi.listCastCandidates.mockResolvedValue([]);
 });
@@ -181,4 +183,20 @@ describe('受注の編集ページ', () => {
       )
     );
   });
+});
+
+test('対象変更直後から旧フォームを隠し、新しい詳細で初期化する', async () => {
+  let resolve!: (order: Order) => void;
+  mockedOrderApi.get.mockResolvedValueOnce(confirmedOrder()).mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    })
+  );
+  const { rerender } = render(<OrderEditPage />);
+  await screen.findByLabelText('人数');
+  mockParams = { storeId: '2', id: 'o2' };
+  rerender(<OrderEditPage />);
+  expect(screen.queryByLabelText('人数')).not.toBeInTheDocument();
+  await act(async () => resolve(confirmedOrder({ id: 'o2', pax: 8, course_minutes: 90 })));
+  expect(await screen.findByLabelText('人数')).toHaveValue(8);
 });

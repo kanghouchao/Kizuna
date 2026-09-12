@@ -42,3 +42,7 @@ export {
 export type { LineOauthIntent } from './line-oauth';
 export { hasPermission, readTokenClaims } from './token-claims';
 export type { TokenClaims } from './token-claims';
+
+export { useKeyedResource } from './hooks/useKeyedResource';
+export type { KeyedResource, ResourceSuccess } from './hooks/useKeyedResource';
+export { useResourceInitialization } from './hooks/useResourceInitialization';
