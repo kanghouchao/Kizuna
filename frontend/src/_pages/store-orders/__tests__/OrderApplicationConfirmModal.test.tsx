@@ -1,3 +1,4 @@
+jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { OrderApplicationConfirmModal } from '../ui/OrderApplicationConfirmModal';
 import { OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
@@ -72,6 +73,20 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     mockedConfirm.mockResolvedValue({ id: 'o1' });
   });
 
+  it('受付の明示選択は数値 ID で確定する', async () => {
+    jest
+      .mocked(orderApi.listReceptionists)
+      .mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
+    renderModal(guestApplication());
+    fireEvent.click(await screen.findByRole('combobox', { name: '受付担当' }));
+    const item = await screen.findByRole('option', { name: '受付花子' });
+    fireEvent.pointerDown(item);
+    fireEvent.click(item);
+    fireEvent.click(confirmButton());
+    await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
+    expect(mockedConfirm.mock.calls[0][1].receptionist_id).toBe(7);
+  });
+
   it('ゲスト申請では顧客の決め方を店員に選ばせる', async () => {
     renderModal(guestApplication());
 
@@ -103,6 +118,7 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
 
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
     // 既定で台帳行を起こすと、店員が判断しないまま重複した行が積み上がる
+    expect(mockedConfirm.mock.calls[0][1].receptionist_id).toBeUndefined();
     expect(mockedConfirm.mock.calls[0][1].customer_id).toBeUndefined();
     expect(mockedConfirm.mock.calls[0][1].new_customer).toBeUndefined();
   });

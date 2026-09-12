@@ -1,7 +1,6 @@
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
 import { orderApi } from '@/entities/order';
-import type { OrderReceptionist } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -61,9 +60,9 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const body = await submitAndGetBody(onSubmit);
 
     expect(body.classification).toBe('ーー');
-    expect(body.hasPet).toBe(false);
-    expect(body.courseMinutes).toBe(60);
-    expect(body.courseName).toBe('');
+    expect(body.has_pet).toBe(false);
+    expect(body.course_minutes).toBe(60);
+    expect(body.course_name).toBe('');
     expect(body.fee_lines).toEqual([]);
   });
 
@@ -74,7 +73,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const body = await submitAndGetBody(onSubmit);
 
     // 番兵値 __none__ が漏れず、選んだ受付の id が文字列で載ること
-    expect(body.receptionistId).toBe('7');
+    expect(body.receptionist_id).toBe('7');
   });
 
   it('受付を未選択へ戻すと空欄のまま送信できること（実行者本人が受付担当になる）', async () => {
@@ -85,7 +84,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const body = await submitAndGetBody(onSubmit);
 
     // 空欄は「自分」の意。ページ側が項目ごと落とし、サーバが実行者本人を受付担当に据える
-    expect(body.receptionistId).toBe('');
+    expect(body.receptionist_id).toBe('');
   });
 
   it('区分の選択がそのままの文字列で送られること', async () => {
@@ -105,8 +104,8 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     await pickOption('ペット有無', 'あり');
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.hasPet).toBe(true);
-    expect(typeof body.hasPet).toBe('boolean');
+    expect(body.has_pet).toBe(true);
+    expect(typeof body.has_pet).toBe('boolean');
   });
 
   it('コース分が文字列ではなく数値へ復元されて送られること', async () => {
@@ -116,8 +115,8 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     await pickOption('ｺｰｽ(分)', '120');
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.courseMinutes).toBe(120);
-    expect(typeof body.courseMinutes).toBe('number');
+    expect(body.course_minutes).toBe(120);
+    expect(typeof body.course_minutes).toBe('number');
   });
 
   it('追加した明細が種別・名称・金額の行としてそのまま送られること', async () => {
@@ -175,7 +174,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     });
   };
 
-  it('候補を選ぶと castId がその id で送られること', async () => {
+  it('候補を選ぶと cast_id がその id で送られること', async () => {
     const onSubmit = jest.fn<void, [OrderFormData]>();
     render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
 
@@ -192,7 +191,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
     expect(screen.getByRole('combobox', { name: /キャスト/ })).toHaveTextContent('花子');
     await submit();
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit.mock.calls[0][0].castId).toBe('cast-1');
+    expect(onSubmit.mock.calls[0][0].cast_id).toBe('cast-1');
   });
 
   it('候補を選ばないまま送ると、キャスト未選択として止められること', async () => {
@@ -211,51 +210,5 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText('キャストを候補から選択してください')).toBeInTheDocument();
-  });
-});
-
-describe('オーダーフォームの受付候補の取得失敗', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
-  });
-
-  it('候補の取得中は欄の傍で読み込み中を名乗ること', async () => {
-    // 候補が「自分（既定）」だけの状態は、まだ読んでいるのか受付が 1 人も居ないのか区別がつかない
-    let resolveList: (rows: OrderReceptionist[]) => void = () => {};
-    mockedOrderApi.listReceptionists.mockReturnValueOnce(
-      new Promise(resolve => {
-        resolveList = resolve;
-      })
-    );
-    renderForm();
-
-    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
-
-    await act(async () => resolveList([{ id: 7, display_name: '受付花子' }]));
-
-    expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
-  });
-
-  it('候補が取れなくても登録は塞がれず、再試行で選べるようになること', async () => {
-    mockedOrderApi.listReceptionists.mockRejectedValueOnce(new Error('boom'));
-    const { onSubmit } = renderForm();
-
-    const region = await screen.findByRole('alert');
-    expect(within(region).getByText('受付担当者の取得に失敗しました')).toBeInTheDocument();
-
-    // 系の故障を利用者の入力ミスとして扱わない。受付担当の既定は「自分」なので、
-    // 候補が取れなくても代録でない限り登録は成立する
-    const body = await submitAndGetBody(onSubmit);
-    expect(body.receptionistId).toBe('');
-
-    mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
-    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
-    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-
-    await selectReceptionist();
-    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
-    expect((onSubmit.mock.calls[1][0] as OrderFormData).receptionistId).toBe('7');
   });
 });

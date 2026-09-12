@@ -200,3 +200,70 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
   await act(async () => resolve(confirmedOrder({ id: 'o2', pax: 8, course_minutes: 90 })));
   expect(await screen.findByLabelText('人数')).toHaveValue(8);
 });
+
+test('候補資格のない元担当を表示し、別候補から変更しないへ戻して保存する', async () => {
+  mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+  mockedOrderApi.update.mockResolvedValue(confirmedOrder());
+  mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '田中' }]);
+  render(<OrderEditPage />);
+  const trigger = await screen.findByRole('combobox', { name: '受付' });
+  expect(trigger).toHaveTextContent('佐藤');
+  fireEvent.click(trigger);
+  const candidate = await screen.findByRole('option', { name: '田中' });
+  fireEvent.pointerDown(candidate);
+  fireEvent.click(candidate);
+  expect(trigger).toHaveTextContent('田中');
+  fireEvent.click(trigger);
+  expect(screen.queryByRole('option', { name: '佐藤' })).not.toBeInTheDocument();
+  const unchanged = screen.getByRole('option', { name: '変更しない' });
+  fireEvent.pointerDown(unchanged);
+  fireEvent.click(unchanged);
+  expect(trigger).toHaveTextContent('佐藤');
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() =>
+    expect(mockedOrderApi.update).toHaveBeenCalledWith('o1', {
+      cast_id: 'cast-1',
+      receptionist_id: 3,
+    })
+  );
+});
+
+test('元担当が未設定なら別候補から未設定に戻して保存できる', async () => {
+  const original = confirmedOrder({ receptionist_id: undefined, receptionist_name: undefined });
+  mockedOrderApi.get.mockResolvedValue(original);
+  mockedOrderApi.update.mockResolvedValue(original);
+  mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '田中' }]);
+  render(<OrderEditPage />);
+  const trigger = await screen.findByRole('combobox', { name: '受付' });
+  fireEvent.click(trigger);
+  const candidate = await screen.findByRole('option', { name: '田中' });
+  fireEvent.pointerDown(candidate);
+  fireEvent.click(candidate);
+  fireEvent.click(trigger);
+  const unset = screen.getByRole('option', { name: '未設定' });
+  fireEvent.pointerDown(unset);
+  fireEvent.click(unset);
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() =>
+    expect(mockedOrderApi.update).toHaveBeenCalledWith('o1', {
+      cast_id: 'cast-1',
+      receptionist_id: undefined,
+    })
+  );
+});
+
+test('候補取得に失敗しても名前のない元担当を識別でき、そのまま保存する', async () => {
+  mockedOrderApi.get.mockResolvedValue(confirmedOrder({ receptionist_name: undefined }));
+  mockedOrderApi.update.mockResolvedValue(confirmedOrder());
+  mockedOrderApi.listReceptionists.mockRejectedValueOnce(new Error('offline'));
+  render(<OrderEditPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('受付担当者の取得に失敗しました');
+  expect(screen.getByRole('combobox', { name: '受付' })).toHaveTextContent('受付担当 ID: 3');
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await waitFor(() =>
+    expect(mockedOrderApi.update).toHaveBeenCalledWith('o1', {
+      cast_id: 'cast-1',
+      receptionist_id: 3,
+    })
+  );
+});

@@ -16,7 +16,6 @@ import {
 import {
   getApiErrorMessage,
   storePath,
-  useResource,
   useKeyedResource,
   useResourceInitialization,
 } from '@/shared/lib';
@@ -26,6 +25,7 @@ import { UNLINKED_NOTE, customerHeadingText, customerLabel } from '../lib/custom
 // 表現する形が無く、空にしたつもりの欄は元の値が残る（空文字を送ると型の変換に失敗して 400）。
 import { optionalDate, optionalNumber, optionalTime, toTimeInput } from '../lib/formValues';
 import { CastSearchCombobox } from './CastSearchCombobox';
+import { OrderReceptionistField } from './OrderReceptionistField';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import {
   Button,
@@ -36,19 +36,10 @@ import {
   FormLabel,
   Input,
   RegionError,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@/shared/ui';
 
-// 受付担当の未選択を表す番兵値。フォームが持つ値は空文字に戻す（作成フォームと同型）。
-const SELECT_NONE = '__none__';
-
 interface OrderEditFormValues {
-  /** 受付担当。'' は「変更しない」ではなく候補の未解決を意味するので、送信時に元の値へ戻す。 */
   receptionist_id: string;
   /** 指名するキャストの id。 */
   cast_id: string;
@@ -139,18 +130,6 @@ export default function OrderEditPage() {
     orderApi.get(orderId)
   );
   const { data: current, isLoading, failure, reload } = resource;
-
-  const {
-    data: receptionistOptions,
-    failure: receptionistsFailure,
-    reload: loadReceptionists,
-  } = useResource(() => orderApi.listReceptionists());
-  const receptionistItems = [
-    { value: SELECT_NONE, label: '－－－' },
-    ...(receptionistOptions ?? [])
-      .filter(o => o.id !== undefined)
-      .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
-  ];
 
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, watch, formState } = form;
@@ -278,39 +257,10 @@ export default function OrderEditPage() {
             <section className="space-y-3">
               <h2 className="text-muted-foreground text-sm font-medium">担当</h2>
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={control}
-                  name="receptionist_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>受付</FormLabel>
-                      <Select
-                        items={receptionistItems}
-                        value={field.value ? field.value : SELECT_NONE}
-                        onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {receptionistItems.map(o => (
-                            <SelectItem key={o.value} value={o.value}>
-                              {o.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {/* 候補が取れなくても編集は塞がない（元の受付担当がそのまま運ばれる） */}
-                      {receptionistsFailure !== null && (
-                        <RegionError
-                          message="受付担当者の取得に失敗しました"
-                          onRetry={() => void loadReceptionists()}
-                        />
-                      )}
-                    </FormItem>
-                  )}
+                <OrderReceptionistField
+                  scene="edit"
+                  originalId={current.receptionist_id}
+                  originalName={current.receptionist_name}
                 />
                 <FormField
                   control={control}

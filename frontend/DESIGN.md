@@ -102,17 +102,17 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 
 既存 primitive を `@/shared/ui` から使う。vendored への画面別変更は consumer の className で表す。
 
-| 用途             | 規則                                                                                                             |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 主／副／破壊操作 | Button の default / outline / destructive。遷移は `render={<Link href="…" />}`、ボタン本文は Button の children  |
-| 入力             | Input / Textarea / Select / Checkbox / Switch / RadioGroup / Label                                               |
-| モーダル         | 中央の Dialog。長いフォームは `max-h-[calc(100vh-2rem)] overflow-y-auto`。横スライド Drawer は追加しない         |
-| 破壊確認         | ConfirmDialog。window.confirm や画面内での AlertDialog 再構築をしない                                            |
-| 検索選択         | CastSearchCombobox の Base UI Combobox。サーバ検索は `filter={null}`。現状は単一消費者のためページ内で組み立てる |
-| 表／タブ         | TableCard + Table / Tabs                                                                                         |
-| 状態             | outline Badge と tint、`border-transparent`                                                                      |
-| 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                        |
-| 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                               |
+| 用途             | 規則                                                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 主／副／破壊操作 | Button の default / outline / destructive。遷移は `render={<Link href="…" />}`、ボタン本文は Button の children       |
+| 入力             | Input / Textarea / Select / Checkbox / Switch / RadioGroup / Label                                                    |
+| モーダル         | 中央の Dialog。長いフォームは `max-h-[calc(100vh-2rem)] overflow-y-auto`。横スライド Drawer は追加しない              |
+| 破壊確認         | ConfirmDialog。window.confirm や画面内での AlertDialog 再構築をしない                                                 |
+| 検索選択         | 共有 Combobox を公開入口から使う。サーバ検索は `filter={null}`。候補取得・検索語・選択の業務制御はページ slice に置く |
+| 表／タブ         | TableCard + Table / Tabs                                                                                              |
+| 状態             | outline Badge と tint、`border-transparent`                                                                           |
+| 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                             |
+| 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                                    |
 
 - CardTitle が章見出しなら `role="heading" aria-level={N}` を渡す。h1 直下は 2、入れ子は 3 とし、飛ばさない。単なるラベルには付けない。
 - destructive の DropdownMenuItem は consumer で `text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong`。vendored の destructive variant は tint 上の文字対比が不足する。
@@ -184,7 +184,7 @@ RegionError の `message` と、`onRetry` または `fallback: {href,label}` の
 
 ## 共有 UI とテスト
 
-vendored は alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
+vendored は combobox / alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
 
 image-upload / auth-layout / theme-provider / confirm-dialog / table-card / toast / region-error は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
 

@@ -6,6 +6,7 @@ import { notify } from '@/shared/notify';
 import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
 import { customerApi } from '@/entities/customer';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
+import { OrderReceptionistField } from './OrderReceptionistField';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import {
   Button,
@@ -28,9 +29,6 @@ import {
   SelectValue,
   Textarea,
 } from '@/shared/ui';
-
-// 受付担当なしを表す番兵値。フォームが持つ値は従来どおり空文字に戻す。
-const SELECT_NONE = '__none__';
 
 const CUSTOMER_MODE_OPTIONS = [
   { value: 'none', label: '顧客に着けない（連絡先は受注に残る）' },
@@ -114,13 +112,6 @@ export function OrderApplicationConfirmModal({
     setValue,
     formState: { isSubmitting },
   } = form;
-  // 閉じている間は取りに行かない（開いた時点で取り直す）
-  const {
-    data: receptionistOptions,
-    isLoading: receptionistsLoading,
-    failure: receptionistsFailure,
-    reload: loadReceptionists,
-  } = useResource(application === null ? null : () => orderApi.listReceptionists(), [application]);
   // 台帳の照会は押したときだけ走らせる（開いただけで顧客を読みに行かない）。確定した語を state に
   // 移してから取得の deps に載せることで、入力中の 1 文字ごとに問い合わせが飛ぶこともない。
   const [customerQuery, setCustomerQuery] = useState<string | null>(null);
@@ -136,12 +127,6 @@ export function OrderApplicationConfirmModal({
     [customerQuery]
   );
   const customerMatches = customerPage?.rows ?? null;
-  const receptionistItems = [
-    { value: SELECT_NONE, label: '未設定（自分が受付なら自動で補われます）' },
-    ...(receptionistOptions ?? [])
-      .filter(o => o.id !== undefined)
-      .map(o => ({ value: String(o.id), label: o.display_name ?? '' })),
-  ];
 
   const castName = application?.cast_name ?? application?.cast_id ?? '';
 
@@ -241,45 +226,7 @@ export function OrderApplicationConfirmModal({
           {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
           <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            <FormField
-              control={control}
-              name="receptionist_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>受付担当</FormLabel>
-                  <Select
-                    items={receptionistItems}
-                    value={field.value ? field.value : SELECT_NONE}
-                    onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {receptionistItems.map(o => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {/* 送信は塞がない。受付担当は任意項目で、サーバ側の再検証が最終権威 */}
-                  {receptionistsLoading ? (
-                    // 候補が「未設定」だけの状態は「受付が 1 人も居ない」と区別がつかない
-                    <p className="text-sm text-muted-foreground">読み込み中...</p>
-                  ) : (
-                    receptionistsFailure !== null && (
-                      <RegionError
-                        message="受付担当者の取得に失敗しました"
-                        onRetry={() => void loadReceptionists()}
-                      />
-                    )
-                  )}
-                </FormItem>
-              )}
-            />
+            <OrderReceptionistField scene="confirm" />
             <FormField
               control={control}
               name="business_date"
