@@ -8,7 +8,6 @@ import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
-import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
@@ -18,7 +17,6 @@ import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +42,7 @@ public class RoleService {
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
   private final PlatformUserRepository platformUserRepository;
+  private final RoleManageHolderGuard roleManageHolderGuard;
 
   /** 一覧は権限の個数だけを返す要約。権限コードの列挙が要るのは編集時のみで、それは {@link #get(Long)} が担う。 */
   @Transactional(readOnly = true)
@@ -86,48 +85,15 @@ public class RoleService {
     if (!role.getVersion().equals(req.getVersion())) {
       throw new StaleRoleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
-    requireRoleManageHolderRemains(role, req.getPermissions());
+    // 同一ロールへの並行する権限追加は、そのロール行の @Version が保存時に検出する。
+    if (!Boolean.TRUE.equals(role.getSystemRole())
+        && !req.getPermissions().contains(ROLE_MANAGE)
+        && roleRepository.findIdsByPermissionCode(ROLE_MANAGE).contains(role.getId())) {
+      roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
+    }
     role.rename(req.getName());
     role.replacePermissions(codesById.keySet());
     return toResponse(save(role), codesById);
-  }
-
-  /**
-   * 不減零（ADR 0020 の守衛 G5）。ROLE_MANAGE を含むロールからそれを外す編集は、そのロールしか持たない保持者を一撃で全員 非保持者にする。有効な ROLE_MANAGE
-   * 実効保持者が 0 になるならその編集を拒む。
-   *
-   * <p>母集団を減らす編集だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}、取り直しの理由もそちら）を押さえ、
-   * 押さえた後に母集団を取り直して判定し直す。平台既定ロールは改廃自体を {@link Role#replacePermissions} が拒むため、押さえずに抜ける。
-   */
-  private void requireRoleManageHolderRemains(Role role, Set<String> newPermissionCodes) {
-    // ROLE_MANAGE を残す・現に持たない編集を押さえずに通せるのは、並行して同じロールへ ROLE_MANAGE を
-    // 足す編集が同一ロール行の @Version を進め、本編集の保存が楽観ロック違反で落ちるためである。
-    if (Boolean.TRUE.equals(role.getSystemRole())
-        || newPermissionCodes.contains(ROLE_MANAGE)
-        || !suppliesRoleManage(role)) {
-      return;
-    }
-    permissionRepository.lockIdByCode(ROLE_MANAGE);
-    Set<Long> roleManageRoleIds = roleRepository.findIdsByPermissionCode(ROLE_MANAGE);
-    if (!roleManageRoleIds.contains(role.getId())) {
-      return;
-    }
-    Set<Long> remaining = new HashSet<>(roleManageRoleIds);
-    remaining.remove(role.getId());
-    // 空集合は HQL の in へ渡さない（残る供給元が無いので保持者も居ない）。
-    if (!remaining.isEmpty()
-        && !platformUserRepository.findEnabledRoleHolderIds(remaining).isEmpty()) {
-      return;
-    }
-    // 編集前から母集団が 0 の配備では、この編集は母集団を減らさない — 悪化させないので通す。
-    if (platformUserRepository.findEnabledRoleHolderIds(Set.of(role.getId())).isEmpty()) {
-      return;
-    }
-    throw new LastRoleManageHolderException("最後の管理権限保持者が居なくなるため、このロールから管理権限を外すことはできません");
-  }
-
-  private boolean suppliesRoleManage(Role role) {
-    return roleRepository.findIdsByPermissionCode(ROLE_MANAGE).contains(role.getId());
   }
 
   @Transactional

@@ -245,15 +245,7 @@ public class StoreManagerService {
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
       predicates.add(cb.isTrue(root.get("enabled")));
       predicates.add(cb.equal(root.get("storeScopeType"), StoreScopeType.SPECIFIC_STORES));
-      if (!hqRoleIds.isEmpty()) {
-        // ロール集合は @ElementCollection のため member of（相関 exists）で組み、親行を結合で増やさない。
-        predicates.add(
-            cb.not(
-                cb.or(
-                    hqRoleIds.stream()
-                        .map(roleId -> cb.isMember(roleId, root.<Set<Long>>get("roleIds")))
-                        .toArray(Predicate[]::new))));
-      }
+      predicates.add(new HqRoleMembership(hqRoleIds).nonHolders().toPredicate(root, query, cb));
       // 既にこの店舗の店長である者だけを外す。他店の店長は候補に残す（任命でこの店舗が担当へ加わる）。
       predicates.add(
           cb.not(
@@ -277,7 +269,7 @@ public class StoreManagerService {
     return user.getUserType() == UserType.STAFF
         && Boolean.TRUE.equals(user.getEnabled())
         && user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
-        && user.getRoleIds().stream().noneMatch(hqRoleIds::contains);
+        && !new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds());
   }
 
   /** 店長ロール。既定ロールは名称が自然キーで、播種の正本は {@link SystemRole} 側にある。 */

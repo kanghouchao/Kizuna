@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -15,8 +14,6 @@ import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
-import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
@@ -32,7 +29,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -64,7 +60,7 @@ class PlatformStaffAccountServiceTest {
 
   @Mock private RoleRepository roleRepository;
 
-  @Mock private PermissionRepository permissionRepository;
+  @Mock private RoleManageHolderGuard roleManageHolderGuard;
 
   @Mock private PasswordEncoder passwordEncoder;
 
@@ -110,45 +106,20 @@ class PlatformStaffAccountServiceTest {
   }
 
   @Test
-  @DisplayName("最後の ROLE_MANAGE 実効保持者の停止は拒否され、押さえる順は 目録行 → 利用者行 であること")
-  void suspend_lastRoleManageHolder_isRejectedAndTakesTheMutexBeforeThePopulation() {
-    // 停止も併合済み PUT と同じ順で押さえないと待ちが環になる（目録行 1 行が全行使点の起点）。
+  @DisplayName("守衛が拒否したとき停止も保存も行わないこと")
+  void suspend_guardRejectsWithoutStoppingOrSaving() {
     PlatformUser existing = staff(3L, "last-admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     when(repository.findStaffEmailById(3L)).thenReturn(Optional.of("last-admin@kizuna.test"));
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(ROLE_MANAGE_ROLE));
-    when(repository.findByIdForUpdate(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
+    when(roleManageHolderGuard.loadForSuspension(3L))
+        .thenThrow(new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません"));
 
     assertThatThrownBy(() -> service.suspend(3L, ACTOR))
         .isInstanceOf(LastRoleManageHolderException.class)
         .hasMessage("最後の管理権限保持者を停止・降格することはできません");
 
-    InOrder inOrder = inOrder(permissionRepository, repository);
-    inOrder.verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-    inOrder.verify(repository).lockEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE));
-    verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(credentialOperations);
-  }
-
-  @Test
-  @DisplayName("押さえた結果ではなく取り直した顔ぶれで数えること")
-  void suspend_countsHoldersAfterLockingNotTheLockResult() {
-    // 押さえる問い合わせの結果は待つ前のスナップショットのままで、待っている間に確定した降格を見ない。
-    PlatformUser existing = staff(3L, "last-admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
-    when(repository.findStaffEmailById(3L)).thenReturn(Optional.of("last-admin@kizuna.test"));
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(ROLE_MANAGE_ROLE));
-    when(repository.findByIdForUpdate(3L)).thenReturn(Optional.of(existing));
-    when(repository.lockEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L, 99L));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
-
-    assertThatThrownBy(() -> service.suspend(3L, ACTOR))
-        .isInstanceOf(LastRoleManageHolderException.class);
-
     assertThat(existing.getEnabled()).isTrue();
     verify(repository, never()).saveAndFlush(any());
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -156,11 +127,7 @@ class PlatformStaffAccountServiceTest {
   void suspend_roleManageHolderWhileAnotherRemains_isAllowed() {
     PlatformUser existing = staff(3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     when(repository.findStaffEmailById(3L)).thenReturn(Optional.of("admin@kizuna.test"));
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(ROLE_MANAGE_ROLE));
-    when(repository.findByIdForUpdate(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L, 99L));
+    when(roleManageHolderGuard.loadForSuspension(3L)).thenReturn(existing);
 
     service.suspend(3L, ACTOR);
 
@@ -170,19 +137,16 @@ class PlatformStaffAccountServiceTest {
   }
 
   @Test
-  @DisplayName("ROLE_MANAGE を持たない対象でも直列化点は押さえ、母集団の行までは押さえないこと")
-  void suspend_nonHolder_takesTheMutexButNotThePopulation() {
+  @DisplayName("非保持者の停止も守衛から取得した対象へ適用すること")
+  void suspend_nonHolder_stopsTheTargetReturnedByTheGuard() {
     PlatformUser existing = staff(4L, "store-only@kizuna.test", Set.of(STORE_SIDE_ROLE));
     when(repository.findStaffEmailById(4L)).thenReturn(Optional.of("store-only@kizuna.test"));
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(ROLE_MANAGE_ROLE));
-    when(repository.findByIdForUpdate(4L)).thenReturn(Optional.of(existing));
+    when(roleManageHolderGuard.loadForSuspension(4L)).thenReturn(existing);
 
     service.suspend(4L, ACTOR);
 
     assertThat(existing.getEnabled()).isFalse();
-    verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-    verify(repository, never()).lockEnabledRoleHolderIds(any());
+    verify(roleManageHolderGuard).loadForSuspension(4L);
   }
 
   @Test
@@ -194,7 +158,7 @@ class PlatformStaffAccountServiceTest {
         .isInstanceOf(SelfStopNotAllowedException.class)
         .hasMessage("自分自身を停止することはできません");
 
-    verifyNoInteractions(permissionRepository);
+    verifyNoInteractions(roleManageHolderGuard);
     verify(repository, never()).findByIdForUpdate(any());
     verifyNoInteractions(credentialOperations);
   }
@@ -205,11 +169,10 @@ class PlatformStaffAccountServiceTest {
     PlatformUser existing = staff(3L, "stopped@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     existing.stop();
     when(repository.findStaffEmailById(3L)).thenReturn(Optional.of("stopped@kizuna.test"));
-    when(repository.findByIdForUpdate(3L)).thenReturn(Optional.of(existing));
+    when(roleManageHolderGuard.loadForSuspension(3L)).thenReturn(existing);
 
     service.suspend(3L, ACTOR);
 
-    verify(repository, never()).lockEnabledRoleHolderIds(any());
     verify(repository, never()).saveAndFlush(any());
     verify(credentialOperations).stop(existing);
   }
@@ -303,7 +266,7 @@ class PlatformStaffAccountServiceTest {
     verify(repository).saveAndFlush(existing);
     verify(credentialOperations).changePassword(existing, "encoded");
     // 再設定は enabled もロールも動かさないので、不減零の直列化点は押さえない。
-    verifyNoInteractions(permissionRepository);
+    verifyNoInteractions(roleManageHolderGuard);
   }
 
   @Test

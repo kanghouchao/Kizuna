@@ -99,16 +99,7 @@ public class StoreStaffService {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
-      if (!hqRoleIds.isEmpty()) {
-        // ロール集合は @ElementCollection のため member of（相関 exists）で組み、親行を結合で増やさない。
-        // 管理者管理の絞りの補集合であり、HQ 側ロールを 1 つでも持てばこの面には現れない（列挙防止）。
-        predicates.add(
-            cb.not(
-                cb.or(
-                    hqRoleIds.stream()
-                        .map(roleId -> cb.isMember(roleId, root.<Set<Long>>get("roleIds")))
-                        .toArray(Predicate[]::new))));
-      }
+      predicates.add(new HqRoleMembership(hqRoleIds).nonHolders().toPredicate(root, query, cb));
       predicates.add(
           cb.or(
               cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
@@ -216,7 +207,7 @@ public class StoreStaffService {
     return repository
         .findById(id)
         .filter(user -> user.getUserType() == UserType.STAFF)
-        .filter(user -> !holdsAny(user.getRoleIds(), hqRoleIds))
+        .filter(user -> !new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds()))
         .filter(user -> user.authorizes(contextStoreId))
         .orElseThrow(() -> new NotFoundException("スタッフが見つかりません: " + id));
   }
@@ -244,7 +235,7 @@ public class StoreStaffService {
    */
   private static void requireGrantableRoles(
       Set<Long> roleIds, Set<Long> hqRoleIds, Set<Long> delegationRoleIds) {
-    if (holdsAny(roleIds, hqRoleIds)) {
+    if (new HqRoleMembership(hqRoleIds).holdsAny(roleIds)) {
       throw new InvalidRoleGrantException("店舗スタッフにプラットフォーム権限を含むロールは付与できません");
     }
     if (holdsAny(roleIds, delegationRoleIds)) {
