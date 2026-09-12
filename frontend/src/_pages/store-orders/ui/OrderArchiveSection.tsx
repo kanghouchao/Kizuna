@@ -9,7 +9,7 @@ import {
   PencilLineIcon,
   UserRoundCogIcon,
 } from 'lucide-react';
-import { Order, OrderListCriteria, OrderStatus, orderApi } from '@/entities/order';
+import { OrderArchiveRow, OrderListCriteria, OrderStatus, orderApi } from '@/entities/order';
 import { storePath, useListPage } from '@/shared/lib';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import { Button, RegionError } from '@/shared/ui';
@@ -31,7 +31,7 @@ interface OrderArchiveSectionProps {
    */
   reloadToken: number;
   /** 帰属の訂正モーダルを開く（完了した受注にだけ起こる）。 */
-  onCorrectAttribution: (order: Order) => void;
+  onCorrectAttribution: (order: OrderArchiveRow) => void;
   /** 完了後訂正の導線を出すか。ORDER_CORRECT の保持で決まる（強制はサーバ側）。 */
   canCorrect: boolean;
 }
@@ -41,7 +41,7 @@ function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('ja-JP');
 }
 
-function OutcomeLine({ order }: { order: Order }) {
+function OutcomeLine({ order }: { order: OrderArchiveRow }) {
   if (order.status === 'COMPLETED') {
     return (
       <p className="text-muted-foreground text-sm">
@@ -71,9 +71,9 @@ function ArchiveRow({
   onCorrectAttribution,
   canCorrect,
 }: {
-  order: Order;
+  order: OrderArchiveRow;
   storeId: string;
-  onCorrectAttribution: (order: Order) => void;
+  onCorrectAttribution: (order: OrderArchiveRow) => void;
   canCorrect: boolean;
 }) {
   const label = customerLabel(order);
@@ -143,7 +143,7 @@ export function OrderArchiveSection({
   canCorrect,
 }: OrderArchiveSectionProps) {
   const [open, setOpen] = useState(false);
-  const list = useListPage<Order, OrderListCriteria>(
+  const list = useListPage<OrderArchiveRow, OrderListCriteria>(
     (page, applied) =>
       orderApi.listArchive({ ...applied, statuses: [status], page, size: PAGE_SIZE }),
     criteria

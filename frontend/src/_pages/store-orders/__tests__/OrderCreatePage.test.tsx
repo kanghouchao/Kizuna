@@ -43,7 +43,7 @@ describe('新規オーダー登録の送信ペイロード', () => {
     jest.clearAllMocks();
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
     mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
-    mockedOrderApi.create.mockResolvedValue({});
+    mockedOrderApi.create.mockResolvedValue({ fee_lines: [] });
   });
 
   it('人数を空欄にすると pax を送らない（Number("") の 0 で @Min(1) に撥ねられない）', async () => {

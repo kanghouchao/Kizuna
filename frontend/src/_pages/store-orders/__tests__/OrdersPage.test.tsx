@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
-import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
+import {
+  OrderArchiveRow,
+  OrderWorkQueueRow,
+  OrderApplicationRow,
+  orderApi,
+  orderApplicationApi,
+} from '@/entities/order';
 import { TokenClaims, readTokenClaims } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 
@@ -47,13 +53,12 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 const mockedApplicationApi = orderApplicationApi as jest.Mocked<typeof orderApplicationApi>;
 const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
-/** 確定済みの受注 1 件。fixture は手書きで、Order 型との照合は tsc の側で効く（jest は型検査しない）。 */
-function confirmedOrder(overrides: Partial<Order> = {}): Order {
+/** 確定済みの受注 1 件。fixture は手書きで、OrderWorkQueueRow 型との照合は tsc の側で効く（jest は型検査しない）。 */
+function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQueueRow {
   return {
     id: 'o1',
     business_date: '2026-07-03',
     arrival_scheduled_start_time: '19:30:00',
-    customer_id: 'c1',
     customer_name: '山田太郎',
     cast_name: '花子',
     receptionist_name: '佐藤',
@@ -63,6 +68,16 @@ function confirmedOrder(overrides: Partial<Order> = {}): Order {
     cast_id: 'cast-1',
     status: 'CONFIRMED',
     reception_route: 'PHONE',
+    ...overrides,
+  };
+}
+
+function archivedOrder(overrides: Partial<OrderArchiveRow> = {}): OrderArchiveRow {
+  return {
+    id: 'o1',
+    business_date: '2026-07-03',
+    customer_name: '山田太郎',
+    status: 'COMPLETED',
     ...overrides,
   };
 }
@@ -83,7 +98,7 @@ function pendingApplication(overrides: Partial<OrderApplicationRow> = {}): Order
 
 const EMPTY_ARCHIVE = { rows: [], page: 0, pageCount: 0, total: 0 };
 
-function stubQueue(...rows: Order[]) {
+function stubQueue(...rows: OrderWorkQueueRow[]) {
   mockedOrderApi.listWorkQueue.mockResolvedValue({ rows, nextCursor: null });
 }
 
@@ -92,7 +107,7 @@ function stubInbox(...rows: OrderApplicationRow[]) {
 }
 
 /** アーカイブの片群だけに行を置く。もう一方は空のまま（群ごとに別の読みが走るため）。 */
-function stubArchive(status: Order['status'], ...rows: Order[]) {
+function stubArchive(status: OrderArchiveRow['status'], ...rows: OrderArchiveRow[]) {
   mockedOrderApi.listArchive.mockImplementation(async params =>
     params.statuses[0] === status
       ? { rows, page: 0, pageCount: 1, total: rows.length }
@@ -169,7 +184,10 @@ describe('作業キューの描画', () => {
 
   it('確定は申請内容を予填したモーダルで行い、申請が受付箱から外れて作業キューを取り直すこと', async () => {
     stubInbox(pendingApplication());
-    mockedApplicationApi.confirm.mockResolvedValue(confirmedOrder({ id: 'order-9' }));
+    mockedApplicationApi.confirm.mockResolvedValue({
+      ...confirmedOrder({ id: 'order-9' }),
+      fee_lines: [],
+    });
     render(<OrderListPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: '確定' }));
@@ -250,7 +268,6 @@ describe('作業キューの描画', () => {
   it('顧客未設定の受注は録入された連絡先で呼ぶこと', async () => {
     stubQueue(
       confirmedOrder({
-        customer_id: undefined,
         customer_name: undefined,
         contact_name: '匿名希望',
       })
@@ -379,7 +396,7 @@ describe('アーカイブ', () => {
       params.statuses[0] === 'CANCELLED'
         ? {
             rows: [
-              confirmedOrder({
+              archivedOrder({
                 id: 'x1',
                 status: 'CANCELLED',
                 cancelled_reason: '客都合。当日夕方に連絡あり',
@@ -429,7 +446,7 @@ describe('アーカイブ', () => {
 
   it('完了後訂正の導線は ORDER_CORRECT を持つ人にだけ出ること', async () => {
     // 押せない導線を描くと、訂正の内容を入力し終えてから 403 を受け取ることになる
-    stubArchive('COMPLETED', confirmedOrder({ id: 'x3', status: 'COMPLETED', total_fee: 28000 }));
+    stubArchive('COMPLETED', archivedOrder({ id: 'x3', status: 'COMPLETED', total_fee: 28000 }));
     mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE']));
     const withoutPermission = render(<OrderListPage />);
 
@@ -450,7 +467,7 @@ describe('アーカイブ', () => {
 
   it('取消済みの行には訂正の導線を出さないこと', async () => {
     // 誤取消の救済は同内容で受注を起こし直すこと。門そのものが取消を受け付けない
-    stubArchive('CANCELLED', confirmedOrder({ id: 'x4', status: 'CANCELLED' }));
+    stubArchive('CANCELLED', archivedOrder({ id: 'x4', status: 'CANCELLED' }));
     mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'ORDER_CORRECT']));
     render(<OrderListPage />);
 
@@ -465,7 +482,7 @@ describe('アーカイブ', () => {
       params.statuses[0] === 'COMPLETED'
         ? {
             rows: [
-              confirmedOrder({
+              archivedOrder({
                 id: 'x2',
                 status: 'COMPLETED',
                 total_fee: 28000,
@@ -507,7 +524,7 @@ describe('新規オーダー登録', () => {
   });
 
   it('受付担当を選ばなければ項目ごと送らないこと（サーバが実行者本人に解決する）', async () => {
-    mockedOrderApi.create.mockResolvedValue(confirmedOrder());
+    mockedOrderApi.create.mockResolvedValue({ ...confirmedOrder(), fee_lines: [] });
     render(<CreateOrderPage />);
 
     fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '新規客' } });

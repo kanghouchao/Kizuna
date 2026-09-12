@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
-  Order,
+  OrderArchiveRow,
+  OrderWorkQueueRow,
   OrderApplicationRow,
   OrderListCriteria,
   OrderSortKey,
@@ -85,8 +86,8 @@ export default function OrderListPage() {
   const [descending, setDescending] = useState(false);
 
   const [confirming, setConfirming] = useState<OrderApplicationRow | null>(null);
-  const [completing, setCompleting] = useState<Order | null>(null);
-  const [correcting, setCorrecting] = useState<Order | null>(null);
+  const [completing, setCompleting] = useState<OrderWorkQueueRow | null>(null);
+  const [correcting, setCorrecting] = useState<OrderArchiveRow | null>(null);
 
   // 群を跨いで同じ条件を当てる。参照が毎レンダー変わるとアーカイブが取り直し続けるため畳んで持つ
   const criteria: OrderListCriteria = useMemo(
@@ -94,7 +95,7 @@ export default function OrderListPage() {
     [applied, sortKey, descending]
   );
 
-  const queue = useCursorList<Order, OrderListCriteria>(
+  const queue = useCursorList<OrderWorkQueueRow, OrderListCriteria>(
     (cursor, activeCriteria) =>
       orderApi.listWorkQueue({
         ...activeCriteria,

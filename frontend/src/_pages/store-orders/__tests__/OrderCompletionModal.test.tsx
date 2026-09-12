@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { OrderCompletionModal } from '../ui/OrderCompletionModal';
-import { Order, orderApi } from '@/entities/order';
+import { Order, OrderWorkQueueRow, orderApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -29,6 +29,7 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const confirmedOrder: Order = {
+  fee_lines: [],
   id: 'o1',
   status: 'CONFIRMED',
   business_date: '2026-08-10',
@@ -83,7 +84,11 @@ describe('OrderCompletionModal', () => {
         { kind: 'MANUAL_ADJUST', name: '調整減算', amount: -200, system_owned: true },
       ],
     });
-    const queueRow: Order = { id: 'o1', status: 'CONFIRMED', customer_name: '山田太郎' };
+    const queueRow: OrderWorkQueueRow = {
+      id: 'o1',
+      status: 'CONFIRMED',
+      customer_name: '山田太郎',
+    };
 
     render(
       <OrderCompletionModal
