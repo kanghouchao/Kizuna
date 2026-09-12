@@ -18,7 +18,6 @@ import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -36,8 +35,8 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -69,7 +68,7 @@ class PlatformStaffAccountServiceTest {
 
   @Mock private PasswordEncoder passwordEncoder;
 
-  @Mock private ApplicationEventPublisher eventPublisher;
+  @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
 
   @InjectMocks private PlatformStaffAccountService service;
 
@@ -129,7 +128,7 @@ class PlatformStaffAccountServiceTest {
     inOrder.verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
     inOrder.verify(repository).lockEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE));
     verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -167,9 +166,7 @@ class PlatformStaffAccountServiceTest {
 
     assertThat(existing.getEnabled()).isFalse();
     verify(repository).saveAndFlush(existing);
-    // stop() が版を 0→1 へ増やし、増えた確定値をイベントが運ぶ。
-    verify(eventPublisher)
-        .publishEvent(new PlatformUserCredentialsChanged("admin@kizuna.test", 1L));
+    verify(credentialOperations).stop(existing);
   }
 
   @Test
@@ -199,11 +196,11 @@ class PlatformStaffAccountServiceTest {
 
     verifyNoInteractions(permissionRepository);
     verify(repository, never()).findByIdForUpdate(any());
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
-  @DisplayName("既に停止済みの対象への停止は不減零も stop も通さず、現在の版を運ぶイベントだけを再発行すること（冪等）")
+  @DisplayName("停止済みでも不減零検証と保存をせず統一操作へ渡すこと")
   void suspend_alreadyDisabled_republishesTheRevocationOnly() {
     PlatformUser existing = staff(3L, "stopped@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     existing.stop();
@@ -214,9 +211,7 @@ class PlatformStaffAccountServiceTest {
 
     verify(repository, never()).lockEnabledRoleHolderIds(any());
     verify(repository, never()).saveAndFlush(any());
-    // 版は増えない（stop() は走らない）が、キャッシュ反映の再送復旧のため現在値のイベントは発行される。
-    verify(eventPublisher)
-        .publishEvent(new PlatformUserCredentialsChanged("stopped@kizuna.test", 1L));
+    verify(credentialOperations).stop(existing);
   }
 
   @Test
@@ -230,7 +225,7 @@ class PlatformStaffAccountServiceTest {
 
     assertThat(existing.getEnabled()).isTrue();
     verify(repository).saveAndFlush(existing);
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -242,7 +237,7 @@ class PlatformStaffAccountServiceTest {
     service.resume(3L);
 
     verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -253,7 +248,7 @@ class PlatformStaffAccountServiceTest {
     assertThatThrownBy(() -> service.resume(8L)).isInstanceOf(NotFoundException.class);
 
     verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -270,7 +265,7 @@ class PlatformStaffAccountServiceTest {
     assertThat(existing.getPassword()).as("パスワードは書き換わらないこと").isEqualTo("hash");
     verify(repository, never()).saveAndFlush(any());
     verifyNoInteractions(passwordEncoder);
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -288,7 +283,7 @@ class PlatformStaffAccountServiceTest {
     verifyNoInteractions(roleRepository);
     verifyNoInteractions(passwordEncoder);
     verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -306,9 +301,7 @@ class PlatformStaffAccountServiceTest {
     verify(passwordEncoder).encode(temporaryPassword);
     assertThat(existing.getPassword()).isEqualTo("encoded");
     verify(repository).saveAndFlush(existing);
-    // changePassword() が版を 0→1 へ増やし、増えた確定値をイベントが運ぶ（全セッション失効の発火）。
-    verify(eventPublisher)
-        .publishEvent(new PlatformUserCredentialsChanged("store-only@kizuna.test", 1L));
+    verify(credentialOperations).changePassword(existing, "encoded");
     // 再設定は enabled もロールも動かさないので、不減零の直列化点は押さえない。
     verifyNoInteractions(permissionRepository);
   }
@@ -324,7 +317,7 @@ class PlatformStaffAccountServiceTest {
     verifyNoInteractions(roleRepository);
     verifyNoInteractions(passwordEncoder);
     verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -364,6 +357,6 @@ class PlatformStaffAccountServiceTest {
 
     verify(repository, never()).findByIdForUpdate(any());
     verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(eventPublisher);
+    verifyNoInteractions(credentialOperations);
   }
 }

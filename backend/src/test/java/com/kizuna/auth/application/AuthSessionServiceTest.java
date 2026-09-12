@@ -1,8 +1,10 @@
 package com.kizuna.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -30,6 +32,24 @@ class AuthSessionServiceTest {
   @Mock private CredentialVersionService credentialVersionService;
 
   @InjectMocks private AuthSessionService service;
+
+  @Test
+  void committedReflectionFailurePropagates() {
+    var failure = new IllegalStateException("Redis 書込み失敗");
+    doThrow(failure).when(credentialVersionService).reflect(EMAIL, 3L);
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      service.onCredentialsChanged(new PlatformUserCredentialsChanged(EMAIL, 3L));
+      verify(credentialVersionService, never()).reflect(anyString(), anyLong());
+      assertThatThrownBy(
+              () ->
+                  TransactionSynchronizationManager.getSynchronizations()
+                      .forEach(TransactionSynchronization::afterCommit))
+          .isSameAs(failure);
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
+  }
 
   @Test
   void invalidate_blacklistsTokenAndClearsContext() {

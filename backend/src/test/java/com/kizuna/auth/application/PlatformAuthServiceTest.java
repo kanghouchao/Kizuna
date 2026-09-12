@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.PlatformMeResponse;
@@ -16,12 +17,12 @@ import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -41,8 +42,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -61,7 +62,7 @@ class PlatformAuthServiceTest {
   @Mock private PermissionRepository permissionRepository;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private PlatformJwtIssuer jwtIssuer;
-  @Mock private ApplicationEventPublisher eventPublisher;
+  @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
   @Mock private AuthenticationManager authenticationManager;
   @Mock private Authentication authentication;
 
@@ -476,7 +477,7 @@ class PlatformAuthServiceTest {
         .isInstanceOf(ServiceException.class);
 
     verify(userRepository, never()).save(any());
-    verify(eventPublisher, never()).publishEvent(any());
+    verifyNoInteractions(credentialOperations);
   }
 
   @Test
@@ -490,9 +491,7 @@ class PlatformAuthServiceTest {
 
     assertThat(user.getPassword()).isEqualTo("new-encoded-hash");
     verify(userRepository).save(user);
-    // 版の増分がイベントで運ばれ、commit 後にキャッシュへ反映される（全端末失効の発火）。
-    verify(eventPublisher)
-        .publishEvent(new PlatformUserCredentialsChanged("admin@kizuna.test", 1L));
+    verify(credentialOperations).changePassword(user, "new-encoded-hash");
   }
 
   /**

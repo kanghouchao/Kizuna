@@ -225,6 +225,9 @@ class PlatformUserTest {
     user.stop();
     assertThat(user.getCredentialVersion()).isEqualTo(1L);
 
+    user.stop();
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+
     user.resume();
     assertThat(user.getCredentialVersion()).isEqualTo(1L);
   }

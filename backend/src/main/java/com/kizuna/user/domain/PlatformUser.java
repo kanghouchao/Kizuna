@@ -140,8 +140,10 @@ public class PlatformUser extends BaseEntity {
 
   /** 停止する（enabled=false）。行は削除せず、過去の実行主体の記録を保持する。版も増やし、発行済みセッションを即時失効させる。 */
   public void stop() {
-    this.enabled = false;
-    this.credentialVersion++;
+    if (this.enabled) {
+      this.enabled = false;
+      this.credentialVersion++;
+    }
   }
 
   /** 再開する（enabled=true）。 */

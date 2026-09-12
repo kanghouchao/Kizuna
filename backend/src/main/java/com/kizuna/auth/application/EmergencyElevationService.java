@@ -10,12 +10,12 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.EmergencyElevationView;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -23,7 +23,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Limit;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -41,7 +40,7 @@ public class EmergencyElevationService {
   private final PlatformUserRepository userRepository;
   private final PlatformAuthService authService;
   private final AuthenticationManager authenticationManager;
-  private final ApplicationEventPublisher eventPublisher;
+  private final CredentialOperations credentialOperations;
 
   /**
    * 宛先の店舗が実在しないことの写像。外部キー違反は全域ハンドラが 4xx へ落とす対象ではない（一意違反のみ）ため、 flush してこの場で捕まえないと「存在しない店舗への発動」が 500
@@ -104,10 +103,8 @@ public class EmergencyElevationService {
             .findById(elevation.getActivatedBy())
             .orElseThrow(
                 () -> new IllegalStateException("緊急昇格の発動者が存在しません: " + elevation.getActivatedBy()));
-    activator.invalidateSessions();
+    credentialOperations.invalidateSessions(activator);
     userRepository.save(activator);
-    eventPublisher.publishEvent(
-        new PlatformUserCredentialsChanged(activator.getEmail(), activator.getCredentialVersion()));
   }
 
   /**
