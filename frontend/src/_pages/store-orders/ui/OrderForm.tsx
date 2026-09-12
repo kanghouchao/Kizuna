@@ -280,7 +280,6 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
           </CardContent>
         </Card>
 
-        {/* 3. コース・料金 */}
         <Card>
           <CardHeader>
             <CardTitle role="heading" aria-level={2}>
