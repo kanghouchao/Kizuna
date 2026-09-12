@@ -3,7 +3,7 @@ import { notify } from '@/shared/notify';
 import type { PlatformStaffResponse } from '@/entities/user';
 import { platformRoleApi, platformStaffApi } from '@/entities/user';
 import { useKeyedResource } from '@/shared/lib';
-import { StaffEditModal } from '../StaffEditModal';
+import { StaffModal, type StaffEditModalProps } from '../StaffModal';
 
 jest.mock('@/entities/user', () => ({
   platformRoleApi: { list: jest.fn() },
@@ -30,13 +30,18 @@ const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResp
   ...override,
 });
 
-const renderModal = (props: Partial<React.ComponentProps<typeof StaffEditModal>> = {}) => {
+const renderModal = (props: Partial<StaffEditModalProps<PlatformStaffResponse>> = {}) => {
   const onClose = jest.fn();
   const onUpdated = jest.fn();
   function Harness() {
     const resource = useKeyedResource(['staff', 42], () => platformStaffApi.get(42));
     return (
-      <StaffEditModal
+      <StaffModal
+        mode="edit"
+        editStatus={false}
+        honorific="さん"
+        loadRoles={platformRoleApi.list}
+        update={platformStaffApi.update}
         resource={resource}
         stores={[]}
         storesLoading={false}
@@ -52,7 +57,7 @@ const renderModal = (props: Partial<React.ComponentProps<typeof StaffEditModal>>
   return { onClose, onUpdated };
 };
 
-describe('スタッフ授権編集モーダル', () => {
+describe('共通授権編集モーダル', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRoleApi.list.mockResolvedValue([
@@ -186,5 +191,62 @@ describe('スタッフ授権編集モーダル', () => {
     expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).not.toHaveBeenCalled();
+  });
+  it('詳細取得が終わるまで編集フォームを表示しない', async () => {
+    let resolve!: (value: PlatformStaffResponse) => void;
+    mockedStaffApi.get.mockReturnValue(
+      new Promise(done => {
+        resolve = done;
+      })
+    );
+    renderModal();
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
+    resolve(staff({ store_scope_type: 'SPECIFIC_STORES', store_ids: [9] }));
+    await screen.findByRole('button', { name: '保存する' });
+    expect(screen.getByLabelText('個別店舗')).toBeChecked();
+  });
+  it('応答の店舗範囲が欠落しても全店舗へ拡大しない', async () => {
+    mockedStaffApi.get.mockResolvedValue(
+      staff({ store_scope_type: undefined, store_ids: undefined })
+    );
+    renderModal();
+    await screen.findByRole('button', { name: '保存する' });
+    expect(screen.getByLabelText('個別店舗')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await screen.findByText('対象店舗を 1 つ以上選択してください');
+    expect(mockedStaffApi.update).not.toHaveBeenCalled();
+  });
+  it('409 の再取得値で入力と version を置き換える', async () => {
+    mockedStaffApi.get
+      .mockResolvedValueOnce(staff())
+      .mockResolvedValueOnce(staff({ roles: [{ id: 4, name: '経理' }], version: 8 }));
+    mockedStaffApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+    renderModal();
+    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+    await waitFor(() => expect(mockedNotify.warning).toHaveBeenCalled());
+    expect(await screen.findByLabelText('経理')).toBeChecked();
+    expect(screen.getByLabelText('店長')).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await waitFor(() =>
+      expect(mockedStaffApi.update).toHaveBeenLastCalledWith(42, {
+        role_ids: [4],
+        store_scope_type: 'ALL_STORES',
+        store_ids: [],
+        version: 8,
+      })
+    );
+  });
+  it.each([404, 500])('409 後の再取得失敗は置換警告を出さず領域内に表示する (%s)', async status => {
+    mockedStaffApi.get
+      .mockResolvedValueOnce(staff())
+      .mockRejectedValueOnce({ response: { status } });
+    mockedStaffApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+    renderModal();
+    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      status === 404 ? 'この対象は見つかりませんでした。' : '詳細を取得できませんでした。'
+    );
+    expect(mockedNotify.warning).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
   });
 });
