@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { platformRoleApi, platformStaffApi } from '@/entities/user';
-import { StaffCreateModal } from '../StaffCreateModal';
+import { StaffModal, type StaffCreateModalProps } from '../StaffModal';
 
 jest.mock('@/entities/user', () => ({
   platformRoleApi: { list: jest.fn() },
@@ -18,12 +18,21 @@ const mockedNotify = notify as jest.Mocked<typeof notify>;
 
 const stores = [{ id: 9, name: '店舗A' }];
 
-const renderModal = (props: Partial<React.ComponentProps<typeof StaffCreateModal>> = {}) => {
+const renderModal = (props: Partial<StaffCreateModalProps> = {}) => {
   const onClose = jest.fn();
   const onCreated = jest.fn();
   const onReloadStores = jest.fn();
   render(
-    <StaffCreateModal
+    <StaffModal
+      mode="create"
+      identity="human"
+      title="管理者を追加"
+      initialScope="ALL_STORES"
+      displayName={{ label: '氏名', required: '氏名を入力してください' }}
+      successMessage="管理者を追加しました"
+      failureMessage="管理者の追加に失敗しました"
+      loadRoles={platformRoleApi.list}
+      create={platformStaffApi.create}
       stores={stores}
       storesLoading={false}
       storesFailed={false}
@@ -44,7 +53,7 @@ const fillBasics = () => {
   fireEvent.change(screen.getByLabelText('氏名'), { target: { value: '佐藤次郎' } });
 };
 
-describe('管理者新規作成モーダル', () => {
+describe('共通作成モーダル', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRoleApi.list.mockResolvedValue([
@@ -228,7 +237,66 @@ describe('管理者新規作成モーダル', () => {
     await screen.findByRole('button', { name: '追加中...' });
 
     expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '追加中...' }));
+    expect(mockedStaffApi.create).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    '店舗目録が空・失敗でも個別店舗へフォーカスし、全店舗への変更でエラーを消す (%s)',
+    async storesFailed => {
+      renderModal({ stores: [], storesFailed });
+      await screen.findByLabelText('店長');
+      fillBasics();
+      fireEvent.click(screen.getByLabelText('店長'));
+      fireEvent.click(screen.getByLabelText('個別店舗'));
+      fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+      await screen.findByText('対象店舗を 1 つ以上選択してください');
+      await waitFor(() => expect(screen.getByLabelText('個別店舗')).toHaveFocus());
+      fireEvent.click(screen.getByLabelText('全店舗'));
+      await waitFor(() =>
+        expect(screen.queryByText('対象店舗を 1 つ以上選択してください')).not.toBeInTheDocument()
+      );
+      fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+      await waitFor(() =>
+        expect(mockedStaffApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({ store_scope_type: 'ALL_STORES', store_ids: [] })
+        )
+      );
+    }
+  );
+  it('店舗を選ぶとエラーが消え、全店舗から戻っても過去の選択は復元しない', async () => {
+    renderModal();
+    await screen.findByLabelText('店長');
+    fillBasics();
+    fireEvent.click(screen.getByLabelText('店長'));
+    fireEvent.click(screen.getByLabelText('個別店舗'));
+    expect(screen.queryByText('対象店舗を 1 つ以上選択してください')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+    await screen.findByText('対象店舗を 1 つ以上選択してください');
+    fireEvent.click(screen.getByLabelText('店舗A'));
+    await waitFor(() =>
+      expect(screen.queryByText('対象店舗を 1 つ以上選択してください')).not.toBeInTheDocument()
+    );
+    expect(screen.getByRole('group', { name: '担当店舗' })).toHaveAttribute(
+      'aria-invalid',
+      'false'
+    );
+    fireEvent.click(screen.getByLabelText('全店舗'));
+    fireEvent.click(screen.getByLabelText('個別店舗'));
+    await screen.findByText('対象店舗を 1 つ以上選択してください');
+    expect(screen.getByLabelText('店舗A')).not.toBeChecked();
+  });
+  it('作成失敗では入力を保持して再送信できる', async () => {
+    mockedStaffApi.create.mockRejectedValueOnce(new Error('network'));
+    renderModal();
+    await screen.findByLabelText('店長');
+    fillBasics();
+    fireEvent.click(screen.getByLabelText('店長'));
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+    await waitFor(() => expect(mockedNotify.error).toHaveBeenCalled());
+    expect(screen.getByLabelText('氏名')).toHaveValue('佐藤次郎');
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+    await waitFor(() => expect(mockedStaffApi.create).toHaveBeenCalledTimes(2));
   });
 });

@@ -1,9 +1,14 @@
 'use client';
 
+import { useId, type Ref, type ComponentProps } from 'react';
 import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
 import { Button, Label, RegionError } from '@/shared/ui';
 
-interface StoreSetPickerProps {
+interface StoreSetPickerProps extends Pick<
+  ComponentProps<'div'>,
+  'id' | 'aria-invalid' | 'aria-describedby'
+> {
+  ref?: Ref<HTMLInputElement>;
   /** 見出し。既定は授権の語彙で、店舗集合を別の意味で使う面（特典規則の発火範囲など）が言い換える。 */
   label?: string;
   /** 店舗目録。取得は呼び出し元（一覧ページ）が 1 回だけ行い、ここでは取得しない。 */
@@ -28,7 +33,11 @@ export function StoreSetPicker({
   storeScopeType,
   storeIds,
   onChange,
+  ref,
+  ...groupProps
 }: StoreSetPickerProps) {
+  const labelId = useId();
+  const scopeName = useId();
   const toggleStore = (id: number) => {
     const nextIds = storeIds.includes(id)
       ? storeIds.filter(storeId => storeId !== id)
@@ -37,22 +46,29 @@ export function StoreSetPicker({
   };
 
   return (
-    <div>
-      <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
+    <div role="group" aria-labelledby={labelId} {...groupProps}>
+      <span id={labelId} className="mb-1 block text-sm font-medium text-foreground">
+        {label}
+      </span>
       <div className="space-y-2">
-        <Label className="font-normal">
+        <Label className="font-normal break-words min-w-0">
           <input
+            className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             type="radio"
-            name="store-scope-type"
+            name={scopeName}
             checked={storeScopeType === 'ALL_STORES'}
             onChange={() => onChange({ storeScopeType: 'ALL_STORES', storeIds: [] })}
           />
           全店舗
         </Label>
-        <Label className="font-normal">
+        <Label className="font-normal break-words min-w-0">
           <input
+            className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             type="radio"
-            name="store-scope-type"
+            name={scopeName}
+            ref={ref}
+            aria-invalid={groupProps['aria-invalid']}
+            aria-describedby={groupProps['aria-describedby']}
             checked={storeScopeType === 'SPECIFIC_STORES'}
             onChange={() => onChange({ storeScopeType: 'SPECIFIC_STORES', storeIds })}
           />
@@ -79,8 +95,9 @@ export function StoreSetPicker({
                 const id = store.id;
                 if (id === undefined) return null;
                 return (
-                  <Label key={id} className="font-normal">
+                  <Label key={id} className="font-normal break-words min-w-0">
                     <input
+                      className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       type="checkbox"
                       checked={storeIds.includes(id)}
                       onChange={() => toggleStore(id)}
