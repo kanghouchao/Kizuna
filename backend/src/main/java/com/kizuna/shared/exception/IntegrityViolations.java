@@ -6,27 +6,24 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 /**
- * 整合性違反を、違反した制約の名前で業務例外へ写像する共通抽出。
- *
- * <p>制約名は Hibernate の {@link ConstraintViolationException#getConstraintName()}
- * から取り、字面と等値比較する。ドライバの報錯文言への 部分一致は使わない — 文言はドライバとロケールに依存し、別種の違反（列長超過など）を偶然含んでしまえば誤った業務例外へ帰属する。
- *
- * <p>「どの制約をどの業務例外へ写像するか」の決定は呼出側に残す。同じ制約でも操作の向きによって適切な分類は異なる（授与中ロールの削除は競合、 存在しないロールの授与は要求誤り）ため、対応表は
- * call site が持つ。
- *
- * <p>写像に無い違反は元の例外をそのまま返す（fail-loud）。呼出側が {@code throw} することで、全域ハンドラの分類（一意違反のみ 409、他は 500）へ落ちる。
+ * Hibernate の制約名を等値照合して業務例外へ写像する。文言はドライバやロケールに依存するため照合しない。 操作によって適切な業務例外が異なるため、対応表と保存・flush
+ * の選択は呼出側が担う。 明示 flush は永続化コンテキストの変更に伴う違反を捕捉範囲内で顕在化させる。トランザクションや再試行は管理しない。
+ * 未対応の違反は元の例外を保ち、全域ハンドラの分類に委ねる。
  */
 public final class IntegrityViolations {
 
   private IntegrityViolations() {}
 
-  /**
-   * 違反した制約に対応する業務例外を返す。対応が無い場合・制約名を取れない場合は {@code ex} 自身を返す。
-   *
-   * @param ex 整合性違反
-   * @param table 制約から業務例外の生成への対応表
-   * @return 呼出側が送出すべき例外
-   */
+  public static <T> T translateOnFailure(
+      Supplier<T> operation, Map<DbConstraint, Supplier<RuntimeException>> table) {
+    try {
+      return operation.get();
+    } catch (DataIntegrityViolationException ex) {
+      throw translate(ex, table);
+    }
+  }
+
+  /** 違反した制約に対応する業務例外を返す。対応が無い場合・制約名を取れない場合は {@code ex} 自身を返す。 */
   public static RuntimeException translate(
       DataIntegrityViolationException ex, Map<DbConstraint, Supplier<RuntimeException>> table) {
     String violated = violatedConstraintName(ex);

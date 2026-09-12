@@ -1,9 +1,11 @@
 package com.kizuna.shared.exception;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,68 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 /** {@link IntegrityViolations} の抽出（制約名の取り出しと等値照合）を固定する単体テスト。 */
 class IntegrityViolationsTest {
+
+  @Test
+  @DisplayName("操作を一回実行し、戻り値をそのまま返す")
+  void returnsOperationResult() {
+    Object expected = new Object();
+    AtomicInteger calls = new AtomicInteger();
+    Object result =
+        IntegrityViolations.translateOnFailure(
+            () -> {
+              calls.incrementAndGet();
+              return expected;
+            },
+            Map.of());
+    assertThat(result).isSameAs(expected);
+    assertThat(calls.get()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("操作の整合性違反を対応する業務例外へ変換して送出する")
+  void throwsMappedOperationFailure() {
+    DataIntegrityViolationException failure =
+        new DataIntegrityViolationException(
+            "save failed", hibernateViolation(DbConstraint.UQ_T_USERS_EMAIL.sqlName()));
+    ConflictException expected = new ConflictException("重複しています");
+    assertThatThrownBy(
+            () ->
+                IntegrityViolations.translateOnFailure(
+                    () -> {
+                      throw failure;
+                    },
+                    Map.of(DbConstraint.UQ_T_USERS_EMAIL, () -> expected)))
+        .isSameAs(expected);
+  }
+
+  @Test
+  @DisplayName("操作の未対応違反は元の例外を送出する")
+  void propagatesUnmappedOperationFailure() {
+    DataIntegrityViolationException failure =
+        new DataIntegrityViolationException("save failed", hibernateViolation("uq_t_other_key"));
+    assertThatThrownBy(
+            () ->
+                IntegrityViolations.translateOnFailure(
+                    () -> {
+                      throw failure;
+                    },
+                    Map.of(DbConstraint.UQ_T_USERS_EMAIL, () -> new ConflictException("重複しています"))))
+        .isSameAs(failure);
+  }
+
+  @Test
+  @DisplayName("操作の整合性違反以外の例外はそのまま送出する")
+  void propagatesOtherOperationFailure() {
+    IllegalStateException failure = new IllegalStateException("operation failed");
+    assertThatThrownBy(
+            () ->
+                IntegrityViolations.translateOnFailure(
+                    () -> {
+                      throw failure;
+                    },
+                    Map.of()))
+        .isSameAs(failure);
+  }
 
   private static ConstraintViolationException hibernateViolation(String constraintName) {
     return new ConstraintViolationException(

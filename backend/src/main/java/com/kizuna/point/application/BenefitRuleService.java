@@ -15,7 +15,6 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -91,16 +90,10 @@ public class BenefitRuleService {
     }
   }
 
-  /**
-   * 保存して flush する。flush を挟むのは二つの理由による — 応答が返す版を確定させること（{@code save} だけでは @Version が commit
-   * まで進まず、その応答を次の編集へそのまま渡すと自分の版で 409 になる）と、集合表の外部キー違反を この場で捕まえて 400 へ写すこと。
-   */
+  /** 応答に更新後の版を返し、次回の編集で自分の更新と競合しないようにする。 */
   private BenefitRule persist(BenefitRule rule) {
-    try {
-      return benefitRuleRepository.saveAndFlush(rule);
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(ex, STORE_REFERENCE_VIOLATIONS);
-    }
+    return IntegrityViolations.translateOnFailure(
+        () -> benefitRuleRepository.saveAndFlush(rule), STORE_REFERENCE_VIOLATIONS);
   }
 
   private BenefitRule find(Long id) {

@@ -19,7 +19,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -124,19 +123,11 @@ public class MemberRegistrationService {
     throw new IllegalStateException("会員コードの発行に失敗しました");
   }
 
-  /**
-   * 事前チェック後の並行登録で同一 email が先に確定した場合、一意制約違反を重複登録の 400 に写像する（事前チェックだけでは競合を塞げないための最終防衛線）。 saveAndFlush
-   * で INSERT をここで確定させ、コミット時の遅延フラッシュが 500 に化けるのを防ぐ。
-   */
+  /** 事前チェック後の並行登録で同一 email が先に確定した場合、一意制約違反を重複登録の 400 に写像する（事前チェックだけでは競合を塞げないための最終防衛線）。 */
   private PlatformUser saveUser(PlatformUser user) {
-    try {
-      return platformUserRepository.saveAndFlush(user);
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(
-          ex,
-          Map.of(
-              DbConstraint.UQ_T_USERS_EMAIL, () -> new ServiceException(DUPLICATE_EMAIL_MESSAGE)));
-    }
+    return IntegrityViolations.translateOnFailure(
+        () -> platformUserRepository.saveAndFlush(user),
+        Map.of(DbConstraint.UQ_T_USERS_EMAIL, () -> new ServiceException(DUPLICATE_EMAIL_MESSAGE)));
   }
 
   /**
@@ -144,16 +135,12 @@ public class MemberRegistrationService {
    * （どちらも「先に確定した別要求と衝突した」であり、要求自体の形式は正しい）。
    */
   private PlatformUser saveLineUser(PlatformUser user) {
-    try {
-      return platformUserRepository.saveAndFlush(user);
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(
-          ex,
-          Map.of(
-              DbConstraint.UQ_T_USERS_EMAIL,
-              () -> new ConflictException(DUPLICATE_EMAIL_MESSAGE),
-              DbConstraint.UQ_T_USERS_LINE_USER_ID,
-              () -> new ConflictException(DUPLICATE_LINE_USER_MESSAGE)));
-    }
+    return IntegrityViolations.translateOnFailure(
+        () -> platformUserRepository.saveAndFlush(user),
+        Map.of(
+            DbConstraint.UQ_T_USERS_EMAIL,
+            () -> new ConflictException(DUPLICATE_EMAIL_MESSAGE),
+            DbConstraint.UQ_T_USERS_LINE_USER_ID,
+            () -> new ConflictException(DUPLICATE_LINE_USER_MESSAGE)));
   }
 }

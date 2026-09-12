@@ -23,7 +23,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Limit;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -179,10 +178,7 @@ public class EmergencyElevationService {
 
   /** 記録を書いて id を確定させる。claim に載せる id が要るので、commit を待たず flush する。 */
   private EmergencyElevation persist(EmergencyElevation elevation) {
-    try {
-      return elevationRepository.saveAndFlush(elevation);
-    } catch (DataIntegrityViolationException ex) {
-      throw IntegrityViolations.translate(ex, STORE_REFERENCE_VIOLATIONS);
-    }
+    return IntegrityViolations.translateOnFailure(
+        () -> elevationRepository.saveAndFlush(elevation), STORE_REFERENCE_VIOLATIONS);
   }
 }
