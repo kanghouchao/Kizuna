@@ -32,6 +32,7 @@ Status: Accepted
 2026-09-12 採用（[#878](https://github.com/kanghouchao/Kizuna/issues/878)）。この追補は実装予定の規範であり、実装完了を示さない。
 
 - user の application 層の統一操作が、停止・パスワード変更・明示的な全セッション失効の集約行為とイベント発行を束ねる。増版は集約内に残す。停止済みへの停止再要求は増版せず、人には現在版を再通知する。commit 後の Redis 更新失敗から再要求で回復できるため、通知は状態差分でなく要求に従う。
+- 店員編集での停止再要求は、最新情報と更新用 version の再取得・確認を前提とする。commit 後の失敗でも DB の version は更新済みなので、古い要求は 409 で拒否する。最新の授権・状態に基づいて停止を再要求し、検証通過後に同じ credentialVersion を通知する。version だけを差し替えた古い授権の上書きや、停止時だけの競合検証の迂回は認めない。
 - 統一操作の具体クラスだけを型単位の `@NamedInterface("credential-operations")` で公開し、auth は `user::credential-operations` を同期参照する。既存の ActorIdentityService 等と同じ公開方式であり、application 全体の公開や公開のためだけの interface / Impl 分割は不要である。公開面は三操作に限定し、PlatformUser 引数は既存の `user::domain` 境界を利用する。
 - SERVICE も初回停止で増版するという ADR 0025 の規則を維持する。セッションを持たない SERVICE への通知は統一操作内の明示分岐で省く。業務サービスに例外を分散させない。
 - 統一操作は MANDATORY で業務サービスの既存トランザクションへの参加を要求し、保存・flush は業務サービスに残す。授権変更と停止を含む更新では、先行 flush が既存の制約例外変換を迂回し得るためである。業務変更と版更新は一緒に確定・取消される。

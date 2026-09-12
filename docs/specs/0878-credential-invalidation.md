@@ -13,7 +13,7 @@ user モジュールの application 層に統一操作を置き、集約の行�
 ## ユーザーストーリー（User Stories）
 
 1. アカウント管理者として、停止時に版更新と通知を行いたい。既発行セッションを失効させるため。
-2. アカウント管理者として、停止済みでも停止を再要求したい。Redis 更新失敗後に現在版を再通知して回復するため。
+2. アカウント管理者として、停止済みでも停止を再要求したい。Redis 更新失敗後に現在版を再通知して回復するため。店員編集では最新の情報と更新用 version を再取得・確認してから停止を再要求する。
 3. アカウント管理者として、停止の再要求では版を進めたくない。停止の冪等性を維持するため。
 4. 店長として、店員編集で停止を指定した場合に統一操作を使いたい。同じ通知規則を守るため。
 5. 店長として、停止を指定しない編集では通知を起こしたくない。無関係な変更で失効させないため。
@@ -35,6 +35,7 @@ user モジュールの application 層に統一操作を置き、集約の行�
 - 統一操作クラスだけを型単位の `@NamedInterface("credential-operations")` で公開し、auth の PlatformAuthService と EmergencyElevationService は `user::credential-operations` を経由して同期参照する。ActorIdentityService と ReceptionistEligibilityService の既存の公開方式に揃え、application パッケージ全体の公開や公開のためだけの interface / Impl 分割は行わない。公開メソッドは上記三操作に限定し、引数の PlatformUser は既存の `user::domain` 公開境界を使う。
 - 増版は PlatformUser の行為メソッドに残す。application 層での read-modify-write や HQL 一括更新は行わない。
 - 人と SERVICE は初回停止で増版し、停止済みへの再要求では増版しない。人は再要求でも現在版を通知し、SERVICE は統一操作内の明示的な種別分岐で通知しない。
+- 店員編集の再試行は最新情報の再取得を前提とする。afterCommit の Redis 更新失敗では停止と JPA の version 更新は確定済みであり、元の要求の再送は version 不一致により 409 となって統一操作へ到達しない。既存の詳細取得で現在の授権・状態・version を読み直し、内容を確認して最新情報に基づく enabled=false の要求を送る。古い授権情報のまま version だけを差し替えてはならない。停止済みでも version と既存の権限・授権検証を通過すれば現在の credentialVersion を再通知する。再取得後に別の更新が入った場合も 409 を維持し、再度取得・確認する。更新用 version と資格情報の credentialVersion は別の値である。
 - パスワード変更と明示失効は集約が進めた版を通知する。SERVICE の資格情報保持禁止は維持する。
 - PlatformUserCredentialsChanged、AuthSessionService の同期受信と手書き afterCommit を維持する。user から auth のサービスを直接参照せず、集約イベントの蓄積・repository 自動発行へ移行しない。
 - 対象は PlatformStaffAccountService の停止・代理再設定、StoreStaffService の停止指定、PlatformAuthService の自助変更、EmergencyElevationService の撤回、ServiceIdentityService の停止。
@@ -51,7 +52,8 @@ user モジュールの application 層に統一操作を置き、集約の行�
 | 現在の検証 | 変更後の責務 |
 | --- | --- |
 | PlatformStaffAccountServiceTest | 権限・対象・ロック・パスワード処理・停止済みでも統一操作へ進むことを存続。イベント内容を統一契約へ移す |
-| StoreStaffServiceTest | false は停止済みでも統一操作へ進み、true/null は進まないことと、既存の保存エラー変換を検証する |
+| StoreStaffServiceTest | version と既存の権限・授権検証を通過した false は停止済みでも統一操作へ進む。古い version は 409 で通知せず、true/null は失効操作へ進まないことと、既存の保存エラー変換を検証する |
+| 店員停止の再試行結合テスト | 実際の更新・詳細取得の入口と DB commit を通し、Redis 反映失敗の 500 → 古い要求の 409 → 最新情報の取得 → 最新情報に基づく停止再要求 → 同じ credentialVersion の Redis 反映と旧セッション拒否を検証する |
 | PlatformAuthServiceTest | 照合・エンコード・対象を存続。不正パスワードでは統一操作を呼ばない。イベント内容を統一契約へ移す |
 | EmergencyElevationServiceTest | 記録終了、撤回者ではなく発動者の失効、他の有効な発動の終了を存続。版・通知の詳細を統一契約へ移す |
 | ServiceIdentityServiceTest | ロック・対象・反復停止の入口を存続。SERVICE の増版と無通知を統一契約へ移す |
@@ -64,12 +66,15 @@ user モジュールの application 層に統一操作を置き、集約の行�
 
 ArchUnit の先例は AttributionMaterializationTests、commit/rollback の先例は AuthSessionServiceTest、実際の認証結果の先例は CredentialVersionIT。既存境界を再利用し、業務サービスごとのイベント内容検証は複製しない。
 
+店員停止の結合テストでは、失敗させるのは初回停止の commit 後の Redis 書込みに限定する。500 後に別トランザクションで停止・credentialVersion の増分・更新用 version の変更が確定したことを確認し、古い要求の 409 では再通知されないことを検証する。Redis を復旧させ、既存の詳細取得結果から再要求を組み立てる。再要求では credentialVersion がさらに増えず、キャッシュに確定版が反映され、初回停止前のトークンが拒否されることを確認する。更新処理や統一操作を mock で置換せず、テスト全体を rollback するトランザクションで afterCommit を省略しない。再取得までに授権が変わったケースも含め、古い授権の巻き戻しや version 検証の迂回がないことを確認する。
+
 ## 対象外（Out of Scope）
 
 - 発行時の enabled / SERVICE 守衛（#887）。
 - 緊急昇格の失効語義の変更（ADR 0024）。
 - Redis キャッシュ方式、JWT claim、ログアウトによる単一セッション失効の変更。
 - HTTP API、DB スキーマ、フロントエンド、認証モジュール全体の再編。
+- version に依存しない停止専用 API の追加、version 検証の緩和、フロントエンドの自動再送。店員停止の回復は既存の詳細取得と更新の契約内で扱う。
 - 互換レイヤー、移行処理、新規依存。
 
 ## 補足（Further Notes）
