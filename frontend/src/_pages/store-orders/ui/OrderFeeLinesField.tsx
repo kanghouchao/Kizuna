@@ -9,6 +9,7 @@ import {
   OrderFeeLineInput,
   OrderFeeLineKind,
   feeLinesTotal,
+  isDeduction,
 } from '@/entities/order';
 import { integerRule } from '@/shared/lib';
 import {
@@ -205,7 +206,9 @@ export function OrderFeeLinesField({ systemLines = [], courseName }: OrderFeeLin
               <span>
                 {ORDER_FEE_LINE_KIND_LABELS[line.kind]} / {line.name}
               </span>
-              <span>-¥{line.amount.toLocaleString()}</span>
+              <span>
+                {isDeduction(line.kind) ? '-' : ''}¥{line.amount.toLocaleString()}
+              </span>
             </div>
           ))}
         </div>
