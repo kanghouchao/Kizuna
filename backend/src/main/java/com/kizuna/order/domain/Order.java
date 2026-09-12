@@ -397,7 +397,9 @@ public class Order extends StoreScopedEntity {
       feeLines.add(
           OrderFeeLine.of(
               OrderFeeLineKind.POINT_REDEMPTION, POINT_REDEMPTION_LINE_NAME, -usedPoints));
-      recalculateTotalFee();
+      if (recalculateTotalFee() < 0) {
+        throw new InvalidOrderFeeLineException("内訳の総和が負になっています。割引・調整の金額を見直してください");
+      }
     }
     this.autoGrantPoints = autoGrantPoints;
     transitionTo(OrderStatus.COMPLETED);
