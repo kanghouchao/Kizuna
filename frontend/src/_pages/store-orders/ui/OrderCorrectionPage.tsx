@@ -185,12 +185,18 @@ export default function OrderCorrectionPage() {
         extension_minutes: optionalNumber(values.extension_minutes),
         fee_lines: toFeeLineInputs(values.fee_lines),
       });
-      const memberCode = await attributedMemberCode();
       if (!operation.isCurrent()) return;
       notify.success('受注を訂正しました');
-      // 結果は差し替えではなく併記で残す。一覧へ戻すと、何がどう変わったかを確かめる面が消える。
-      setOutcome({ result: corrected, memberCode, orderId, storeId });
-      await reload();
+      setOutcome({ result: corrected, memberCode: '不明', orderId, storeId });
+      void reload();
+      // 補助情報の遅延で訂正結果を隠さない。詳細再取得後の世代に結び付け、旧対象へは反映しない。
+      const enrichment = resource.capture();
+      void attributedMemberCode().then(memberCode => {
+        if (!enrichment.isCurrent()) return;
+        setOutcome(outcome =>
+          outcome?.result === corrected ? { ...outcome, memberCode } : outcome
+        );
+      });
     } catch (error) {
       if (!operation.isCurrent()) return;
       if (isConflict(error)) {

@@ -129,10 +129,10 @@ export function ServiceIdentityEditModal({
     } catch (error) {
       if (!operation.isCurrent()) return;
       if (isConflict(error)) {
+        onUpdated();
         const result = await resource.reload();
         if (result.status === 'success' && result.isCurrent()) {
           notify.warning('他の担当者が更新しました。入力を最新の内容に置き換えました');
-          onUpdated();
         }
       } else {
         notify.error(getApiErrorMessage(error, '権限の更新に失敗しました'));

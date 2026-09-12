@@ -254,9 +254,33 @@ test('訂正後の帰属取得中に別対象へ移ると、古い通知と結�
   fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
   fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
   await waitFor(() => expect(mockedOrderApi.attribution).toHaveBeenCalled());
+  expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
+  jest.mocked(notify.success).mockClear();
   mockParams = { storeId: '1', id: 'o2' };
   rerender(<OrderCorrectionPage />);
   await act(async () => resolve(ATTRIBUTED));
   expect(notify.success).not.toHaveBeenCalled();
   expect(screen.queryByText('訂正しました')).not.toBeInTheDocument();
+});
+
+test('帰属取得が未着でも訂正成功を通知し、詳細を更新して編集を再開する', async () => {
+  let resolve!: (value: typeof ATTRIBUTED) => void;
+  mockedOrderApi.get.mockResolvedValue(completedOrder({ version: 8 }));
+  mockedOrderApi.correct.mockResolvedValueOnce({ previous_total_fee: 100, total_fee: 200 });
+  mockedOrderApi.attribution.mockReturnValueOnce(
+    new Promise(done => {
+      resolve = done;
+    })
+  );
+  render(<OrderCorrectionPage />);
+  fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
+  fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+  await waitFor(() => expect(mockedOrderApi.attribution).toHaveBeenCalled());
+  expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
+  await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText('訂正しました')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('button', { name: '訂正する' })).toBeEnabled());
+  await act(async () => resolve(ATTRIBUTED));
+  expect(screen.getByText(/会員コード 123456789012/)).toBeInTheDocument();
+  expect(notify.success).toHaveBeenCalledTimes(1);
 });

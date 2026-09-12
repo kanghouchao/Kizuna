@@ -136,7 +136,7 @@ describe.each(cases)('$name の詳細ライフサイクル', ({ Page, api }) => 
     expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    await waitFor(() => expect(mocked.list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocked.list).toHaveBeenCalledTimes(3));
   });
 
   test('未着の詳細を閉じ、同じ ID を開き直した後の古い失敗を無視する', async () => {
@@ -150,5 +150,32 @@ describe.each(cases)('$name の詳細ライフサイクル', ({ Page, api }) => 
     await act(async () => pending.reject({ response: { status: 404 } }));
     expect(screen.getByRole('button', { name: '保存する' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+  test('競合時の詳細取得が失敗しても一覧を更新し、手動再試行後に古い一覧を残さない', async () => {
+    const pending = deferred<typeof detail>();
+    mocked.get
+      .mockResolvedValueOnce(detail)
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(detail);
+    mocked.update.mockRejectedValueOnce({ response: { status: 409 } });
+    render(<Page />);
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+    await screen.findByRole('button', { name: '保存する' });
+    mocked.list.mockResolvedValue({
+      rows: [{ ...detail, display_name: '一覧の最新の名前' }],
+      page: 0,
+      pageCount: 1,
+      total: 1,
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await waitFor(() => expect(mocked.get).toHaveBeenCalledTimes(2));
+    expect(mocked.list).toHaveBeenCalledTimes(2);
+    await act(async () => pending.reject(new Error('network')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('詳細を取得できませんでした。');
+    expect(notify.warning).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'キャンセル' }));
+    expect(await screen.findByText('一覧の最新の名前')).toBeInTheDocument();
+    expect(screen.queryByText('一覧の古い名前')).not.toBeInTheDocument();
   });
 });
