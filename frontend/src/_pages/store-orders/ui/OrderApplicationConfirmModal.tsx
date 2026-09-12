@@ -226,7 +226,9 @@ export function OrderApplicationConfirmModal({
           {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
           <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            <OrderReceptionistField scene="confirm" />
+            {application !== null && (
+              <OrderReceptionistField key={application.id} scene="confirm" />
+            )}
             <FormField
               control={control}
               name="business_date"

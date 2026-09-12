@@ -179,3 +179,43 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     });
   });
 });
+
+describe('確定対象と受付候補の取得', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it.each(['同じ申請を開き直す', '開いたまま別申請へ切り替える'])(
+    '%s と最新の受付候補を表示する',
+    async mode => {
+      const list = jest.mocked(orderApi.listReceptionists);
+      list.mockResolvedValueOnce([{ id: 7, display_name: '旧受付' }]);
+      const props = { onClose: jest.fn(), onConfirmed: jest.fn() };
+      const application = guestApplication();
+      const { rerender } = render(<OrderApplicationConfirmModal {...props} application={null} />);
+      expect(list).not.toHaveBeenCalled();
+      rerender(<OrderApplicationConfirmModal {...props} application={application} />);
+      fireEvent.click(await screen.findByRole('combobox', { name: '受付担当' }));
+      const old = await screen.findByRole('option', { name: '旧受付' });
+      fireEvent.pointerDown(old);
+      fireEvent.click(old);
+
+      list.mockResolvedValueOnce([{ id: 9, display_name: '新受付' }]);
+      if (mode === '同じ申請を開き直す') {
+        rerender(<OrderApplicationConfirmModal {...props} application={null} />);
+        expect(list).toHaveBeenCalledTimes(1);
+      }
+      rerender(
+        <OrderApplicationConfirmModal
+          {...props}
+          application={
+            mode === '同じ申請を開き直す' ? application : guestApplication({ id: 'app-3' })
+          }
+        />
+      );
+      fireEvent.click(await screen.findByRole('combobox', { name: '受付担当' }));
+      expect(await screen.findByRole('option', { name: '新受付' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: '旧受付' })).not.toBeInTheDocument();
+    }
+  );
+});
