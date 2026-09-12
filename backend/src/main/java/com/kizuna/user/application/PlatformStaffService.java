@@ -10,9 +10,6 @@ import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
-import com.kizuna.user.domain.LastRoleManageHolderException;
-import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
@@ -51,7 +48,7 @@ public class PlatformStaffService {
 
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
-  private final PermissionRepository permissionRepository;
+  private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
 
   @Transactional(readOnly = true)
@@ -78,13 +75,7 @@ public class PlatformStaffService {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
-      // ロール集合は @ElementCollection のため、店舗集合と同様に member of（相関 exists）で組んで親行を増やさない。
-      // HQ 側ロールは高々数件なので、id ごとの述語を OR で並べても副問い合わせの本数は実用上問題にならない。
-      predicates.add(
-          cb.or(
-              hqRoleIds.stream()
-                  .map(roleId -> cb.isMember(roleId, root.<Set<Long>>get("roleIds")))
-                  .toArray(Predicate[]::new)));
+      predicates.add(new HqRoleMembership(hqRoleIds).holders().toPredicate(root, query, cb));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
@@ -148,7 +139,10 @@ public class PlatformStaffService {
     if (!user.getVersion().equals(req.getVersion())) {
       throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
-    requireRoleManageHolderRemains(user, req);
+    // 供給ロールの追加は並行しうるため、ロック前は要求に既存ロールの除去があるかだけで判断する。
+    if (user.getEnabled() && !req.getRoleIds().containsAll(user.getRoleIds())) {
+      roleManageHolderGuard.requireAfterGrantChange(user, req.getRoleIds());
+    }
     user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
     return toResponse(save(user), roleNames);
   }
@@ -163,7 +157,7 @@ public class PlatformStaffService {
     return repository
         .findById(id)
         .filter(user -> user.getUserType() == UserType.STAFF)
-        .filter(user -> holdsAny(user.getRoleIds(), hqRoleIds))
+        .filter(user -> new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds()))
         .orElseThrow(() -> new NotFoundException("管理者が見つかりません: " + id));
   }
 
@@ -172,59 +166,9 @@ public class PlatformStaffService {
    * 店舗側ロールのみへ降ろされた利用者はこの面から二度と辿り着けなくなる（店舗スタッフ管理の領分・ADR 0020）。
    */
   private static void requireHqRole(Set<Long> roleIds, Set<Long> hqRoleIds) {
-    if (!holdsAny(roleIds, hqRoleIds)) {
+    if (!new HqRoleMembership(hqRoleIds).holdsAny(roleIds)) {
       throw new InvalidRoleGrantException("管理者にはプラットフォーム権限を含むロールを 1 つ以上付与してください");
     }
-  }
-
-  /**
-   * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になるロール剥奪を拒む。判定を役職名（HQ_ADMIN）でなく 実効権限で行うのは、管理が
-   * ROLE_MANAGE を含む自作ロールへ移った配備でも正しく数えるためである。
-   *
-   * <p>母集団を減らしうる更新だけが共有の直列化点（{@link PermissionRepository#lockIdByCode}、取り直しの理由もそちら）を押さえ、 押さえた後に
-   * ROLE_MANAGE を含むロール集合を取り直して判定し直す。そのうえで母集団の行も押さえて数え直す（{@link
-   * PlatformUserRepository#lockEnabledRoleHolderIds}）。目録行の直列化点があれば行ロックは冗長だが、 母集団の行を押さえている事実自体が
-   * {@code PlatformStaffManagementIT} の実測の対象なので残している。
-   */
-  private void requireRoleManageHolderRemains(PlatformUser user, PlatformStaffUpdateRequest req) {
-    // 発火判定に ROLE_MANAGE を含むロール集合を使ってはならない。集合は並行するロール編集の「追加」で
-    // 増えうる（追加側は母集団を減らさないので直列化点を押さえない）ため、押さえる前の集合で「減らさない」
-    // とは言えない。停止も除去も含まない更新だけが、要求の形だけを根拠に素通りできる。
-    if (!mightReduceRoleManageHolders(user, req)) {
-      return;
-    }
-    permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-    Set<Long> roleManageRoleIds =
-        roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
-    if (!reducesRoleManageHolders(user, req, roleManageRoleIds)) {
-      return;
-    }
-    repository.lockEnabledRoleHolderIds(roleManageRoleIds);
-    List<Long> holders = repository.findEnabledRoleHolderIds(roleManageRoleIds);
-    if (holders.size() == 1 && holders.contains(user.getId())) {
-      throw new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません");
-    }
-  }
-
-  /** 現保持ロールのいずれかの除去を含むか。含まない更新はどの母集団も減らせない。 */
-  private static boolean mightReduceRoleManageHolders(
-      PlatformUser user, PlatformStaffUpdateRequest req) {
-    return user.getEnabled() && !req.getRoleIds().containsAll(user.getRoleIds());
-  }
-
-  /** 対象が今そこに居て、更新後に居なくなるか。居ないなら、この更新で母集団は減らない。 */
-  private static boolean reducesRoleManageHolders(
-      PlatformUser user, PlatformStaffUpdateRequest req, Set<Long> roleManageRoleIds) {
-    if (roleManageRoleIds.isEmpty()) {
-      return false;
-    }
-    boolean wasHolder = user.getEnabled() && holdsAny(user.getRoleIds(), roleManageRoleIds);
-    boolean staysHolder = holdsAny(req.getRoleIds(), roleManageRoleIds);
-    return wasHolder && !staysHolder;
-  }
-
-  private static boolean holdsAny(Set<Long> roleIds, Set<Long> targetRoleIds) {
-    return roleIds.stream().anyMatch(targetRoleIds::contains);
   }
 
   /** 指定 id のロールが全て実在することを検証し、id→名称の対応を返す（応答組立にも使う）。 */

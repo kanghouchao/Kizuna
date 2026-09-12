@@ -4,8 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -21,8 +20,6 @@ import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
-import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
@@ -40,7 +37,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -72,7 +68,7 @@ class PlatformStaffServiceTest {
 
   @Mock private RoleRepository roleRepository;
 
-  @Mock private PermissionRepository permissionRepository;
+  @Mock private RoleManageHolderGuard roleManageHolderGuard;
 
   @Mock private PasswordEncoder encoder;
 
@@ -85,12 +81,6 @@ class PlatformStaffServiceTest {
   /** HQ 側ロールの解決を差し込む。既定では HQ_ROLE と ROLE_MANAGE_ROLE だけが HQ 側。 */
   private void givenHqSideRoles() {
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE, ROLE_MANAGE_ROLE));
-  }
-
-  /** ROLE_MANAGE を含むロールの解決を差し込む（不減零の母集団判定）。 */
-  private void givenRoleManageRoles() {
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(ROLE_MANAGE_ROLE));
   }
 
   private Role role(long id, String name) {
@@ -594,10 +584,11 @@ class PlatformStaffServiceTest {
             StoreScopeType.ALL_STORES,
             Set.of());
     givenHqSideRoles();
-    givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
+    doThrow(new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません"))
+        .when(roleManageHolderGuard)
+        .requireAfterGrantChange(existing, Set.of(HQ_ROLE));
 
     assertThatThrownBy(
             () ->
@@ -616,16 +607,14 @@ class PlatformStaffServiceTest {
         staff(
             3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
-    givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L, 99L));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
     service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
 
     assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
+    verify(roleManageHolderGuard).requireAfterGrantChange(existing, Set.of(HQ_ROLE));
   }
 
   @Test
@@ -643,91 +632,46 @@ class PlatformStaffServiceTest {
     service.update(
         3L, updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
 
-    verify(permissionRepository, never()).lockIdByCode(any());
-    verify(repository, never()).lockEnabledRoleHolderIds(any());
+    verifyNoInteractions(roleManageHolderGuard);
   }
 
   @Test
-  void update_countsHoldersAfterLockingNotTheLockResult() {
-    // 押さえる問い合わせの結果は待つ前のスナップショットのままで、待っている間に確定した降格を見ない
-    // （PlatformStaffManagementIT が実 PostgreSQL で実測）。数えるのは押さえた後に取り直した側でなければ、
-    // 最後の 2 人の相互降級で母集団が 0 になる。
+  void update_removingAnyExistingRoleCallsTheGuardEvenWithoutKnownManagementGrants() {
     PlatformUser existing =
         staff(
             3L,
-            "last-admin@kizuna.test",
-            Set.of(ROLE_MANAGE_ROLE),
+            "target@kizuna.test",
+            Set.of(HQ_ROLE, MANAGER_ROLE),
             StoreScopeType.ALL_STORES,
             Set.of());
     givenHqSideRoles();
-    givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    // 押さえた側はまだ相手を保持者だと思っている。取り直した側だけが降格を見ている。
-    when(repository.lockEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L, 99L));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
 
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
-        .isInstanceOf(LastRoleManageHolderException.class);
+    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
 
-    verify(repository, never()).saveAndFlush(any());
+    verify(roleManageHolderGuard).requireAfterGrantChange(existing, Set.of(HQ_ROLE));
   }
 
   @Test
-  void update_takesTheGuardMutexBeforeThePopulation() {
-    // 押さえる順は 目録行 → 利用者行。全行使点が同じ 1 行から始まるので、行使点が増えても待ちが環にならない。
+  void update_disabledTargetCanLoseRolesWithoutCallingTheGuard() {
     PlatformUser existing =
         staff(
             3L,
-            "last-admin@kizuna.test",
-            Set.of(ROLE_MANAGE_ROLE),
+            "target@kizuna.test",
+            Set.of(HQ_ROLE, ROLE_MANAGE_ROLE),
             StoreScopeType.ALL_STORES,
             Set.of());
+    existing.stop();
     givenHqSideRoles();
-    givenRoleManageRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE))).thenReturn(List.of(3L));
-
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
-        .isInstanceOf(LastRoleManageHolderException.class);
-
-    InOrder inOrder = inOrder(permissionRepository, repository);
-    inOrder.verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-    inOrder.verify(repository).lockEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE));
-  }
-
-  @Test
-  void update_reevaluatesTheRoleSetAfterTakingTheGuardMutex() {
-    // ロール定義の編集が並行して ROLE_MANAGE を外していれば、押さえた後に読む集合が母集団の正である。
-    // 対象がその集合に居ないなら、この更新は母集団を減らさない — 押さえたうえで通す（対照）。
-    PlatformUser existing =
-        staff(
-            3L,
-            "last-admin@kizuna.test",
-            Set.of(ROLE_MANAGE_ROLE),
-            StoreScopeType.ALL_STORES,
-            Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(HQ_ROLE));
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    lenient()
-        .when(repository.findEnabledRoleHolderIds(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
     service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
 
     assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
-    verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
+    verifyNoInteractions(roleManageHolderGuard);
   }
 }

@@ -4,10 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
@@ -36,7 +35,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -58,6 +56,8 @@ class RoleServiceTest {
   @Mock private RoleRepository roleRepository;
   @Mock private PermissionRepository permissionRepository;
   @Mock private PlatformUserRepository platformUserRepository;
+
+  @Mock private RoleManageHolderGuard roleManageHolderGuard;
 
   @InjectMocks private RoleService service;
 
@@ -269,8 +269,9 @@ class RoleServiceTest {
     when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
         .thenReturn(Set.of(GUARDED_ROLE));
-    when(platformUserRepository.findEnabledRoleHolderIds(Set.of(GUARDED_ROLE)))
-        .thenReturn(List.of(3L));
+    doThrow(new LastRoleManageHolderException("最後の管理権限保持者が居なくなるため、このロールから管理権限を外すことはできません"))
+        .when(roleManageHolderGuard)
+        .requireAfterRolePermissionRemoval(GUARDED_ROLE);
 
     assertThatThrownBy(
             () -> service.update(GUARDED_ROLE, updateRequest("IT管理", Set.of("STORE_MANAGE"), 0L)))
@@ -289,14 +290,12 @@ class RoleServiceTest {
     when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
         .thenReturn(Set.of(GUARDED_ROLE, OTHER_ROLE_MANAGE_ROLE));
-    when(platformUserRepository.findEnabledRoleHolderIds(Set.of(OTHER_ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(3L));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
     service.update(GUARDED_ROLE, updateRequest("IT管理", Set.of("STORE_MANAGE"), 0L));
 
     assertThat(existing.getPermissionIds()).containsExactly(ORDER_MANAGE_ID);
-    verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
+    verify(roleManageHolderGuard).requireAfterRolePermissionRemoval(GUARDED_ROLE);
   }
 
   @Test
@@ -311,31 +310,22 @@ class RoleServiceTest {
     service.update(GUARDED_ROLE, updateRequest("IT管理（改名）", Set.of("ROLE_MANAGE"), 0L));
 
     assertThat(existing.getName()).isEqualTo("IT管理（改名）");
-    verify(permissionRepository, never()).lockIdByCode(any());
+    verifyNoInteractions(roleManageHolderGuard);
   }
 
   @Test
-  void update_reevaluatesTheRoleSetAfterTakingTheGuardMutex() {
-    // 押さえる前に読んだ集合で数えると、ロール編集と授権変更が双方とも検査を通って母集団が 0 になる。
-    // 待っている間に別経路がこのロールから ROLE_MANAGE を外していれば、この編集はもう母集団を減らさない。
+  void update_existingSupplierRemoval_callsTheGuard() {
     Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("STORE_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
     when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
-        .thenReturn(Set.of(GUARDED_ROLE))
-        .thenReturn(Set.of());
-    lenient()
-        .when(platformUserRepository.findEnabledRoleHolderIds(Set.of(GUARDED_ROLE)))
-        .thenReturn(List.of(3L));
+        .thenReturn(Set.of(GUARDED_ROLE));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
     service.update(GUARDED_ROLE, updateRequest("IT管理", Set.of("STORE_MANAGE"), 0L));
 
-    InOrder inOrder = inOrder(roleRepository, permissionRepository);
-    inOrder.verify(roleRepository).findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
-    inOrder.verify(permissionRepository).lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-    inOrder.verify(roleRepository).findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
+    verify(roleManageHolderGuard).requireAfterRolePermissionRemoval(GUARDED_ROLE);
   }
 
   @Test
@@ -434,5 +424,19 @@ class RoleServiceTest {
 
     assertThatThrownBy(() -> service.create(createRequest("店長", Set.of("ORDER_MANAGE"))))
         .isSameAs(violation);
+  }
+
+  @Test
+  void update_nonSupplierDoesNotCallTheGuard() {
+    Role existing = role(GUARDED_ROLE, "受付", false, Set.of(ORDER_MANAGE_ID));
+    when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
+        .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
+    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of());
+    when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
+
+    service.update(GUARDED_ROLE, updateRequest("受付", Set.of("CUSTOMER_MANAGE"), 0L));
+
+    verifyNoInteractions(roleManageHolderGuard);
   }
 }

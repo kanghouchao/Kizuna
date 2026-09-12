@@ -5,8 +5,6 @@ import com.kizuna.user.api.dto.StaffAccountResponse;
 import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
-import com.kizuna.user.domain.LastRoleManageHolderException;
-import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -40,9 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
  * アカウント管理ユースケース。対象は本人種別 STAFF の全アカウントで、ロール構成（HQ 側／店舗側）を問わない — CAST/MEMBER は権限モデルの外なので在否も出さない。
  *
  * <p>授権は一切書かない。停止・再開とパスワード再設定だけを扱い、ロールと店舗集合は表示にしか現れない。
- *
- * <p><b>ロックの獲得順は 権限目録行（{@link PermissionRepository#lockIdByCode}）→ 利用者行</b>で、授権管理の PUT
- * 経路と同一。逆順の行使点が 1 つでも生まれると、二経路が互いの保持する行を待って環になる。
  */
 @Service
 @RequiredArgsConstructor
@@ -56,7 +51,7 @@ public class PlatformStaffAccountService {
 
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
-  private final PermissionRepository permissionRepository;
+  private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
   private final CredentialOperations credentialOperations;
 
@@ -133,15 +128,8 @@ public class PlatformStaffAccountService {
     if (email.equals(actorEmail)) {
       throw new SelfStopNotAllowedException("自分自身を停止することはできません");
     }
-    // 対象が母集団に属するかは押さえる前には決められない（並行するロール編集が対象へ ROLE_MANAGE を
-    // 足しうる）ため、停止は経路を問わず無条件に直列化点を押さえてから判定する。
-    permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name());
-    // 目録行を待った後に取り直す。事前検査で実体を読んでいないので、ここでの獲得は版の照合を伴わない。
-    PlatformUser target = repository.findByIdForUpdate(id).orElseThrow(() -> notFound(id));
+    PlatformUser target = roleManageHolderGuard.loadForSuspension(id);
     boolean wasEnabled = target.getEnabled();
-    if (wasEnabled) {
-      requireRoleManageHolderRemains(target);
-    }
     credentialOperations.stop(target);
     if (wasEnabled) {
       repository.saveAndFlush(target);
@@ -164,7 +152,7 @@ public class PlatformStaffAccountService {
       throw new SelfPasswordResetNotAllowedException("自分自身のパスワードは再設定できません");
     }
     // HQ 側ロール保持者は対象外（ADR 0021 の守衛 G6）。
-    if (holdsAny(target.getRoleIds(), roleRepository.findHqRoleIds())) {
+    if (new HqRoleMembership(roleRepository.findHqRoleIds()).holdsAny(target.getRoleIds())) {
       throw new HqPasswordResetNotAllowedException("HQ 側ロール保持者のパスワードは再設定できません");
     }
     String temporaryPassword = temporaryPassword();
@@ -188,30 +176,6 @@ public class PlatformStaffAccountService {
       target.resume();
       repository.saveAndFlush(target);
     }
-  }
-
-  /**
-   * 不減零（ADR 0020 の守衛 G5）。有効な ROLE_MANAGE 実効保持者が 0 になる停止を拒む。役職名でなく実効権限で数える理由は、ロール剥奪経路（{@link
-   * PlatformStaffService} の同名検査）に単源化してある。
-   *
-   * <p>母集団の行も押さえてから数え直す。押さえた問い合わせの結果を数えてはならない（待っている間に確定した降格を見ない — {@link
-   * PlatformUserRepository#lockEnabledRoleHolderIds}）。
-   */
-  private void requireRoleManageHolderRemains(PlatformUser target) {
-    Set<Long> roleManageRoleIds =
-        roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name());
-    if (!holdsAny(target.getRoleIds(), roleManageRoleIds)) {
-      return;
-    }
-    repository.lockEnabledRoleHolderIds(roleManageRoleIds);
-    List<Long> holders = repository.findEnabledRoleHolderIds(roleManageRoleIds);
-    if (holders.size() == 1 && holders.contains(target.getId())) {
-      throw new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません");
-    }
-  }
-
-  private static boolean holdsAny(Set<Long> roleIds, Set<Long> targetRoleIds) {
-    return roleIds.stream().anyMatch(targetRoleIds::contains);
   }
 
   /**
