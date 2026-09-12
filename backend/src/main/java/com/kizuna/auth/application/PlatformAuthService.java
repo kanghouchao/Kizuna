@@ -6,11 +6,11 @@ import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -27,7 +27,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -56,7 +55,7 @@ public class PlatformAuthService {
   private final PasswordEncoder passwordEncoder;
   private final PlatformJwtIssuer jwtIssuer;
   private final AuthenticationManager authenticationManager;
-  private final ApplicationEventPublisher eventPublisher;
+  private final CredentialOperations credentialOperations;
 
   @Transactional(readOnly = true)
   public Token login(String email, String password) {
@@ -166,10 +165,8 @@ public class PlatformAuthService {
     if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
       throw new ServiceException("現在のパスワードが正しくありません");
     }
-    user.changePassword(passwordEncoder.encode(newPassword));
+    credentialOperations.changePassword(user, passwordEncoder.encode(newPassword));
     userRepository.save(user);
-    eventPublisher.publishEvent(
-        new PlatformUserCredentialsChanged(user.getEmail(), user.getCredentialVersion()));
   }
 
   private PlatformMeResponse toMeResponse(PlatformUser user) {

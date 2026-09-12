@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.StoreStaffCreateRequest;
@@ -17,7 +19,6 @@ import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -26,20 +27,25 @@ import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -84,7 +90,7 @@ class StoreStaffServiceTest {
   @Mock private PlatformUserRepository repository;
   @Mock private RoleRepository roleRepository;
   @Mock private PasswordEncoder encoder;
-  @Mock private ApplicationEventPublisher eventPublisher;
+  @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
   @Mock private StoreContext storeContext;
 
   @InjectMocks private StoreStaffService service;
@@ -537,11 +543,12 @@ class StoreStaffServiceTest {
                     updateRequest(
                         Set.of(CLERK_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(CONTEXT_STORE))))
         .isInstanceOf(StaleStaffUpdateException.class);
+    verifyNoInteractions(credentialOperations);
   }
 
-  @Test
-  @DisplayName("編集: 停止は失効イベントを発行すること")
-  void updatePublishesStoppedEventOnDisable() {
+  @ParameterizedTest
+  @CsvSource({"true,false", "false,false", "false,true", "true,true", "true,", "false,"})
+  void updateDelegatesOnlyExplicitStop(boolean enabled, Boolean requested) {
     PlatformUser target =
         staff(
             1L,
@@ -561,13 +568,54 @@ class StoreStaffServiceTest {
 
     StoreStaffUpdateRequest req =
         updateRequest(Set.of(CLERK_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(CONTEXT_STORE));
-    req.setEnabled(false);
+    if (!enabled) {
+      target.stop();
+    }
+    req.setEnabled(requested);
     service.update(1L, req);
 
-    assertThat(target.getEnabled()).isFalse();
-    // stop() が版を 0→1 へ増やし、増えた確定値をイベントが運ぶ。
-    verify(eventPublisher)
-        .publishEvent(new PlatformUserCredentialsChanged("clerk@kizuna.test", 1L));
+    assertThat(target.getEnabled()).isEqualTo(requested == null ? enabled : requested);
+    if (Boolean.FALSE.equals(requested)) {
+      verify(credentialOperations).stop(target);
+    } else {
+      verifyNoInteractions(credentialOperations);
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "fk_t_user_stores_store,指定された店舗が存在しません",
+    "fk_t_user_roles_role,指定されたロールが存在しません",
+    "uq_t_users_email,このメールアドレスは既に登録されています"
+  })
+  void stoppingWhileChangingGrantsPreservesSaveErrorMapping(String constraint, String message) {
+    PlatformUser target =
+        staff(
+            1L,
+            "clerk@kizuna.test",
+            Set.of(CLERK_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(CONTEXT_STORE));
+    when(repository.findById(1L)).thenReturn(Optional.of(target));
+    when(repository.saveAndFlush(target))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "保存失敗", new ConstraintViolationException("制約違反", new SQLException(), constraint)));
+    givenHqSideRoles();
+    givenStaffManageRoles();
+    givenRoleNames();
+    givenContextStore();
+    givenManagerActor(CONTEXT_STORE, OTHER_STORE);
+    givenStoreConsoleRoles();
+    StoreStaffUpdateRequest req =
+        updateRequest(
+            Set.of(CLERK_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(CONTEXT_STORE, OTHER_STORE));
+    req.setEnabled(false);
+
+    assertThatThrownBy(() -> service.update(1L, req))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage(message);
+    verify(credentialOperations).stop(target);
   }
 
   @Test

@@ -1,6 +1,6 @@
 # 資格情報の版更新と失効通知の責務境界
 
-対象: #878。状態: 設計確定（2026-09-12）。実装は未着手。
+対象: #878。状態: #908 で実装済み（2026-09-12）。
 
 ## 問題（Problem Statement）
 
@@ -32,7 +32,7 @@ user モジュールの application 層に統一操作を置き、集約の行�
 ## 実装上の決定（Implementation Decisions）
 
 - user.application に具体クラスの統一操作を置く。停止・パスワード変更・明示的な全セッション失効を扱う。汎用コールバックや設定可能な操作フレームワークは導入しない。
-- 統一操作クラスだけを型単位の `@NamedInterface("credential-operations")` で公開し、auth の PlatformAuthService と EmergencyElevationService は `user::credential-operations` を経由して同期参照する。ActorIdentityService と ReceptionistEligibilityService の既存の公開方式に揃え、application パッケージ全体の公開や公開のためだけの interface / Impl 分割は行わない。公開メソッドは上記三操作に限定し、引数の PlatformUser は既存の `user::domain` 公開境界を使う。
+- 統一操作クラスだけを型単位の `@NamedInterface(name = "credential-operations", propagate = false)` で公開し、auth の PlatformAuthService と EmergencyElevationService は `user::credential-operations` を経由して同期参照する。ActorIdentityService と ReceptionistEligibilityService の既存の公開方式に揃え、application パッケージ全体の公開や公開のためだけの interface / Impl 分割は行わない。公開メソッドは上記三操作に限定し、引数の PlatformUser は既存の `user::domain` 公開境界を使う。
 - 増版は PlatformUser の行為メソッドに残す。application 層での read-modify-write や HQL 一括更新は行わない。
 - 人と SERVICE は初回停止で増版し、停止済みへの再要求では増版しない。人は再要求でも現在版を通知し、SERVICE は統一操作内の明示的な種別分岐で通知しない。
 - 店員編集の再試行は最新情報の再取得を前提とする。afterCommit の Redis 更新失敗では停止と JPA の version 更新は確定済みであり、元の要求の再送は version 不一致により 409 となって統一操作へ到達しない。既存の詳細取得で現在の授権・状態・version を読み直し、内容を確認して最新情報に基づく enabled=false の要求を送る。古い授権情報のまま version だけを差し替えてはならない。停止済みでも version と既存の権限・授権検証を通過すれば現在の credentialVersion を再通知する。再取得後に別の更新が入った場合も 409 を維持し、再度取得・確認する。更新用 version と資格情報の credentialVersion は別の値である。

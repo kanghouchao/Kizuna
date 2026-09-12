@@ -9,7 +9,6 @@ import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -29,7 +28,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -60,7 +58,7 @@ public class PlatformStaffAccountService {
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
   private final PasswordEncoder passwordEncoder;
-  private final ApplicationEventPublisher eventPublisher;
+  private final CredentialOperations credentialOperations;
 
   @Transactional(readOnly = true)
   public Page<StaffAccountSummaryResponse> list(String search, Long storeId, Pageable pageable) {
@@ -140,15 +138,14 @@ public class PlatformStaffAccountService {
     permissionRepository.lockIdByCode(PermissionCode.ROLE_MANAGE.name());
     // 目録行を待った後に取り直す。事前検査で実体を読んでいないので、ここでの獲得は版の照合を伴わない。
     PlatformUser target = repository.findByIdForUpdate(id).orElseThrow(() -> notFound(id));
-    if (target.getEnabled()) {
+    boolean wasEnabled = target.getEnabled();
+    if (wasEnabled) {
       requireRoleManageHolderRemains(target);
-      target.stop();
+    }
+    credentialOperations.stop(target);
+    if (wasEnabled) {
       repository.saveAndFlush(target);
     }
-    // 停止済みへの再送では版は増えないが、現在値を運ぶイベントは毎回発行する — commit 後の
-    // キャッシュ反映が失敗した場合に、同じ要求の再送で反映を書き直せるようにするため。
-    eventPublisher.publishEvent(
-        new PlatformUserCredentialsChanged(target.getEmail(), target.getCredentialVersion()));
   }
 
   /**
@@ -171,10 +168,8 @@ public class PlatformStaffAccountService {
       throw new HqPasswordResetNotAllowedException("HQ 側ロール保持者のパスワードは再設定できません");
     }
     String temporaryPassword = temporaryPassword();
-    target.changePassword(passwordEncoder.encode(temporaryPassword));
+    credentialOperations.changePassword(target, passwordEncoder.encode(temporaryPassword));
     repository.saveAndFlush(target);
-    eventPublisher.publishEvent(
-        new PlatformUserCredentialsChanged(target.getEmail(), target.getCredentialVersion()));
     return temporaryPassword;
   }
 

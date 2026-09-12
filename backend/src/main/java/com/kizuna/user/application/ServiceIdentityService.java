@@ -48,6 +48,7 @@ public class ServiceIdentityService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
+  private final CredentialOperations credentialOperations;
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
 
@@ -132,8 +133,9 @@ public class ServiceIdentityService {
   @Transactional
   public void suspend(Long id) {
     PlatformUser user = requireServiceIdentityForUpdate(id);
-    if (user.getEnabled()) {
-      user.stop();
+    boolean wasEnabled = user.getEnabled();
+    credentialOperations.stop(user);
+    if (wasEnabled) {
       repository.saveAndFlush(user);
     }
   }

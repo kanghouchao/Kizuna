@@ -24,6 +24,7 @@ import com.kizuna.member.application.MemberRegistrationService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
+import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.LineAlreadyLinkedException;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -41,7 +42,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
@@ -304,7 +304,7 @@ class LineAuthServiceTest {
             mock(PasswordEncoder.class),
             jwtIssuer,
             mock(AuthenticationManager.class),
-            mock(ApplicationEventPublisher.class));
+            mock(CredentialOperations.class));
     return new LineAuthService(
         channelResolver,
         lineApiClient,

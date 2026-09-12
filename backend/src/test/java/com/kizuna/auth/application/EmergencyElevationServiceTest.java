@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.EmergencyElevationActivationResponse;
@@ -16,12 +17,12 @@ import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.EmergencyElevationView;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
@@ -38,8 +39,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -54,7 +55,7 @@ class EmergencyElevationServiceTest {
   @Mock private PlatformUserRepository userRepository;
   @Mock private PlatformAuthService authService;
   @Mock private AuthenticationManager authenticationManager;
-  @Mock private ApplicationEventPublisher eventPublisher;
+  @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
   @Mock private Authentication authentication;
 
   @InjectMocks private EmergencyElevationService service;
@@ -172,8 +173,7 @@ class EmergencyElevationServiceTest {
     assertThat(activator.getCredentialVersion()).isEqualTo(1L);
     assertThat(revoker.getCredentialVersion()).isZero();
     verify(userRepository).save(activator);
-    verify(eventPublisher)
-        .publishEvent(new PlatformUserCredentialsChanged("activator@kizuna.test", 1L));
+    verify(credentialOperations).invalidateSessions(activator);
   }
 
   @Test
@@ -348,6 +348,6 @@ class EmergencyElevationServiceTest {
         .isInstanceOf(NotFoundException.class);
 
     verify(userRepository, never()).save(any());
-    verify(eventPublisher, never()).publishEvent(any());
+    verifyNoInteractions(credentialOperations);
   }
 }

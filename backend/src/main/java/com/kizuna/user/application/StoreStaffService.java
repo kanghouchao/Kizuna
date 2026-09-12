@@ -14,7 +14,6 @@ import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -32,7 +31,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -70,7 +68,7 @@ public class StoreStaffService {
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
-  private final ApplicationEventPublisher eventPublisher;
+  private final CredentialOperations credentialOperations;
   private final StoreContext storeContext;
 
   @Transactional(readOnly = true)
@@ -179,19 +177,11 @@ public class StoreStaffService {
     requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), scope);
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
     user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
-    // enabled の遷移（null=現状維持）。停止は行を残し、過去の実行主体の記録を保持する。
-    if (Boolean.FALSE.equals(req.getEnabled()) && user.getEnabled()) {
-      user.stop();
+    if (Boolean.FALSE.equals(req.getEnabled())) {
+      credentialOperations.stop(user);
     }
     if (Boolean.TRUE.equals(req.getEnabled()) && !user.getEnabled()) {
       user.resume();
-    }
-    // 失効の即時反映は「本リクエストが停止を明示的に要求したか」で判定する（現在状態との差分ではない）。
-    // 差分語義だと、commit 後のキャッシュ反映が失敗して 500 になった後の再送でイベントが発行されず、
-    // 復旧手段が無くなる。再開は失効機構に何もしない — 版は戻らず、停止前のセッションは復活しない（ADR 0022）。
-    if (Boolean.FALSE.equals(req.getEnabled())) {
-      eventPublisher.publishEvent(
-          new PlatformUserCredentialsChanged(user.getEmail(), user.getCredentialVersion()));
     }
     return toResponse(save(user), roleNames, delegationRoleIds, scope);
   }
