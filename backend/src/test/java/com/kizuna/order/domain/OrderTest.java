@@ -36,6 +36,37 @@ class OrderTest {
   }
 
   @Test
+  @DisplayName("利用ポイントで内訳の総和が負になる完了は拒否すること")
+  void completeWith_rejectsNegativeTotal() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "会計", 1000)));
+
+    assertThatThrownBy(() -> order.completeWith(1001, 10))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("内訳の総和が負になっています。割引・調整の金額を見直してください");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(order.getAutoGrantPoints()).isNull();
+  }
+
+  @Test
+  @DisplayName("全額をポイントで支払う完了は総和 0 で受け付けること")
+  void completeWith_acceptsFullPointPayment() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "会計", 1000)));
+
+    order.completeWith(1000, 10);
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getTotalFee()).isZero();
+    assertThat(order.getAutoGrantPoints()).isEqualTo(10);
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
+        .containsExactly(
+            tuple(OrderFeeLineKind.SURCHARGE, 1000),
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -1000));
+  }
+
+  @Test
   @DisplayName("キャンセル済みの注文は完了できないこと")
   void completeWith_fromCancelled_isRejected() {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
