@@ -17,6 +17,7 @@ import static com.kizuna.user.domain.PermissionCode.PLATFORM_MENU_VIEW;
 import static com.kizuna.user.domain.PermissionCode.POINT_ADJUST;
 import static com.kizuna.user.domain.PermissionCode.ROLE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SERVICE_ID_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.SERVICE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SHIFT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STAFF_ACCOUNT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_MANAGE;
@@ -65,6 +66,7 @@ class DefaultGrantApprovalTests {
           Map.entry(BENEFIT_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(EMERGENCY_ELEVATE, Set.of(HQ_ADMIN)),
           Map.entry(SERVICE_ID_MANAGE, Set.of(HQ_ADMIN)),
+          Map.entry(SERVICE_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(STORE_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)),
           Map.entry(ORDER_SET_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)),
           Map.entry(ORDER_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),

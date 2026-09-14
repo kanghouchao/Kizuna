@@ -1,0 +1,66 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-009-service-settings
+      author: kanghouchao
+      # 歴史版本の参照先を失わせないため、店舗・操作者・項目の削除は NO ACTION で拒否する。
+      # 項目の退場は deleted 標記で表し、履歴を連鎖削除しない。
+      changes:
+        - sql:
+            sql: |
+              CREATE TABLE t_services (
+                id VARCHAR(64) CONSTRAINT pk_t_services PRIMARY KEY,
+                store_id BIGINT NOT NULL CONSTRAINT fk_t_services_store REFERENCES t_stores(id) ON DELETE NO ACTION,
+                kind VARCHAR(32), name VARCHAR(255), duration_minutes INTEGER,
+                charge_type VARCHAR(16), price INTEGER, remuneration INTEGER,
+                revision_number BIGINT NOT NULL CONSTRAINT ck_t_services_revision_number CHECK (revision_number >= 1),
+                deleted BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                version BIGINT NOT NULL DEFAULT 0,
+                CONSTRAINT uq_t_services_id_store UNIQUE (id, store_id),
+                CONSTRAINT ck_t_services_terms CHECK (kind IS NOT NULL AND name IS NOT NULL AND length(trim(name)) BETWEEN 1 AND 255
+                AND price IS NOT NULL AND remuneration IS NOT NULL
+                AND price >= 0 AND remuneration BETWEEN 0 AND price
+                AND ((kind = 'COURSE' AND duration_minutes IS NOT NULL AND duration_minutes > 0 AND charge_type IS NULL AND price > 0)
+                OR (kind = 'SURCHARGE' AND duration_minutes IS NULL AND charge_type IS NULL AND price > 0)
+                OR (kind = 'SPECIAL_SERVICE' AND duration_minutes IS NULL AND charge_type IS NOT NULL
+                AND ((charge_type = 'PAID' AND price > 0) OR (charge_type = 'FREE' AND price = 0)))))
+              );
+              CREATE INDEX idx_t_services_list ON t_services(store_id, deleted, id);
+              CREATE INDEX idx_t_services_kind_list ON t_services(store_id, deleted, kind, id);
+              CREATE TABLE t_service_revisions (
+                id VARCHAR(64) CONSTRAINT pk_t_service_revisions PRIMARY KEY,
+                store_id BIGINT NOT NULL CONSTRAINT fk_t_service_revisions_store REFERENCES t_stores(id) ON DELETE NO ACTION,
+                service_id VARCHAR(64) NOT NULL,
+                revision_number BIGINT NOT NULL CONSTRAINT ck_t_service_revisions_revision_number CHECK (revision_number >= 1),
+                operation VARCHAR(16) NOT NULL CONSTRAINT ck_t_service_revisions_operation CHECK (operation IN ('CREATED','UPDATED','DELETED')),
+                actor_id BIGINT NOT NULL CONSTRAINT fk_t_service_revisions_actor REFERENCES t_users(id) ON DELETE NO ACTION,
+                occurred_at TIMESTAMPTZ NOT NULL,
+                before_kind VARCHAR(32), before_name VARCHAR(255), before_duration_minutes INTEGER,
+                before_charge_type VARCHAR(16), before_price INTEGER, before_remuneration INTEGER,
+                after_kind VARCHAR(32), after_name VARCHAR(255), after_duration_minutes INTEGER,
+                after_charge_type VARCHAR(16), after_price INTEGER, after_remuneration INTEGER,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                version BIGINT NOT NULL DEFAULT 0,
+                CONSTRAINT fk_t_service_revisions_service_store FOREIGN KEY (service_id, store_id) REFERENCES t_services(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT uq_t_service_revisions_number UNIQUE (service_id, revision_number),
+                CONSTRAINT ck_t_service_revisions_after CHECK (after_kind IS NOT NULL AND after_name IS NOT NULL AND length(trim(after_name)) BETWEEN 1 AND 255
+                AND after_price IS NOT NULL AND after_remuneration IS NOT NULL
+                AND after_price >= 0 AND after_remuneration BETWEEN 0 AND after_price
+                AND ((after_kind = 'COURSE' AND after_duration_minutes IS NOT NULL AND after_duration_minutes > 0 AND after_charge_type IS NULL AND after_price > 0)
+                OR (after_kind = 'SURCHARGE' AND after_duration_minutes IS NULL AND after_charge_type IS NULL AND after_price > 0)
+                OR (after_kind = 'SPECIAL_SERVICE' AND after_duration_minutes IS NULL AND after_charge_type IS NOT NULL
+                AND ((after_charge_type = 'PAID' AND after_price > 0) OR (after_charge_type = 'FREE' AND after_price = 0))))),
+                CONSTRAINT ck_t_service_revisions_before CHECK (
+                (operation = 'CREATED' AND revision_number = 1 AND before_kind IS NULL AND before_name IS NULL
+                AND before_duration_minutes IS NULL AND before_charge_type IS NULL AND before_price IS NULL AND before_remuneration IS NULL)
+                OR (operation IN ('UPDATED','DELETED') AND revision_number > 1 AND (before_kind IS NOT NULL AND before_name IS NOT NULL AND length(trim(before_name)) BETWEEN 1 AND 255
+                AND before_price IS NOT NULL AND before_remuneration IS NOT NULL
+                AND before_price >= 0 AND before_remuneration BETWEEN 0 AND before_price
+                AND ((before_kind = 'COURSE' AND before_duration_minutes IS NOT NULL AND before_duration_minutes > 0 AND before_charge_type IS NULL AND before_price > 0)
+                OR (before_kind = 'SURCHARGE' AND before_duration_minutes IS NULL AND before_charge_type IS NULL AND before_price > 0)
+                OR (before_kind = 'SPECIAL_SERVICE' AND before_duration_minutes IS NULL AND before_charge_type IS NOT NULL
+                AND ((before_charge_type = 'PAID' AND before_price > 0) OR (before_charge_type = 'FREE' AND before_price = 0)))))
+                AND before_kind = after_kind))
+              );

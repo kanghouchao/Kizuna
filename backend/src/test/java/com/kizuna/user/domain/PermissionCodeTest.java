@@ -43,12 +43,13 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("STORE コンソールの権限は店舗業務系の 13 個")
+  @DisplayName("STORE コンソールの権限は店舗業務系の 14 個")
   void storePermissions() {
     assertThat(byConsole(PermissionCode.Console.STORE))
         .containsExactlyInAnyOrder(
             PermissionCode.STORE_STAFF_MANAGE,
             PermissionCode.ORDER_MANAGE,
+            PermissionCode.SERVICE_MANAGE,
             PermissionCode.CUSTOMER_MANAGE,
             PermissionCode.CUSTOMER_MERGE,
             PermissionCode.ORDER_CORRECT,
@@ -80,9 +81,9 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("権限目録は 25 個で全てコンソール分類を持つ")
+  @DisplayName("権限目録は 26 個で全てコンソール分類を持つ")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(25);
+    assertThat(PermissionCode.values()).hasSize(26);
     assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getConsole))
         .doesNotContainNull();
   }

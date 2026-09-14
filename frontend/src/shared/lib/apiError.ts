@@ -51,6 +51,10 @@ export function isNotFound(error: unknown): boolean {
   return statusOf(error) === 404;
 }
 
+export function isForbidden(error: unknown): boolean {
+  return statusOf(error) === 403;
+}
+
 function statusOf(error: unknown): number | undefined {
   if (!error || typeof error !== 'object' || !('response' in error)) return undefined;
   return (error as { response?: { status?: number } }).response?.status;
