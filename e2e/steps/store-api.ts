@@ -438,3 +438,41 @@ export async function withdrawCast(
   });
   expect(response.ok()).toBeTruthy();
 }
+
+export async function createSpecialService(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+): Promise<string> {
+  const response = await request.post("/api/store/services", {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: {
+      kind: "SPECIAL_SERVICE",
+      name,
+      charge_type: "PAID",
+      price: 2000,
+      remuneration: 1500,
+    },
+  });
+  expect(response.status()).toBe(201);
+  return (await response.json()).id;
+}
+
+export async function reviseSpecialService(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  name: string,
+): Promise<void> {
+  const response = await request.put(`/api/store/services/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: {
+      name,
+      charge_type: "FREE",
+      price: 0,
+      remuneration: 0,
+      expected_version: 1,
+    },
+  });
+  expect(response.status()).toBe(200);
+}

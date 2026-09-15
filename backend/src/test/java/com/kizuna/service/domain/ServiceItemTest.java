@@ -11,6 +11,27 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class ServiceItemTest {
   @Test
+  void namesPreserveConsentTermsButFinancialChangesRequireConfirmation() {
+    var item =
+        ServiceItem.create(
+            new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "追加", null, ChargeType.PAID, 2000, 1500));
+    item.replace(
+        new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "新名称", null, ChargeType.PAID, 2000, 1500), 1);
+    assertThat(item.getTermsVersion()).isEqualTo(1);
+    item.replace(
+        new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "新名称", null, ChargeType.PAID, 3000, 1500), 2);
+    assertThat(item.getTermsVersion()).isEqualTo(2);
+    item.replace(
+        new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "新名称", null, ChargeType.FREE, 0, 0), 3);
+    assertThat(item.getTermsVersion()).isEqualTo(3);
+    item.replace(
+        new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "有料", null, ChargeType.PAID, 3000, 1500), 4);
+    item.replace(
+        new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "有料", null, ChargeType.PAID, 3000, 1600), 5);
+    assertThat(item.getTermsVersion()).isEqualTo(5);
+  }
+
+  @Test
   void courseKeepsIntegerPriceAndRemuneration() {
     var item =
         ServiceItem.create(new ServiceTerms(ServiceKind.COURSE, " 基本 ", 60, null, 12000, 7000));

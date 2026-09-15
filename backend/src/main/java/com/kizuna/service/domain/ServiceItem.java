@@ -27,6 +27,9 @@ public class ServiceItem extends StoreScopedEntity {
   private long revisionNumber = 1;
 
   @Column(nullable = false)
+  private long termsVersion = 1;
+
+  @Column(nullable = false)
   private boolean deleted;
 
   @Builder
@@ -42,6 +45,10 @@ public class ServiceItem extends StoreScopedEntity {
     requireEditable(expectedVersion);
     if (terms.getKind() != next.getKind()) throw new ServiceException("サービス種別は変更できません");
     if (terms.equals(next)) return false;
+    if (!Objects.equals(terms.getDurationMinutes(), next.getDurationMinutes())
+        || terms.getChargeType() != next.getChargeType()
+        || !terms.getPrice().equals(next.getPrice())
+        || !terms.getRemuneration().equals(next.getRemuneration())) termsVersion++;
     terms = next;
     revisionNumber++;
     return true;

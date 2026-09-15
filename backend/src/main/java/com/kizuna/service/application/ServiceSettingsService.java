@@ -14,9 +14,11 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
@@ -34,6 +36,8 @@ public class ServiceSettingsService {
   private final ServiceRevisionRepository revisions;
   private final ServiceMapper mapper;
   private final ActorIdentityService actors;
+  private final StoreRepository stores;
+  private final StoreContext context;
 
   @Transactional(readOnly = true)
   @StoreScoped
@@ -55,6 +59,7 @@ public class ServiceSettingsService {
   @Transactional
   @StoreScoped
   public String create(ServiceCreateRequest request, String actor) {
+    stores.lockCastFields(context.getStoreId());
     var actorId = actors.requireUserId(actor);
     var item =
         ServiceItem.create(
@@ -73,6 +78,7 @@ public class ServiceSettingsService {
   @Transactional
   @StoreScoped
   public ServiceResponse update(String id, ServiceUpdateRequest request, String actor) {
+    stores.lockCastFields(context.getStoreId());
     var actorId = actors.requireUserId(actor);
     var item = lock(id);
     var before = item.getTerms();
@@ -95,6 +101,7 @@ public class ServiceSettingsService {
   @StoreScoped
   public void delete(String id, long expectedVersion, String actor) {
     if (expectedVersion < 1) throw new ServiceException("版本は 1 以上で指定してください");
+    stores.lockCastFields(context.getStoreId());
     var actorId = actors.requireUserId(actor);
     var item = lock(id);
     var before = item.getTerms();
